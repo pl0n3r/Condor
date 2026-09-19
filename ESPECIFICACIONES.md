@@ -13,6 +13,7 @@
 | Tipo | SaaS de gestión corporativa |
 | Mercado inicial | Colombia |
 | Idioma principal | Español de Colombia (`es-CO`) |
+| Versión inicial de producción | `0.1.0` |
 
 ## 2. Regla de idioma
 
@@ -116,6 +117,26 @@ Cóndor está pensado inicialmente para el público colombiano y utilizará `es-
 Se excluyen deliberadamente las reglas específicas de DISCADMIN, del dominio musical, rutas, módulos, esquema de datos y decisiones funcionales propias de BRVTAL.
 
 Además, `AGENTES.md` debe reflejar todas las reglas operativas acordadas para Cóndor: español de Colombia, infraestructura objetivo, roadmap en Issue #1, convención visual acumulativa, separación entre roadmap y especificaciones y orientación del roadmap a una lectura ejecutiva para socios.
+
+### D-005 — Versionado por deploy
+
+Cóndor utiliza una versión humana de producto para cada deploy a producción, siguiendo el esquema pre-1.0 utilizado en BRVTAL.
+
+Reglas:
+
+- primer deploy: **`0.1.0`**;
+- deploys siguientes: incremento normal de patch, por ejemplo `0.1.1`, `0.1.2`, `0.1.3`;
+- un cambio de minor, por ejemplo `0.2.0`, representa un hito deliberado;
+- `1.0.0` solo se asignará mediante decisión explícita del usuario;
+- una versión no se reutiliza para dos deploys diferentes;
+- versión de producto y SHA Git son identidades complementarias, no equivalentes;
+- cuando exista el bootstrap de aplicación, `config/version.php` será la fuente canónica;
+- si existe `package.json` u otra metadata de versión, deberá mantenerse en paridad con la fuente canónica;
+- toda PR deploy-bound debe llevar su bump de versión antes de los gates finales;
+- el roadmap mostrará la versión en el título del hito cuando esté asignada;
+- un merge/CI exitoso no demuestra por sí mismo que esa versión esté desplegada o validada en producción.
+
+Antes de habilitar el despliegue automático real, cambios preparatorios o puramente documentales no consumen versiones de producción.
 
 ## 7. Criterio de actualización
 
