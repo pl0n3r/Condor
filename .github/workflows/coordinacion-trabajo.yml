@@ -3,13 +3,17 @@ name: Coordinación multiagente (V 0.1.0)
 on:
   issue_comment:
     types: [created]
-  pull_request_target:
-    types: [ready_for_review, converted_to_draft, closed]
+  pull_request:
+    types: [opened, ready_for_review, converted_to_draft, closed]
   issues:
     types: [closed, reopened]
 
 permissions:
   contents: read
+
+concurrency:
+  group: coordinacion-${{ github.event.issue.number || github.event.pull_request.head.ref || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   comandos:
@@ -19,8 +23,9 @@ jobs:
       github.event.issue.pull_request == null &&
       (
         github.event.comment.body == '/tomar' ||
-        github.event.comment.body == '/liberar' ||
-        github.event.comment.body == '/liberar-forzado'
+        startsWith(github.event.comment.body, '/liberar ') ||
+        github.event.comment.body == '/liberar-forzado' ||
+        startsWith(github.event.comment.body, '/transferir ')
       )
     runs-on: ubuntu-latest
     permissions:
@@ -29,9 +34,10 @@ jobs:
       pull-requests: write
     steps:
       - name: Descargar coordinador canónico
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
 
       - name: Ejecutar comando
         env:
@@ -43,31 +49,24 @@ jobs:
           COMANDO: ${{ github.event.comment.body }}
         run: |
           set -euo pipefail
-          case "$COMANDO" in
-            /tomar)
-              python3 scripts/coordinar_trabajo.py tomar                 --repo "$REPOSITORIO"                 --issue "$ISSUE"                 --actor "$ACTOR"                 --association "$ASOCIACION"
-              ;;
-            /liberar)
-              python3 scripts/coordinar_trabajo.py liberar                 --repo "$REPOSITORIO"                 --issue "$ISSUE"                 --actor "$ACTOR"                 --association "$ASOCIACION"
-              ;;
-            /liberar-forzado)
-              python3 scripts/coordinar_trabajo.py liberar                 --repo "$REPOSITORIO"                 --issue "$ISSUE"                 --actor "$ACTOR"                 --association "$ASOCIACION"                 --force
-              ;;
-          esac
+          python3 scripts/coordinar_trabajo.py comentario             --repo "$REPOSITORIO"             --issue "$ISSUE"             --actor "$ACTOR"             --association "$ASOCIACION"             --body "$COMANDO"
 
   estado-pr:
     name: Sincronizar estado desde PR
-    if: github.event_name == 'pull_request_target'
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: write
       issues: write
-      pull-requests: write
+      pull-requests: read
     steps:
       - name: Descargar coordinador canónico
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
 
       - name: Sincronizar estado
         env:
@@ -76,6 +75,7 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           ACCION: ${{ github.event.action }}
         run: |
+          set -euo pipefail
           python3 scripts/coordinar_trabajo.py pr-event             --repo "$REPOSITORIO"             --pr "$PR"             --action "$ACCION"
 
   estado-issue:
@@ -88,9 +88,10 @@ jobs:
       pull-requests: write
     steps:
       - name: Descargar coordinador canónico
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
 
       - name: Sincronizar estado
         env:
@@ -99,4 +100,5 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
           ACCION: ${{ github.event.action }}
         run: |
+          set -euo pipefail
           python3 scripts/coordinar_trabajo.py issue-event             --repo "$REPOSITORIO"             --issue "$ISSUE"             --action "$ACCION"
