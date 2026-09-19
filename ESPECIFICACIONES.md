@@ -192,6 +192,22 @@ Reglas:
 - la vista para socios debe seguir siendo legible mediante secciones, fases y resúmenes, pero nunca sacrificando el histórico;
 - `docs/roadmap-historico/` puede usarse para snapshots o copias auxiliares, pero **nunca como sustituto que permita retirar entradas del roadmap canónico**.
 
+### D-009 — Versión obligatoria en títulos de GitHub
+
+Todo artefacto de GitHub con título humano controlado por el proyecto debe incluir al final la versión objetivo en formato exacto **`(V X.Y.Z)`**.
+
+Aplica, como mínimo, a Issues, Pull Requests, Releases, Milestones y cualquier superficie equivalente de tracking visible.
+
+Reglas:
+
+- durante la preparación inicial se usa `(V 0.1.0)`;
+- la versión del título indica bucket/objetivo de tracking, no que esa versión esté desplegada;
+- después de un deploy, el trabajo nuevo usa normalmente la siguiente versión objetivo;
+- incluso PRs documentales llevan la versión objetivo;
+- no usar variantes de formato en títulos;
+- `1.0.0` continúa requiriendo decisión explícita del usuario;
+- los títulos históricos pueden normalizarse retroactivamente para mantener tracking consistente.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Cóndor.

@@ -126,6 +126,7 @@
 | **Minor / menor** | Número intermedio; representa un hito más significativo antes de 1.0. | `0.1.x → 0.2.0` requiere una decisión deliberada. |
 | **Major / mayor** | Primer número; indica una etapa grande de madurez/cambio. | `1.0.0` solo llegará por decisión explícita. |
 | **Bump de versión** | Incrementar el número de versión. | Toda PR que vaya a desplegarse deberá llevar el bump correspondiente. |
+| **Versión en título** | Etiqueta de tracking al final de un título de GitHub. No significa que esa versión ya esté desplegada. | Ejemplo: `feat: autenticación (V 0.1.0)`. |
 
 ---
 
