@@ -39,9 +39,9 @@
 ```mermaid
 flowchart LR
  A["Issue disponible"] --> B["/tomar"]
- B --> C["Lock: trabajo/issue-N"]
- C --> D["Implementación"]
- D --> E["PR + Closes #N"]
+ B --> C["Lock + UUID de reserva"]
+ C --> D["trabajo/issue-N"]
+ D --> E["PR + Closes #N + Reserva UUID"]
  E --> F["CI + coordinación"]
  F --> G["Sonar / CodeRabbit"]
  G --> H["Squash merge serial"]
@@ -62,7 +62,7 @@ flowchart LR
 - Plantillas de Issues/PR en español activas.
 - Labels en español sincronizados y milestone **Primera entrega (V 0.1.0)** creado.
 - CodeRabbit configurado con perfil assertive e instrucciones generales de revisión en español.
-- Núcleo de coordinación multiagente preparado: reserva atómica por Issue, estados de cola y detección de archivos solapados.
+- Núcleo de coordinación multiagente preparado: reserva atómica por Issue, UUID por sesión, marcadores confiables, estados de cola y detección de archivos solapados.
 
 ## Archivos de la entrega actual
 
@@ -84,7 +84,7 @@ flowchart LR
 - El título del PR es rechazado automáticamente si no termina con `(V X.Y.Z)`.
 - Los enlaces relativos y archivos documentales canónicos tienen validación automática.
 - El workflow de gobierno sincronizó labels y creó el milestone #1 `Primera entrega (V 0.1.0)`.
-- SonarCloud permanece pendiente y no se presenta como configurado.
+- SonarQube Cloud está activo; el Quality Gate se revisa en cada PR cuando la integración reporta resultados.
 - No existe evidencia de deploy ni validación de producción.
 
 ## Qué sigue
