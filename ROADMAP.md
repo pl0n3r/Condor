@@ -29,7 +29,9 @@ Reglas:
 | Repositorio | `pl0n3r/Condor` |
 | Rama canónica | `main` |
 | Tipo | SaaS de gestión corporativa |
-| Estado | Bootstrap / definición inicial |
+| Estado | Arranque / definición inicial |
+| Mercado principal | Colombia |
+| Idioma principal | Español (Colombia, `es-CO`) |
 | Infraestructura base | Heredada conceptualmente de BRVTAL, sin copiar lógica de negocio ni deuda histórica |
 
 ## 2. Principios de desarrollo
@@ -48,7 +50,8 @@ Condor adopta desde el inicio las prácticas maduras utilizadas en BRVTAL:
 - ninguna migración destructiva de producción ejecutada automáticamente;
 - CI verde no equivale a validación en producción;
 - documentación suficiente para retomar el proyecto sin memoria de chat;
-- decisiones rutinarias técnicas se resuelven autónomamente desde el contexto del repositorio.
+- decisiones rutinarias técnicas se resuelven autónomamente desde el contexto del repositorio;
+- español como idioma predeterminado de producto, documentación y colaboración.
 
 ## 3. Infraestructura objetivo
 
@@ -95,6 +98,8 @@ No se copiará la arquitectura funcional de BRVTAL salvo patrones genéricos que
 - [x] Decisión: reutilizar la filosofía de infraestructura de BRVTAL.
 - [x] Decisión: reutilizar las mismas prácticas maduras de ingeniería.
 - [x] Decisión: `ROADMAP.md` será el lugar canónico donde se condensa todo el estado del proyecto.
+- [x] Decisión: Condor está orientado inicialmente al público colombiano y usa español de Colombia como idioma principal.
+- [x] Decisión: toda la colaboración en GitHub se realizará en español siempre que sea técnicamente viable.
 
 ### En curso
 
@@ -141,13 +146,37 @@ Los demás artefactos tienen responsabilidades distintas:
 - **PRs:** cambios concretos y evidencia de validación;
 - **docs/**: documentación especializada que sea demasiado extensa para el roadmap.
 
+### D-003 — Español de Colombia como idioma canónico
+
+Condor está pensado inicialmente para usuarios en Colombia. El idioma predeterminado es **español de Colombia (`es-CO`)**.
+
+La regla se aplica, siempre que técnicamente sea viable, a:
+
+- interfaz de usuario, navegación, formularios, validaciones, errores, estados vacíos, ayudas, accesibilidad y mensajes del sistema;
+- correos, notificaciones, textos transaccionales y contenido generado por la aplicación;
+- documentación del repositorio;
+- títulos, descripciones y comentarios de Issues;
+- títulos, descripciones, revisiones, respuestas y comentarios de Pull Requests;
+- mensajes de commit;
+- nombres visibles de workflows, jobs y pasos de GitHub Actions;
+- Releases, notas de versión, Projects, milestones y labels;
+- comentarios de código cuando sean necesarios;
+- textos de pruebas y fixtures visibles para personas.
+
+Convenciones técnicas que deban conservarse por compatibilidad, interoperabilidad o claridad pueden permanecer en inglés: nombres de librerías y APIs, comandos, palabras reservadas, protocolos, formatos estándar, nombres de paquetes, claves externas, identificadores de terceros y términos técnicos cuya traducción introduzca ambigüedad.
+
+Para ramas y nombres internos propios del proyecto, preferir español claro y ASCII cuando sea práctico, por ejemplo `feature/autenticacion`, `fix/permisos` o `docs/roadmap`.
+
+Los formatos locales deben partir de Colombia cuando no exista otro requisito: idioma `es-CO`, moneda COP, fechas/horas comprensibles para usuarios colombianos y textos redactados de forma natural para este mercado.
+
 ## 7. Riesgos y restricciones
 
 - evitar sobrearquitectura antes de conocer el alcance funcional;
 - evitar copiar componentes de BRVTAL que no tengan sentido para Condor;
 - mantener compatibilidad con el hosting elegido mientras no se decida otra plataforma;
 - diseñar seguridad, permisos y aislamiento de datos antes de exponer flujos sensibles;
-- evitar que Issues, README y chats diverjan del estado condensado aquí.
+- evitar que Issues, README y chats diverjan del estado condensado aquí;
+- evitar anglicismos innecesarios en superficies visibles y documentación sin traducir términos técnicos cuya traducción perjudique precisión o compatibilidad.
 
 ## 8. Próximos pasos
 
