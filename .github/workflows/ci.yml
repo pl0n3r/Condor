@@ -25,9 +25,10 @@ jobs:
       github: ${{ steps.cambios.outputs.github }}
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Validar título de Pull Request
         if: github.event_name == 'pull_request'
@@ -95,7 +96,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
       - name: Validar documentación
         run: python3 scripts/validar_documentacion.py
@@ -106,7 +109,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
       - name: Validar archivos canónicos
         run: |
@@ -146,9 +151,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Probar reglas de coordinación
         run: python3 -m unittest tests/test_coordinar_trabajo.py
