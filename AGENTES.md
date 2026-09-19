@@ -318,11 +318,11 @@ Antes de que el despliegue automático a producción esté habilitado, las PRs p
 
 Cuando un hito tenga versión asignada, usar el formato:
 
-`Nombre del hito (v0.1.0), PR #N`
+`Nombre del hito (V 0.1.0), PR #N`
 
 Al completarse:
 
-`✅ ~~Nombre del hito (v0.1.0), PR #N~~`
+`✅ ~~Nombre del hito (V 0.1.0), PR #N~~`
 
 No marcar una versión como desplegada o validada en producción sin evidencia correspondiente.
 
@@ -358,6 +358,7 @@ Reglas:
 - el roadmap es **append-only**: se agregan entradas nuevas y se actualiza el estado de las existentes, pero no se elimina el historial;
 - no borrar trabajo terminado para hacer el roadmap “más limpio”;
 - registrar PR y versión cuando exista una release asignada;
+- usar en los títulos del roadmap/versionados el formato visual `(V X.Y.Z)` cuando se muestre una versión;
 - **no retirar, mover ni borrar del Issue #1 las fases o tareas ya registradas antes de v1.0.0**; el roadmap es un ledger acumulativo;
 - una instrucción explícita del usuario puede repriorizar el roadmap;
 - Issues específicos contienen criterios de aceptación; el roadmap contiene orden y estado;
@@ -394,9 +395,41 @@ Mensajes concisos en español, por ejemplo:
 
 Términos convencionales como `feat`, `fix`, `docs`, `test`, `refactor`, `perf` e `infra` pueden mantenerse por utilidad técnica.
 
+### Regla de versión en títulos de GitHub
+
+Todo artefacto de GitHub con título humano que podamos controlar debe incluir la versión objetivo al final, usando exactamente:
+
+`(V 0.1.0)`
+
+Aplica a:
+
+- Issues;
+- Pull Requests;
+- Releases;
+- Milestones;
+- Discussions o Project items si llegan a usarse y tienen título propio;
+- cualquier otro artefacto equivalente de tracking visible para personas.
+
+Reglas:
+
+- la versión del título representa **tracking / versión objetivo**, no evidencia de deploy;
+- mientras el proyecto esté preparando la primera entrega, usar `(V 0.1.0)`;
+- después de desplegar una versión, el trabajo nuevo pasa normalmente a la siguiente versión objetivo, por ejemplo `(V 0.1.1)`;
+- una PR documental también lleva versión en el título aunque por sí sola no “consuma” ni demuestre un deploy;
+- no usar variantes como `v0.1.0`, `V0.1.0` o `(v0.1.0)` en títulos de GitHub;
+- antes de crear o renombrar un artefacto, comprobar cuál es la versión objetivo vigente;
+- al cambiar deliberadamente de minor, todos los títulos nuevos usan la nueva versión objetivo;
+- `1.0.0` sigue requiriendo decisión explícita del usuario.
+
+Ejemplos:
+
+- `feat: agrega autenticación inicial (V 0.1.0)`
+- `planificación: permisos y roles (V 0.1.0)`
+- `release: primer deploy de producción (V 0.1.0)`
+
 ### Pull Requests
 
-- título en español;
+- título en español y con la versión objetivo al final;
 - resumen claro;
 - explicar por qué cambia;
 - listar validación real;
@@ -408,6 +441,7 @@ Términos convencionales como `feat`, `fix`, `docs`, `test`, `refactor`, `perf` 
 ### Issues
 
 - título y descripción en español;
+- título con la versión objetivo al final en formato exacto `(V X.Y.Z)`;
 - problema/objetivo verificable;
 - criterios de aceptación cuando corresponda;
 - evidencia y limitaciones explícitas;
@@ -505,6 +539,7 @@ Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y 
 - Cóndor usa versión humana de producto por cada deploy;
 - el primer deploy será `0.1.0`;
 - el incremento normal por deploy es patch (`0.1.1`, `0.1.2`, ...);
+- todos los títulos visibles de GitHub usan la versión objetivo al final con formato exacto `(V X.Y.Z)`;
 - los saltos minor son hitos deliberados y `1.0.0` requiere decisión explícita del usuario;
 - cuando exista la aplicación, `config/version.php` será la fuente canónica de versión y cualquier metadata equivalente deberá mantener paridad;
 - el README usa la misma estrategia de snapshot por deploy que BRVTAL;
