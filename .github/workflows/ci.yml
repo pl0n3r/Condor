@@ -221,7 +221,7 @@ jobs:
     name: Playwright Chromium
     needs: preflight
     if: needs.preflight.outputs.e2e == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -239,29 +239,12 @@ jobs:
       - name: Instalar dependencias reproducibles
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Restaurar caché de browsers Playwright
-        id: playwright-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
-
-      - name: Instalar dependencias del sistema para Chromium
-        run: ./node_modules/.bin/playwright install-deps chromium
-
-      - name: Instalar Chromium fijado por lockfile
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: ./node_modules/.bin/playwright install chromium
-
-      - name: Registrar estado de caché
-        env:
-          CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
+      - name: Registrar navegador del runner
         run: |
-          if [[ "$CACHE_HIT" == "true" ]]; then
-            echo "- Caché de Playwright: **hit**" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "- Caché de Playwright: **miss**" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          set -euo pipefail
+          version="$(google-chrome --version)"
+          echo "Navegador E2E: $version"
+          echo "- Navegador E2E: **$version**" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Ejecutar Playwright
         run: npm run test:e2e
