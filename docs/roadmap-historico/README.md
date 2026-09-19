@@ -1,22 +1,36 @@
-# Histórico del roadmap de Cóndor
+# Histórico auxiliar del roadmap de Cóndor
 
-Esta carpeta almacenará snapshots o resúmenes de etapas cerradas cuando el [roadmap canónico — Issue #1](https://github.com/pl0n3r/Condor/issues/1) crezca demasiado.
+Esta carpeta puede almacenar **snapshots o copias auxiliares** de etapas del roadmap canónico para consulta, auditoría o respaldo documental.
 
-## Objetivo
+## Regla principal
 
-Mantener el Issue principal legible y útil para seguimiento de negocio sin perder trazabilidad del trabajo realizado.
+El roadmap canónico vive en el [Issue #1](https://github.com/pl0n3r/Condor/issues/1) y funciona como un **log acumulativo append-only**.
 
-## Convención
+Por lo tanto:
 
-Cuando una etapa cerrada necesite salir del cuerpo principal del Issue:
+- no se eliminan del Issue #1 tareas, fases, hitos o bloqueos históricos;
+- no se mueven entradas fuera del Issue #1 para “limpiarlo”;
+- el trabajo completado permanece visible y tachado;
+- esta carpeta nunca sustituye el historial canónico;
+- hasta, como mínimo, la primera **v1.0.0 madura**, se conserva trazabilidad detallada de todo el trabajo relevante.
 
-1. resumir el periodo en un archivo con formato `AAAA-MM-descripcion.md`;
-2. conservar hitos, entregables, PRs, versiones, bloqueos resueltos y resultados relevantes;
-3. dejar en el Issue #1 un resumen y enlace al histórico;
-4. no perder la convención de estado original;
-5. no mover aquí especificaciones técnicas: siguen perteneciendo a `ESPECIFICACIONES.md` o documentación especializada.
+## Uso permitido de esta carpeta
 
-La convención del roadmap es:
+Puede utilizarse para:
+
+1. crear snapshots por fecha o release;
+2. conservar vistas congeladas de una etapa;
+3. facilitar auditorías o revisiones históricas;
+4. documentar un volumen cerrado si algún día el roadmap debe continuar en otro Issue por límites prácticos de tamaño.
+
+Si el roadmap necesita dividirse:
+
+- el Issue #1 permanece intacto;
+- se crea un Issue/volumen de continuación;
+- ambos quedan enlazados;
+- ninguna entrada histórica se borra ni se reescribe para compactar.
+
+## Convención de progreso
 
 - ✅ ~~Completado y validado~~
 - 🚧 Pendiente / en curso
