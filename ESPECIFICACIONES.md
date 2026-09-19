@@ -320,22 +320,24 @@ Reglas:
 - artifacts de Playwright se conservan solo ante fallos;
 - no se usan assertions frágiles de texto fuente como sustituto de comportamiento verificable.
 
-### D-016 — Caché de Playwright como optimización, no como fuente de verdad
+### D-016 — Gate E2E rápido con Chrome estable del runner
 
-La telemetría identificó a Playwright Chromium como cuello de botella inicial del CI. La optimización permitida reutiliza únicamente los binarios descargados del navegador.
+La telemetría identificó a la preparación del navegador como el cuello de botella inicial del CI. Se evaluó cachear los binarios Playwright: el cache hit fue real, pero redujo el job solo de **35 s a 33 s** mientras restauraba aproximadamente **271 MB**, por lo que esa estrategia fue descartada.
+
+Condor usa para el gate E2E rápido el Chrome estable preinstalado en el runner GitHub `ubuntu-24.04`, controlado desde Playwright mediante `channel: 'chrome'`.
 
 Reglas:
 
-- cachear solo `~/.cache/ms-playwright`;
-- no cachear `node_modules`;
-- mantener `npm ci` en cada ejecución;
-- derivar la clave de caché de sistema operativo + `package-lock.json`;
-- si cambia el lockfile, la caché de browser deja de ser válida;
-- mantener la instalación explícita de dependencias del sistema en cada runner;
-- en cache miss, instalar Chromium usando el binario Playwright ya fijado por lockfile;
-- fijar `actions/cache` por SHA;
-- un cache hit nunca sustituye la ejecución de Playwright;
-- medir cold/warm runs antes de afirmar una mejora.
+- el motor Chromium sigue siendo la cobertura primaria;
+- `@playwright/test` permanece fijado por lockfile;
+- `npm ci` se ejecuta en cada run;
+- no descargar ni cachear browsers para el gate rápido cuando el runner ya provee Chrome;
+- registrar la versión real de Chrome en el Job Summary;
+- fijar explícitamente el sistema del runner en `ubuntu-24.04`;
+- WebKit sigue disponible para ejecución dirigida cuando el riesgo lo justifique;
+- si una futura incompatibilidad exige una revisión exacta de Chromium, se puede usar el browser Playwright fijado de forma dirigida;
+- toda optimización se conserva solo si la medición demuestra una mejora material sin perder cobertura.
+
 
 ## 7. Criterio de actualización
 
