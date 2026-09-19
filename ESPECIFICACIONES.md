@@ -274,6 +274,18 @@ Reglas:
 - las ramas paralelas deben minimizar cambios en archivos globales compartidos;
 - el snapshot de README se actualiza al convertir un PR en candidato serial de merge/deploy, no al inicio de todas las ramas paralelas.
 
+### D-013 — Relay detallado de Sonar en Pull Requests
+
+Los resultados de SonarQube Cloud no deben limitarse al estado del Quality Gate.
+
+Reglas:
+
+- cada check `SonarCloud Code Analysis` completado debe activar el relay canónico;
+- el relay publica o actualiza un único comentario en la PR;
+- el comentario incluye resultado, SHA, cantidad de anotaciones y hasta 50 hallazgos con severidad, archivo, línea, título y detalle disponible;
+- si Sonar no expone anotaciones por línea, el comentario debe indicarlo y enlazar al análisis completo;
+- el relay es informativo y no sustituye al Quality Gate de Sonar.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
