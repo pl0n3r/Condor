@@ -1,0 +1,46 @@
+name: Reportar error (V 0.1.0)
+description: Registrar un defecto reproducible en Cóndor.
+title: "error: [descripción breve] (V 0.1.0)"
+labels:
+  - "tipo: error"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe el problema con evidencia suficiente para reproducirlo. Conserva la versión objetivo al final del título.
+  - type: textarea
+    id: comportamiento_actual
+    attributes:
+      label: ¿Qué ocurrió?
+      description: Explica el comportamiento observado.
+    validations:
+      required: true
+  - type: textarea
+    id: comportamiento_esperado
+    attributes:
+      label: ¿Qué debería ocurrir?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduccion
+    attributes:
+      label: Pasos para reproducir
+      description: Incluye datos de prueba no sensibles cuando ayuden.
+    validations:
+      required: true
+  - type: dropdown
+    id: impacto
+    attributes:
+      label: Impacto
+      options:
+        - Crítico
+        - Alto
+        - Medio
+        - Bajo
+    validations:
+      required: true
+  - type: textarea
+    id: evidencia
+    attributes:
+      label: Evidencia adicional
+      description: Logs sin secretos, capturas, rutas o referencias útiles.

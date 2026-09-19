@@ -1,0 +1,14 @@
+[
+  {"name":"tipo: error","color":"D73A4A","description":"Defecto reproducible o regresión."},
+  {"name":"tipo: mejora","color":"A2EEEF","description":"Mejora de producto, experiencia o ingeniería."},
+  {"name":"tipo: producto","color":"7057FF","description":"Definición funcional o decisión de producto."},
+  {"name":"tipo: infraestructura","color":"1D76DB","description":"CI/CD, hosting, automatización o plataforma."},
+  {"name":"tipo: documentación","color":"0075CA","description":"Documentación y conocimiento durable."},
+  {"name":"tipo: pruebas","color":"BFDADC","description":"Cobertura, E2E, integración o contratos."},
+  {"name":"calidad","color":"0E8A16","description":"Calidad, mantenibilidad o deuda preventiva."},
+  {"name":"seguridad","color":"B60205","description":"Autenticación, autorización o riesgo de seguridad."},
+  {"name":"deuda técnica","color":"FBCA04","description":"Trabajo de mantenimiento o deuda técnica."},
+  {"name":"prioridad: alta","color":"D93F0B","description":"Trabajo que requiere atención prioritaria."},
+  {"name":"estado: bloqueado","color":"000000","description":"Trabajo detenido por una dependencia real."},
+  {"name":"versión: 0.1.0","color":"C5DEF5","description":"Trabajo asociado a la versión objetivo V 0.1.0."}
+]
