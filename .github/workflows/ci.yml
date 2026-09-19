@@ -246,6 +246,9 @@ jobs:
           echo "Navegador E2E: $version"
           echo "- Navegador E2E: **$version**" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Instalar ffmpeg de Playwright para evidencia de fallo
+        run: ./node_modules/.bin/playwright install ffmpeg
+
       - name: Ejecutar Playwright
         run: npm run test:e2e
 

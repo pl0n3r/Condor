@@ -331,7 +331,8 @@ Reglas:
 - el motor Chromium sigue siendo la cobertura primaria;
 - `@playwright/test` permanece fijado por lockfile;
 - `npm ci` se ejecuta en cada run;
-- no descargar ni cachear browsers para el gate rápido cuando el runner ya provee Chrome;
+- no descargar ni cachear Chromium para el gate rápido cuando el runner ya provee Chrome;
+- instalar únicamente el helper `ffmpeg` de Playwright para conservar video/diagnóstico en fallos;
 - registrar la versión real de Chrome en el Job Summary;
 - fijar explícitamente el sistema del runner en `ubuntu-24.04`;
 - WebKit sigue disponible para ejecución dirigida cuando el riesgo lo justifique;
