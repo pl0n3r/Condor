@@ -12,6 +12,8 @@
 | **Condor** | Nombre corto del proyecto. | Se usa en GitHub, documentación técnica y conversaciones de desarrollo. |
 | **Roadmap** | Lista ordenada del trabajo planeado, en curso, bloqueado y terminado. | Vive en el Issue #1 y conserva el histórico tachando lo completado. |
 | **Issue** | Tarjeta de trabajo o problema en GitHub. | Sirve para describir una tarea concreta, bug, mejora o investigación. |
+| **ID de reserva** | UUID que identifica una sesión concreta de trabajo, incluso si varias sesiones comparten la misma cuenta. | Se genera al ejecutar `/tomar` y debe declararse en el PR. |
+| **Transferencia de reserva** | Rotación explícita del ID para entregar la tarea a otra sesión. | `/transferir <UUID>` invalida el ID anterior y genera uno nuevo. |
 | **Reserva de trabajo** | Marca que una tarea ya fue tomada por una sesión o agente. | Se obtiene comentando `/tomar` en un Issue disponible. |
 | **Cola de trabajo** | Conjunto de tareas disponibles, reservadas, en revisión o bloqueadas. | GitHub muestra el estado de cada Issue mediante labels. |
 | **Lock / bloqueo de coordinación** | Mecanismo que permite que solo una sesión sea propietaria de una tarea. | La rama `trabajo/issue-N` se crea de forma atómica y actúa como lock. |
