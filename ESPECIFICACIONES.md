@@ -95,7 +95,7 @@ No se copiarán automáticamente módulos, esquemas de datos, rutas, identidad v
 - Issues específicos: unidades ejecutables de trabajo y criterios de aceptación.
 - PRs: cambios concretos y evidencia de validación.
 - `docs/roadmap-historico/`: archivo de etapas cerradas cuando el roadmap activo necesite compactarse.
-- `AGENTS.md`: protocolo operativo de desarrollo cuando sea creado.
+- `AGENTES.md`: protocolo operativo de desarrollo cuando sea creado.
 
 El roadmap usa la convención heredada de BRVTAL:
 
@@ -108,6 +108,14 @@ Los elementos completados permanecen tachados como historial durable.
 ### D-003 — Español de Colombia como idioma principal
 
 Cóndor está pensado inicialmente para el público colombiano y utilizará `es-CO` como idioma predeterminado en producto y colaboración, salvo excepciones técnicas justificadas.
+
+### D-004 — AGENTES.md hereda las prácticas maduras de BRVTAL
+
+`AGENTES.md` es el protocolo operativo canónico de Cóndor. Toma de BRVTAL la estructura y las reglas que sí aplican: protocolo de arranque, paralelización, roles multidisciplinarios, disciplina de PR/CI, seguridad, testing, gates, estados de producción y mantenimiento del roadmap.
+
+Se excluyen deliberadamente las reglas específicas de DISCADMIN, del dominio musical, rutas, módulos, esquema de datos y decisiones funcionales propias de BRVTAL.
+
+Además, `AGENTES.md` debe reflejar todas las reglas operativas acordadas para Cóndor: español de Colombia, infraestructura objetivo, roadmap en Issue #1, convención visual acumulativa, separación entre roadmap y especificaciones y orientación del roadmap a una lectura ejecutiva para socios.
 
 ## 7. Criterio de actualización
 
