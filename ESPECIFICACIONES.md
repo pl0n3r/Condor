@@ -286,6 +286,21 @@ Reglas:
 - si Sonar no expone anotaciones por línea, el comentario debe indicarlo y enlazar al análisis completo;
 - el relay es informativo y no sustituye al Quality Gate de Sonar.
 
+### D-014 — Telemetría de throughput no bloqueante
+
+El tiempo del CI se mide **después** de cada ejecución canónica mediante un workflow observador separado, sin añadir latencia a la ruta crítica.
+
+Reglas:
+
+- comparar únicamente ejecuciones del mismo tipo de evento;
+- usar como línea base la mediana de hasta cinco ejecuciones exitosas anteriores;
+- exigir al menos tres muestras antes de clasificar una regresión;
+- marcar regresión solo si el wall time supera simultáneamente **25%** y **15 segundos** frente a la mediana;
+- un CI fallido no se clasifica como regresión de velocidad;
+- la telemetría genera Job Summary y evidencia JSON retenida 30 días;
+- una regresión de throughput genera advertencia, no bloquea por sí sola el merge;
+- optimizaciones de runners, sharding o topología deben apoyarse en esta evidencia antes de añadir complejidad.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.

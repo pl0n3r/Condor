@@ -18,12 +18,13 @@
 | --- | --- | --- |
 | Versión objetivo | 🚧 **V 0.1.0** | primera entrega en preparación |
 | Versión desplegada | ⚪ **Sin deploy todavía** | no existe evidencia de una versión en producción |
-| Base exacta previa | ✅ **main** | `a7d38bf6150038ff2bba3332c493e99b00cfcd65` |
-| CI | ✅ **Activo** | PRs #9/#11 y CI exact-main sobre `4051563` pasaron con check agregado `Validar` |
+| Base exacta previa | ✅ **main** | `a72767ddf94877d0de27ddbe2eea15bd6fcda886` |
+| CI | ✅ **Activo** | `main` `a72767d`: CI exact-main verde con coordinación multiagente y check agregado `Validar` |
+| Telemetría CI | 🚧 **En implementación** | Issue #21: wall time, gate dominante, baseline reciente y alertas no bloqueantes |
 | SonarQube Cloud | ✅ **Activo** | Quality Gate + relay detallado de hallazgos hacia comentarios de PR |
 | Relay Sonar | ✅ **Activo** | `main` `756ca31`: publica/actualiza un comentario único con archivo, línea, severidad y detalle de cada anotación |
 | CodeRabbit | ✅ **Configurado** | `.coderabbit.yaml` activo con perfil assertive e instrucciones de revisión en español |
-| Coordinación multiagente | 🚧 **En validación** | Issue #12: reserva atómica por Issue + detección de solapamientos |
+| Coordinación multiagente | ✅ **Activa** | Issue #18 validó toma única, rechazo de colisión y liberación; PR #20 cerró la carrera de limpieza |
 | Producción | ⚪ **NO VALIDADA** | CI/merge no sustituyen despliegue ni validación real |
 
 ## Fuentes de verdad
@@ -63,20 +64,17 @@ flowchart LR
 - Plantillas de Issues/PR en español activas.
 - Labels en español sincronizados y milestone **Primera entrega (V 0.1.0)** creado.
 - CodeRabbit configurado con perfil assertive e instrucciones generales de revisión en español.
-- Núcleo de coordinación multiagente preparado: reserva atómica por Issue, UUID por sesión, marcadores confiables, estados de cola y detección de archivos solapados.
+- Coordinación multiagente validada en GitHub real: reserva atómica, UUID por sesión, rechazo de segunda toma, liberación y limpieza idempotente.
+- Telemetría de throughput del CI preparada como observador no bloqueante con baseline de runs comparables.
 
 ## Archivos de la entrega actual
 
-- `.coderabbit.yaml`
-- `.github/ISSUE_TEMPLATE/config.yml`
-- `.github/ISSUE_TEMPLATE/error.yml`
-- `.github/ISSUE_TEMPLATE/mejora.yml`
-- `.github/ISSUE_TEMPLATE/tarea.yml`
-- `.github/pull_request_template.md`
-- `.github/labels.json`
+- `.github/workflows/ci-throughput-telemetry.yml`
 - `.github/workflows/ci.yml`
-- `.github/workflows/sincronizar-gobierno.yml`
-- `scripts/validar_documentacion.py`
+- `scripts/ci_throughput_report.py`
+- `tests/test_ci_throughput_report.py`
+- `ESPECIFICACIONES.md`
+- `GLOSARIO.md`
 - `README.md`
 
 ## Validación
@@ -92,8 +90,8 @@ flowchart LR
 
 | Lane | Trabajo |
 | --- | --- |
-| **AHORA** | 🚧 Validar coordinación multiagente y reservas de trabajo, Issue #12; relay Sonar ya activo en `main`. |
-| **SIGUE** | 🚧 Protección de `main` con gates `Validar` + coordinación, Issue #10; bloqueo administrativo vigente. |
+| **AHORA** | 🚧 Medir throughput del CI y detectar regresiones, Issue #21. |
+| **SIGUE** | 🚧 Baseline de pruebas de contrato/integración y Playwright; protección de `main` sigue bloqueada en Issue #10. |
 | **DESPUÉS** | 🚧 Definición funcional del producto + bootstrap técnico de aplicación. |
 | **CALIDAD** | 🚧 SonarCloud + baseline de pruebas + Playwright. |
 | **DEPLOY** | 🚧 Preparar Hostinger y realizar el primer deploy real **V 0.1.0**. |
@@ -104,6 +102,7 @@ flowchart LR
 | --- | --- |
 | Gobierno y trazabilidad | 🟢 Base activa; protección de `main` bloqueada en Issue #10 |
 | CI base | 🟢 Activo |
+| Telemetría de CI | 🟡 En implementación, Issue #21 |
 | Definición del producto | ⚪ Pendiente |
 | Arquitectura | ⚪ Pendiente |
 | SonarQube Cloud | 🟢 Activo; ampliar integración con CI |

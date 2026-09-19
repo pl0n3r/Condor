@@ -122,8 +122,11 @@ jobs:
             ROADMAP.md \
             .github/workflows/coordinacion-trabajo.yml \
             .github/workflows/sonar-annotation-relay.yml \
+            .github/workflows/ci-throughput-telemetry.yml \
             scripts/coordinar_trabajo.py \
-            tests/test_coordinar_trabajo.py; do
+            scripts/ci_throughput_report.py \
+            tests/test_coordinar_trabajo.py \
+            tests/test_ci_throughput_report.py; do
             test -f "$archivo" || { echo "::error::Falta $archivo"; exit 1; }
           done
           test ! -e AGENTS.md || { echo "::error::AGENTS.md no debe existir; el archivo canónico es AGENTES.md"; exit 1; }
@@ -161,6 +164,9 @@ jobs:
 
       - name: Probar reglas de coordinación
         run: python3 -m unittest tests/test_coordinar_trabajo.py
+
+      - name: Probar telemetría de CI
+        run: python3 -m unittest tests/test_ci_throughput_report.py
 
       - name: Validar reserva y colisiones
         if: github.event_name == 'pull_request'
