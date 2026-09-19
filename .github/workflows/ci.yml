@@ -77,7 +77,7 @@ jobs:
             echo "github=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if grep -Eq '(^package(-lock)?\.json$|^playwright\.config\.mjs$|^tests/e2e/|^src/|^app/|^public/|^web/|\.(html|php|css|js|mjs)$)' <<<"$archivos"; then
+          if grep -Eq '(^\.github/workflows/ci\.yml$|^package(-lock)?\.json$|^playwright\.config\.mjs$|^tests/e2e/|^src/|^app/|^public/|^web/|\.(html|php|css|js|mjs)$)' <<<"$archivos"; then
             echo "e2e=true" >> "$GITHUB_OUTPUT"
           else
             echo "e2e=false" >> "$GITHUB_OUTPUT"
