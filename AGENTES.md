@@ -50,6 +50,43 @@ No preguntar por operaciones rutinarias que puedan resolverse con seguridad desd
 - una operación irreversible o destructiva en producción;
 - acceso a datos sensibles o una acción protegida que requiera autorización explícita.
 
+## 1.1. Reserva obligatoria y coordinación multiagente
+
+GitHub es el **árbitro central de la cola de trabajo**. Después de que esta capacidad esté fusionada en `main`, ninguna sesión, cuenta de IA o agente puede empezar implementación nueva sin reservar primero un Issue.
+
+### Tomar trabajo
+
+1. Elegir únicamente un Issue abierto con label `estado: disponible`.
+2. Comentar exactamente `/tomar` en ese Issue.
+3. Esperar la respuesta del workflow de coordinación.
+4. La reserva exitosa crea de forma atómica la rama canónica `trabajo/issue-N`, cambia el Issue a `estado: reservado` y publica quién lo tomó.
+5. Si otra sesión intenta reservar el mismo Issue, la creación atómica de la rama actúa como lock: solo una puede ganar.
+6. Si la reserva es rechazada, **no trabajar esa tarea**; elegir otro Issue disponible.
+
+### Propiedad de la reserva
+
+- una reserva no vence automáticamente: el sistema es **fail-closed**;
+- compartir la misma cuenta de GitHub **no** autoriza a dos sesiones a trabajar el mismo Issue;
+- una sesión solo puede continuar una reserva si la creó en la sesión actual o fue invocada explícitamente para retomar ese Issue;
+- nunca modificar `trabajo/issue-N` si pertenece a otra sesión/agente;
+- nunca crear ramas alternativas para saltarse una reserva existente;
+- para liberar normalmente, comentar `/liberar`;
+- el dueño del repositorio puede resolver una reserva huérfana con `/liberar-forzado`.
+
+### Pull Requests y colisiones
+
+- después del primer commit lógico, abrir el PR pronto para hacer visible el alcance en curso;
+- el PR debe salir de `trabajo/issue-N` e incluir `Closes #N` en el cuerpo;
+- CI valida la reserva y compara los archivos del PR contra todos los demás PR abiertos hacia `main`;
+- si dos PR modifican el mismo archivo, la validación de coordinación falla y el trabajo debe repartirse, serializarse o actualizarse sobre el nuevo `main`;
+- nunca resolver una colisión sobrescribiendo silenciosamente el trabajo de otra sesión;
+- archivos globales como `README.md`, `AGENTES.md`, `ESPECIFICACIONES.md`, `GLOSARIO.md` y workflows deben tocarse solo cuando el Issue lo requiera;
+- los merges a `main` continúan siendo estrictamente seriales.
+
+### README con trabajo paralelo
+
+Para evitar que todas las ramas paralelas colisionen por el snapshot del README, una rama de trabajo normal **no actualiza README prematuramente**. Cuando ese PR pase a ser el siguiente candidato serial de merge/deploy, debe sincronizarse con el `main` más reciente y actualizar el snapshot requerido antes de sus gates finales.
+
 ---
 
 ## 2. Paralelización por defecto
@@ -60,7 +97,7 @@ La paralelización es el modo operativo normal cuando reduce tiempo sin aumentar
 - Si existen dos o más operaciones de solo lectura independientes, agruparlas en el mismo lote cuando la herramienta lo permita.
 - Revisar en paralelo, cuando existan, estado del PR, checks del head exacto, CI, SonarCloud, CodeRabbit, comentarios y threads.
 - Mientras un gate externo procesa, aprovechar el tiempo para análisis de solo lectura de trabajo independiente.
-- Se permiten hasta **4 líneas de trabajo concurrentes** cuando no compitan por los mismos archivos o estado mutable.
+- Se permiten hasta **4 líneas de trabajo concurrentes** solo cuando correspondan a Issues distintos, cada uno con reserva válida, y no compitan por los mismos archivos o estado mutable.
 - Las escrituras sobre el mismo archivo, ramas dependientes o estado compartido se serializan.
 - Los merges a `main` son **siempre seriales**.
 - Antes de cada merge, volver a comprobar `main`, head exacto del PR y gates aplicables.
@@ -140,8 +177,8 @@ Cuando no exista otro requisito explícito:
 | Base de datos objetivo inicial | MariaDB / MySQL-compatible |
 | Frontend objetivo inicial | HTML + CSS + JavaScript con dependencias contenidas |
 | Navegador / E2E | Playwright |
-| CI | GitHub Actions — pendiente de bootstrap |
-| Calidad | SonarCloud + CodeRabbit — pendiente de bootstrap completo |
+| CI | GitHub Actions — activo |
+| Calidad | SonarQube Cloud + CodeRabbit — activos; ampliación de gates en progreso |
 | Deploy objetivo | GitHub `main` → Hostinger |
 | Versión inicial de producto | `0.1.0` |
 
@@ -265,21 +302,23 @@ No crear workflows duplicados si un gate pertenece naturalmente al CI canónico.
 Para trabajo normal de código o configuración:
 
 1. partir del `main` exacto actual;
-2. crear rama enfocada;
-3. implementar el cambio lógico;
-4. añadir/ajustar pruebas aplicables;
-5. ejecutar pruebas dirigidas;
-6. abrir PR a `main`;
-7. ejecutar/revisar CI, SonarCloud y CodeRabbit en paralelo cuando estén disponibles;
-8. corregir findings válidos en la misma rama;
-9. comprobar nuevamente el head exacto y el `main` actual;
-10. hacer **squash merge**;
-11. obtener el SHA exacto resultante de `main`;
-12. validar los gates que correspondan contra ese SHA;
-13. observar despliegue por separado;
-14. validar producción solo con evidencia real;
-15. actualizar el roadmap con el resultado;
-16. actualizar especificaciones si cambió una decisión durable.
+2. elegir un Issue con `estado: disponible`;
+3. reservarlo con `/tomar` y esperar confirmación;
+4. trabajar exclusivamente en la rama canónica `trabajo/issue-N` creada por la reserva;
+5. implementar el cambio lógico;
+6. añadir/ajustar pruebas aplicables;
+7. ejecutar pruebas dirigidas;
+8. abrir PR a `main` desde esa rama e incluir `Closes #N`;
+9. ejecutar/revisar CI, coordinación, SonarCloud y CodeRabbit en paralelo cuando estén disponibles;
+10. corregir findings válidos en la misma rama;
+11. comprobar nuevamente el head exacto y el `main` actual;
+12. hacer **squash merge**;
+13. obtener el SHA exacto resultante de `main`;
+14. validar los gates que correspondan contra ese SHA;
+15. observar despliegue por separado;
+16. validar producción solo con evidencia real;
+17. actualizar el roadmap con el resultado;
+18. actualizar especificaciones si cambió una decisión durable.
 
 No iniciar una rama dependiente nueva antes de cerrar la validación de `main` del bloque anterior. El análisis de solo lectura para trabajo futuro sí puede adelantarse.
 
@@ -524,6 +563,9 @@ Ante un fallo recurrente:
 
 Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y deben considerarse obligatorias hasta que el usuario las cambie explícitamente:
 
+- toda implementación nueva requiere una reserva de Issue mediante `/tomar`; GitHub es el lock central de coordinación multiagente;
+- toda reserva usa la rama canónica `trabajo/issue-N` y no vence automáticamente;
+- CI debe rechazar PRs sin relación válida `Closes #N` o con archivos solapados con otros PR abiertos;
 - el nombre oficial y público del producto es `Condor App`;
 - en documentación técnica, GitHub y conversación de desarrollo se usa `Condor` como nombre corto;
 - el dominio canónico es `https://www.condorapp.com.co`;
