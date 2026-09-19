@@ -20,7 +20,8 @@
 | Versión desplegada | ⚪ **Sin deploy todavía** | no existe evidencia de una versión en producción |
 | Base exacta previa | ✅ **main** | `a7d38bf6150038ff2bba3332c493e99b00cfcd65` |
 | CI | ✅ **Activo** | PRs #9/#11 y CI exact-main sobre `4051563` pasaron con check agregado `Validar` |
-| SonarQube Cloud | ✅ **Activo** | PR #14: Quality Gate passed, 0 issues nuevos y 0 hotspots |
+| SonarQube Cloud | ✅ **Activo** | Quality Gate + relay detallado de hallazgos hacia comentarios de PR |
+| Relay Sonar | 🚧 **En validación** | Publica/actualiza un comentario único con archivo, línea, severidad y detalle de cada anotación |
 | CodeRabbit | ✅ **Configurado** | `.coderabbit.yaml` activo con perfil assertive e instrucciones de revisión en español |
 | Coordinación multiagente | 🚧 **En validación** | Issue #12: reserva atómica por Issue + detección de solapamientos |
 | Producción | ⚪ **NO VALIDADA** | CI/merge no sustituyen despliegue ni validación real |
