@@ -1,193 +1,83 @@
-# Condor — Roadmap canónico
+# Cóndor — Roadmap
 
-> **Fuente única del estado vivo del proyecto.**
->
-> Este archivo condensa el panorama completo de Condor y debe permitir retomar el proyecto sin depender de conversaciones anteriores.
-> Toda decisión durable, cambio de dirección, prioridad, hallazgo importante, estado de implementación o siguiente paso debe reflejarse aquí.
+> Vista ejecutiva del avance del proyecto.  
+> Este documento está pensado para que cualquier persona pueda entender **qué se ha hecho, qué se está haciendo, qué sigue y si existe algún bloqueo**, sin entrar en detalles técnicos.
 
-## 0. Regla de gobierno
-
-`ROADMAP.md` es la fuente canónica para **qué es Condor, dónde está, qué se decidió, qué falta y qué sigue**.
-
-Reglas:
-
-- actualizar este archivo en toda PR que cambie de forma material el producto, arquitectura, infraestructura, seguridad, calidad, UX, prioridades o estado del roadmap;
-- no mantener roadmaps paralelos en README, Issues, chats o documentos sueltos;
-- GitHub Issues representan unidades ejecutables de trabajo, pero el panorama consolidado vive aquí;
-- `AGENTS.md` define **cómo trabajar**; `ROADMAP.md` define **qué estamos construyendo y en qué estado está**;
-- `README.md` presenta el proyecto de forma breve y visual, sin competir con este documento;
-- las decisiones sustituidas deben actualizarse aquí en lugar de acumular contradicciones;
-- mantener un panorama suficientemente completo para que un agente nuevo pueda leerlo y continuar desde el estado real del repositorio;
-- antes de abrir trabajo nuevo, contrastar este roadmap con `main`, PRs abiertos, CI y Issues para evitar duplicados;
-- después de cada merge relevante, condensar el resultado aquí.
-
-## 1. Identidad del proyecto
-
-| Campo | Valor |
-|---|---|
-| Proyecto | **Condor** |
-| Repositorio | `pl0n3r/Condor` |
-| Rama canónica | `main` |
-| Tipo | SaaS de gestión corporativa |
-| Estado | Arranque / definición inicial |
-| Mercado principal | Colombia |
-| Idioma principal | Español (Colombia, `es-CO`) |
-| Infraestructura base | Heredada conceptualmente de BRVTAL, sin copiar lógica de negocio ni deuda histórica |
-
-## 2. Principios de desarrollo
-
-Condor adopta desde el inicio las prácticas maduras utilizadas en BRVTAL:
-
-- branch → implementación → pruebas dirigidas → PR → CI → Sonar/CodeRabbit → correcciones → squash merge → validación del SHA exacto de `main`;
-- paralelización por defecto para trabajo independiente;
-- merges a `main` serializados;
-- CI rápido, selectivo y paralelo;
-- pruebas de contrato, integración y Playwright E2E cuando corresponda;
-- preferencia por pruebas de comportamiento sobre assertions de texto fuente;
-- usuario E2E aislado para flujos autenticados cuando exista autenticación;
-- seguridad desde el diseño;
-- ningún secreto en el repositorio;
-- ninguna migración destructiva de producción ejecutada automáticamente;
-- CI verde no equivale a validación en producción;
-- documentación suficiente para retomar el proyecto sin memoria de chat;
-- decisiones rutinarias técnicas se resuelven autónomamente desde el contexto del repositorio;
-- español como idioma predeterminado de producto, documentación y colaboración.
-
-## 3. Infraestructura objetivo
-
-Base inicial, sujeta a ajuste si las necesidades reales del producto lo requieren:
-
-- GitHub como fuente de código y colaboración;
-- GitHub Actions para CI;
-- SonarCloud para análisis estático/calidad;
-- CodeRabbit para revisión automática;
-- Hostinger shared hosting como destino de producción;
-- PHP 8.5;
-- MariaDB / MySQL-compatible;
-- HTML + CSS + JavaScript con dependencias contenidas;
-- Playwright para pruebas de navegador;
-- despliegue desde `main` hacia Hostinger;
-- separación estricta entre validación de código, observación de despliegue y validación real de producción.
-
-## 4. Arquitectura de producto
-
-**Pendiente de definición.**
-
-Este bloque debe condensar progresivamente:
-
-- usuarios y roles;
-- dominios funcionales;
-- modelo de datos;
-- módulos;
-- navegación;
-- permisos;
-- integraciones;
-- límites de arquitectura;
-- contratos públicos/internos;
-- requisitos de multi-tenancy si aplica.
-
-No se copiará la arquitectura funcional de BRVTAL salvo patrones genéricos que sean apropiados para Condor.
-
-## 5. Estado actual
-
-### Completado
-
-- [x] Proyecto nombrado **Condor**.
-- [x] Repositorio oficial creado: `pl0n3r/Condor`.
-- [x] `main` definida como rama canónica.
-- [x] Decisión: reutilizar la filosofía de infraestructura de BRVTAL.
-- [x] Decisión: reutilizar las mismas prácticas maduras de ingeniería.
-- [x] Decisión: `ROADMAP.md` será el lugar canónico donde se condensa todo el estado del proyecto.
-- [x] Decisión: Condor está orientado inicialmente al público colombiano y usa español de Colombia como idioma principal.
-- [x] Decisión: toda la colaboración en GitHub se realizará en español siempre que sea técnicamente viable.
-
-### En curso
-
-- [ ] Definir el alcance funcional de Condor.
-- [ ] Diseñar la arquitectura inicial.
-- [ ] Crear bootstrap técnico.
-- [ ] Crear `AGENTS.md` con protocolo operativo específico de Condor.
-- [ ] Crear CI inicial.
-- [ ] Configurar SonarCloud.
-- [ ] Configurar CodeRabbit.
-- [ ] Definir estrategia de entornos y despliegue en Hostinger.
-- [ ] Crear baseline de seguridad y testing.
-
-### Pendiente / backlog estratégico
-
-Se irá consolidando aquí a medida que aparezcan requisitos. Los Issues deberán mapearse a este panorama, no sustituirlo.
-
-## 6. Decisiones durables
-
-### D-001 — BRVTAL como referencia de infraestructura, no como código base
-
-Condor reutiliza prácticas, automatización, criterios de calidad, disciplina de CI/CD y patrones generales probados en BRVTAL.
-
-No se copiarán automáticamente:
-
-- módulos de DISCADMIN;
-- reglas de negocio;
-- identidad visual;
-- rutas;
-- esquema de base de datos;
-- deuda técnica;
-- decisiones específicas del dominio musical.
-
-### D-002 — Roadmap como memoria operativa del proyecto
-
-`ROADMAP.md` es el registro consolidado del estado de Condor.
-
-Los demás artefactos tienen responsabilidades distintas:
-
-- **ROADMAP.md:** qué existe, qué se decidió, qué falta, prioridades, riesgos y próximos pasos;
-- **AGENTS.md:** cómo deben trabajar humanos/agentes sobre el repositorio;
-- **README.md:** presentación breve y visual;
-- **Issues:** trabajo ejecutable y trazable;
-- **PRs:** cambios concretos y evidencia de validación;
-- **docs/**: documentación especializada que sea demasiado extensa para el roadmap.
-
-### D-003 — Español de Colombia como idioma canónico
-
-Condor está pensado inicialmente para usuarios en Colombia. El idioma predeterminado es **español de Colombia (`es-CO`)**.
-
-La regla se aplica, siempre que técnicamente sea viable, a:
-
-- interfaz de usuario, navegación, formularios, validaciones, errores, estados vacíos, ayudas, accesibilidad y mensajes del sistema;
-- correos, notificaciones, textos transaccionales y contenido generado por la aplicación;
-- documentación del repositorio;
-- títulos, descripciones y comentarios de Issues;
-- títulos, descripciones, revisiones, respuestas y comentarios de Pull Requests;
-- mensajes de commit;
-- nombres visibles de workflows, jobs y pasos de GitHub Actions;
-- Releases, notas de versión, Projects, milestones y labels;
-- comentarios de código cuando sean necesarios;
-- textos de pruebas y fixtures visibles para personas.
-
-Convenciones técnicas que deban conservarse por compatibilidad, interoperabilidad o claridad pueden permanecer en inglés: nombres de librerías y APIs, comandos, palabras reservadas, protocolos, formatos estándar, nombres de paquetes, claves externas, identificadores de terceros y términos técnicos cuya traducción introduzca ambigüedad.
-
-Para ramas y nombres internos propios del proyecto, preferir español claro y ASCII cuando sea práctico, por ejemplo `feature/autenticacion`, `fix/permisos` o `docs/roadmap`.
-
-Los formatos locales deben partir de Colombia cuando no exista otro requisito: idioma `es-CO`, moneda COP, fechas/horas comprensibles para usuarios colombianos y textos redactados de forma natural para este mercado.
-
-## 7. Riesgos y restricciones
-
-- evitar sobrearquitectura antes de conocer el alcance funcional;
-- evitar copiar componentes de BRVTAL que no tengan sentido para Condor;
-- mantener compatibilidad con el hosting elegido mientras no se decida otra plataforma;
-- diseñar seguridad, permisos y aislamiento de datos antes de exponer flujos sensibles;
-- evitar que Issues, README y chats diverjan del estado condensado aquí;
-- evitar anglicismos innecesarios en superficies visibles y documentación sin traducir términos técnicos cuya traducción perjudique precisión o compatibilidad.
-
-## 8. Próximos pasos
-
-1. Definir claramente qué problema resuelve Condor y para quién.
-2. Identificar usuarios, roles y flujos principales.
-3. Diseñar arquitectura mínima viable.
-4. Crear bootstrap técnico e infraestructura CI.
-5. Crear primer vertical slice funcional.
-6. Añadir seguridad, integración y E2E desde el inicio.
-7. Mantener este roadmap actualizado en cada cambio material.
+**Última actualización:** 19 de septiembre de 2026  
+**Estado general:** 🟡 Arranque del proyecto  
+**Mercado inicial:** Colombia
 
 ---
 
-**Regla final:** si una decisión o avance es suficientemente importante como para afectar cómo se continúa Condor en una sesión futura, debe quedar condensado aquí.
+## Vista general
+
+| Frente | Estado | Avance actual |
+|---|---|---|
+| Definición del producto | 🟡 En curso | Alcance funcional por definir |
+| Arquitectura | ⚪ Pendiente | Se diseñará después de cerrar el alcance inicial |
+| Infraestructura de desarrollo | 🟡 En curso | Se adoptarán las prácticas maduras de BRVTAL |
+| Calidad y pruebas | 🟡 En curso | SonarCloud, CodeRabbit, CI y E2E previstos desde el inicio |
+| Seguridad | ⚪ Pendiente | Baseline por diseñar junto con la arquitectura |
+| Experiencia de usuario | ⚪ Pendiente | Se definirá con los primeros flujos del producto |
+| Despliegue | ⚪ Pendiente | Hostinger como base inicial; flujo aún por configurar |
+
+**Leyenda:** 🟢 Completado · 🟡 En curso · 🔴 Bloqueado · ⚪ Pendiente
+
+## Lo que ya está hecho
+
+- ✅ Proyecto creado con el nombre **Cóndor**.
+- ✅ Repositorio oficial definido: `pl0n3r/Condor`.
+- ✅ Rama principal: `main`.
+- ✅ Se decidió reutilizar la experiencia de infraestructura y las prácticas de ingeniería maduras de BRVTAL, sin copiar su lógica de negocio ni su deuda técnica.
+- ✅ Español de Colombia (`es-CO`) definido como idioma principal del producto y de la colaboración en GitHub.
+- ✅ Este `ROADMAP.md` queda definido como la vista ejecutiva del avance del proyecto.
+- ✅ Las especificaciones se separaron del roadmap para mantener esta vista limpia.
+
+## En qué estamos trabajando
+
+1. **Definición del producto**
+   - precisar qué problema resuelve Cóndor;
+   - identificar usuarios y roles;
+   - definir los flujos principales.
+
+2. **Base técnica**
+   - preparar el arranque del proyecto;
+   - crear las reglas operativas para agentes y desarrollo;
+   - configurar CI, SonarCloud y CodeRabbit;
+   - preparar pruebas automatizadas desde el inicio.
+
+3. **Arquitectura**
+   - se diseñará una vez esté suficientemente claro el alcance inicial;
+   - se evitará sobrearquitectura prematura.
+
+## Qué sigue
+
+- Definir el alcance funcional inicial.
+- Diseñar la arquitectura mínima viable.
+- Crear la base técnica del proyecto.
+- Construir el primer flujo funcional completo.
+- Incorporar autenticación, seguridad, pruebas e integración según lo requiera ese primer flujo.
+- Configurar el despliegue y su observabilidad.
+
+## Bloqueos
+
+**No hay bloqueos activos.**
+
+## Cómo se mantiene este roadmap
+
+Este archivo es un **tablero de progreso**, no un documento de especificaciones.
+
+- cada cambio material debe reflejar aquí su impacto en el avance;
+- cada PR relevante debe actualizar el roadmap antes de fusionarse si cambia el estado de algún frente;
+- los detalles técnicos, reglas y decisiones viven en [ESPECIFICACIONES.md](ESPECIFICACIONES.md);
+- los Issues representan trabajo ejecutable, pero esta página muestra el panorama consolidado;
+- cuando el historial crezca demasiado, el trabajo terminado se moverá a `docs/roadmap-historico/` y esta vista conservará solo lo necesario para entender el estado actual;
+- el roadmap debe priorizar claridad para negocio y evitar ruido técnico.
+
+---
+
+### Vista rápida
+
+**Ahora:** definición + base técnica.  
+**Después:** arquitectura mínima + primer flujo funcional.  
+**Bloqueos:** ninguno.
