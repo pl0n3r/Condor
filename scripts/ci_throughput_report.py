@@ -232,9 +232,12 @@ def display_seconds(value: Any) -> str:
     """Formatea una duración corta para el resumen humano."""
     if value is None:
         return "n/a"
-    total = round(float(value))
+    numeric = round(float(value))
+    sign = "-" if numeric < 0 else ""
+    total = abs(numeric)
     minutes, seconds = divmod(total, 60)
-    return f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
+    rendered = f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
+    return f"{sign}{rendered}"
 
 
 def status_label(status: str) -> str:
@@ -256,8 +259,8 @@ def markdown_summary(report: dict[str, Any]) -> str:
     lines = [
         "# Throughput del CI de Condor",
         "",
-        f"- SHA observado: \`{report['source_sha']}\`",
-        f"- Evento: \`{report['event']}\`",
+        f"- SHA observado: `{report['source_sha']}`",
+        f"- Evento: `{report['event']}`",
         f"- Resultado del CI: **{report['conclusion']}**",
         f"- Wall time: **{display_seconds(report['workflow_wall_seconds'])}**",
         f"- Línea base: **{display_seconds(baseline)}** "
