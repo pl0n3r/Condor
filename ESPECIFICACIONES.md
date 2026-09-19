@@ -95,7 +95,7 @@ No se copiarán automáticamente módulos, esquemas de datos, rutas, identidad v
 - `ESPECIFICACIONES.md`: reglas, decisiones y detalle funcional/técnico.
 - Issues específicos: unidades ejecutables de trabajo y criterios de aceptación.
 - PRs: cambios concretos y evidencia de validación.
-- `docs/roadmap-historico/`: archivo de etapas cerradas cuando el roadmap activo necesite compactarse.
+- `docs/roadmap-historico/`: snapshots o copias auxiliares; nunca sustituye ni recorta el roadmap canónico.
 - `AGENTES.md`: protocolo operativo de desarrollo cuando sea creado.
 
 El roadmap usa la convención heredada de BRVTAL:
@@ -207,6 +207,36 @@ Reglas:
 - no usar variantes de formato en títulos;
 - `1.0.0` continúa requiriendo decisión explícita del usuario;
 - los títulos históricos pueden normalizarse retroactivamente para mantener tracking consistente.
+
+### D-010 — Roadmap exclusivo de trabajo y progreso
+
+El Issue #1 debe contener **únicamente información de trabajo y progreso**.
+
+Puede contener:
+
+- fases;
+- tareas e hitos;
+- estado ✅ / 🚧 / ⛔;
+- versiones objetivo;
+- Issues/PRs relacionados;
+- merge SHA;
+- evidencia de validación, deploy o producción;
+- bloqueos y su resolución;
+- resúmenes de progreso que cambien con el estado real del proyecto.
+
+No debe contener texto permanente de referencia, como:
+
+- políticas;
+- convenciones;
+- manuales;
+- reglas de idioma/versionado/GitHub;
+- instrucciones para agentes;
+- explicaciones de cómo funciona el roadmap;
+- criterios de seguridad o entrega que no sean una tarea ejecutable.
+
+Ese contenido vive en `AGENTES.md`, `ESPECIFICACIONES.md` o `GLOSARIO.md`.
+
+La regla append-only de D-008 aplica a **entradas de trabajo e historial de ejecución**. Retirar o mover del roadmap texto normativo fijo no constituye pérdida de historial y debe hacerse cuando mantenga la vista más limpia para socios.
 
 ## 7. Criterio de actualización
 

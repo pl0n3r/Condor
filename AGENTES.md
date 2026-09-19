@@ -13,7 +13,7 @@ Cóndor separa explícitamente operación, especificación y progreso:
 - **Código fusionado en `main` + pruebas**: verdad de implementación.
 - **`AGENTES.md`**: cómo se trabaja.
 - **`ESPECIFICACIONES.md`**: decisiones durables, reglas funcionales y arquitectura.
-- **[Issue #1 — Roadmap canónico](https://github.com/pl0n3r/Condor/issues/1)**: qué está planeado, en curso, bloqueado o terminado y en qué orden se ejecuta.
+- **[Issue #1 — Roadmap canónico](https://github.com/pl0n3r/Condor/issues/1)**: log exclusivo de trabajo y progreso: qué está planeado, en curso, bloqueado o terminado y en qué orden se ejecuta.
 - **Issues específicos**: alcance ejecutable y criterios de aceptación.
 - **PRs**: cambio concreto y evidencia de validación.
 - **`README.md`**: presentación visual y ejecutiva del proyecto; no es roadmap acumulativo ni especificación.
@@ -365,7 +365,9 @@ Reglas:
 - después de un merge relevante, el roadmap debe reflejar la realidad, no el plan anterior;
 - hasta alcanzar una **v1.0.0 madura**, conservar un registro detallado de cada bloque relevante: tarea/hito, estado, versión cuando exista, PR, merge SHA, validación exact-main, estado de despliegue y validación de producción cuando exista;
 - si el cuerpo del Issue #1 llegara a un límite práctico de tamaño, **no compactar ni borrar**: crear un volumen/Issue de continuación, dejar el Issue #1 intacto y enlazar ambos en ambas direcciones;
-- el roadmap debe conservar una lectura limpia para socios y personas no técnicas: mostrar trabajo planeado, hecho, pendiente, bloqueos, fases, PRs/versiones y progreso sin llenarlo con especificaciones de implementación;
+- el roadmap debe conservar una lectura limpia para socios y personas no técnicas: mostrar trabajo planeado, hecho, pendiente, bloqueos, fases, PRs/versiones y progreso;
+- **no incluir en el roadmap políticas permanentes, manuales, convenciones, instrucciones operativas ni explicaciones que permanezcan fijas**; esos contenidos pertenecen a `AGENTES.md`, `ESPECIFICACIONES.md` o `GLOSARIO.md`;
+- la regla append-only aplica a **entradas de trabajo e historial de ejecución**, no al texto normativo: mover o retirar boilerplate/políticas del roadmap está permitido y es obligatorio cuando mejora su limpieza sin borrar trabajo histórico;
 - cuando un detalle técnico sea necesario para ejecutar o validar una tarea, llevarlo al Issue específico o a `ESPECIFICACIONES.md` y mantener en el roadmap solo el resumen necesario para entender avance y estado.
 
 ---
@@ -528,7 +530,7 @@ Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y 
 - la convención visual es exactamente: ✅ ~~completado~~, 🚧 pendiente/en curso, ⛔ bloqueado;
 - los elementos completados se conservan tachados y no se eliminan;
 - el roadmap no se compacta ni elimina historial antes de v1.0.0; si debe dividirse por tamaño, se crea una continuación sin alterar el histórico ya registrado;
-- el roadmap no es el archivo de especificaciones;
+- el roadmap no es el archivo de especificaciones ni un repositorio de políticas; contiene únicamente trabajo/progreso e historial de ejecución;
 - `ESPECIFICACIONES.md` contiene decisiones durables, reglas funcionales y detalle arquitectónico;
 - el roadmap debe poder ser leído por una socia o stakeholder para entender el avance en tiempo real sin necesitar contexto técnico;
 - `ROADMAP.md` es solo un punto de entrada al Issue #1 y no mantiene una copia paralela del progreso;
