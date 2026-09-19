@@ -3,6 +3,8 @@ description: Registrar trabajo técnico concreto y verificable.
 title: "tarea: [descripción breve] (V 0.1.0)"
 labels:
   - "tipo: infraestructura"
+  - "estado: disponible"
+  - "versión: 0.1.0"
 body:
   - type: textarea
     id: objetivo
