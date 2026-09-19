@@ -320,6 +320,28 @@ Reglas:
 - artifacts de Playwright se conservan solo ante fallos;
 - no se usan assertions frágiles de texto fuente como sustituto de comportamiento verificable.
 
+### D-016 — Gate E2E rápido con Chrome estable del runner
+
+La telemetría identificó a la preparación del navegador como el cuello de botella inicial del CI. Se evaluó cachear los binarios Playwright: el cache hit fue real, pero redujo el job solo de **35 s a 33 s** mientras restauraba aproximadamente **271 MB**, por lo que esa estrategia fue descartada.
+
+Condor usa para el gate E2E rápido el Chrome estable preinstalado en el runner GitHub `ubuntu-24.04`, controlado desde Playwright mediante `channel: 'chrome'`.
+
+Reglas:
+
+- el motor Chromium sigue siendo la cobertura primaria;
+- `@playwright/test` permanece fijado por lockfile;
+- `npm ci` se ejecuta en cada run;
+- no descargar ni cachear Chromium para el gate rápido cuando el runner ya provee Chrome;
+- instalar únicamente el helper `ffmpeg` de Playwright para conservar video/diagnóstico en fallos;
+- registrar la versión real de Chrome en el Job Summary;
+- fijar explícitamente el sistema del runner en `ubuntu-24.04`;
+- WebKit sigue disponible para ejecución dirigida cuando el riesgo lo justifique;
+- si una futura incompatibilidad exige una revisión exacta de Chromium, se puede usar el browser Playwright fijado de forma dirigida;
+- toda optimización se conserva solo si la medición demuestra una mejora material sin perder cobertura.
+
+Evidencia inicial: el enfoque final redujo Playwright de **37 s a 12 s** y el CI de PR de aproximadamente **50 s a 31 s**. Estos datos deben confirmarse nuevamente sobre el SHA exacto de `main`.
+
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
