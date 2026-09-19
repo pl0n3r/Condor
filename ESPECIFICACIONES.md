@@ -1,4 +1,4 @@
-# Cóndor — Especificaciones y decisiones
+# Condor — Especificaciones y decisiones
 
 > Documento de referencia para las reglas, decisiones durables, arquitectura y especificaciones del proyecto.  
 > El progreso operativo y acumulativo vive en el roadmap canónico: [Issue #1](https://github.com/pl0n3r/Condor/issues/1).
@@ -7,7 +7,9 @@
 
 | Campo | Valor |
 |---|---|
-| Proyecto | **Cóndor** |
+| Nombre oficial | **Condor App** |
+| Nombre corto | **Condor** |
+| Dominio canónico | `https://www.condorapp.com.co` |
 | Repositorio | `pl0n3r/Condor` |
 | Rama canónica | `main` |
 | Tipo | SaaS de gestión corporativa |
@@ -33,7 +35,7 @@ Los formatos locales partirán de Colombia cuando no exista otro requisito: `es-
 
 ## 3. Principios de ingeniería
 
-Cóndor adopta las prácticas maduras aprendidas en BRVTAL, sin copiar su lógica de negocio:
+Condor adopta las prácticas maduras aprendidas en BRVTAL, sin copiar su lógica de negocio:
 
 - branch → implementación → pruebas dirigidas → PR → CI → Sonar/CodeRabbit → correcciones → squash merge → validación del SHA exacto de `main`;
 - paralelización por defecto del trabajo independiente;
@@ -84,7 +86,7 @@ Aquí se documentarán, cuando se definan:
 
 ### D-001 — BRVTAL es referencia de prácticas, no código base
 
-Cóndor reutiliza aprendizajes de infraestructura, automatización, calidad, seguridad y flujo de entrega de BRVTAL.
+Condor reutiliza aprendizajes de infraestructura, automatización, calidad, seguridad y flujo de entrega de BRVTAL.
 
 No se copiarán automáticamente módulos, esquemas de datos, rutas, identidad visual, reglas de negocio ni decisiones específicas del dominio musical.
 
@@ -108,19 +110,19 @@ Los elementos completados permanecen tachados como historial durable.
 
 ### D-003 — Español de Colombia como idioma principal
 
-Cóndor está pensado inicialmente para el público colombiano y utilizará `es-CO` como idioma predeterminado en producto y colaboración, salvo excepciones técnicas justificadas.
+Condor está pensado inicialmente para el público colombiano y utilizará `es-CO` como idioma predeterminado en producto y colaboración, salvo excepciones técnicas justificadas.
 
 ### D-004 — AGENTES.md hereda las prácticas maduras de BRVTAL
 
-`AGENTES.md` es el protocolo operativo canónico de Cóndor. Toma de BRVTAL la estructura y las reglas que sí aplican: protocolo de arranque, paralelización, roles multidisciplinarios, disciplina de PR/CI, seguridad, testing, gates, estados de producción y mantenimiento del roadmap.
+`AGENTES.md` es el protocolo operativo canónico de Condor. Toma de BRVTAL la estructura y las reglas que sí aplican: protocolo de arranque, paralelización, roles multidisciplinarios, disciplina de PR/CI, seguridad, testing, gates, estados de producción y mantenimiento del roadmap.
 
 Se excluyen deliberadamente las reglas específicas de DISCADMIN, del dominio musical, rutas, módulos, esquema de datos y decisiones funcionales propias de BRVTAL.
 
-Además, `AGENTES.md` debe reflejar todas las reglas operativas acordadas para Cóndor: español de Colombia, infraestructura objetivo, roadmap en Issue #1, convención visual acumulativa, separación entre roadmap y especificaciones y orientación del roadmap a una lectura ejecutiva para socios.
+Además, `AGENTES.md` debe reflejar todas las reglas operativas acordadas para Condor: español de Colombia, infraestructura objetivo, roadmap en Issue #1, convención visual acumulativa, separación entre roadmap y especificaciones y orientación del roadmap a una lectura ejecutiva para socios.
 
 ### D-005 — Versionado por deploy
 
-Cóndor utiliza una versión humana de producto para cada deploy a producción, siguiendo el esquema pre-1.0 utilizado en BRVTAL.
+Condor utiliza una versión humana de producto para cada deploy a producción, siguiendo el esquema pre-1.0 utilizado en BRVTAL.
 
 Reglas:
 
@@ -157,7 +159,7 @@ Debe incluir como mínimo:
 - qué sigue;
 - panorama general pendiente resumido con enlace al roadmap canónico.
 
-La versión desplegada se actualiza únicamente con evidencia del despliegue. El primer deploy real de Cóndor será `v0.1.0`; hasta que ocurra, el README debe mostrar que no existe versión desplegada y mantener `v0.1.0` como versión objetivo.
+La versión desplegada se actualiza únicamente con evidencia del despliegue. El primer deploy real de Condor será `v0.1.0`; hasta que ocurra, el README debe mostrar que no existe versión desplegada y mantener `v0.1.0` como versión objetivo.
 
 El README no sustituye el roadmap, `AGENTES.md` ni `ESPECIFICACIONES.md`.
 
@@ -170,14 +172,14 @@ Su objetivo es permitir que una persona no técnica entienda el avance y las evi
 Reglas:
 
 - explicar términos con lenguaje de negocio;
-- incluir contexto de Cóndor cuando ayude;
+- incluir contexto de Condor cuando ayude;
 - mantenerlo actualizado cuando aparezcan conceptos técnicos relevantes nuevos;
 - no convertirlo en documentación de implementación;
 - enlazarlo desde el README.
 
 ### D-008 — Roadmap acumulativo e inmutable hasta v1.0.0
 
-El roadmap canónico en GitHub Issue #1 funciona como **ledger histórico append-only** del desarrollo de Cóndor.
+El roadmap canónico en GitHub Issue #1 funciona como **ledger histórico append-only** del desarrollo de Condor.
 
 Reglas:
 
@@ -238,8 +240,21 @@ Ese contenido vive en `AGENTES.md`, `ESPECIFICACIONES.md` o `GLOSARIO.md`.
 
 La regla append-only de D-008 aplica a **entradas de trabajo e historial de ejecución**. Retirar o mover del roadmap texto normativo fijo no constituye pérdida de historial y debe hacerse cuando mantenga la vista más limpia para socios.
 
+### D-011 — Nombre oficial Condor App y nombre corto Condor
+
+La identidad oficial del producto es **Condor App**.
+
+Reglas:
+
+- usar **Condor App** en superficies de marca, identidad pública, presentación comercial y referencias al nombre oficial del producto;
+- usar **Condor** como nombre corto en documentación técnica, GitHub, conversaciones de desarrollo, código y referencias internas;
+- no usar **Cóndor** con tilde como nombre del producto o del proyecto;
+- el repositorio permanece como `pl0n3r/Condor`;
+- el dominio canónico es **https://www.condorapp.com.co**;
+- esta convención aplica a documentación existente y futura.
+
 ## 7. Criterio de actualización
 
-Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Cóndor.
+Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
 
 El progreso, estado y orden de ejecución deben actualizarse en el [roadmap canónico — Issue #1](https://github.com/pl0n3r/Condor/issues/1), no duplicarse aquí.
