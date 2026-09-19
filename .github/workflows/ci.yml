@@ -1,0 +1,162 @@
+name: CI Cóndor (V 0.1.0)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-condor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    name: Preflight
+    runs-on: ubuntu-latest
+    outputs:
+      documentacion: ${{ steps.cambios.outputs.documentacion }}
+      github: ${{ steps.cambios.outputs.github }}
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validar título de Pull Request
+        if: github.event_name == 'pull_request'
+        env:
+          TITULO_PR: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TITULO_PR" =~ \(V\ [0-9]+\.[0-9]+\.[0-9]+\)$ ]]; then
+            echo "::error::El título del PR debe terminar con el formato exacto (V X.Y.Z)."
+            exit 1
+          fi
+
+      - name: Clasificar cambios
+        id: cambios
+        env:
+          EVENTO: ${{ github.event_name }}
+          BASE_PR: ${{ github.event.pull_request.base.sha }}
+          PUSH_ANTES: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENTO" == "pull_request" ]]; then
+            base="$BASE_PR"
+          elif [[ "$EVENTO" == "push" && -n "$PUSH_ANTES" && "$PUSH_ANTES" != "0000000000000000000000000000000000000000" ]]; then
+            base="$PUSH_ANTES"
+          else
+            base=""
+          fi
+
+          if [[ -n "$base" ]] && git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            archivos="$(git diff --name-only "$base" "$GITHUB_SHA")"
+          else
+            archivos="$(git ls-files)"
+          fi
+
+          printf '%s\n' "$archivos"
+
+          if grep -Eq '(^|/)[^/]+\.md$|^docs/' <<<"$archivos"; then
+            echo "documentacion=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "documentacion=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if grep -Eq '^\.github/|^AGENTES\.md$|^ESPECIFICACIONES\.md$|^GLOSARIO\.md$|^ROADMAP\.md$' <<<"$archivos"; then
+            echo "github=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "github=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resumen preflight
+        run: |
+          {
+            echo "## Preflight Cóndor"
+            echo
+            echo "- Evento: `$GITHUB_EVENT_NAME`"
+            echo "- SHA: `$GITHUB_SHA`"
+            echo "- Documentación modificada: `${{ steps.cambios.outputs.documentacion }}`"
+            echo "- Gobierno/GitHub modificado: `${{ steps.cambios.outputs.github }}`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  documentacion:
+    name: Validar documentación
+    needs: preflight
+    if: needs.preflight.outputs.documentacion == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Validar documentación
+        run: python3 scripts/validar_documentacion.py
+
+  gobierno:
+    name: Validar gobierno del repositorio
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Validar archivos canónicos
+        run: |
+          set -euo pipefail
+          for archivo in AGENTES.md ESPECIFICACIONES.md GLOSARIO.md README.md ROADMAP.md; do
+            test -f "$archivo" || { echo "::error::Falta $archivo"; exit 1; }
+          done
+          test ! -e AGENTS.md || { echo "::error::AGENTS.md no debe existir; el archivo canónico es AGENTES.md"; exit 1; }
+
+      - name: Validar configuración de labels
+        run: |
+          python3 -m json.tool .github/labels.json >/dev/null
+
+      - name: Validar títulos predeterminados de Issues
+        run: |
+          set -euo pipefail
+          for archivo in .github/ISSUE_TEMPLATE/*.yml; do
+            [[ "$(basename "$archivo")" == "config.yml" ]] && continue
+            titulo="$(grep -m1 '^title:' "$archivo" | sed -E 's/^title:[[:space:]]*"?([^"]*)"?$/\1/')"
+            if [[ ! "$titulo" =~ \(V\ [0-9]+\.[0-9]+\.[0-9]+\)$ ]]; then
+              echo "::error file=$archivo::El título predeterminado debe terminar con (V X.Y.Z)."
+              exit 1
+            fi
+          done
+
+  validar:
+    name: Validar
+    needs: [preflight, documentacion, gobierno]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consolidar gates
+        env:
+          PREFLIGHT: ${{ needs.preflight.result }}
+          DOCUMENTACION: ${{ needs.documentacion.result }}
+          GOBIERNO: ${{ needs.gobierno.result }}
+        run: |
+          set -euo pipefail
+
+          [[ "$PREFLIGHT" == "success" ]] || { echo "::error::Preflight no pasó."; exit 1; }
+          [[ "$GOBIERNO" == "success" ]] || { echo "::error::Gobierno no pasó."; exit 1; }
+
+          case "$DOCUMENTACION" in
+            success|skipped) ;;
+            *) echo "::error::Documentación no pasó."; exit 1 ;;
+          esac
+
+          {
+            echo "## Resultado CI Cóndor"
+            echo
+            echo "- Preflight: **$PREFLIGHT**"
+            echo "- Documentación: **$DOCUMENTACION**"
+            echo "- Gobierno: **$GOBIERNO**"
+            echo "- Resultado agregado: **success**"
+          } >> "$GITHUB_STEP_SUMMARY"

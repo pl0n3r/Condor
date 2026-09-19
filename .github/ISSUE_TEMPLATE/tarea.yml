@@ -1,0 +1,31 @@
+name: Crear tarea técnica (V 0.1.0)
+description: Registrar trabajo técnico concreto y verificable.
+title: "tarea: [descripción breve] (V 0.1.0)"
+labels:
+  - "tipo: infraestructura"
+body:
+  - type: textarea
+    id: objetivo
+    attributes:
+      label: Objetivo
+    validations:
+      required: true
+  - type: textarea
+    id: alcance
+    attributes:
+      label: Alcance
+      description: Lista el trabajo que sí debe realizarse.
+    validations:
+      required: true
+  - type: textarea
+    id: aceptacion
+    attributes:
+      label: Criterios de aceptación
+      description: Define resultados verificables.
+    validations:
+      required: true
+  - type: textarea
+    id: riesgos
+    attributes:
+      label: Riesgos o dependencias
+      description: Registra bloqueos, permisos o dependencias externas conocidas.

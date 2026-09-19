@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: false
+    base_branches:
+      - main
+  path_filters:
+    - "!**/node_modules/**"
+    - "!**/vendor/**"
+    - "!**/.DS_Store"
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        Responde y redacta los comentarios de revisión en español. Trata AGENTES.md como protocolo operativo canónico y ESPECIFICACIONES.md como fuente de decisiones durables. Prioriza defectos verificables, seguridad, mantenibilidad y regresiones reales; evita observaciones cosméticas sin impacto.
+    - path: ".github/**"
+      instructions: |
+        Revisa que los títulos y textos humanos estén en español cuando sea técnicamente viable. Conserva el CI canónico con preflight rápido, gates independientes en paralelo y un check agregado estable. Detecta falsos negativos en selección por paths y permisos excesivos.
+    - path: "scripts/**"
+      instructions: |
+        Prioriza scripts deterministas, portables, con errores accionables y sin efectos destructivos implícitos.
+    - path: "tests/**"
+      instructions: |
+        Exige cobertura de regresión útil para defectos deterministas. Prefiere pruebas de comportamiento sobre assertions frágiles de texto fuente.
+    - path: "config/**"
+      instructions: |
+        Revisa seguridad, secretos, configuración por entorno, fail-closed y compatibilidad con Hostinger shared hosting.
+    - path: "database/**"
+      instructions: |
+        Señala operaciones destructivas, migraciones no idempotentes o cambios capaces de afectar producción sin guardas explícitas.
+    - path: "README.md"
+      instructions: |
+        README es un snapshot visual del estado actual, no un roadmap acumulativo. Debe distinguir versión objetivo, versión desplegada y validación real de producción.
+knowledge_base:
+  code_guidelines:
+    enabled: true

@@ -1,0 +1,70 @@
+name: Gobierno GitHub (V 0.1.0)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/labels.json"
+      - ".github/workflows/sincronizar-gobierno.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sincronizar:
+    name: Sincronizar labels y milestone
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Crear o actualizar labels en español
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          jq -c '.[]' .github/labels.json | while read -r item; do
+            nombre="$(jq -r '.name' <<<"$item")"
+            color="$(jq -r '.color' <<<"$item")"
+            descripcion="$(jq -r '.description' <<<"$item")"
+            gh label create "$nombre"               --repo "$GITHUB_REPOSITORY"               --color "$color"               --description "$descripcion"               --force
+          done
+
+          for etiqueta in "bug" "documentation" "duplicate" "enhancement" "good first issue" "help wanted" "invalid" "question" "wontfix"; do
+            gh label delete "$etiqueta" --repo "$GITHUB_REPOSITORY" --yes 2>/dev/null || true
+          done
+
+      - name: Crear milestone inicial
+        id: milestone
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITULO: "Primera entrega (V 0.1.0)"
+        run: |
+          set -euo pipefail
+
+          numero="$(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/milestones?state=all&per_page=100"               --jq '.[] | select(.title == env.TITULO) | .number' 2>/dev/null | head -n1
+          )"
+
+          if [[ -z "$numero" ]]; then
+            respuesta="$(
+              gh api --method POST "repos/$GITHUB_REPOSITORY/milestones"                 -f title="$TITULO"                 -f description="Primera etapa de tracking de Cóndor antes del primer deploy real."
+            )"
+            numero="$(jq -r '.number' <<<"$respuesta")"
+          fi
+
+          echo "numero=$numero" >> "$GITHUB_OUTPUT"
+          echo "Milestone: $TITULO (#$numero)"
+
+      - name: Resumen de gobierno
+        run: |
+          {
+            echo "## Gobierno GitHub"
+            echo
+            echo "- Labels sincronizados desde `.github/labels.json`."
+            echo "- Labels predeterminados en inglés retirados cuando existían."
+            echo "- Milestone: **Primera entrega (V 0.1.0)** (#${{ steps.milestone.outputs.numero }})."
+          } >> "$GITHUB_STEP_SUMMARY"

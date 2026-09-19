@@ -1,0 +1,25 @@
+name: Proponer mejora (V 0.1.0)
+description: Registrar una mejora de producto, experiencia, calidad o ingeniería.
+title: "mejora: [descripción breve] (V 0.1.0)"
+labels:
+  - "tipo: mejora"
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Problema u oportunidad
+      description: Explica qué necesidad existe antes de proponer la solución.
+    validations:
+      required: true
+  - type: textarea
+    id: resultado
+    attributes:
+      label: Resultado esperado
+      description: Describe qué debería mejorar y cómo sabremos que funcionó.
+    validations:
+      required: true
+  - type: textarea
+    id: alcance
+    attributes:
+      label: Alcance sugerido
+      description: Incluye límites o elementos que explícitamente no hacen parte de esta mejora.
