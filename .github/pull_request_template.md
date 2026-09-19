@@ -4,8 +4,16 @@ Describe de forma breve qué cambia y por qué.
 
 ## Issue / roadmap
 
-- Issue relacionado:
+- Issue reservado: Closes #
 - Hito del roadmap:
+- Rama canónica: trabajo/issue-
+
+## Coordinación multiagente
+
+- [ ] El Issue fue reservado con `/tomar` antes de implementar.
+- [ ] Esta rama corresponde exactamente a `trabajo/issue-N`.
+- [ ] No estoy trabajando un Issue reservado por otra sesión/agente.
+- [ ] El CI de coordinación no reporta archivos solapados con otros PR abiertos.
 
 ## Validación
 
