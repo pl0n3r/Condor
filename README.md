@@ -18,10 +18,11 @@
 | --- | --- | --- |
 | Versión objetivo | 🚧 **V 0.1.0** | primera entrega en preparación |
 | Versión desplegada | ⚪ **Sin deploy todavía** | no existe evidencia de una versión en producción |
-| Base exacta previa | ✅ **main** | `4051563502dd239cd942c5d6ffd3dc69ea6aefa3` |
+| Base exacta previa | ✅ **main** | `a7d38bf6150038ff2bba3332c493e99b00cfcd65` |
 | CI | ✅ **Activo** | PRs #9/#11 y CI exact-main sobre `4051563` pasaron con check agregado `Validar` |
-| SonarCloud | 🚧 **Pendiente** | requiere configuración específica posterior |
+| SonarQube Cloud | ✅ **Activo** | PR #14: Quality Gate passed, 0 issues nuevos y 0 hotspots |
 | CodeRabbit | ✅ **Configurado** | `.coderabbit.yaml` activo con perfil assertive e instrucciones de revisión en español |
+| Coordinación multiagente | 🚧 **En validación** | Issue #12: reserva atómica por Issue + detección de solapamientos |
 | Producción | ⚪ **NO VALIDADA** | CI/merge no sustituyen despliegue ni validación real |
 
 ## Fuentes de verdad
@@ -37,13 +38,13 @@
 
 ```mermaid
 flowchart LR
- A["Trabajo / Issue"] --> B["Rama + implementación"]
- B --> C["PR (V X.Y.Z)"]
- C --> D["Preflight"]
- D --> E["Gates paralelos"]
- E --> F["Validar"]
+ A["Issue disponible"] --> B["/tomar"]
+ B --> C["Lock: trabajo/issue-N"]
+ C --> D["Implementación"]
+ D --> E["PR + Closes #N"]
+ E --> F["CI + coordinación"]
  F --> G["Sonar / CodeRabbit"]
- G --> H["Squash merge"]
+ G --> H["Squash merge serial"]
  H --> I["Validación exacta de main"]
  I --> J["Deploy Hostinger"]
  J --> K["Versión desplegada observada"]
@@ -61,6 +62,7 @@ flowchart LR
 - Plantillas de Issues/PR en español activas.
 - Labels en español sincronizados y milestone **Primera entrega (V 0.1.0)** creado.
 - CodeRabbit configurado con perfil assertive e instrucciones generales de revisión en español.
+- Núcleo de coordinación multiagente preparado: reserva atómica por Issue, estados de cola y detección de archivos solapados.
 
 ## Archivos de la entrega actual
 
@@ -89,8 +91,8 @@ flowchart LR
 
 | Lane | Trabajo |
 | --- | --- |
-| **AHORA** | 🚧 Normalizar identidad **Condor App / Condor** y dominio canónico, Issue #13. |
-| **SIGUE** | 🚧 Coordinación multiagente y reservas de trabajo, Issue #12; protección de `main` sigue bloqueada en Issue #10. |
+| **AHORA** | 🚧 Validar coordinación multiagente y reservas de trabajo, Issue #12. |
+| **SIGUE** | 🚧 Protección de `main` con gates `Validar` + coordinación, Issue #10; bloqueo administrativo vigente. |
 | **DESPUÉS** | 🚧 Definición funcional del producto + bootstrap técnico de aplicación. |
 | **CALIDAD** | 🚧 SonarCloud + baseline de pruebas + Playwright. |
 | **DEPLOY** | 🚧 Preparar Hostinger y realizar el primer deploy real **V 0.1.0**. |
@@ -103,7 +105,8 @@ flowchart LR
 | CI base | 🟢 Activo |
 | Definición del producto | ⚪ Pendiente |
 | Arquitectura | ⚪ Pendiente |
-| SonarCloud + pruebas | ⚪ Pendiente |
+| SonarQube Cloud | 🟢 Activo; ampliar integración con CI |
+| Pruebas | ⚪ Pendiente baseline funcional/E2E |
 | Seguridad base | ⚪ Pendiente |
 | Diseño y UX | ⚪ Pendiente |
 | Primer vertical slice | ⚪ Pendiente |
