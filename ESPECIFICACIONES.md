@@ -263,9 +263,11 @@ Reglas:
 - el comando `/tomar` intenta crear de forma atómica `trabajo/issue-N`; la creación de esa rama funciona como lock distribuido;
 - solo una reserva puede existir para un Issue;
 - una reserva es fail-closed y no expira automáticamente;
-- `/liberar` libera una reserva normal y `/liberar-forzado` queda restringido al dueño del repositorio;
+- cada reserva recibe un UUID de sesión único;
+- `/liberar <UUID>` libera una reserva normal, `/transferir <UUID>` rota explícitamente el ID para otra sesión y `/liberar-forzado` queda restringido al dueño del repositorio;
 - compartir una cuenta de GitHub no permite a dos sesiones asumir simultáneamente la misma reserva;
-- cada PR debe corresponder a su rama `trabajo/issue-N` e incluir `Closes #N`;
+- cada PR debe corresponder a su rama `trabajo/issue-N`, incluir `Closes #N` y declarar el UUID activo como `Reserva: <UUID>`;
+- los marcadores de reserva solo son confiables si los publica la identidad automatizada `github-actions[bot]`;
 - CI compara archivos contra otros PR abiertos y falla ante solapamientos para evitar sobrescrituras silenciosas;
 - los estados visibles de la cola son disponible, reservado, en revisión, completado, cancelado y bloqueado;
 - los merges a `main` permanecen serializados aunque el trabajo previo pueda ejecutarse en paralelo;
