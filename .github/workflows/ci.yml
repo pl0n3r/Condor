@@ -111,7 +111,15 @@ jobs:
       - name: Validar archivos canónicos
         run: |
           set -euo pipefail
-          for archivo in AGENTES.md ESPECIFICACIONES.md GLOSARIO.md README.md ROADMAP.md; do
+          for archivo in \
+            AGENTES.md \
+            ESPECIFICACIONES.md \
+            GLOSARIO.md \
+            README.md \
+            ROADMAP.md \
+            .github/workflows/coordinacion-trabajo.yml \
+            scripts/coordinar_trabajo.py \
+            tests/test_coordinar_trabajo.py; do
             test -f "$archivo" || { echo "::error::Falta $archivo"; exit 1; }
           done
           test ! -e AGENTS.md || { echo "::error::AGENTS.md no debe existir; el archivo canónico es AGENTES.md"; exit 1; }
