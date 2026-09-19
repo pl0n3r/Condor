@@ -1,7 +1,7 @@
 # Cóndor — Especificaciones y decisiones
 
 > Documento de referencia para las reglas, decisiones durables, arquitectura y especificaciones del proyecto.  
-> A diferencia de `ROADMAP.md`, este archivo puede contener detalle técnico y funcional.
+> El progreso operativo y acumulativo vive en el roadmap canónico: [Issue #1](https://github.com/pl0n3r/Condor/issues/1).
 
 ## 1. Identidad
 
@@ -87,14 +87,23 @@ Cóndor reutiliza aprendizajes de infraestructura, automatización, calidad, seg
 
 No se copiarán automáticamente módulos, esquemas de datos, rutas, identidad visual, reglas de negocio ni decisiones específicas del dominio musical.
 
-### D-002 — Separación entre avance y especificación
+### D-002 — Separación entre progreso y especificación
 
-- `ROADMAP.md`: vista ejecutiva del progreso.
+- **Issue #1:** roadmap canónico de ejecución y progreso.
+- `ROADMAP.md`: acceso visible desde el repositorio hacia el Issue #1; no duplica el estado.
 - `ESPECIFICACIONES.md`: reglas, decisiones y detalle funcional/técnico.
-- Issues: unidades de trabajo.
-- PRs: cambios y evidencia.
-- `docs/roadmap-historico/`: archivo de periodos cerrados cuando el roadmap principal crezca demasiado.
+- Issues específicos: unidades ejecutables de trabajo y criterios de aceptación.
+- PRs: cambios concretos y evidencia de validación.
+- `docs/roadmap-historico/`: archivo de etapas cerradas cuando el roadmap activo necesite compactarse.
 - `AGENTS.md`: protocolo operativo de desarrollo cuando sea creado.
+
+El roadmap usa la convención heredada de BRVTAL:
+
+- ✅ ~~completado~~;
+- 🚧 pendiente / en curso;
+- ⛔ bloqueado / dependencia externa.
+
+Los elementos completados permanecen tachados como historial durable.
 
 ### D-003 — Español de Colombia como idioma principal
 
@@ -104,4 +113,4 @@ Cóndor está pensado inicialmente para el público colombiano y utilizará `es-
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Cóndor.
 
-El roadmap no debe convertirse nuevamente en este documento.
+El progreso, estado y orden de ejecución deben actualizarse en el [roadmap canónico — Issue #1](https://github.com/pl0n3r/Condor/issues/1), no duplicarse aquí.
