@@ -411,25 +411,44 @@ Términos convencionales como `feat`, `fix`, `docs`, `test`, `refactor`, `perf` 
 
 ---
 
-## 15. README
+## 15. README por deploy
 
-El README de Cóndor debe ser **visual, ejecutivo y estable**.
+Cóndor adopta la misma estrategia de README operativo de BRVTAL: **`README.md` es el snapshot visual del deploy actual**, no un documento acumulativo.
 
-Debe priorizar:
+Para cada PR deploy-bound:
 
-- qué es Cóndor;
-- estado general;
-- enlaces al roadmap y especificaciones;
-- arquitectura resumida;
-- badges de CI/calidad cuando existan;
-- forma de desarrollo/ejecución cuando sea útil.
+- reemplazar el snapshot del README; no anexar un changelog histórico;
+- mostrar de forma visible la **versión objetivo** y la **versión desplegada actualmente**;
+- después del primer deploy real, la señal `Versión desplegada` debe mostrar siempre la última versión que Hostinger haya recibido de forma verificable, por ejemplo **`v0.1.0`**;
+- nunca actualizar `Versión desplegada` solo porque una PR se fusionó o CI quedó verde;
+- si todavía no existe evidencia de despliegue, mostrarlo explícitamente y mantener la versión objetivo separada;
+- incluir únicamente los archivos modificados por el deploy actual y una explicación breve;
+- incluir una sección **Qué se hizo**;
+- incluir una sección **Validación** con evidencia real;
+- incluir **Qué sigue** en lanes `AHORA / SIGUE / DESPUÉS` o equivalente;
+- incluir un **Panorama general pendiente** conciso, enlazado al roadmap canónico, sin duplicarlo por completo;
+- incluir una sección exacta **Estado del deploy** con tabla `Señal | Estado | Evidencia`;
+- incluir una sección **Flujo de entrega** con diagrama Mermaid cuando el pipeline exista;
+- mostrar badges de CI, Sonar y observación de deploy cuando esas superficies estén configuradas;
+- mantener visibles enlaces a `AGENTES.md`, `ESPECIFICACIONES.md` y al Issue #1;
+- mantener el README visualmente escaneable mediante tablas, estados y símbolos, evitando prosa innecesaria.
+
+El README debe distinguir siempre:
+
+- **versión objetivo** de la PR;
+- **versión desplegada** observada;
+- SHA exacto de `main`;
+- estado de validación en código;
+- estado de validación en producción.
 
 No usar README como:
 
 - roadmap acumulativo;
 - changelog completo;
 - archivo de decisiones técnicas;
-- reemplazo de `AGENTES.md`.
+- reemplazo de `AGENTES.md` o `ESPECIFICACIONES.md`.
+
+El historial de releases se conserva mediante Git/PRs/releases/roadmap; el README muestra solamente el snapshot operativo vigente.
 
 ---
 
@@ -482,7 +501,9 @@ Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y 
 - el primer deploy será `0.1.0`;
 - el incremento normal por deploy es patch (`0.1.1`, `0.1.2`, ...);
 - los saltos minor son hitos deliberados y `1.0.0` requiere decisión explícita del usuario;
-- cuando exista la aplicación, `config/version.php` será la fuente canónica de versión y cualquier metadata equivalente deberá mantener paridad.
+- cuando exista la aplicación, `config/version.php` será la fuente canónica de versión y cualquier metadata equivalente deberá mantener paridad;
+- el README usa la misma estrategia de snapshot por deploy que BRVTAL;
+- el README debe mostrar siempre y por separado la versión objetivo y la versión realmente desplegada; tras el primer deploy, la señal visible será por ejemplo `v0.1.0`, pero nunca se inferirá desde CI.
 
 ---
 

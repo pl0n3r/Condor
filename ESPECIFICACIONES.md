@@ -138,6 +138,29 @@ Reglas:
 
 Antes de habilitar el despliegue automático real, cambios preparatorios o puramente documentales no consumen versiones de producción.
 
+### D-006 — README como snapshot del deploy
+
+`README.md` sigue la estrategia operativa de BRVTAL: representa **solo el deploy/snapshot vigente** y se reemplaza en cada PR deploy-bound.
+
+Debe incluir como mínimo:
+
+- versión objetivo;
+- **versión desplegada observada**;
+- estado del deploy;
+- SHA/base exacta relevante;
+- huella del cambio cuando sea determinísticamente disponible;
+- calidad y gates;
+- flujo de entrega;
+- qué se hizo;
+- archivos modificados en ese deploy;
+- validación;
+- qué sigue;
+- panorama general pendiente resumido con enlace al roadmap canónico.
+
+La versión desplegada se actualiza únicamente con evidencia del despliegue. El primer deploy real de Cóndor será `v0.1.0`; hasta que ocurra, el README debe mostrar que no existe versión desplegada y mantener `v0.1.0` como versión objetivo.
+
+El README no sustituye el roadmap, `AGENTES.md` ni `ESPECIFICACIONES.md`.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Cóndor.
