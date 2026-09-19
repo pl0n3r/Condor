@@ -1,5 +1,5 @@
 name: Reportar error (V 0.1.0)
-description: Registrar un defecto reproducible en Cóndor.
+description: Registrar un defecto reproducible en Condor.
 title: "error: [descripción breve] (V 0.1.0)"
 labels:
   - "tipo: error"
