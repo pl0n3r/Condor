@@ -123,6 +123,7 @@ jobs:
             README.md \
             ROADMAP.md \
             .github/workflows/coordinacion-trabajo.yml \
+            .github/workflows/sonar-annotation-relay.yml \
             scripts/coordinar_trabajo.py \
             tests/test_coordinar_trabajo.py; do
             test -f "$archivo" || { echo "::error::Falta $archivo"; exit 1; }
