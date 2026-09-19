@@ -3,6 +3,8 @@ description: Registrar una mejora de producto, experiencia, calidad o ingenierí
 title: "mejora: [descripción breve] (V 0.1.0)"
 labels:
   - "tipo: mejora"
+  - "estado: disponible"
+  - "versión: 0.1.0"
 body:
   - type: textarea
     id: problema
