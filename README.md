@@ -21,7 +21,7 @@
 | Base exacta previa | ✅ **main** | `a7d38bf6150038ff2bba3332c493e99b00cfcd65` |
 | CI | ✅ **Activo** | PRs #9/#11 y CI exact-main sobre `4051563` pasaron con check agregado `Validar` |
 | SonarQube Cloud | ✅ **Activo** | Quality Gate + relay detallado de hallazgos hacia comentarios de PR |
-| Relay Sonar | 🚧 **En validación** | Publica/actualiza un comentario único con archivo, línea, severidad y detalle de cada anotación |
+| Relay Sonar | ✅ **Activo** | `main` `756ca31`: publica/actualiza un comentario único con archivo, línea, severidad y detalle de cada anotación |
 | CodeRabbit | ✅ **Configurado** | `.coderabbit.yaml` activo con perfil assertive e instrucciones de revisión en español |
 | Coordinación multiagente | 🚧 **En validación** | Issue #12: reserva atómica por Issue + detección de solapamientos |
 | Producción | ⚪ **NO VALIDADA** | CI/merge no sustituyen despliegue ni validación real |
@@ -92,7 +92,7 @@ flowchart LR
 
 | Lane | Trabajo |
 | --- | --- |
-| **AHORA** | 🚧 Validar coordinación multiagente y reservas de trabajo, Issue #12. |
+| **AHORA** | 🚧 Validar coordinación multiagente y reservas de trabajo, Issue #12; relay Sonar ya activo en `main`. |
 | **SIGUE** | 🚧 Protección de `main` con gates `Validar` + coordinación, Issue #10; bloqueo administrativo vigente. |
 | **DESPUÉS** | 🚧 Definición funcional del producto + bootstrap técnico de aplicación. |
 | **CALIDAD** | 🚧 SonarCloud + baseline de pruebas + Playwright. |
