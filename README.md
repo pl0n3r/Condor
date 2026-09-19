@@ -37,6 +37,7 @@
 | [ESPECIFICACIONES.md](ESPECIFICACIONES.md) | reglas, arquitectura y decisiones durables |
 | [Roadmap #1](https://github.com/pl0n3r/Condor/issues/1) | trabajo planeado, realizado, pendiente y bloqueado |
 | [ROADMAP.md](ROADMAP.md) | acceso directo al roadmap canónico |
+| [GLOSARIO.md](GLOSARIO.md) | explicación sencilla de términos técnicos para seguimiento de negocio |
 
 ## Flujo de entrega
 
@@ -69,6 +70,7 @@ Este repositorio todavía no tiene un deploy real. Para la PR actual, los archiv
 - `AGENTES.md` — reglas operativas, versionado y contrato del README.
 - `ESPECIFICACIONES.md` — decisiones durables de versionado y snapshot por deploy.
 - `README.md` — primer panel visual de desarrollo de Cóndor.
+- `GLOSARIO.md` — guía de términos técnicos en lenguaje de negocio para socios.
 
 ## Validación
 

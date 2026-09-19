@@ -17,6 +17,7 @@ Cóndor separa explícitamente operación, especificación y progreso:
 - **Issues específicos**: alcance ejecutable y criterios de aceptación.
 - **PRs**: cambio concreto y evidencia de validación.
 - **`README.md`**: presentación visual y ejecutiva del proyecto; no es roadmap acumulativo ni especificación.
+- **`GLOSARIO.md`**: traducción de términos técnicos a lenguaje de negocio para socios y personas no técnicas.
 - **`docs/`**: documentación especializada cuando el detalle ya no cabe razonablemente en las fuentes anteriores.
 
 Si una fuente contradice al código actual, contrastar el cambio más reciente y corregir la documentación durable en el mismo trabajo cuando corresponda.
@@ -503,7 +504,8 @@ Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y 
 - los saltos minor son hitos deliberados y `1.0.0` requiere decisión explícita del usuario;
 - cuando exista la aplicación, `config/version.php` será la fuente canónica de versión y cualquier metadata equivalente deberá mantener paridad;
 - el README usa la misma estrategia de snapshot por deploy que BRVTAL;
-- el README debe mostrar siempre y por separado la versión objetivo y la versión realmente desplegada; tras el primer deploy, la señal visible será por ejemplo `v0.1.0`, pero nunca se inferirá desde CI.
+- el README debe mostrar siempre y por separado la versión objetivo y la versión realmente desplegada; tras el primer deploy, la señal visible será por ejemplo `v0.1.0`, pero nunca se inferirá desde CI;
+- `GLOSARIO.md` debe mantenerse actualizado con los términos técnicos relevantes que aparezcan en superficies visibles para socios, usando lenguaje de negocio y ejemplos de Cóndor cuando ayuden.
 
 ---
 
@@ -520,5 +522,7 @@ Actualizar `AGENTES.md` cuando cambie de forma durable:
 - responsabilidades entre archivos/fuentes de verdad.
 
 No convertir `AGENTES.md` en un roadmap ni en un historial de releases.
+
+Cuando una decisión o implementación introduzca terminología técnica relevante para seguimiento de negocio, revisar si `GLOSARIO.md` necesita actualización en la misma PR.
 
 **Regla final:** un agente nuevo debe poder leer este archivo, revisar el repositorio y el Issue #1, y continuar Cóndor sin necesitar el chat anterior.

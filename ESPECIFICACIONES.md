@@ -161,6 +161,20 @@ La versión desplegada se actualiza únicamente con evidencia del despliegue. El
 
 El README no sustituye el roadmap, `AGENTES.md` ni `ESPECIFICACIONES.md`.
 
+### D-007 — Glosario para seguimiento de negocio
+
+`GLOSARIO.md` es la referencia en lenguaje sencillo para términos técnicos que aparezcan en README, roadmap, Issues o documentación visible para socios.
+
+Su objetivo es permitir que una persona no técnica entienda el avance y las evidencias del proyecto sin depender de explicaciones externas.
+
+Reglas:
+
+- explicar términos con lenguaje de negocio;
+- incluir contexto de Cóndor cuando ayude;
+- mantenerlo actualizado cuando aparezcan conceptos técnicos relevantes nuevos;
+- no convertirlo en documentación de implementación;
+- enlazarlo desde el README.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Cóndor.
