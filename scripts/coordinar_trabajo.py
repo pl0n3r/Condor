@@ -224,13 +224,19 @@ class GitHub:
         return True
 
     def delete_branch(self, branch: str) -> None:
-        """Elimina una rama, ignorando que ya no exista."""
+        """Elimina una rama de forma idempotente sin ocultar errores reales."""
         encoded = quote(branch, safe="/")
-        self.request(
-            "DELETE",
-            f"/repos/{self.repo}/git/refs/heads/{encoded}",
-            allow=(404,),
-        )
+        try:
+            self.request(
+                "DELETE",
+                f"/repos/{self.repo}/git/refs/heads/{encoded}",
+                allow=(404,),
+            )
+        except GitHubError as exc:
+            if exc.status != 422:
+                raise
+            if self.branch_sha(branch) is not None:
+                raise
 
     def issue_comments(self, issue_number: int) -> list[dict[str, Any]]:
         """Obtiene todos los comentarios de un Issue."""
