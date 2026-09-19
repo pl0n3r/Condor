@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""Coordinacion multiagente para Condor.
-
-GitHub actua como arbitro central:
-- una reserva crea de forma atomica la rama trabajo/issue-N;
-- un Issue reservado no puede ser tomado por otra sesion;
-- cada PR debe corresponder a su Issue reservado;
-- los PR abiertos no pueden solapar archivos silenciosamente.
-"""
+"""Coordina trabajo concurrente entre sesiones y agentes usando GitHub como árbitro."""
 
 from __future__ import annotations
 
@@ -15,6 +8,7 @@ import json
 import os
 import re
 import sys
+import uuid
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError
@@ -24,36 +18,63 @@ from urllib.request import Request, urlopen
 
 API_URL = os.getenv("GITHUB_API_URL", "https://api.github.com").rstrip("/")
 TOKEN = os.getenv("GH_TOKEN") or os.getenv("GITHUB_TOKEN")
+TRUSTED_MARKER_LOGIN = os.getenv(
+    "CONDOR_TRUSTED_MARKER_LOGIN",
+    "github-actions[bot]",
+)
+
 ALLOWED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
+STATUS_AVAILABLE = "estado: disponible"
+STATUS_RESERVED = "estado: reservado"
+STATUS_REVIEW = "estado: en revisión"
+STATUS_COMPLETED = "estado: completado"
+STATUS_CANCELLED = "estado: cancelado"
+STATUS_BLOCKED = "estado: bloqueado"
+
 STATUS_LABELS: dict[str, tuple[str, str]] = {
-    "estado: disponible": ("2DA44E", "Trabajo disponible para ser reservado."),
-    "estado: reservado": ("FBCA04", "Trabajo reservado por una sesión o agente."),
-    "estado: en revisión": ("1D76DB", "Trabajo con Pull Request listo para revisión."),
-    "estado: completado": ("0E8A16", "Trabajo completado."),
-    "estado: cancelado": ("6E7781", "Trabajo cerrado sin completarse."),
+    STATUS_AVAILABLE: ("2DA44E", "Trabajo disponible para ser reservado."),
+    STATUS_RESERVED: ("FBCA04", "Trabajo reservado por una sesión o agente."),
+    STATUS_REVIEW: ("1D76DB", "Trabajo con Pull Request listo para revisión."),
+    STATUS_COMPLETED: ("0E8A16", "Trabajo completado."),
+    STATUS_CANCELLED: ("6E7781", "Trabajo cerrado sin completarse."),
+    STATUS_BLOCKED: ("000000", "Trabajo detenido por una dependencia real."),
 }
 
 BRANCH_RE = re.compile(r"^trabajo/issue-(\d+)$")
 CLOSING_RE = re.compile(r"(?im)\b(?:closes|fixes|resolves)\s+#(\d+)\b")
+RESERVATION_LINE_RE = re.compile(
+    r"(?im)^Reserva:\s*([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+    r"[89ab][0-9a-f]{3}-[0-9a-f]{12})\s*$"
+)
 RESERVATION_RE = re.compile(r"<!-- condor-reserva (\{.*?\}) -->")
+SESSION_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+    r"[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+)
 
 
 class CoordinationError(RuntimeError):
-    pass
+    """Representa un rechazo seguro de una operación de coordinación."""
 
 
 @dataclass
 class GitHubError(RuntimeError):
+    """Representa un error HTTP devuelto por GitHub."""
+
     status: int
     message: str
 
     def __str__(self) -> str:
+        """Devuelve una representación legible del error de GitHub."""
         return f"GitHub API {self.status}: {self.message}"
 
 
 class GitHub:
+    """Cliente REST mínimo para las operaciones de coordinación requeridas."""
+
     def __init__(self, repo: str, token: str | None = None) -> None:
+        """Inicializa el cliente para un repositorio owner/name."""
         self.repo = repo
         self.token = token or TOKEN
         if not self.token:
@@ -66,6 +87,7 @@ class GitHub:
         payload: Any | None = None,
         allow: tuple[int, ...] = (),
     ) -> Any:
+        """Ejecuta una llamada JSON autenticada a la API de GitHub."""
         url = f"{API_URL}{path}"
         body = None if payload is None else json.dumps(payload).encode("utf-8")
         headers = {
@@ -92,6 +114,7 @@ class GitHub:
             raise GitHubError(exc.code, str(message)) from exc
 
     def paginate(self, path: str) -> list[dict[str, Any]]:
+        """Recorre una colección paginada de GitHub y devuelve todos sus elementos."""
         page = 1
         items: list[dict[str, Any]] = []
         while True:
@@ -106,18 +129,21 @@ class GitHub:
         return items
 
     def issue(self, number: int) -> dict[str, Any]:
+        """Obtiene un Issue por número."""
         payload = self.request("GET", f"/repos/{self.repo}/issues/{number}")
         if not isinstance(payload, dict):
             raise CoordinationError(f"No fue posible leer Issue #{number}.")
         return payload
 
     def pull(self, number: int) -> dict[str, Any]:
+        """Obtiene un Pull Request por número."""
         payload = self.request("GET", f"/repos/{self.repo}/pulls/{number}")
         if not isinstance(payload, dict):
             raise CoordinationError(f"No fue posible leer PR #{number}.")
         return payload
 
     def comment(self, issue_number: int, body: str) -> None:
+        """Publica un comentario en un Issue o Pull Request."""
         self.request(
             "POST",
             f"/repos/{self.repo}/issues/{issue_number}/comments",
@@ -125,6 +151,7 @@ class GitHub:
         )
 
     def ensure_label(self, name: str, color: str, description: str) -> None:
+        """Crea un label si todavía no existe."""
         encoded = quote(name, safe="")
         current = self.request(
             "GET",
@@ -139,10 +166,12 @@ class GitHub:
             )
 
     def ensure_status_labels(self) -> None:
+        """Asegura que todos los estados de coordinación existan como labels."""
         for name, (color, description) in STATUS_LABELS.items():
             self.ensure_label(name, color, description)
 
     def add_labels(self, issue_number: int, labels: list[str]) -> None:
+        """Añade labels a un Issue."""
         if labels:
             self.request(
                 "POST",
@@ -151,6 +180,7 @@ class GitHub:
             )
 
     def remove_label(self, issue_number: int, label: str) -> None:
+        """Retira un label, ignorando que ya no exista."""
         encoded = quote(label, safe="")
         self.request(
             "DELETE",
@@ -159,6 +189,7 @@ class GitHub:
         )
 
     def set_status(self, issue_number: int, status: str | None) -> None:
+        """Mantiene exactamente un estado de coordinación visible."""
         self.ensure_status_labels()
         for label in STATUS_LABELS:
             self.remove_label(issue_number, label)
@@ -166,6 +197,7 @@ class GitHub:
             self.add_labels(issue_number, [status])
 
     def branch_sha(self, branch: str) -> str | None:
+        """Devuelve el SHA de una rama o None si no existe."""
         encoded = quote(branch, safe="/")
         payload = self.request(
             "GET",
@@ -178,6 +210,7 @@ class GitHub:
         return str(obj.get("sha")) if isinstance(obj, dict) and obj.get("sha") else None
 
     def create_branch(self, branch: str, sha: str) -> bool:
+        """Crea una rama de forma atómica; False significa que ya existía."""
         try:
             self.request(
                 "POST",
@@ -191,6 +224,7 @@ class GitHub:
         return True
 
     def delete_branch(self, branch: str) -> None:
+        """Elimina una rama, ignorando que ya no exista."""
         encoded = quote(branch, safe="/")
         self.request(
             "DELETE",
@@ -199,12 +233,15 @@ class GitHub:
         )
 
     def issue_comments(self, issue_number: int) -> list[dict[str, Any]]:
+        """Obtiene todos los comentarios de un Issue."""
         return self.paginate(f"/repos/{self.repo}/issues/{issue_number}/comments")
 
     def open_pulls(self) -> list[dict[str, Any]]:
+        """Obtiene todos los Pull Requests abiertos."""
         return self.paginate(f"/repos/{self.repo}/pulls?state=open")
 
     def pull_files(self, number: int) -> set[str]:
+        """Devuelve los archivos modificados por un Pull Request."""
         files = self.paginate(f"/repos/{self.repo}/pulls/{number}/files")
         return {
             str(item["filename"])
@@ -213,6 +250,7 @@ class GitHub:
         }
 
     def close_pull(self, number: int) -> None:
+        """Cierra un Pull Request sin fusionarlo."""
         self.request(
             "PATCH",
             f"/repos/{self.repo}/pulls/{number}",
@@ -220,6 +258,7 @@ class GitHub:
         )
 
     def try_assign(self, issue_number: int, login: str) -> None:
+        """Intenta asignar el Issue sin convertir la asignación en requisito duro."""
         self.request(
             "POST",
             f"/repos/{self.repo}/issues/{issue_number}/assignees",
@@ -228,6 +267,7 @@ class GitHub:
         )
 
     def try_unassign(self, issue_number: int, login: str) -> None:
+        """Intenta retirar la asignación del propietario anterior."""
         self.request(
             "DELETE",
             f"/repos/{self.repo}/issues/{issue_number}/assignees",
@@ -237,33 +277,98 @@ class GitHub:
 
 
 def issue_from_branch(branch: str) -> int | None:
+    """Extrae el número de Issue de la rama canónica."""
     match = BRANCH_RE.fullmatch(branch)
     return int(match.group(1)) if match else None
 
 
 def closing_issues(body: str) -> set[int]:
+    """Extrae referencias Closes/Fixes/Resolves del cuerpo de un PR."""
     return {int(value) for value in CLOSING_RE.findall(body or "")}
 
 
-def reservation_marker(owner: str, branch: str, active: bool, reason: str) -> str:
+def reservation_from_pr_body(body: str) -> str | None:
+    """Extrae el ID de reserva declarado por un Pull Request."""
+    match = RESERVATION_LINE_RE.search(body or "")
+    return match.group(1).lower() if match else None
+
+
+def new_reservation_id() -> str:
+    """Genera un identificador único para una sesión de trabajo."""
+    return str(uuid.uuid4())
+
+
+def reservation_marker(
+    owner: str,
+    reservation_id: str,
+    branch: str,
+    active: bool,
+    reason: str,
+) -> str:
+    """Serializa un marcador de reserva verificable por identidad del bot."""
     payload = json.dumps(
-        {"owner": owner, "branch": branch, "active": active, "reason": reason},
+        {
+            "version": 1,
+            "owner": owner,
+            "reservation_id": reservation_id.lower(),
+            "branch": branch,
+            "active": active,
+            "reason": reason,
+        },
         separators=(",", ":"),
         sort_keys=True,
     )
     return f"<!-- condor-reserva {payload} -->"
 
 
-def latest_reservation(comments: list[dict[str, Any]]) -> dict[str, Any] | None:
+def valid_reservation_payload(value: Any) -> bool:
+    """Valida esquema y tipos de un marcador de reserva."""
+    if not isinstance(value, dict):
+        return False
+    required = {
+        "version",
+        "owner",
+        "reservation_id",
+        "branch",
+        "active",
+        "reason",
+    }
+    if set(value) != required:
+        return False
+    if value.get("version") != 1:
+        return False
+    if not isinstance(value.get("owner"), str) or not value["owner"]:
+        return False
+    reservation_id = value.get("reservation_id")
+    if not isinstance(reservation_id, str) or not SESSION_RE.fullmatch(
+        reservation_id.lower()
+    ):
+        return False
+    branch = value.get("branch")
+    if not isinstance(branch, str) or BRANCH_RE.fullmatch(branch) is None:
+        return False
+    if not isinstance(value.get("active"), bool):
+        return False
+    return isinstance(value.get("reason"), str) and bool(value["reason"])
+
+
+def latest_reservation(
+    comments: list[dict[str, Any]],
+    trusted_login: str = TRUSTED_MARKER_LOGIN,
+) -> dict[str, Any] | None:
+    """Devuelve solo el último marcador publicado por la identidad confiable."""
     latest: dict[str, Any] | None = None
     for comment in comments:
+        user = comment.get("user")
+        if not isinstance(user, dict) or user.get("login") != trusted_login:
+            continue
         body = str(comment.get("body") or "")
         for match in RESERVATION_RE.finditer(body):
             try:
                 parsed = json.loads(match.group(1))
             except json.JSONDecodeError:
                 continue
-            if isinstance(parsed, dict):
+            if valid_reservation_payload(parsed):
                 latest = parsed
     return latest
 
@@ -272,6 +377,7 @@ def file_overlaps(
     current_files: set[str],
     others: dict[int, set[str]],
 ) -> dict[int, list[str]]:
+    """Calcula solapamientos exactos de archivos contra otros PR."""
     collisions: dict[int, list[str]] = {}
     for pr_number, files in others.items():
         overlap = sorted(current_files & files)
@@ -281,6 +387,7 @@ def file_overlaps(
 
 
 def label_names(issue: dict[str, Any]) -> set[str]:
+    """Convierte los labels de la API en un conjunto de nombres."""
     result: set[str] = set()
     for label in issue.get("labels", []):
         if isinstance(label, dict) and isinstance(label.get("name"), str):
@@ -289,18 +396,55 @@ def label_names(issue: dict[str, Any]) -> set[str]:
 
 
 def authorized(association: str) -> bool:
+    """Indica si la asociación del actor permite controlar reservas."""
     return association.upper() in ALLOWED_ASSOCIATIONS
 
 
-def active_owner(api: GitHub, issue_number: int) -> str | None:
+def active_reservation(api: GitHub, issue_number: int) -> dict[str, Any] | None:
+    """Obtiene la reserva activa confiable de un Issue."""
     reservation = latest_reservation(api.issue_comments(issue_number))
-    if not reservation or not reservation.get("active"):
+    if not reservation or not reservation["active"]:
         return None
-    owner = reservation.get("owner")
-    return str(owner) if owner else None
+    return reservation
 
 
-def reserve_work(api: GitHub, issue_number: int, actor: str, association: str) -> None:
+def open_pulls_for_branch(api: GitHub, branch: str) -> list[int]:
+    """Lista PR abiertos que usan una rama concreta como head."""
+    result: list[int] = []
+    for pull in api.open_pulls():
+        head = pull.get("head")
+        if isinstance(head, dict) and head.get("ref") == branch:
+            number = pull.get("number")
+            if isinstance(number, int):
+                result.append(number)
+    return result
+
+
+def publish_reservation(
+    api: GitHub,
+    issue_number: int,
+    owner: str,
+    reservation_id: str,
+    branch: str,
+    active: bool,
+    reason: str,
+    message: str,
+) -> None:
+    """Publica un marcador de reserva y su mensaje humano en un solo comentario."""
+    api.comment(
+        issue_number,
+        f"{reservation_marker(owner, reservation_id, branch, active, reason)}\n"
+        f"{message}",
+    )
+
+
+def reserve_work(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    association: str,
+) -> str | None:
+    """Reserva atómicamente un Issue y devuelve su ID de sesión."""
     if not authorized(association):
         raise CoordinationError(
             f"@{actor} no tiene una asociación autorizada para reservar trabajo."
@@ -313,15 +457,15 @@ def reserve_work(api: GitHub, issue_number: int, actor: str, association: str) -
         raise CoordinationError(f"Issue #{issue_number} no está abierto.")
 
     labels = label_names(issue)
-    if "estado: bloqueado" in labels:
+    if STATUS_BLOCKED in labels:
         api.comment(issue_number, f"⛔ @{actor}: Issue #{issue_number} está bloqueado.")
-        return
-    if "estado: disponible" not in labels:
+        return None
+    if STATUS_AVAILABLE not in labels:
         api.comment(
             issue_number,
-            f"⛔ @{actor}: Issue #{issue_number} no esta marcado como estado: disponible.",
+            f"⛔ @{actor}: Issue #{issue_number} no está marcado como {STATUS_AVAILABLE}.",
         )
-        return
+        return None
 
     branch = f"trabajo/issue-{issue_number}"
     main_sha = api.branch_sha("main")
@@ -329,39 +473,89 @@ def reserve_work(api: GitHub, issue_number: int, actor: str, association: str) -
         raise CoordinationError("No fue posible resolver el SHA actual de main.")
 
     if not api.create_branch(branch, main_sha):
-        api.set_status(issue_number, "estado: reservado")
+        api.set_status(issue_number, STATUS_RESERVED)
         api.comment(
             issue_number,
             f"⛔ @{actor}: la reserva no fue concedida. La rama {branch} ya existe. "
-            "El trabajo queda fail-closed hasta liberación explicita.",
+            "El trabajo queda fail-closed hasta liberación explícita.",
         )
-        return
+        return None
 
-    api.set_status(issue_number, "estado: reservado")
-    api.try_assign(issue_number, actor)
-    marker = reservation_marker(actor, branch, True, "tomar")
-    api.comment(
-        issue_number,
-        f"{marker}\n"
-        f"🔒 **Trabajo reservado por @{actor}.**\n\n"
-        f"- Rama canónica: {branch}\n"
-        f"- Base de reserva: {main_sha}\n"
-        "- La reserva no vence automáticamente.\n"
-        "- Otra sesión no debe modificar esta rama ni trabajar este Issue.\n"
-        "- Libera con /liberar; el dueño del repositorio puede usar /liberar-forzado.",
+    reservation_id = new_reservation_id()
+    try:
+        api.set_status(issue_number, STATUS_RESERVED)
+        api.try_assign(issue_number, actor)
+        publish_reservation(
+            api,
+            issue_number,
+            actor,
+            reservation_id,
+            branch,
+            True,
+            "tomar",
+            f"🔒 **Trabajo reservado por @{actor}.**\n\n"
+            f"- Rama canónica: {branch}\n"
+            f"- Reserva: {reservation_id}\n"
+            f"- Base de reserva: {main_sha}\n"
+            "- La reserva no vence automáticamente.\n"
+            "- Otra sesión no debe adoptar este ID de reserva.\n"
+            "- Para liberar: /liberar <ID>.\n"
+            "- Para transferir a otra sesión de la misma cuenta: /transferir <ID>.",
+        )
+    except Exception:
+        api.delete_branch(branch)
+        api.try_unassign(issue_number, actor)
+        try:
+            api.set_status(issue_number, STATUS_AVAILABLE)
+        except Exception:
+            pass
+        raise
+
+    print(
+        f"Reserva concedida: Issue #{issue_number} -> {branch} "
+        f"(@{actor}, {reservation_id})"
     )
-    print(f"Reserva concedida: Issue #{issue_number} -> {branch} (@{actor})")
+    return reservation_id
 
 
-def open_pulls_for_branch(api: GitHub, branch: str) -> list[int]:
-    result: list[int] = []
-    for pull in api.open_pulls():
-        head = pull.get("head")
-        if isinstance(head, dict) and head.get("ref") == branch:
-            number = pull.get("number")
-            if isinstance(number, int):
-                result.append(number)
-    return result
+def transfer_work(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    association: str,
+    reservation_id: str,
+) -> str | None:
+    """Transfiere una reserva a otra sesión del mismo actor mediante un nuevo ID."""
+    if not authorized(association):
+        raise CoordinationError(
+            f"@{actor} no tiene una asociación autorizada para transferir trabajo."
+        )
+    current = active_reservation(api, issue_number)
+    if not current:
+        api.comment(issue_number, f"⛔ @{actor}: no existe una reserva activa.")
+        return None
+    if current["owner"] != actor or current["reservation_id"] != reservation_id.lower():
+        api.comment(
+            issue_number,
+            f"⛔ @{actor}: el ID de reserva no corresponde a la sesión activa.",
+        )
+        return None
+
+    new_id = new_reservation_id()
+    publish_reservation(
+        api,
+        issue_number,
+        actor,
+        new_id,
+        current["branch"],
+        True,
+        "transferir",
+        f"🔁 Reserva transferida explícitamente por @{actor}.\n"
+        f"- Nueva reserva: {new_id}\n"
+        "- El ID anterior queda invalidado.",
+    )
+    print(f"Reserva transferida: Issue #{issue_number} -> {new_id}")
+    return new_id
 
 
 def release_work(
@@ -369,54 +563,84 @@ def release_work(
     issue_number: int,
     actor: str,
     association: str,
+    reservation_id: str | None,
     force: bool,
 ) -> None:
+    """Libera una reserva respetando propiedad de sesión y orden fail-closed."""
     if not authorized(association):
         raise CoordinationError(
             f"@{actor} no tiene una asociación autorizada para liberar trabajo."
         )
 
     repo_owner = api.repo.split("/", 1)[0]
-    owner = active_owner(api, issue_number)
+    current = active_reservation(api, issue_number)
     if force:
         if actor != repo_owner:
             raise CoordinationError(
                 f"Solo @{repo_owner} puede ejecutar /liberar-forzado."
             )
-    elif owner != actor:
+    else:
+        if not current:
+            api.comment(issue_number, f"⛔ @{actor}: no existe una reserva activa.")
+            return
+        if (
+            current["owner"] != actor
+            or reservation_id is None
+            or current["reservation_id"] != reservation_id.lower()
+        ):
+            api.comment(
+                issue_number,
+                f"⛔ @{actor}: solo la sesión propietaria puede liberar esta reserva.",
+            )
+            return
+
+    branch = (
+        str(current["branch"])
+        if current
+        else f"trabajo/issue-{issue_number}"
+    )
+    open_pulls = open_pulls_for_branch(api, branch)
+    if open_pulls and not force:
+        rendered = ", ".join(f"#{number}" for number in open_pulls)
         api.comment(
             issue_number,
-            f"⛔ @{actor}: solo el propietario activo "
-            f"(@{owner or 'desconocido'}) puede liberar esta reserva.",
+            f"⛔ @{actor}: no se libera mientras existan PR abiertos ({rendered}). "
+            "Cierra el PR primero o usa liberación forzada como dueño.",
         )
         return
-
-    branch = f"trabajo/issue-{issue_number}"
-    for pr_number in open_pulls_for_branch(api, branch):
+    for pr_number in open_pulls:
         api.close_pull(pr_number)
+
+    owner = str(current["owner"]) if current else actor
+    session = (
+        str(current["reservation_id"])
+        if current
+        else new_reservation_id()
+    )
     api.delete_branch(branch)
+
+    publish_reservation(
+        api,
+        issue_number,
+        owner,
+        session,
+        branch,
+        False,
+        "liberacion-forzada" if force else "liberar",
+        f"🔓 Reserva liberada por @{actor}. La rama {branch} fue eliminada.",
+    )
 
     issue = api.issue(issue_number)
     if issue.get("state") == "open":
-        api.set_status(issue_number, "estado: disponible")
-    if owner:
+        if STATUS_BLOCKED not in label_names(issue):
+            api.set_status(issue_number, STATUS_AVAILABLE)
+    if current:
         api.try_unassign(issue_number, owner)
-
-    marker = reservation_marker(
-        owner or actor,
-        branch,
-        False,
-        "liberación-forzada" if force else "liberar",
-    )
-    api.comment(
-        issue_number,
-        f"{marker}\n"
-        f"🔓 Reserva liberada por @{actor}. La rama {branch} fue eliminada.",
-    )
     print(f"Reserva liberada: Issue #{issue_number}")
 
 
 def update_pr_state(api: GitHub, pr_number: int, action: str) -> None:
+    """Sincroniza labels y reserva con eventos de un PR del mismo repositorio."""
     pull = api.pull(pr_number)
     head = pull.get("head")
     branch = str(head.get("ref") or "") if isinstance(head, dict) else ""
@@ -425,47 +649,60 @@ def update_pr_state(api: GitHub, pr_number: int, action: str) -> None:
         return
 
     issue = api.issue(issue_number)
-    if action == "ready_for_review" and issue.get("state") == "open":
-        api.set_status(issue_number, "estado: en revisión")
+    current = active_reservation(api, issue_number)
+
+    if action == "opened":
+        if not pull.get("draft") and current and issue.get("state") == "open":
+            api.set_status(issue_number, STATUS_REVIEW)
         return
-    if action == "converted_to_draft" and issue.get("state") == "open":
-        api.set_status(issue_number, "estado: reservado")
+    if action == "ready_for_review":
+        if current and issue.get("state") == "open":
+            api.set_status(issue_number, STATUS_REVIEW)
+        return
+    if action == "converted_to_draft":
+        if current and issue.get("state") == "open":
+            api.set_status(issue_number, STATUS_RESERVED)
         return
     if action != "closed":
         return
 
-    merged = bool(pull.get("merged"))
-    reservation = latest_reservation(api.issue_comments(issue_number))
-    owner = str(reservation.get("owner")) if reservation and reservation.get("owner") else "sistema"
-
     api.delete_branch(branch)
-    if merged:
-        api.set_status(issue_number, "estado: completado")
-        reason = "pr-merged"
-        human = f"✅ PR #{pr_number} fusionado; reserva cerrada."
-    else:
-        if issue.get("state") == "open":
-            api.set_status(issue_number, "estado: disponible")
-        reason = "pr-cerrado-sin-merge"
-        human = f"🔓 PR #{pr_number} cerrado sin merge; reserva liberada."
+    merged = bool(pull.get("merged"))
+    if current:
+        publish_reservation(
+            api,
+            issue_number,
+            str(current["owner"]),
+            str(current["reservation_id"]),
+            branch,
+            False,
+            "pr-merged" if merged else "pr-cerrado-sin-merge",
+            (
+                f"✅ PR #{pr_number} fusionado; reserva cerrada."
+                if merged
+                else f"🔓 PR #{pr_number} cerrado sin merge; reserva liberada."
+            ),
+        )
+        api.try_unassign(issue_number, str(current["owner"]))
 
-    if owner != "sistema":
-        api.try_unassign(issue_number, owner)
-    api.comment(
-        issue_number,
-        f"{reservation_marker(owner, branch, False, reason)}\n{human}",
-    )
+    issue = api.issue(issue_number)
+    if merged or issue.get("state") != "open":
+        api.set_status(issue_number, STATUS_COMPLETED)
+    elif STATUS_BLOCKED not in label_names(issue):
+        api.set_status(issue_number, STATUS_AVAILABLE)
 
 
 def update_issue_state(api: GitHub, issue_number: int, action: str) -> None:
+    """Limpia una reserva al cerrar un Issue o restablece su estado al reabrirlo."""
     issue = api.issue(issue_number)
     branch = f"trabajo/issue-{issue_number}"
+    current = active_reservation(api, issue_number)
 
     if action == "reopened":
-        if api.branch_sha(branch):
-            api.set_status(issue_number, "estado: reservado")
-        else:
-            api.set_status(issue_number, "estado: disponible")
+        if current and api.branch_sha(branch):
+            api.set_status(issue_number, STATUS_RESERVED)
+        elif STATUS_BLOCKED not in label_names(issue):
+            api.set_status(issue_number, STATUS_AVAILABLE)
         return
     if action != "closed":
         return
@@ -474,30 +711,42 @@ def update_issue_state(api: GitHub, issue_number: int, action: str) -> None:
         api.close_pull(pr_number)
     api.delete_branch(branch)
 
+    if current:
+        publish_reservation(
+            api,
+            issue_number,
+            str(current["owner"]),
+            str(current["reservation_id"]),
+            branch,
+            False,
+            "issue-cerrado",
+            f"🧹 Reserva limpiada al cerrar Issue #{issue_number}.",
+        )
+        api.try_unassign(issue_number, str(current["owner"]))
+
     state_reason = issue.get("state_reason")
-    status = "estado: cancelado" if state_reason == "not_planned" else "estado: completado"
+    status = STATUS_CANCELLED if state_reason == "not_planned" else STATUS_COMPLETED
     api.set_status(issue_number, status)
 
-    reservation = latest_reservation(api.issue_comments(issue_number))
-    owner = str(reservation.get("owner")) if reservation and reservation.get("owner") else "sistema"
-    if owner != "sistema":
-        api.try_unassign(issue_number, owner)
-    api.comment(
-        issue_number,
-        f"{reservation_marker(owner, branch, False, 'issue-cerrado')}\n"
-        f"🧹 Reserva limpiada al cerrar Issue #{issue_number}.",
-    )
 
-
-def validate_pull(api: GitHub, pr_number: int, require_reservation: bool) -> None:
+def validate_pull(
+    api: GitHub,
+    pr_number: int,
+    require_reservation: bool,
+) -> None:
+    """Valida destino, reserva, relación con Issue y colisiones de un PR."""
     pull = api.pull(pr_number)
+    base = pull.get("base")
     head = pull.get("head")
     branch = str(head.get("ref") or "") if isinstance(head, dict) else ""
     issue_number = issue_from_branch(branch)
     errors: list[str] = []
 
+    if not isinstance(base, dict) or base.get("ref") != "main":
+        errors.append("La rama base del PR debe ser main.")
+
     if issue_number is None:
-        errors.append("La rama del PR debe usar el formato canonico trabajo/issue-N.")
+        errors.append("La rama del PR debe usar el formato canónico trabajo/issue-N.")
     else:
         body = str(pull.get("body") or "")
         if issue_number not in closing_issues(body):
@@ -511,17 +760,29 @@ def validate_pull(api: GitHub, pr_number: int, require_reservation: bool) -> Non
 
         if require_reservation:
             labels = label_names(issue)
-            if not ({"estado: reservado", "estado: en revisión"} & labels):
-                errors.append(f"Issue #{issue_number} no tiene una reserva activa visible.")
+            if not ({STATUS_RESERVED, STATUS_REVIEW} & labels):
+                errors.append(
+                    f"Issue #{issue_number} no tiene una reserva activa visible."
+                )
             if api.branch_sha(branch) is None:
                 errors.append(f"La rama reservada {branch} no existe.")
-            reservation = latest_reservation(api.issue_comments(issue_number))
-            if not reservation or not reservation.get("active"):
-                errors.append(f"Issue #{issue_number} no tiene marcador de reserva activo.")
-            elif reservation.get("branch") != branch:
+            reservation = active_reservation(api, issue_number)
+            if not reservation:
                 errors.append(
-                    f"El marcador de reserva apunta a {reservation.get('branch')}, no a {branch}."
+                    f"Issue #{issue_number} no tiene marcador de reserva activo y confiable."
                 )
+            else:
+                if reservation["branch"] != branch:
+                    errors.append(
+                        f"El marcador de reserva apunta a {reservation['branch']}, "
+                        f"no a {branch}."
+                    )
+                declared = reservation_from_pr_body(body)
+                if declared != reservation["reservation_id"]:
+                    errors.append(
+                        "El PR debe declarar exactamente la sesión activa como "
+                        "'Reserva: <UUID>'."
+                    )
 
     current_files = api.pull_files(pr_number)
     others: dict[int, set[str]] = {}
@@ -529,18 +790,17 @@ def validate_pull(api: GitHub, pr_number: int, require_reservation: bool) -> Non
         other_number = other.get("number")
         if not isinstance(other_number, int) or other_number == pr_number:
             continue
-        base = other.get("base")
-        if isinstance(base, dict) and base.get("ref") != "main":
+        other_base = other.get("base")
+        if isinstance(other_base, dict) and other_base.get("ref") != "main":
             continue
         others[other_number] = api.pull_files(other_number)
 
     collisions = file_overlaps(current_files, others)
-    if collisions:
-        for other_pr, files in collisions.items():
-            rendered = ", ".join(files)
-            errors.append(
-                f"Colisión con PR #{other_pr}: ambos modifican {rendered}."
-            )
+    for other_pr, files in collisions.items():
+        rendered = ", ".join(files)
+        errors.append(
+            f"Colisión con PR #{other_pr}: ambos modifican {rendered}."
+        )
 
     if errors:
         raise CoordinationError("\n".join(f"- {error}" for error in errors))
@@ -552,22 +812,72 @@ def validate_pull(api: GitHub, pr_number: int, require_reservation: bool) -> Non
     )
 
 
+def parse_comment_command(body: str) -> tuple[str, str | None]:
+    """Interpreta únicamente los comandos públicos soportados por el workflow."""
+    value = body.strip()
+    if value == "/tomar":
+        return "tomar", None
+    if value == "/liberar-forzado":
+        return "liberar-forzado", None
+
+    for prefix, command in (
+        ("/liberar ", "liberar"),
+        ("/transferir ", "transferir"),
+    ):
+        if value.startswith(prefix):
+            session = value[len(prefix):].strip().lower()
+            if not SESSION_RE.fullmatch(session):
+                raise CoordinationError(
+                    f"El comando {command} requiere un UUID de reserva válido."
+                )
+            return command, session
+    raise CoordinationError("Comando de coordinación no reconocido.")
+
+
+def process_comment(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    association: str,
+    body: str,
+) -> None:
+    """Ejecuta un comando de comentario ya filtrado por GitHub Actions."""
+    command, reservation_id = parse_comment_command(body)
+    if command == "tomar":
+        reserve_work(api, issue_number, actor, association)
+    elif command == "liberar":
+        release_work(
+            api,
+            issue_number,
+            actor,
+            association,
+            reservation_id,
+            False,
+        )
+    elif command == "liberar-forzado":
+        release_work(api, issue_number, actor, association, None, True)
+    elif command == "transferir":
+        assert reservation_id is not None
+        transfer_work(
+            api,
+            issue_number,
+            actor,
+            association,
+            reservation_id,
+        )
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Coordinacion multiagente de Condor")
+    """Construye la interfaz de línea de comandos del coordinador."""
+    parser = argparse.ArgumentParser(description="Coordinación multiagente de Condor")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    tomar = sub.add_parser("tomar")
-    tomar.add_argument("--repo", required=True)
-    tomar.add_argument("--issue", required=True, type=int)
-    tomar.add_argument("--actor", required=True)
-    tomar.add_argument("--association", required=True)
-
-    liberar = sub.add_parser("liberar")
-    liberar.add_argument("--repo", required=True)
-    liberar.add_argument("--issue", required=True, type=int)
-    liberar.add_argument("--actor", required=True)
-    liberar.add_argument("--association", required=True)
-    liberar.add_argument("--force", action="store_true")
+    comment = sub.add_parser("comentario")
+    comment.add_argument("--repo", required=True)
+    comment.add_argument("--issue", required=True, type=int)
+    comment.add_argument("--actor", required=True)
+    comment.add_argument("--association", required=True)
+    comment.add_argument("--body", required=True)
 
     pr_event = sub.add_parser("pr-event")
     pr_event.add_argument("--repo", required=True)
@@ -579,28 +889,27 @@ def build_parser() -> argparse.ArgumentParser:
     issue_event.add_argument("--issue", required=True, type=int)
     issue_event.add_argument("--action", required=True)
 
-    validar = sub.add_parser("validar-pr")
-    validar.add_argument("--repo", required=True)
-    validar.add_argument("--pr", required=True, type=int)
-    validar.add_argument("--require-reservation", action="store_true")
+    validate = sub.add_parser("validar-pr")
+    validate.add_argument("--repo", required=True)
+    validate.add_argument("--pr", required=True, type=int)
+    validate.add_argument("--require-reservation", action="store_true")
 
     return parser
 
 
 def main() -> int:
+    """Despacha el comando solicitado y devuelve un exit code apto para CI."""
     parser = build_parser()
     args = parser.parse_args()
     try:
         api = GitHub(args.repo)
-        if args.command == "tomar":
-            reserve_work(api, args.issue, args.actor, args.association)
-        elif args.command == "liberar":
-            release_work(
+        if args.command == "comentario":
+            process_comment(
                 api,
                 args.issue,
                 args.actor,
                 args.association,
-                args.force,
+                args.body,
             )
         elif args.command == "pr-event":
             update_pr_state(api, args.pr, args.action)
