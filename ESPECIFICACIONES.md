@@ -248,7 +248,7 @@ Reglas:
 
 - usar **Condor App** en superficies de marca, identidad pública, presentación comercial y referencias al nombre oficial del producto;
 - usar **Condor** como nombre corto en documentación técnica, GitHub, conversaciones de desarrollo, código y referencias internas;
-- no usar **Cóndor** con tilde como nombre del producto o del proyecto;
+- no usar variantes con tilde como nombre del producto o del proyecto;
 - el repositorio permanece como `pl0n3r/Condor`;
 - el dominio canónico es **https://www.condorapp.com.co**;
 - esta convención aplica a documentación existente y futura.
