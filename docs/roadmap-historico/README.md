@@ -1,4 +1,4 @@
-# Histórico auxiliar del roadmap de Cóndor
+# Histórico auxiliar del roadmap de Condor
 
 Esta carpeta puede almacenar **snapshots o copias auxiliares** de etapas del roadmap canónico para consulta, auditoría o respaldo documental.
 
