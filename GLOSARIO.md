@@ -1,20 +1,22 @@
-# Cóndor — Glosario para seguimiento del proyecto
+# Condor — Glosario para seguimiento del proyecto
 
-> Guía en lenguaje de negocio para entender los términos técnicos que aparecen en el README, roadmap, Issues y Pull Requests de Cóndor.
+> Guía en lenguaje de negocio para entender los términos técnicos que aparecen en el README, roadmap, Issues y Pull Requests de Condor.
 >
 > Si un término técnico importante aparece de forma recurrente y no está explicado aquí, debe añadirse al glosario.
 
 ## Cómo leer el estado del proyecto
 
-| Término | Explicación sencilla | En Cóndor |
+| Término | Explicación sencilla | En Condor |
 | --- | --- | --- |
+| **Condor App** | Nombre oficial y público del producto. | Se usa en marca, presentación y superficies públicas. |
+| **Condor** | Nombre corto del proyecto. | Se usa en GitHub, documentación técnica y conversaciones de desarrollo. |
 | **Roadmap** | Lista ordenada del trabajo planeado, en curso, bloqueado y terminado. | Vive en el Issue #1 y conserva el histórico tachando lo completado. |
 | **Issue** | Tarjeta de trabajo o problema en GitHub. | Sirve para describir una tarea concreta, bug, mejora o investigación. |
 | **PR / Pull Request** | Propuesta de cambio que se revisa antes de entrar al producto principal. | Es el paso normal antes de fusionar trabajo a `main`. |
 | **Versión** | Número fácil de reconocer para identificar una entrega del producto. | El primer deploy será `v0.1.0`; después normalmente `v0.1.1`, `v0.1.2`, etc. |
 | **Versión objetivo** | Versión que una entrega está preparando. | Puede ser `v0.1.0` aunque todavía no haya sido desplegada. |
 | **Versión desplegada** | Última versión que realmente llegó al servidor de producción. | Solo cambia cuando existe evidencia de que Hostinger recibió esa release. |
-| **Release** | Entrega identificable del producto. | Normalmente corresponde a una versión desplegable de Cóndor. |
+| **Release** | Entrega identificable del producto. | Normalmente corresponde a una versión desplegable de Condor. |
 | **Deploy / despliegue** | Proceso de llevar una versión del código al servidor donde funciona el producto. | El objetivo es `main → Hostinger`. |
 | **Producción** | Entorno real usado por clientes o usuarios finales. | No se considera validado solo porque las pruebas automáticas pasaron. |
 | **VALIDADO EN CÓDIGO** | Las pruebas y controles técnicos requeridos pasaron. | Todavía no significa que Hostinger tenga esa versión. |
@@ -24,17 +26,17 @@
 
 ## GitHub y control de cambios
 
-| Término | Explicación sencilla | En Cóndor |
+| Término | Explicación sencilla | En Condor |
 | --- | --- | --- |
 | **Repositorio** | Carpeta central donde vive el código y su historial. | `pl0n3r/Condor`. |
 | **Git** | Sistema que registra cada cambio realizado al proyecto. | Permite saber qué cambió, cuándo y recuperar estados anteriores. |
-| **GitHub** | Plataforma donde alojamos el repositorio, Issues, PRs y automatizaciones. | Es la plataforma central de colaboración técnica de Cóndor. |
+| **GitHub** | Plataforma donde alojamos el repositorio, Issues, PRs y automatizaciones. | Es la plataforma central de colaboración técnica de Condor. |
 | **main** | Rama principal y oficial del proyecto. | El código fusionado allí representa la base canónica del proyecto. |
 | **Rama / branch** | Copia de trabajo separada para desarrollar sin alterar directamente `main`. | Cada cambio normal se prepara en una rama enfocada. |
 | **Commit** | Registro de un grupo concreto de cambios. | Debe tener un mensaje claro en español. |
 | **SHA** | Identificador único de un commit. Es como una huella digital del código. | Permite saber exactamente qué código se validó o desplegó. |
 | **Merge** | Incorporar una rama o PR a la rama principal. | Los merges a `main` se hacen de forma controlada. |
-| **Squash merge** | Fusionar una PR dejando sus cambios como un solo commit limpio. | Es la estrategia predeterminada de Cóndor. |
+| **Squash merge** | Fusionar una PR dejando sus cambios como un solo commit limpio. | Es la estrategia predeterminada de Condor. |
 | **Head** | Último commit de una rama o PR. | Los controles finales deben revisar el head exacto que se va a fusionar. |
 | **Diff** | Comparación que muestra qué líneas/archivos cambiaron. | Ayuda a revisar el alcance real de una PR. |
 | **Label** | Etiqueta para clasificar Issues o PRs. | Puede indicar seguridad, calidad, producto, infraestructura, etc. |
@@ -42,7 +44,7 @@
 
 ## Calidad, pruebas y automatización
 
-| Término | Explicación sencilla | En Cóndor |
+| Término | Explicación sencilla | En Condor |
 | --- | --- | --- |
 | **CI / Integración continua** | Sistema automático que revisa el código cada vez que se propone o integra un cambio. | Vivirá en GitHub Actions. |
 | **GitHub Actions** | Herramienta de GitHub que ejecuta automatizaciones. | Ejecutará CI, pruebas y otros controles. |
@@ -50,7 +52,7 @@
 | **Preflight** | Revisión rápida inicial que decide qué controles necesita una PR. | Evita correr pruebas innecesarias y reduce tiempos. |
 | **Check** | Resultado visible de un control automático en GitHub. | Puede aparecer como aprobado, fallido o pendiente. |
 | **SonarCloud** | Herramienta que analiza calidad, mantenibilidad y ciertos riesgos de seguridad del código. | Se configurará como control automático. |
-| **CodeRabbit** | Revisor automático de Pull Requests con IA. | Ya puede comentar PRs de Cóndor. |
+| **CodeRabbit** | Revisor automático de Pull Requests con IA. | Ya puede comentar PRs de Condor. |
 | **Finding / hallazgo** | Problema o recomendación detectada por una revisión automática o humana. | Los hallazgos válidos se corrigen antes del merge. |
 | **Test / prueba automatizada** | Comprobación programada para verificar que algo funciona como esperamos. | Protege contra errores que reaparezcan. |
 | **Prueba de contrato** | Verifica una regla o comportamiento técnico estable. | Ejemplo: que una API devuelva siempre la estructura esperada. |
@@ -65,7 +67,7 @@
 
 ## Infraestructura y funcionamiento
 
-| Término | Explicación sencilla | En Cóndor |
+| Término | Explicación sencilla | En Condor |
 | --- | --- | --- |
 | **Frontend** | Parte visual con la que interactúa el usuario. | Inicialmente HTML, CSS y JavaScript. |
 | **Backend** | Lógica que procesa datos y reglas del sistema. | Objetivo inicial: PHP 8.5. |
@@ -87,12 +89,12 @@
 
 ## Arquitectura y datos
 
-| Término | Explicación sencilla | En Cóndor |
+| Término | Explicación sencilla | En Condor |
 | --- | --- | --- |
 | **Arquitectura** | Forma general en que se organiza el sistema y cómo se conectan sus partes. | Se definirá después de cerrar suficiente alcance funcional. |
 | **MVP** | Primera versión útil con el mínimo necesario para entregar valor real. | Su alcance se definirá en la Fase 1. |
 | **Vertical slice** | Función completa de principio a fin, no solo una capa aislada. | Ejemplo: interfaz + backend + base de datos + permisos + pruebas de un flujo. |
-| **Multi-tenant / multiempresa** | Un mismo sistema atiende varias empresas manteniendo sus datos aislados. | Todavía debe definirse si Cóndor lo necesita. |
+| **Multi-tenant / multiempresa** | Un mismo sistema atiende varias empresas manteniendo sus datos aislados. | Todavía debe definirse si Condor lo necesita. |
 | **RBAC** | Sistema de permisos basado en roles. | Permitirá decidir qué puede hacer cada tipo de usuario. |
 | **Migración de base de datos** | Cambio controlado a la estructura de datos. | Fusionar código no significa que la migración se haya ejecutado en producción. |
 | **Transacción** | Grupo de cambios de datos que deben completarse todos o ninguno. | Protege la integridad de operaciones importantes. |
@@ -101,7 +103,7 @@
 
 ## Seguridad
 
-| Término | Explicación sencilla | En Cóndor |
+| Término | Explicación sencilla | En Condor |
 | --- | --- | --- |
 | **Autenticación** | Comprobar quién es una persona. | Ejemplo: login. |
 | **Autorización** | Comprobar qué puede hacer una persona autenticada. | Ejemplo: un rol puede ver pero no borrar. |
@@ -119,9 +121,9 @@
 
 ## Versionado
 
-| Término | Explicación sencilla | En Cóndor |
+| Término | Explicación sencilla | En Condor |
 | --- | --- | --- |
-| **SemVer / versionado semántico** | Convención de versiones tipo `MAYOR.MENOR.PARCHE`. | Cóndor empieza en `0.1.0`. |
+| **SemVer / versionado semántico** | Convención de versiones tipo `MAYOR.MENOR.PARCHE`. | Condor empieza en `0.1.0`. |
 | **Patch / parche** | Último número de la versión; normalmente identifica una entrega incremental. | `0.1.0 → 0.1.1`. |
 | **Minor / menor** | Número intermedio; representa un hito más significativo antes de 1.0. | `0.1.x → 0.2.0` requiere una decisión deliberada. |
 | **Major / mayor** | Primer número; indica una etapa grande de madurez/cambio. | `1.0.0` solo llegará por decisión explícita. |
@@ -138,6 +140,6 @@ Cuando aparezca un término técnico nuevo de importancia en el README, roadmap 
 
 1. añadirlo aquí si puede generar confusión;
 2. explicarlo sin depender de otros términos técnicos;
-3. usar un ejemplo de Cóndor cuando ayude;
+3. usar un ejemplo de Condor cuando ayude;
 4. evitar definiciones académicas innecesarias;
 5. actualizar una definición si el significado práctico dentro del proyecto cambia.
