@@ -253,6 +253,39 @@ Reglas:
 - el dominio canónico es **https://www.condorapp.com.co**;
 - esta convención aplica a documentación existente y futura.
 
+### D-012 — Coordinación multiagente con reserva atómica
+
+GitHub es la autoridad central para coordinar múltiples cuentas de IA, agentes y sesiones de desarrollo.
+
+Reglas:
+
+- todo trabajo de implementación parte de un Issue abierto marcado `estado: disponible`;
+- el comando `/tomar` intenta crear de forma atómica `trabajo/issue-N`; la creación de esa rama funciona como lock distribuido;
+- solo una reserva puede existir para un Issue;
+- una reserva es fail-closed y no expira automáticamente;
+- cada reserva recibe un UUID de sesión único;
+- `/liberar <UUID>` libera una reserva normal, `/transferir <UUID>` rota explícitamente el ID para otra sesión y `/liberar-forzado` queda restringido al dueño del repositorio;
+- compartir una cuenta de GitHub no permite a dos sesiones asumir simultáneamente la misma reserva;
+- cada PR debe corresponder a su rama `trabajo/issue-N`, incluir `Closes #N` y declarar el UUID activo como `Reserva: <UUID>`;
+- los marcadores de reserva solo son confiables si los publica la identidad automatizada `github-actions[bot]`;
+- CI compara archivos contra otros PR abiertos y falla ante solapamientos para evitar sobrescrituras silenciosas;
+- los estados visibles de la cola son disponible, reservado, en revisión, completado, cancelado y bloqueado;
+- los merges a `main` permanecen serializados aunque el trabajo previo pueda ejecutarse en paralelo;
+- las ramas paralelas deben minimizar cambios en archivos globales compartidos;
+- el snapshot de README se actualiza al convertir un PR en candidato serial de merge/deploy, no al inicio de todas las ramas paralelas.
+
+### D-013 — Relay detallado de Sonar en Pull Requests
+
+Los resultados de SonarQube Cloud no deben limitarse al estado del Quality Gate.
+
+Reglas:
+
+- cada check `SonarCloud Code Analysis` completado debe activar el relay canónico;
+- el relay publica o actualiza un único comentario en la PR;
+- el comentario incluye resultado, SHA, cantidad de anotaciones y hasta 50 hallazgos con severidad, archivo, línea, título y detalle disponible;
+- si Sonar no expone anotaciones por línea, el comentario debe indicarlo y enlazar al análisis completo;
+- el relay es informativo y no sustituye al Quality Gate de Sonar.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.

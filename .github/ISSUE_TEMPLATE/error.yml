@@ -3,6 +3,8 @@ description: Registrar un defecto reproducible en Condor.
 title: "error: [descripción breve] (V 0.1.0)"
 labels:
   - "tipo: error"
+  - "estado: disponible"
+  - "versión: 0.1.0"
 body:
   - type: markdown
     attributes:
