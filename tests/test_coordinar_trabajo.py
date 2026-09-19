@@ -7,6 +7,8 @@ import unittest
 
 from scripts.coordinar_trabajo import (
     CoordinationError,
+    GitHub,
+    GitHubError,
     STATUS_AVAILABLE,
     STATUS_BLOCKED,
     STATUS_COMPLETED,
@@ -152,6 +154,49 @@ def add_active_reservation(
             ),
         }
     )
+
+
+
+class LimpiezaRamaTests(unittest.TestCase):
+    """Cubre idempotencia y fail-closed al limpiar referencias Git."""
+
+    def test_delete_branch_existing_succeeds_without_extra_lookup(self) -> None:
+        """Una eliminación normal no realiza comprobaciones innecesarias."""
+        api = GitHub("pl0n3r/Condor", "token-prueba")
+        calls: list[str] = []
+
+        def request(method, path, payload=None, allow=()):
+            calls.append(method)
+            return None
+
+        api.request = request  # type: ignore[method-assign]
+        api.delete_branch("trabajo/issue-19")
+        self.assertEqual(calls, ["DELETE"])
+
+    def test_delete_branch_ignores_422_only_when_reference_is_gone(self) -> None:
+        """Un 422 por referencia ya eliminada se trata como éxito idempotente."""
+        api = GitHub("pl0n3r/Condor", "token-prueba")
+
+        def request(method, path, payload=None, allow=()):
+            if method == "DELETE":
+                raise GitHubError(422, "Reference does not exist")
+            return None
+
+        api.request = request  # type: ignore[method-assign]
+        api.delete_branch("trabajo/issue-19")
+
+    def test_delete_branch_keeps_422_when_reference_still_exists(self) -> None:
+        """Un 422 real no se oculta si GitHub confirma que la rama existe."""
+        api = GitHub("pl0n3r/Condor", "token-prueba")
+
+        def request(method, path, payload=None, allow=()):
+            if method == "DELETE":
+                raise GitHubError(422, "Validation Failed")
+            return {"object": {"sha": "abc123"}}
+
+        api.request = request  # type: ignore[method-assign]
+        with self.assertRaises(GitHubError):
+            api.delete_branch("trabajo/issue-19")
 
 
 class CoordinacionTests(unittest.TestCase):
