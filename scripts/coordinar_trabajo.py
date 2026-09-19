@@ -74,6 +74,8 @@ class GitHub:
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "condor-coordinacion",
         }
+        if body is not None:
+            headers["Content-Type"] = "application/json"
         request = Request(url, data=body, headers=headers, method=method)
         try:
             with urlopen(request, timeout=30) as response:
