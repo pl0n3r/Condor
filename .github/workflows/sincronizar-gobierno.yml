@@ -51,7 +51,7 @@ jobs:
 
           if [[ -z "$numero" ]]; then
             respuesta="$(
-              gh api --method POST "repos/$GITHUB_REPOSITORY/milestones"                 -f title="$TITULO"                 -f description="Primera etapa de tracking de Cóndor antes del primer deploy real."
+              gh api --method POST "repos/$GITHUB_REPOSITORY/milestones"                 -f title="$TITULO"                 -f description="Primera etapa de tracking de Condor antes del primer deploy real."
             )"
             numero="$(jq -r '.number' <<<"$respuesta")"
           fi
