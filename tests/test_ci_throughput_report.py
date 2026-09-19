@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from scripts.ci_throughput_report import (
     build_report,
@@ -22,14 +23,24 @@ def run(
     conclusion: str = "success",
 ) -> dict:
     """Crea un run histórico mínimo con duración controlada."""
+    started = datetime(
+        2026,
+        9,
+        19,
+        10,
+        0,
+        0,
+        tzinfo=timezone.utc,
+    ) + timedelta(seconds=run_id)
+    completed = started + timedelta(seconds=seconds)
     return {
         "id": run_id,
         "name": "CI Condor (V 0.1.0)",
         "event": event,
         "conclusion": conclusion,
         "head_sha": f"sha-{run_id}",
-        "run_started_at": "2026-09-19T10:00:00Z",
-        "updated_at": f"2026-09-19T10:00:{seconds:02d}Z",
+        "run_started_at": started.isoformat().replace("+00:00", "Z"),
+        "updated_at": completed.isoformat().replace("+00:00", "Z"),
     }
 
 
