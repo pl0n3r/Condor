@@ -6,8 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
+import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 WORKFLOW_NAME = "CI Condor (V 0.1.0)"
@@ -73,6 +73,32 @@ def run_wall_seconds(run: dict[str, Any]) -> int | None:
     )
 
 
+def comparable_run(
+    run: dict[str, Any],
+    current_run_id: int,
+    event: str,
+) -> dict[str, Any] | None:
+    """Normaliza un run si sirve como muestra de línea base."""
+    if int(run.get("id") or 0) == current_run_id:
+        return None
+    if run.get("name") != WORKFLOW_NAME:
+        return None
+    if run.get("conclusion") != "success":
+        return None
+    if run.get("event") != event:
+        return None
+
+    duration = run_wall_seconds(run)
+    if duration is None:
+        return None
+    return {
+        "run_id": int(run["id"]),
+        "head_sha": str(run.get("head_sha") or ""),
+        "duration_seconds": duration,
+        "run_started_at": run.get("run_started_at"),
+    }
+
+
 def comparable_runs(
     history: Any,
     current_run_id: int,
@@ -89,23 +115,9 @@ def comparable_runs(
     for run in values:
         if not isinstance(run, dict):
             continue
-        if int(run.get("id") or 0) == current_run_id:
-            continue
-        if run.get("name") != WORKFLOW_NAME:
-            continue
-        if run.get("conclusion") != "success" or run.get("event") != event:
-            continue
-        duration = run_wall_seconds(run)
-        if duration is None:
-            continue
-        candidates.append(
-            {
-                "run_id": int(run["id"]),
-                "head_sha": str(run.get("head_sha") or ""),
-                "duration_seconds": duration,
-                "run_started_at": run.get("run_started_at"),
-            }
-        )
+        candidate = comparable_run(run, current_run_id, event)
+        if candidate is not None:
+            candidates.append(candidate)
 
     candidates.sort(
         key=lambda item: str(item.get("run_started_at") or ""),
@@ -297,19 +309,12 @@ def markdown_summary(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def load_json(path: str) -> Any:
-    """Carga JSON UTF-8 desde un archivo."""
-    return json.loads(Path(path).read_text(encoding="utf-8"))
-
-
 def main() -> None:
-    """Despacha generación de reporte o resumen."""
+    """Despacha generación de reporte o resumen desde JSON por stdin."""
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
 
     report = sub.add_parser("report")
-    report.add_argument("--jobs-file", required=True)
-    report.add_argument("--history-file", required=True)
     report.add_argument("--run-id", required=True)
     report.add_argument("--source-sha", required=True)
     report.add_argument("--event", required=True)
@@ -317,17 +322,19 @@ def main() -> None:
     report.add_argument("--started-at", required=True)
     report.add_argument("--updated-at", required=True)
 
-    summary = sub.add_parser("summary")
-    summary.add_argument("--input", required=True)
+    sub.add_parser("summary")
 
     args = parser.parse_args()
+    payload = json.load(sys.stdin)
     if args.command == "summary":
-        print(markdown_summary(load_json(args.input)), end="")
+        print(markdown_summary(payload), end="")
         return
 
+    jobs = payload.get("jobs", []) if isinstance(payload, dict) else []
+    history = payload.get("history", {}) if isinstance(payload, dict) else {}
     output = build_report(
-        load_json(args.jobs_file),
-        load_json(args.history_file),
+        jobs,
+        history,
         {
             "run_id": args.run_id,
             "source_sha": args.source_sha,
