@@ -26,6 +26,7 @@
 | CodeRabbit | ✅ **Configurado** | `.coderabbit.yaml` activo con perfil assertive e instrucciones de revisión en español |
 | Coordinación multiagente | ✅ **Activa** | Issue #18 validó toma única, rechazo de colisión y liberación; PR #20 cerró la carrera de limpieza |
 | Baseline de pruebas | ✅ **Activo** | Issue #23 / PR #24: contrato + integración + Playwright Chromium; exact-main verde |
+| Optimización Playwright | 🚧 **Validando merge** | PR #26: gate 37 s → 12 s; CI de PR 50 s → 31 s; cobertura preservada |
 | Producción | ⚪ **NO VALIDADA** | CI/merge no sustituyen despliegue ni validación real |
 
 ## Fuentes de verdad
@@ -69,13 +70,13 @@ flowchart LR
 - Telemetría de throughput del CI activa; primera medición real: 19 s y artifact con evidencia.
 - Baseline técnico de contrato, integración y Playwright activo sin inventar lógica funcional.
 - `main` protegido por ruleset: PR obligatorio, check `Validar` requerido y sin bypass.
-- Optimización de caché de browsers Playwright en curso, Issue #25.
+- Playwright optimizado con Chrome estable del runner: 37 s → 12 s en PR #26; la caché de 271 MB fue descartada por ahorrar solo ~2 s.
 
 ## Archivos de la entrega actual
 
 - `.github/workflows/ci.yml`
+- `playwright.config.mjs`
 - `ESPECIFICACIONES.md`
-- `GLOSARIO.md`
 - `README.md`
 
 ## Validación
@@ -85,16 +86,18 @@ flowchart LR
 - Los enlaces relativos y archivos documentales canónicos tienen validación automática.
 - El workflow de gobierno sincronizó labels y creó el milestone #1 `Primera entrega (V 0.1.0)`.
 - SonarQube Cloud está activo; el Quality Gate se revisa en cada PR cuando la integración reporta resultados.
+- PR #26 redujo el gate Playwright de 37 s a 12 s en la medición de PR, manteniendo el mismo harness y evidencia de fallo.
+- El experimento de caché de browsers fue descartado: cache hit real 35 s → 33 s restaurando ~271 MB.
 - No existe evidencia de deploy ni validación de producción.
 
 ## Qué sigue
 
 | Lane | Trabajo |
 | --- | --- |
-| **AHORA** | 🚧 Reducir el costo de Playwright en CI sin perder cobertura, Issue #25. |
+| **AHORA** | 🚧 Cerrar optimización de Playwright con validación exacta de `main`, Issue #25 / PR #26. |
 | **SIGUE** | 🚧 Definición funcional del producto. |
 | **DESPUÉS** | 🚧 Definición funcional del producto + bootstrap técnico de aplicación. |
-| **CALIDAD** | 🚧 Optimización medida de Playwright, Issue #25; SonarQube Cloud y baseline de pruebas activos. |
+| **CALIDAD** | 🟢 Playwright 37 s → 12 s en PR #26; SonarQube Cloud y baseline de pruebas activos. |
 | **DEPLOY** | 🚧 Preparar Hostinger y realizar el primer deploy real **V 0.1.0**. |
 
 ## Panorama general pendiente

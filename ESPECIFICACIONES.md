@@ -339,6 +339,8 @@ Reglas:
 - si una futura incompatibilidad exige una revisión exacta de Chromium, se puede usar el browser Playwright fijado de forma dirigida;
 - toda optimización se conserva solo si la medición demuestra una mejora material sin perder cobertura.
 
+Evidencia inicial: el enfoque final redujo Playwright de **37 s a 12 s** y el CI de PR de aproximadamente **50 s a 31 s**. Estos datos deben confirmarse nuevamente sobre el SHA exacto de `main`.
+
 
 ## 7. Criterio de actualización
 
