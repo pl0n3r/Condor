@@ -154,3 +154,7 @@ Cuando aparezca un término técnico nuevo de importancia en el README, roadmap 
 3. usar un ejemplo de Condor cuando ayude;
 4. evitar definiciones académicas innecesarias;
 5. actualizar una definición si el significado práctico dentro del proyecto cambia.
+| **SaaS** | Software que se ofrece como servicio por internet, normalmente mediante suscripción, en lugar de instalarse y administrarse de forma independiente en cada empresa. | Condor App se plantea como SaaS para empresas colombianas. |
+| **B2B** | Modelo en el que una empresa vende productos o servicios a otras empresas. | Condor App es un producto B2B porque sus clientes serán empresas. |
+| **E-commerce** | Canal digital donde una empresa publica productos o servicios y recibe compras o pedidos por internet. | Es uno de los primeros frentes de Condor App. |
+| **Mayorista** | Cliente que compra volúmenes mayores y puede tener precios o condiciones comerciales diferentes a un comprador normal. | Condor contempla definir precios y descuentos específicos para este tipo de cliente. |

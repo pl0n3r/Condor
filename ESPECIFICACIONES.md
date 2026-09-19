@@ -65,22 +65,80 @@ Sujeta a ajuste según las necesidades reales del producto:
 - despliegue desde `main` hacia Hostinger;
 - separación entre validación de código, observación del despliegue y validación de producción.
 
-## 5. Arquitectura funcional
+## 5. Definición funcional del producto
 
-Pendiente de definición.
+### 5.1 Problema y mercado confirmados
 
-Aquí se documentarán, cuando se definan:
+Condor App será un **SaaS B2B para empresas colombianas**.
 
-- usuarios y roles;
-- permisos;
-- dominios funcionales;
-- módulos;
-- navegación;
-- modelo de datos;
-- integraciones;
-- multi-tenancy si aplica;
-- contratos internos y públicos;
-- límites arquitectónicos.
+El problema general que el producto busca atacar es la baja digitalización de empresas que todavía no cuentan con herramientas suficientes o integradas para operar partes importantes del negocio.
+
+Carencias identificadas hasta ahora:
+
+- no tener presencia web;
+- no tener e-commerce;
+- no contar con una administración centralizada del e-commerce;
+- no manejar inventarios digitalmente;
+- no tener una administración flexible de precios;
+- no poder manejar condiciones comerciales para mayoristas;
+- no poder aplicar descuentos por cantidad.
+
+El tamaño exacto de empresa objetivo todavía no está cerrado. El foco en pymes es una **hipótesis**, no una decisión final.
+
+### 5.2 Primer frente de producto confirmado
+
+El primer frente que Condor App debe definir y atacar está compuesto por:
+
+1. **Presencia web** de la empresa.
+2. **E-commerce**.
+3. **Administración del e-commerce**.
+4. **Manejo de inventarios**.
+5. **Administración de precios**.
+6. **Condiciones o precios para mayoristas**.
+7. **Descuentos por cantidad**.
+
+La intención no es construir únicamente una tienda online aislada. La visión confirmada es que Condor App pueda crecer progresivamente hasta ayudar a digitalizar distintas partes operativas de una empresa.
+
+El punto de entrada inicial será el frente comercial/digital: presencia web + comercio electrónico + operación de catálogo/precios/inventario.
+
+### 5.3 Hipótesis y decisiones todavía abiertas
+
+No considerar como requisito cerrado hasta que producto lo confirme:
+
+- foco específico en pymes;
+- producto modular o activable por capacidades;
+- alcance exacto de la presencia web;
+- uso de plantillas, constructor visual o servicio administrado;
+- estructura exacta del catálogo;
+- variantes de producto;
+- pedidos;
+- pagos;
+- envíos;
+- facturación;
+- CRM/clientes;
+- multiempresa / multi-tenant;
+- modelo de suscripción y precios del SaaS;
+- integraciones externas.
+
+### 5.4 Definiciones pendientes antes del MVP
+
+- precisar el perfil de empresa objetivo inicial;
+- formular problema principal y propuesta de valor en una frase;
+- definir MVP y exclusiones explícitas;
+- identificar actores/usuarios;
+- definir roles y permisos;
+- mapear flujos críticos;
+- definir límites de los módulos iniciales;
+- especificar reglas de inventario;
+- especificar reglas de precios;
+- especificar reglas para mayoristas y descuentos por cantidad;
+- definir el nivel de integración entre sitio público, e-commerce y backoffice;
+- definir métricas de éxito iniciales.
+
+### 5.5 Regla de esta fase
+
+Durante esta fase la prioridad es **definir el producto**. Una hipótesis de producto no debe convertirse automáticamente en arquitectura, esquema de datos o código hasta que su alcance funcional quede acordado.
+
 
 ## 6. Decisiones durables
 
@@ -341,6 +399,12 @@ Reglas:
 
 Evidencia inicial: el enfoque final redujo Playwright de **37 s a 12 s** y el CI de PR de aproximadamente **50 s a 31 s**. Estos datos deben confirmarse nuevamente sobre el SHA exacto de `main`.
 
+
+### D-017 — Entrada inicial por digitalización comercial
+
+El primer frente de Condor App será la digitalización comercial de empresas colombianas con baja digitalización: presencia web, e-commerce, administración del e-commerce, inventario, precios, condiciones para mayoristas y descuentos por cantidad.
+
+Esta decisión define dirección de producto, no todavía arquitectura ni alcance completo del MVP.
 
 ## 7. Criterio de actualización
 
