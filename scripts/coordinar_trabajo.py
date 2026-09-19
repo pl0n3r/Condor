@@ -558,6 +558,80 @@ def transfer_work(
     return new_id
 
 
+
+def release_permission(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    association: str,
+    reservation_id: str | None,
+    force: bool,
+) -> tuple[dict[str, Any] | None, bool]:
+    """Valida si el actor y la sesión pueden liberar una reserva."""
+    if not authorized(association):
+        raise CoordinationError(
+            f"@{actor} no tiene una asociación autorizada para liberar trabajo."
+        )
+
+    current = active_reservation(api, issue_number)
+    if force:
+        repo_owner = api.repo.split("/", 1)[0]
+        if actor != repo_owner:
+            raise CoordinationError(
+                f"Solo @{repo_owner} puede ejecutar /liberar-forzado."
+            )
+        return current, True
+
+    if not current:
+        api.comment(issue_number, f"⛔ @{actor}: no existe una reserva activa.")
+        return None, False
+
+    same_session = (
+        current["owner"] == actor
+        and reservation_id is not None
+        and current["reservation_id"] == reservation_id.lower()
+    )
+    if not same_session:
+        api.comment(
+            issue_number,
+            f"⛔ @{actor}: solo la sesión propietaria puede liberar esta reserva.",
+        )
+        return current, False
+    return current, True
+
+
+def close_pulls_before_release(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    branch: str,
+    force: bool,
+) -> bool:
+    """Cierra PR al forzar o rechaza la liberación normal si siguen abiertos."""
+    open_pulls = open_pulls_for_branch(api, branch)
+    if open_pulls and not force:
+        rendered = ", ".join(f"#{number}" for number in open_pulls)
+        api.comment(
+            issue_number,
+            f"⛔ @{actor}: no se libera mientras existan PR abiertos ({rendered}). "
+            "Cierra el PR primero o usa liberación forzada como dueño.",
+        )
+        return False
+    for pr_number in open_pulls:
+        api.close_pull(pr_number)
+    return True
+
+
+def expose_issue_after_release(api: GitHub, issue_number: int) -> None:
+    """Vuelve a exponer el Issue solo si sigue abierto y no está bloqueado."""
+    issue = api.issue(issue_number)
+    if (
+        issue.get("state") == "open"
+        and STATUS_BLOCKED not in label_names(issue)
+    ):
+        api.set_status(issue_number, STATUS_AVAILABLE)
+
+
 def release_work(
     api: GitHub,
     issue_number: int,
@@ -567,49 +641,30 @@ def release_work(
     force: bool,
 ) -> None:
     """Libera una reserva respetando propiedad de sesión y orden fail-closed."""
-    if not authorized(association):
-        raise CoordinationError(
-            f"@{actor} no tiene una asociación autorizada para liberar trabajo."
-        )
-
-    repo_owner = api.repo.split("/", 1)[0]
-    current = active_reservation(api, issue_number)
-    if force:
-        if actor != repo_owner:
-            raise CoordinationError(
-                f"Solo @{repo_owner} puede ejecutar /liberar-forzado."
-            )
-    else:
-        if not current:
-            api.comment(issue_number, f"⛔ @{actor}: no existe una reserva activa.")
-            return
-        if (
-            current["owner"] != actor
-            or reservation_id is None
-            or current["reservation_id"] != reservation_id.lower()
-        ):
-            api.comment(
-                issue_number,
-                f"⛔ @{actor}: solo la sesión propietaria puede liberar esta reserva.",
-            )
-            return
+    current, allowed = release_permission(
+        api,
+        issue_number,
+        actor,
+        association,
+        reservation_id,
+        force,
+    )
+    if not allowed:
+        return
 
     branch = (
         str(current["branch"])
         if current
         else f"trabajo/issue-{issue_number}"
     )
-    open_pulls = open_pulls_for_branch(api, branch)
-    if open_pulls and not force:
-        rendered = ", ".join(f"#{number}" for number in open_pulls)
-        api.comment(
-            issue_number,
-            f"⛔ @{actor}: no se libera mientras existan PR abiertos ({rendered}). "
-            "Cierra el PR primero o usa liberación forzada como dueño.",
-        )
+    if not close_pulls_before_release(
+        api,
+        issue_number,
+        actor,
+        branch,
+        force,
+    ):
         return
-    for pr_number in open_pulls:
-        api.close_pull(pr_number)
 
     owner = str(current["owner"]) if current else actor
     session = (
@@ -618,7 +673,6 @@ def release_work(
         else new_reservation_id()
     )
     api.delete_branch(branch)
-
     publish_reservation(
         api,
         issue_number,
@@ -629,45 +683,51 @@ def release_work(
         "liberacion-forzada" if force else "liberar",
         f"🔓 Reserva liberada por @{actor}. La rama {branch} fue eliminada.",
     )
-
-    issue = api.issue(issue_number)
-    if issue.get("state") == "open":
-        if STATUS_BLOCKED not in label_names(issue):
-            api.set_status(issue_number, STATUS_AVAILABLE)
+    expose_issue_after_release(api, issue_number)
     if current:
         api.try_unassign(issue_number, owner)
     print(f"Reserva liberada: Issue #{issue_number}")
 
 
-def update_pr_state(api: GitHub, pr_number: int, action: str) -> None:
-    """Sincroniza labels y reserva con eventos de un PR del mismo repositorio."""
-    pull = api.pull(pr_number)
-    head = pull.get("head")
-    branch = str(head.get("ref") or "") if isinstance(head, dict) else ""
-    issue_number = issue_from_branch(branch)
-    if issue_number is None:
-        return
+def sync_review_status(
+    api: GitHub,
+    issue_number: int,
+    pull: dict[str, Any],
+    action: str,
+    current: dict[str, Any] | None,
+) -> bool:
+    """Sincroniza estados de revisión y devuelve si el evento ya fue manejado."""
+    review_actions = {"opened", "ready_for_review", "converted_to_draft"}
+    if action not in review_actions:
+        return False
 
     issue = api.issue(issue_number)
-    current = active_reservation(api, issue_number)
+    if not current or issue.get("state") != "open":
+        return True
+    if action == "opened" and pull.get("draft"):
+        return True
 
-    if action == "opened":
-        if not pull.get("draft") and current and issue.get("state") == "open":
-            api.set_status(issue_number, STATUS_REVIEW)
-        return
-    if action == "ready_for_review":
-        if current and issue.get("state") == "open":
-            api.set_status(issue_number, STATUS_REVIEW)
-        return
-    if action == "converted_to_draft":
-        if current and issue.get("state") == "open":
-            api.set_status(issue_number, STATUS_RESERVED)
-        return
-    if action != "closed":
-        return
+    target = (
+        STATUS_RESERVED
+        if action == "converted_to_draft"
+        else STATUS_REVIEW
+    )
+    api.set_status(issue_number, target)
+    return True
 
+
+def close_pr_reservation(
+    api: GitHub,
+    pr_number: int,
+    issue_number: int,
+    branch: str,
+    pull: dict[str, Any],
+    current: dict[str, Any] | None,
+) -> None:
+    """Cierra la reserva y actualiza el Issue al cerrarse un PR."""
     api.delete_branch(branch)
     merged = bool(pull.get("merged"))
+
     if current:
         publish_reservation(
             api,
@@ -691,6 +751,29 @@ def update_pr_state(api: GitHub, pr_number: int, action: str) -> None:
     elif STATUS_BLOCKED not in label_names(issue):
         api.set_status(issue_number, STATUS_AVAILABLE)
 
+
+def update_pr_state(api: GitHub, pr_number: int, action: str) -> None:
+    """Sincroniza labels y reserva con eventos de un PR del mismo repositorio."""
+    pull = api.pull(pr_number)
+    head = pull.get("head")
+    branch = str(head.get("ref") or "") if isinstance(head, dict) else ""
+    issue_number = issue_from_branch(branch)
+    if issue_number is None:
+        return
+
+    current = active_reservation(api, issue_number)
+    if sync_review_status(api, issue_number, pull, action, current):
+        return
+    if action != "closed":
+        return
+    close_pr_reservation(
+        api,
+        pr_number,
+        issue_number,
+        branch,
+        pull,
+        current,
+    )
 
 def update_issue_state(api: GitHub, issue_number: int, action: str) -> None:
     """Limpia una reserva al cerrar un Issue o restablece su estado al reabrirlo."""
@@ -729,6 +812,98 @@ def update_issue_state(api: GitHub, issue_number: int, action: str) -> None:
     api.set_status(issue_number, status)
 
 
+
+def reservation_validation_errors(
+    api: GitHub,
+    issue: dict[str, Any],
+    issue_number: int,
+    branch: str,
+    body: str,
+) -> list[str]:
+    """Valida la reserva activa requerida por un Pull Request."""
+    errors: list[str] = []
+    labels = label_names(issue)
+    if not ({STATUS_RESERVED, STATUS_REVIEW} & labels):
+        errors.append(
+            f"Issue #{issue_number} no tiene una reserva activa visible."
+        )
+    if api.branch_sha(branch) is None:
+        errors.append(f"La rama reservada {branch} no existe.")
+
+    reservation = active_reservation(api, issue_number)
+    if not reservation:
+        errors.append(
+            f"Issue #{issue_number} no tiene marcador de reserva activo y confiable."
+        )
+        return errors
+
+    if reservation["branch"] != branch:
+        errors.append(
+            f"El marcador de reserva apunta a {reservation['branch']}, no a {branch}."
+        )
+    if reservation_from_pr_body(body) != reservation["reservation_id"]:
+        errors.append(
+            "El PR debe declarar exactamente la sesión activa como "
+            "'Reserva: <UUID>'."
+        )
+    return errors
+
+
+def issue_contract_errors(
+    api: GitHub,
+    issue_number: int,
+    branch: str,
+    body: str,
+    require_reservation: bool,
+) -> list[str]:
+    """Valida relación con Issue y, cuando aplica, su reserva activa."""
+    errors: list[str] = []
+    if issue_number not in closing_issues(body):
+        errors.append(
+            f"El PR debe incluir Closes #{issue_number} (o Fixes/Resolves) en el cuerpo."
+        )
+
+    issue = api.issue(issue_number)
+    if issue.get("state") != "open":
+        errors.append(f"Issue #{issue_number} debe estar abierto durante el PR.")
+    if require_reservation:
+        errors.extend(
+            reservation_validation_errors(
+                api,
+                issue,
+                issue_number,
+                branch,
+                body,
+            )
+        )
+    return errors
+
+
+def collision_validation_errors(
+    api: GitHub,
+    pr_number: int,
+) -> list[str]:
+    """Detecta archivos solapados contra otros PR abiertos hacia main."""
+    current_files = api.pull_files(pr_number)
+    others: dict[int, set[str]] = {}
+    for other in api.open_pulls():
+        other_number = other.get("number")
+        if not isinstance(other_number, int) or other_number == pr_number:
+            continue
+        other_base = other.get("base")
+        if isinstance(other_base, dict) and other_base.get("ref") != "main":
+            continue
+        others[other_number] = api.pull_files(other_number)
+
+    errors: list[str] = []
+    for other_pr, files in file_overlaps(current_files, others).items():
+        rendered = ", ".join(files)
+        errors.append(
+            f"Colisión con PR #{other_pr}: ambos modifican {rendered}."
+        )
+    return errors
+
+
 def validate_pull(
     api: GitHub,
     pr_number: int,
@@ -749,59 +924,17 @@ def validate_pull(
         errors.append("La rama del PR debe usar el formato canónico trabajo/issue-N.")
     else:
         body = str(pull.get("body") or "")
-        if issue_number not in closing_issues(body):
-            errors.append(
-                f"El PR debe incluir Closes #{issue_number} (o Fixes/Resolves) en el cuerpo."
+        errors.extend(
+            issue_contract_errors(
+                api,
+                issue_number,
+                branch,
+                body,
+                require_reservation,
             )
-
-        issue = api.issue(issue_number)
-        if issue.get("state") != "open":
-            errors.append(f"Issue #{issue_number} debe estar abierto durante el PR.")
-
-        if require_reservation:
-            labels = label_names(issue)
-            if not ({STATUS_RESERVED, STATUS_REVIEW} & labels):
-                errors.append(
-                    f"Issue #{issue_number} no tiene una reserva activa visible."
-                )
-            if api.branch_sha(branch) is None:
-                errors.append(f"La rama reservada {branch} no existe.")
-            reservation = active_reservation(api, issue_number)
-            if not reservation:
-                errors.append(
-                    f"Issue #{issue_number} no tiene marcador de reserva activo y confiable."
-                )
-            else:
-                if reservation["branch"] != branch:
-                    errors.append(
-                        f"El marcador de reserva apunta a {reservation['branch']}, "
-                        f"no a {branch}."
-                    )
-                declared = reservation_from_pr_body(body)
-                if declared != reservation["reservation_id"]:
-                    errors.append(
-                        "El PR debe declarar exactamente la sesión activa como "
-                        "'Reserva: <UUID>'."
-                    )
-
-    current_files = api.pull_files(pr_number)
-    others: dict[int, set[str]] = {}
-    for other in api.open_pulls():
-        other_number = other.get("number")
-        if not isinstance(other_number, int) or other_number == pr_number:
-            continue
-        other_base = other.get("base")
-        if isinstance(other_base, dict) and other_base.get("ref") != "main":
-            continue
-        others[other_number] = api.pull_files(other_number)
-
-    collisions = file_overlaps(current_files, others)
-    for other_pr, files in collisions.items():
-        rendered = ", ".join(files)
-        errors.append(
-            f"Colisión con PR #{other_pr}: ambos modifican {rendered}."
         )
 
+    errors.extend(collision_validation_errors(api, pr_number))
     if errors:
         raise CoordinationError("\n".join(f"- {error}" for error in errors))
 
@@ -810,7 +943,6 @@ def validate_pull(
         f"Coordinación válida para PR #{pr_number} "
         f"({mode}); sin solapamientos con otros PR abiertos."
     )
-
 
 def parse_comment_command(body: str) -> tuple[str, str | None]:
     """Interpreta únicamente los comandos públicos soportados por el workflow."""
