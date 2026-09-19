@@ -47,7 +47,7 @@ RESERVATION_LINE_RE = re.compile(
     r"(?im)^Reserva:\s*([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
     r"[89ab][0-9a-f]{3}-[0-9a-f]{12})\s*$"
 )
-RESERVATION_RE = re.compile(r"<!-- condor-reserva (\\{[^\\}]*\\}) -->")
+RESERVATION_RE = re.compile(r"<!-- condor-reserva (\{[^}]*\}) -->")
 SESSION_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
     r"[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
