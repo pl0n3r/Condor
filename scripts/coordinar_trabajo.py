@@ -28,8 +28,8 @@ ALLOWED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 STATUS_LABELS: dict[str, tuple[str, str]] = {
     "estado: disponible": ("2DA44E", "Trabajo disponible para ser reservado."),
-    "estado: reservado": ("FBCA04", "Trabajo reservado por una sesion o agente."),
-    "estado: en revision": ("1D76DB", "Trabajo con Pull Request listo para revision."),
+    "estado: reservado": ("FBCA04", "Trabajo reservado por una sesión o agente."),
+    "estado: en revisión": ("1D76DB", "Trabajo con Pull Request listo para revisión."),
     "estado: completado": ("0E8A16", "Trabajo completado."),
     "estado: cancelado": ("6E7781", "Trabajo cerrado sin completarse."),
 }
@@ -301,18 +301,18 @@ def active_owner(api: GitHub, issue_number: int) -> str | None:
 def reserve_work(api: GitHub, issue_number: int, actor: str, association: str) -> None:
     if not authorized(association):
         raise CoordinationError(
-            f"@{actor} no tiene una asociacion autorizada para reservar trabajo."
+            f"@{actor} no tiene una asociación autorizada para reservar trabajo."
         )
 
     issue = api.issue(issue_number)
     if issue.get("pull_request"):
         raise CoordinationError("Los comandos de reserva se ejecutan sobre Issues, no PRs.")
     if issue.get("state") != "open":
-        raise CoordinationError(f"Issue #{issue_number} no esta abierto.")
+        raise CoordinationError(f"Issue #{issue_number} no está abierto.")
 
     labels = label_names(issue)
     if "estado: bloqueado" in labels:
-        api.comment(issue_number, f"⛔ @{actor}: Issue #{issue_number} esta bloqueado.")
+        api.comment(issue_number, f"⛔ @{actor}: Issue #{issue_number} está bloqueado.")
         return
     if "estado: disponible" not in labels:
         api.comment(
@@ -331,7 +331,7 @@ def reserve_work(api: GitHub, issue_number: int, actor: str, association: str) -
         api.comment(
             issue_number,
             f"⛔ @{actor}: la reserva no fue concedida. La rama {branch} ya existe. "
-            "El trabajo queda fail-closed hasta liberacion explicita.",
+            "El trabajo queda fail-closed hasta liberación explicita.",
         )
         return
 
@@ -342,11 +342,11 @@ def reserve_work(api: GitHub, issue_number: int, actor: str, association: str) -
         issue_number,
         f"{marker}\n"
         f"🔒 **Trabajo reservado por @{actor}.**\n\n"
-        f"- Rama canonica: {branch}\n"
+        f"- Rama canónica: {branch}\n"
         f"- Base de reserva: {main_sha}\n"
-        "- La reserva no vence automaticamente.\n"
-        "- Otra sesion no debe modificar esta rama ni trabajar este Issue.\n"
-        "- Libera con /liberar; el dueno del repositorio puede usar /liberar-forzado.",
+        "- La reserva no vence automáticamente.\n"
+        "- Otra sesión no debe modificar esta rama ni trabajar este Issue.\n"
+        "- Libera con /liberar; el dueño del repositorio puede usar /liberar-forzado.",
     )
     print(f"Reserva concedida: Issue #{issue_number} -> {branch} (@{actor})")
 
@@ -371,7 +371,7 @@ def release_work(
 ) -> None:
     if not authorized(association):
         raise CoordinationError(
-            f"@{actor} no tiene una asociacion autorizada para liberar trabajo."
+            f"@{actor} no tiene una asociación autorizada para liberar trabajo."
         )
 
     repo_owner = api.repo.split("/", 1)[0]
@@ -404,7 +404,7 @@ def release_work(
         owner or actor,
         branch,
         False,
-        "liberacion-forzada" if force else "liberar",
+        "liberación-forzada" if force else "liberar",
     )
     api.comment(
         issue_number,
@@ -424,7 +424,7 @@ def update_pr_state(api: GitHub, pr_number: int, action: str) -> None:
 
     issue = api.issue(issue_number)
     if action == "ready_for_review" and issue.get("state") == "open":
-        api.set_status(issue_number, "estado: en revision")
+        api.set_status(issue_number, "estado: en revisión")
         return
     if action == "converted_to_draft" and issue.get("state") == "open":
         api.set_status(issue_number, "estado: reservado")
@@ -509,7 +509,7 @@ def validate_pull(api: GitHub, pr_number: int, require_reservation: bool) -> Non
 
         if require_reservation:
             labels = label_names(issue)
-            if not ({"estado: reservado", "estado: en revision"} & labels):
+            if not ({"estado: reservado", "estado: en revisión"} & labels):
                 errors.append(f"Issue #{issue_number} no tiene una reserva activa visible.")
             if api.branch_sha(branch) is None:
                 errors.append(f"La rama reservada {branch} no existe.")
@@ -537,7 +537,7 @@ def validate_pull(api: GitHub, pr_number: int, require_reservation: bool) -> Non
         for other_pr, files in collisions.items():
             rendered = ", ".join(files)
             errors.append(
-                f"Colision con PR #{other_pr}: ambos modifican {rendered}."
+                f"Colisión con PR #{other_pr}: ambos modifican {rendered}."
             )
 
     if errors:
@@ -545,7 +545,7 @@ def validate_pull(api: GitHub, pr_number: int, require_reservation: bool) -> Non
 
     mode = "reserva obligatoria" if require_reservation else "bootstrap"
     print(
-        f"Coordinacion valida para PR #{pr_number} "
+        f"Coordinación válida para PR #{pr_number} "
         f"({mode}); sin solapamientos con otros PR abiertos."
     )
 
