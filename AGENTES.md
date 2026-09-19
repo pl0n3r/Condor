@@ -1,14 +1,16 @@
-# Cóndor — contexto operativo canónico para agentes
+# Condor — contexto operativo canónico para agentes
 
-> **ESTE ARCHIVO ES EL PUNTO DE ARRANQUE OBLIGATORIO PARA CHATGPT, CODEX Y CUALQUIER AGENTE DE DESARROLLO QUE TRABAJE EN CÓNDOR.**
+> **ESTE ARCHIVO ES EL PUNTO DE ARRANQUE OBLIGATORIO PARA CHATGPT, CODEX Y CUALQUIER AGENTE DE DESARROLLO QUE TRABAJE EN CONDOR.**
 >
 > Leer este archivo completo antes de modificar el proyecto. No se debe depender de conversaciones anteriores, memoria externa ni resúmenes humanos para continuar el trabajo.
 >
-> Cóndor adopta deliberadamente las prácticas maduras de ingeniería de BRVTAL cuando son aplicables, pero **no copia su lógica de negocio, arquitectura funcional, rutas, módulos ni deuda histórica**.
+> Condor adopta deliberadamente las prácticas maduras de ingeniería de BRVTAL cuando son aplicables, pero **no copia su lógica de negocio, arquitectura funcional, rutas, módulos ni deuda histórica**.
+>
+> **Identidad:** el nombre oficial y público del producto es **Condor App**. En documentación técnica, GitHub, conversaciones de desarrollo y referencias internas se usa **Condor** como nombre corto.
 
 ## 0. Responsabilidad de cada fuente
 
-Cóndor separa explícitamente operación, especificación y progreso:
+Condor separa explícitamente operación, especificación y progreso:
 
 - **Código fusionado en `main` + pruebas**: verdad de implementación.
 - **`AGENTES.md`**: cómo se trabaja.
@@ -91,7 +93,7 @@ El objetivo es responsabilizarse del recorrido completo:
 
 ## 4. Idioma y mercado
 
-Cóndor está orientado inicialmente a Colombia.
+Condor está orientado inicialmente a Colombia.
 
 ### Regla de idioma
 
@@ -126,7 +128,9 @@ Cuando no exista otro requisito explícito:
 
 | Elemento | Valor actual |
 |---|---|
-| Proyecto | **Cóndor** |
+| Nombre oficial del producto | **Condor App** |
+| Nombre corto técnico/interno | **Condor** |
+| Dominio canónico | `https://www.condorapp.com.co` |
 | Repositorio | `pl0n3r/Condor` |
 | Rama canónica | `main` |
 | Tipo | SaaS de gestión corporativa |
@@ -232,7 +236,7 @@ No declarar un gate como aprobado mientras siga procesando.
 
 ## 9. Contrato de CI y entrega
 
-El CI de Cóndor debe evolucionar hacia un flujo rápido y selectivo inspirado en BRVTAL:
+El CI de Condor debe evolucionar hacia un flujo rápido y selectivo inspirado en BRVTAL:
 
 1. **preflight** siempre corto y obligatorio;
 2. clasificar archivos modificados;
@@ -283,11 +287,11 @@ No iniciar una rama dependiente nueva antes de cerrar la validación de `main` d
 
 ## 11. Versionado de producto y releases
 
-Cóndor usa versionado de producto explícito por deploy, siguiendo la convención ya adoptada en BRVTAL.
+Condor usa versionado de producto explícito por deploy, siguiendo la convención ya adoptada en BRVTAL.
 
 ### Regla de versión
 
-- la primera versión de producción de Cóndor será **`0.1.0`**;
+- la primera versión de producción de Condor será **`0.1.0`**;
 - cada deploy posterior incrementa normalmente el **patch**: `0.1.0 → 0.1.1 → 0.1.2 → ...`;
 - un cambio de **minor** pre-1.0, por ejemplo `0.1.x → 0.2.0`, representa un hito deliberado de producto y no debe ocurrir automáticamente;
 - **`1.0.0` requiere decisión explícita del usuario**;
@@ -453,7 +457,7 @@ Ejemplos:
 
 ## 15. README por deploy
 
-Cóndor adopta la misma estrategia de README operativo de BRVTAL: **`README.md` es el snapshot visual del deploy actual**, no un documento acumulativo.
+Condor adopta la misma estrategia de README operativo de BRVTAL: **`README.md` es el snapshot visual del deploy actual**, no un documento acumulativo.
 
 Para cada PR deploy-bound:
 
@@ -516,12 +520,15 @@ Ante un fallo recurrente:
 
 ---
 
-## 17. Reglas ya acordadas para Cóndor
+## 17. Reglas ya acordadas para Condor
 
 Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y deben considerarse obligatorias hasta que el usuario las cambie explícitamente:
 
+- el nombre oficial y público del producto es `Condor App`;
+- en documentación técnica, GitHub y conversación de desarrollo se usa `Condor` como nombre corto;
+- el dominio canónico es `https://www.condorapp.com.co`;
 - el repositorio oficial es `pl0n3r/Condor`;
-- Cóndor reutiliza la infraestructura y las prácticas maduras de BRVTAL cuando tengan sentido;
+- Condor reutiliza la infraestructura y las prácticas maduras de BRVTAL cuando tengan sentido;
 - no se copia automáticamente lógica de negocio, módulos, rutas, esquema de datos ni deuda histórica de BRVTAL;
 - GitHub y todo lo controlable por el proyecto se escribe en español siempre que sea técnicamente viable;
 - el producto está pensado inicialmente para Colombia y usa `es-CO` y COP como defaults;
@@ -538,7 +545,7 @@ Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y 
 - toda PR relevante debe reflejar en el roadmap cualquier cambio real de estado antes o inmediatamente después del cierre de la entrega;
 - el roadmap funciona como un log detallado acumulativo desde el inicio del proyecto hasta, como mínimo, la primera v1.0.0 madura;
 - nunca declarar VALIDADO EN PRODUCCIÓN únicamente porque CI esté verde;
-- Cóndor usa versión humana de producto por cada deploy;
+- Condor usa versión humana de producto por cada deploy;
 - el primer deploy será `0.1.0`;
 - el incremento normal por deploy es patch (`0.1.1`, `0.1.2`, ...);
 - todos los títulos visibles de GitHub usan la versión objetivo al final con formato exacto `(V X.Y.Z)`;
@@ -546,7 +553,7 @@ Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y 
 - cuando exista la aplicación, `config/version.php` será la fuente canónica de versión y cualquier metadata equivalente deberá mantener paridad;
 - el README usa la misma estrategia de snapshot por deploy que BRVTAL;
 - el README debe mostrar siempre y por separado la versión objetivo y la versión realmente desplegada; tras el primer deploy, la señal visible será por ejemplo `v0.1.0`, pero nunca se inferirá desde CI;
-- `GLOSARIO.md` debe mantenerse actualizado con los términos técnicos relevantes que aparezcan en superficies visibles para socios, usando lenguaje de negocio y ejemplos de Cóndor cuando ayuden.
+- `GLOSARIO.md` debe mantenerse actualizado con los términos técnicos relevantes que aparezcan en superficies visibles para socios, usando lenguaje de negocio y ejemplos de Condor cuando ayuden.
 
 ---
 
@@ -566,4 +573,4 @@ No convertir `AGENTES.md` en un roadmap ni en un historial de releases.
 
 Cuando una decisión o implementación introduzca terminología técnica relevante para seguimiento de negocio, revisar si `GLOSARIO.md` necesita actualización en la misma PR.
 
-**Regla final:** un agente nuevo debe poder leer este archivo, revisar el repositorio y el Issue #1, y continuar Cóndor sin necesitar el chat anterior.
+**Regla final:** un agente nuevo debe poder leer este archivo, revisar el repositorio y el Issue #1, y continuar Condor sin necesitar el chat anterior.
