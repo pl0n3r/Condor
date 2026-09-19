@@ -59,24 +59,29 @@ GitHub es el **árbitro central de la cola de trabajo**. Después de que esta ca
 1. Elegir únicamente un Issue abierto con label `estado: disponible`.
 2. Comentar exactamente `/tomar` en ese Issue.
 3. Esperar la respuesta del workflow de coordinación.
-4. La reserva exitosa crea de forma atómica la rama canónica `trabajo/issue-N`, cambia el Issue a `estado: reservado` y publica quién lo tomó.
-5. Si otra sesión intenta reservar el mismo Issue, la creación atómica de la rama actúa como lock: solo una puede ganar.
-6. Si la reserva es rechazada, **no trabajar esa tarea**; elegir otro Issue disponible.
+4. La reserva exitosa crea de forma atómica la rama canónica `trabajo/issue-N`, cambia el Issue a `estado: reservado` y publica un **ID de reserva UUID**.
+5. La sesión que ejecutó `/tomar` debe conservar ese UUID y usarlo en el PR como `Reserva: <UUID>`.
+6. Si otra sesión intenta reservar el mismo Issue, la creación atómica de la rama actúa como lock: solo una puede ganar.
+7. Si la reserva es rechazada, **no trabajar esa tarea**; elegir otro Issue disponible.
 
 ### Propiedad de la reserva
 
 - una reserva no vence automáticamente: el sistema es **fail-closed**;
 - compartir la misma cuenta de GitHub **no** autoriza a dos sesiones a trabajar el mismo Issue;
-- una sesión solo puede continuar una reserva si la creó en la sesión actual o fue invocada explícitamente para retomar ese Issue;
+- cada toma genera un ID de reserva UUID distinto, incluso bajo el mismo login;
+- una sesión solo puede continuar una reserva si conoce el UUID de su propia toma o recibió una transferencia explícita;
+- nunca adoptar el UUID visible de otra sesión solo porque se comparte la misma cuenta;
 - nunca modificar `trabajo/issue-N` si pertenece a otra sesión/agente;
 - nunca crear ramas alternativas para saltarse una reserva existente;
-- para liberar normalmente, comentar `/liberar`;
+- para liberar normalmente, comentar `/liberar <UUID>`;
+- para transferir el trabajo a otra sesión de la misma cuenta, comentar `/transferir <UUID>`; el workflow genera un UUID nuevo e invalida el anterior;
+- para transferir entre cuentas distintas, liberar y permitir que la nueva cuenta ejecute `/tomar`;
 - el dueño del repositorio puede resolver una reserva huérfana con `/liberar-forzado`.
 
 ### Pull Requests y colisiones
 
 - después del primer commit lógico, abrir el PR pronto para hacer visible el alcance en curso;
-- el PR debe salir de `trabajo/issue-N` e incluir `Closes #N` en el cuerpo;
+- el PR debe salir de `trabajo/issue-N`, incluir `Closes #N` y declarar `Reserva: <UUID>` en el cuerpo;
 - CI valida la reserva y compara los archivos del PR contra todos los demás PR abiertos hacia `main`;
 - si dos PR modifican el mismo archivo, la validación de coordinación falla y el trabajo debe repartirse, serializarse o actualizarse sobre el nuevo `main`;
 - nunca resolver una colisión sobrescribiendo silenciosamente el trabajo de otra sesión;
