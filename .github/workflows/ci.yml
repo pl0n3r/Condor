@@ -239,8 +239,29 @@ jobs:
       - name: Instalar dependencias reproducibles
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Instalar Chromium y dependencias del runner
-        run: ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Restaurar caché de browsers Playwright
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+
+      - name: Instalar dependencias del sistema para Chromium
+        run: ./node_modules/.bin/playwright install-deps chromium
+
+      - name: Instalar Chromium fijado por lockfile
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: ./node_modules/.bin/playwright install chromium
+
+      - name: Registrar estado de caché
+        env:
+          CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
+        run: |
+          if [[ "$CACHE_HIT" == "true" ]]; then
+            echo "- Caché de Playwright: **hit**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Caché de Playwright: **miss**" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Ejecutar Playwright
         run: npm run test:e2e

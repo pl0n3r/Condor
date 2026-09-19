@@ -57,6 +57,9 @@
 | **GitHub Actions** | Herramienta de GitHub que ejecuta automatizaciones. | Ejecutará CI, pruebas y otros controles. |
 | **Gate / control** | Requisito que debe pasar antes de considerar un cambio listo. | Puede ser una prueba, análisis de seguridad o revisión automática. |
 | **Preflight** | Revisión rápida inicial que decide qué controles necesita una PR. | Evita correr pruebas innecesarias y reduce tiempos. |
+| **Caché** | Copia temporal reutilizable de algo costoso de volver a descargar o calcular. | Condor puede reutilizar binarios de Playwright para acelerar CI, pero la caché nunca sustituye dependencias declaradas ni pruebas. |
+| **Cache hit / acierto de caché** | La copia reutilizable ya existe y puede usarse. | Evita volver a descargar Chromium cuando el lockfile no cambió. |
+| **Cache miss / fallo de caché** | No existe una copia válida y debe generarse de nuevo. | Condor descarga Chromium y guarda una nueva caché para ejecuciones compatibles posteriores. |
 | **Throughput del CI** | Qué tan rápido completa el proyecto sus controles automáticos desde que empiezan hasta que terminan. | Condor lo mide después de cada CI para encontrar cuellos de botella sin ralentizar las entregas. |
 | **Wall time** | Tiempo real de reloj transcurrido entre inicio y final de una ejecución. | Es la métrica principal para saber cuánto tarda el CI completo. |
 | **Línea base de CI** | Referencia construida con tiempos recientes comparables. | Condor usa la mediana de hasta cinco ejecuciones exitosas anteriores del mismo tipo. |

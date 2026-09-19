@@ -320,6 +320,23 @@ Reglas:
 - artifacts de Playwright se conservan solo ante fallos;
 - no se usan assertions frágiles de texto fuente como sustituto de comportamiento verificable.
 
+### D-016 — Caché de Playwright como optimización, no como fuente de verdad
+
+La telemetría identificó a Playwright Chromium como cuello de botella inicial del CI. La optimización permitida reutiliza únicamente los binarios descargados del navegador.
+
+Reglas:
+
+- cachear solo `~/.cache/ms-playwright`;
+- no cachear `node_modules`;
+- mantener `npm ci` en cada ejecución;
+- derivar la clave de caché de sistema operativo + `package-lock.json`;
+- si cambia el lockfile, la caché de browser deja de ser válida;
+- mantener la instalación explícita de dependencias del sistema en cada runner;
+- en cache miss, instalar Chromium usando el binario Playwright ya fijado por lockfile;
+- fijar `actions/cache` por SHA;
+- un cache hit nunca sustituye la ejecución de Playwright;
+- medir cold/warm runs antes de afirmar una mejora.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
