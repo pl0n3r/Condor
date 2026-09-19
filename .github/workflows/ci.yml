@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: read
+  issues: read
+  pull-requests: read
 
 concurrency:
   group: ci-condor-${{ github.event.pull_request.number || github.ref }}
@@ -130,9 +132,40 @@ jobs:
             fi
           done
 
+  coordinacion:
+    name: Validar coordinación
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Probar reglas de coordinación
+        run: python3 -m unittest tests/test_coordinar_trabajo.py
+
+      - name: Validar reserva y colisiones
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORIO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          argumentos=()
+          if git cat-file -e "$BASE_SHA:.github/workflows/coordinacion-trabajo.yml" 2>/dev/null; then
+            argumentos+=(--require-reservation)
+          else
+            echo "Bootstrap: la base aún no contiene coordinación multiagente; se validan rama, Issue y colisiones."
+          fi
+          python3 scripts/coordinar_trabajo.py validar-pr             --repo "$REPOSITORIO"             --pr "$PR"             "${argumentos[@]}"
+
+
   validar:
     name: Validar
-    needs: [preflight, documentacion, gobierno]
+    needs: [preflight, documentacion, gobierno, coordinacion]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -141,11 +174,13 @@ jobs:
           PREFLIGHT: ${{ needs.preflight.result }}
           DOCUMENTACION: ${{ needs.documentacion.result }}
           GOBIERNO: ${{ needs.gobierno.result }}
+          COORDINACION: ${{ needs.coordinacion.result }}
         run: |
           set -euo pipefail
 
           [[ "$PREFLIGHT" == "success" ]] || { echo "::error::Preflight no pasó."; exit 1; }
           [[ "$GOBIERNO" == "success" ]] || { echo "::error::Gobierno no pasó."; exit 1; }
+          [[ "$COORDINACION" == "success" ]] || { echo "::error::Coordinación no pasó."; exit 1; }
 
           case "$DOCUMENTACION" in
             success|skipped) ;;
@@ -158,5 +193,6 @@ jobs:
             echo "- Preflight: **$PREFLIGHT**"
             echo "- Documentación: **$DOCUMENTACION**"
             echo "- Gobierno: **$GOBIERNO**"
+            echo "- Coordinación: **$COORDINACION**"
             echo "- Resultado agregado: **success**"
           } >> "$GITHUB_STEP_SUMMARY"
