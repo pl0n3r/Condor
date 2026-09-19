@@ -17,6 +17,7 @@ Cóndor separa explícitamente operación, especificación y progreso:
 - **Issues específicos**: alcance ejecutable y criterios de aceptación.
 - **PRs**: cambio concreto y evidencia de validación.
 - **`README.md`**: presentación visual y ejecutiva del proyecto; no es roadmap acumulativo ni especificación.
+- **`GLOSARIO.md`**: traducción de términos técnicos a lenguaje de negocio para socios y personas no técnicas.
 - **`docs/`**: documentación especializada cuando el detalle ya no cabe razonablemente en las fuentes anteriores.
 
 Si una fuente contradice al código actual, contrastar el cambio más reciente y corregir la documentación durable en el mismo trabajo cuando corresponda.
@@ -138,6 +139,7 @@ Cuando no exista otro requisito explícito:
 | CI | GitHub Actions — pendiente de bootstrap |
 | Calidad | SonarCloud + CodeRabbit — pendiente de bootstrap completo |
 | Deploy objetivo | GitHub `main` → Hostinger |
+| Versión inicial de producto | `0.1.0` |
 
 Estos valores son una base, no una obligación eterna. Si las necesidades reales del producto justifican un cambio de arquitectura o plataforma, documentarlo primero en `ESPECIFICACIONES.md` y reflejar el trabajo en el roadmap.
 
@@ -279,7 +281,54 @@ No iniciar una rama dependiente nueva antes de cerrar la validación de `main` d
 
 ---
 
-## 11. Estados de entrega
+## 11. Versionado de producto y releases
+
+Cóndor usa versionado de producto explícito por deploy, siguiendo la convención ya adoptada en BRVTAL.
+
+### Regla de versión
+
+- la primera versión de producción de Cóndor será **`0.1.0`**;
+- cada deploy posterior incrementa normalmente el **patch**: `0.1.0 → 0.1.1 → 0.1.2 → ...`;
+- un cambio de **minor** pre-1.0, por ejemplo `0.1.x → 0.2.0`, representa un hito deliberado de producto y no debe ocurrir automáticamente;
+- **`1.0.0` requiere decisión explícita del usuario**;
+- no saltar versiones ni reutilizar una versión que ya haya representado un deploy distinto;
+- la versión humana del producto y el SHA Git son identidades diferentes: la versión comunica release de producto; el SHA identifica exactamente el código.
+
+### Deploy-bound PR
+
+Una PR es **deploy-bound** cuando su merge a `main` vaya a activar o formar parte de una entrega a producción.
+
+Para cada PR deploy-bound:
+
+1. asignar exactamente una versión objetivo;
+2. reflejar esa versión en el título visible del hito del roadmap cuando entre en implementación/PR;
+3. actualizar la fuente canónica de versión del producto;
+4. si existe `package.json` u otra metadata de versión, mantener paridad con la fuente canónica;
+5. ejecutar los gates sobre el head estable que contiene el bump;
+6. hacer squash merge;
+7. verificar el SHA exacto resultante de `main`;
+8. observar el despliegue de esa versión por separado;
+9. registrar versión, PR y evidencia en el roadmap.
+
+Cuando el bootstrap técnico cree la aplicación, la fuente canónica será **`config/version.php`**, siguiendo el patrón de BRVTAL. Si existe `package.json`, su `version` deberá coincidir.
+
+Antes de que el despliegue automático a producción esté habilitado, las PRs puramente documentales o de preparación no consumen versiones de producción. El primer deploy real será `0.1.0`.
+
+### Convención del roadmap
+
+Cuando un hito tenga versión asignada, usar el formato:
+
+`Nombre del hito (v0.1.0), PR #N`
+
+Al completarse:
+
+`✅ ~~Nombre del hito (v0.1.0), PR #N~~`
+
+No marcar una versión como desplegada o validada en producción sin evidencia correspondiente.
+
+---
+
+## 12. Estados de entrega
 
 Usar estos conceptos con precisión:
 
@@ -292,7 +341,7 @@ Nunca convertir automáticamente “CI verde” en “VALIDADO EN PRODUCCIÓN”
 
 ---
 
-## 12. Roadmap canónico y convención de progreso
+## 13. Roadmap canónico y convención de progreso
 
 El roadmap activo es **[GitHub Issue #1](https://github.com/pl0n3r/Condor/issues/1)**.
 
@@ -317,7 +366,7 @@ Reglas:
 
 ---
 
-## 13. Convenciones de GitHub
+## 14. Convenciones de GitHub
 
 Todo lo controlable por el proyecto debe estar en español.
 
@@ -363,29 +412,48 @@ Términos convencionales como `feat`, `fix`, `docs`, `test`, `refactor`, `perf` 
 
 ---
 
-## 14. README
+## 15. README por deploy
 
-El README de Cóndor debe ser **visual, ejecutivo y estable**.
+Cóndor adopta la misma estrategia de README operativo de BRVTAL: **`README.md` es el snapshot visual del deploy actual**, no un documento acumulativo.
 
-Debe priorizar:
+Para cada PR deploy-bound:
 
-- qué es Cóndor;
-- estado general;
-- enlaces al roadmap y especificaciones;
-- arquitectura resumida;
-- badges de CI/calidad cuando existan;
-- forma de desarrollo/ejecución cuando sea útil.
+- reemplazar el snapshot del README; no anexar un changelog histórico;
+- mostrar de forma visible la **versión objetivo** y la **versión desplegada actualmente**;
+- después del primer deploy real, la señal `Versión desplegada` debe mostrar siempre la última versión que Hostinger haya recibido de forma verificable, por ejemplo **`v0.1.0`**;
+- nunca actualizar `Versión desplegada` solo porque una PR se fusionó o CI quedó verde;
+- si todavía no existe evidencia de despliegue, mostrarlo explícitamente y mantener la versión objetivo separada;
+- incluir únicamente los archivos modificados por el deploy actual y una explicación breve;
+- incluir una sección **Qué se hizo**;
+- incluir una sección **Validación** con evidencia real;
+- incluir **Qué sigue** en lanes `AHORA / SIGUE / DESPUÉS` o equivalente;
+- incluir un **Panorama general pendiente** conciso, enlazado al roadmap canónico, sin duplicarlo por completo;
+- incluir una sección exacta **Estado del deploy** con tabla `Señal | Estado | Evidencia`;
+- incluir una sección **Flujo de entrega** con diagrama Mermaid cuando el pipeline exista;
+- mostrar badges de CI, Sonar y observación de deploy cuando esas superficies estén configuradas;
+- mantener visibles enlaces a `AGENTES.md`, `ESPECIFICACIONES.md` y al Issue #1;
+- mantener el README visualmente escaneable mediante tablas, estados y símbolos, evitando prosa innecesaria.
+
+El README debe distinguir siempre:
+
+- **versión objetivo** de la PR;
+- **versión desplegada** observada;
+- SHA exacto de `main`;
+- estado de validación en código;
+- estado de validación en producción.
 
 No usar README como:
 
 - roadmap acumulativo;
 - changelog completo;
 - archivo de decisiones técnicas;
-- reemplazo de `AGENTES.md`.
+- reemplazo de `AGENTES.md` o `ESPECIFICACIONES.md`.
+
+El historial de releases se conserva mediante Git/PRs/releases/roadmap; el README muestra solamente el snapshot operativo vigente.
 
 ---
 
-## 15. Producción y operaciones protegidas
+## 16. Producción y operaciones protegidas
 
 Nunca ejecutar automáticamente:
 
@@ -409,7 +477,7 @@ Ante un fallo recurrente:
 
 ---
 
-## 16. Reglas ya acordadas para Cóndor
+## 17. Reglas ya acordadas para Cóndor
 
 Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y deben considerarse obligatorias hasta que el usuario las cambie explícitamente:
 
@@ -429,11 +497,19 @@ Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y 
 - `ROADMAP.md` es solo un punto de entrada al Issue #1 y no mantiene una copia paralela del progreso;
 - `AGENTES.md` es el protocolo operativo canónico y hereda la estructura/reglas aplicables de BRVTAL;
 - toda PR relevante debe reflejar en el roadmap cualquier cambio real de estado antes o inmediatamente después del cierre de la entrega;
-- nunca declarar VALIDADO EN PRODUCCIÓN únicamente porque CI esté verde.
+- nunca declarar VALIDADO EN PRODUCCIÓN únicamente porque CI esté verde;
+- Cóndor usa versión humana de producto por cada deploy;
+- el primer deploy será `0.1.0`;
+- el incremento normal por deploy es patch (`0.1.1`, `0.1.2`, ...);
+- los saltos minor son hitos deliberados y `1.0.0` requiere decisión explícita del usuario;
+- cuando exista la aplicación, `config/version.php` será la fuente canónica de versión y cualquier metadata equivalente deberá mantener paridad;
+- el README usa la misma estrategia de snapshot por deploy que BRVTAL;
+- el README debe mostrar siempre y por separado la versión objetivo y la versión realmente desplegada; tras el primer deploy, la señal visible será por ejemplo `v0.1.0`, pero nunca se inferirá desde CI;
+- `GLOSARIO.md` debe mantenerse actualizado con los términos técnicos relevantes que aparezcan en superficies visibles para socios, usando lenguaje de negocio y ejemplos de Cóndor cuando ayuden.
 
 ---
 
-## 17. Mantenimiento de este archivo
+## 18. Mantenimiento de este archivo
 
 Actualizar `AGENTES.md` cuando cambie de forma durable:
 
@@ -446,5 +522,7 @@ Actualizar `AGENTES.md` cuando cambie de forma durable:
 - responsabilidades entre archivos/fuentes de verdad.
 
 No convertir `AGENTES.md` en un roadmap ni en un historial de releases.
+
+Cuando una decisión o implementación introduzca terminología técnica relevante para seguimiento de negocio, revisar si `GLOSARIO.md` necesita actualización en la misma PR.
 
 **Regla final:** un agente nuevo debe poder leer este archivo, revisar el repositorio y el Issue #1, y continuar Cóndor sin necesitar el chat anterior.
