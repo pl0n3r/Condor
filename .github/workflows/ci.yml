@@ -1,4 +1,4 @@
-name: CI Cóndor (V 0.1.0)
+name: CI Condor (V 0.1.0)
 
 on:
   pull_request:
@@ -78,7 +78,7 @@ jobs:
       - name: Resumen preflight
         run: |
           {
-            echo "## Preflight Cóndor"
+            echo "## Preflight Condor"
             echo
             printf -- '- Evento: `%s`\n' "$GITHUB_EVENT_NAME"
             printf -- '- SHA: `%s`\n' "$GITHUB_SHA"
@@ -153,7 +153,7 @@ jobs:
           esac
 
           {
-            echo "## Resultado CI Cóndor"
+            echo "## Resultado CI Condor"
             echo
             echo "- Preflight: **$PREFLIGHT**"
             echo "- Documentación: **$DOCUMENTACION**"

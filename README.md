@@ -1,6 +1,6 @@
-# Cóndor — Snapshot de desarrollo
+# Condor App — Snapshot de desarrollo
 
-[![CI Cóndor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
+[![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 
 > **Panel visual del estado actual del proyecto.**  
 > El progreso acumulativo vive en el [roadmap canónico — Issue #1](https://github.com/pl0n3r/Condor/issues/1).
@@ -8,6 +8,7 @@
 <p align="center">
   <strong>Mercado:</strong> Colombia ·
   <strong>Idioma:</strong> es-CO ·
+  <strong>Dominio:</strong> www.condorapp.com.co ·
   <strong>Versión objetivo:</strong> V 0.1.0
 </p>
 
@@ -17,8 +18,8 @@
 | --- | --- | --- |
 | Versión objetivo | 🚧 **V 0.1.0** | primera entrega en preparación |
 | Versión desplegada | ⚪ **Sin deploy todavía** | no existe evidencia de una versión en producción |
-| Base exacta previa | ✅ **main** | `f3155431156f82377016cc624bb0f362331d32e0` |
-| CI | ✅ **Activo** | PR #9 y CI post-merge sobre `f315543` pasaron con check agregado `Validar` |
+| Base exacta previa | ✅ **main** | `4051563502dd239cd942c5d6ffd3dc69ea6aefa3` |
+| CI | ✅ **Activo** | PRs #9/#11 y CI exact-main sobre `4051563` pasaron con check agregado `Validar` |
 | SonarCloud | 🚧 **Pendiente** | requiere configuración específica posterior |
 | CodeRabbit | ✅ **Configurado** | `.coderabbit.yaml` activo con perfil assertive e instrucciones de revisión en español |
 | Producción | ⚪ **NO VALIDADA** | CI/merge no sustituyen despliegue ni validación real |
@@ -55,7 +56,7 @@ flowchart LR
 - `AGENTES.md`, `ESPECIFICACIONES.md` y `GLOSARIO.md` separados por responsabilidad.
 - Versionado de tracking obligatorio en títulos de GitHub.
 - Roadmap convertido en log exclusivo de trabajo/progreso.
-- Issue #8 abierto para bootstrap de gobierno técnico y CI.
+- Issue #8 cerrado: gobierno técnico y CI base validados en código.
 - CI canónico activo con preflight, validaciones paralelas y check agregado `Validar`.
 - Plantillas de Issues/PR en español activas.
 - Labels en español sincronizados y milestone **Primera entrega (V 0.1.0)** creado.
@@ -77,7 +78,7 @@ flowchart LR
 
 ## Validación
 
-- PR #9 validó el CI inicial y el CI post-merge del SHA exacto `f315543` terminó en verde.
+- PRs #9/#11 validaron el CI inicial; el SHA exacto `4051563` terminó con CI y gobierno en verde.
 - El título del PR es rechazado automáticamente si no termina con `(V X.Y.Z)`.
 - Los enlaces relativos y archivos documentales canónicos tienen validación automática.
 - El workflow de gobierno sincronizó labels y creó el milestone #1 `Primera entrega (V 0.1.0)`.
@@ -88,8 +89,8 @@ flowchart LR
 
 | Lane | Trabajo |
 | --- | --- |
-| **AHORA** | 🚧 Limpiar warnings/errores no fatales de workflows y cerrar Issue #8. |
-| **SIGUE** | 🚧 Protección de `main` con el check agregado `Validar`. |
+| **AHORA** | 🚧 Normalizar identidad **Condor App / Condor** y dominio canónico, Issue #13. |
+| **SIGUE** | 🚧 Coordinación multiagente y reservas de trabajo, Issue #12; protección de `main` sigue bloqueada en Issue #10. |
 | **DESPUÉS** | 🚧 Definición funcional del producto + bootstrap técnico de aplicación. |
 | **CALIDAD** | 🚧 SonarCloud + baseline de pruebas + Playwright. |
 | **DEPLOY** | 🚧 Preparar Hostinger y realizar el primer deploy real **V 0.1.0**. |
