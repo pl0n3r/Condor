@@ -253,6 +253,25 @@ Reglas:
 - el dominio canónico es **https://www.condorapp.com.co**;
 - esta convención aplica a documentación existente y futura.
 
+### D-012 — Coordinación multiagente con reserva atómica
+
+GitHub es la autoridad central para coordinar múltiples cuentas de IA, agentes y sesiones de desarrollo.
+
+Reglas:
+
+- todo trabajo de implementación parte de un Issue abierto marcado `estado: disponible`;
+- el comando `/tomar` intenta crear de forma atómica `trabajo/issue-N`; la creación de esa rama funciona como lock distribuido;
+- solo una reserva puede existir para un Issue;
+- una reserva es fail-closed y no expira automáticamente;
+- `/liberar` libera una reserva normal y `/liberar-forzado` queda restringido al dueño del repositorio;
+- compartir una cuenta de GitHub no permite a dos sesiones asumir simultáneamente la misma reserva;
+- cada PR debe corresponder a su rama `trabajo/issue-N` e incluir `Closes #N`;
+- CI compara archivos contra otros PR abiertos y falla ante solapamientos para evitar sobrescrituras silenciosas;
+- los estados visibles de la cola son disponible, reservado, en revisión, completado, cancelado y bloqueado;
+- los merges a `main` permanecen serializados aunque el trabajo previo pueda ejecutarse en paralelo;
+- las ramas paralelas deben minimizar cambios en archivos globales compartidos;
+- el snapshot de README se actualiza al convertir un PR en candidato serial de merge/deploy, no al inicio de todas las ramas paralelas.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
