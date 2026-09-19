@@ -23,7 +23,7 @@ jobs:
       github: ${{ steps.cambios.outputs.github }}
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -80,10 +80,10 @@ jobs:
           {
             echo "## Preflight Cóndor"
             echo
-            echo "- Evento: `$GITHUB_EVENT_NAME`"
-            echo "- SHA: `$GITHUB_SHA`"
-            echo "- Documentación modificada: `${{ steps.cambios.outputs.documentacion }}`"
-            echo "- Gobierno/GitHub modificado: `${{ steps.cambios.outputs.github }}`"
+            printf -- '- Evento: `%s`\n' "$GITHUB_EVENT_NAME"
+            printf -- '- SHA: `%s`\n' "$GITHUB_SHA"
+            printf -- '- Documentación modificada: `%s`\n' "${{ steps.cambios.outputs.documentacion }}"
+            printf -- '- Gobierno/GitHub modificado: `%s`\n' "${{ steps.cambios.outputs.github }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
   documentacion:
@@ -93,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validar documentación
         run: python3 scripts/validar_documentacion.py
@@ -104,7 +104,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validar archivos canónicos
         run: |

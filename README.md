@@ -17,10 +17,10 @@
 | --- | --- | --- |
 | Versión objetivo | 🚧 **V 0.1.0** | primera entrega en preparación |
 | Versión desplegada | ⚪ **Sin deploy todavía** | no existe evidencia de una versión en producción |
-| Base exacta previa | ✅ **main** | `9acb394c948b22f1e852ff6e4d226875abcc55e2` |
-| CI | 🚧 **En bootstrap** | PR de infraestructura prepara preflight + gates paralelos + check agregado `Validar` |
+| Base exacta previa | ✅ **main** | `f3155431156f82377016cc624bb0f362331d32e0` |
+| CI | ✅ **Activo** | PR #9 y CI post-merge sobre `f315543` pasaron con check agregado `Validar` |
 | SonarCloud | 🚧 **Pendiente** | requiere configuración específica posterior |
-| CodeRabbit | 🚧 **Configurándose** | reglas genéricas inspiradas en BRVTAL y comentarios solicitados en español |
+| CodeRabbit | ✅ **Configurado** | `.coderabbit.yaml` activo con perfil assertive e instrucciones de revisión en español |
 | Producción | ⚪ **NO VALIDADA** | CI/merge no sustituyen despliegue ni validación real |
 
 ## Fuentes de verdad
@@ -56,10 +56,10 @@ flowchart LR
 - Versionado de tracking obligatorio en títulos de GitHub.
 - Roadmap convertido en log exclusivo de trabajo/progreso.
 - Issue #8 abierto para bootstrap de gobierno técnico y CI.
-- CI canónico inicial preparado con preflight, validaciones paralelas y check agregado.
-- Plantillas de Issues/PR en español preparadas.
-- Sincronización automática de labels en español y milestone de **V 0.1.0** preparada.
-- CodeRabbit configurado con instrucciones generales de revisión en español.
+- CI canónico activo con preflight, validaciones paralelas y check agregado `Validar`.
+- Plantillas de Issues/PR en español activas.
+- Labels en español sincronizados y milestone **Primera entrega (V 0.1.0)** creado.
+- CodeRabbit configurado con perfil assertive e instrucciones generales de revisión en español.
 
 ## Archivos de la entrega actual
 
@@ -77,10 +77,10 @@ flowchart LR
 
 ## Validación
 
-- El CI de esta PR debe validarse a sí mismo antes del merge.
+- PR #9 validó el CI inicial y el CI post-merge del SHA exacto `f315543` terminó en verde.
 - El título del PR es rechazado automáticamente si no termina con `(V X.Y.Z)`.
 - Los enlaces relativos y archivos documentales canónicos tienen validación automática.
-- El workflow de gobierno sincronizará labels/milestone al entrar a `main`.
+- El workflow de gobierno sincronizó labels y creó el milestone #1 `Primera entrega (V 0.1.0)`.
 - SonarCloud permanece pendiente y no se presenta como configurado.
 - No existe evidencia de deploy ni validación de producción.
 
@@ -88,7 +88,7 @@ flowchart LR
 
 | Lane | Trabajo |
 | --- | --- |
-| **AHORA** | 🚧 Validar y cerrar gobierno GitHub + CI inicial (V 0.1.0), Issue #8. |
+| **AHORA** | 🚧 Limpiar warnings/errores no fatales de workflows y cerrar Issue #8. |
 | **SIGUE** | 🚧 Protección de `main` con el check agregado `Validar`. |
 | **DESPUÉS** | 🚧 Definición funcional del producto + bootstrap técnico de aplicación. |
 | **CALIDAD** | 🚧 SonarCloud + baseline de pruebas + Playwright. |
@@ -98,8 +98,8 @@ flowchart LR
 
 | Frente | Estado |
 | --- | --- |
-| Gobierno y trazabilidad | 🟡 En cierre |
-| CI base | 🟡 En bootstrap |
+| Gobierno y trazabilidad | 🟢 Base activa; protección de `main` bloqueada en Issue #10 |
+| CI base | 🟢 Activo |
 | Definición del producto | ⚪ Pendiente |
 | Arquitectura | ⚪ Pendiente |
 | SonarCloud + pruebas | ⚪ Pendiente |

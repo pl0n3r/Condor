@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Crear o actualizar labels en español
         env:
@@ -64,7 +64,7 @@ jobs:
           {
             echo "## Gobierno GitHub"
             echo
-            echo "- Labels sincronizados desde `.github/labels.json`."
+            echo '- Labels sincronizados desde `.github/labels.json`.'
             echo "- Labels predeterminados en inglés retirados cuando existían."
             echo "- Milestone: **Primera entrega (V 0.1.0)** (#${{ steps.milestone.outputs.numero }})."
           } >> "$GITHUB_STEP_SUMMARY"
