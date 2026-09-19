@@ -421,13 +421,17 @@ Todo lo controlable por el proyecto debe estar en español.
 
 ### Ramas
 
-Preferir nombres cortos, descriptivos y ASCII:
+Después de activar la coordinación multiagente, el trabajo normal usa **exclusivamente** la rama canónica creada por la reserva:
 
-- `feature/autenticacion`
-- `fix/permisos`
-- `docs/agentes-operativo`
-- `infra/ci-inicial`
-- `test/e2e-login`
+- `trabajo/issue-12`
+- `trabajo/issue-57`
+
+Reglas:
+
+- no crear manualmente ramas `feature/*`, `fix/*`, `docs/*`, `infra/*` o equivalentes para trabajo normal;
+- `/tomar` crea `trabajo/issue-N` de forma atómica desde el `main` actual;
+- una rama canónica existente significa que el Issue está reservado, incluso si un label tarda en sincronizarse;
+- solo se permiten excepciones de bootstrap/mantenimiento cuando están explícitamente documentadas en el Issue correspondiente.
 
 ### Commits
 
