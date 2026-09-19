@@ -301,6 +301,25 @@ Reglas:
 - una regresión de throughput genera advertencia, no bloquea por sí sola el merge;
 - optimizaciones de runners, sharding o topología deben apoyarse en esta evidencia antes de añadir complejidad.
 
+### D-015 — Baseline de pruebas antes del producto funcional
+
+Condor establece infraestructura de pruebas antes de implementar módulos funcionales, sin fingir cobertura de producto inexistente.
+
+Reglas:
+
+- pruebas de **contrato** protegen interfaces técnicas estables consumidas por personas, agentes y automatizaciones;
+- pruebas de **integración** ejercitan herramientas reales a través de fronteras de proceso/archivo;
+- Playwright usa **Chromium** como navegador primario del CI;
+- WebKit permanece configurado para cobertura dirigida cuando exista un riesgo real de compatibilidad, sin duplicar permanentemente el costo del CI;
+- el harness E2E inicial valida que el runner, navegador, semántica accesible y selectores funcionen, pero no se presenta como validación de Condor App;
+- cuando exista autenticación, los E2E reales usarán un usuario aislado/desechable;
+- las pruebas E2E priorizan roles accesibles y `data-testid` estables;
+- `package-lock.json` es obligatorio para reproducibilidad;
+- dependencias de test se fijan a versiones exactas cuando afectan browsers/runner;
+- E2E se ejecuta de forma path-sensitive; contrato e integración permanecen como gates rápidos paralelos;
+- artifacts de Playwright se conservan solo ante fallos;
+- no se usan assertions frágiles de texto fuente como sustituto de comportamiento verificable.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.

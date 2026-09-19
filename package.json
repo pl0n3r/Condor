@@ -1,0 +1,16 @@
+{
+  "name": "condor-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:contract": "python3 -m unittest discover -s tests/contract -p 'test_*.py'",
+    "test:integration": "python3 -m unittest discover -s tests/integration -p 'test_*.py'",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:webkit": "playwright test --project=webkit",
+    "test": "npm run test:contract && npm run test:integration && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

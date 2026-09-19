@@ -1,0 +1,28 @@
+# Condor — archivos locales, secretos y artefactos generados
+
+# Entorno / secretos
+.env
+.env.*
+!.env.example
+*.local.php
+*.local.json
+
+# Node / Playwright
+node_modules/
+playwright-report/
+test-results/
+blob-report/
+
+# Logs / temporales
+*.log
+*.tmp
+*.swp
+*.bak
+*.backup
+
+# Sistema / editor
+.DS_Store
+.AppleDouble
+.LSOverride
+.vscode/
+.idea/
