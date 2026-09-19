@@ -355,12 +355,15 @@ Reglas:
 
 - todo trabajo planeado relevante debe aparecer en el roadmap;
 - todo trabajo completado relevante permanece visible y tachado;
+- el roadmap es **append-only**: se agregan entradas nuevas y se actualiza el estado de las existentes, pero no se elimina el historial;
 - no borrar trabajo terminado para hacer el roadmap “más limpio”;
 - registrar PR y versión cuando exista una release asignada;
-- si el roadmap crece demasiado, mover fases cerradas a `docs/roadmap-historico/` conservando un resumen enlazado;
+- **no retirar, mover ni borrar del Issue #1 las fases o tareas ya registradas antes de v1.0.0**; el roadmap es un ledger acumulativo;
 - una instrucción explícita del usuario puede repriorizar el roadmap;
 - Issues específicos contienen criterios de aceptación; el roadmap contiene orden y estado;
 - después de un merge relevante, el roadmap debe reflejar la realidad, no el plan anterior;
+- hasta alcanzar una **v1.0.0 madura**, conservar un registro detallado de cada bloque relevante: tarea/hito, estado, versión cuando exista, PR, merge SHA, validación exact-main, estado de despliegue y validación de producción cuando exista;
+- si el cuerpo del Issue #1 llegara a un límite práctico de tamaño, **no compactar ni borrar**: crear un volumen/Issue de continuación, dejar el Issue #1 intacto y enlazar ambos en ambas direcciones;
 - el roadmap debe conservar una lectura limpia para socios y personas no técnicas: mostrar trabajo planeado, hecho, pendiente, bloqueos, fases, PRs/versiones y progreso sin llenarlo con especificaciones de implementación;
 - cuando un detalle técnico sea necesario para ejecutar o validar una tarea, llevarlo al Issue específico o a `ESPECIFICACIONES.md` y mantener en el roadmap solo el resumen necesario para entender avance y estado.
 
@@ -490,13 +493,14 @@ Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y 
 - el roadmap registra de forma acumulativa todo trabajo planeado, realizado, pendiente y bloqueado;
 - la convención visual es exactamente: ✅ ~~completado~~, 🚧 pendiente/en curso, ⛔ bloqueado;
 - los elementos completados se conservan tachados y no se eliminan;
-- si el roadmap crece demasiado, las fases antiguas cerradas pueden pasar al histórico conservando resumen y trazabilidad;
+- el roadmap no se compacta ni elimina historial antes de v1.0.0; si debe dividirse por tamaño, se crea una continuación sin alterar el histórico ya registrado;
 - el roadmap no es el archivo de especificaciones;
 - `ESPECIFICACIONES.md` contiene decisiones durables, reglas funcionales y detalle arquitectónico;
 - el roadmap debe poder ser leído por una socia o stakeholder para entender el avance en tiempo real sin necesitar contexto técnico;
 - `ROADMAP.md` es solo un punto de entrada al Issue #1 y no mantiene una copia paralela del progreso;
 - `AGENTES.md` es el protocolo operativo canónico y hereda la estructura/reglas aplicables de BRVTAL;
 - toda PR relevante debe reflejar en el roadmap cualquier cambio real de estado antes o inmediatamente después del cierre de la entrega;
+- el roadmap funciona como un log detallado acumulativo desde el inicio del proyecto hasta, como mínimo, la primera v1.0.0 madura;
 - nunca declarar VALIDADO EN PRODUCCIÓN únicamente porque CI esté verde;
 - Cóndor usa versión humana de producto por cada deploy;
 - el primer deploy será `0.1.0`;

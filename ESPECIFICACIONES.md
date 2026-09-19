@@ -175,6 +175,23 @@ Reglas:
 - no convertirlo en documentación de implementación;
 - enlazarlo desde el README.
 
+### D-008 — Roadmap acumulativo e inmutable hasta v1.0.0
+
+El roadmap canónico en GitHub Issue #1 funciona como **ledger histórico append-only** del desarrollo de Cóndor.
+
+Reglas:
+
+- no borrar tareas, hitos, fases o entradas ya registradas;
+- no retirar del Issue #1 trabajo completado para “limpiar” la vista;
+- agregar trabajo nuevo como nuevas entradas;
+- cambiar a ✅ y tachar lo completado, conservando su texto y contexto;
+- conservar bloqueos resueltos como parte del historial cuando hayan sido relevantes;
+- registrar, cuando exista, versión, PR, merge SHA, validación exacta de `main`, despliegue y validación de producción;
+- mantener este nivel de trazabilidad desde el arranque hasta, como mínimo, la primera **v1.0.0 madura**;
+- si el Issue #1 alcanza un límite práctico de tamaño, crear un Issue/volumen de continuación sin borrar ni reescribir el histórico anterior; ambos deben quedar enlazados;
+- la vista para socios debe seguir siendo legible mediante secciones, fases y resúmenes, pero nunca sacrificando el histórico;
+- `docs/roadmap-historico/` puede usarse para snapshots o copias auxiliares, pero **nunca como sustituto que permita retirar entradas del roadmap canónico**.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Cóndor.
