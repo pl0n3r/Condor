@@ -1,0 +1,67 @@
+name: Telemetría throughput CI (V 0.1.0)
+
+on:
+  workflow_run:
+    workflows: ["CI Condor (V 0.1.0)"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: telemetria-ci-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  reportar:
+    name: Medir throughput
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar observador canónico
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Recolectar tiempos y detectar regresión
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORIO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+          SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          SOURCE_STARTED_AT: ${{ github.event.workflow_run.run_started_at }}
+          SOURCE_UPDATED_AT: ${{ github.event.workflow_run.updated_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+
+          gh api --paginate             "repos/$REPOSITORIO/actions/runs/$RUN_ID/jobs?per_page=100"             --slurp > artifacts/job-pages.json
+
+          gh api             "repos/$REPOSITORIO/actions/runs?per_page=50"             > artifacts/recent-runs.json
+
+          python3 scripts/ci_throughput_report.py report             --jobs-file artifacts/job-pages.json             --history-file artifacts/recent-runs.json             --run-id "$RUN_ID"             --source-sha "$SOURCE_SHA"             --event "$SOURCE_EVENT"             --conclusion "$SOURCE_CONCLUSION"             --started-at "$SOURCE_STARTED_AT"             --updated-at "$SOURCE_UPDATED_AT"             > artifacts/ci-throughput.json
+
+          python3 scripts/ci_throughput_report.py summary             --input artifacts/ci-throughput.json             > artifacts/ci-throughput-summary.md
+
+          cat artifacts/ci-throughput-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+          estado="$(
+            python3 -c 'import json; print(json.load(open("artifacts/ci-throughput.json", encoding="utf-8"))["regression"]["status"])'
+          )"
+          if [[ "$estado" == "regression" ]]; then
+            echo "::warning::Se detectó una regresión significativa del throughput del CI. Revisa el Job Summary y el artifact."
+          fi
+
+      - name: Subir evidencia de throughput
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ci-throughput-${{ github.event.workflow_run.id }}
+          path: |
+            artifacts/ci-throughput.json
+            artifacts/ci-throughput-summary.md
+          retention-days: 30
+          if-no-files-found: error

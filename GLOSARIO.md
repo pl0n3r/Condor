@@ -57,6 +57,10 @@
 | **GitHub Actions** | Herramienta de GitHub que ejecuta automatizaciones. | Ejecutará CI, pruebas y otros controles. |
 | **Gate / control** | Requisito que debe pasar antes de considerar un cambio listo. | Puede ser una prueba, análisis de seguridad o revisión automática. |
 | **Preflight** | Revisión rápida inicial que decide qué controles necesita una PR. | Evita correr pruebas innecesarias y reduce tiempos. |
+| **Throughput del CI** | Qué tan rápido completa el proyecto sus controles automáticos desde que empiezan hasta que terminan. | Condor lo mide después de cada CI para encontrar cuellos de botella sin ralentizar las entregas. |
+| **Wall time** | Tiempo real de reloj transcurrido entre inicio y final de una ejecución. | Es la métrica principal para saber cuánto tarda el CI completo. |
+| **Línea base de CI** | Referencia construida con tiempos recientes comparables. | Condor usa la mediana de hasta cinco ejecuciones exitosas anteriores del mismo tipo. |
+| **Regresión de throughput** | Cuando el CI se vuelve significativamente más lento que su comportamiento reciente. | Se advierte cuando supera a la vez +25% y +15 segundos frente a la línea base. |
 | **Check** | Resultado visible de un control automático en GitHub. | Puede aparecer como aprobado, fallido o pendiente. |
 | **SonarCloud** | Herramienta que analiza calidad, mantenibilidad y ciertos riesgos de seguridad del código. | Se configurará como control automático. |
 | **CodeRabbit** | Revisor automático de Pull Requests con IA. | Ya puede comentar PRs de Condor. |
