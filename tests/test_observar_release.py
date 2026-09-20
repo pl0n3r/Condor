@@ -253,6 +253,49 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(resultado["comprobaciones"]["home"]["intento"], 1)
         sleep.assert_not_called()
 
+    def test_tls_y_dns_no_se_clasifican_como_transitorios(self) -> None:
+        casos = [
+            modulo.URLError(
+                modulo.ssl.SSLCertVerificationError(
+                    1,
+                    "certificate verify failed",
+                )
+            ),
+            modulo.URLError(
+                modulo.socket.gaierror(
+                    modulo.socket.EAI_NONAME,
+                    "Name or service not known",
+                )
+            ),
+        ]
+
+        for fallo in casos:
+            with self.subTest(fallo=type(fallo.reason).__name__):
+                with patch.object(modulo, "build_opener") as opener:
+                    opener.return_value.open.side_effect = fallo
+                    with self.assertRaises(modulo.ObservacionError) as caught:
+                        modulo.obtener(
+                            "https://example.invalid",
+                            "/health",
+                            1,
+                        )
+                self.assertNotIsInstance(
+                    caught.exception,
+                    modulo.ObservacionTransitoria,
+                )
+
+    def test_timeout_de_urllib_si_es_transitorio(self) -> None:
+        with patch.object(modulo, "build_opener") as opener:
+            opener.return_value.open.side_effect = modulo.URLError(
+                TimeoutError("timed out")
+            )
+            with self.assertRaises(modulo.ObservacionTransitoria):
+                modulo.obtener(
+                    "https://example.invalid",
+                    "/health",
+                    1,
+                )
+
     def test_url_y_salida_no_exponen_credenciales(self) -> None:
         with self.assertRaises(modulo.ObservacionError):
             modulo.validar_base_url("https://usuario:clave@ejemplo.com")

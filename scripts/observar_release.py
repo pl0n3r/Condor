@@ -6,12 +6,14 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import socket
+import ssl
 import sys
 import time
 from collections.abc import Callable
 from html.parser import HTMLParser
 from typing import Any
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -123,9 +125,44 @@ def obtener(origen: str, ruta: str, timeout: float) -> tuple[str, bytes]:
                 f"Redirección HTTP {error.code} no permitida."
             ) from error
         raise ObservacionError(f"HTTP {error.code}; se esperaba 200.") from error
-    except OSError as error:
+    except URLError as error:
+        reason = error.reason
+        transient = isinstance(
+            reason,
+            (
+                TimeoutError,
+                ConnectionAbortedError,
+                ConnectionRefusedError,
+                ConnectionResetError,
+            ),
+        )
+        if transient:
+            raise ObservacionTransitoria(
+                "La conexión falló temporalmente durante la observación."
+            ) from error
+        if isinstance(reason, ssl.SSLError):
+            raise ObservacionError(
+                "La conexión TLS no pudo validarse de forma segura."
+            ) from error
+        if isinstance(reason, socket.gaierror):
+            raise ObservacionError(
+                "El dominio de producción no pudo resolverse de forma válida."
+            ) from error
+        raise ObservacionError(
+            "No se recibió una respuesta HTTP válida."
+        ) from error
+    except (
+        TimeoutError,
+        ConnectionAbortedError,
+        ConnectionRefusedError,
+        ConnectionResetError,
+    ) as error:
         raise ObservacionTransitoria(
-            "No se recibió una respuesta HTTP válida dentro del tiempo permitido."
+            "La conexión falló temporalmente durante la observación."
+        ) from error
+    except OSError as error:
+        raise ObservacionError(
+            "La solicitud HTTP falló de forma no reintentable."
         ) from error
 
 
