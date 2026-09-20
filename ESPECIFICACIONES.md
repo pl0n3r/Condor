@@ -523,6 +523,88 @@ Quedan pendientes de decisión específica:
 
 Esta decisión **sustituye** las propuestas conversacionales previas de NestJS/Node como runtime backend, Vue y Next.js. Esas opciones fueron consideradas antes de confirmar las restricciones reales del hosting compartido y ya no representan el stack objetivo de Condor.
 
+
+### D-024 — Baseline técnico de arquitectura para el arranque
+
+Condor adopta las siguientes decisiones técnicas como baseline del monolito modular inicial:
+
+1. **Persistencia y migraciones**
+   - Doctrine ORM como ORM inicial.
+   - Doctrine Migrations como mecanismo canónico para cambios de esquema.
+   - Todo cambio de estructura de base de datos debe quedar versionado mediante migración.
+   - Los identificadores de dominio deben ser opacos y no depender de secuencias visibles; la elección exacta UUID vs ULID se cerrará junto con el modelo de datos inicial.
+
+2. **Configuración por entorno**
+   - separar desarrollo, pruebas y producción;
+   - secretos fuera del repositorio;
+   - variables de entorno como mecanismo principal;
+   - evitar dependencias propietarias de Hostinger cuando exista una alternativa estándar razonable.
+
+3. **Frontend y build**
+   - React + TypeScript para administración;
+   - Vite compila los assets;
+   - Node.js pertenece al toolchain de desarrollo/CI/build y no es runtime de producción;
+   - Symfony/hosting sirve los assets generados.
+
+4. **Twig y React**
+   - Twig/Symfony es la base de superficies públicas y sensibles a SEO;
+   - React se usa para el backoffice y componentes interactivos que realmente lo necesiten;
+   - no se adopta una SPA global por defecto.
+
+5. **API interna**
+   - REST es el contrato inicial;
+   - los contratos estables/públicos deben poder versionarse;
+   - los errores siguen un formato consistente;
+   - la validación server-side es la autoridad;
+   - frontend y backend se comunican mediante contratos explícitos.
+
+6. **Estructura modular**
+   - monolito modular organizado por dominios;
+   - cada módulo encapsula entidades, repositorios, servicios de aplicación y adaptadores/controladores;
+   - la coordinación entre módulos se hace mediante servicios de aplicación y, cuando reduzca acoplamiento real, eventos internos simples;
+   - no se requieren colas externas inicialmente.
+
+7. **Archivos y media**
+   - el almacenamiento de archivos se accede mediante una abstracción;
+   - primera etapa: almacenamiento compatible con Hostinger;
+   - futuro: adaptador S3/object storage sin modificar el dominio;
+   - MariaDB sigue siendo persistencia relacional y no se usa como sustituto de object storage.
+
+8. **Autenticación y sesiones**
+   - autenticación web basada inicialmente en sesión segura;
+   - cookies seguras, protección CSRF y expiración controlada;
+   - recuperación de acceso segura;
+   - tokens/API keys solo cuando exista un cliente o integración que los necesite.
+
+9. **RBAC**
+   - roles configurables por empresa;
+   - permisos CRUD por módulo como baseline;
+   - alcance por sede cuando corresponda;
+   - permisos acumulativos para usuarios con varios roles;
+   - permisos especiales se añaden únicamente cuando exista un caso de uso real.
+
+10. **Auditoría**
+    - auditoría transversal y estructurada desde el inicio;
+    - registrar actor, acción, entidad, fecha/hora y contexto relevante;
+    - distinguir auditoría de negocio de logging técnico;
+    - conservar trazabilidad de operaciones administrativas y cambios sensibles.
+
+### D-025 — Resolución de tenant por ruta y dominio personalizado
+
+Cada empresa debe poder exponer su experiencia pública mediante una identidad web propia sin duplicar la aplicación.
+
+Reglas:
+
+- cada tenant tiene un **slug** único y estable;
+- Condor puede resolver una empresa por una ruta canónica bajo el dominio de la plataforma, por ejemplo `https://www.condorapp.com.co/empresa-x`;
+- un dominio personalizado del cliente puede mapearse al mismo tenant y servir el frontend directamente bajo ese dominio, sin redirección visible hacia Condor;
+- la resolución del tenant debe centralizarse en un `TenantResolver` o abstracción equivalente;
+- el resolver puede identificar tenant por **host/dominio** y por **slug/ruta** según el canal de entrada;
+- los dominios asociados a un tenant se modelan como datos propios, no como configuración quemada en código;
+- el diseño debe permitir en el futuro subdominios y múltiples dominios por tenant sin obligar a exponer esa complejidad en la primera versión;
+- resolver un tenant nunca sustituye ni relaja el aislamiento de datos: toda consulta y mutación debe seguir validando el tenant activo;
+- la resolución por dominio/ruta debe permanecer desacoplada del proveedor de hosting para conservar portabilidad a AWS.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
