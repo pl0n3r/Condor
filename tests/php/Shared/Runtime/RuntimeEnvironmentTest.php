@@ -72,6 +72,76 @@ final class RuntimeEnvironmentTest extends TestCase
     {
         file_put_contents($this->projectDir.'/var', 'blocked');
 
+        self::assertFalse(
+            RuntimeEnvironment::runtimeStorageAvailable($this->projectDir)
+        );
+
+        $this->expectException(RuntimeException::class);
+
+        RuntimeEnvironment::prepare($this->projectDir);
+    }
+
+    public function testRejectsRuntimeDirectorySymlink(): void
+    {
+        mkdir($this->projectDir.'/var', 0700, true);
+        mkdir($this->projectDir.'/runtime-target', 0700, true);
+
+        if (
+            !@symlink(
+                $this->projectDir.'/runtime-target',
+                $this->projectDir.'/var/runtime'
+            )
+        ) {
+            self::markTestSkipped('El entorno no permite crear symlinks.');
+        }
+
+        self::assertFalse(
+            RuntimeEnvironment::runtimeStorageAvailable($this->projectDir)
+        );
+
+        $this->expectException(RuntimeException::class);
+
+        RuntimeEnvironment::prepare($this->projectDir);
+    }
+
+    public function testRejectsSecretFileSymlink(): void
+    {
+        mkdir($this->projectDir.'/var/runtime', 0700, true);
+        file_put_contents(
+            $this->projectDir.'/secret-target',
+            str_repeat('a', 64).PHP_EOL
+        );
+
+        if (
+            !@symlink(
+                $this->projectDir.'/secret-target',
+                $this->projectDir.'/var/runtime/app_secret'
+            )
+        ) {
+            self::markTestSkipped('El entorno no permite crear symlinks.');
+        }
+
+        self::assertFalse(
+            RuntimeEnvironment::runtimeStorageAvailable($this->projectDir)
+        );
+
+        $this->expectException(RuntimeException::class);
+
+        RuntimeEnvironment::prepare($this->projectDir);
+    }
+
+    public function testRejectsIncompletePersistentSecret(): void
+    {
+        mkdir($this->projectDir.'/var/runtime', 0700, true);
+        file_put_contents(
+            $this->projectDir.'/var/runtime/app_secret',
+            'partial'
+        );
+
+        self::assertFalse(
+            RuntimeEnvironment::runtimeStorageAvailable($this->projectDir)
+        );
+
         $this->expectException(RuntimeException::class);
 
         RuntimeEnvironment::prepare($this->projectDir);

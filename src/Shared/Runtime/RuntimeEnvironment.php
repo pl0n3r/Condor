@@ -30,6 +30,58 @@ final class RuntimeEnvironment
         }
     }
 
+    public static function runtimeStorageAvailable(string $projectDir): bool
+    {
+        $projectDir = rtrim($projectDir, DIRECTORY_SEPARATOR);
+        $varDir = $projectDir.DIRECTORY_SEPARATOR.'var';
+        $runtimeDir = $varDir.DIRECTORY_SEPARATOR.'runtime';
+
+        if (
+            is_link($runtimeDir)
+            || (file_exists($runtimeDir) && !is_dir($runtimeDir))
+        ) {
+            return false;
+        }
+
+        if (is_dir($runtimeDir)) {
+            if (!is_writable($runtimeDir)) {
+                return false;
+            }
+        } else {
+            if (
+                is_link($varDir)
+                || (file_exists($varDir) && !is_dir($varDir))
+            ) {
+                return false;
+            }
+
+            $parent = is_dir($varDir) ? $varDir : $projectDir;
+            if (
+                !is_dir($parent)
+                || is_link($parent)
+                || !is_writable($parent)
+            ) {
+                return false;
+            }
+        }
+
+        if (self::read('APP_SECRET') !== null) {
+            return true;
+        }
+
+        $secretFile = $runtimeDir.DIRECTORY_SEPARATOR.'app_secret';
+        if (is_link($secretFile)) {
+            return false;
+        }
+
+        if (file_exists($secretFile)) {
+            return is_file($secretFile)
+                && self::readSecretFile($secretFile) !== null;
+        }
+
+        return true;
+    }
+
     private static function persistentSecret(string $projectDir): string
     {
         $runtimeDir =
@@ -37,7 +89,10 @@ final class RuntimeEnvironment
             DIRECTORY_SEPARATOR.'var'.
             DIRECTORY_SEPARATOR.'runtime';
 
-        if (!self::ensureDirectory($runtimeDir)) {
+        if (
+            !self::runtimeStorageAvailable($projectDir)
+            || !self::ensureDirectory($runtimeDir)
+        ) {
             throw new RuntimeException(
                 'No fue posible preparar almacenamiento runtime seguro.'
             );
@@ -66,17 +121,24 @@ final class RuntimeEnvironment
             );
         }
 
+        $contents = $candidate.PHP_EOL;
+        $writeOk = false;
+
         try {
-            if (
-                fwrite($handle, $candidate.PHP_EOL) === false
-                || !fflush($handle)
-            ) {
-                throw new RuntimeException(
-                    'No fue posible persistir el secreto runtime.'
-                );
-            }
+            $written = @fwrite($handle, $contents);
+            $writeOk =
+                $written === strlen($contents)
+                && @fflush($handle);
         } finally {
             fclose($handle);
+        }
+
+        if (!$writeOk) {
+            @unlink($secretFile);
+
+            throw new RuntimeException(
+                'No fue posible persistir el secreto runtime.'
+            );
         }
 
         @chmod($secretFile, 0600);
@@ -86,7 +148,10 @@ final class RuntimeEnvironment
 
     private static function ensureDirectory(string $runtimeDir): bool
     {
-        if (is_link($runtimeDir)) {
+        if (
+            is_link($runtimeDir)
+            || (file_exists($runtimeDir) && !is_dir($runtimeDir))
+        ) {
             return false;
         }
 

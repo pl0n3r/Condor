@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Shared\Runtime\RuntimeEnvironment;
+
 $projectDir = dirname(__DIR__);
 $version = 'desconocida';
 
@@ -14,19 +16,21 @@ try {
     // La respuesta permanece segura y sin detalles internos.
 }
 
-$autoloadPresent = is_file($projectDir.'/vendor/autoload.php');
+$autoloadFile = $projectDir.'/vendor/autoload.php';
+$autoloadPresent = is_file($autoloadFile);
 $phpCompatible = PHP_VERSION_ID >= 80500;
-$projectRuntime = $projectDir.'/var/runtime';
+$runtimeStorageAvailable = false;
 
-if (is_dir($projectRuntime)) {
-    $projectRuntimeWritable = is_writable($projectRuntime);
-} elseif (is_dir($projectDir.'/var')) {
-    $projectRuntimeWritable = is_writable($projectDir.'/var');
-} else {
-    $projectRuntimeWritable = is_writable($projectDir);
+if ($autoloadPresent) {
+    try {
+        require_once $autoloadFile;
+        $runtimeStorageAvailable =
+            RuntimeEnvironment::runtimeStorageAvailable($projectDir);
+    } catch (Throwable) {
+        $runtimeStorageAvailable = false;
+    }
 }
 
-$runtimeStorageAvailable = $projectRuntimeWritable;
 $ok = $autoloadPresent && $phpCompatible && $runtimeStorageAvailable;
 
 http_response_code($ok ? 200 : 503);
