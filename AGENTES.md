@@ -389,33 +389,86 @@ Nunca convertir automáticamente “CI verde” en “VALIDADO EN PRODUCCIÓN”
 
 ---
 
-## 13. Roadmap canónico y convención de progreso
+## 13. Roadmap canónico y noticias cronológicas de avance
 
-El roadmap activo es **[GitHub Issue #1](https://github.com/pl0n3r/Condor/issues/1)**.
+El roadmap activo es **[GitHub Issue #1](https://github.com/pl0n3r/Condor/issues/1)** y se conserva de forma acumulativa hasta **V 1.0.0**.
 
-Convención obligatoria, heredada de BRVTAL:
+### Dos capas del mismo registro
+
+- **Cuerpo del Issue #1:** plan acumulativo, fases, tareas, estados y ruta hacia V 1.0.0. Debe mantenerse lógico, escaneable y ordenado; no se usa como feed minuto a minuto.
+- **Comentarios del Issue #1:** bitácora cronológica append-only de ejecución. GitHub ordena estos comentarios por tiempo y esa secuencia es la fuente canónica de “qué ocurrió y cuándo”.
+- No insertar la bitácora operativa dentro del encabezado ni antes de las fases.
+- Una corrección posterior se registra con un comentario nuevo; no se reescriben comentarios anteriores para ocultar fallos, cambios de criterio o estados intermedios.
+
+### Regla obligatoria para todos los agentes — dejar noticias del trabajo
+
+**Cada agente/sesión es responsable de publicar sus propios avances en los comentarios del Roadmap #1 mientras trabaja.** No debe esperar al final del PR, al merge ni a que otro agente haga el resumen por él.
+
+Publicar una noticia inmediatamente después de cada evento material:
+
+1. inicio/reserva de un frente de trabajo;
+2. decisión funcional, técnica o arquitectónica que cambie el alcance;
+3. commit relevante o bloque funcional terminado;
+4. apertura o actualización sustancial de un PR;
+5. resultado de CI, SonarQube o CodeRabbit;
+6. finding válido detectado;
+7. corrección aplicada a un finding o regresión;
+8. bloqueo, colisión o dependencia que impida continuar;
+9. desbloqueo/reanudación;
+10. squash merge;
+11. validación del SHA exacto de `main`;
+12. observación del deploy;
+13. validación real de producción.
+
+No acumular horas de trabajo para contarlas al final. Si ocurren varios eventos materiales en pocos minutos, registrar cada cambio de estado como un comentario nuevo o un único comentario inmediato que agrupe solo eventos simultáneos del mismo bloque.
+
+### Formato mínimo de cada noticia
+
+Usar lenguaje entendible para una socia no técnica y, cuando exista, incluir Issue/PR/SHA:
+
+```md
+### <evento breve> — Issue #N / PR #N
+- **Qué cambió:** ...
+- **Evidencia:** commit/check/SHA/resultado relevante.
+- **Estado:** EN CURSO | VALIDADO EN CÓDIGO | MERGED | DESPLEGADO | VALIDADO EN PRODUCCIÓN | BLOQUEADO.
+- **Siguiente:** ... / **Bloqueo:** ...
+```
+
+Reglas del formato:
+
+- el timestamp de GitHub del comentario es la hora canónica; no inventar horas manuales;
+- ser breve pero suficiente para entender el cambio sin abrir otros archivos;
+- enlazar o mencionar la evidencia concreta cuando exista;
+- distinguir siempre CI verde, merge, deploy y validación en producción;
+- nunca marcar `VALIDADO EN PRODUCCIÓN` sin evidencia real;
+- no publicar mensajes vacíos del tipo “sigo”, “adelante” o “trabajando”; la noticia debe describir un cambio verificable;
+- findings y fallos también se registran: la bitácora cuenta la historia real, no solo los éxitos;
+- cada agente registra **su propio frente**; no asumir que otro agente documentará el trabajo;
+- el cuerpo del roadmap solo se modifica cuando cambia el plan/estado acumulativo de una tarea o fase; los eventos operativos viven en comentarios.
+
+Convención visual del cuerpo:
 
 - ✅ ~~Completado y validado por los gates requeridos~~
 - 🚧 Pendiente / en curso
 - ⛔ Bloqueado / dependencia externa
 
-Reglas:
+Reglas generales:
 
-- todo trabajo planeado relevante debe aparecer en el roadmap;
+- todo trabajo planeado relevante debe aparecer en el cuerpo del roadmap;
 - todo trabajo completado relevante permanece visible y tachado;
-- el roadmap es **append-only**: se agregan entradas nuevas y se actualiza el estado de las existentes, pero no se elimina el historial;
+- el registro completo es **append-only** hasta V 1.0.0: cuerpo + comentarios conservan la historia; no se elimina trabajo terminado ni eventos operativos;
 - no borrar trabajo terminado para hacer el roadmap “más limpio”;
 - registrar PR y versión cuando exista una release asignada;
 - usar en los títulos del roadmap/versionados el formato visual `(V X.Y.Z)` cuando se muestre una versión;
-- **no retirar, mover ni borrar del Issue #1 las fases o tareas ya registradas antes de v1.0.0**; el roadmap es un ledger acumulativo;
+- **no retirar ni borrar del Issue #1 las fases o tareas ya registradas antes de V 1.0.0**; se permite reorganizar títulos/secciones para mejorar la lectura sin perder ninguna entrada histórica;
 - una instrucción explícita del usuario puede repriorizar el roadmap;
 - Issues específicos contienen criterios de aceptación; el roadmap contiene orden y estado;
-- después de un merge relevante, el roadmap debe reflejar la realidad, no el plan anterior;
-- hasta alcanzar una **v1.0.0 madura**, conservar un registro detallado de cada bloque relevante: tarea/hito, estado, versión cuando exista, PR, merge SHA, validación exact-main, estado de despliegue y validación de producción cuando exista;
+- después de un merge relevante, el cuerpo debe reflejar la realidad, no el plan anterior;
+- hasta alcanzar una **V 1.0.0 madura**, conservar un registro detallado y acumulativo de cada bloque relevante: tarea/hito en el cuerpo y eventos de ejecución en comentarios, incluyendo PR, merge SHA, validación exact-main, despliegue y validación de producción cuando exista;
 - si el cuerpo del Issue #1 llegara a un límite práctico de tamaño, **no compactar ni borrar**: crear un volumen/Issue de continuación, dejar el Issue #1 intacto y enlazar ambos en ambas direcciones;
-- el roadmap debe conservar una lectura limpia para socios y personas no técnicas: mostrar trabajo planeado, hecho, pendiente, bloqueos, fases, PRs/versiones y progreso;
-- **no incluir en el roadmap políticas permanentes, manuales, convenciones, instrucciones operativas ni explicaciones que permanezcan fijas**; esos contenidos pertenecen a `AGENTES.md`, `ESPECIFICACIONES.md` o `GLOSARIO.md`;
-- la regla append-only aplica a **entradas de trabajo e historial de ejecución**, no al texto normativo: mover o retirar boilerplate/políticas del roadmap está permitido y es obligatorio cuando mejora su limpieza sin borrar trabajo histórico;
+- el roadmap debe conservar una lectura limpia para socios y personas no técnicas;
+- **no incluir en el cuerpo del roadmap políticas permanentes, manuales, convenciones ni instrucciones operativas extensas**; esos contenidos pertenecen a `AGENTES.md`, `ESPECIFICACIONES.md` o `GLOSARIO.md`;
+- la regla append-only aplica a trabajo e historial de ejecución, no al boilerplate normativo;
 - cuando un detalle técnico sea necesario para ejecutar o validar una tarea, llevarlo al Issue específico o a `ESPECIFICACIONES.md` y mantener en el roadmap solo el resumen necesario para entender avance y estado.
 
 ---
