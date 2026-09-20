@@ -1,0 +1,42 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Super Admin · Condor App{% endblock %}
+
+{% block head %}
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/build/admin.css">
+{% endblock %}
+
+{% block body %}
+<section class="admin-shell" aria-label="Administración global de Condor">
+    <aside class="sidebar">
+        <strong>Condor App</strong>
+        <nav aria-label="Navegación global">
+            <a href="{{ path('app_super_admin') }}" aria-current="page">Plataforma</a>
+        </nav>
+        <form method="post" action="{{ path('app_logout') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('logout') }}">
+            <button class="button button-secondary" type="submit">Cerrar sesión</button>
+        </form>
+    </aside>
+
+    <div class="workspace">
+        <span class="eyebrow">Super Admin</span>
+        <h1>Administración global</h1>
+        <p class="muted">Control de plataforma separado de los permisos de cada empresa.</p>
+
+        <div class="feature-grid" aria-label="Resumen de plataforma">
+            <article class="feature-card">
+                <span>Empresas</span>
+                <strong>{{ tenant_count }}</strong>
+            </article>
+            <article class="feature-card">
+                <span>Usuarios</span>
+                <strong>{{ user_count }}</strong>
+            </article>
+        </div>
+
+        <p class="version-line">V {{ app_version }}</p>
+    </div>
+</section>
+{% endblock %}

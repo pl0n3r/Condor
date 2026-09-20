@@ -24,6 +24,10 @@ final class AdminController extends AbstractController
             throw new AccessDeniedException();
         }
 
+        if ($this->isGranted(User::ROLE_SUPER_ADMIN)) {
+            return $this->redirectToRoute('app_super_admin');
+        }
+
         $tenant = $currentTenantForUser->resolve($user);
 
         return $this->render('admin/index.html.twig', [
