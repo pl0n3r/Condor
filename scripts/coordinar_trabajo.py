@@ -575,8 +575,6 @@ def release_permission(
 
 def close_pulls_before_release(
     api: GitHub,
-    issue_number: int,
-    actor: str,
     branch: str,
     force: bool,
 ) -> bool:
@@ -626,8 +624,6 @@ def release_work(
     )
     if not close_pulls_before_release(
         api,
-        issue_number,
-        actor,
         branch,
         force,
     ):
@@ -685,7 +681,6 @@ def sync_review_status(
 
 def close_pr_reservation(
     api: GitHub,
-    pr_number: int,
     issue_number: int,
     branch: str,
     pull: dict[str, Any],
@@ -731,7 +726,6 @@ def update_pr_state(api: GitHub, pr_number: int, action: str) -> None:
         return
     close_pr_reservation(
         api,
-        pr_number,
         issue_number,
         branch,
         pull,
