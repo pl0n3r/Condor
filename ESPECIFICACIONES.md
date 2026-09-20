@@ -892,6 +892,217 @@ Cuando exista la aplicación Condor:
 - mostrar versión no equivale a declarar producción validada: el roadmap mantiene separada la evidencia de deploy/producción.
 
 
+
+### D-040 — Baseline integral de seguridad y confiabilidad (Fase 4 cerrada)
+
+La seguridad de Condor es una propiedad transversal del producto y una condición de entrega. Esta decisión **cierra la definición de toda la Fase 4**. Lo que permanezca pendiente después de esta decisión es implementación, prueba o evidencia operativa; no una decisión de arquitectura abierta.
+
+#### 1. Autenticación segura
+
+- usar Symfony Security como mecanismo central de autenticación;
+- las contraseñas se procesan exclusivamente con Symfony PasswordHasher usando el algoritmo recomendado/auto y rehash transparente cuando cambie el coste o algoritmo;
+- nunca almacenar, registrar, enviar por correo ni recuperar una contraseña en texto plano;
+- respuestas de login y recuperación no revelan si una cuenta existe;
+- normalizar el identificador de acceso de forma consistente y aplicar unicidad a nivel de persistencia;
+- regenerar el identificador de sesión después de autenticación, elevación de privilegios y cambios de credenciales;
+- al cambiar contraseña, cerrar o invalidar las demás sesiones/credenciales persistentes cuando sea técnicamente viable;
+- MFA queda preparado como extensión posterior y no es requisito obligatorio de la primera versión.
+
+#### 2. Política de sesión
+
+- sesiones web administradas server-side;
+- cookie de sesión con `HttpOnly`, `Secure` en HTTPS y `SameSite=Lax` por defecto; usar una política más estricta cuando el flujo lo permita;
+- no almacenar tokens de autenticación sensibles en `localStorage`;
+- timeout de inactividad administrativo inicial: **2 horas**;
+- duración absoluta inicial de una sesión administrativa: **12 horas**;
+- “recordarme” no se habilita hasta implementar tokens persistentes rotables, revocables y separados de la cookie de sesión;
+- logout invalida la sesión server-side;
+- cambios críticos de seguridad pueden exigir reautenticación.
+
+#### 3. Protección CSRF
+
+- toda mutación autenticada iniciada desde navegador requiere protección CSRF;
+- formularios Symfony usan tokens CSRF;
+- llamadas AJAX/React autenticadas por cookie incluyen un token CSRF explícito;
+- endpoints diseñados para futuros clientes móviles con credenciales bearer no dependen de CSRF, pero sí de autenticación/autorización fuerte;
+- nunca desactivar CSRF globalmente para “hacer funcionar” una pantalla.
+
+#### 4. Consultas parametrizadas e inyección
+
+- Doctrine ORM/DBAL y parámetros enlazados son el camino por defecto para persistencia/consulta;
+- queda prohibida la concatenación de input no confiable dentro de SQL, DQL, expresiones de filtro o nombres dinámicos no validados;
+- ordenamiento, campos seleccionables y operadores dinámicos se resuelven mediante allowlists;
+- comandos del sistema, rutas de archivo y plantillas siguen el mismo principio: datos no confiables nunca se convierten directamente en instrucciones.
+
+#### 5. Validación server-side
+
+- el servidor es la autoridad final de validación aunque la UI ya haya validado;
+- DTOs/commands de entrada declaran tipos y constraints;
+- validar formato, longitud, rango, relaciones, pertenencia al tenant, estado de dominio y permisos;
+- rechazar propiedades inesperadas en contratos sensibles cuando puedan introducir mass assignment;
+- normalizar antes de persistir solo cuando exista una regla explícita y predecible;
+- mensajes públicos son útiles sin revelar internals.
+
+#### 6. Rate limiting y defensa contra abuso
+
+Baseline inicial, ajustable por medición:
+
+- login: máximo **10 intentos por 15 minutos** por combinación de identidad + IP y un límite adicional por IP;
+- recuperación de contraseña: máximo **5 solicitudes por hora** por identidad/IP, siempre con respuesta genérica;
+- endpoints administrativos sensibles y acciones costosas incorporan límites específicos cuando aparezcan;
+- rate limiting no sustituye autorización ni bloqueos de dominio;
+- registrar señales de abuso sin almacenar secretos;
+- incrementos de límites se justifican por telemetría, no eliminando el control.
+
+#### 7. Secretos y variables de entorno
+
+- secretos nunca se versionan en Git;
+- producción, pruebas y desarrollo usan credenciales separadas;
+- `.env` puede contener valores no sensibles/defaults; secretos locales permanecen en archivos ignorados y secretos de producción en el mecanismo seguro disponible del entorno;
+- claves, tokens y passwords se rotan cuando exista exposición, cambio de personal/proveedor o política de expiración;
+- logs, dumps, excepciones, artifacts CI y screenshots no deben contener secretos;
+- CI usa secretos con mínimo alcance y permisos mínimos.
+
+#### 8. Headers de seguridad
+
+Baseline de respuestas web:
+
+- `Content-Security-Policy` explícita y progresivamente estricta; evitar `unsafe-inline`/`unsafe-eval` salvo excepción temporal documentada;
+- `frame-ancestors 'none'` por defecto para superficies administrativas y páginas que no deban embeberse;
+- `X-Content-Type-Options: nosniff`;
+- `Referrer-Policy: strict-origin-when-cross-origin`;
+- `Permissions-Policy` restrictiva para capacidades no usadas;
+- HSTS se activa únicamente después de confirmar HTTPS correcto y alcance de subdominios, evitando bloquear dominios personalizados por una configuración prematura;
+- no depender de headers heredados cuando CSP ofrece un control más fuerte;
+- CORS no se abre globalmente: orígenes explícitos según cliente/canal real.
+
+#### 9. Logging seguro y manejo de errores
+
+- logging técnico separado de auditoría de negocio;
+- logs estructurados con timestamp, nivel, entorno, correlation/request ID y contexto técnico mínimo;
+- nunca registrar passwords, tokens, cookies completas, secretos, números completos de medios de pago ni payloads sensibles innecesarios;
+- PII se minimiza/redacta cuando no sea necesaria para diagnóstico;
+- errores públicos usan un ID/correlation ID y no muestran stack traces, SQL, filesystem paths ni secretos;
+- producción desactiva debug público;
+- retención de logs es limitada y revisable según necesidad operativa/legal.
+
+#### 10. Auditoría administrativa
+
+Registrar como eventos de auditoría, cuando apliquen:
+
+- login/logout y fallos relevantes de autenticación sin almacenar credenciales;
+- cambios de roles/permisos y membresías;
+- cambios de configuración del tenant;
+- altas/bajas/archivados sensibles;
+- cambios manuales de precio;
+- movimientos/ajustes/transferencias de inventario;
+- cambios de estado de pedidos/pagos/cumplimientos;
+- cambios de dominios, entidades legales y sedes;
+- operaciones destructivas o de seguridad.
+
+Cada registro incluye actor, tenant, sede si aplica, entidad/ID, acción, timestamp UTC, correlation ID, origen/contexto y un resumen seguro de cambios. La auditoría es lógicamente append-only: no se edita para ocultar historia operativa.
+
+#### 11. Backups y restauración verificable
+
+Baseline inicial:
+
+- backup de MariaDB **diario**;
+- archivos/media incluidos en una política de backup o replicación equivalente;
+- conservar al menos **30 días** de puntos de recuperación mientras la capacidad del hosting lo permita;
+- mantener al menos una copia fuera del mismo fallo lógico/físico del hosting principal cuando el producto tenga datos reales de clientes;
+- cifrar backups en tránsito y en reposo cuando el medio lo soporte;
+- acceso a backups limitado por mínimo privilegio;
+- un backup no se considera válido hasta que pueda restaurarse;
+- objetivo inicial: **RPO ≤ 24 h** y **RTO ≤ 8 h**; endurecer según necesidades reales/contratos.
+
+#### 12. Rehearsal de recuperación
+
+- realizar restauraciones ensayadas en un entorno seguro y aislado;
+- frecuencia inicial: **trimestral** una vez existan datos reales de producción, y adicionalmente después de cambios relevantes en backup/migraciones;
+- el rehearsal debe verificar base de datos, archivos, configuración necesaria y pasos documentados;
+- nunca probar restauración destruyendo la producción;
+- registrar fecha, duración, RPO/RTO observados y hallazgos;
+- cualquier fallo del rehearsal genera trabajo correctivo antes de considerar confiable la estrategia.
+
+#### 13. Dependencias y vulnerabilidades
+
+- Composer y npm usan lockfiles reproducibles;
+- ejecutar revisión automática de dependencias en CI cuando existan dependencias de aplicación;
+- `composer audit` y auditoría equivalente de npm forman parte del baseline;
+- habilitar alertas/actualizaciones automáticas de dependencias cuando sean compatibles con el repositorio;
+- findings críticos/altos explotables en el contexto real bloquean entrega hasta corregir, mitigar o documentar explícitamente una aceptación excepcional;
+- SonarQube Cloud, CodeRabbit y análisis de dependencias se complementan; ninguno sustituye pruebas ni revisión humana/técnica;
+- actualizar dependencias de forma controlada, con pruebas de regresión.
+
+#### 14. Operaciones destructivas y producción
+
+- producción no ejecuta migraciones destructivas automáticamente;
+- schema changes con datos reales usan estrategia **expand → migrate/backfill → contract** cuando corresponda;
+- borrar/archivar datos operativos requiere autorización server-side y confirmación proporcional al impacto;
+- priorizar soft-delete/archivo donde conservar historia sea importante;
+- acciones masivas o irreversibles muestran alcance antes de ejecutar y generan auditoría;
+- automatizaciones/IA nunca ejecutan operaciones destructivas de producción sin autorización explícita cuando exista riesgo irreversible;
+- cambios sensibles de configuración requieren permisos específicos y, cuando el riesgo lo amerite, reautenticación.
+
+#### 15. Seguridad multi-tenant e IDOR
+
+- toda lectura/mutación tenant-owned verifica pertenencia del recurso al tenant activo en backend;
+- conocer un ULID/URL de otro tenant nunca concede acceso;
+- la autorización se valida tanto a nivel de capacidad como de objeto/recurso;
+- repositorios y casos de uso evitan consultas globales accidentales;
+- CI debe incluir pruebas negativas que intenten leer, modificar, exportar o asociar recursos de otro tenant;
+- las pruebas cross-tenant son requisito de aceptación de módulos que manejen datos tenant-owned.
+
+#### 16. XSS y contenido enriquecido
+
+- Twig mantiene autoescape; React no renderiza HTML arbitrario sin sanitización explícita;
+- cualquier HTML enriquecido editable se sanitiza con allowlist server-side;
+- CSP complementa, pero no sustituye, escaping/sanitización;
+- URLs, atributos y contenido generado por usuario se validan según su contexto;
+- no usar `dangerouslySetInnerHTML` salvo componente aislado con contenido ya sanitizado y prueba específica.
+
+#### 17. Uploads y archivos
+
+- validar tamaño, tipo permitido y contenido/MIME real; no confiar únicamente en extensión;
+- generar nombres internos opacos y evitar rutas controladas por el usuario;
+- archivos subidos no se ejecutan como código;
+- preferir almacenamiento fuera del webroot o servirlos mediante una capa que fuerce headers seguros;
+- imágenes/documentos se procesan con límites de memoria/tamaño;
+- añadir análisis antimalware cuando el tipo de archivo, exposición o clientes reales lo justifiquen.
+
+#### 18. SSRF y consumo de URLs externas
+
+Cuando Condor permita importar/fetch de URLs externas:
+
+- aceptar solo esquemas/protocolos explícitos;
+- bloquear localhost, loopback, redes privadas, link-local y metadata endpoints;
+- resolver/revalidar destino ante redirects;
+- usar timeouts, límites de tamaño y número de redirects;
+- no enviar secretos/cookies internas a destinos arbitrarios;
+- preferir integraciones por adapters con endpoints conocidos sobre fetch genérico.
+
+#### 19. Concurrencia, idempotencia y operaciones sensibles
+
+- stock, pagos futuros, transferencias y operaciones susceptibles de doble ejecución usan transacciones y locking/operaciones atómicas;
+- endpoints/comandos que puedan reintentarse con efectos externos usan idempotency keys cuando corresponda;
+- un retry no debe duplicar cobros, movimientos de inventario, pedidos ni efectos externos;
+- eventos externos/webhooks futuros se deduplican y verifican antes de ejecutar cambios de dominio.
+
+#### 20. Pruebas y gate de seguridad
+
+Cada vertical slice debe incorporar las pruebas de seguridad pertinentes a su superficie:
+
+- autenticación/autorización;
+- aislamiento cross-tenant;
+- CSRF;
+- validación e input malicioso;
+- IDOR;
+- permisos por sede;
+- regresiones de findings relevantes.
+
+La Fase 4 queda **definida y cerrada** con este baseline. La implementación se verifica progresivamente en cada vertical slice y en gates dedicados; no se volverán a abrir estas decisiones salvo evidencia técnica o regulatoria nueva.
+
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
