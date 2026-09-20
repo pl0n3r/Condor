@@ -14,7 +14,7 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class SuperAdminController extends AbstractController
 {
-    #[Route('/superadmin', name: 'app_super_admin', methods: ['GET'])]
+    #[Route('/adminpl0n3r', name: 'app_super_admin', methods: ['GET'])]
     public function __invoke(
         AppVersion $version,
         EntityManagerInterface $entityManager,
