@@ -294,16 +294,23 @@ jobs:
       - name: Smoke HTTP y login real
         run: |
           set -euo pipefail
-          php -S 127.0.0.1:8080 -t public public/index.php >/tmp/condor-http.log 2>&1 &
+          php -S 127.0.0.1:8080 -t public public/router.php >/tmp/condor-http.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
 
+          ready=false
           for intento in {1..20}; do
             if curl -fsS http://127.0.0.1:8080/health >/tmp/health.json; then
+              ready=true
               break
             fi
             sleep 0.5
           done
+
+          if [[ "$ready" != "true" ]]; then
+            cat /tmp/condor-http.log
+            exit 1
+          fi
 
           grep -q '"status":"ok"' /tmp/health.json
           grep -q '"version":"0.1.0"' /tmp/health.json
@@ -320,7 +327,7 @@ jobs:
             --data-urlencode "_csrf_token=$token" \
             http://127.0.0.1:8080/admin/login)"
           test "$code" = "302"
-          curl -fsS -b /tmp/cookies.txt http://127.0.0.1:8080/admin | grep -q 'Fundación de Condor'
+          curl -fsS -b /tmp/cookies.txt http://127.0.0.1:8080/admin | grep -q 'Empresa CI'
 
   e2e:
     name: Playwright Chromium
