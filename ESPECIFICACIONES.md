@@ -51,19 +51,29 @@ Condor adopta las prácticas maduras aprendidas en BRVTAL, sin copiar su lógica
 
 ## 4. Infraestructura objetivo inicial
 
-Sujeta a ajuste según las necesidades reales del producto:
+La plataforma inicial está condicionada por **Hostinger shared hosting**, pero la aplicación debe permanecer portable para una futura migración a AWS.
+
+Stack confirmado:
 
 - GitHub;
 - GitHub Actions;
 - SonarCloud;
 - CodeRabbit;
 - Hostinger shared hosting;
-- PHP 8.5;
-- MariaDB / MySQL-compatible;
-- HTML + CSS + JavaScript con dependencias contenidas;
+- PHP 8.5 como runtime de backend;
+- Symfony 7.4 LTS como framework backend;
+- MariaDB como base de datos;
+- arquitectura de **monolito modular**;
+- React + TypeScript para el frontend administrativo;
+- Vite para compilar React a assets estáticos;
+- Twig/Symfony para render server-side de superficies públicas y SEO;
+- Node.js permitido como herramienta de desarrollo/build, no requerido como runtime de producción;
 - Playwright;
 - despliegue desde `main` hacia Hostinger;
+- configuración por entorno y ausencia de dependencias propietarias del hosting;
 - separación entre validación de código, observación del despliegue y validación de producción.
+
+La arquitectura debe permitir que una futura migración a AWS sea principalmente una evolución de infraestructura. No se adoptarán microservicios inicialmente; los módulos internos deben mantener fronteras suficientemente claras para extraer componentes en el futuro solo si una necesidad real de escala, carga u organización lo justifica.
 
 ## 5. Definición funcional del producto
 
@@ -480,6 +490,38 @@ Reglas:
 - integraciones externas, webhooks y acciones hacia terceros quedan fuera del alcance inicial;
 - aun así, el diseño debe permitir añadir adaptadores externos en el futuro sin rehacer el núcleo del motor;
 - la personalización de workflows debe respetar los invariantes del dominio, permisos, auditoría y aislamiento por tenant.
+
+
+### D-023 — Stack técnico inicial portable de Hostinger a AWS
+
+Condor se implementará inicialmente sobre las capacidades reales disponibles en el hosting compartido de Hostinger, evitando diseñar contra un runtime que no exista en producción.
+
+Decisiones:
+
+- backend en **PHP 8.5 + Symfony 7.4 LTS**;
+- persistencia en **MariaDB**;
+- arquitectura de **monolito modular**, con límites internos claros entre dominios;
+- administración en **React + TypeScript**;
+- React se compila con **Vite** a assets estáticos servidos por la misma aplicación;
+- las superficies públicas y sensibles a SEO usarán **Twig/Symfony server-side rendering** como base;
+- React se incorpora en esas superficies solo donde aporte interacción real;
+- Node.js puede formar parte del toolchain de desarrollo/build, pero no es una dependencia del runtime de producción;
+- no se usarán microservicios en la primera arquitectura;
+- se evitarán APIs, servicios o convenciones propietarias de Hostinger cuando exista una alternativa estándar razonable;
+- configuración, secretos y endpoints deben resolverse por entorno;
+- el acceso a datos y las migraciones deben diseñarse para mantener MariaDB portable hacia infraestructura administrada en AWS;
+- una eventual migración a AWS debe cambiar principalmente la infraestructura, no exigir una reescritura funcional del producto.
+
+Quedan pendientes de decisión específica:
+
+- ORM o capa de persistencia;
+- estrategia exacta de migraciones;
+- estructura de carpetas y fronteras entre módulos;
+- contrato entre Twig, React y endpoints internos;
+- pipeline reproducible de build y despliegue de React/Vite;
+- topología futura en AWS cuando la escala real la justifique.
+
+Esta decisión **sustituye** las propuestas conversacionales previas de NestJS/Node como runtime backend, Vue y Next.js. Esas opciones fueron consideradas antes de confirmar las restricciones reales del hosting compartido y ya no representan el stack objetivo de Condor.
 
 ## 7. Criterio de actualización
 
