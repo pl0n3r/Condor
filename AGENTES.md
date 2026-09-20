@@ -605,6 +605,7 @@ Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y 
 - el README usa la misma estrategia de snapshot por deploy que BRVTAL;
 - el README debe mostrar siempre y por separado la versión objetivo y la versión realmente desplegada; tras el primer deploy, la señal visible será por ejemplo `v0.1.0`, pero nunca se inferirá desde CI;
 - `GLOSARIO.md` debe mantenerse actualizado con los términos técnicos relevantes que aparezcan en superficies visibles para socios, usando lenguaje de negocio y ejemplos de Condor cuando ayuden.
+- **No usar archivos ZIP como mecanismo de entrega, respaldo, transferencia de código o handoff del proyecto.** Todo cambio de código/documentación debe quedar directamente versionado en GitHub mediante commits, ramas, PRs y merges; no enviar paquetes ZIP al usuario ni usar ZIP como sustituto del repositorio. Los artefactos internos automáticos de GitHub Actions solo pueden existir como evidencia técnica efímera cuando una herramienta los genere de forma inevitable, nunca como fuente de verdad ni como canal de entrega.
 
 ---
 
