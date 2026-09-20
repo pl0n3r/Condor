@@ -1,86 +1,80 @@
-# Condor App — Snapshot de deploy V 0.1.1
+# Condor App — Snapshot de deploy V 0.1.2
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo de esta entrega:** recuperar el render del home corporativo en Hostinger y dejar el bootstrap preparado para shared hosting sin secretos versionados.
+> **Objetivo:** eliminar el HTTP 500 de Hostinger y hacer observable cualquier fallo de bootstrap sin exponer información sensible.
 
 <p align="center">
   <strong>Producto:</strong> Condor App ·
-  <strong>Mercado:</strong> Colombia ·
-  <strong>Dominio:</strong> www.condorapp.com.co ·
-  <strong>Versión objetivo:</strong> V 0.1.1
+  <strong>Dominio:</strong> condorapp.com.co ·
+  <strong>Runtime producción:</strong> PHP 8.3 ·
+  <strong>Versión objetivo:</strong> V 0.1.2
 </p>
 
 ## Estado del deploy
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Versión objetivo | 🚧 **V 0.1.1** | Issue #76 / PR #77 |
-| Versión desplegada | ⚠️ **V 0.1.0 observada** | routing hacia Symfony llegó a Hostinger, pero el home se reporta en blanco |
-| Main actual antes del merge | ✅ | `779a92e04da491cb076bbb9461f05a63ab8c5469` |
-| CI del PR | ✅ **Verde** | head `e47405cd4a51f129ee698d179124476784aace6d`, run `35492258455` |
-| SonarQube Cloud | ✅ **Verde** | 0 issues nuevos · 0 hotspots |
-| CodeRabbit | 🚧 **Pendiente** | revisión solicitada sobre el head estable |
-| Producción | ⛔ **NO VALIDADA** | el usuario sigue observando home blanco |
+| Versión objetivo | 🚧 **V 0.1.2** | Issue #78 |
+| Versión desplegada | ⚠️ **V 0.1.1** | Hostinger confirmó deploy de `main` a `public_html` |
+| Producción V 0.1.1 | ⛔ **HTTP 500** | navegador del propietario confirma respuesta 500 en `/` |
+| Runtime Hostinger | ✅ **PHP 8.3** | confirmado por el propietario |
+| Main base | ✅ | `52ac97fbfb4565741ee6353de06b754cedec99f9` |
+| Producción | ⛔ **NO VALIDADA** | no cerrar hasta que el home cargue correctamente |
 
-## Qué se hizo
+## Qué se hace en V 0.1.2
 
-- Se endureció el bootstrap para Hostinger cuando no existe un `.env` versionado.
-- `APP_SECRET` puede generarse y persistirse en runtime fuera de Git.
-- La ausencia de `DATABASE_URL` deja arrancar las superficies públicas sin fingir una conexión real.
-- La versión de producto sube de **0.1.0 → 0.1.1**.
-- CI y Playwright dejaron de depender de una versión fija y ahora leen `config/version.php`.
-- Se corrigió el finding de Sonar sobre credenciales ficticias hardcodeadas.
-- Se mantiene paridad entre `config/version.php`, `package.json` y `package-lock.json`.
+- Se elimina el `index.html` temporal de la raíz del deploy.
+- Se añade `public_html/index.php` como puente estable al front controller de Symfony.
+- Se simplifican los `.htaccess` y se eliminan directivas `Options` innecesarias para LiteSpeed/shared hosting.
+- El routing raíz solo sirve archivos existentes dentro de `public/`; el resto entra a Symfony.
+- `APP_SECRET` usa almacenamiento temporal seguro si `var/runtime` no es writable.
+- Si Symfony no puede iniciar, se devuelve una página de error segura en vez de una respuesta vacía.
+- `runtime-check.php` permite comprobar versión, compatibilidad PHP, autoload y almacenamiento runtime sin depender del kernel.
+- CI pasa a ejecutar PHP 8.3 para reflejar el runtime real de Hostinger.
+- La versión se sincroniza en `config/version.php`, `package.json` y `package-lock.json`.
 
-## Archivos de la entrega actual
+## Archivos de esta entrega
 
-- `config/bootstrap.php`
-- `config/version.php`
+- `.htaccess`
+- `public/.htaccess`
+- `index.php`
+- `public/index.php`
+- `runtime-check.php`
 - `src/Shared/Runtime/RuntimeEnvironment.php`
 - `tests/php/Shared/Runtime/RuntimeEnvironmentTest.php`
+- `tests/php/Shared/Runtime/RuntimeCheckTest.php`
 - `.github/workflows/ci.yml`
-- `tests/e2e/slice1.spec.mjs`
+- `config/version.php`
 - `package.json`
 - `package-lock.json`
+- `AGENTES.md`
 - `README.md`
+- se elimina `index.html`
 
-## Validación
+## Validación requerida
 
-- PHP, Composer, configuración Symfony y migraciones en MariaDB descartable: ✅
-- PHPUnit / regresiones runtime: ✅
-- Smoke HTTP + login real: ✅
-- Playwright Chromium desktop/mobile: ✅
-- SonarQube Cloud: ✅ 0 issues / 0 hotspots
-- CodeRabbit: 🚧 pendiente
-- Producción V 0.1.1: 🚧 pendiente de merge, deploy y observación real
+- PHP 8.3 + Composer + Symfony: 🚧
+- PHPUnit: 🚧
+- MariaDB/integración: 🚧
+- Playwright Chromium: 🚧
+- SonarQube Cloud: 🚧
+- Exact-main: 🚧
+- Deploy Hostinger V 0.1.2: 🚧
+- Home real sin HTTP 500: 🚧
 
 ## Qué sigue
 
 | Lane | Trabajo |
 | --- | --- |
-| **AHORA** | Cerrar CodeRabbit y hacer squash merge de PR #77 |
-| **SIGUE** | Validar el SHA exacto resultante de `main` |
-| **DESPUÉS** | Observar Hostinger: `/health`, home, footer, CSS y login |
-| **P0** | No cerrar Issue #76 hasta que el home deje de aparecer blanco |
-
-## Flujo de entrega
-
-```mermaid
-flowchart LR
- A["Issue #76"] --> B["PR #77 · V 0.1.1"]
- B --> C["CI + Sonar + CodeRabbit"]
- C --> D["Squash merge"]
- D --> E["Exact-main"]
- E --> F["Deploy Hostinger"]
- F --> G["Observación real"]
- G --> H["VALIDADO EN PRODUCCIÓN"]
-```
+| **AHORA** | Implementar y validar Issue #78 |
+| **SIGUE** | Squash merge y exact-main |
+| **DESPUÉS** | Observar `/runtime-check.php`, `/`, `/app.css` y `/admin/login` en Hostinger |
+| **P0** | No declarar producción validada hasta eliminar el HTTP 500 |
 
 ## Fuentes de verdad
 
 - [AGENTES.md](AGENTES.md) — protocolo operativo.
 - [ESPECIFICACIONES.md](ESPECIFICACIONES.md) — decisiones durables.
 - [Roadmap #1](https://github.com/pl0n3r/Condor/issues/1) — plan acumulativo y bitácora cronológica.
-- [GLOSARIO.md](GLOSARIO.md) — términos técnicos en lenguaje de negocio.

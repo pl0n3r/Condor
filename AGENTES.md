@@ -178,7 +178,7 @@ Cuando no exista otro requisito explícito:
 | Tipo | SaaS de gestión corporativa |
 | Mercado inicial | Colombia |
 | Hosting objetivo inicial | Hostinger shared hosting |
-| Backend objetivo inicial | PHP 8.5 |
+| Backend objetivo inicial | PHP 8.3 en producción Hostinger; compatibilidad declarada `^8.3` |
 | Base de datos objetivo inicial | MariaDB / MySQL-compatible |
 | Frontend objetivo inicial | HTML + CSS + JavaScript con dependencias contenidas |
 | Navegador / E2E | Playwright |

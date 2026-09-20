@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 final class RuntimeEnvironmentTest extends TestCase
 {
     private string $projectDir;
+    private string $fallbackDir;
 
     /** @var array<string, string|false|null> */
     private array $previous = [];
@@ -27,13 +28,19 @@ final class RuntimeEnvironmentTest extends TestCase
         }
 
         $this->projectDir =
-            sys_get_temp_dir().'/condor-runtime-'.bin2hex(random_bytes(6));
+            sys_get_temp_dir().'/condor-project-'.bin2hex(random_bytes(6));
         mkdir($this->projectDir, 0770, true);
+
+        $this->fallbackDir =
+            rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR).
+            DIRECTORY_SEPARATOR.'condor-runtime-'.
+            substr(hash('sha256', $this->projectDir), 0, 12);
     }
 
     protected function tearDown(): void
     {
         $this->removeTree($this->projectDir);
+        $this->removeTree($this->fallbackDir);
 
         foreach ($this->previous as $name => $value) {
             if (is_string($value)) {
@@ -61,9 +68,25 @@ final class RuntimeEnvironmentTest extends TestCase
             file_get_contents($this->projectDir.'/var/runtime/app_secret')
         );
 
-        putenv('APP_SECRET');
-        unset($_ENV['APP_SECRET'], $_SERVER['APP_SECRET']);
+        $this->clearSecretEnvironment();
 
+        RuntimeEnvironment::prepare($this->projectDir);
+
+        self::assertSame($first, getenv('APP_SECRET'));
+    }
+
+    public function testFallsBackWhenProjectRuntimeCannotBeCreated(): void
+    {
+        file_put_contents($this->projectDir.'/var', 'blocked');
+
+        RuntimeEnvironment::prepare($this->projectDir);
+
+        $first = getenv('APP_SECRET');
+        self::assertIsString($first);
+        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $first);
+        self::assertFileExists($this->fallbackDir.'/app_secret');
+
+        $this->clearSecretEnvironment();
         RuntimeEnvironment::prepare($this->projectDir);
 
         self::assertSame($first, getenv('APP_SECRET'));
@@ -108,8 +131,20 @@ final class RuntimeEnvironmentTest extends TestCase
         );
     }
 
+    private function clearSecretEnvironment(): void
+    {
+        putenv('APP_SECRET');
+        unset($_ENV['APP_SECRET'], $_SERVER['APP_SECRET']);
+    }
+
     private function removeTree(string $path): void
     {
+        if (is_file($path)) {
+            @unlink($path);
+
+            return;
+        }
+
         if (!is_dir($path)) {
             return;
         }
