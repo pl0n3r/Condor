@@ -8,7 +8,9 @@ use RuntimeException;
 
 final class RuntimeEnvironment
 {
-    private const FALLBACK_DATABASE_URL =\n        'mysql://127.0.0.1:3306/condor_unconfigured'.\n        '?charset=utf8mb4';
+    private const FALLBACK_DATABASE_URL =
+        'mysql://127.0.0.1:3306/condor_unconfigured'.
+        '?charset=utf8mb4';
 
     public static function prepare(string $projectDir): void
     {
@@ -21,15 +23,28 @@ final class RuntimeEnvironment
 
         if (self::read('DATABASE_URL') === null) {
             self::define('DATABASE_URL', self::FALLBACK_DATABASE_URL);
-            error_log(\n                'Condor bootstrap: DATABASE_URL no está configurada; '.\n                'las rutas que requieren persistencia permanecerán no disponibles.'\n            );
+            error_log(
+                'Condor bootstrap: DATABASE_URL no está configurada; '.
+                'las rutas que requieren persistencia permanecerán no disponibles.'
+            );
         }
     }
 
     private static function runtimeSecret(string $projectDir): string
     {
-        $runtimeDir = rtrim($projectDir, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'var'.DIRECTORY_SEPARATOR.'runtime';
-        if (!is_dir($runtimeDir) && !@mkdir($runtimeDir, 0770, true) && !is_dir($runtimeDir)) {
-            throw new RuntimeException('No fue posible preparar el directorio runtime de Condor.');
+        $runtimeDir =
+            rtrim($projectDir, DIRECTORY_SEPARATOR).
+            DIRECTORY_SEPARATOR.'var'.
+            DIRECTORY_SEPARATOR.'runtime';
+
+        if (
+            !is_dir($runtimeDir)
+            && !@mkdir($runtimeDir, 0770, true)
+            && !is_dir($runtimeDir)
+        ) {
+            throw new RuntimeException(
+                'No fue posible preparar el directorio runtime de Condor.'
+            );
         }
 
         $secretFile = $runtimeDir.DIRECTORY_SEPARATOR.'app_secret';
@@ -40,14 +55,21 @@ final class RuntimeEnvironment
 
         $candidate = bin2hex(random_bytes(32));
         $handle = @fopen($secretFile, 'x');
+
         if ($handle !== false) {
             try {
-                if (fwrite($handle, $candidate.PHP_EOL) === false || !fflush($handle)) {
-                    throw new RuntimeException('No fue posible persistir el secreto runtime de Condor.');
+                if (
+                    fwrite($handle, $candidate.PHP_EOL) === false
+                    || !fflush($handle)
+                ) {
+                    throw new RuntimeException(
+                        'No fue posible persistir el secreto runtime de Condor.'
+                    );
                 }
             } finally {
                 fclose($handle);
             }
+
             @chmod($secretFile, 0600);
 
             return $candidate;
@@ -55,7 +77,9 @@ final class RuntimeEnvironment
 
         $existing = self::readSecretFile($secretFile);
         if ($existing === null) {
-            throw new RuntimeException('El secreto runtime de Condor no es válido.');
+            throw new RuntimeException(
+                'El secreto runtime de Condor no es válido.'
+            );
         }
 
         return $existing;
@@ -70,7 +94,9 @@ final class RuntimeEnvironment
         $contents = @file_get_contents($secretFile);
         $secret = is_string($contents) ? trim($contents) : '';
 
-        return preg_match('/^[0-9a-f]{64}$/', $secret) === 1 ? $secret : null;
+        return preg_match('/^[0-9a-f]{64}$/', $secret) === 1
+            ? $secret
+            : null;
     }
 
     private static function defineIfMissing(string $name, string $value): void
@@ -82,7 +108,13 @@ final class RuntimeEnvironment
 
     private static function read(string $name): ?string
     {
-        foreach ([getenv($name), $_SERVER[$name] ?? null, $_ENV[$name] ?? null] as $value) {
+        $candidates = [
+            getenv($name),
+            $_SERVER[$name] ?? null,
+            $_ENV[$name] ?? null,
+        ];
+
+        foreach ($candidates as $value) {
             if (is_string($value) && $value !== '') {
                 return $value;
             }
