@@ -226,9 +226,7 @@ jobs:
         image: mariadb:11.4
         env:
           MARIADB_DATABASE: condor_test
-          MARIADB_USER: condor
-          MARIADB_PASSWORD: condor
-          MARIADB_ROOT_PASSWORD: root
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
         ports:
           - 3306:3306
         options: >-
@@ -239,14 +237,23 @@ jobs:
     env:
       APP_ENV: test
       APP_DEBUG: 0
-      APP_SECRET: condor-ci-secret-no-produccion
-      DATABASE_URL: mysql://condor:condor@127.0.0.1:3306/condor_test?serverVersion=mariadb-11.4.0&charset=utf8mb4
+      DATABASE_URL: mysql://root@127.0.0.1:3306/condor_test?serverVersion=mariadb-11.4.0&charset=utf8mb4
       RELEASE_SHA: ${{ github.sha }}
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+
+      - name: Generar secretos efímeros de CI
+        run: |
+          set -euo pipefail
+          app_secret="$(openssl rand -hex 32)"
+          owner_password="$(openssl rand -base64 32)"
+          echo "::add-mask::$app_secret"
+          echo "::add-mask::$owner_password"
+          echo "APP_SECRET=$app_secret" >> "$GITHUB_ENV"
+          echo "CONDOR_OWNER_PASSWORD=$owner_password" >> "$GITHUB_ENV"
 
       - name: Instalar dependencias PHP
         run: composer install --no-interaction --prefer-dist --no-progress
@@ -269,8 +276,6 @@ jobs:
         run: php bin/console doctrine:migrations:migrate --no-interaction
 
       - name: Probar onboarding transaccional
-        env:
-          CONDOR_OWNER_PASSWORD: Condor-CI-Password-2026!
         run: |
           set -euo pipefail
           php bin/console app:onboarding:create \
@@ -284,8 +289,6 @@ jobs:
           php bin/console doctrine:query:sql "SELECT id, slug FROM condor_tenant WHERE slug = 'empresa-ci'" | grep -q 'empresa-ci'
 
       - name: Smoke HTTP y login real
-        env:
-          CONDOR_OWNER_PASSWORD: Condor-CI-Password-2026!
         run: |
           set -euo pipefail
           php -S 127.0.0.1:8080 -t public public/index.php >/tmp/condor-http.log 2>&1 &

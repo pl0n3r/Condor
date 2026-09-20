@@ -47,7 +47,18 @@ class Membership
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
-    public function tenant(): Tenant { return $this->tenant; }
-    public function user(): User { return $this->user; }
-    public function roleKey(): string { return $this->roleKey; }
+    public function tenant(): Tenant
+    {
+        return $this->tenant;
+    }
+
+    public function user(): User
+    {
+        return $this->user;
+    }
+
+    public function roleKey(): string
+    {
+        return $this->roleKey;
+    }
 }

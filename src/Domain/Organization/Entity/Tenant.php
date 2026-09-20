@@ -34,8 +34,23 @@ class Tenant
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
-    public function id(): string { return $this->id; }
-    public function name(): string { return $this->name; }
-    public function slug(): string { return $this->slug; }
-    public function createdAt(): DateTimeImmutable { return $this->createdAt; }
+    public function id(): string
+    {
+        return $this->id;
+    }
+
+    public function name(): string
+    {
+        return $this->name;
+    }
+
+    public function slug(): string
+    {
+        return $this->slug;
+    }
+
+    public function createdAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
 }

@@ -23,7 +23,12 @@ class Branch
     private Tenant $tenant;
 
     #[ORM\ManyToOne(targetEntity: LegalEntity::class)]
-    #[ORM\JoinColumn(name: 'legal_entity_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
+    #[ORM\JoinColumn(
+        name: 'legal_entity_id',
+        referencedColumnName: 'id',
+        nullable: true,
+        onDelete: 'SET NULL',
+    )]
     private ?LegalEntity $legalEntity;
 
     #[ORM\Column(type: 'string', length: 160)]
@@ -38,8 +43,13 @@ class Branch
     #[ORM\Column(type: 'datetime_immutable')]
     private DateTimeImmutable $createdAt;
 
-    public function __construct(Tenant $tenant, string $name, string $slug, ?LegalEntity $legalEntity = null, bool $default = false)
-    {
+    public function __construct(
+        Tenant $tenant,
+        string $name,
+        string $slug,
+        ?LegalEntity $legalEntity = null,
+        bool $default = false,
+    ) {
         $this->id = UlidFactory::new();
         $this->tenant = $tenant;
         $this->name = trim($name);
@@ -49,9 +59,28 @@ class Branch
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
-    public function id(): string { return $this->id; }
-    public function tenant(): Tenant { return $this->tenant; }
-    public function name(): string { return $this->name; }
-    public function slug(): string { return $this->slug; }
-    public function isDefault(): bool { return $this->default; }
+    public function id(): string
+    {
+        return $this->id;
+    }
+
+    public function tenant(): Tenant
+    {
+        return $this->tenant;
+    }
+
+    public function name(): string
+    {
+        return $this->name;
+    }
+
+    public function slug(): string
+    {
+        return $this->slug;
+    }
+
+    public function isDefault(): bool
+    {
+        return $this->default;
+    }
 }

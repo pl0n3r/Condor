@@ -33,8 +33,12 @@ class TenantDomain
     #[ORM\Column(type: 'datetime_immutable')]
     private DateTimeImmutable $createdAt;
 
-    public function __construct(Tenant $tenant, string $hostname, bool $primary = false, bool $verified = false)
-    {
+    public function __construct(
+        Tenant $tenant,
+        string $hostname,
+        bool $primary = false,
+        bool $verified = false,
+    ) {
         $this->id = UlidFactory::new();
         $this->tenant = $tenant;
         $this->hostname = strtolower(rtrim(trim($hostname), '.'));
@@ -43,7 +47,18 @@ class TenantDomain
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
-    public function tenant(): Tenant { return $this->tenant; }
-    public function hostname(): string { return $this->hostname; }
-    public function isVerified(): bool { return $this->verified; }
+    public function tenant(): Tenant
+    {
+        return $this->tenant;
+    }
+
+    public function hostname(): string
+    {
+        return $this->hostname;
+    }
+
+    public function isVerified(): bool
+    {
+        return $this->verified;
+    }
 }

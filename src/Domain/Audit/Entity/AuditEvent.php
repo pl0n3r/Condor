@@ -41,8 +41,14 @@ class AuditEvent
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
     private DateTimeImmutable $createdAt;
 
-    public function __construct(Tenant $tenant, ?string $actorUserId, string $action, string $entityType, string $entityId, array $context = [])
-    {
+    public function __construct(
+        Tenant $tenant,
+        ?string $actorUserId,
+        string $action,
+        string $entityType,
+        string $entityId,
+        array $context = [],
+    ) {
         $this->id = UlidFactory::new();
         $this->tenant = $tenant;
         $this->actorUserId = $actorUserId;

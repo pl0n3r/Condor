@@ -48,13 +48,35 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
-    public function id(): string { return $this->id; }
-    public function email(): string { return $this->email; }
-    public function displayName(): string { return $this->displayName; }
-    public function isActive(): bool { return $this->active; }
+    public function id(): string
+    {
+        return $this->id;
+    }
 
-    public function getUserIdentifier(): string { return $this->email; }
-    public function getPassword(): string { return $this->passwordHash; }
+    public function email(): string
+    {
+        return $this->email;
+    }
+
+    public function displayName(): string
+    {
+        return $this->displayName;
+    }
+
+    public function isActive(): bool
+    {
+        return $this->active;
+    }
+
+    public function getUserIdentifier(): string
+    {
+        return $this->email;
+    }
+
+    public function getPassword(): string
+    {
+        return $this->passwordHash;
+    }
 
     /** @return list<string> */
     public function getRoles(): array

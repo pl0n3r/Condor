@@ -44,9 +44,28 @@ class LegalEntity
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
-    public function id(): string { return $this->id; }
-    public function tenant(): Tenant { return $this->tenant; }
-    public function legalName(): string { return $this->legalName; }
-    public function nit(): ?string { return $this->nit; }
-    public function isPrimary(): bool { return $this->primary; }
+    public function id(): string
+    {
+        return $this->id;
+    }
+
+    public function tenant(): Tenant
+    {
+        return $this->tenant;
+    }
+
+    public function legalName(): string
+    {
+        return $this->legalName;
+    }
+
+    public function nit(): ?string
+    {
+        return $this->nit;
+    }
+
+    public function isPrimary(): bool
+    {
+        return $this->primary;
+    }
 }
