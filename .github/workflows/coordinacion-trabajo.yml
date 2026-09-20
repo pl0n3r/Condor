@@ -21,10 +21,7 @@ jobs:
       github.event.action == 'labeled' &&
       github.event.issue.pull_request == null &&
       github.event.sender.login != 'github-actions[bot]' &&
-      (
-        github.event.label.name == 'estado: reservado' ||
-        github.event.label.name == 'estado: disponible'
-      )
+      github.event.label.name == 'estado: reservado'
     runs-on: ubuntu-latest
     permissions:
       contents: write
