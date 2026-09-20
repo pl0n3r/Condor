@@ -1103,6 +1103,214 @@ Cada vertical slice debe incorporar las pruebas de seguridad pertinentes a su su
 La Fase 4 queda **definida y cerrada** con este baseline. La implementación se verifica progresivamente en cada vertical slice y en gates dedicados; no se volverán a abrir estas decisiones salvo evidencia técnica o regulatoria nueva.
 
 
+
+### D-041 — Baseline de sistema de diseño y experiencia (Fase 5)
+
+Condor adopta un sistema de diseño **token-first, accesible, sobrio y modular**. La identidad visual final de marca —logo, símbolo y paleta de marca definitiva— requiere aprobación subjetiva del propietario, pero **no bloquea** la implementación del sistema de diseño ni del producto.
+
+#### Principios visuales
+
+- priorizar claridad, densidad controlada y jerarquía de información sobre ornamentación;
+- apariencia profesional, contemporánea y confiable para software empresarial colombiano;
+- evitar el aspecto genérico de “dashboard plantilla” y también evitar una identidad excesivamente decorativa que reduzca legibilidad;
+- usar progresive disclosure: lo frecuente visible, lo avanzado bajo demanda;
+- estados, acciones y jerarquías deben ser comprensibles también sin depender únicamente del color;
+- la personalización por tenant no puede romper accesibilidad ni consistencia del shell administrativo.
+
+#### Tokens y escalas
+
+El design system usa **CSS custom properties / tokens semánticos** como fuente de verdad visual.
+
+- spacing base: múltiplos de **4 px**;
+- escala recomendada: 4, 8, 12, 16, 24, 32, 48 y 64 px;
+- radio base: **8 px**; controles compactos pueden usar 6 px y superficies principales 12 px;
+- tipografía inicial: stack de sistema de alta legibilidad, sin dependencia de una fuente remota para funcionar;
+- tamaño base de texto: **16 px**; información secundaria no debe bajar de 12 px;
+- line-height de cuerpo aproximado 1.5;
+- pesos tipográficos limitados y consistentes: regular, medium/semibold y bold solo cuando la jerarquía lo requiera;
+- colores se definen semánticamente: background, surface, text-primary, text-secondary, border, accent, success, warning, danger, info, focus;
+- la futura paleta de marca modifica tokens de marca/acento, no los contratos de componentes.
+
+#### Densidad y superficies
+
+- densidad por defecto: cómoda para administración diaria, sin desperdiciar espacio;
+- tablas/listados pueden ofrecer modo compacto cuando exista necesidad real;
+- cards solo cuando representen agrupaciones reales; no convertir toda la interfaz en mosaicos;
+- formularios priorizan una columna legible y usan múltiples columnas solo cuando reduzca scroll sin perder comprensión;
+- acciones primarias deben ser inequívocas; evitar múltiples botones primarios competidores en la misma región.
+
+#### Componentes reutilizables mínimos
+
+Antes de multiplicar variaciones por módulo, el sistema debe disponer de primitives/components reutilizables:
+
+- Button, IconButton y ButtonGroup;
+- Input, Textarea, Select, Combobox y Checkbox/Switch;
+- Field/Label/Help/Error;
+- FormSection;
+- Modal/Dialog y ConfirmationDialog;
+- Drawer/Sheet;
+- Toast/InlineAlert;
+- Badge/Status;
+- Tabs;
+- Table/DataGrid baseline;
+- Pagination;
+- EmptyState;
+- Skeleton/Spinner;
+- Breadcrumbs;
+- Search/FilterBar;
+- Dropdown/Menu;
+- Card/Panel solo donde aporte agrupación;
+- Date/Time y Money display/inputs con locale correcto;
+- Avatar/UserMenu;
+- navegación/sidebar.
+
+No crear componentes duplicados por módulo si el comportamiento es equivalente.
+
+#### Navegación administrativa
+
+- desktop: **sidebar persistente/colapsable + top bar de contexto/utilidades**;
+- tablet: sidebar colapsable;
+- mobile: top bar + drawer de navegación; no forzar una bottom-nav fija porque los módulos son configurables y pueden crecer;
+- navegación se genera a partir de capacidades/módulos habilitados y permisos efectivos;
+- módulos no autorizados no se muestran, pero la seguridad real sigue en backend;
+- ubicación actual siempre visible mediante título/contexto y breadcrumbs cuando exista profundidad;
+- acciones globales y acciones de página se mantienen separadas;
+- búsqueda global se incorpora cuando existan suficientes entidades para justificarla, no como requisito del primer slice.
+
+#### Responsive
+
+- diseñar desde **360 px** de ancho útil como baseline mínimo;
+- ningún flujo crítico requiere hover;
+- tablas densas deben degradar a scroll horizontal controlado, columnas priorizadas o vistas resumidas, no a contenido ilegible;
+- formularios y acciones conservan orden lógico en móvil;
+- targets táctiles: mínimo aproximado **44×44 px** para acciones principales/interactivas;
+- componentes se prueban en viewport móvil y desktop desde el slice que los introduce.
+
+#### Accesibilidad
+
+Objetivo baseline: **WCAG 2.2 AA** en las superficies propias de Condor.
+
+- navegación completa por teclado;
+- foco visible y consistente;
+- contraste suficiente;
+- labels programáticos;
+- mensajes de error asociados al campo y resumen cuando el formulario sea largo;
+- estados no comunicados solo mediante color;
+- orden DOM y foco coherentes en modals/drawers;
+- soporte de `prefers-reduced-motion`;
+- animaciones funcionales, breves y nunca necesarias para entender el estado.
+
+#### Estados de interfaz
+
+Toda pantalla/consulta relevante debe contemplar explícitamente:
+
+- loading;
+- empty;
+- success;
+- validation error;
+- permission denied;
+- not found;
+- recoverable technical error;
+- destructive confirmation;
+- offline/network error solo cuando el cliente lo pueda detectar de forma útil.
+
+Un error recuperable debe ofrecer la acción siguiente: reintentar, corregir, volver o contactar soporte con correlation ID cuando aplique.
+
+#### Lenguaje y microcopy
+
+- español de Colombia natural, profesional y directo;
+- verbos de acción concretos: “Guardar”, “Crear producto”, “Transferir stock”;
+- evitar jerga técnica cuando exista equivalente de negocio;
+- confirmaciones destructivas explican **qué se afectará**;
+- mensajes de error explican qué ocurrió y qué puede hacer la persona, sin filtrar internals;
+- usar terminología canónica de D-030 de forma consistente.
+
+#### Identidad visual pendiente
+
+Queda deliberadamente abierta únicamente la **aprobación final de identidad de marca**: logo/símbolo, paleta principal de marca y estilo gráfico definitivo. Esa decisión puede aplicarse posteriormente sobre los tokens sin reescribir componentes ni flujos.
+
+### D-042 — Estrategia de vertical slices y Definition of Done (Fase 6)
+
+Condor se construirá mediante vertical slices pequeños pero completos. Cada slice debe atravesar las capas que realmente necesite —UI, contratos, dominio, persistencia, permisos, pruebas y observabilidad— y dejar una capacidad coherente, evitando construir “capas vacías” sin uso.
+
+#### Primer vertical slice seleccionado
+
+**Slice 1 — Fundación + onboarding del tenant**
+
+Objetivo: demostrar el recorrido técnico completo y dejar la base real sobre la que se construyen los módulos comerciales.
+
+Alcance:
+
+1. bootstrap real de Symfony 7.4 + Doctrine + MariaDB;
+2. React + TypeScript + Vite integrado al proyecto para administración;
+3. fuente canónica de versión **V 0.1.0**;
+4. versión visible en footer público y login administrativo;
+5. login/logout seguro;
+6. modelo Tenant;
+7. modelo EntidadLegal;
+8. modelo Sede;
+9. Usuario + Membresía;
+10. creación inicial de tenant + primera entidad legal + primera sede predeterminada + propietario administrador;
+11. `TenantResolver` + `TenantContext`;
+12. shell administrativo responsive mínimo;
+13. migraciones Doctrine;
+14. auditoría mínima de creación/configuración inicial;
+15. pruebas de aislamiento cross-tenant;
+16. smoke público y autenticado aislado cuando el entorno lo permita.
+
+El slice no necesita todavía catálogo, inventario ni pedidos; su valor es validar el núcleo de identidad, tenancy, persistencia, permisos, seguridad y entrega real.
+
+#### Secuencia inicial de slices
+
+Después del Slice 1, el orden recomendado es:
+
+- **Slice 2 — Roles y permisos por sede**;
+- **Slice 3 — Catálogo: producto + variante**;
+- **Slice 4 — Inventario: fuente + stock + movimientos + transferencias**;
+- **Slice 5 — Clientes + categoría comercial + listas/reglas de precio**;
+- **Slice 6 — Canal e-commerce + catálogo público + disponibilidad/precio efectivo**;
+- **Slice 7 — Pedido manual/e-commerce + reserva/liberación/consumo de stock**;
+- **Slice 8 — CMS público por temas + bloques configurables**;
+- **Slice 9 — Workflows internos sobre eventos ya existentes**.
+
+El orden puede cambiar por evidencia de uso o necesidad comercial, pero no por comodidad técnica aislada.
+
+#### Definition of Done obligatoria por slice
+
+Un slice está terminado únicamente cuando, según aplique:
+
+- el caso de uso está implementado end-to-end;
+- backend es autoridad de reglas y validación;
+- persistencia/migraciones están versionadas;
+- permisos y aislamiento tenant están aplicados;
+- API/contratos son reutilizables por web y futuros clientes móviles;
+- UI contempla loading/empty/error/success;
+- responsive validado en móvil y desktop;
+- accesibilidad relevante validada;
+- controles de Fase 4 aplicables implementados;
+- unit/contract/integration tests cubren invariantes estables;
+- Playwright cubre el flujo de usuario cuando la superficie existe;
+- existen pruebas negativas de seguridad/tenant cuando maneja datos tenant-owned;
+- errores tienen correlation/request ID y logging suficiente;
+- no se introducen secretos ni dependencias de producción innecesarias;
+- CI, SonarQube y CodeRabbit aplicables están verdes o sus findings válidos corregidos;
+- PR se hace squash merge;
+- se verifica el SHA exacto de `main`;
+- deploy y validación de producción se registran por separado;
+- roadmap ejecutivo y detalle de fase se actualizan con Issue/PR/SHA/evidencia.
+
+#### Política de alcance
+
+- evitar slices gigantes que mezclen dominios no necesarios;
+- evitar “backend primero por meses” o “UI mock sin dominio real” como estrategia normal;
+- una abstracción nueva debe justificarla al menos un caso real del slice;
+- si un requisito menor no bloquea coherencia, se registra y se difiere en vez de expandir indefinidamente el slice;
+- decisiones nuevas realmente durables se actualizan en ESPECIFICACIONES.md en el mismo trabajo.
+
+#### Métrica de avance
+
+La Fase 6 se mide por **slices integrados y validados**, no por porcentaje subjetivo de archivos creados. Cada slice completado debe tener evidencia trazable en el roadmap.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
