@@ -26,7 +26,6 @@ jobs:
     permissions:
       contents: write
       issues: write
-      pull-requests: write
     steps:
       - name: Descargar coordinador canónico
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
