@@ -15,6 +15,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
 #[ORM\Table(name: 'condor_user')]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
+    public const ROLE_SUPER_ADMIN = 'ROLE_SUPER_ADMIN';
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 26)]
     private string $id;
@@ -87,6 +88,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getRoles(): array
     {
         return array_values(array_unique([...$this->roles, 'ROLE_USER']));
+    }
+
+    public function grantRole(string $role): void
+    {
+        $role = trim($role);
+        if ($role === '' || in_array($role, $this->roles, true)) {
+            return;
+        }
+
+        $this->roles[] = $role;
     }
 
     public function setPasswordHash(string $passwordHash): void
