@@ -23,9 +23,11 @@ from scripts.coordinar_trabajo import (
     parse_comment_command,
     release_work,
     reservation_from_pr_body,
+    reservation_from_text,
     reservation_marker,
     reserve_work,
     transfer_work,
+    update_issue_label_state,
     update_issue_state,
     update_pr_state,
     validate_pull,
@@ -48,6 +50,7 @@ class FakeGitHub:
             "number": 12,
             "state": "open",
             "state_reason": None,
+            "body": "## Issue de prueba\n",
             "labels": [{"name": STATUS_AVAILABLE}],
         }
         self.comments: list[dict] = []
@@ -56,11 +59,19 @@ class FakeGitHub:
         self.status_history: list[str | None] = []
         self.assignees: set[str] = set()
         self.fail_comment = False
+        self.fail_body_update = False
 
     def issue(self, number: int) -> dict:
         """Devuelve el Issue falso."""
         assert number == 12
         return self.issue_data
+
+    def update_issue_body(self, issue_number: int, body: str) -> None:
+        """Actualiza metadata oculta del Issue."""
+        assert issue_number == 12
+        if self.fail_body_update:
+            raise CoordinationError("fallo simulado de metadata")
+        self.issue_data["body"] = body
 
     def pull(self, number: int) -> dict:
         """Devuelve un PR falso."""
@@ -142,17 +153,16 @@ def add_active_reservation(
     branch = "trabajo/issue-12"
     api.branches[branch] = "abc123"
     api.set_status(12, STATUS_RESERVED)
-    api.comments.append(
-        {
-            "user": {"login": BOT},
-            "body": reservation_marker(
-                owner,
-                reservation_id,
-                branch,
-                True,
-                "tomar",
-            ),
-        }
+    api.issue_data["body"] = (
+        str(api.issue_data.get("body") or "")
+        + "\n"
+        + reservation_marker(
+            owner,
+            reservation_id,
+            branch,
+            True,
+            "tomar",
+        )
     )
 
 
@@ -215,9 +225,15 @@ class CoordinacionTests(unittest.TestCase):
         self.assertEqual(closing_issues(body), {12, 18, 21})
 
     def test_reservation_from_pr_body(self) -> None:
-        """Extrae el ID de sesión de un PR."""
+        """Extrae el ID de sesión visible legacy u oculto."""
         self.assertEqual(
             reservation_from_pr_body(f"Closes #12\nReserva: {SESSION_A}"),
+            SESSION_A,
+        )
+        self.assertEqual(
+            reservation_from_pr_body(
+                f"Closes #12\n<!-- condor-reserva-id: {SESSION_A} -->"
+            ),
             SESSION_A,
         )
         self.assertIsNone(reservation_from_pr_body("Closes #12"))
@@ -279,6 +295,31 @@ class CoordinacionTests(unittest.TestCase):
         self.assertIsNotNone(reservation)
         assert reservation is not None
         self.assertEqual(reservation["reservation_id"], session)
+        self.assertEqual(api.comments, [])
+        self.assertIn("<!-- condor-reserva ", str(api.issue_data["body"]))
+
+    def test_label_reserved_creates_silent_reservation(self) -> None:
+        """El label reservado crea el lock sin comentarios visibles."""
+        api = FakeGitHub()
+        api.issue_data["labels"].append({"name": STATUS_RESERVED})
+
+        update_issue_label_state(api, 12, "pl0n3r", STATUS_RESERVED)
+
+        self.assertIn("trabajo/issue-12", api.branches)
+        self.assertEqual(api.comments, [])
+        reservation = active_reservation(api, 12)
+        self.assertIsNotNone(reservation)
+
+    def test_label_available_releases_without_comments(self) -> None:
+        """El label disponible libera una reserva propia sin ensuciar el Issue."""
+        api = FakeGitHub()
+        add_active_reservation(api)
+        api.issue_data["labels"].append({"name": STATUS_AVAILABLE})
+
+        update_issue_label_state(api, 12, "pl0n3r", STATUS_AVAILABLE)
+
+        self.assertNotIn("trabajo/issue-12", api.branches)
+        self.assertEqual(api.comments, [])
 
     def test_second_reservation_cannot_win_same_branch(self) -> None:
         """Una rama existente impide una segunda reserva."""
@@ -298,9 +339,9 @@ class CoordinacionTests(unittest.TestCase):
         self.assertNotIn("trabajo/issue-12", api.branches)
 
     def test_reservation_rolls_back_if_marker_fails(self) -> None:
-        """Un fallo posterior a crear la rama revierte el lock."""
+        """Un fallo al persistir metadata revierte el lock."""
         api = FakeGitHub()
-        api.fail_comment = True
+        api.fail_body_update = True
         with self.assertRaises(CoordinationError):
             reserve_work(api, 12, "pl0n3r", "OWNER")
         self.assertNotIn("trabajo/issue-12", api.branches)
@@ -320,7 +361,7 @@ class CoordinacionTests(unittest.TestCase):
         add_active_reservation(api)
         release_work(api, 12, "pl0n3r", "OWNER", SESSION_A, False)
         self.assertNotIn("trabajo/issue-12", api.branches)
-        latest = latest_reservation(api.comments)
+        latest = reservation_from_text(str(api.issue_data["body"]))
         self.assertIsNotNone(latest)
         assert latest is not None
         self.assertFalse(latest["active"])
@@ -413,14 +454,16 @@ class CoordinacionTests(unittest.TestCase):
             "number": 15,
             "state": "open",
             "draft": False,
-            "body": f"Closes #12\nReserva: {SESSION_A}",
+            "body": f"Closes #12\n<!-- condor-reserva-id: {SESSION_A} -->",
             "head": {"ref": "trabajo/issue-12"},
             "base": {"ref": "main"},
         }
         api.pull_files_map[15] = {"src/a.php"}
         validate_pull(api, 15, True)
 
-        api.pulls[15]["body"] = f"Closes #12\nReserva: {SESSION_B}"
+        api.pulls[15]["body"] = (
+            f"Closes #12\n<!-- condor-reserva-id: {SESSION_B} -->"
+        )
         with self.assertRaises(CoordinationError):
             validate_pull(api, 15, True)
 
@@ -445,7 +488,7 @@ class CoordinacionTests(unittest.TestCase):
             "number": 15,
             "state": "open",
             "draft": False,
-            "body": f"Closes #12\nReserva: {SESSION_A}",
+            "body": f"Closes #12\n<!-- condor-reserva-id: {SESSION_A} -->",
             "head": {"ref": "trabajo/issue-12"},
             "base": {"ref": "main"},
         }
