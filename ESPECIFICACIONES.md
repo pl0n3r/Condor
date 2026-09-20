@@ -1575,6 +1575,55 @@ Toda automatización debe ser idempotente cuando sea posible y operar con mínim
 
 La Fase 8 queda **definida como baseline operativo**. Sus ítems permanecen activos en el roadmap únicamente cuando falte implementación, medición o evidencia real.
 
+
+### D-045 — IndexNow y Google Tag Manager por tenant
+
+Condor incorpora dos integraciones configurables por tenant para sus superficies públicas. Ambas deben respetar aislamiento multi-tenant, dominios personalizados y la separación entre analítica del producto Condor y herramientas del cliente.
+
+#### IndexNow
+
+- Condor dispondrá de un adapter/servicio de IndexNow desacoplado del CMS, catálogo y e-commerce;
+- la integración opera por tenant y canal público;
+- las URLs notificadas se construyen usando el dominio público efectivo del tenant conforme a D-044: se usa el dominio personalizado únicamente cuando está verificado y marcado como primario; en cualquier otro caso, se usa la URL Condor correspondiente;
+- se notifican cambios indexables por publicación, actualización relevante, cambio de URL y retiro/despublicación;
+- soportar envío individual y por lote;
+- la clave canónica de una operación IndexNow combina tenant, canal, URL pública efectiva, tipo de notificación y revisión/versionado del contenido cuando aplique;
+- dos operaciones con la misma clave canónica son equivalentes para deduplicación, independientemente de si se enviaron de forma individual o dentro de un lote;
+- un cambio de URL genera operaciones independientes para la URL anterior y la nueva cuando el protocolo/estado indexable lo requiera; no se colapsan por compartir el mismo recurso lógico;
+- persistir como mínimo el estado de la operación, último intento, número de intentos y resultado; estados terminales exitosos no se reenvían salvo un replay explícito o una nueva revisión del contenido;
+- los reintentos son acotados y solo aplican a estados reintentables; un replay explícito conserva trazabilidad y crea una nueva ejecución sin alterar la identidad de la operación original;
+- una falla de IndexNow no bloquea la publicación del contenido: se registra el estado/último intento y se reintenta según política;
+- claves/tokens se almacenan fuera del código y se aíslan por tenant/dominio cuando el protocolo lo requiera;
+- nunca enviar rutas privadas, administración, login, borradores, contenido `noindex` ni URLs pertenecientes a otro tenant;
+- la primera implementación puede ser síncrona o mediante cron/job acotado compatible con Hostinger; el contrato debe permitir migrar luego a cola/background processing;
+- toda llamada síncrona a IndexNow debe usar timeout por solicitud y un presupuesto total acotado dentro de la petición de publicación; los valores concretos pertenecen a la política operativa;
+- los reintentos deben ejecutarse preferiblemente fuera de la petición mediante cron/job; si temporalmente permanecen síncronos, deben existir límites explícitos de intentos, tiempo total y backoff para que IndexNow nunca convierta una publicación local válida en una espera no acotada;
+- el envío debe ser idempotente desde la perspectiva de Condor.
+
+#### Google Tag Manager por customer/tenant
+
+- cada tenant puede configurar su propio **Google Tag Manager Container ID**;
+- GTM es opcional y permanece desactivado por defecto;
+- el Container ID se guarda como configuración del tenant/canal, nunca hardcodeado en Twig, React o archivos de despliegue;
+- el Container ID aceptado usa la gramática exacta `GTM-[A-Z0-9]+`, sin espacios; se normaliza eliminando espacios exteriores y convirtiendo a mayúsculas antes de validar;
+- valores que no cumplan esa gramática se rechazan antes de persistirse o activarse; ejemplos válidos: `GTM-ABC123`, `GTM-7XYZ9`; ejemplos inválidos: `UA-12345`, `gtm abc`, `GTM-`, `GTM_ABC123`;
+- el snippet se inyecta únicamente en superficies públicas del tenant/canal donde esté habilitado;
+- GTM del cliente **no se carga en administración/backoffice**;
+- el mismo tenant conserva su GTM cuando se accede mediante su dominio Condor o su dominio personalizado, según la configuración del canal;
+- aislamiento obligatorio: un tenant nunca puede recibir el Container ID ni scripts configurados por otro;
+- la configuración se expondrá en administración cuando exista el módulo de sitio/integraciones;
+- la integración debe poder condicionarse por consentimiento/cookies y futuras políticas de privacidad sin reescribir las plantillas;
+- analítica interna de producto de Condor permanece separada del GTM del cliente;
+- fallos o bloqueos del script de terceros no deben impedir que la página principal de Condor renderice su contenido esencial.
+
+#### Seguridad y pruebas
+
+- CSP debe evolucionar de forma explícita para permitir únicamente los orígenes necesarios cuando GTM esté activado, sin abrir políticas globales indiscriminadas;
+- las pruebas deben verificar aislamiento entre tenants, habilitado/deshabilitado, dominio Condor vs personalizado y ausencia de GTM en superficies privadas;
+- IndexNow debe probar que solo genera URLs públicas del tenant activo y que excluye contenido no indexable;
+- las pruebas de IndexNow deben cubrir dominio personalizado verificado y primario vs URL Condor, publicación, actualización relevante, cambio de URL, retiro/despublicación indexable, envíos individuales y por lote, deduplicación, reintentos acotados, idempotencia y replay explícito;
+- ninguna de las dos integraciones puede exponer secretos en HTML, logs o respuestas públicas más allá de identificadores públicos que el protocolo requiera.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
