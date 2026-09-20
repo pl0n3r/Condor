@@ -6,17 +6,17 @@ on:
       - trabajo/issue-51
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   composer-lock:
-    name: Generar composer.lock
+    name: Fijar composer.lock
     runs-on: ubuntu-latest
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          persist-credentials: false
+          fetch-depth: 0
 
       - name: Resolver dependencias PHP
         run: composer update --no-interaction --no-scripts --prefer-dist --no-progress
@@ -24,9 +24,12 @@ jobs:
       - name: Validar Composer
         run: composer validate --strict
 
-      - name: Publicar lock temporal
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: composer-lock-bootstrap
-          path: composer.lock
-          retention-days: 1
+      - name: Fijar lock y retirar bootstrap temporal
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/workflows/bootstrap-composer-lock.yml
+          git add composer.lock .github/workflows/bootstrap-composer-lock.yml
+          git commit -m "build: fija dependencias PHP del Slice 1 (V 0.1.0)"
+          git push origin HEAD:trabajo/issue-51
