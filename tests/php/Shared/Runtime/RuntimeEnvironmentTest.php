@@ -18,13 +18,16 @@ final class RuntimeEnvironmentTest extends TestCase
     {
         parent::setUp();
 
-        foreach (['APP_ENV', 'APP_DEBUG', 'APP_SECRET', 'DATABASE_URL'] as $name) {
+        foreach (
+            ['APP_ENV', 'APP_DEBUG', 'APP_SECRET', 'DATABASE_URL'] as $name
+        ) {
             $this->previous[$name] = getenv($name);
             putenv($name);
             unset($_ENV[$name], $_SERVER[$name]);
         }
 
-        $this->projectDir = sys_get_temp_dir().'/condor-runtime-'.bin2hex(random_bytes(6));
+        $this->projectDir =
+            sys_get_temp_dir().'/condor-runtime-'.bin2hex(random_bytes(6));
         mkdir($this->projectDir, 0770, true);
     }
 
@@ -53,7 +56,10 @@ final class RuntimeEnvironmentTest extends TestCase
         $first = getenv('APP_SECRET');
         self::assertIsString($first);
         self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $first);
-        self::assertSame($first.PHP_EOL, file_get_contents($this->projectDir.'/var/runtime/app_secret'));
+        self::assertSame(
+            $first.PHP_EOL,
+            file_get_contents($this->projectDir.'/var/runtime/app_secret')
+        );
 
         putenv('APP_SECRET');
         unset($_ENV['APP_SECRET'], $_SERVER['APP_SECRET']);
@@ -63,13 +69,16 @@ final class RuntimeEnvironmentTest extends TestCase
         self::assertSame($first, getenv('APP_SECRET'));
     }
 
-    public function testProvidesSafeBootstrapDefaultsWithoutVersioningSecrets(): void
+    public function testProvidesSafeBootstrapDefaultsWithoutSecrets(): void
     {
         RuntimeEnvironment::prepare($this->projectDir);
 
         self::assertSame('prod', getenv('APP_ENV'));
         self::assertSame('0', getenv('APP_DEBUG'));
-        self::assertStringStartsWith('mysql://127.0.0.1:3306/condor_unconfigured', (string) getenv('DATABASE_URL'));
+        self::assertStringStartsWith(
+            'mysql://127.0.0.1:3306/condor_unconfigured',
+            (string) getenv('DATABASE_URL')
+        );
     }
 
     public function testRespectsRealEnvironmentConfiguration(): void
@@ -90,8 +99,13 @@ final class RuntimeEnvironmentTest extends TestCase
         self::assertSame('test', getenv('APP_ENV'));
         self::assertSame('1', getenv('APP_DEBUG'));
         self::assertSame(str_repeat('a', 64), getenv('APP_SECRET'));
-        self::assertSame('mysql://db.internal:3306/condor', getenv('DATABASE_URL'));
-        self::assertFileDoesNotExist($this->projectDir.'/var/runtime/app_secret');
+        self::assertSame(
+            'mysql://db.internal:3306/condor',
+            getenv('DATABASE_URL')
+        );
+        self::assertFileDoesNotExist(
+            $this->projectDir.'/var/runtime/app_secret'
+        );
     }
 
     private function removeTree(string $path): void
@@ -111,7 +125,9 @@ final class RuntimeEnvironmentTest extends TestCase
             }
 
             $child = $path.DIRECTORY_SEPARATOR.$item;
-            is_dir($child) ? $this->removeTree($child) : @unlink($child);
+            is_dir($child)
+                ? $this->removeTree($child)
+                : @unlink($child);
         }
 
         @rmdir($path);
