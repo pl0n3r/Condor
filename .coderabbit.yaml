@@ -1,42 +1,74 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 reviews:
-  profile: assertive
+  profile: chill
   request_changes_workflow: false
-  high_level_summary: true
+
+  # Condor prioriza findings accionables sobre comentarios decorativos o walkthroughs.
+  high_level_summary: false
+  high_level_summary_placeholder: ""
+  review_status: false
+  review_progress: false
+  in_progress_fortune: false
   poem: false
-  review_status: true
+  collapse_walkthrough: false
+  sequence_diagrams: false
+  changed_files_summary: false
+
   auto_review:
     enabled: true
     drafts: false
     auto_incremental_review: false
     base_branches:
       - main
+
   path_filters:
     - "!**/node_modules/**"
     - "!**/vendor/**"
     - "!**/.DS_Store"
+
   path_instructions:
     - path: "**/*"
       instructions: |
-        Responde y redacta los comentarios de revisión en español. Trata AGENTES.md como protocolo operativo canónico y ESPECIFICACIONES.md como fuente de decisiones durables. Prioriza defectos verificables, seguridad, mantenibilidad y regresiones reales; evita observaciones cosméticas sin impacto.
+        Responde en español y sé directo. No uses contenido decorativo, chistes, poemas, ASCII art, saludos largos, walkthroughs ni resúmenes narrativos.
+        Publica únicamente hallazgos accionables con impacto real. Si no hay un problema verificable, no inventes observaciones.
+        Para cada finding, prioriza este orden: severidad/impacto -> archivo y línea -> problema concreto -> corrección propuesta.
+        Mantén cada comentario breve: idealmente 2-5 frases. Evita repetir contexto ya visible en el diff.
+        Trata AGENTES.md como protocolo operativo canónico y ESPECIFICACIONES.md como fuente de decisiones durables.
+        Prioriza seguridad, integridad de datos, aislamiento multi-tenant, regresiones, mantenibilidad y errores de comportamiento.
+        Evita observaciones cosméticas sin impacto funcional, de seguridad o de mantenibilidad relevante.
+
     - path: ".github/**"
       instructions: |
-        Revisa que los títulos y textos humanos estén en español cuando sea técnicamente viable. Conserva el CI canónico con preflight rápido, gates independientes en paralelo y un check agregado estable. Detecta falsos negativos en selección por paths y permisos excesivos.
+        Conserva el CI canónico con preflight rápido, gates independientes en paralelo y un check agregado estable.
+        Detecta falsos negativos en selección por paths, permisos excesivos, secretos y cambios que degraden throughput.
+        Los textos humanos deben estar en español cuando sea técnicamente viable.
+
     - path: "scripts/**"
       instructions: |
         Prioriza scripts deterministas, portables, con errores accionables y sin efectos destructivos implícitos.
+
     - path: "tests/**"
       instructions: |
-        Exige cobertura de regresión útil para defectos deterministas. Prefiere pruebas de comportamiento sobre assertions frágiles de texto fuente.
+        Exige cobertura de regresión útil para defectos deterministas.
+        Prefiere pruebas de comportamiento sobre assertions frágiles de texto fuente.
+
     - path: "config/**"
       instructions: |
         Revisa seguridad, secretos, configuración por entorno, fail-closed y compatibilidad con Hostinger shared hosting.
+
     - path: "database/**"
       instructions: |
         Señala operaciones destructivas, migraciones no idempotentes o cambios capaces de afectar producción sin guardas explícitas.
+
+    - path: "migrations/**"
+      instructions: |
+        Señala operaciones destructivas, pérdida de datos, falta de reversibilidad razonable y cambios incompatibles con despliegues graduales.
+
     - path: "README.md"
       instructions: |
-        README es un snapshot visual del estado actual, no un roadmap acumulativo. Debe distinguir versión objetivo, versión desplegada y validación real de producción.
+        README es un snapshot visual del estado actual, no un roadmap acumulativo.
+        Debe distinguir versión objetivo, versión desplegada y validación real de producción.
+
 knowledge_base:
   code_guidelines:
     enabled: true
