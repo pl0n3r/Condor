@@ -3,7 +3,7 @@
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo:** reservar la administración propietaria de Condor a una única cuenta y separar ese poder de todos los demás administradores.
+> **Objetivo actual:** mantener un único propietario de plataforma y añadir diagnóstico seguro, trazable y compartible para errores de producción.
 
 <p align="center">
   <strong>Producto:</strong> Condor App ·
@@ -16,34 +16,37 @@
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Producción anterior | ✅ **V 0.1.3 VALIDADA** | propietario autenticado y acceso real a `/adminpl0n3r` |
-| Versión objetivo | 🚧 **V 0.1.4** | Issue #85 |
-| Separación propietaria | 🚧 **EN VALIDACIÓN** | `ROLE_PLATFORM_OWNER` exclusivo para `/adminpl0n3r` |
-| Otros administradores | ✅ **/admin** | la superficie administrativa normal permanece separada |
-| Producción V 0.1.4 | 🚧 **PENDIENTE** | requiere merge, deploy, migración segura de la cuenta propietaria y login real |
+| Producción confirmada | ✅ **V 0.1.3 VALIDADA** | login real del propietario y acceso a `/adminpl0n3r` antes del endurecimiento V 0.1.4 |
+| Código V 0.1.4 | ✅ **VALIDADO EN CÓDIGO** | propietario único fusionado; exact-main `f6fe2ef75e44681fde199fdf67e672312374e086` con gates en validación/verde según bloque |
+| Propietario único | ✅ **IMPLEMENTADO** | `ROLE_PLATFORM_OWNER`, singleton persistente y locking transaccional |
+| Administradores delegados | ✅ **SEPARADOS** | entran por `/admin`; no obtienen acceso propietario |
+| Diagnóstico seguro | 🚧 **EN VALIDACIÓN** | Issue #93 / PR #94 |
+| Producción V 0.1.4 | ⚠️ **NO VALIDADA** | se reportó HTTP 500 en `/adminpl0n3r`; requiere comprobar caché, migraciones y login real antes de cerrar |
 
-## Qué hace V 0.1.4
+## Qué incorpora V 0.1.4
 
-- Introduce `ROLE_PLATFORM_OWNER` para la única cuenta propietaria.
-- `/adminpl0n3r` exige exclusivamente el rol propietario.
-- `/admin` permanece como acceso de los demás administradores.
-- Retira el aprovisionamiento `app:super-admin:provision`.
-- Añade `app:platform-owner:provision` y bloquea un segundo propietario.
-- Migra de forma explícita la cuenta propietaria desde el antiguo `ROLE_SUPER_ADMIN` y elimina ese rol legado de la cuenta.
-- La identidad y la contraseña reales del propietario permanecen fuera del repositorio.
-- Añade pruebas negativas para usuario normal y Super Admin legado.
+- `ROLE_PLATFORM_OWNER` reservado a una única cuenta propietaria.
+- `/adminpl0n3r` exclusivo del propietario; administradores ordinarios permanecen en `/admin`.
+- Unicidad respaldada por base de datos y locking transaccional.
+- Observador de releases con retries únicamente para fallos realmente transitorios.
+- Diagnóstico estructurado de errores 5xx con error ID y request ID.
+- Panel propietario en `/adminpl0n3r/diagnosticos`.
+- Enlaces diagnósticos de solo lectura, sanitizados, revocables y con expiración de 30 minutos.
+- Tokens compartibles generados con 256 bits de entropía y almacenados únicamente como hash.
+- Retención inicial de incidentes de 14 días mediante `app:diagnostics:prune`.
+- Ningún diagnóstico compartido incluye headers, cookies, request bodies, argumentos del stack, secretos, DSN ni PII innecesaria.
 
 ## Validación
 
-- Head V 0.1.4: 🚧 gates en curso.
-- Exact-main: 🚧 pendiente del squash merge.
-- Deploy Hostinger: 🚧 pendiente.
-- Aprovisionamiento/migración de la cuenta propietaria: 🚧 pendiente de producción.
-- Login real en `/adminpl0n3r`: 🚧 pendiente de producción.
+- Propietario único: ✅ CI, Playwright, SonarQube y CodeRabbit; fusionado.
+- Observador autocurable: ✅ PR #92 fusionado; exact-main en validación final.
+- Diagnóstico seguro: 🚧 PR #94; CI/CodeRabbit/Sonar en validación.
+- Deploy Hostinger V 0.1.4: 🚧 no se considera validado mientras persista el 500 reportado.
+- Migraciones de producción: 🚧 se inspeccionan y aplican de forma separada al deploy de código.
 
 ## Fuentes de verdad
 
 - [AGENTES.md](AGENTES.md) — protocolo operativo.
-- [ESPECIFICACIONES.md](ESPECIFICACIONES.md) — decisiones durables de producto, autorización y arquitectura.
-- [Roadmap #1](https://github.com/pl0n3r/Condor/issues/1) — único Roadmap canónico, histórico y cronológico.
-- [Issue #85](https://github.com/pl0n3r/Condor/issues/85) — separación entre propietario y administradores.
+- [ESPECIFICACIONES.md](ESPECIFICACIONES.md) — decisiones durables, incluida D-047 para diagnóstico seguro.
+- [Roadmap #1](https://github.com/pl0n3r/Condor/issues/1) — único Roadmap canónico.
+- [Issue #93](https://github.com/pl0n3r/Condor/issues/93) — diagnóstico seguro y compartible.
