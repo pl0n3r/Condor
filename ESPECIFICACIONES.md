@@ -1311,6 +1311,270 @@ Un slice está terminado únicamente cuando, según aplique:
 
 La Fase 6 se mide por **slices integrados y validados**, no por porcentaje subjetivo de archivos creados. Cada slice completado debe tener evidencia trazable en el roadmap.
 
+
+### D-043 — Entrega, release identity y validación de producción (Fase 7)
+
+Condor separa de forma estricta **código validado**, **despliegue observado** y **producción validada**. Ningún merge o CI verde debe presentarse como validación de producción.
+
+#### Estados canónicos de una entrega
+
+Una entrega puede avanzar por estos estados:
+
+1. **VALIDATED_IN_CODE** — PR/gates verdes y SHA exacto de `main` validado.
+2. **DEPLOY_OBSERVED** — se comprobó que Hostinger está sirviendo la release esperada.
+3. **VALIDATED_IN_PRODUCTION** — los smoke checks aplicables pasan contra la release efectivamente desplegada.
+
+El roadmap y README no pueden saltar directamente del primer estado al tercero.
+
+#### Release identity
+
+- la versión humana permanece en la fuente canónica `config/version.php`;
+- cada build/deploy debe asociar **versión + SHA exacto + timestamp de build/release**;
+- el runtime dispone de metadata de release generada a partir del build, no escrita manualmente en múltiples lugares;
+- sitio público y login administrativo muestran la versión humana acordada;
+- un endpoint/marker público seguro de release puede exponer únicamente datos no sensibles como `status`, `version` y `release_sha`; nunca rutas, secretos, variables de entorno ni detalles internos;
+- logs y errores incluyen `release_sha` para correlacionar incidentes con el código desplegado.
+
+#### Compatibilidad con Hostinger shared hosting
+
+Mientras Hostinger shared hosting sea el runtime:
+
+- PHP 8.5 + Symfony 7.4 + MariaDB son las dependencias de runtime;
+- Node.js se usa solo en desarrollo/CI/build; producción no necesita un proceso Node persistente;
+- no se requiere Docker en producción;
+- no se requieren workers residentes, WebSockets persistentes ni daemons para que el flujo principal funcione;
+- tareas asíncronas iniciales deben poder resolverse síncronamente, por cron o mediante jobs acotados compatibles con shared hosting;
+- el document root público debe apuntar únicamente a la superficie pública de Symfony/`public/` cuando el hosting lo permita;
+- secretos y configuración de producción permanecen fuera del repositorio;
+- assets Vite llegan ya compilados a la release desplegable;
+- la aplicación debe arrancar sin ejecutar migraciones destructivas automáticamente.
+
+#### Build reproducible
+
+La release debe poder reconstruirse desde Git + lockfiles + configuración externa:
+
+- Composer usa lockfile y build de producción sin dependencias de desarrollo;
+- npm/Vite usa lockfile para generar assets estáticos;
+- CI es el lugar preferido para producir/validar artefactos;
+- el mecanismo concreto de transporte a Hostinger puede evolucionar, pero el contenido desplegado debe corresponder a un SHA verificable;
+- no introducir pasos manuales irrepetibles como requisito normal de release.
+
+#### Migraciones de producción
+
+- despliegue de código y migración de base de datos son etapas separables;
+- migraciones aditivas/compatibles pueden automatizarse en el futuro solo cuando exista rollback/observabilidad suficiente;
+- migraciones destructivas nunca se ejecutan automáticamente;
+- cambios con datos reales usan expand → migrate/backfill → contract;
+- el roadmap registra por separado “código desplegado” y “migración aplicada” cuando el cambio lo requiera.
+
+#### Observación del despliegue
+
+Tras merge a `main`:
+
+- registrar SHA y versión esperados;
+- esperar/observar el despliegue automático;
+- verificar el marker de release o evidencia equivalente;
+- si el SHA/version no coincide, el despliegue no se considera observado;
+- fallos de deploy no modifican el estado del código en GitHub: se registran como incidente de entrega.
+
+#### Smoke público
+
+Smoke público obligatorio cuando exista la aplicación:
+
+- `GET /` o una ruta pública estable responde sin error fatal;
+- `GET /health` o equivalente responde en tiempo acotado;
+- marker de release coincide con versión/SHA esperados;
+- login administrativo carga;
+- ninguna de estas comprobaciones muta datos de negocio;
+- respuestas no exponen secretos, stack traces ni información de infraestructura innecesaria.
+
+#### Smoke autenticado
+
+Se habilita únicamente cuando exista un usuario y tenant de prueba aislados:
+
+- credenciales exclusivas de smoke/E2E, nunca cuentas personales ni clientes reales;
+- mínimo privilegio;
+- tenant sin datos reales;
+- primera etapa preferentemente read-only: login → shell → endpoint protegido → logout;
+- cualquier mutación futura de smoke usa datos desechables identificables y limpieza segura dentro del tenant de prueba;
+- una falla de cleanup nunca autoriza borrados globales ni acceso a otros tenants.
+
+#### Medición instruction-to-production
+
+Condor medirá throughput con timestamps observables del flujo:
+
+- reserva/inicio del Issue;
+- primer commit;
+- apertura del PR;
+- inicio/fin de CI;
+- merge;
+- deploy observado;
+- smoke/validación de producción.
+
+Métricas iniciales:
+
+- lead time Issue → merge;
+- PR cycle time;
+- duración de CI;
+- merge → deploy observado;
+- deploy observado → producción validada;
+- lead time total Issue → producción validada.
+
+Primero se crea baseline real; luego se optimiza el cuello de botella dominante. No se sacrifican gates críticos para mejorar una métrica.
+
+#### Primer deploy funcional V 0.1.0
+
+El primer deploy funcional **V 0.1.0** permanece pendiente hasta que:
+
+- el Slice 1 esté implementado;
+- la release V 0.1.0 esté realmente servida por Hostinger;
+- release marker/version correspondan al SHA esperado;
+- smoke público pase;
+- smoke autenticado pase cuando ya exista la superficie autenticada aislada;
+- el README y roadmap registren evidencia real.
+
+### D-044 — Operación, observabilidad y evolución continua (Fase 8)
+
+La operación de Condor debe ser observable, recuperable y mantenible desde shared hosting, sin acoplarse a herramientas propietarias que impidan migrar posteriormente a infraestructura administrada.
+
+#### Observabilidad
+
+Baseline inicial:
+
+- Monolog/logging estructurado;
+- `request_id`/correlation ID por request;
+- contexto de release: versión + SHA;
+- tenant ID interno cuando sea seguro y útil para diagnóstico, evitando nombres/PII innecesarios;
+- niveles coherentes: debug solo fuera de producción, info, warning, error y critical;
+- endpoint de health seguro;
+- medición de latencia, errores y disponibilidad cuando exista tráfico real;
+- adaptador de observabilidad para poder migrar luego a un servicio externo sin reescribir dominio.
+
+El health endpoint:
+
+- verifica que el proceso de aplicación responde;
+- puede comprobar DB con timeout estricto cuando sea útil;
+- no expone credenciales, hostname interno, SQL, stack ni configuración;
+- diferencia degradación de fallo total cuando la arquitectura lo permita.
+
+#### Gestión de errores y alertas
+
+- errores inesperados obtienen correlation ID;
+- excepciones se clasifican entre error de usuario/validación, negocio esperado, dependencia externa y fallo interno;
+- fallos internos no se muestran crudos a usuarios;
+- eventos `error` y `critical` deben poder alimentar un canal de alertas;
+- proveedor/canal concreto de alertas permanece intercambiable;
+- alertar prioritariamente por: 5xx sostenidos, smoke de producción fallido, deploy inconsistente, backup/recovery fallido y fallos repetidos de autenticación/seguridad;
+- evitar alertas por cada evento individual cuando generen ruido; agrupar/deduplicar.
+
+#### Backups y recovery
+
+Se reutiliza el baseline de D-040:
+
+- DB diaria;
+- media/archivos cubiertos;
+- retención inicial de 30 días cuando el hosting lo permita;
+- copia fuera del mismo punto de fallo cuando existan datos reales;
+- RPO inicial ≤ 24 h;
+- RTO inicial ≤ 8 h;
+- rehearsal trimestral en entorno aislado.
+
+Fase 8 no reabre estas decisiones: implementa, mide y demuestra restauración.
+
+#### Performance y capacidad
+
+Objetivos iniciales, medidos antes de convertirlos en gates rígidos:
+
+**Web pública / Core Web Vitals**
+- LCP p75 ≤ 2.5 s;
+- INP p75 ≤ 200 ms;
+- CLS p75 ≤ 0.1.
+
+**Backend**
+- endpoints internos comunes: objetivo p95 ≤ 500 ms de tiempo server-side cuando no dependan de terceros;
+- operaciones pesadas deben paginarse, acotarse o pasar a procesamiento diferido compatible con la infraestructura;
+- evitar N+1 y consultas sin índice en rutas críticas;
+- toda lista potencialmente grande usa paginación;
+- cache solo donde exista política explícita de invalidación;
+- uploads y exports tienen límites de tamaño/tiempo.
+
+Capacidad:
+
+- medir antes de escalar;
+- vigilar DB, disco, memoria/CPU disponibles y tiempos de respuesta cuando Hostinger exponga la señal;
+- una limitación recurrente del shared hosting es evidencia para migrar capacidad/servicio, no razón para introducir microservicios prematuramente.
+
+#### SEO multi-tenant
+
+Para superficies públicas indexables:
+
+- SSR Twig como base;
+- title/description configurables;
+- canonical correcto;
+- sitemap por tenant/canal;
+- robots controlado por entorno y publicación;
+- admin, login y superficies privadas usan `noindex`;
+- datos estructurados cuando la entidad sea completa: Organization/LocalBusiness/Product/BreadcrumbList según aplique;
+- páginas archivadas o eliminadas usan estado HTTP/redirección coherente;
+- URLs estables, legibles y derivadas de slugs con estrategia de colisión.
+
+Regla de dominio duplicado:
+
+- si un tenant tiene dominio personalizado verificado y marcado como primario, ese dominio es el canonical público;
+- la ruta equivalente bajo `condorapp.com.co/<tenant>` debe canonicalizar hacia el dominio primario o quedar noindex según la estrategia del canal;
+- si no existe dominio personalizado primario, la URL Condor es canonical.
+
+#### Analítica de producto
+
+- instrumentación provider-agnostic mediante una interfaz interna de eventos;
+- no bloquear el primer slice esperando un proveedor;
+- eventos iniciales útiles: onboarding completado, primer usuario invitado, producto creado, primer movimiento de inventario, primer cliente creado, primer pedido creado y módulo activado;
+- eventos usan IDs opacos y propiedades operativas mínimas;
+- no enviar contraseñas, tokens, contenido libre sensible, documentos, NIT, email u otra PII innecesaria;
+- separar analítica de producto de auditoría;
+- consentimiento/aviso se incorpora cuando la superficie y regulación aplicable lo requieran.
+
+#### Mantenimiento y deuda técnica
+
+- deuda técnica se registra en Issues con impacto y motivo, no como comentarios perdidos;
+- prioridad por seguridad, riesgo de datos, confiabilidad, velocidad de entrega y costo de mantenimiento;
+- dependencia crítica de seguridad: atención inmediata según explotabilidad/contexto;
+- revisión de dependencias al menos mensual además de gates automáticos;
+- revisión arquitectónica trimestral ligera para confirmar que el monolito modular sigue siendo adecuado;
+- no refactorizar por preferencia estética si no reduce riesgo/costo o habilita producto.
+
+#### Automatización operativa
+
+Candidatos prioritarios a automatización a medida que exista superficie:
+
+- smoke post-deploy;
+- verificación de release identity;
+- auditoría de dependencias;
+- comprobación de backups;
+- recordatorio/reporte de rehearsal;
+- generación de sitemap;
+- tareas programadas de mantenimiento;
+- alertas sobre errores críticos;
+- telemetría de tiempos Issue → producción.
+
+Toda automatización debe ser idempotente cuando sea posible y operar con mínimo privilegio.
+
+#### Revisión periódica de seguridad
+
+- seguridad se valida por slice, no solo en una auditoría anual;
+- dependencia/vulnerability scanning en CI;
+- revisión trimestral del baseline de amenazas cuando el producto ya maneje datos reales;
+- revisar de nuevo ante: nuevo tipo de integración, pagos, uploads ampliados, autenticación móvil, cambios de tenancy o migración de infraestructura;
+- findings se registran y priorizan con evidencia; no se silencian solo para “pasar” herramientas.
+
+#### Portabilidad operativa
+
+- logging, media, email, alertas, analytics y jobs se consumen mediante adapters/contratos cuando sean externos;
+- cambiar Hostinger por AWS debe cambiar principalmente adapters/configuración/infraestructura;
+- no se introduce dependencia de un servicio administrado hasta que resuelva una necesidad real medible.
+
+La Fase 8 queda **definida como baseline operativo**. Sus ítems permanecen activos en el roadmap únicamente cuando falte implementación, medición o evidencia real.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
