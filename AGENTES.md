@@ -556,6 +556,21 @@ Ejemplos:
 
 ---
 
+## 14.1. Evolución incremental del frontend
+
+Regla permanente:
+
+- el frontend **no se deja para el final**; debe evolucionar poco a poco junto con cada slice funcional;
+- cuando una entrega toque una superficie visible, aprovechar para mejorar de forma proporcional estructura, jerarquía, copy, responsive, accesibilidad y acabado visual;
+- evitar rediseños gigantes desconectados del producto: preferir mejoras pequeñas, coherentes y acumulativas;
+- mantener consistencia visual entre home público, login y backoffice sin obligar a que compartan exactamente la misma composición;
+- el home público de Condor debe proyectar una imagen **corporativa, sobria, premium y fina**, con claridad, aire, tipografía cuidada, jerarquía fuerte, movimiento discreto y ausencia de ruido visual;
+- Apple puede usarse como referencia de nivel de acabado, sobriedad y precisión visual, **no como plantilla para copiar ni como fuente de identidad visual**;
+- priorizar fondos limpios, blancos/grises/negros controlados, contraste alto, espaciado generoso, tarjetas/bordes discretos y animaciones sutiles cuando aporten;
+- evitar estética genérica de SaaS saturada: exceso de gradientes, blobs, ilustraciones stock, iconos innecesarios, demasiados colores o CTAs compitiendo;
+- cada mejora visual debe conservar rendimiento, accesibilidad, mobile-first y SSR/SEO de las superficies públicas;
+- el contenido editable del frontend/CMS se definirá en una fase posterior; **no acoplar el diseño visual actual a una solución concreta de gestión de contenido**.
+
 ## 15. README por deploy
 
 Condor adopta la misma estrategia de README operativo de BRVTAL: **`README.md` es el snapshot visual del deploy actual**, no un documento acumulativo.
