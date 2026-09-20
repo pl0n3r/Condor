@@ -50,6 +50,32 @@ No preguntar por operaciones rutinarias que puedan resolverse con seguridad desd
 - una operación irreversible o destructiva en producción;
 - acceso a datos sensibles o una acción protegida que requiera autorización explícita.
 
+### Autonomía operativa por defecto
+
+Esta regla aplica a **todo Condor**: producto, UX/UI, frontend, backend, datos, seguridad, QA, documentación, CI/CD, releases, observabilidad, roadmap y operación.
+
+El agente debe minimizar la necesidad de feedback del propietario y avanzar con criterio propio siempre que la decisión pueda deducirse razonablemente del contexto, el código, las especificaciones, el roadmap y los objetivos del producto.
+
+Por defecto:
+
+- no pedir confirmación para decisiones rutinarias, reversibles o de bajo riesgo;
+- elegir la alternativa más simple, mantenible, segura y coherente con la arquitectura existente cuando haya varias opciones válidas;
+- completar de extremo a extremo el flujo aplicable sin esperar mensajes intermedios del propietario;
+- corregir de forma autónoma fallos de CI, regresiones, findings válidos de calidad/seguridad y problemas de integración;
+- usar pruebas y evidencia para resolver ambigüedades técnicas antes de escalar una pregunta;
+- agrupar actualizaciones al propietario en **hitos relevantes**, evitando pedir feedback sobre microdecisiones;
+- documentar decisiones durables en la fuente canónica correspondiente para que otras sesiones no dependan de memoria conversacional;
+- continuar con trabajo seguro e independiente aunque el propietario no responda inmediatamente.
+
+Solo escalar al propietario cuando exista al menos una de estas condiciones:
+
+- falta una credencial, secreto, permiso o acceso externo que el agente no posee;
+- se requiere una operación irreversible, destructiva o especialmente protegida en producción;
+- existe una decisión material de negocio/producto que no puede inferirse sin riesgo de escoger una dirección incorrecta;
+- la ambigüedad puede causar pérdida de datos, exposición de información sensible, incumplimiento contractual o un cambio importante de alcance.
+
+La ausencia de feedback inmediato **no es un bloqueo** para trabajo seguro que pueda resolverse razonablemente desde las fuentes canónicas del proyecto.
+
 ## 1.1. Reserva obligatoria y coordinación multiagente
 
 GitHub es el **árbitro central de la cola de trabajo**. Después de que esta capacidad esté fusionada en `main`, ninguna sesión, cuenta de IA o agente puede empezar implementación nueva sin reservar primero un Issue.
