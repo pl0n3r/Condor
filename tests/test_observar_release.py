@@ -235,7 +235,7 @@ class ObserverTests(unittest.TestCase):
         self.server.respuestas["/"] = (
             200,
             "text/html",
-            b"<html><body>Sin versión</body></html>",
+            b"<html><body>Sin version</body></html>",
         )
 
         with patch.object(modulo.time, "sleep") as sleep:
