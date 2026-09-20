@@ -8,6 +8,7 @@ import json
 import re
 import sys
 import time
+from collections.abc import Callable
 from html.parser import HTMLParser
 from typing import Any
 from urllib.error import HTTPError
@@ -22,6 +23,10 @@ MAX_BYTES = 256 * 1024
 
 class ObservacionError(Exception):
     """Error presentable sin detalles de red ni datos sensibles."""
+
+
+class ObservacionTransitoria(ObservacionError):
+    """Fallo externo que puede recuperarse sin cambiar el release esperado."""
 
 
 class NoRedirigir(HTTPRedirectHandler):
@@ -109,11 +114,19 @@ def obtener(origen: str, ruta: str, timeout: float) -> tuple[str, bytes]:
                 raise ObservacionError("La respuesta supera el límite permitido.")
             return respuesta.headers.get_content_type(), contenido
     except HTTPError as error:
+        if error.code in {408, 425, 429} or 500 <= error.code < 600:
+            raise ObservacionTransitoria(
+                f"HTTP {error.code}; fallo transitorio al observar producción."
+            ) from error
         if 300 <= error.code < 400:
-            raise ObservacionError(f"Redirección HTTP {error.code} no permitida.") from error
+            raise ObservacionError(
+                f"Redirección HTTP {error.code} no permitida."
+            ) from error
         raise ObservacionError(f"HTTP {error.code}; se esperaba 200.") from error
     except OSError as error:
-        raise ObservacionError("No se recibió una respuesta HTTP válida dentro del tiempo permitido.") from error
+        raise ObservacionTransitoria(
+            "No se recibió una respuesta HTTP válida dentro del tiempo permitido."
+        ) from error
 
 
 def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> None:
@@ -160,56 +173,105 @@ def validar_asset(tipo: str, cuerpo: bytes, ruta: str) -> None:
         raise ObservacionError("El recurso estático está vacío.")
 
 
+def ejecutar_con_reintentos(
+    operacion: Callable[[], str],
+    *,
+    intentos: int,
+    intervalo: float,
+) -> tuple[bool, str, int]:
+    """Reintenta solo fallos externos clasificados explícitamente como transitorios."""
+    for intento in range(1, intentos + 1):
+        try:
+            return True, operacion(), intento
+        except ObservacionTransitoria as error:
+            if intento == intentos:
+                return False, str(error), intento
+            time.sleep(intervalo)
+        except ObservacionError as error:
+            return False, str(error), intento
+
+    return False, "La comprobación no produjo resultado.", intentos
+
+
 def observar(origen: str, version: str, sha: str, *, intentos: int = 3,
             intervalo: float = 2, timeout: float = 5) -> dict[str, Any]:
     """Solo la identidad exacta permite pasar de NO_OBSERVADO a DEPLOY_OBSERVED."""
     evidencias: dict[str, dict[str, Any]] = {}
-    for intento in range(1, intentos + 1):
-        try:
-            tipo, cuerpo = obtener(origen, "/health", timeout)
-            validar_health(tipo, cuerpo, version, sha)
-        except ObservacionError as error:
-            evidencias["health"] = {"ok": False, "detalle": str(error), "intento": intento}
-            if intento < intentos:
-                time.sleep(intervalo)
-            continue
-        evidencias["health"] = {"ok": True, "detalle": "Versión y SHA exactos confirmados.", "intento": intento}
-        break
-    else:
-        return {"estado": "NO_OBSERVADO", "version_esperada": version,
-                "sha_esperado": sha, "comprobaciones": evidencias}
+
+    def comprobar_health() -> str:
+        tipo, cuerpo = obtener(origen, "/health", timeout)
+        validar_health(tipo, cuerpo, version, sha)
+        return "Versión y SHA exactos confirmados."
+
+    ok, detalle, intento = ejecutar_con_reintentos(
+        comprobar_health,
+        intentos=intentos,
+        intervalo=intervalo,
+    )
+    evidencias["health"] = {
+        "ok": ok,
+        "detalle": detalle,
+        "intento": intento,
+    }
+    if not ok:
+        return {
+            "estado": "NO_OBSERVADO",
+            "version_esperada": version,
+            "sha_esperado": sha,
+            "comprobaciones": evidencias,
+        }
 
     for nombre, ruta, es_login in [
-        ("home", "/", False), ("admin_login", "/admin/login", True),
+        ("home", "/", False),
+        ("admin_login", "/admin/login", True),
     ]:
-        try:
-            tipo, cuerpo = obtener(origen, ruta, timeout)
-            validar_pagina(tipo, cuerpo, version, es_login)
-            evidencias[nombre] = {"ok": True, "detalle": "HTTP 200, HTML y versión visibles."}
-        except ObservacionError as error:
-            evidencias[nombre] = {"ok": False, "detalle": str(error)}
+        def comprobar_pagina(
+            ruta_actual: str = ruta,
+            login_actual: bool = es_login,
+        ) -> str:
+            tipo, cuerpo = obtener(origen, ruta_actual, timeout)
+            validar_pagina(tipo, cuerpo, version, login_actual)
+            return "HTTP 200, HTML y versión visibles."
+
+        ok, detalle, intento = ejecutar_con_reintentos(
+            comprobar_pagina,
+            intentos=intentos,
+            intervalo=intervalo,
+        )
+        evidencias[nombre] = {
+            "ok": ok,
+            "detalle": detalle,
+            "intento": intento,
+        }
 
     for nombre, ruta in [
         ("css_publico", "/app.css"),
         ("css_admin", "/build/admin.css"),
         ("js_admin", "/build/admin.js"),
     ]:
-        try:
-            tipo, cuerpo = obtener(origen, ruta, timeout)
-            validar_asset(tipo, cuerpo, ruta)
-            evidencias[nombre] = {
-                "ok": True,
-                "detalle": "HTTP 200 y contenido estático válido.",
-            }
-        except ObservacionError as error:
-            evidencias[nombre] = {"ok": False, "detalle": str(error)}
+        def comprobar_asset(ruta_actual: str = ruta) -> str:
+            tipo, cuerpo = obtener(origen, ruta_actual, timeout)
+            validar_asset(tipo, cuerpo, ruta_actual)
+            return "HTTP 200 y contenido estático válido."
+
+        ok, detalle, intento = ejecutar_con_reintentos(
+            comprobar_asset,
+            intentos=intentos,
+            intervalo=intervalo,
+        )
+        evidencias[nombre] = {
+            "ok": ok,
+            "detalle": detalle,
+            "intento": intento,
+        }
 
     valido = all(item["ok"] for item in evidencias.values())
-    return {"estado": "VALIDATED_IN_PRODUCTION" if valido else "DEPLOY_OBSERVED",
-            "version_esperada": version, "sha_esperado": sha,
-            "comprobaciones": evidencias}
-
-
+    return {
+        "estado": "VALIDATED_IN_PRODUCTION" if valido else "DEPLOY_OBSERVED",
+        "version_esperada": version,
+        "sha_esperado": sha,
+        "comprobaciones": evidencias,
+    }
 def resumen(resultado: dict[str, Any]) -> str:
     lineas = [
         "## Observación de release Condor",

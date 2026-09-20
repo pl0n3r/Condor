@@ -118,10 +118,19 @@ class ObserverTests(unittest.TestCase):
         )
         self.assertEqual(self.observar()["estado"], "DEPLOY_OBSERVED")
 
-    def test_sha_distinto_no_observa_deploy_ni_visita_paginas(self) -> None:
-        resultado = modulo.observar(self.base, VERSION, "b" * 40, intentos=1)
+    def test_sha_distinto_no_se_reintenta_ni_visita_paginas(self) -> None:
+        with patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(
+                self.base,
+                VERSION,
+                "b" * 40,
+                intentos=3,
+                intervalo=1,
+            )
         self.assertEqual(resultado["estado"], "NO_OBSERVADO")
         self.assertEqual(self.server.visitas, ["/health"])
+        self.assertEqual(resultado["comprobaciones"]["health"]["intento"], 1)
+        sleep.assert_not_called()
 
     def test_version_distinta_no_observa_deploy(self) -> None:
         resultado = modulo.observar(self.base, "0.1.1", SHA, intentos=1)
@@ -170,9 +179,79 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
         self.assertEqual(resultado["comprobaciones"]["health"]["intento"], 2)
 
-    def test_timeout_no_se_declara_validado(self) -> None:
-        with patch.object(modulo, "obtener", side_effect=modulo.ObservacionError("Tiempo agotado")):
-            self.assertEqual(self.observar()["estado"], "NO_OBSERVADO")
+    def test_timeout_transitorio_agota_presupuesto_sin_validar(self) -> None:
+        with patch.object(
+            modulo,
+            "obtener",
+            side_effect=modulo.ObservacionTransitoria("Tiempo agotado"),
+        ), patch.object(modulo.time, "sleep") as sleep:
+            resultado = self.observar()
+        self.assertEqual(resultado["estado"], "NO_OBSERVADO")
+        self.assertEqual(resultado["comprobaciones"]["health"]["intento"], 2)
+        sleep.assert_called_once_with(0)
+
+    def test_home_transitorio_se_recupera_dentro_del_presupuesto(self) -> None:
+        pendientes = [
+            (503, "text/html", b"temporal"),
+            (200, "text/html", HOME),
+        ]
+        self.server.respuestas["/"] = lambda: pendientes.pop(0)
+
+        with patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(
+                self.base,
+                VERSION,
+                SHA,
+                intentos=2,
+                intervalo=1,
+                timeout=1,
+            )
+
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertEqual(resultado["comprobaciones"]["home"]["intento"], 2)
+        self.assertEqual(self.server.visitas.count("/"), 2)
+        sleep.assert_called_once_with(1)
+
+    def test_asset_429_se_recupera_sin_ocultar_fallo_funcional(self) -> None:
+        pendientes = [
+            (429, "text/css", b""),
+            (200, "text/css", b"body{margin:0}"),
+        ]
+        self.server.respuestas["/app.css"] = lambda: pendientes.pop(0)
+
+        resultado = modulo.observar(
+            self.base,
+            VERSION,
+            SHA,
+            intentos=2,
+            intervalo=0,
+            timeout=1,
+        )
+
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertEqual(resultado["comprobaciones"]["css_publico"]["intento"], 2)
+
+    def test_home_sin_version_es_determinista_y_no_se_reintenta(self) -> None:
+        self.server.respuestas["/"] = (
+            200,
+            "text/html",
+            b"<html><body>Sin versión</body></html>",
+        )
+
+        with patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(
+                self.base,
+                VERSION,
+                SHA,
+                intentos=3,
+                intervalo=1,
+                timeout=1,
+            )
+
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertEqual(self.server.visitas.count("/"), 1)
+        self.assertEqual(resultado["comprobaciones"]["home"]["intento"], 1)
+        sleep.assert_not_called()
 
     def test_url_y_salida_no_exponen_credenciales(self) -> None:
         with self.assertRaises(modulo.ObservacionError):
