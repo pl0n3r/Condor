@@ -1,0 +1,47 @@
+{
+  "name": "pl0n3r/condor",
+  "description": "Condor App — SaaS de gestión corporativa para empresas colombianas",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.3",
+    "ext-ctype": "*",
+    "ext-iconv": "*",
+    "doctrine/dbal": "^4.2",
+    "doctrine/doctrine-bundle": "^2.13",
+    "doctrine/doctrine-migrations-bundle": "^3.4",
+    "doctrine/orm": "^3.3",
+    "symfony/asset": "7.4.*",
+    "symfony/console": "7.4.*",
+    "symfony/dotenv": "7.4.*",
+    "symfony/framework-bundle": "7.4.*",
+    "symfony/monolog-bundle": "^3.10",
+    "symfony/rate-limiter": "7.4.*",
+    "symfony/security-bundle": "7.4.*",
+    "symfony/security-csrf": "7.4.*",
+    "symfony/twig-bundle": "7.4.*",
+    "symfony/uid": "7.4.*",
+    "symfony/validator": "7.4.*",
+    "symfony/yaml": "7.4.*",
+    "twig/twig": "^3.15"
+  },
+  "require-dev": {
+    "symfony/browser-kit": "7.4.*",
+    "symfony/css-selector": "7.4.*",
+    "symfony/phpunit-bridge": "7.4.*"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "App\\Tests\\": "tests/php/"
+    }
+  },
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {}
+  }
+}
