@@ -9,10 +9,10 @@ test.describe('Slice 1 — fundación y onboarding', () => {
 
   test('muestra versión, autentica y expone el contexto tenant', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('V 0.1.0')).toBeVisible();
+    await expect(page.locator('.site-footer').getByText('V 0.1.0')).toBeVisible();
 
     await page.goto('/admin/login');
-    await expect(page.getByText('V 0.1.0')).toBeVisible();
+    await expect(page.locator('.version-line')).toHaveText('V 0.1.0');
 
     await page.getByLabel('Correo').fill(email);
     await page.getByLabel('Contraseña').fill(password);
