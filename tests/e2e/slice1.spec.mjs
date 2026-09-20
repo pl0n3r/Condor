@@ -9,6 +9,9 @@ test.describe('Slice 1 — fundación y onboarding', () => {
 
   test('muestra versión, autentica y expone el contexto tenant', async ({ page }) => {
     await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Tu empresa avanza cuando todo trabaja en conjunto.' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Condor App, inicio' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Menos sistemas aislados. Más claridad para operar.' })).toBeVisible();
     await expect(page.locator('.site-footer').getByText('V 0.1.0')).toBeVisible();
 
     await page.goto('/admin/login');
@@ -37,5 +40,14 @@ test.describe('Slice 1 — fundación y onboarding', () => {
     await expect(page.getByRole('heading', { name: 'Ingresar a Condor' })).toBeVisible();
     await expect(page.getByLabel('Correo')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Ingresar' })).toBeVisible();
+  });
+
+  test('el home conserva jerarquía y versión visible desde 360 px', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto('/');
+
+    await expect(page.getByRole('heading', { name: 'Tu empresa avanza cuando todo trabaja en conjunto.' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Entrar al administrador' })).toBeVisible();
+    await expect(page.locator('.site-footer').getByText('V 0.1.0')).toBeVisible();
   });
 });

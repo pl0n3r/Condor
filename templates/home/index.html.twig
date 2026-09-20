@@ -3,10 +3,52 @@
 {% block title %}Condor App{% endblock %}
 
 {% block body %}
-<section class="hero">
+<header class="public-nav">
+    <a class="wordmark" href="{{ path('app_home') }}" aria-label="Condor App, inicio">Condor App</a>
+    <a class="nav-link" href="{{ path('app_login') }}">Ingresar</a>
+</header>
+
+<section class="home-hero" aria-labelledby="home-title">
+    <div class="home-hero-copy">
+        <span class="eyebrow">Operación empresarial, conectada</span>
+        <h1 id="home-title">Tu empresa avanza cuando todo trabaja en conjunto.</h1>
+        <p>Condor centraliza presencia web, comercio, inventario, clientes y operación en una plataforma flexible para empresas colombianas.</p>
+        <a class="button home-cta" href="{{ path('app_login') }}">Entrar al administrador</a>
+    </div>
+    <div class="home-signal" aria-label="Capacidades conectadas por Condor">
+        <span>Presencia web</span>
+        <span>Comercio</span>
+        <span>Inventario</span>
+        <span>Clientes</span>
+    </div>
+</section>
+
+<section class="home-section" aria-labelledby="capabilities-title">
+    <span class="eyebrow">Una base para crecer</span>
+    <h2 id="capabilities-title">Menos sistemas aislados. Más claridad para operar.</h2>
+    <div class="capability-grid">
+        <article>
+            <span class="capability-number">01</span>
+            <h3>Una operación central</h3>
+            <p>La información comercial vive en un mismo contexto, con trazabilidad y reglas claras.</p>
+        </article>
+        <article>
+            <span class="capability-number">02</span>
+            <h3>Flexible por empresa</h3>
+            <p>Condor se adapta a sedes, canales y formas de trabajo sin perder consistencia.</p>
+        </article>
+        <article>
+            <span class="capability-number">03</span>
+            <h3>Construido por etapas</h3>
+            <p>Cada avance entrega valor visible y verificable, sin esperar una transformación interminable.</p>
+        </article>
+    </div>
+</section>
+
+<section class="home-closing" aria-labelledby="closing-title">
     <span class="eyebrow">Condor App</span>
-    <h1>Tu empresa, conectada en un solo lugar.</h1>
-    <p>Estamos construyendo una plataforma flexible para presencia web, comercio, inventario, clientes y operación.</p>
-    <a class="button" href="{{ path('app_login') }}">Entrar al administrador</a>
+    <h2 id="closing-title">Una plataforma preparada para la forma real de operar tu empresa.</h2>
+    <p>Estamos construyendo la primera versión funcional y publicando avances progresivos para validarlos desde el inicio.</p>
+    <a class="text-link" href="{{ path('app_login') }}">Acceder a Condor <span aria-hidden="true">→</span></a>
 </section>
 {% endblock %}

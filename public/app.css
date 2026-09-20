@@ -1,11 +1,13 @@
 :root {
   color-scheme: light;
-  --bg: #f5f6f8;
+  --bg: #f4f4f1;
   --surface: #ffffff;
-  --text: #17191d;
-  --muted: #656b75;
-  --border: #dfe2e7;
-  --accent: #1f2937;
+  --text: #151716;
+  --muted: #626862;
+  --border: #d9dcd7;
+  --accent: #171a18;
+  --accent-soft: #e4eadf;
+  --green: #355e3b;
   --danger: #b42318;
   --focus: #2563eb;
   --radius: 8px;
@@ -30,6 +32,127 @@ body {
 a { color: inherit; }
 
 .page-shell { min-height: calc(100vh - 52px); }
+
+.public-nav {
+  min-height: 76px;
+  width: min(100% - 40px, 1180px);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+
+.wordmark {
+  font-size: .88rem;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.nav-link,
+.text-link {
+  font-weight: 700;
+  text-underline-offset: 4px;
+}
+
+.nav-link { font-size: .9rem; }
+
+.home-hero {
+  width: min(100% - 40px, 1180px);
+  min-height: min(760px, calc(100vh - 76px));
+  margin-inline: auto;
+  padding: clamp(72px, 10vw, 144px) 0 clamp(64px, 8vw, 112px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(260px, .7fr);
+  align-items: end;
+  gap: clamp(48px, 9vw, 128px);
+}
+
+.home-hero-copy { display: grid; justify-items: start; gap: 24px; }
+
+.home-hero h1 {
+  max-width: 900px;
+  font-size: clamp(3.25rem, 7.8vw, 7.8rem);
+  letter-spacing: -.065em;
+  line-height: .92;
+}
+
+.home-hero-copy > p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(1.08rem, 2vw, 1.42rem);
+}
+
+.home-cta { margin-top: 8px; padding-inline: 22px; }
+
+.home-signal {
+  padding: 28px;
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, .58);
+  box-shadow: 0 28px 70px rgba(26, 31, 27, .07);
+}
+
+.home-signal span {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: .95rem;
+  font-weight: 700;
+}
+
+.home-signal span:last-child { border-bottom: 0; }
+
+.home-section {
+  padding: clamp(72px, 10vw, 136px) max(20px, calc((100vw - 1180px) / 2));
+  background: var(--accent);
+  color: #f8f8f4;
+}
+
+.home-section > h2,
+.home-closing > h2 {
+  max-width: 880px;
+  margin: 24px 0 clamp(48px, 7vw, 88px);
+  font-size: clamp(2.4rem, 5vw, 5rem);
+  letter-spacing: -.05em;
+  line-height: 1;
+}
+
+.home-section .eyebrow { color: #aeb7af; }
+
+.capability-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: #3a3e3b;
+  border: 1px solid #3a3e3b;
+}
+
+.capability-grid article {
+  min-height: 300px;
+  padding: clamp(24px, 4vw, 44px);
+  display: flex;
+  flex-direction: column;
+  background: var(--accent);
+}
+
+.capability-number { color: #8f9990; font-size: .78rem; letter-spacing: .12em; }
+.capability-grid h3 { margin: auto 0 16px; font-size: 1.35rem; }
+.capability-grid p { margin: 0; color: #bfc5bf; }
+
+.home-closing {
+  width: min(100% - 40px, 1180px);
+  margin-inline: auto;
+  padding: clamp(80px, 12vw, 160px) 0;
+}
+
+.home-closing > h2 { margin-bottom: 32px; }
+.home-closing > p { max-width: 650px; color: var(--muted); font-size: 1.1rem; }
+.home-closing .text-link { display: inline-block; margin-top: 28px; }
 
 .hero,
 .auth-layout {
@@ -121,7 +244,9 @@ input {
   gap: var(--space-4);
   color: var(--muted);
   font-size: .8rem;
-  background: var(--surface);
+  background: var(--accent);
+  color: #c8cec8;
+  border-color: #333735;
 }
 
 .admin-shell { min-height: calc(100vh - 52px); display: grid; grid-template-columns: 240px 1fr; }
@@ -143,6 +268,12 @@ input {
 .workspace h1 { margin-top: var(--space-2); font-size: clamp(2rem, 4vw, 3rem); }
 
 @media (max-width: 720px) {
+  .public-nav { min-height: 68px; }
+  .home-hero { min-height: auto; grid-template-columns: 1fr; padding-top: 64px; }
+  .home-hero h1 { font-size: clamp(3rem, 15vw, 5rem); }
+  .home-signal { padding: 18px 24px; }
+  .capability-grid { grid-template-columns: 1fr; }
+  .capability-grid article { min-height: 230px; }
   .admin-shell { grid-template-columns: 1fr; }
   .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
 }
