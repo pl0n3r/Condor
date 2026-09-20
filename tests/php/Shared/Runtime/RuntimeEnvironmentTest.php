@@ -69,7 +69,7 @@ final class RuntimeEnvironmentTest extends TestCase
 
         self::assertSame('prod', getenv('APP_ENV'));
         self::assertSame('0', getenv('APP_DEBUG'));
-        self::assertStringStartsWith('mysql://condor_unconfigured:', (string) getenv('DATABASE_URL'));
+        self::assertStringStartsWith('mysql://127.0.0.1:3306/condor_unconfigured', (string) getenv('DATABASE_URL'));
     }
 
     public function testRespectsRealEnvironmentConfiguration(): void
@@ -78,7 +78,7 @@ final class RuntimeEnvironmentTest extends TestCase
             'APP_ENV' => 'test',
             'APP_DEBUG' => '1',
             'APP_SECRET' => str_repeat('a', 64),
-            'DATABASE_URL' => 'mysql://real:secret@db.internal:3306/condor',
+            'DATABASE_URL' => 'mysql://db.internal:3306/condor',
         ] as $name => $value) {
             putenv($name.'='.$value);
             $_ENV[$name] = $value;
@@ -90,7 +90,7 @@ final class RuntimeEnvironmentTest extends TestCase
         self::assertSame('test', getenv('APP_ENV'));
         self::assertSame('1', getenv('APP_DEBUG'));
         self::assertSame(str_repeat('a', 64), getenv('APP_SECRET'));
-        self::assertSame('mysql://real:secret@db.internal:3306/condor', getenv('DATABASE_URL'));
+        self::assertSame('mysql://db.internal:3306/condor', getenv('DATABASE_URL'));
         self::assertFileDoesNotExist($this->projectDir.'/var/runtime/app_secret');
     }
 
