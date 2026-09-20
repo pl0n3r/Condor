@@ -1,0 +1,45 @@
+name: Bootstrap Node Lock temporal
+
+on:
+  push:
+    branches:
+      - trabajo/issue-51
+
+permissions:
+  contents: write
+
+jobs:
+  node-lock:
+    name: Fijar package-lock.json
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Resolver lock de Node
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Validar frontend
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm run build:admin
+
+      - name: Fijar lock y retirar bootstrap temporal
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/workflows/bootstrap-node-lock.yml
+          git add package-lock.json .github/workflows/bootstrap-node-lock.yml
+          git commit -m "build: fija dependencias frontend del Slice 1 (V 0.1.0)"
+          git push origin HEAD:trabajo/issue-51

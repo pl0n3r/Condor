@@ -2,20 +2,26 @@
 
 {% block title %}Administrador · Condor App{% endblock %}
 
-{% block head %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block head %}
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/build/admin.css">
+{% endblock %}
 
 {% block body %}
-<section class="admin-shell">
-    <aside class="sidebar">
-        <strong>Condor App</strong>
-        <nav aria-label="Navegación principal">
-            <a href="{{ path('app_admin') }}" aria-current="page">Inicio</a>
-        </nav>
-    </aside>
-    <div class="workspace">
-        <span class="eyebrow">Administrador</span>
-        <h1>Fundación de Condor</h1>
-        <p class="muted">El primer vertical slice está en construcción.</p>
-    </div>
-</section>
+<div id="condor-admin-root" data-version="{{ app_version }}">
+    <section class="admin-shell" aria-label="Administrador de Condor">
+        <aside class="sidebar">
+            <strong>Condor App</strong>
+            <nav aria-label="Navegación principal">
+                <a href="{{ path('app_admin') }}" aria-current="page">Inicio</a>
+            </nav>
+        </aside>
+        <div class="workspace">
+            <span class="eyebrow">Administrador</span>
+            <h1>Fundación de Condor</h1>
+            <p class="muted">El primer vertical slice está construyendo la base multi-tenant del producto.</p>
+        </div>
+    </section>
+</div>
+<script type="module" src="/build/admin.js"></script>
 {% endblock %}

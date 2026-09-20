@@ -1,0 +1,40 @@
+#condor-admin-root {
+  min-height: calc(100vh - 52px);
+}
+
+.brand-block {
+  display: grid;
+  gap: 4px;
+}
+
+.brand-block span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.foundation-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-8);
+}
+
+.foundation-grid article {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.foundation-grid article span {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+@media (max-width: 800px) {
+  .foundation-grid {
+    grid-template-columns: 1fr;
+  }
+}
