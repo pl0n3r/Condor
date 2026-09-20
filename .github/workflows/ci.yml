@@ -275,6 +275,9 @@ jobs:
       - name: Aplicar migraciones en MariaDB descartable
         run: php bin/console doctrine:migrations:migrate --no-interaction
 
+      - name: Ejecutar pruebas PHP
+        run: vendor/bin/simple-phpunit
+
       - name: Probar onboarding transaccional
         run: |
           set -euo pipefail
@@ -326,11 +329,42 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: condor_e2e
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      APP_ENV: test
+      APP_DEBUG: 0
+      DATABASE_URL: mysql://root@127.0.0.1:3306/condor_e2e?serverVersion=mariadb-11.4.0&charset=utf8mb4
+      RELEASE_SHA: ${{ github.sha }}
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
+      E2E_EMAIL: owner-e2e@example.test
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+
+      - name: Preparar secretos efímeros
+        run: |
+          set -euo pipefail
+          app_secret="$(openssl rand -hex 32)"
+          e2e_password="$(openssl rand -base64 32)"
+          echo "::add-mask::$app_secret"
+          echo "::add-mask::$e2e_password"
+          echo "APP_SECRET=$app_secret" >> "$GITHUB_ENV"
+          echo "E2E_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
+          echo "CONDOR_OWNER_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
 
       - name: Preparar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -339,7 +373,44 @@ jobs:
           cache: npm
 
       - name: Instalar dependencias reproducibles
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Validar y construir frontend
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm run build:admin
+          test -s public/build/admin.js
+          test -s public/build/admin.css
+
+      - name: Preparar base E2E
+        run: |
+          set -euo pipefail
+          php bin/console doctrine:migrations:migrate --no-interaction
+          php bin/console app:onboarding:create \
+            --name="Empresa E2E" \
+            --slug="empresa-e2e" \
+            --legal-name="Empresa E2E SAS" \
+            --branch="Principal" \
+            --email="$E2E_EMAIL" \
+            --owner-name="Propietario E2E"
+
+      - name: Iniciar aplicación
+        run: |
+          set -euo pipefail
+          php -S 127.0.0.1:8080 -t public public/router.php >/tmp/condor-e2e-http.log 2>&1 &
+          echo "$!" > /tmp/condor-e2e-http.pid
+          for intento in {1..30}; do
+            if curl -fsS "$PLAYWRIGHT_BASE_URL/health" >/dev/null; then
+              exit 0
+            fi
+            sleep 0.5
+          done
+          cat /tmp/condor-e2e-http.log
+          exit 1
 
       - name: Registrar navegador del runner
         run: |
@@ -354,6 +425,13 @@ jobs:
       - name: Ejecutar Playwright
         run: npm run test:e2e
 
+      - name: Detener aplicación
+        if: always()
+        run: |
+          if [[ -f /tmp/condor-e2e-http.pid ]]; then
+            kill "$(cat /tmp/condor-e2e-http.pid)" 2>/dev/null || true
+          fi
+
       - name: Conservar evidencia solo si falla
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -362,6 +440,7 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            /tmp/condor-e2e-http.log
           retention-days: 14
           if-no-files-found: ignore
 
