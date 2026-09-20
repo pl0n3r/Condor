@@ -15,7 +15,7 @@ Condor separa explícitamente operación, especificación y progreso:
 - **Código fusionado en `main` + pruebas**: verdad de implementación.
 - **`AGENTES.md`**: cómo se trabaja.
 - **`ESPECIFICACIONES.md`**: decisiones durables, reglas funcionales y arquitectura.
-- **[Issue #80 — Roadmap canónico](https://github.com/pl0n3r/Condor/issues/80)**: log exclusivo de trabajo y progreso: qué está planeado, en curso, bloqueado o terminado y en qué orden se ejecuta.
+- **[Issue #1 — Roadmap canónico](https://github.com/pl0n3r/Condor/issues/1)**: log exclusivo de trabajo y progreso: qué está planeado, en curso, bloqueado o terminado y en qué orden se ejecuta.
 - **Issues específicos**: alcance ejecutable y criterios de aceptación.
 - **PRs**: cambio concreto y evidencia de validación.
 - **`README.md`**: presentación visual y ejecutiva del proyecto; no es roadmap acumulativo ni especificación.
@@ -34,7 +34,7 @@ En cada sesión de desarrollo:
 2. Obtener el SHA exacto actual de `main`.
 3. Revisar PRs abiertos.
 4. Revisar los gates/checks del PR activo y del SHA relevante de `main` cuando existan.
-5. Leer el [roadmap canónico — Issue #80](https://github.com/pl0n3r/Condor/issues/80).
+5. Leer el [roadmap canónico — Issue #1](https://github.com/pl0n3r/Condor/issues/1).
 6. Leer el Issue específico que corresponda al siguiente trabajo.
 7. Consultar únicamente las especificaciones/documentos del área necesaria.
 8. Si un PR abierto ya cubre la tarea, continuar o corregir ese PR en vez de duplicarlo.
@@ -393,15 +393,17 @@ Nunca convertir automáticamente “CI verde” en “VALIDADO EN PRODUCCIÓN”
 
 ## 13. Roadmap canónico y registro macro de avance
 
-El roadmap activo es **[GitHub Issue #80](https://github.com/pl0n3r/Condor/issues/80)** y se conserva de forma acumulativa hasta **V 1.0.0**.
+El roadmap activo es **[GitHub Issue #1](https://github.com/pl0n3r/Condor/issues/1)** y se conserva de forma acumulativa hasta **V 1.0.0**.
+
+**Regla permanente de preservación y orden:** el Issue #1 debe conservar la historia completa desde la definición inicial de Condor, organizada cronológicamente y por fases. Nunca se reemplaza por una versión resumida que elimine contexto previo. Los avances nuevos se agregan manteniendo la estructura existente; los hitos completados permanecen visibles y tachados. Solo las microactualizaciones operativas pueden resumirse, nunca el historial macro del proyecto.
 
 ### Dos capas del mismo registro
 
-- **Cuerpo del Issue #80:** plan acumulativo, fases, tareas, estados y ruta hacia V 1.0.0. Debe mantenerse lógico, escaneable y ordenado.
-- **Comentarios del Issue #80:** historial **macro** de hitos relevantes: qué bloque importante se implementó, qué decisión cambió el producto y cuál fue el resultado.
+- **Cuerpo del Issue #1:** plan acumulativo, fases, tareas, estados y ruta hacia V 1.0.0. Debe mantenerse lógico, escaneable y ordenado.
+- **Comentarios del Issue #1:** historial **macro** de hitos relevantes: qué bloque importante se implementó, qué decisión cambió el producto y cuál fue el resultado.
 - El Roadmap **no es un log minuto a minuto**. Commits individuales, reintentos, gates parciales, findings menores y correcciones intermedias viven en el Issue, PR o check correspondiente.
 - Si varias acciones pertenecen a la misma iteración, consolidarlas en un único comentario de hito cuando exista un resultado sustancial o cambie materialmente el estado.
-- Los comentarios históricos pueden consolidarse para eliminar ruido operativo conservando el significado y el orden de los hitos importantes.
+- Las microactualizaciones operativas pueden consolidarse para reducir ruido, pero **nunca** se eliminan o compactan hitos macro, fases, decisiones de producto, entregas, incidentes o contexto histórico relevante.
 
 ### Qué merece una noticia en el Roadmap
 
@@ -437,7 +439,8 @@ Reglas:
 - no publicar mensajes vacíos del tipo “sigo”, “adelante” o “trabajando”;
 - un finding o fallo solo llega al Roadmap si cambia materialmente la iteración, explica un incidente relevante o altera su resultado;
 - el detalle técnico fino pertenece al Issue específico, PR, checks o `ESPECIFICACIONES.md`;
-- el cuerpo del roadmap solo cambia cuando cambia el plan o estado acumulativo de una tarea/fase.
+- el cuerpo del roadmap se actualiza cuando cambia el plan o estado acumulativo de una tarea/fase, **sin borrar ni reescribir el histórico anterior para limpiar la vista**;
+- mantener siempre el orden lógico: origen/definición → fases → implementación → versiones/incidentes → iteración actual → próximos bloques.
 
 Convención visual del cuerpo:
 
@@ -454,7 +457,7 @@ Reglas generales:
 - Issues específicos contienen criterios de aceptación; el roadmap contiene orden, estado e hitos macro;
 - después de un merge relevante, el cuerpo debe reflejar la realidad, no el plan anterior;
 - hasta alcanzar una **V 1.0.0 madura**, conservar el historial de hitos relevantes sin volver a introducir microactualizaciones;
-- si el cuerpo del Issue #80 llegara a un límite práctico de tamaño, crear un volumen/Issue de continuación y enlazar ambos;
+- **no crear un segundo Roadmap ni un volumen de continuación**; si el cuerpo se acerca a un límite práctico, reorganizar dentro del mismo Issue #1 y usar sus comentarios para hitos macro adicionales, preservando todo el histórico;
 - el roadmap debe conservar una lectura limpia para socios y personas no técnicas;
 - las políticas permanentes, manuales y detalle técnico pertenecen a `AGENTES.md`, `ESPECIFICACIONES.md`, Issues o PRs, no al Roadmap.
 
@@ -577,7 +580,7 @@ Para cada PR deploy-bound:
 - incluir una sección exacta **Estado del deploy** con tabla `Señal | Estado | Evidencia`;
 - incluir una sección **Flujo de entrega** con diagrama Mermaid cuando el pipeline exista;
 - mostrar badges de CI, Sonar y observación de deploy cuando esas superficies estén configuradas;
-- mantener visibles enlaces a `AGENTES.md`, `ESPECIFICACIONES.md` y al Issue #80;
+- mantener visibles enlaces a `AGENTES.md`, `ESPECIFICACIONES.md` y al Issue #1;
 - mantener el README visualmente escaneable mediante tablas, estados y símbolos, evitando prosa innecesaria.
 
 El README debe distinguir siempre:
@@ -638,15 +641,15 @@ Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y 
 - no se copia automáticamente lógica de negocio, módulos, rutas, esquema de datos ni deuda histórica de BRVTAL;
 - GitHub y todo lo controlable por el proyecto se escribe en español siempre que sea técnicamente viable;
 - el producto está pensado inicialmente para Colombia y usa `es-CO` y COP como defaults;
-- el roadmap canónico vive en GitHub Issue #80;
+- el roadmap canónico vive en GitHub Issue #1;
 - el roadmap registra de forma acumulativa los hitos, trabajo relevante, pendientes y bloqueos principales;
 - la convención visual es exactamente: ✅ ~~completado~~, 🚧 pendiente/en curso, ⛔ bloqueado;
 - los elementos completados relevantes se conservan tachados en el cuerpo del roadmap;
-- el roadmap se mantiene compacto por diseño: los comentarios registran hitos macro y el detalle operacional vive en Issues/PRs; si debe dividirse por tamaño, se crea una continuación enlazada;
+- el roadmap se mantiene **ordenado y completo**, no reducido: los comentarios registran hitos macro y el detalle operacional vive en Issues/PRs; nunca se crea un segundo Roadmap para dividir el histórico;
 - el roadmap no es el archivo de especificaciones ni un repositorio de políticas; contiene únicamente trabajo/progreso e historial de ejecución;
 - `ESPECIFICACIONES.md` contiene decisiones durables, reglas funcionales y detalle arquitectónico;
 - el roadmap debe poder ser leído por una socia o stakeholder para entender el avance en tiempo real sin necesitar contexto técnico;
-- `ROADMAP.md` es solo un punto de entrada al Issue #80 y no mantiene una copia paralela del progreso;
+- `ROADMAP.md` es solo un punto de entrada al Issue #1 y no mantiene una copia paralela del progreso;
 - `AGENTES.md` es el protocolo operativo canónico y hereda la estructura/reglas aplicables de BRVTAL;
 - toda PR relevante debe reflejar en el roadmap cualquier cambio real de estado antes o inmediatamente después del cierre de la entrega;
 - el roadmap funciona como un registro macro acumulativo desde el inicio del proyecto hasta, como mínimo, la primera v1.0.0 madura;
@@ -680,4 +683,4 @@ No convertir `AGENTES.md` en un roadmap ni en un historial de releases.
 
 Cuando una decisión o implementación introduzca terminología técnica relevante para seguimiento de negocio, revisar si `GLOSARIO.md` necesita actualización en la misma PR.
 
-**Regla final:** un agente nuevo debe poder leer este archivo, revisar el repositorio y el Issue #80, y continuar Condor sin necesitar el chat anterior.
+**Regla final:** un agente nuevo debe poder leer este archivo, revisar el repositorio y el Issue #1, y continuar Condor sin necesitar el chat anterior. El Issue #1 debe permanecer como el único Roadmap, cronológico, acumulativo y completo desde la definición inicial del proyecto.

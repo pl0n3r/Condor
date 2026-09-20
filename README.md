@@ -74,5 +74,5 @@
 
 - [AGENTES.md](AGENTES.md) — protocolo operativo.
 - [ESPECIFICACIONES.md](ESPECIFICACIONES.md) — decisiones durables.
-- [Roadmap #80](https://github.com/pl0n3r/Condor/issues/80) — plan acumulativo e hitos macro de avance.
+- [Roadmap #1](https://github.com/pl0n3r/Condor/issues/1) — plan acumulativo e hitos macro de avance.
 - [GLOSARIO.md](GLOSARIO.md) — términos técnicos en lenguaje de negocio.
