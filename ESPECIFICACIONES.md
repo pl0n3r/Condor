@@ -116,18 +116,15 @@ El punto de entrada inicial será el frente comercial/digital: presencia web + c
 No considerar como requisito cerrado hasta que producto lo confirme:
 
 - foco específico en pymes;
-- producto modular o activable por capacidades;
 - alcance exacto de la presencia web;
 - uso de plantillas, constructor visual o servicio administrado;
 - alcance completo de pedidos/ventas;
-- pagos;
-- envíos;
-- facturación;
+- proveedores concretos de pagos, envíos y facturación;
 - alcance de CRM;
-- modelo de suscripción y precios del SaaS;
-- integraciones externas.
+- precios, límites y empaquetado exacto de los planes/módulos del SaaS;
+- integraciones externas concretas.
 
-Ya están confirmados como principios o capacidades funcionales: multiempresa/multi-tenant, núcleo Empresa + Sede + Usuario, catálogo producto → variantes → precios → inventario por sede, Cliente como entidad comercial separada del Usuario y reglas iniciales de precios, roles, inventario y ventas documentadas en las decisiones durables.
+Ya están confirmados como principios o capacidades funcionales: multiempresa/multi-tenant, núcleo Empresa + Sede + Usuario, catálogo producto → variantes → precios → inventario configurable por fuente, Cliente como entidad comercial separada del Usuario, suite con mensualidad base + módulos adicionales, primera versión sin integraciones externas obligatorias y reglas iniciales de precios, roles, inventario y ventas documentadas en las decisiones durables.
 
 ### 5.4 Definiciones pendientes de producto
 
@@ -512,14 +509,7 @@ Decisiones:
 - el acceso a datos y las migraciones deben diseñarse para mantener MariaDB portable hacia infraestructura administrada en AWS;
 - una eventual migración a AWS debe cambiar principalmente la infraestructura, no exigir una reescritura funcional del producto.
 
-Quedan pendientes de decisión específica:
-
-- ORM o capa de persistencia;
-- estrategia exacta de migraciones;
-- estructura de carpetas y fronteras entre módulos;
-- contrato entre Twig, React y endpoints internos;
-- pipeline reproducible de build y despliegue de React/Vite;
-- topología futura en AWS cuando la escala real la justifique.
+Las decisiones de ORM, migraciones, estructura modular, frontera Twig/React y contrato REST inicial ya quedaron resueltas en D-024. Permanecen pendientes el detalle fino del pipeline de despliegue y la topología futura en AWS cuando la escala real la justifique.
 
 Esta decisión **sustituye** las propuestas conversacionales previas de NestJS/Node como runtime backend, Vue y Next.js. Esas opciones fueron consideradas antes de confirmar las restricciones reales del hosting compartido y ya no representan el stack objetivo de Condor.
 
@@ -604,6 +594,81 @@ Reglas:
 - el diseño debe permitir en el futuro subdominios y múltiples dominios por tenant sin obligar a exponer esa complejidad en la primera versión;
 - resolver un tenant nunca sustituye ni relaja el aislamiento de datos: toda consulta y mutación debe seguir validando el tenant activo;
 - la resolución por dominio/ruta debe permanecer desacoplada del proveedor de hosting para conservar portabilidad a AWS.
+
+
+### D-026 — Modelo comercial base y alcance de la primera versión
+
+Condor tendrá un modelo comercial modular sin obligar a resolver desde el inicio todas las integraciones externas.
+
+Reglas:
+
+- el modelo comercial parte de una **mensualidad base por empresa/tenant**;
+- módulos o capacidades adicionales pueden contratarse o activarse aparte;
+- los precios, límites, nombres de planes y reglas exactas de upgrade/downgrade permanecen pendientes;
+- la primera versión puede operar sin pasarela de pago integrada, sin facturación electrónica integrada y sin integraciones externas obligatorias;
+- los pedidos pueden existir con registro de pago/manualidad operativa cuando corresponda;
+- pagos, envíos, facturación y otras integraciones deben conectarse más adelante mediante adaptadores/contratos, sin rehacer el dominio;
+- la ausencia inicial de una integración no debe bloquear el modelo de datos necesario para incorporarla después.
+
+### D-027 — Canales, sedes, inventario y precio efectivo
+
+Condor debe soportar empresas pequeñas de una sola sede y empresas con múltiples sedes sin obligar a usar complejidad innecesaria.
+
+Reglas:
+
+- una empresa puede tener múltiples sedes desde el inicio;
+- la primera sede creada se convierte automáticamente en la sede predeterminada;
+- la sede predeterminada puede cambiarse posteriormente;
+- usuarios internos pueden operar en varias sedes;
+- los roles/permisos pueden variar por sede;
+- las transferencias entre sedes generan movimientos de inventario auditables;
+- cada canal comercial, incluido el e-commerce, selecciona una **fuente de inventario efectiva**;
+- por defecto esa fuente puede ser una sede;
+- opcionalmente un canal puede usar un stock propio independiente de las sedes;
+- por tanto, la ubicación canónica del stock evoluciona de la regla más estrecha “variante + sede” a **variante + fuente de inventario**; una sede es la fuente predeterminada y un stock de canal es una fuente opcional;
+- un pedido consume/reserva inventario de una sola fuente efectiva y no se divide automáticamente entre sedes;
+- si la fuente configurada está agotada, el producto se muestra agotado aunque exista stock en otra sede;
+- no existe fallback automático hacia otra sede;
+- cambiar la fuente configurada o reponerla debe reflejarse en la disponibilidad del canal;
+- vender sin stock/backorder es configurable por producto y queda **desactivado por defecto**;
+- cada canal puede seleccionar su lista de precios predeterminada;
+- las reglas de precio/descuento deben resolver un único precio efectivo mediante una precedencia determinista y auditable.
+
+### D-028 — Clientes, catálogo, servicios, personal y entidades legales
+
+El modelo funcional debe distinguir conceptos que pueden coincidir en empresas pequeñas, pero no son equivalentes.
+
+Reglas:
+
+- la compra con cuenta obligatoria o como invitado es configurable por empresa/canal;
+- un cliente tiene una sola **categoría comercial principal efectiva** para evitar ambigüedad de precios;
+- la categoría comercial puede influir en lista de precios, descuentos y condiciones comerciales;
+- las categorías comerciales son configurables por empresa;
+- Condor soporta productos físicos y servicios;
+- el primer flujo funcional se concentra en productos físicos;
+- un servicio puede venderse o cotizarse sin agenda/calendario en la primera etapa;
+- agenda/reservas se incorporan únicamente cuando exista un caso real;
+- un usuario/empleado interno puede operar en varias sedes;
+- un usuario puede tener roles distintos según la sede;
+- la autorización efectiva debe considerar tenant + usuario + sede + roles;
+- una cuenta/tenant de Condor puede contener **múltiples razones sociales o entidades legales**;
+- tenant/cuenta y razón social son entidades diferentes;
+- cada entidad legal puede mantener sus propios datos fiscales/legales;
+- los módulos que lo necesiten deben poder asociar una operación a una entidad legal concreta;
+- una empresa que solo tenga una razón social no debe enfrentar complejidad adicional en la interfaz.
+
+### D-029 — Configurabilidad comercial con precedencias deterministas
+
+Condor toma como referencia la facilidad de administración de WooCommerce y Magento para reglas comerciales, sin copiar su implementación.
+
+Reglas:
+
+- descuentos por cantidad, producto, categoría u otras dimensiones pueden evolucionar como reglas configurables;
+- la flexibilidad no puede producir varios precios efectivos ambiguos;
+- toda regla comercial debe tener alcance, prioridad y vigencia explícitos cuando corresponda;
+- la UI debe mostrar defaults simples y revelar reglas avanzadas solo bajo demanda;
+- no volver a convertir “¿esto debe ser configurable?” en una pregunta recurrente cuando exista variación real entre empresas: la regla general es configurabilidad con defaults e invariantes claros;
+- cuando dos reglas puedan competir, el motor de precios debe resolverlas de forma determinista y trazable.
 
 ## 7. Criterio de actualización
 
