@@ -1,0 +1,13 @@
+framework:
+  secret: '%env(APP_SECRET)%'
+  csrf_protection: true
+  handle_all_throwables: true
+  http_method_override: false
+  router:
+    utf8: true
+  session:
+    handler_id: null
+    cookie_secure: auto
+    cookie_httponly: true
+    cookie_samesite: lax
+    gc_maxlifetime: 7200
