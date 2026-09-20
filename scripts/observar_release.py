@@ -9,15 +9,14 @@ import re
 import sys
 import time
 from html.parser import HTMLParser
-from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 DOMINIO_PRODUCCION = "https://www.condorapp.com.co"
-SHA_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
-VERSION_PATTERN = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+\Z")
+SHA_PATTERN = re.compile(r"[0-9a-f]{40}\Z", re.ASCII)
+VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+\Z", re.ASCII)
 MAX_BYTES = 256 * 1024
 
 
@@ -105,7 +104,7 @@ def obtener(origen: str, ruta: str, timeout: float) -> tuple[str, bytes]:
         if 300 <= error.code < 400:
             raise ObservacionError(f"Redirección HTTP {error.code} no permitida.") from error
         raise ObservacionError(f"HTTP {error.code}; se esperaba 200.") from error
-    except (URLError, TimeoutError, OSError) as error:
+    except OSError as error:
         raise ObservacionError("No se recibió una respuesta HTTP válida dentro del tiempo permitido.") from error
 
 
@@ -114,7 +113,7 @@ def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> None:
         raise ObservacionError("/health no respondió con JSON.")
     try:
         carga = json.loads(cuerpo.decode("utf-8"))
-    except (ValueError, UnicodeError) as error:
+    except ValueError as error:
         raise ObservacionError("/health devolvió JSON inválido.") from error
     if not isinstance(carga, dict) or carga.get("status") != "ok":
         raise ObservacionError("/health no informa estado ok.")
@@ -131,7 +130,7 @@ def validar_pagina(tipo: str, cuerpo: bytes, version: str, login: bool) -> None:
     try:
         analizador.feed(cuerpo.decode("utf-8"))
         analizador.close()
-    except (ValueError, UnicodeError) as error:
+    except ValueError as error:
         raise ObservacionError("La página devolvió HTML no válido para esta comprobación.") from error
 
     texto = " ".join(analizador.textos)
@@ -181,15 +180,15 @@ def resumen(resultado: dict[str, Any]) -> str:
         "## Observación de release Condor",
         "",
         f"- Estado: **{resultado['estado']}**",
-        f"- Versión esperada: "+ "`" + resultado["version_esperada"] + "`",
-        f"- SHA esperado: "+ "`" + resultado["sha_esperado"] + "`",
+        "- Versión esperada: "+ "`" + resultado["version_esperada"] + "`",
+        "- SHA esperado: "+ "`" + resultado["sha_esperado"] + "`",
         "",
         "| Comprobación | Resultado | Detalle |",
         "| --- | --- | --- |",
     ]
     for nombre, item in resultado["comprobaciones"].items():
         icono = "✅" if item["ok"] else "❌"
-        lineas.append(f"| "+ "`"+nombre+"`"+f" | {icono} | {item['detalle']} |")
+        lineas.append("| "+ "`"+nombre+"`"+f" | {icono} | {item['detalle']} |")
     if resultado["estado"] != "VALIDATED_IN_PRODUCTION":
         lineas.extend(["", "La producción no se declara validada con esta evidencia."])
     return "\n".join(lineas) + "\n"
@@ -197,19 +196,16 @@ def resumen(resultado: dict[str, Any]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-url", default=DOMINIO_PRODUCCION)
     parser.add_argument("--version", required=True, help="Versión esperada, p. ej. 0.1.0")
     parser.add_argument("--sha", required=True, help="SHA exacto de 40 caracteres del merge")
     parser.add_argument("--intentos", type=int, default=3)
     parser.add_argument("--intervalo", type=float, default=2)
     parser.add_argument("--timeout", type=float, default=5)
-    parser.add_argument("--permitir-http-local", action="store_true")
-    parser.add_argument("--json-out", type=Path, help="Ruta de reporte JSON no sensible")
-    parser.add_argument("--summary-file", type=Path, help="Ruta opcional al Job Summary")
+    parser.add_argument("--markdown", action="store_true", help="Salida para el Job Summary")
     args = parser.parse_args(argv)
 
     try:
-        origen = validar_base_url(args.base_url, args.permitir_http_local)
+        origen = DOMINIO_PRODUCCION
         if not VERSION_PATTERN.fullmatch(args.version):
             raise ObservacionError("La versión debe tener formato X.Y.Z.")
         if not SHA_PATTERN.fullmatch(args.sha):
@@ -222,12 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     resultado = observar(origen, args.version, args.sha, intentos=args.intentos,
                         intervalo=args.intervalo, timeout=args.timeout)
     reporte = json.dumps(resultado, ensure_ascii=False, indent=2) + "\n"
-    print(reporte, end="")
-    if args.json_out:
-        args.json_out.write_text(reporte, encoding="utf-8")
-    if args.summary_file:
-        with args.summary_file.open("a", encoding="utf-8") as destino:
-            destino.write(resumen(resultado))
+    print(resumen(resultado) if args.markdown else reporte, end="")
     return 0 if resultado["estado"] == "VALIDATED_IN_PRODUCTION" else 1
 
 

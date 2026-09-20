@@ -13,7 +13,8 @@ from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "observar_release.py"
 spec = importlib.util.spec_from_file_location("observar_release", SCRIPT)
-assert spec is not None and spec.loader is not None
+assert spec is not None
+assert spec.loader is not None
 modulo = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = modulo
 spec.loader.exec_module(modulo)

@@ -34,11 +34,11 @@ jobs:
           VERSION_ESPERADA: ${{ inputs.version }}
           SHA_ESPERADO: ${{ inputs.sha }}
         run: |
+          set -euo pipefail
           python3 scripts/observar_release.py \
-            --base-url https://www.condorapp.com.co \
             --version "$VERSION_ESPERADA" \
             --sha "$SHA_ESPERADO" \
             --intentos 5 \
             --intervalo 4 \
             --timeout 5 \
-            --summary-file "$GITHUB_STEP_SUMMARY"
+            --markdown | tee -a "$GITHUB_STEP_SUMMARY"

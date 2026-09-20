@@ -5,7 +5,8 @@ from pathlib import Path
 
 ruta = Path(__file__).resolve().parents[1] / "test_observar_release.py"
 especificacion = importlib.util.spec_from_file_location("test_observar_release", ruta)
-assert especificacion is not None and especificacion.loader is not None
+assert especificacion is not None
+assert especificacion.loader is not None
 modulo = importlib.util.module_from_spec(especificacion)
 especificacion.loader.exec_module(modulo)
 
