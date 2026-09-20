@@ -139,14 +139,6 @@ class GitHub:
             raise CoordinationError(f"No fue posible leer Issue #{number}.")
         return payload
 
-    def update_issue_body(self, issue_number: int, body: str) -> None:
-        """Actualiza el body de un Issue sin publicar comentarios visibles."""
-        self.request(
-            "PATCH",
-            f"/repos/{self.repo}/issues/{issue_number}",
-            {"body": body},
-        )
-
     def pull(self, number: int) -> dict[str, Any]:
         """Obtiene un Pull Request por número."""
         payload = self.request("GET", f"/repos/{self.repo}/pulls/{number}")
@@ -371,43 +363,6 @@ def valid_reservation_payload(value: Any) -> bool:
     return isinstance(value.get("reason"), str) and bool(value["reason"])
 
 
-def reservation_from_text(text: str) -> dict[str, Any] | None:
-    """Obtiene el último marcador de reserva válido de un texto controlado."""
-    latest: dict[str, Any] | None = None
-    for match in RESERVATION_RE.finditer(text or ""):
-        try:
-            parsed = json.loads(match.group(1))
-        except json.JSONDecodeError:
-            continue
-        if valid_reservation_payload(parsed):
-            latest = parsed
-    return latest
-
-
-def store_reservation(
-    api: GitHub,
-    issue_number: int,
-    owner: str,
-    reservation_id: str,
-    branch: str,
-    active: bool,
-    reason: str,
-) -> None:
-    """Guarda la reserva como metadata HTML oculta en el body del Issue."""
-    issue = api.issue(issue_number)
-    current_body = str(issue.get("body") or "")
-    cleaned = RESERVATION_RE.sub("", current_body).rstrip()
-    marker = reservation_marker(
-        owner,
-        reservation_id,
-        branch,
-        active,
-        reason,
-    )
-    next_body = f"{cleaned}\n\n{marker}\n" if cleaned else f"{marker}\n"
-    api.update_issue_body(issue_number, next_body)
-
-
 def latest_reservation(
     comments: list[dict[str, Any]],
     trusted_login: str = TRUSTED_MARKER_LOGIN,
@@ -452,18 +407,11 @@ def authorized(association: str) -> bool:
 
 
 def active_reservation(api: GitHub, issue_number: int) -> dict[str, Any] | None:
-    """Obtiene la reserva activa, prefiriendo metadata oculta del Issue."""
-    issue = api.issue(issue_number)
-    body_reservation = reservation_from_text(str(issue.get("body") or ""))
-    if body_reservation is not None:
-        return body_reservation if body_reservation["active"] else None
-
-    # Compatibilidad temporal con reservas creadas antes del modo silencioso.
+    """Obtiene la reserva activa desde metadata publicada por el bot confiable."""
     reservation = latest_reservation(api.issue_comments(issue_number))
     if not reservation or not reservation["active"]:
         return None
     return reservation
-
 
 def open_pulls_for_branch(api: GitHub, branch: str) -> list[int]:
     """Lista PR abiertos que usan una rama concreta como head."""
@@ -529,14 +477,15 @@ def reserve_work(
     try:
         api.set_status(issue_number, STATUS_RESERVED)
         api.try_assign(issue_number, actor)
-        store_reservation(
-            api,
+        api.comment(
             issue_number,
-            actor,
-            reservation_id,
-            branch,
-            True,
-            "tomar",
+            reservation_marker(
+                actor,
+                reservation_id,
+                branch,
+                True,
+                "tomar",
+            ),
         )
     except Exception:
         api.delete_branch(branch)
@@ -573,14 +522,15 @@ def transfer_work(
         return None
 
     new_id = new_reservation_id()
-    store_reservation(
-        api,
+    api.comment(
         issue_number,
-        actor,
-        new_id,
-        current["branch"],
-        True,
-        "transferir",
+        reservation_marker(
+            actor,
+            new_id,
+            current["branch"],
+            True,
+            "transferir",
+        ),
     )
     print(f"Reserva transferida: Issue #{issue_number} -> {new_id}")
     return new_id
@@ -690,14 +640,15 @@ def release_work(
         else new_reservation_id()
     )
     api.delete_branch(branch)
-    store_reservation(
-        api,
+    api.comment(
         issue_number,
-        owner,
-        session,
-        branch,
-        False,
-        "liberacion-forzada" if force else "liberar",
+        reservation_marker(
+            owner,
+            session,
+            branch,
+            False,
+            "liberacion-forzada" if force else "liberar",
+        ),
     )
     expose_issue_after_release(api, issue_number)
     if current:
@@ -745,14 +696,15 @@ def close_pr_reservation(
     merged = bool(pull.get("merged"))
 
     if current:
-        store_reservation(
-            api,
+        api.comment(
             issue_number,
-            str(current["owner"]),
-            str(current["reservation_id"]),
-            branch,
-            False,
-            "pr-merged" if merged else "pr-cerrado-sin-merge",
+            reservation_marker(
+                str(current["owner"]),
+                str(current["reservation_id"]),
+                branch,
+                False,
+                "pr-merged" if merged else "pr-cerrado-sin-merge",
+            ),
         )
         api.try_unassign(issue_number, str(current["owner"]))
 
@@ -792,32 +744,14 @@ def update_issue_label_state(
     actor: str,
     label: str,
 ) -> None:
-    """Procesa reserva/liberación silenciosa usando labels de estado existentes."""
-    if actor == TRUSTED_MARKER_LOGIN:
+    """Reserva silenciosamente mediante label; la liberación exige sesión o cierre."""
+    if actor == TRUSTED_MARKER_LOGIN or label != STATUS_RESERVED:
         return
 
-    if label == STATUS_RESERVED:
-        # Poder aplicar el label exige permisos de escritura en GitHub; la rama
-        # canónica sigue siendo el lock atómico real.
-        reserve_work(api, issue_number, actor, "OWNER")
-        return
-
-    if label != STATUS_AVAILABLE:
-        return
-
-    current = active_reservation(api, issue_number)
-    if not current or current["owner"] != actor:
-        return
-
-    release_work(
-        api,
-        issue_number,
-        actor,
-        "OWNER",
-        str(current["reservation_id"]),
-        False,
-    )
-
+    # La capacidad de aplicar el label exige escritura en GitHub; la rama
+    # canónica sigue siendo el lock atómico y el bot firma la metadata mediante
+    # un comentario HTML sin contenido humano visible.
+    reserve_work(api, issue_number, actor, "OWNER")
 
 def update_issue_state(api: GitHub, issue_number: int, action: str) -> None:
     """Limpia una reserva al cerrar un Issue o restablece su estado al reabrirlo."""
@@ -839,14 +773,15 @@ def update_issue_state(api: GitHub, issue_number: int, action: str) -> None:
     api.delete_branch(branch)
 
     if current:
-        store_reservation(
-            api,
+        api.comment(
             issue_number,
-            str(current["owner"]),
-            str(current["reservation_id"]),
-            branch,
-            False,
-            "issue-cerrado",
+            reservation_marker(
+                str(current["owner"]),
+                str(current["reservation_id"]),
+                branch,
+                False,
+                "issue-cerrado",
+            ),
         )
         api.try_unassign(issue_number, str(current["owner"]))
 
