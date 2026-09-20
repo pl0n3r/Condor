@@ -57,13 +57,12 @@ GitHub es el **árbitro central de la cola de trabajo**. Después de que esta ca
 ### Tomar trabajo
 
 1. Elegir únicamente un Issue abierto con label `estado: disponible`.
-2. Añadir el label `estado: reservado` sin publicar comentarios técnicos.
-3. Esperar a que el workflow cree de forma atómica la rama canónica `trabajo/issue-N` y normalice el estado del Issue.
-4. La rama canónica es el lock central. El workflow publica únicamente metadata HTML no narrativa desde la identidad confiable del bot para validar la sesión.
-5. La sesión propietaria conserva su UUID y lo declara en el PR solo como metadata HTML oculta: `<!-- condor-reserva-id: <UUID> -->`.
-6. Si otra sesión intenta reservar el mismo Issue, solo la que logra crear la rama puede ganar.
-7. Si la reserva no se consolida, **no trabajar esa tarea**; elegir otro Issue disponible.
-8. No usar `/tomar`, `/liberar`, UUIDs visibles ni instrucciones operativas como comentarios humanos del Issue/PR.
+2. Comentar exactamente `/tomar` en ese Issue.
+3. Esperar la respuesta del workflow de coordinación.
+4. La reserva exitosa crea de forma atómica la rama canónica `trabajo/issue-N`, cambia el Issue a `estado: reservado` y publica un **ID de reserva UUID**.
+5. La sesión que ejecutó `/tomar` debe conservar ese UUID y usarlo en el PR como `Reserva: <UUID>`.
+6. Si otra sesión intenta reservar el mismo Issue, la creación atómica de la rama actúa como lock: solo una puede ganar.
+7. Si la reserva es rechazada, **no trabajar esa tarea**; elegir otro Issue disponible.
 
 ### Propiedad de la reserva
 
@@ -74,16 +73,15 @@ GitHub es el **árbitro central de la cola de trabajo**. Después de que esta ca
 - nunca adoptar el UUID visible de otra sesión solo porque se comparte la misma cuenta;
 - nunca modificar `trabajo/issue-N` si pertenece a otra sesión/agente;
 - nunca crear ramas alternativas para saltarse una reserva existente;
-- una reserva **no se libera cambiando labels manualmente**: eso no prueba identidad de sesión;
-- el cierre o merge del PR limpia la reserva automáticamente;
-- una liberación/transferencia manual solo puede ejecutarse por un flujo que presente el UUID de sesión correcto o por mantenimiento explícito del propietario;
-- para transferir entre sesiones/cuentas, no reutilizar UUIDs ajenos; liberar de forma controlada y volver a reservar;
-- una reserva huérfana se resuelve mediante mantenimiento explícito, sin publicar comandos técnicos en el Issue.
+- para liberar normalmente, comentar `/liberar <UUID>`;
+- para transferir el trabajo a otra sesión de la misma cuenta, comentar `/transferir <UUID>`; el workflow genera un UUID nuevo e invalida el anterior;
+- para transferir entre cuentas distintas, liberar y permitir que la nueva cuenta ejecute `/tomar`;
+- el dueño del repositorio puede resolver una reserva huérfana con `/liberar-forzado`.
 
 ### Pull Requests y colisiones
 
 - después del primer commit lógico, abrir el PR pronto para hacer visible el alcance en curso;
-- el PR debe salir de `trabajo/issue-N`, incluir `Closes #N` y declarar `<!-- condor-reserva-id: <UUID> -->` en el cuerpo;
+- el PR debe salir de `trabajo/issue-N`, incluir `Closes #N` y declarar `Reserva: <UUID>` en el cuerpo;
 - CI valida la reserva y compara los archivos del PR contra todos los demás PR abiertos hacia `main`;
 - si dos PR modifican el mismo archivo, la validación de coordinación falla y el trabajo debe repartirse, serializarse o actualizarse sobre el nuevo `main`;
 - nunca resolver una colisión sobrescribiendo silenciosamente el trabajo de otra sesión;
@@ -310,7 +308,7 @@ Para trabajo normal de código o configuración:
 
 1. partir del `main` exacto actual;
 2. elegir un Issue con `estado: disponible`;
-3. reservarlo con el label `estado: reservado` y esperar la creación de la rama canónica;
+3. reservarlo con `/tomar` y esperar confirmación;
 4. trabajar exclusivamente en la rama canónica `trabajo/issue-N` creada por la reserva;
 5. implementar el cambio lógico;
 6. añadir/ajustar pruebas aplicables;
@@ -391,86 +389,33 @@ Nunca convertir automáticamente “CI verde” en “VALIDADO EN PRODUCCIÓN”
 
 ---
 
-## 13. Roadmap canónico y noticias cronológicas de avance
+## 13. Roadmap canónico y convención de progreso
 
-El roadmap activo es **[GitHub Issue #1](https://github.com/pl0n3r/Condor/issues/1)** y se conserva de forma acumulativa hasta **V 1.0.0**.
+El roadmap activo es **[GitHub Issue #1](https://github.com/pl0n3r/Condor/issues/1)**.
 
-### Dos capas del mismo registro
-
-- **Cuerpo del Issue #1:** plan acumulativo, fases, tareas, estados y ruta hacia V 1.0.0. Debe mantenerse lógico, escaneable y ordenado; no se usa como feed minuto a minuto.
-- **Comentarios del Issue #1:** bitácora cronológica append-only de ejecución. GitHub ordena estos comentarios por tiempo y esa secuencia es la fuente canónica de “qué ocurrió y cuándo”.
-- No insertar la bitácora operativa dentro del encabezado ni antes de las fases.
-- Una corrección posterior se registra con un comentario nuevo; no se reescriben comentarios anteriores para ocultar fallos, cambios de criterio o estados intermedios.
-
-### Regla obligatoria para todos los agentes — dejar noticias del trabajo
-
-**Cada agente/sesión es responsable de publicar sus propios avances en los comentarios del Roadmap #1 mientras trabaja.** No debe esperar al final del PR, al merge ni a que otro agente haga el resumen por él.
-
-Publicar una noticia inmediatamente después de cada evento material:
-
-1. inicio/reserva de un frente de trabajo;
-2. decisión funcional, técnica o arquitectónica que cambie el alcance;
-3. commit relevante o bloque funcional terminado;
-4. apertura o actualización sustancial de un PR;
-5. resultado de CI, SonarQube o CodeRabbit;
-6. finding válido detectado;
-7. corrección aplicada a un finding o regresión;
-8. bloqueo, colisión o dependencia que impida continuar;
-9. desbloqueo/reanudación;
-10. squash merge;
-11. validación del SHA exacto de `main`;
-12. observación del deploy;
-13. validación real de producción.
-
-No acumular horas de trabajo para contarlas al final. Si ocurren varios eventos materiales en pocos minutos, registrar cada cambio de estado como un comentario nuevo o un único comentario inmediato que agrupe solo eventos simultáneos del mismo bloque.
-
-### Formato mínimo de cada noticia
-
-Usar lenguaje entendible para una socia no técnica y, cuando exista, incluir Issue/PR/SHA:
-
-```md
-### <evento breve> — Issue #N / PR #N
-- **Qué cambió:** ...
-- **Evidencia:** commit/check/SHA/resultado relevante.
-- **Estado:** EN CURSO | VALIDADO EN CÓDIGO | MERGED | DESPLEGADO | VALIDADO EN PRODUCCIÓN | BLOQUEADO.
-- **Siguiente:** ... / **Bloqueo:** ...
-```
-
-Reglas del formato:
-
-- el timestamp de GitHub del comentario es la hora canónica; no inventar horas manuales;
-- ser breve pero suficiente para entender el cambio sin abrir otros archivos;
-- enlazar o mencionar la evidencia concreta cuando exista;
-- distinguir siempre CI verde, merge, deploy y validación en producción;
-- nunca marcar `VALIDADO EN PRODUCCIÓN` sin evidencia real;
-- no publicar mensajes vacíos del tipo “sigo”, “adelante” o “trabajando”; la noticia debe describir un cambio verificable;
-- findings y fallos también se registran: la bitácora cuenta la historia real, no solo los éxitos;
-- cada agente registra **su propio frente**; no asumir que otro agente documentará el trabajo;
-- el cuerpo del roadmap solo se modifica cuando cambia el plan/estado acumulativo de una tarea o fase; los eventos operativos viven en comentarios.
-
-Convención visual del cuerpo:
+Convención obligatoria, heredada de BRVTAL:
 
 - ✅ ~~Completado y validado por los gates requeridos~~
 - 🚧 Pendiente / en curso
 - ⛔ Bloqueado / dependencia externa
 
-Reglas generales:
+Reglas:
 
-- todo trabajo planeado relevante debe aparecer en el cuerpo del roadmap;
+- todo trabajo planeado relevante debe aparecer en el roadmap;
 - todo trabajo completado relevante permanece visible y tachado;
-- el registro completo es **append-only** hasta V 1.0.0: cuerpo + comentarios conservan la historia; no se elimina trabajo terminado ni eventos operativos;
+- el roadmap es **append-only**: se agregan entradas nuevas y se actualiza el estado de las existentes, pero no se elimina el historial;
 - no borrar trabajo terminado para hacer el roadmap “más limpio”;
 - registrar PR y versión cuando exista una release asignada;
 - usar en los títulos del roadmap/versionados el formato visual `(V X.Y.Z)` cuando se muestre una versión;
-- **no retirar ni borrar del Issue #1 las fases o tareas ya registradas antes de V 1.0.0**; se permite reorganizar títulos/secciones para mejorar la lectura sin perder ninguna entrada histórica;
+- **no retirar, mover ni borrar del Issue #1 las fases o tareas ya registradas antes de v1.0.0**; el roadmap es un ledger acumulativo;
 - una instrucción explícita del usuario puede repriorizar el roadmap;
 - Issues específicos contienen criterios de aceptación; el roadmap contiene orden y estado;
-- después de un merge relevante, el cuerpo debe reflejar la realidad, no el plan anterior;
-- hasta alcanzar una **V 1.0.0 madura**, conservar un registro detallado y acumulativo de cada bloque relevante: tarea/hito en el cuerpo y eventos de ejecución en comentarios, incluyendo PR, merge SHA, validación exact-main, despliegue y validación de producción cuando exista;
+- después de un merge relevante, el roadmap debe reflejar la realidad, no el plan anterior;
+- hasta alcanzar una **v1.0.0 madura**, conservar un registro detallado de cada bloque relevante: tarea/hito, estado, versión cuando exista, PR, merge SHA, validación exact-main, estado de despliegue y validación de producción cuando exista;
 - si el cuerpo del Issue #1 llegara a un límite práctico de tamaño, **no compactar ni borrar**: crear un volumen/Issue de continuación, dejar el Issue #1 intacto y enlazar ambos en ambas direcciones;
-- el roadmap debe conservar una lectura limpia para socios y personas no técnicas;
-- **no incluir en el cuerpo del roadmap políticas permanentes, manuales, convenciones ni instrucciones operativas extensas**; esos contenidos pertenecen a `AGENTES.md`, `ESPECIFICACIONES.md` o `GLOSARIO.md`;
-- la regla append-only aplica a trabajo e historial de ejecución, no al boilerplate normativo;
+- el roadmap debe conservar una lectura limpia para socios y personas no técnicas: mostrar trabajo planeado, hecho, pendiente, bloqueos, fases, PRs/versiones y progreso;
+- **no incluir en el roadmap políticas permanentes, manuales, convenciones, instrucciones operativas ni explicaciones que permanezcan fijas**; esos contenidos pertenecen a `AGENTES.md`, `ESPECIFICACIONES.md` o `GLOSARIO.md`;
+- la regla append-only aplica a **entradas de trabajo e historial de ejecución**, no al texto normativo: mover o retirar boilerplate/políticas del roadmap está permitido y es obligatorio cuando mejora su limpieza sin borrar trabajo histórico;
 - cuando un detalle técnico sea necesario para ejecutar o validar una tarea, llevarlo al Issue específico o a `ESPECIFICACIONES.md` y mantener en el roadmap solo el resumen necesario para entender avance y estado.
 
 ---
@@ -489,7 +434,7 @@ Después de activar la coordinación multiagente, el trabajo normal usa **exclus
 Reglas:
 
 - no crear manualmente ramas `feature/*`, `fix/*`, `docs/*`, `infra/*` o equivalentes para trabajo normal;
-- el workflow de reserva crea `trabajo/issue-N` de forma atómica desde el `main` actual;
+- `/tomar` crea `trabajo/issue-N` de forma atómica desde el `main` actual;
 - una rama canónica existente significa que el Issue está reservado, incluso si un label tarda en sincronizarse;
 - solo se permiten excepciones de bootstrap/mantenimiento cuando están explícitamente documentadas en el Issue correspondiente.
 
@@ -627,7 +572,7 @@ Ante un fallo recurrente:
 
 Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y deben considerarse obligatorias hasta que el usuario las cambie explícitamente:
 
-- toda implementación nueva requiere una reserva silenciosa de Issue mediante el label `estado: reservado`; GitHub es el lock central de coordinación multiagente;
+- toda implementación nueva requiere una reserva de Issue mediante `/tomar`; GitHub es el lock central de coordinación multiagente;
 - toda reserva usa la rama canónica `trabajo/issue-N` y no vence automáticamente;
 - CI debe rechazar PRs sin relación válida `Closes #N` o con archivos solapados con otros PR abiertos;
 - el nombre oficial y público del producto es `Condor App`;
@@ -649,7 +594,7 @@ Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y 
 - `ROADMAP.md` es solo un punto de entrada al Issue #1 y no mantiene una copia paralela del progreso;
 - `AGENTES.md` es el protocolo operativo canónico y hereda la estructura/reglas aplicables de BRVTAL;
 - toda PR relevante debe reflejar en el roadmap cualquier cambio real de estado antes o inmediatamente después del cierre de la entrega;
-- el roadmap funciona como registro acumulativo desde el inicio del proyecto hasta, como mínimo, la primera V 1.0.0 madura: el cuerpo conserva el plan y los comentarios conservan la cronología operativa;
+- el roadmap funciona como un log detallado acumulativo desde el inicio del proyecto hasta, como mínimo, la primera v1.0.0 madura;
 - nunca declarar VALIDADO EN PRODUCCIÓN únicamente porque CI esté verde;
 - Condor usa versión humana de producto por cada deploy;
 - el primer deploy será `0.1.0`;
