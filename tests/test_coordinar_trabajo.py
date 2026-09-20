@@ -327,7 +327,7 @@ class CoordinacionTests(unittest.TestCase):
         api.branches["trabajo/issue-12"] = "abc123"
         result = reserve_work(api, 12, "pl0n3r", "OWNER")
         self.assertIsNone(result)
-        self.assertEqual(api.status_history[-1], STATUS_RESERVED)
+        self.assertEqual(api.status_history, [])
         self.assertIsNone(active_reservation(api, 12))
 
     def test_blocked_issue_cannot_be_reserved(self) -> None:
