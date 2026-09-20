@@ -1,12 +1,10 @@
 name: Coordinación multiagente (V 0.1.0)
 
 on:
-  issue_comment:
-    types: [created]
   pull_request:
     types: [opened, ready_for_review, converted_to_draft, closed]
   issues:
-    types: [closed, reopened]
+    types: [labeled, closed, reopened]
 
 permissions:
   contents: read
@@ -16,16 +14,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  comandos:
-    name: Procesar reserva de trabajo
+  reserva-silenciosa:
+    name: Sincronizar reserva silenciosa
     if: >-
-      github.event_name == 'issue_comment' &&
+      github.event_name == 'issues' &&
+      github.event.action == 'labeled' &&
       github.event.issue.pull_request == null &&
+      github.event.sender.login != 'github-actions[bot]' &&
       (
-        github.event.comment.body == '/tomar' ||
-        startsWith(github.event.comment.body, '/liberar ') ||
-        github.event.comment.body == '/liberar-forzado' ||
-        startsWith(github.event.comment.body, '/transferir ')
+        github.event.label.name == 'estado: reservado' ||
+        github.event.label.name == 'estado: disponible'
       )
     runs-on: ubuntu-latest
     permissions:
@@ -39,17 +37,16 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
-      - name: Ejecutar comando
+      - name: Procesar estado solicitado
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORIO: ${{ github.repository }}
           ISSUE: ${{ github.event.issue.number }}
-          ACTOR: ${{ github.event.comment.user.login }}
-          ASOCIACION: ${{ github.event.comment.author_association }}
-          COMANDO: ${{ github.event.comment.body }}
+          ACTOR: ${{ github.event.sender.login }}
+          LABEL: ${{ github.event.label.name }}
         run: |
           set -euo pipefail
-          python3 scripts/coordinar_trabajo.py comentario             --repo "$REPOSITORIO"             --issue "$ISSUE"             --actor "$ACTOR"             --association "$ASOCIACION"             --body "$COMANDO"
+          python3 scripts/coordinar_trabajo.py label-event             --repo "$REPOSITORIO"             --issue "$ISSUE"             --actor "$ACTOR"             --label "$LABEL"
 
   estado-pr:
     name: Sincronizar estado desde PR
@@ -80,7 +77,9 @@ jobs:
 
   estado-issue:
     name: Limpiar o reabrir reserva
-    if: github.event_name == 'issues'
+    if: >-
+      github.event_name == 'issues' &&
+      (github.event.action == 'closed' || github.event.action == 'reopened')
     runs-on: ubuntu-latest
     permissions:
       contents: write
