@@ -363,6 +363,19 @@ def valid_reservation_payload(value: Any) -> bool:
     return isinstance(value.get("reason"), str) and bool(value["reason"])
 
 
+def reservation_from_text(text: str) -> dict[str, Any] | None:
+    """Extrae el último marcador de reserva válido de un texto."""
+    latest: dict[str, Any] | None = None
+    for match in RESERVATION_RE.finditer(text or ""):
+        try:
+            parsed = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            continue
+        if valid_reservation_payload(parsed):
+            latest = parsed
+    return latest
+
+
 def latest_reservation(
     comments: list[dict[str, Any]],
     trusted_login: str = TRUSTED_MARKER_LOGIN,
@@ -738,14 +751,27 @@ def update_issue_label_state(
     actor: str,
     label: str,
 ) -> None:
-    """Reserva silenciosamente mediante label; la liberación exige sesión o cierre."""
+    """Reserva mediante label y restaura un estado canónico si pierde la carrera."""
     if actor == TRUSTED_MARKER_LOGIN or label != STATUS_RESERVED:
         return
 
-    # La capacidad de aplicar el label exige escritura en GitHub; la rama
-    # canónica sigue siendo el lock atómico y el bot firma la metadata mediante
-    # un comentario HTML sin contenido humano visible.
-    reserve_work(api, issue_number, actor, "OWNER")
+    reservation_id = reserve_work(api, issue_number, actor, "OWNER")
+    if reservation_id is not None:
+        return
+
+    # El evento labeled ya aplicó estado: reservado antes de ejecutar el
+    # coordinador. Si no se obtuvo el lock, corregimos ese estado transitorio
+    # sin pisar una reserva concurrente que sí haya creado la rama/marcador.
+    branch = f"trabajo/issue-{issue_number}"
+    if api.branch_sha(branch) or active_reservation(api, issue_number):
+        api.set_status(issue_number, STATUS_RESERVED)
+        return
+
+    labels = label_names(api.issue(issue_number))
+    api.set_status(
+        issue_number,
+        STATUS_BLOCKED if STATUS_BLOCKED in labels else STATUS_AVAILABLE,
+    )
 
 def update_issue_state(api: GitHub, issue_number: int, action: str) -> None:
     """Limpia una reserva al cerrar un Issue o restablece su estado al reabrirlo."""
