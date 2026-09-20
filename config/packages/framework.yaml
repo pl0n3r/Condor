@@ -10,3 +10,4 @@ framework:
     cookie_secure: auto
     cookie_httponly: true
     cookie_samesite: lax
+    gc_maxlifetime: 7200

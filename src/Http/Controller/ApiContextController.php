@@ -7,18 +7,18 @@ namespace App\Http\Controller;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\User;
 use App\Shared\Version\AppVersion;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 
-final class AdminController extends AbstractController
+final class ApiContextController extends AbstractController
 {
-    #[Route('/admin', name: 'app_admin', methods: ['GET'])]
+    #[Route('/api/v1/context', name: 'api_context', methods: ['GET'])]
     public function __invoke(
-        AppVersion $version,
         CurrentTenantForUser $currentTenantForUser,
-    ): Response {
+        AppVersion $version,
+    ): JsonResponse {
         $user = $this->getUser();
         if (!$user instanceof User) {
             throw new AccessDeniedException();
@@ -26,9 +26,13 @@ final class AdminController extends AbstractController
 
         $tenant = $currentTenantForUser->resolve($user);
 
-        return $this->render('admin/index.html.twig', [
-            'app_version' => $version->human(),
-            'tenant_name' => $tenant->name(),
+        return $this->json([
+            'tenant' => [
+                'id' => $tenant->id(),
+                'name' => $tenant->name(),
+                'slug' => $tenant->slug(),
+            ],
+            'version' => $version->human(),
         ]);
     }
 }

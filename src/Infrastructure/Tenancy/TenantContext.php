@@ -6,8 +6,9 @@ namespace App\Infrastructure\Tenancy;
 
 use App\Domain\Organization\Entity\Tenant;
 use LogicException;
+use Symfony\Contracts\Service\ResetInterface;
 
-final class TenantContext
+final class TenantContext implements ResetInterface
 {
     private ?Tenant $tenant = null;
 
@@ -28,5 +29,10 @@ final class TenantContext
     public function require(): Tenant
     {
         return $this->tenant ?? throw new LogicException('No existe un tenant activo para esta operación.');
+    }
+
+    public function reset(): void
+    {
+        $this->tenant = null;
     }
 }

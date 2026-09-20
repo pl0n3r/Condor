@@ -23,6 +23,8 @@ final readonly class TenantContextSubscriber
             return;
         }
 
+        $this->context->reset();
+
         $tenant = $this->resolver->resolve($event->getRequest());
         if ($tenant !== null) {
             $this->context->set($tenant);

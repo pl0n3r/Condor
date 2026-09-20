@@ -26,7 +26,7 @@ final class SecurityController extends AbstractController
         ]);
     }
 
-    #[Route('/admin/logout', name: 'app_logout', methods: ['POST', 'GET'])]
+    #[Route('/admin/logout', name: 'app_logout', methods: ['POST'])]
     public function logout(): never
     {
         throw new \LogicException('Esta ruta es interceptada por el firewall de Symfony.');

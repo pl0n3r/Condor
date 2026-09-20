@@ -8,18 +8,26 @@
 {% endblock %}
 
 {% block body %}
-<div id="condor-admin-root" data-version="{{ app_version }}">
+<div
+    id="condor-admin-root"
+    data-version="{{ app_version }}"
+    data-logout-token="{{ csrf_token('logout') }}"
+>
     <section class="admin-shell" aria-label="Administrador de Condor">
         <aside class="sidebar">
             <strong>Condor App</strong>
             <nav aria-label="Navegación principal">
                 <a href="{{ path('app_admin') }}" aria-current="page">Inicio</a>
             </nav>
+            <form method="post" action="{{ path('app_logout') }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('logout') }}">
+                <button class="button button-secondary" type="submit">Cerrar sesión</button>
+            </form>
         </aside>
         <div class="workspace">
             <span class="eyebrow">Administrador</span>
-            <h1>Fundación de Condor</h1>
-            <p class="muted">El primer vertical slice está construyendo la base multi-tenant del producto.</p>
+            <h1>{{ tenant_name }}</h1>
+            <p class="muted">Cargando contexto seguro de la empresa…</p>
         </div>
     </section>
 </div>
