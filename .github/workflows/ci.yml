@@ -217,6 +217,105 @@ jobs:
       - name: Ejecutar integraciones
         run: python3 -m unittest discover -s tests/integration -p 'test_*.py'
 
+  backend-php:
+    name: Backend PHP / MariaDB
+    needs: preflight
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: condor_test
+          MARIADB_USER: condor
+          MARIADB_PASSWORD: condor
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      APP_ENV: test
+      APP_DEBUG: 0
+      APP_SECRET: condor-ci-secret-no-produccion
+      DATABASE_URL: mysql://condor:condor@127.0.0.1:3306/condor_test?serverVersion=mariadb-11.4.0&charset=utf8mb4
+      RELEASE_SHA: ${{ github.sha }}
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Instalar dependencias PHP
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Validar Composer y sintaxis PHP
+        run: |
+          set -euo pipefail
+          composer validate --strict
+          find src config migrations public -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l bin/console
+
+      - name: Validar configuración Symfony
+        run: |
+          set -euo pipefail
+          php bin/console lint:yaml config
+          php bin/console lint:twig templates
+          php bin/console about
+
+      - name: Aplicar migraciones en MariaDB descartable
+        run: php bin/console doctrine:migrations:migrate --no-interaction
+
+      - name: Probar onboarding transaccional
+        env:
+          CONDOR_OWNER_PASSWORD: Condor-CI-Password-2026!
+        run: |
+          set -euo pipefail
+          php bin/console app:onboarding:create \
+            --name="Empresa CI" \
+            --slug="empresa-ci" \
+            --legal-name="Empresa CI SAS" \
+            --nit="900000001-1" \
+            --branch="Principal" \
+            --email="owner-ci@example.test" \
+            --owner-name="Propietario CI"
+          php bin/console doctrine:query:sql "SELECT id, slug FROM condor_tenant WHERE slug = 'empresa-ci'" | grep -q 'empresa-ci'
+
+      - name: Smoke HTTP y login real
+        env:
+          CONDOR_OWNER_PASSWORD: Condor-CI-Password-2026!
+        run: |
+          set -euo pipefail
+          php -S 127.0.0.1:8080 -t public public/index.php >/tmp/condor-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for intento in {1..20}; do
+            if curl -fsS http://127.0.0.1:8080/health >/tmp/health.json; then
+              break
+            fi
+            sleep 0.5
+          done
+
+          grep -q '"status":"ok"' /tmp/health.json
+          grep -q '"version":"0.1.0"' /tmp/health.json
+          curl -fsS http://127.0.0.1:8080/ | grep -q 'V 0.1.0'
+          curl -fsS -c /tmp/cookies.txt http://127.0.0.1:8080/admin/login >/tmp/login.html
+          grep -q 'V 0.1.0' /tmp/login.html
+
+          token="$(python3 -c 'import html,re; body=open("/tmp/login.html",encoding="utf-8").read(); m=re.search(r"name=\"_csrf_token\" value=\"([^\"]+)\"",body); assert m; print(html.unescape(m.group(1)))')"
+
+          code="$(curl -sS -o /tmp/login-response.html -w '%{http_code}' \
+            -b /tmp/cookies.txt -c /tmp/cookies.txt \
+            --data-urlencode "_username=owner-ci@example.test" \
+            --data-urlencode "_password=$CONDOR_OWNER_PASSWORD" \
+            --data-urlencode "_csrf_token=$token" \
+            http://127.0.0.1:8080/admin/login)"
+          test "$code" = "302"
+          curl -fsS -b /tmp/cookies.txt http://127.0.0.1:8080/admin | grep -q 'Fundación de Condor'
+
   e2e:
     name: Playwright Chromium
     needs: preflight
@@ -265,7 +364,7 @@ jobs:
 
   validar:
     name: Validar
-    needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, e2e]
+    needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, backend-php, e2e]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -276,6 +375,7 @@ jobs:
           GOBIERNO: ${{ needs.gobierno.result }}
           COORDINACION: ${{ needs.coordinacion.result }}
           PRUEBAS_BASE: ${{ needs.pruebas-base.result }}
+          BACKEND_PHP: ${{ needs.backend-php.result }}
           E2E: ${{ needs.e2e.result }}
         run: |
           set -euo pipefail
@@ -284,6 +384,7 @@ jobs:
           [[ "$GOBIERNO" == "success" ]] || { echo "::error::Gobierno no pasó."; exit 1; }
           [[ "$COORDINACION" == "success" ]] || { echo "::error::Coordinación no pasó."; exit 1; }
           [[ "$PRUEBAS_BASE" == "success" ]] || { echo "::error::Pruebas base no pasaron."; exit 1; }
+          [[ "$BACKEND_PHP" == "success" ]] || { echo "::error::Backend PHP no pasó."; exit 1; }
 
           case "$E2E" in
             success|skipped) ;;
@@ -303,6 +404,7 @@ jobs:
             echo "- Gobierno: **$GOBIERNO**"
             echo "- Coordinación: **$COORDINACION**"
             echo "- Pruebas base: **$PRUEBAS_BASE**"
+            echo "- Backend PHP: **$BACKEND_PHP**"
             echo "- Playwright: **$E2E**"
             echo "- Resultado agregado: **success**"
           } >> "$GITHUB_STEP_SUMMARY"
