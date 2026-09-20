@@ -243,6 +243,8 @@ Cuando aplique:
 - consultas preparadas;
 - uploads validados por tipo, tamaño, ruta y autorización si existen;
 - logs sin passwords, tokens ni secretos;
+- ante errores 5xx de producción, priorizar el incidente estructurado y su diagnóstico compartible sanitizado; no pedir ni publicar logs crudos si el mecanismo seguro está disponible;
+- cualquier enlace de diagnóstico para soporte/IA debe ser temporal, de solo lectura, revocable y omitir headers, cookies, cuerpos de request, secretos, PII innecesaria y argumentos del stack;
 - permisos de mínimo privilegio;
 - backups con restauración demostrable, no solo generación de archivos.
 

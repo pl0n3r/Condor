@@ -1,0 +1,65 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Diagnósticos · Condor App{% endblock %}
+
+{% block head %}
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/build/admin.css">
+{% endblock %}
+
+{% block body %}
+<section class="admin-shell" aria-label="Diagnósticos de Condor">
+    <aside class="sidebar">
+        <strong>Condor App</strong>
+        <nav aria-label="Navegación propietaria">
+            <a href="{{ path('app_platform_owner') }}">Plataforma</a>
+            <a href="{{ path('app_platform_diagnostics') }}" aria-current="page">Diagnósticos</a>
+        </nav>
+        <form method="post" action="{{ path('app_logout') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('logout') }}">
+            <button class="button button-secondary" type="submit">Cerrar sesión</button>
+        </form>
+    </aside>
+
+    <div class="workspace">
+        <span class="eyebrow">Propietario · observabilidad</span>
+        <h1>Diagnósticos seguros</h1>
+        <p class="muted">Los enlaces compartidos duran 30 minutos, son de solo lectura y nunca incluyen headers, cookies, request bodies ni secretos.</p>
+
+        <div class="foundation-grid">
+            {% for incident in incidents %}
+                <article>
+                    <strong>{{ incident.id }}</strong>
+                    <span>{{ incident.occurredAt|date('Y-m-d H:i:s', 'UTC') }} UTC · HTTP {{ incident.status }} · {{ incident.routeName ?? '(sin ruta)' }}</span>
+                    <span>{{ incident.exceptionClass }}</span>
+                    <span>Fingerprint: {{ incident.fingerprint|slice(0, 16) }}…</span>
+                    <form method="post" action="{{ path('app_platform_diagnostic_share_create', {id: incident.id}) }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('diagnostic_share_' ~ incident.id) }}">
+                        <button class="button" type="submit">Crear enlace temporal</button>
+                    </form>
+                </article>
+            {% else %}
+                <article><strong>Sin errores registrados</strong><span>Los próximos 5xx internos aparecerán aquí con una referencia segura.</span></article>
+            {% endfor %}
+        </div>
+
+        {% if shares %}
+            <h2>Enlaces activos</h2>
+            <div class="foundation-grid">
+                {% for share in shares %}
+                    <article>
+                        <strong>{{ share.id }}</strong>
+                        <span>Error {{ share.incident.id }} · vence {{ share.expiresAt|date('Y-m-d H:i:s', 'UTC') }} UTC</span>
+                        <form method="post" action="{{ path('app_platform_diagnostic_share_revoke', {id: share.id}) }}">
+                            <input type="hidden" name="_token" value="{{ csrf_token('diagnostic_revoke_' ~ share.id) }}">
+                            <button class="button button-secondary" type="submit">Revocar</button>
+                        </form>
+                    </article>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <p class="version-line">V {{ app_version }}</p>
+    </div>
+</section>
+{% endblock %}
