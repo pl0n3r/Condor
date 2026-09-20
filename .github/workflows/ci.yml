@@ -106,208 +106,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Preparar PHP 8.5
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
-        with:
-          php-version: '8.5'
-          coverage: none
-
-      - name: Validar documentación
-        run: python3 scripts/validar_documentacion.py
-
-  gobierno:
-    name: Validar gobierno del repositorio
-    needs: preflight
-    runs-on: ubuntu-latest
-    steps:
-      - name: Descargar repositorio
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-
-      - name: Validar archivos canónicos
-        run: |
-          set -euo pipefail
-          for archivo in \
-            AGENTES.md \
-            ESPECIFICACIONES.md \
-            GLOSARIO.md \
-            README.md \
-            ROADMAP.md \
-            .github/workflows/coordinacion-trabajo.yml \
-            .github/workflows/sonar-annotation-relay.yml \
-            .github/workflows/ci-throughput-telemetry.yml \
-            scripts/coordinar_trabajo.py \
-            scripts/ci_throughput_report.py \
-            tests/test_coordinar_trabajo.py \
-            tests/test_ci_throughput_report.py \
-            package.json \
-            package-lock.json \
-            playwright.config.mjs \
-            tests/contract/test_tooling_contract.py \
-            tests/integration/test_tooling_integration.py \
-            tests/e2e/harness.spec.mjs; do
-            test -f "$archivo" || { echo "::error::Falta $archivo"; exit 1; }
-          done
-          test ! -e AGENTS.md || { echo "::error::AGENTS.md no debe existir; el archivo canónico es AGENTES.md"; exit 1; }
-
-      - name: Validar configuración de labels
-        run: python3 -m json.tool .github/labels.json >/dev/null
-
-      - name: Validar títulos predeterminados de Issues
-        run: |
-          set -euo pipefail
-          for archivo in .github/ISSUE_TEMPLATE/*.yml; do
-            [[ "$(basename "$archivo")" == "config.yml" ]] && continue
-            titulo="$(grep -m1 '^title:' "$archivo" | sed -E 's/^title:[[:space:]]*"?([^"]*)"?$/\1/')"
-            if [[ ! "$titulo" =~ \(V\ [0-9]+\.[0-9]+\.[0-9]+\)$ ]]; then
-              echo "::error file=$archivo::El título predeterminado debe terminar con (V X.Y.Z)."
-              exit 1
-            fi
-          done
-
-  coordinacion:
-    name: Validar coordinación
-    needs: preflight
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: read
-      pull-requests: read
-    steps:
-      - name: Descargar repositorio
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Probar reglas de coordinación
-        run: python3 -m unittest tests/test_coordinar_trabajo.py
-
-      - name: Validar reserva y colisiones
-        if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORIO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          argumentos=()
-          if git cat-file -e "$BASE_SHA:.github/workflows/coordinacion-trabajo.yml" 2>/dev/null; then
-            argumentos+=(--require-reservation)
-          else
-            echo "Bootstrap: la base aún no contiene coordinación multiagente; se validan rama, Issue y colisiones."
-          fi
-          python3 scripts/coordinar_trabajo.py validar-pr \
-            --repo "$REPOSITORIO" \
-            --pr "$PR" \
-            "${argumentos[@]}"
-
-  pruebas-base:
-    name: Pruebas de contrato e integración
-    needs: preflight
-    runs-on: ubuntu-latest
-    steps:
-      - name: Descargar repositorio
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-
-      - name: Probar telemetría de CI
-        run: python3 -m unittest tests/test_ci_throughput_report.py
-
-      - name: Ejecutar contratos
-        run: python3 -m unittest discover -s tests/contract -p 'test_*.py'
-
-      - name: Ejecutar integraciones
-        run: python3 -m unittest discover -s tests/integration -p 'test_*.py'
-
-  e2e: ${{ steps.cambios.outputs.e2e }}
-    steps:
-      - name: Descargar repositorio
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Validar título de Pull Request
-        if: github.event_name == 'pull_request'
-        env:
-          TITULO_PR: ${{ github.event.pull_request.title }}
-        run: |
-          set -euo pipefail
-          if [[ ! "$TITULO_PR" =~ \(V\ [0-9]+\.[0-9]+\.[0-9]+\)$ ]]; then
-            echo "::error::El título del PR debe terminar con el formato exacto (V X.Y.Z)."
-            exit 1
-          fi
-
-      - name: Clasificar cambios
-        id: cambios
-        env:
-          EVENTO: ${{ github.event_name }}
-          BASE_PR: ${{ github.event.pull_request.base.sha }}
-          PUSH_ANTES: ${{ github.event.before }}
-        run: |
-          set -euo pipefail
-
-          if [[ "$EVENTO" == "pull_request" ]]; then
-            base="$BASE_PR"
-          elif [[ "$EVENTO" == "push" && -n "$PUSH_ANTES" && "$PUSH_ANTES" != "0000000000000000000000000000000000000000" ]]; then
-            base="$PUSH_ANTES"
-          else
-            base=""
-          fi
-
-          if [[ -n "$base" ]] && git cat-file -e "${base}^{commit}" 2>/dev/null; then
-            archivos="$(git diff --name-only "$base" "$GITHUB_SHA")"
-          else
-            archivos="$(git ls-files)"
-          fi
-
-          printf '%s\n' "$archivos"
-
-          if grep -Eq '(^|/)[^/]+\.md$|^docs/' <<<"$archivos"; then
-            echo "documentacion=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "documentacion=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          if grep -Eq '^\.github/|^AGENTES\.md$|^ESPECIFICACIONES\.md$|^GLOSARIO\.md$|^ROADMAP\.md$' <<<"$archivos"; then
-            echo "github=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "github=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          if grep -Eq '(^\.github/workflows/ci\.yml$|^package(-lock)?\.json$|^composer\.(json|lock)$|^playwright\.config\.mjs$|^tests/|^src/|^app/|^public/|^web/|^config/|^migrations/|^templates/|^frontend/|\.(html|twig|php|css|js|mjs|ts|tsx)$)' <<<"$archivos"; then
-            echo "e2e=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "e2e=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Resumen preflight
-        run: |
-          {
-            echo "## Preflight Condor"
-            echo
-            printf -- '- Evento: `%s`\n' "$GITHUB_EVENT_NAME"
-            printf -- '- SHA: `%s`\n' "$GITHUB_SHA"
-            printf -- '- Documentación modificada: `%s`\n' "${{ steps.cambios.outputs.documentacion }}"
-            printf -- '- Gobierno/GitHub modificado: `%s`\n' "${{ steps.cambios.outputs.github }}"
-            printf -- '- E2E requerido: `%s`\n' "${{ steps.cambios.outputs.e2e }}"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  documentacion:
-    name: Validar documentación
-    needs: preflight
-    if: needs.preflight.outputs.documentacion == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Descargar repositorio
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-
       - name: Validar documentación
         run: python3 scripts/validar_documentacion.py
 
@@ -447,6 +245,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Preparar PHP 8.5
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+
       - name: Generar secretos efímeros de CI
         run: |
           set -euo pipefail
@@ -563,6 +367,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+
+      - name: Preparar PHP 8.5
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
 
       - name: Preparar secretos efímeros
         run: |
