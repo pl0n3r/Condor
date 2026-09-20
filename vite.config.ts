@@ -1,4 +1,3 @@
-import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
@@ -10,7 +9,7 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       input: {
-        admin: resolve(import.meta.dirname, 'frontend/admin/main.tsx')
+        admin: 'frontend/admin/main.tsx'
       },
       output: {
         entryFileNames: 'admin.js',
