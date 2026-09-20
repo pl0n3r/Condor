@@ -7,7 +7,7 @@ namespace DoctrineMigrations;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
-final class FoundationTenantMigration extends AbstractMigration
+final class Version20260920023000 extends AbstractMigration // NOSONAR -- nombre requerido por Doctrine Migrations
 {
     public function getDescription(): string
     {
