@@ -68,6 +68,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->active;
     }
 
+    public function deactivate(): void
+    {
+        $this->active = false;
+    }
+
     public function getUserIdentifier(): string
     {
         return $this->email;

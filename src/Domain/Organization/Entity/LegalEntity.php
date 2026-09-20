@@ -12,6 +12,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_legal_entity')]
 #[ORM\UniqueConstraint(name: 'uniq_legal_tenant_nit', columns: ['tenant_id', 'nit'])]
+#[ORM\UniqueConstraint(name: 'uniq_legal_tenant_id', columns: ['tenant_id', 'id'])]
 class LegalEntity
 {
     #[ORM\Id]

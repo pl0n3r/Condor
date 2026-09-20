@@ -46,4 +46,35 @@ final class CurrentTenantForUserTest extends KernelTestCase
         $this->expectException(AccessDeniedException::class);
         $resolver->resolve($user);
     }
+
+    public function testItDoesNotChooseArbitrarilyBetweenMultipleMemberships(): void
+    {
+        self::bootKernel();
+
+        $container = static::getContainer();
+        $entityManager = $container->get(EntityManagerInterface::class);
+        $context = $container->get(TenantContext::class);
+        $resolver = $container->get(CurrentTenantForUser::class);
+
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        self::assertInstanceOf(TenantContext::class, $context);
+        self::assertInstanceOf(CurrentTenantForUser::class, $resolver);
+
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+        $first = new Tenant('Empresa Uno', 'empresa-uno-'.$suffix);
+        $second = new Tenant('Empresa Dos', 'empresa-dos-'.$suffix);
+        $user = new User('multi-'.$suffix.'@example.test', 'Usuario Multi');
+
+        $entityManager->persist($first);
+        $entityManager->persist($second);
+        $entityManager->persist($user);
+        $entityManager->persist(new Membership($first, $user, Membership::ROLE_OWNER));
+        $entityManager->persist(new Membership($second, $user, 'READ_ONLY'));
+        $entityManager->flush();
+
+        $context->reset();
+
+        $this->expectException(AccessDeniedException::class);
+        $resolver->resolve($user);
+    }
 }

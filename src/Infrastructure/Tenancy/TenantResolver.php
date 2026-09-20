@@ -24,14 +24,17 @@ final readonly class TenantResolver
 
     public function resolve(Request $request): ?Tenant
     {
-        $slug = $request->attributes->get('tenant_slug');
-        if (is_string($slug) && $slug !== '') {
-            return $this->entityManager->getRepository(Tenant::class)->findOneBy(['slug' => strtolower($slug)]);
-        }
-
         $host = strtolower(rtrim($request->getHost(), '.'));
+
         if (in_array($host, self::PLATFORM_HOSTS, true)) {
-            return null;
+            $slug = $request->attributes->get('tenant_slug');
+            if (!is_string($slug) || $slug === '') {
+                return null;
+            }
+
+            return $this->entityManager
+                ->getRepository(Tenant::class)
+                ->findOneBy(['slug' => strtolower($slug)]);
         }
 
         $domain = $this->entityManager->getRepository(TenantDomain::class)->findOneBy([

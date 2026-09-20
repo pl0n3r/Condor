@@ -8,6 +8,7 @@ use App\Shared\Id\UlidFactory;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
+use DomainException;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_branch')]
@@ -27,7 +28,7 @@ class Branch
         name: 'legal_entity_id',
         referencedColumnName: 'id',
         nullable: true,
-        onDelete: 'SET NULL',
+        onDelete: 'RESTRICT',
     )]
     private ?LegalEntity $legalEntity;
 
@@ -50,6 +51,10 @@ class Branch
         ?LegalEntity $legalEntity = null,
         bool $default = false,
     ) {
+        if ($legalEntity !== null && $legalEntity->tenant()->id() !== $tenant->id()) {
+            throw new DomainException('La entidad legal debe pertenecer al mismo tenant de la sede.');
+        }
+
         $this->id = UlidFactory::new();
         $this->tenant = $tenant;
         $this->name = trim($name);

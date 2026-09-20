@@ -32,16 +32,21 @@ final readonly class CurrentTenantForUser
             return $activeTenant;
         }
 
-        $membership = $this->entityManager->getRepository(Membership::class)->findOneBy([
-            'user' => $user,
-            'active' => true,
-        ]);
+        $memberships = $this->entityManager->getRepository(Membership::class)->findBy(
+            ['user' => $user, 'active' => true],
+            ['id' => 'ASC'],
+            2,
+        );
 
-        if (!$membership instanceof Membership) {
+        if ($memberships === []) {
             throw new AccessDeniedException('No tienes una empresa activa asociada.');
         }
 
-        $tenant = $membership->tenant();
+        if (count($memberships) > 1) {
+            throw new AccessDeniedException('Selecciona explícitamente la empresa que quieres administrar.');
+        }
+
+        $tenant = $memberships[0]->tenant();
         $this->tenantContext->set($tenant);
 
         return $tenant;

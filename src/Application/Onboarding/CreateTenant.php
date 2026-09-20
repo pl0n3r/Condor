@@ -10,6 +10,7 @@ use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
@@ -43,33 +44,41 @@ final readonly class CreateTenant
             throw new DomainException('Ya existe una cuenta con ese correo.');
         }
 
-        return $this->entityManager->wrapInTransaction(function () use ($input, $slug, $email): OnboardingResult {
-            $tenant = new Tenant($input->tenantName, $slug);
-            $legalEntity = new LegalEntity($tenant, $input->legalName, $input->nit, true);
-            $branch = new Branch($tenant, $input->branchName, 'principal', $legalEntity, true);
-            $owner = new User($email, $input->ownerName, ['ROLE_TENANT_OWNER']);
-            $owner->setPasswordHash($this->passwordHasher->hashPassword($owner, $input->ownerPassword));
-            $membership = new Membership($tenant, $owner, Membership::ROLE_OWNER);
+        try {
+            return $this->entityManager->wrapInTransaction(function () use ($input, $slug, $email): OnboardingResult {
+                $tenant = new Tenant($input->tenantName, $slug);
+                $legalEntity = new LegalEntity($tenant, $input->legalName, $input->nit, true);
+                $branch = new Branch($tenant, $input->branchName, 'principal', $legalEntity, true);
+                $owner = new User($email, $input->ownerName);
+                $owner->setPasswordHash($this->passwordHasher->hashPassword($owner, $input->ownerPassword));
+                $membership = new Membership($tenant, $owner, Membership::ROLE_OWNER);
 
-            foreach ([$tenant, $legalEntity, $branch, $owner, $membership] as $entity) {
-                $this->entityManager->persist($entity);
-            }
+                foreach ([$tenant, $legalEntity, $branch, $owner, $membership] as $entity) {
+                    $this->entityManager->persist($entity);
+                }
 
-            $this->entityManager->persist(new AuditEvent(
-                $tenant,
-                $owner->id(),
-                'tenant.onboarding_completed',
-                Tenant::class,
-                $tenant->id(),
-                [
-                    'branch_id' => $branch->id(),
-                    'legal_entity_id' => $legalEntity->id(),
-                ],
-            ));
+                $this->entityManager->persist(new AuditEvent(
+                    $tenant,
+                    $owner->id(),
+                    'tenant.onboarding_completed',
+                    Tenant::class,
+                    $tenant->id(),
+                    [
+                        'branch_id' => $branch->id(),
+                        'legal_entity_id' => $legalEntity->id(),
+                    ],
+                ));
 
-            $this->entityManager->flush();
+                $this->entityManager->flush();
 
-            return new OnboardingResult($tenant->id(), $tenant->slug(), $branch->id(), $owner->id());
-        });
+                return new OnboardingResult($tenant->id(), $tenant->slug(), $branch->id(), $owner->id());
+            });
+        } catch (UniqueConstraintViolationException $exception) {
+            throw new DomainException(
+                'Los datos de la empresa ya están registrados (identificador o correo).',
+                0,
+                $exception,
+            );
+        }
     }
 }

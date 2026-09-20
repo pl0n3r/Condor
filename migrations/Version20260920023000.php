@@ -18,7 +18,7 @@ final class Version20260920023000 extends AbstractMigration // NOSONAR -- nombre
     {
         $this->addSql(<<<'SQL'
             CREATE TABLE condor_tenant (
-                id CHAR(26) NOT NULL,
+                id VARCHAR(26) NOT NULL,
                 name VARCHAR(160) NOT NULL,
                 slug VARCHAR(120) NOT NULL,
                 created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
@@ -29,23 +29,24 @@ final class Version20260920023000 extends AbstractMigration // NOSONAR -- nombre
 
         $this->addSql(<<<'SQL'
             CREATE TABLE condor_legal_entity (
-                id CHAR(26) NOT NULL,
-                tenant_id CHAR(26) NOT NULL,
+                id VARCHAR(26) NOT NULL,
+                tenant_id VARCHAR(26) NOT NULL,
                 legal_name VARCHAR(180) NOT NULL,
                 nit VARCHAR(32) DEFAULT NULL,
                 is_primary TINYINT(1) NOT NULL,
                 created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 INDEX IDX_LEGAL_TENANT (tenant_id),
                 UNIQUE INDEX uniq_legal_tenant_nit (tenant_id, nit),
+                UNIQUE INDEX uniq_legal_tenant_id (tenant_id, id),
                 PRIMARY KEY(id)
             ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
             SQL);
 
         $this->addSql(<<<'SQL'
             CREATE TABLE condor_branch (
-                id CHAR(26) NOT NULL,
-                tenant_id CHAR(26) NOT NULL,
-                legal_entity_id CHAR(26) DEFAULT NULL,
+                id VARCHAR(26) NOT NULL,
+                tenant_id VARCHAR(26) NOT NULL,
+                legal_entity_id VARCHAR(26) DEFAULT NULL,
                 name VARCHAR(160) NOT NULL,
                 slug VARCHAR(120) NOT NULL,
                 is_default TINYINT(1) NOT NULL,
@@ -59,7 +60,7 @@ final class Version20260920023000 extends AbstractMigration // NOSONAR -- nombre
 
         $this->addSql(<<<'SQL'
             CREATE TABLE condor_user (
-                id CHAR(26) NOT NULL,
+                id VARCHAR(26) NOT NULL,
                 email VARCHAR(180) NOT NULL,
                 display_name VARCHAR(160) NOT NULL,
                 password_hash VARCHAR(255) NOT NULL,
@@ -73,9 +74,9 @@ final class Version20260920023000 extends AbstractMigration // NOSONAR -- nombre
 
         $this->addSql(<<<'SQL'
             CREATE TABLE condor_membership (
-                id CHAR(26) NOT NULL,
-                tenant_id CHAR(26) NOT NULL,
-                user_id CHAR(26) NOT NULL,
+                id VARCHAR(26) NOT NULL,
+                tenant_id VARCHAR(26) NOT NULL,
+                user_id VARCHAR(26) NOT NULL,
                 role_key VARCHAR(64) NOT NULL,
                 active TINYINT(1) NOT NULL,
                 created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
@@ -88,8 +89,8 @@ final class Version20260920023000 extends AbstractMigration // NOSONAR -- nombre
 
         $this->addSql(<<<'SQL'
             CREATE TABLE condor_tenant_domain (
-                id CHAR(26) NOT NULL,
-                tenant_id CHAR(26) NOT NULL,
+                id VARCHAR(26) NOT NULL,
+                tenant_id VARCHAR(26) NOT NULL,
                 hostname VARCHAR(253) NOT NULL,
                 is_primary TINYINT(1) NOT NULL,
                 is_verified TINYINT(1) NOT NULL,
@@ -102,9 +103,9 @@ final class Version20260920023000 extends AbstractMigration // NOSONAR -- nombre
 
         $this->addSql(<<<'SQL'
             CREATE TABLE condor_audit_event (
-                id CHAR(26) NOT NULL,
-                tenant_id CHAR(26) NOT NULL,
-                actor_user_id CHAR(26) DEFAULT NULL,
+                id VARCHAR(26) NOT NULL,
+                tenant_id VARCHAR(26) NOT NULL,
+                actor_user_id VARCHAR(26) DEFAULT NULL,
                 action VARCHAR(120) NOT NULL,
                 entity_type VARCHAR(120) NOT NULL,
                 entity_id VARCHAR(64) NOT NULL,
@@ -128,7 +129,12 @@ final class Version20260920023000 extends AbstractMigration // NOSONAR -- nombre
         $this->addSql(
             'ALTER TABLE condor_branch '
             .'ADD CONSTRAINT FK_BRANCH_LEGAL FOREIGN KEY (legal_entity_id) '
-            .'REFERENCES condor_legal_entity (id) ON DELETE SET NULL',
+            .'REFERENCES condor_legal_entity (id) ON DELETE RESTRICT',
+        );
+        $this->addSql(
+            'ALTER TABLE condor_branch '
+            .'ADD CONSTRAINT FK_BRANCH_LEGAL_TENANT FOREIGN KEY (tenant_id, legal_entity_id) '
+            .'REFERENCES condor_legal_entity (tenant_id, id) ON DELETE RESTRICT',
         );
         $this->addSql(
             'ALTER TABLE condor_membership '

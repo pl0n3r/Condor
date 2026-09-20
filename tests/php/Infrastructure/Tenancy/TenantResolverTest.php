@@ -39,9 +39,19 @@ final class TenantResolverTest extends KernelTestCase
         $resolvedSecond = $resolver->resolve(Request::create('https://b-'.$suffix.'.example.test/'));
         $unverified = $resolver->resolve(Request::create('https://no-'.$suffix.'.example.test/'));
 
+        $crossedRequest = Request::create('https://a-'.$suffix.'.example.test/'.$second->slug());
+        $crossedRequest->attributes->set('tenant_slug', $second->slug());
+        $crossed = $resolver->resolve($crossedRequest);
+
+        $platformRequest = Request::create('https://condorapp.com.co/'.$second->slug());
+        $platformRequest->attributes->set('tenant_slug', $second->slug());
+        $platformResolved = $resolver->resolve($platformRequest);
+
         self::assertSame($first->id(), $resolvedFirst?->id());
         self::assertSame($second->id(), $resolvedSecond?->id());
         self::assertNull($unverified);
+        self::assertSame($first->id(), $crossed?->id());
+        self::assertSame($second->id(), $platformResolved?->id());
         self::assertNotSame($resolvedFirst?->id(), $resolvedSecond?->id());
     }
 }
