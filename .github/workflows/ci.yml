@@ -300,6 +300,9 @@ jobs:
       - name: Smoke HTTP y login real
         run: |
           set -euo pipefail
+          app_version="$(php -r '$config = require "config/version.php"; echo $config["version"] ?? "";')"
+          test -n "$app_version"
+
           php -S 127.0.0.1:8080 -t public public/router.php >/tmp/condor-http.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
@@ -319,10 +322,10 @@ jobs:
           fi
 
           grep -q '"status":"ok"' /tmp/health.json
-          grep -q '"version":"0.1.0"' /tmp/health.json
-          curl -fsS http://127.0.0.1:8080/ | grep -q 'V 0.1.0'
+          grep -q "\"version\":\"$app_version\"" /tmp/health.json
+          curl -fsS http://127.0.0.1:8080/ | grep -q "V $app_version"
           curl -fsS -c /tmp/cookies.txt http://127.0.0.1:8080/admin/login >/tmp/login.html
-          grep -q 'V 0.1.0' /tmp/login.html
+          grep -q "V $app_version" /tmp/login.html
 
           token="$(python3 -c 'import html,re; body=open("/tmp/login.html",encoding="utf-8").read(); m=re.search(r"name=\"_csrf_token\" value=\"([^\"]+)\"",body); assert m; print(html.unescape(m.group(1)))')"
 
@@ -373,6 +376,13 @@ jobs:
         with:
           php-version: '8.5'
           coverage: none
+
+      - name: Resolver versión de aplicación
+        run: |
+          set -euo pipefail
+          app_version="$(php -r '$config = require "config/version.php"; echo $config["version"] ?? "";')"
+          test -n "$app_version"
+          echo "APP_VERSION=$app_version" >> "$GITHUB_ENV"
 
       - name: Preparar secretos efímeros
         run: |
