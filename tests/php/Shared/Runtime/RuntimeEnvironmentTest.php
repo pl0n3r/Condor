@@ -6,6 +6,7 @@ namespace App\Tests\Shared\Runtime;
 
 use App\Shared\Runtime\RuntimeEnvironment;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 final class RuntimeEnvironmentTest extends TestCase
 {
@@ -27,8 +28,8 @@ final class RuntimeEnvironmentTest extends TestCase
         }
 
         $this->projectDir =
-            sys_get_temp_dir().'/condor-runtime-'.bin2hex(random_bytes(6));
-        mkdir($this->projectDir, 0770, true);
+            sys_get_temp_dir().'/condor-project-'.bin2hex(random_bytes(6));
+        mkdir($this->projectDir, 0700, true);
     }
 
     protected function tearDown(): void
@@ -61,12 +62,89 @@ final class RuntimeEnvironmentTest extends TestCase
             file_get_contents($this->projectDir.'/var/runtime/app_secret')
         );
 
-        putenv('APP_SECRET');
-        unset($_ENV['APP_SECRET'], $_SERVER['APP_SECRET']);
-
+        $this->clearSecretEnvironment();
         RuntimeEnvironment::prepare($this->projectDir);
 
         self::assertSame($first, getenv('APP_SECRET'));
+    }
+
+    public function testRejectsUnsafeRuntimeStorageInsteadOfUsingSharedTemp(): void
+    {
+        file_put_contents($this->projectDir.'/var', 'blocked');
+
+        self::assertFalse(
+            RuntimeEnvironment::runtimeStorageAvailable($this->projectDir)
+        );
+
+        $this->expectException(RuntimeException::class);
+
+        RuntimeEnvironment::prepare($this->projectDir);
+    }
+
+    public function testRejectsRuntimeDirectorySymlink(): void
+    {
+        mkdir($this->projectDir.'/var', 0700, true);
+        mkdir($this->projectDir.'/runtime-target', 0700, true);
+
+        if (
+            !@symlink(
+                $this->projectDir.'/runtime-target',
+                $this->projectDir.'/var/runtime'
+            )
+        ) {
+            self::markTestSkipped('El entorno no permite crear symlinks.');
+        }
+
+        self::assertFalse(
+            RuntimeEnvironment::runtimeStorageAvailable($this->projectDir)
+        );
+
+        $this->expectException(RuntimeException::class);
+
+        RuntimeEnvironment::prepare($this->projectDir);
+    }
+
+    public function testRejectsSecretFileSymlink(): void
+    {
+        mkdir($this->projectDir.'/var/runtime', 0700, true);
+        file_put_contents(
+            $this->projectDir.'/secret-target',
+            str_repeat('a', 64).PHP_EOL
+        );
+
+        if (
+            !@symlink(
+                $this->projectDir.'/secret-target',
+                $this->projectDir.'/var/runtime/app_secret'
+            )
+        ) {
+            self::markTestSkipped('El entorno no permite crear symlinks.');
+        }
+
+        self::assertFalse(
+            RuntimeEnvironment::runtimeStorageAvailable($this->projectDir)
+        );
+
+        $this->expectException(RuntimeException::class);
+
+        RuntimeEnvironment::prepare($this->projectDir);
+    }
+
+    public function testRejectsIncompletePersistentSecret(): void
+    {
+        mkdir($this->projectDir.'/var/runtime', 0700, true);
+        file_put_contents(
+            $this->projectDir.'/var/runtime/app_secret',
+            'partial'
+        );
+
+        self::assertFalse(
+            RuntimeEnvironment::runtimeStorageAvailable($this->projectDir)
+        );
+
+        $this->expectException(RuntimeException::class);
+
+        RuntimeEnvironment::prepare($this->projectDir);
     }
 
     public function testProvidesSafeBootstrapDefaultsWithoutSecrets(): void
@@ -108,8 +186,20 @@ final class RuntimeEnvironmentTest extends TestCase
         );
     }
 
+    private function clearSecretEnvironment(): void
+    {
+        putenv('APP_SECRET');
+        unset($_ENV['APP_SECRET'], $_SERVER['APP_SECRET']);
+    }
+
     private function removeTree(string $path): void
     {
+        if (is_file($path) || is_link($path)) {
+            @unlink($path);
+
+            return;
+        }
+
         if (!is_dir($path)) {
             return;
         }
@@ -125,7 +215,7 @@ final class RuntimeEnvironmentTest extends TestCase
             }
 
             $child = $path.DIRECTORY_SEPARATOR.$item;
-            is_dir($child)
+            is_dir($child) && !is_link($child)
                 ? $this->removeTree($child)
                 : @unlink($child);
         }

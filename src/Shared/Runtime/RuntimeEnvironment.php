@@ -18,19 +18,71 @@ final class RuntimeEnvironment
         self::defineIfMissing('APP_DEBUG', '0');
 
         if (self::read('APP_SECRET') === null) {
-            self::define('APP_SECRET', self::runtimeSecret($projectDir));
+            self::define('APP_SECRET', self::persistentSecret($projectDir));
         }
 
         if (self::read('DATABASE_URL') === null) {
             self::define('DATABASE_URL', self::FALLBACK_DATABASE_URL);
             error_log(
                 'Condor bootstrap: DATABASE_URL no está configurada; '.
-                'las rutas que requieren persistencia permanecerán no disponibles.'
+                'las rutas con persistencia permanecerán no disponibles.'
             );
         }
     }
 
-    private static function runtimeSecret(string $projectDir): string
+    public static function runtimeStorageAvailable(string $projectDir): bool
+    {
+        $projectDir = rtrim($projectDir, DIRECTORY_SEPARATOR);
+        $varDir = $projectDir.DIRECTORY_SEPARATOR.'var';
+        $runtimeDir = $varDir.DIRECTORY_SEPARATOR.'runtime';
+
+        if (
+            is_link($runtimeDir)
+            || (file_exists($runtimeDir) && !is_dir($runtimeDir))
+        ) {
+            return false;
+        }
+
+        if (is_dir($runtimeDir)) {
+            if (!is_writable($runtimeDir)) {
+                return false;
+            }
+        } else {
+            if (
+                is_link($varDir)
+                || (file_exists($varDir) && !is_dir($varDir))
+            ) {
+                return false;
+            }
+
+            $parent = is_dir($varDir) ? $varDir : $projectDir;
+            if (
+                !is_dir($parent)
+                || is_link($parent)
+                || !is_writable($parent)
+            ) {
+                return false;
+            }
+        }
+
+        if (self::read('APP_SECRET') !== null) {
+            return true;
+        }
+
+        $secretFile = $runtimeDir.DIRECTORY_SEPARATOR.'app_secret';
+        if (is_link($secretFile)) {
+            return false;
+        }
+
+        if (file_exists($secretFile)) {
+            return is_file($secretFile)
+                && self::readSecretFile($secretFile) !== null;
+        }
+
+        return true;
+    }
+
+    private static function persistentSecret(string $projectDir): string
     {
         $runtimeDir =
             rtrim($projectDir, DIRECTORY_SEPARATOR).
@@ -38,12 +90,11 @@ final class RuntimeEnvironment
             DIRECTORY_SEPARATOR.'runtime';
 
         if (
-            !is_dir($runtimeDir)
-            && !@mkdir($runtimeDir, 0770, true)
-            && !is_dir($runtimeDir)
+            !self::runtimeStorageAvailable($projectDir)
+            || !self::ensureDirectory($runtimeDir)
         ) {
             throw new RuntimeException(
-                'No fue posible preparar el directorio runtime de Condor.'
+                'No fue posible preparar almacenamiento runtime seguro.'
             );
         }
 
@@ -56,38 +107,70 @@ final class RuntimeEnvironment
         $candidate = bin2hex(random_bytes(32));
         $handle = @fopen($secretFile, 'x');
 
-        if ($handle !== false) {
-            try {
-                if (
-                    fwrite($handle, $candidate.PHP_EOL) === false
-                    || !fflush($handle)
-                ) {
-                    throw new RuntimeException(
-                        'No fue posible persistir el secreto runtime de Condor.'
-                    );
+        if ($handle === false) {
+            for ($attempt = 0; $attempt < 25; ++$attempt) {
+                usleep(10000);
+                $existing = self::readSecretFile($secretFile);
+                if ($existing !== null) {
+                    return $existing;
                 }
-            } finally {
-                fclose($handle);
             }
 
-            @chmod($secretFile, 0600);
-
-            return $candidate;
-        }
-
-        $existing = self::readSecretFile($secretFile);
-        if ($existing === null) {
             throw new RuntimeException(
-                'El secreto runtime de Condor no es válido.'
+                'No fue posible obtener el secreto runtime persistente.'
             );
         }
 
-        return $existing;
+        $contents = $candidate.PHP_EOL;
+        $writeOk = false;
+
+        try {
+            $written = @fwrite($handle, $contents);
+            $writeOk =
+                $written === strlen($contents)
+                && @fflush($handle);
+        } finally {
+            fclose($handle);
+        }
+
+        if (!$writeOk) {
+            @unlink($secretFile);
+
+            throw new RuntimeException(
+                'No fue posible persistir el secreto runtime.'
+            );
+        }
+
+        @chmod($secretFile, 0600);
+
+        return $candidate;
+    }
+
+    private static function ensureDirectory(string $runtimeDir): bool
+    {
+        if (
+            is_link($runtimeDir)
+            || (file_exists($runtimeDir) && !is_dir($runtimeDir))
+        ) {
+            return false;
+        }
+
+        if (!is_dir($runtimeDir)) {
+            if (!@mkdir($runtimeDir, 0700, true) && !is_dir($runtimeDir)) {
+                return false;
+            }
+        }
+
+        @chmod($runtimeDir, 0700);
+
+        return is_dir($runtimeDir)
+            && !is_link($runtimeDir)
+            && is_writable($runtimeDir);
     }
 
     private static function readSecretFile(string $secretFile): ?string
     {
-        if (!is_file($secretFile)) {
+        if (is_link($secretFile) || !is_file($secretFile)) {
             return null;
         }
 
