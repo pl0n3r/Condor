@@ -44,6 +44,9 @@ final readonly class ProvisionSuperAdmin
 
         if ($existing instanceof User) {
             $existing->grantRole(User::ROLE_SUPER_ADMIN);
+            $existing->setPasswordHash(
+                $this->passwordHasher->hashPassword($existing, $plainPassword),
+            );
             $this->entityManager->flush();
 
             return $existing;
