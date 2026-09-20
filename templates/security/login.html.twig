@@ -1,0 +1,36 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Ingresar · Condor App{% endblock %}
+
+{% block head %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+
+{% block body %}
+<section class="auth-layout">
+    <div class="auth-card">
+        <span class="eyebrow">Administración</span>
+        <h1>Ingresar a Condor</h1>
+        <p class="muted">Accede con tu cuenta para administrar tu empresa.</p>
+
+        {% if error %}
+            <div class="alert alert-error" role="alert">No pudimos iniciar sesión con esos datos.</div>
+        {% endif %}
+
+        <form method="post" class="stack">
+            <label>
+                <span>Correo</span>
+                <input type="email" name="_username" value="{{ last_username }}" autocomplete="email" required>
+            </label>
+
+            <label>
+                <span>Contraseña</span>
+                <input type="password" name="_password" autocomplete="current-password" required>
+            </label>
+
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
+            <button class="button" type="submit">Ingresar</button>
+        </form>
+
+        <p class="version-line">V {{ app_version }}</p>
+    </div>
+</section>
+{% endblock %}

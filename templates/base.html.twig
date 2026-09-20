@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Condor App{% endblock %}</title>
+    <link rel="stylesheet" href="/app.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <main class="page-shell">
+        {% block body %}{% endblock %}
+    </main>
+    <footer class="site-footer" aria-label="Información de versión">
+        <span>Condor App</span>
+        {% if app_version is defined %}<span>V {{ app_version }}</span>{% endif %}
+    </footer>
+</body>
+</html>

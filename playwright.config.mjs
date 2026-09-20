@@ -13,6 +13,7 @@ export default defineConfig({
   ],
   outputDir: 'test-results',
   use: {
+    baseURL: process.env.PLAYWRIGHT_BASE_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure'

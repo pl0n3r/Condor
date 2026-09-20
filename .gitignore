@@ -7,7 +7,12 @@
 *.local.php
 *.local.json
 
-# Node / Playwright
+# PHP / Symfony
+vendor/
+var/
+.phpunit.result.cache
+
+# Frontend / Playwright
 node_modules/
 playwright-report/
 test-results/
