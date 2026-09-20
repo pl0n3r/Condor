@@ -47,6 +47,10 @@ RESERVATION_LINE_RE = re.compile(
     r"(?im)^Reserva:\s*([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
     r"[89ab][0-9a-f]{3}-[0-9a-f]{12})\s*$"
 )
+RESERVATION_HIDDEN_RE = re.compile(
+    r"<!--\s*condor-reserva-id:\s*([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+    r"[89ab][0-9a-f]{3}-[0-9a-f]{12})\s*-->"
+)
 RESERVATION_RE = re.compile(r"<!-- condor-reserva (\{[^}]*\}) -->")
 SESSION_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
@@ -134,6 +138,14 @@ class GitHub:
         if not isinstance(payload, dict):
             raise CoordinationError(f"No fue posible leer Issue #{number}.")
         return payload
+
+    def update_issue_body(self, issue_number: int, body: str) -> None:
+        """Actualiza el body de un Issue sin publicar comentarios visibles."""
+        self.request(
+            "PATCH",
+            f"/repos/{self.repo}/issues/{issue_number}",
+            {"body": body},
+        )
 
     def pull(self, number: int) -> dict[str, Any]:
         """Obtiene un Pull Request por número."""
@@ -294,8 +306,9 @@ def closing_issues(body: str) -> set[int]:
 
 
 def reservation_from_pr_body(body: str) -> str | None:
-    """Extrae el ID de reserva declarado por un Pull Request."""
-    match = RESERVATION_LINE_RE.search(body or "")
+    """Extrae el ID de reserva visible legacy u oculto de un Pull Request."""
+    value = body or ""
+    match = RESERVATION_HIDDEN_RE.search(value) or RESERVATION_LINE_RE.search(value)
     return match.group(1).lower() if match else None
 
 
@@ -358,6 +371,43 @@ def valid_reservation_payload(value: Any) -> bool:
     return isinstance(value.get("reason"), str) and bool(value["reason"])
 
 
+def reservation_from_text(text: str) -> dict[str, Any] | None:
+    """Obtiene el último marcador de reserva válido de un texto controlado."""
+    latest: dict[str, Any] | None = None
+    for match in RESERVATION_RE.finditer(text or ""):
+        try:
+            parsed = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            continue
+        if valid_reservation_payload(parsed):
+            latest = parsed
+    return latest
+
+
+def store_reservation(
+    api: GitHub,
+    issue_number: int,
+    owner: str,
+    reservation_id: str,
+    branch: str,
+    active: bool,
+    reason: str,
+) -> None:
+    """Guarda la reserva como metadata HTML oculta en el body del Issue."""
+    issue = api.issue(issue_number)
+    current_body = str(issue.get("body") or "")
+    cleaned = RESERVATION_RE.sub("", current_body).rstrip()
+    marker = reservation_marker(
+        owner,
+        reservation_id,
+        branch,
+        active,
+        reason,
+    )
+    next_body = f"{cleaned}\n\n{marker}\n" if cleaned else f"{marker}\n"
+    api.update_issue_body(issue_number, next_body)
+
+
 def latest_reservation(
     comments: list[dict[str, Any]],
     trusted_login: str = TRUSTED_MARKER_LOGIN,
@@ -368,14 +418,9 @@ def latest_reservation(
         user = comment.get("user")
         if not isinstance(user, dict) or user.get("login") != trusted_login:
             continue
-        body = str(comment.get("body") or "")
-        for match in RESERVATION_RE.finditer(body):
-            try:
-                parsed = json.loads(match.group(1))
-            except json.JSONDecodeError:
-                continue
-            if valid_reservation_payload(parsed):
-                latest = parsed
+        parsed = reservation_from_text(str(comment.get("body") or ""))
+        if parsed is not None:
+            latest = parsed
     return latest
 
 
@@ -407,7 +452,13 @@ def authorized(association: str) -> bool:
 
 
 def active_reservation(api: GitHub, issue_number: int) -> dict[str, Any] | None:
-    """Obtiene la reserva activa confiable de un Issue."""
+    """Obtiene la reserva activa, prefiriendo metadata oculta del Issue."""
+    issue = api.issue(issue_number)
+    body_reservation = reservation_from_text(str(issue.get("body") or ""))
+    if body_reservation is not None:
+        return body_reservation if body_reservation["active"] else None
+
+    # Compatibilidad temporal con reservas creadas antes del modo silencioso.
     reservation = latest_reservation(api.issue_comments(issue_number))
     if not reservation or not reservation["active"]:
         return None
@@ -450,7 +501,7 @@ def reserve_work(
     actor: str,
     association: str,
 ) -> str | None:
-    """Reserva atómicamente un Issue y devuelve su ID de sesión."""
+    """Reserva atómicamente un Issue sin publicar comentarios visibles."""
     if not authorized(association):
         raise CoordinationError(
             f"@{actor} no tiene una asociación autorizada para reservar trabajo."
@@ -458,19 +509,12 @@ def reserve_work(
 
     issue = api.issue(issue_number)
     if issue.get("pull_request"):
-        raise CoordinationError("Los comandos de reserva se ejecutan sobre Issues, no PRs.")
+        raise CoordinationError("La reserva se ejecuta sobre Issues, no PRs.")
     if issue.get("state") != "open":
         raise CoordinationError(f"Issue #{issue_number} no está abierto.")
 
     labels = label_names(issue)
-    if STATUS_BLOCKED in labels:
-        api.comment(issue_number, f"⛔ @{actor}: Issue #{issue_number} está bloqueado.")
-        return None
-    if STATUS_AVAILABLE not in labels:
-        api.comment(
-            issue_number,
-            f"⛔ @{actor}: Issue #{issue_number} no está marcado como {STATUS_AVAILABLE}.",
-        )
+    if STATUS_BLOCKED in labels or STATUS_AVAILABLE not in labels:
         return None
 
     branch = f"trabajo/issue-{issue_number}"
@@ -479,19 +523,13 @@ def reserve_work(
         raise CoordinationError("No fue posible resolver el SHA actual de main.")
 
     if not api.create_branch(branch, main_sha):
-        api.set_status(issue_number, STATUS_RESERVED)
-        api.comment(
-            issue_number,
-            f"⛔ @{actor}: la reserva no fue concedida. La rama {branch} ya existe. "
-            "El trabajo queda fail-closed hasta liberación explícita.",
-        )
         return None
 
     reservation_id = new_reservation_id()
     try:
         api.set_status(issue_number, STATUS_RESERVED)
         api.try_assign(issue_number, actor)
-        publish_reservation(
+        store_reservation(
             api,
             issue_number,
             actor,
@@ -499,14 +537,6 @@ def reserve_work(
             branch,
             True,
             "tomar",
-            f"🔒 **Trabajo reservado por @{actor}.**\n\n"
-            f"- Rama canónica: {branch}\n"
-            f"- Reserva: {reservation_id}\n"
-            f"- Base de reserva: {main_sha}\n"
-            "- La reserva no vence automáticamente.\n"
-            "- Otra sesión no debe adoptar este ID de reserva.\n"
-            "- Para liberar: /liberar <ID>.\n"
-            "- Para transferir a otra sesión de la misma cuenta: /transferir <ID>.",
         )
     except Exception:
         api.delete_branch(branch)
@@ -538,17 +568,12 @@ def transfer_work(
         )
     current = active_reservation(api, issue_number)
     if not current:
-        api.comment(issue_number, f"⛔ @{actor}: no existe una reserva activa.")
         return None
     if current["owner"] != actor or current["reservation_id"] != reservation_id.lower():
-        api.comment(
-            issue_number,
-            f"⛔ @{actor}: el ID de reserva no corresponde a la sesión activa.",
-        )
         return None
 
     new_id = new_reservation_id()
-    publish_reservation(
+    store_reservation(
         api,
         issue_number,
         actor,
@@ -556,9 +581,6 @@ def transfer_work(
         current["branch"],
         True,
         "transferir",
-        f"🔁 Reserva transferida explícitamente por @{actor}.\n"
-        f"- Nueva reserva: {new_id}\n"
-        "- El ID anterior queda invalidado.",
     )
     print(f"Reserva transferida: Issue #{issue_number} -> {new_id}")
     return new_id
@@ -589,7 +611,6 @@ def release_permission(
         return current, True
 
     if not current:
-        api.comment(issue_number, f"⛔ @{actor}: no existe una reserva activa.")
         return None, False
 
     same_session = (
@@ -598,10 +619,6 @@ def release_permission(
         and current["reservation_id"] == reservation_id.lower()
     )
     if not same_session:
-        api.comment(
-            issue_number,
-            f"⛔ @{actor}: solo la sesión propietaria puede liberar esta reserva.",
-        )
         return current, False
     return current, True
 
@@ -616,12 +633,6 @@ def close_pulls_before_release(
     """Cierra PR al forzar o rechaza la liberación normal si siguen abiertos."""
     open_pulls = open_pulls_for_branch(api, branch)
     if open_pulls and not force:
-        rendered = ", ".join(f"#{number}" for number in open_pulls)
-        api.comment(
-            issue_number,
-            f"⛔ @{actor}: no se libera mientras existan PR abiertos ({rendered}). "
-            "Cierra el PR primero o usa liberación forzada como dueño.",
-        )
         return False
     for pr_number in open_pulls:
         api.close_pull(pr_number)
@@ -679,7 +690,7 @@ def release_work(
         else new_reservation_id()
     )
     api.delete_branch(branch)
-    publish_reservation(
+    store_reservation(
         api,
         issue_number,
         owner,
@@ -687,7 +698,6 @@ def release_work(
         branch,
         False,
         "liberacion-forzada" if force else "liberar",
-        f"🔓 Reserva liberada por @{actor}. La rama {branch} fue eliminada.",
     )
     expose_issue_after_release(api, issue_number)
     if current:
@@ -735,7 +745,7 @@ def close_pr_reservation(
     merged = bool(pull.get("merged"))
 
     if current:
-        publish_reservation(
+        store_reservation(
             api,
             issue_number,
             str(current["owner"]),
@@ -743,11 +753,6 @@ def close_pr_reservation(
             branch,
             False,
             "pr-merged" if merged else "pr-cerrado-sin-merge",
-            (
-                f"✅ PR #{pr_number} fusionado; reserva cerrada."
-                if merged
-                else f"🔓 PR #{pr_number} cerrado sin merge; reserva liberada."
-            ),
         )
         api.try_unassign(issue_number, str(current["owner"]))
 
@@ -781,6 +786,39 @@ def update_pr_state(api: GitHub, pr_number: int, action: str) -> None:
         current,
     )
 
+def update_issue_label_state(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    label: str,
+) -> None:
+    """Procesa reserva/liberación silenciosa usando labels de estado existentes."""
+    if actor == TRUSTED_MARKER_LOGIN:
+        return
+
+    if label == STATUS_RESERVED:
+        # Poder aplicar el label exige permisos de escritura en GitHub; la rama
+        # canónica sigue siendo el lock atómico real.
+        reserve_work(api, issue_number, actor, "OWNER")
+        return
+
+    if label != STATUS_AVAILABLE:
+        return
+
+    current = active_reservation(api, issue_number)
+    if not current or current["owner"] != actor:
+        return
+
+    release_work(
+        api,
+        issue_number,
+        actor,
+        "OWNER",
+        str(current["reservation_id"]),
+        False,
+    )
+
+
 def update_issue_state(api: GitHub, issue_number: int, action: str) -> None:
     """Limpia una reserva al cerrar un Issue o restablece su estado al reabrirlo."""
     issue = api.issue(issue_number)
@@ -801,7 +839,7 @@ def update_issue_state(api: GitHub, issue_number: int, action: str) -> None:
     api.delete_branch(branch)
 
     if current:
-        publish_reservation(
+        store_reservation(
             api,
             issue_number,
             str(current["owner"]),
@@ -809,7 +847,6 @@ def update_issue_state(api: GitHub, issue_number: int, action: str) -> None:
             branch,
             False,
             "issue-cerrado",
-            f"🧹 Reserva limpiada al cerrar Issue #{issue_number}.",
         )
         api.try_unassign(issue_number, str(current["owner"]))
 
@@ -849,8 +886,7 @@ def reservation_validation_errors(
         )
     if reservation_from_pr_body(body) != reservation["reservation_id"]:
         errors.append(
-            "El PR debe declarar exactamente la sesión activa como "
-            "'Reserva: <UUID>'."
+            "El PR debe declarar la sesión activa mediante metadata de reserva oculta."
         )
     return errors
 
@@ -1027,6 +1063,12 @@ def build_parser() -> argparse.ArgumentParser:
     issue_event.add_argument("--issue", required=True, type=int)
     issue_event.add_argument("--action", required=True)
 
+    label_event = sub.add_parser("label-event")
+    label_event.add_argument("--repo", required=True)
+    label_event.add_argument("--issue", required=True, type=int)
+    label_event.add_argument("--actor", required=True)
+    label_event.add_argument("--label", required=True)
+
     validate = sub.add_parser("validar-pr")
     validate.add_argument("--repo", required=True)
     validate.add_argument("--pr", required=True, type=int)
@@ -1053,6 +1095,8 @@ def main() -> int:
             update_pr_state(api, args.pr, args.action)
         elif args.command == "issue-event":
             update_issue_state(api, args.issue, args.action)
+        elif args.command == "label-event":
+            update_issue_label_state(api, args.issue, args.actor, args.label)
         elif args.command == "validar-pr":
             validate_pull(api, args.pr, args.require_reservation)
         else:
