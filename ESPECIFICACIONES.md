@@ -1624,6 +1624,23 @@ Condor incorpora dos integraciones configurables por tenant para sus superficies
 - las pruebas de IndexNow deben cubrir dominio personalizado verificado y primario vs URL Condor, publicación, actualización relevante, cambio de URL, retiro/despublicación indexable, envíos individuales y por lote, deduplicación, reintentos acotados, idempotencia y replay explícito;
 - ninguna de las dos integraciones puede exponer secretos en HTML, logs o respuestas públicas más allá de identificadores públicos que el protocolo requiera.
 
+### D-046 — Propietario único de plataforma y administración delegada
+
+Condor separa de forma estricta la propiedad global de la plataforma de cualquier rol administrativo de tenants, sedes o módulos.
+
+Reglas:
+
+- existe **una sola cuenta propietaria de plataforma** en toda la instalación de Condor;
+- el propietario usa el rol global `ROLE_PLATFORM_OWNER`, independiente de membresías, roles y permisos configurables de los tenants;
+- `/adminpl0n3r` es una superficie exclusiva del propietario de plataforma y exige `ROLE_PLATFORM_OWNER` en backend;
+- los demás administradores se autentican y operan por `/admin`; sus facultades se limitan al tenant, sede, módulo o función que les corresponda y nunca equivalen a propiedad de plataforma;
+- el rol legado `ROLE_SUPER_ADMIN` no autoriza `/adminpl0n3r` y se elimina de la cuenta propietaria al migrarla al rol nuevo;
+- el propietario puede operar sin membresía de tenant; esa excepción no se hereda a otros administradores;
+- la unicidad del propietario es un **invariante de base de datos**, no solo una comprobación de aplicación: un registro singleton bloqueable serializa el aprovisionamiento y evita carreras TOCTOU;
+- el aprovisionamiento soportado es idempotente para la misma cuenta y rechaza atómicamente cualquier intento de definir una cuenta propietaria distinta;
+- correo, contraseña y demás credenciales reales del propietario permanecen fuera del repositorio y de documentación pública;
+- una futura transferencia de propiedad deberá ser una operación explícita, auditada y diseñada como tal; nunca se implementará simplemente concediendo `ROLE_PLATFORM_OWNER` a una segunda cuenta.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.

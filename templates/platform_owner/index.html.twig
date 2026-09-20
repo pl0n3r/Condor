@@ -1,6 +1,6 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Super Admin · Condor App{% endblock %}
+{% block title %}Propietario · Condor App{% endblock %}
 
 {% block head %}
 <meta name="robots" content="noindex,nofollow">
@@ -8,11 +8,11 @@
 {% endblock %}
 
 {% block body %}
-<section class="admin-shell" aria-label="Administración global de Condor">
+<section class="admin-shell" aria-label="Administración propietaria de Condor">
     <aside class="sidebar">
         <strong>Condor App</strong>
-        <nav aria-label="Navegación global">
-            <a href="{{ path('app_super_admin') }}" aria-current="page">Plataforma</a>
+        <nav aria-label="Navegación propietaria">
+            <a href="{{ path('app_platform_owner') }}" aria-current="page">Plataforma</a>
         </nav>
         <form method="post" action="{{ path('app_logout') }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token('logout') }}">
@@ -21,9 +21,9 @@
     </aside>
 
     <div class="workspace">
-        <span class="eyebrow">Super Admin</span>
+        <span class="eyebrow">Propietario de plataforma</span>
         <h1>Administración global</h1>
-        <p class="muted">Control de plataforma separado de los permisos de cada empresa.</p>
+        <p class="muted">Acceso propietario exclusivo, separado de los administradores de empresas y sedes.</p>
 
         <div class="feature-grid" aria-label="Resumen de plataforma">
             <article class="feature-card">

@@ -33,6 +33,6 @@ security:
 
   access_control:
     - { path: ^/admin/login$, roles: PUBLIC_ACCESS }
-    - { path: ^/adminpl0n3r$, roles: ROLE_SUPER_ADMIN }
+    - { path: ^/adminpl0n3r$, roles: ROLE_PLATFORM_OWNER }
     - { path: ^/api/v1/context$, roles: ROLE_USER }
     - { path: ^/admin, roles: ROLE_USER }
