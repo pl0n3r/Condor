@@ -26,7 +26,7 @@
 ## Qué hace V 0.1.3
 
 - Añade `ROLE_SUPER_ADMIN` como rol global de plataforma.
-- Añade la superficie protegida `/superadmin`.
+- Añade la superficie protegida `/adminpl0n3r`.
 - Mantiene separado el Super Admin del RBAC y de las membresías de cada tenant.
 - Redirige a un Super Admin desde `/admin` hacia la administración global.
 - Añade `app:super-admin:provision` para crear o promover la cuenta inicial.
@@ -58,7 +58,7 @@
 - Exact-main: 🚧 pendiente del squash merge.
 - Deploy Hostinger V 0.1.3: 🚧 pendiente.
 - Aprovisionamiento de la cuenta real: 🚧 pendiente de credenciales suministradas fuera del repositorio.
-- Login real y acceso a `/superadmin`: 🚧 pendiente de producción.
+- Login real y acceso a `/adminpl0n3r`: 🚧 pendiente de producción.
 
 ## Qué sigue
 
@@ -67,7 +67,7 @@
 | **AHORA** | Revalidar PR #82 sobre el head final V 0.1.3 |
 | **SIGUE** | Squash merge y validar el SHA exacto de `main` |
 | **DESPUÉS** | Observar deploy de V 0.1.3 en Hostinger |
-| **FINAL** | Aprovisionar la cuenta propietaria y validar login + `/superadmin` |
+| **FINAL** | Aprovisionar la cuenta propietaria y validar login + `/adminpl0n3r` |
 
 ## Fuentes de verdad
 
