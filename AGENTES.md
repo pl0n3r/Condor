@@ -57,31 +57,32 @@ GitHub es el **árbitro central de la cola de trabajo**. Después de que esta ca
 ### Tomar trabajo
 
 1. Elegir únicamente un Issue abierto con label `estado: disponible`.
-2. Comentar exactamente `/tomar` en ese Issue.
-3. Esperar la respuesta del workflow de coordinación.
-4. La reserva exitosa crea de forma atómica la rama canónica `trabajo/issue-N`, cambia el Issue a `estado: reservado` y publica un **ID de reserva UUID**.
-5. La sesión que ejecutó `/tomar` debe conservar ese UUID y usarlo en el PR como `Reserva: <UUID>`.
-6. Si otra sesión intenta reservar el mismo Issue, la creación atómica de la rama actúa como lock: solo una puede ganar.
-7. Si la reserva es rechazada, **no trabajar esa tarea**; elegir otro Issue disponible.
+2. Añadir el label `estado: reservado` **sin publicar comentarios** y sin retirar manualmente `estado: disponible`.
+3. Esperar a que el workflow de coordinación cree la rama canónica `trabajo/issue-N` y deje solo el estado `estado: reservado`.
+4. La rama canónica es el lock atómico. La reserva se guarda como metadata HTML oculta en el body del Issue; no debe aparecer como comentario visible.
+5. La sesión propietaria conserva el UUID de esa metadata y lo declara en el PR únicamente como comentario HTML oculto: `<!-- condor-reserva-id: <UUID> -->`.
+6. Si otra sesión intenta reservar el mismo Issue, la creación atómica de la rama determina un único ganador.
+7. Si la rama ya existe o la reserva no se consolida, **no trabajar esa tarea**; elegir otro Issue disponible.
+8. La coordinación interna no debe ensuciar Issues/PRs con `/tomar`, `/liberar`, UUIDs, instrucciones técnicas o mensajes de bot visibles.
 
 ### Propiedad de la reserva
 
 - una reserva no vence automáticamente: el sistema es **fail-closed**;
 - compartir la misma cuenta de GitHub **no** autoriza a dos sesiones a trabajar el mismo Issue;
-- cada toma genera un ID de reserva UUID distinto, incluso bajo el mismo login;
-- una sesión solo puede continuar una reserva si conoce el UUID de su propia toma o recibió una transferencia explícita;
-- nunca adoptar el UUID visible de otra sesión solo porque se comparte la misma cuenta;
+- cada reserva genera un ID UUID distinto almacenado como metadata oculta;
+- una sesión solo continúa una reserva si es la sesión que la tomó o existe una transferencia explícita de trabajo;
+- nunca adoptar metadata de reserva de otra sesión solo porque se comparte la misma cuenta;
 - nunca modificar `trabajo/issue-N` si pertenece a otra sesión/agente;
 - nunca crear ramas alternativas para saltarse una reserva existente;
-- para liberar normalmente, comentar `/liberar <UUID>`;
-- para transferir el trabajo a otra sesión de la misma cuenta, comentar `/transferir <UUID>`; el workflow genera un UUID nuevo e invalida el anterior;
-- para transferir entre cuentas distintas, liberar y permitir que la nueva cuenta ejecute `/tomar`;
-- el dueño del repositorio puede resolver una reserva huérfana con `/liberar-forzado`.
+- para liberar trabajo sin PR abierto, añadir `estado: disponible`; el workflow retira la rama y deja la reserva inactiva sin comentarios;
+- al cerrar o fusionar un PR, la reserva se limpia automáticamente;
+- una transferencia entre sesiones debe ser explícita; si no existe un mecanismo seguro de handoff para el estado actual, cerrar/liberar y volver a reservar en vez de compartir trabajo ambiguamente;
+- una reserva huérfana se resuelve mediante mantenimiento explícito del propietario, nunca publicando comandos técnicos en el Issue.
 
 ### Pull Requests y colisiones
 
 - después del primer commit lógico, abrir el PR pronto para hacer visible el alcance en curso;
-- el PR debe salir de `trabajo/issue-N`, incluir `Closes #N` y declarar `Reserva: <UUID>` en el cuerpo;
+- el PR debe salir de `trabajo/issue-N`, incluir `Closes #N` y declarar la reserva solo como metadata HTML oculta `<!-- condor-reserva-id: <UUID> -->`;
 - CI valida la reserva y compara los archivos del PR contra todos los demás PR abiertos hacia `main`;
 - si dos PR modifican el mismo archivo, la validación de coordinación falla y el trabajo debe repartirse, serializarse o actualizarse sobre el nuevo `main`;
 - nunca resolver una colisión sobrescribiendo silenciosamente el trabajo de otra sesión;
@@ -308,7 +309,7 @@ Para trabajo normal de código o configuración:
 
 1. partir del `main` exacto actual;
 2. elegir un Issue con `estado: disponible`;
-3. reservarlo con `/tomar` y esperar confirmación;
+3. reservarlo añadiendo `estado: reservado` y esperar la creación de la rama canónica, sin comentarios técnicos;
 4. trabajar exclusivamente en la rama canónica `trabajo/issue-N` creada por la reserva;
 5. implementar el cambio lógico;
 6. añadir/ajustar pruebas aplicables;
@@ -434,7 +435,7 @@ Después de activar la coordinación multiagente, el trabajo normal usa **exclus
 Reglas:
 
 - no crear manualmente ramas `feature/*`, `fix/*`, `docs/*`, `infra/*` o equivalentes para trabajo normal;
-- `/tomar` crea `trabajo/issue-N` de forma atómica desde el `main` actual;
+- el workflow de reserva crea `trabajo/issue-N` de forma atómica desde el `main` actual, disparado por `estado: reservado`;
 - una rama canónica existente significa que el Issue está reservado, incluso si un label tarda en sincronizarse;
 - solo se permiten excepciones de bootstrap/mantenimiento cuando están explícitamente documentadas en el Issue correspondiente.
 
@@ -572,8 +573,8 @@ Ante un fallo recurrente:
 
 Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y deben considerarse obligatorias hasta que el usuario las cambie explícitamente:
 
-- toda implementación nueva requiere una reserva de Issue mediante `/tomar`; GitHub es el lock central de coordinación multiagente;
-- toda reserva usa la rama canónica `trabajo/issue-N` y no vence automáticamente;
+- toda implementación nueva requiere una reserva silenciosa del Issue mediante el label `estado: reservado`; GitHub es el lock central de coordinación multiagente;
+- toda reserva usa la rama canónica `trabajo/issue-N`, metadata oculta de sesión y no vence automáticamente;
 - CI debe rechazar PRs sin relación válida `Closes #N` o con archivos solapados con otros PR abiertos;
 - el nombre oficial y público del producto es `Condor App`;
 - en documentación técnica, GitHub y conversación de desarrollo se usa `Condor` como nombre corto;
@@ -605,6 +606,7 @@ Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y 
 - el README usa la misma estrategia de snapshot por deploy que BRVTAL;
 - el README debe mostrar siempre y por separado la versión objetivo y la versión realmente desplegada; tras el primer deploy, la señal visible será por ejemplo `v0.1.0`, pero nunca se inferirá desde CI;
 - `GLOSARIO.md` debe mantenerse actualizado con los términos técnicos relevantes que aparezcan en superficies visibles para socios, usando lenguaje de negocio y ejemplos de Condor cuando ayuden.
+- la coordinación técnica interna no se publica como comentarios visibles: no usar `/tomar`, `/liberar`, UUIDs de reserva ni mensajes operativos de bot en la conversación del Issue/PR; usar labels, rama canónica y metadata HTML oculta.
 
 ---
 
