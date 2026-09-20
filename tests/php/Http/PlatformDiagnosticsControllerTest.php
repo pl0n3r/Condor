@@ -8,7 +8,6 @@ use App\Domain\Identity\Entity\User;
 use App\Domain\Observability\Entity\ErrorIncident;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
-use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
 final class PlatformDiagnosticsControllerTest extends WebTestCase
 {
@@ -17,10 +16,8 @@ final class PlatformDiagnosticsControllerTest extends WebTestCase
         $client = static::createClient();
         $container = static::getContainer();
         $entityManager = $container->get(EntityManagerInterface::class);
-        $csrf = $container->get(CsrfTokenManagerInterface::class);
 
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
-        self::assertInstanceOf(CsrfTokenManagerInterface::class, $csrf);
 
         $owner = new User(
             'diagnostic-owner-'.bin2hex(random_bytes(4)).'@example.test',
@@ -48,12 +45,17 @@ final class PlatformDiagnosticsControllerTest extends WebTestCase
         $entityManager->flush();
 
         $client->loginUser($owner);
-        $token = $csrf->getToken('diagnostic_share_'.$incident->id())->getValue();
-        $crawler = $client->request(
-            'POST',
-            '/adminpl0n3r/diagnosticos/'.$incident->id().'/compartir',
-            ['_token' => $token],
-        );
+        $crawler = $client->request('GET', '/adminpl0n3r/diagnosticos');
+        self::assertResponseIsSuccessful();
+
+        $form = $crawler
+            ->filter(
+                'form[action="/adminpl0n3r/diagnosticos/'.
+                $incident->id().
+                '/compartir"]'
+            )
+            ->form();
+        $crawler = $client->submit($form);
 
         self::assertResponseIsSuccessful();
         $text = $crawler->filter('code')->text();
