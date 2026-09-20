@@ -850,6 +850,48 @@ Defaults técnicos:
 - analítica de producto se instrumenta cuando existan flujos reales; inicialmente medir activación y uso de capacidades sin recolectar datos innecesarios.
 
 
+
+### D-037 — API-first y preparación para aplicaciones móviles
+
+Condor debe poder incorporar clientes nativos iOS y Android sin reescribir la lógica de negocio ni crear un backend paralelo.
+
+Reglas:
+
+- la lógica de negocio vive en dominio/servicios de aplicación del backend y no en componentes Twig o React;
+- las capacidades que necesiten UI interactiva se exponen mediante contratos de aplicación/API reutilizables por web y, posteriormente, móvil;
+- el backoffice React consume los mismos casos de uso y reglas server-side que consumirían clientes móviles;
+- Twig puede renderizar superficies públicas directamente por rendimiento/SEO, pero no se convierte en la única puerta de entrada a reglas de negocio;
+- autenticación/autorización se diseñan para permitir evolución desde sesión web hacia credenciales/tokens apropiados para clientes móviles, sin debilitar el modelo de permisos;
+- endpoints y DTOs no deben depender de detalles visuales de una pantalla concreta;
+- versionar contratos externos cuando cambios incompatibles lo requieran; no versionar prematuramente cada endpoint;
+- archivos, media, paginación, errores e idempotencia deben usar contratos consumibles por clientes móviles;
+- añadir una app móvil en el futuro debe ser principalmente un nuevo cliente de Condor, no un segundo producto con lógica duplicada.
+
+### D-038 — Roadmap como libro ejecutivo vivo
+
+El Issue #1 conserva su función canónica de progreso, pero además debe poder ser leído de forma autónoma por socios y stakeholders no técnicos.
+
+Reglas:
+
+- mantener al inicio un **Resumen ejecutivo vivo** con propósito, estado actual, versión, producción, trabajo actual, siguiente hito y decisiones humanas pendientes;
+- explicar estados con una leyenda corta;
+- el detalle histórico permanece debajo y no se borra para maquillar avance;
+- distinguir claramente entre **definido**, **implementado**, **validado en código/CI**, **desplegado** y **validado en producción**;
+- cada trabajo significativo debe actualizar el resumen ejecutivo cuando cambie alguno de esos datos;
+- el roadmap resume decisiones, pero las reglas durables completas permanecen en ESPECIFICACIONES.md;
+- evitar jerga innecesaria en el resumen ejecutivo; el detalle técnico puede permanecer en fases/Issues enlazados.
+
+### D-039 — Identidad visible de versión
+
+Cuando exista la aplicación Condor:
+
+- la versión de producto debe mostrarse discretamente en el footer del sitio público;
+- la pantalla de login del administrador debe mostrar la misma versión;
+- ambas superficies leen la fuente canónica de versión; no duplican un literal independiente;
+- la primera versión visible será **V 0.1.0**;
+- mostrar versión no equivale a declarar producción validada: el roadmap mantiene separada la evidencia de deploy/producción.
+
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
