@@ -109,31 +109,30 @@ No considerar como requisito cerrado hasta que producto lo confirme:
 - producto modular o activable por capacidades;
 - alcance exacto de la presencia web;
 - uso de plantillas, constructor visual o servicio administrado;
-- estructura exacta del catálogo;
-- variantes de producto;
-- pedidos;
+- alcance completo de pedidos/ventas;
 - pagos;
 - envíos;
 - facturación;
-- CRM/clientes;
-- multiempresa / multi-tenant;
+- alcance de CRM;
 - modelo de suscripción y precios del SaaS;
 - integraciones externas.
 
-### 5.4 Definiciones pendientes antes del MVP
+Ya están confirmados como principios o capacidades funcionales: multiempresa/multi-tenant, núcleo Empresa + Sede + Usuario, catálogo producto → variantes → precios → inventario por sede, Cliente como entidad comercial separada del Usuario y reglas iniciales de precios, roles, inventario y ventas documentadas en las decisiones durables.
+
+### 5.4 Definiciones pendientes de producto
+
+Condor no usa un MVP rígido como frontera artificial. La construcción avanza por bloques incrementales coherentes.
+
+Pendientes principales:
 
 - precisar el perfil de empresa objetivo inicial;
 - formular problema principal y propuesta de valor en una frase;
-- definir MVP y exclusiones explícitas;
-- identificar actores/usuarios;
-- definir roles y permisos;
-- mapear flujos críticos;
-- definir límites de los módulos iniciales;
-- especificar reglas de inventario;
-- especificar reglas de precios;
-- especificar reglas para mayoristas y descuentos por cantidad;
+- mapear flujos críticos de extremo a extremo;
+- terminar de definir límites de los módulos iniciales;
+- completar reglas de ventas/pedidos, descuentos, impuestos y efectos sobre inventario;
 - definir el nivel de integración entre sitio público, e-commerce y backoffice;
-- definir métricas de éxito iniciales.
+- definir métricas de éxito iniciales;
+- seguir separando qué reglas son configurables por empresa y qué invariantes deben permanecer fijos para proteger coherencia, seguridad y trazabilidad.
 
 ### 5.5 Regla de esta fase
 
@@ -405,6 +404,38 @@ Evidencia inicial: el enfoque final redujo Playwright de **37 s a 12 s** y el CI
 El primer frente de Condor App será la digitalización comercial de empresas colombianas con baja digitalización: presencia web, e-commerce, administración del e-commerce, inventario, precios, condiciones para mayoristas y descuentos por cantidad.
 
 Esta decisión define dirección de producto, no todavía arquitectura ni alcance completo del MVP.
+
+
+### D-018 — Simple por defecto y altamente configurable por empresa
+
+La configurabilidad es un principio transversal de Condor App.
+
+Reglas:
+
+- el producto debe funcionar correctamente con valores por defecto sensatos, sin obligar a una empresa a configurar todo antes de operar;
+- cuando una regla cambie razonablemente entre empresas, debe preferirse una opción o parámetro por tenant antes que una regla rígida quemada en código;
+- la configuración debe responder a variaciones reales de negocio y no convertirse en una capa abstracta de sobrearquitectura;
+- la experiencia administrativa toma **WooCommerce como referencia de facilidad y configurabilidad**, sin copiar su interfaz, código ni arquitectura;
+- la complejidad avanzada debe aparecer únicamente cuando el caso de uso la necesite;
+- Empresa, Sede y Usuario forman parte del núcleo mínimo transversal;
+- los roles parten de plantillas base, pero cada empresa puede editarlos y crear roles adicionales;
+- la primera versión de autorización se mantiene deliberadamente simple: módulos + permisos CRUD, con alcance por sede cuando corresponda;
+- los permisos especializados se incorporarán solo cuando exista un caso de uso real que los justifique;
+- la flexibilidad nunca puede romper invariantes necesarios para integridad, seguridad o trazabilidad.
+
+### D-019 — Reglas iniciales configurables de ventas y precios manuales
+
+Las primeras reglas acordadas para ventas/pedidos deben preservar flexibilidad sin perder auditoría.
+
+Reglas:
+
+- permitir una venta o pedido sin cliente registrado es configurable por empresa;
+- modificar manualmente el precio de una línea de venta puede habilitarse o restringirse según configuración y permisos;
+- toda modificación manual de precio debe conservar trazabilidad de quién realizó el cambio, cuándo ocurrió y por qué;
+- exigir un motivo al modificar el precio es una opción configurable simple de tipo sí/no;
+- el valor por defecto propuesto para exigir motivo es **sí**;
+- el motivo puede comenzar como texto libre; una lista administrable de motivos se considera una extensión futura, no una necesidad inicial;
+- los descuentos deben admitir evolución flexible a reglas por producto y/o por pedido, sin introducir complejidad antes de que el dominio lo requiera.
 
 ## 7. Criterio de actualización
 
