@@ -316,6 +316,29 @@ class CoordinacionTests(unittest.TestCase):
         reservation = active_reservation(api, 12)
         self.assertIsNotNone(reservation)
 
+    def test_label_reserved_restores_blocked_state_if_rejected(self) -> None:
+        """Un intento inválido no deja un falso estado reservado."""
+        api = FakeGitHub()
+        api.issue_data["labels"] = [
+            {"name": STATUS_BLOCKED},
+            {"name": STATUS_RESERVED},
+        ]
+
+        update_issue_label_state(api, 12, "pl0n3r", STATUS_RESERVED)
+
+        self.assertNotIn("trabajo/issue-12", api.branches)
+        self.assertEqual(api.status_history[-1], STATUS_BLOCKED)
+
+    def test_label_reserved_keeps_concurrent_winner_reserved(self) -> None:
+        """Una rama ganadora evita que el perdedor restaure disponible."""
+        api = FakeGitHub()
+        api.issue_data["labels"].append({"name": STATUS_RESERVED})
+        api.branches["trabajo/issue-12"] = "winner-sha"
+
+        update_issue_label_state(api, 12, "pl0n3r", STATUS_RESERVED)
+
+        self.assertEqual(api.status_history[-1], STATUS_RESERVED)
+
     def test_label_available_cannot_release_another_session(self) -> None:
         """El label disponible nunca recibe autoridad de sesión implícita."""
         api = FakeGitHub()
