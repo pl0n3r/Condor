@@ -11,7 +11,7 @@ final class RuntimeCheckTest extends TestCase
     public function testDiagnosticIsSafeAndHealthyInCi(): void
     {
         ob_start();
-        require dirname(__DIR__, 4).'/runtime-check.php';
+        require dirname(__DIR__, 4).'/public/runtime-check.php';
         $output = ob_get_clean();
 
         self::assertIsString($output);

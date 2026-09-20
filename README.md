@@ -25,23 +25,17 @@
 
 ## Qué se hace en V 0.1.2
 
-- Se elimina el `index.html` temporal de la raíz del deploy.
-- Se añade `public_html/index.php` como puente estable al front controller de Symfony.
-- Se simplifican los `.htaccess` y se eliminan directivas `Options` innecesarias para LiteSpeed/shared hosting.
-- El routing raíz solo sirve archivos existentes dentro de `public/`; el resto entra a Symfony.
 - `APP_SECRET` usa almacenamiento temporal seguro si `var/runtime` no es writable.
 - Si Symfony no puede iniciar, se devuelve una página de error segura en vez de una respuesta vacía.
-- `runtime-check.php` permite comprobar versión, compatibilidad PHP, autoload y almacenamiento runtime sin depender del kernel.
+- `public/runtime-check.php` permite comprobar versión, compatibilidad PHP, autoload y almacenamiento runtime sin depender del kernel.
 - CI pasa a ejecutar PHP 8.3 para reflejar el runtime real de Hostinger.
+- Doctrine desactiva `enable_native_lazy_objects` porque esa función requiere PHP 8.4+ y era la causa reproducida del HTTP 500 en PHP 8.3.
 - La versión se sincroniza en `config/version.php`, `package.json` y `package-lock.json`.
 
 ## Archivos de esta entrega
 
-- `.htaccess`
-- `public/.htaccess`
-- `index.php`
 - `public/index.php`
-- `runtime-check.php`
+- `public/runtime-check.php`
 - `src/Shared/Runtime/RuntimeEnvironment.php`
 - `tests/php/Shared/Runtime/RuntimeEnvironmentTest.php`
 - `tests/php/Shared/Runtime/RuntimeCheckTest.php`
@@ -51,7 +45,6 @@
 - `package-lock.json`
 - `AGENTES.md`
 - `README.md`
-- se elimina `index.html`
 
 ## Validación requerida
 
@@ -68,7 +61,7 @@
 
 | Lane | Trabajo |
 | --- | --- |
-| **AHORA** | Implementar y validar Issue #78 |
+| **AHORA** | Validar Doctrine sobre PHP 8.3 y cerrar PR #79 |
 | **SIGUE** | Squash merge y exact-main |
 | **DESPUÉS** | Observar `/runtime-check.php`, `/`, `/app.css` y `/admin/login` en Hostinger |
 | **P0** | No declarar producción validada hasta eliminar el HTTP 500 |

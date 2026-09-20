@@ -1,21 +1,23 @@
-# Condor en Hostinger shared hosting (LiteSpeed)
-# public_html contiene el repositorio completo. Solo /public es superficie web.
+# Condor en Hostinger shared hosting
+#
+# Hostinger usa public_html como document root. Symfony mantiene su superficie
+# pública en /public, así que toda petición debe entrar por ese directorio.
+# La reescritura es interna: las URLs públicas no muestran /public.
 
-DirectoryIndex index.php
+Options -Indexes
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Evita bucles para reescrituras internas ya resueltas dentro de /public.
+    # Evita bucles después de la reescritura interna hacia /public.
     RewriteRule ^public(?:/|$) - [L]
 
-    # Entrypoints mínimos permitidos en la raíz del deploy.
-    RewriteRule ^(?:index\.php|runtime-check\.php)$ - [L]
+    # Todo el tráfico web se resuelve exclusivamente dentro de /public.
+    # Esto evita servir config/, src/, vendor/, composer.json, etc.
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
 
-    # Sirve únicamente archivos públicos reales desde /public.
-    RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
-    RewriteRule ^(.+)$ public/$1 [L]
-
-    # Cualquier otra ruta entra por el front controller.
-    RewriteRule ^ index.php [QSA,L]
+# Fallar cerrado si mod_rewrite no estuviera disponible.
+<IfModule !mod_rewrite.c>
+    Require all denied
 </IfModule>
