@@ -10,13 +10,21 @@ final class RuntimeCheckTest extends TestCase
 {
     public function testDiagnosticIsSafeAndHealthyInCi(): void
     {
-        ob_start();
-        require dirname(__DIR__, 4).'/public/runtime-check.php';
-        $output = ob_get_clean();
+        $script = dirname(__DIR__, 4).'/public/runtime-check.php';
+        $command = escapeshellarg(PHP_BINARY).' '.escapeshellarg($script);
 
-        self::assertIsString($output);
+        $lines = [];
+        $exitCode = 1;
+        exec($command, $lines, $exitCode);
 
-        $payload = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(0, $exitCode);
+
+        $payload = json_decode(
+            implode(PHP_EOL, $lines),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
 
         self::assertSame('ok', $payload['status'] ?? null);
         self::assertSame('0.1.2', $payload['version'] ?? null);
