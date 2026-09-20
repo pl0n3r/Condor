@@ -170,26 +170,32 @@ jobs:
           conclusion = clean(check_run.get("conclusion") or "desconocida", 40)
           details_url = str(check_run.get("details_url") or "").strip()
 
+          gate_ok = conclusion == "success"
+          gate_label = (
+              "✅ **Quality Gate aprobado**"
+              if gate_ok
+              else f"❌ **Quality Gate no aprobado** — {conclusion}"
+          )
+
           lines = [
               marker,
-              "## SonarQube Cloud — hallazgos detallados",
+              "## SonarQube Cloud",
               "",
-              f"- Check run: `{check_run_id}`",
-              f"- Head: `{head_sha or 'desconocido'}`",
-              f"- Resultado: **{conclusion}**",
-              f"- Hallazgos anotados: **{len(annotations)}**",
+              gate_label,
+              f"**{len(annotations)} hallazgos**",
           ]
 
           if details_url:
-              lines.append(f"- [Abrir análisis completo en SonarQube Cloud]({details_url})")
+              lines.append(f"[Ver análisis completo]({details_url})")
 
           lines.append("")
 
           if not annotations:
-              lines.append(
-                  "Sonar no expuso anotaciones por línea para este check. "
-                  "Revisa el enlace del análisis completo si el Quality Gate falló."
-              )
+              if not gate_ok:
+                  lines.append(
+                      "SonarQube no expuso anotaciones por línea para este fallo; "
+                      "el detalle está disponible en el análisis completo."
+                  )
           else:
               visible = annotations[:50]
               for index, annotation in enumerate(visible, 1):
