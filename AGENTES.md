@@ -178,7 +178,7 @@ Cuando no exista otro requisito explícito:
 | Tipo | SaaS de gestión corporativa |
 | Mercado inicial | Colombia |
 | Hosting objetivo inicial | Hostinger shared hosting |
-| Backend objetivo inicial | PHP 8.3 en producción Hostinger; compatibilidad declarada `^8.3` |
+| Backend objetivo inicial | PHP 8.5 en producción Hostinger |
 | Base de datos objetivo inicial | MariaDB / MySQL-compatible |
 | Frontend objetivo inicial | HTML + CSS + JavaScript con dependencias contenidas |
 | Navegador / E2E | Playwright |
@@ -190,6 +190,8 @@ Cuando no exista otro requisito explícito:
 Estos valores son una base, no una obligación eterna. Si las necesidades reales del producto justifican un cambio de arquitectura o plataforma, documentarlo primero en `ESPECIFICACIONES.md` y reflejar el trabajo en el roadmap.
 
 Mientras Hostinger shared hosting sea la plataforma elegida:
+
+- PHP 8.5 es el runtime objetivo de producción y CI;
 
 - evitar requerir procesos Node de larga duración en producción;
 - evitar Docker como requisito de runtime;

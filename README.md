@@ -8,7 +8,7 @@
 <p align="center">
   <strong>Producto:</strong> Condor App ·
   <strong>Dominio:</strong> condorapp.com.co ·
-  <strong>Runtime producción:</strong> PHP 8.3 ·
+  <strong>Runtime producción:</strong> PHP 8.5 ·
   <strong>Versión objetivo:</strong> V 0.1.2
 </p>
 
@@ -19,17 +19,17 @@
 | Versión objetivo | 🚧 **V 0.1.2** | Issue #78 |
 | Versión desplegada | ⚠️ **V 0.1.1** | Hostinger confirmó deploy de `main` a `public_html` |
 | Producción V 0.1.1 | ⛔ **HTTP 500** | navegador del propietario confirma respuesta 500 en `/` |
-| Runtime Hostinger | ✅ **PHP 8.3** | confirmado por el propietario |
+| Runtime Hostinger | ✅ **PHP 8.5** | confirmado por el propietario |
 | Main base | ✅ | `52ac97fbfb4565741ee6353de06b754cedec99f9` |
 | Producción | ⛔ **NO VALIDADA** | no cerrar hasta que el home cargue correctamente |
 
 ## Qué se hace en V 0.1.2
 
-- `APP_SECRET` usa almacenamiento temporal seguro si `var/runtime` no es writable.
+- `APP_SECRET` solo se persiste en `var/runtime` con permisos restrictivos; no se usan directorios temporales compartidos.
 - Si Symfony no puede iniciar, se devuelve una página de error segura en vez de una respuesta vacía.
 - `public/runtime-check.php` permite comprobar versión, compatibilidad PHP, autoload y almacenamiento runtime sin depender del kernel.
-- CI pasa a ejecutar PHP 8.3 para reflejar el runtime real de Hostinger.
-- Doctrine desactiva `enable_native_lazy_objects` porque esa función requiere PHP 8.4+ y era la causa reproducida del HTTP 500 en PHP 8.3.
+- CI pasa a ejecutar PHP 8.5 para reflejar el runtime real de Hostinger.
+- Doctrine desactiva `enable_native_lazy_objects` porque esa función requiere PHP 8.4+ y era la causa reproducida del HTTP 500 en PHP 8.5.
 - La versión se sincroniza en `config/version.php`, `package.json` y `package-lock.json`.
 
 ## Archivos de esta entrega
@@ -48,7 +48,7 @@
 
 ## Validación requerida
 
-- PHP 8.3 + Composer + Symfony: 🚧
+- PHP 8.5 + Composer + Symfony: 🚧
 - PHPUnit: 🚧
 - MariaDB/integración: 🚧
 - Playwright Chromium: 🚧
@@ -61,7 +61,7 @@
 
 | Lane | Trabajo |
 | --- | --- |
-| **AHORA** | Validar Doctrine sobre PHP 8.3 y cerrar PR #79 |
+| **AHORA** | Validar Doctrine sobre PHP 8.5 y cerrar PR #79 |
 | **SIGUE** | Squash merge y exact-main |
 | **DESPUÉS** | Observar `/runtime-check.php`, `/`, `/app.css` y `/admin/login` en Hostinger |
 | **P0** | No declarar producción validada hasta eliminar el HTTP 500 |

@@ -15,7 +15,7 @@ try {
 }
 
 $autoloadPresent = is_file($projectDir.'/vendor/autoload.php');
-$phpCompatible = PHP_VERSION_ID >= 80300;
+$phpCompatible = PHP_VERSION_ID >= 80500;
 $projectRuntime = $projectDir.'/var/runtime';
 
 if (is_dir($projectRuntime)) {
@@ -26,8 +26,7 @@ if (is_dir($projectRuntime)) {
     $projectRuntimeWritable = is_writable($projectDir);
 }
 
-$tempRuntimeWritable = is_writable(sys_get_temp_dir());
-$runtimeStorageAvailable = $projectRuntimeWritable || $tempRuntimeWritable;
+$runtimeStorageAvailable = $projectRuntimeWritable;
 $ok = $autoloadPresent && $phpCompatible && $runtimeStorageAvailable;
 
 http_response_code($ok ? 200 : 503);

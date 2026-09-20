@@ -6,11 +6,11 @@ namespace App\Tests\Shared\Runtime;
 
 use App\Shared\Runtime\RuntimeEnvironment;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 final class RuntimeEnvironmentTest extends TestCase
 {
     private string $projectDir;
-    private string $fallbackDir;
 
     /** @var array<string, string|false|null> */
     private array $previous = [];
@@ -29,18 +29,12 @@ final class RuntimeEnvironmentTest extends TestCase
 
         $this->projectDir =
             sys_get_temp_dir().'/condor-project-'.bin2hex(random_bytes(6));
-        mkdir($this->projectDir, 0770, true);
-
-        $this->fallbackDir =
-            rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR).
-            DIRECTORY_SEPARATOR.'condor-runtime-'.
-            substr(hash('sha256', $this->projectDir), 0, 12);
+        mkdir($this->projectDir, 0700, true);
     }
 
     protected function tearDown(): void
     {
         $this->removeTree($this->projectDir);
-        $this->removeTree($this->fallbackDir);
 
         foreach ($this->previous as $name => $value) {
             if (is_string($value)) {
@@ -69,27 +63,18 @@ final class RuntimeEnvironmentTest extends TestCase
         );
 
         $this->clearSecretEnvironment();
-
         RuntimeEnvironment::prepare($this->projectDir);
 
         self::assertSame($first, getenv('APP_SECRET'));
     }
 
-    public function testFallsBackWhenProjectRuntimeCannotBeCreated(): void
+    public function testRejectsUnsafeRuntimeStorageInsteadOfUsingSharedTemp(): void
     {
         file_put_contents($this->projectDir.'/var', 'blocked');
 
+        $this->expectException(RuntimeException::class);
+
         RuntimeEnvironment::prepare($this->projectDir);
-
-        $first = getenv('APP_SECRET');
-        self::assertIsString($first);
-        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $first);
-        self::assertFileExists($this->fallbackDir.'/app_secret');
-
-        $this->clearSecretEnvironment();
-        RuntimeEnvironment::prepare($this->projectDir);
-
-        self::assertSame($first, getenv('APP_SECRET'));
     }
 
     public function testProvidesSafeBootstrapDefaultsWithoutSecrets(): void
@@ -139,7 +124,7 @@ final class RuntimeEnvironmentTest extends TestCase
 
     private function removeTree(string $path): void
     {
-        if (is_file($path)) {
+        if (is_file($path) || is_link($path)) {
             @unlink($path);
 
             return;
@@ -160,7 +145,7 @@ final class RuntimeEnvironmentTest extends TestCase
             }
 
             $child = $path.DIRECTORY_SEPARATOR.$item;
-            is_dir($child)
+            is_dir($child) && !is_link($child)
                 ? $this->removeTree($child)
                 : @unlink($child);
         }

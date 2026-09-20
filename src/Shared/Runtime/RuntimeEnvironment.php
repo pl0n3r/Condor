@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Shared\Runtime;
 
+use RuntimeException;
+
 final class RuntimeEnvironment
 {
     private const FALLBACK_DATABASE_URL =
@@ -16,7 +18,7 @@ final class RuntimeEnvironment
         self::defineIfMissing('APP_DEBUG', '0');
 
         if (self::read('APP_SECRET') === null) {
-            self::define('APP_SECRET', self::runtimeSecret($projectDir));
+            self::define('APP_SECRET', self::persistentSecret($projectDir));
         }
 
         if (self::read('DATABASE_URL') === null) {
@@ -28,43 +30,17 @@ final class RuntimeEnvironment
         }
     }
 
-    private static function runtimeSecret(string $projectDir): string
+    private static function persistentSecret(string $projectDir): string
     {
-        foreach (self::runtimeDirectories($projectDir) as $runtimeDir) {
-            $secret = self::persistentSecret($runtimeDir);
-            if ($secret !== null) {
-                return $secret;
-            }
-        }
-
-        error_log(
-            'Condor bootstrap: no fue posible persistir APP_SECRET; '.
-            'se usará un secreto efímero para mantener disponible la superficie pública.'
-        );
-
-        return bin2hex(random_bytes(32));
-    }
-
-    /** @return list<string> */
-    private static function runtimeDirectories(string $projectDir): array
-    {
-        $projectRuntime =
+        $runtimeDir =
             rtrim($projectDir, DIRECTORY_SEPARATOR).
             DIRECTORY_SEPARATOR.'var'.
             DIRECTORY_SEPARATOR.'runtime';
 
-        $tempRuntime =
-            rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR).
-            DIRECTORY_SEPARATOR.'condor-runtime-'.
-            substr(hash('sha256', $projectDir), 0, 12);
-
-        return array_values(array_unique([$projectRuntime, $tempRuntime]));
-    }
-
-    private static function persistentSecret(string $runtimeDir): ?string
-    {
         if (!self::ensureDirectory($runtimeDir)) {
-            return null;
+            throw new RuntimeException(
+                'No fue posible preparar almacenamiento runtime seguro.'
+            );
         }
 
         $secretFile = $runtimeDir.DIRECTORY_SEPARATOR.'app_secret';
@@ -77,7 +53,17 @@ final class RuntimeEnvironment
         $handle = @fopen($secretFile, 'x');
 
         if ($handle === false) {
-            return self::readSecretFile($secretFile);
+            for ($attempt = 0; $attempt < 25; ++$attempt) {
+                usleep(10000);
+                $existing = self::readSecretFile($secretFile);
+                if ($existing !== null) {
+                    return $existing;
+                }
+            }
+
+            throw new RuntimeException(
+                'No fue posible obtener el secreto runtime persistente.'
+            );
         }
 
         try {
@@ -85,7 +71,9 @@ final class RuntimeEnvironment
                 fwrite($handle, $candidate.PHP_EOL) === false
                 || !fflush($handle)
             ) {
-                return null;
+                throw new RuntimeException(
+                    'No fue posible persistir el secreto runtime.'
+                );
             }
         } finally {
             fclose($handle);
@@ -98,17 +86,26 @@ final class RuntimeEnvironment
 
     private static function ensureDirectory(string $runtimeDir): bool
     {
-        if (is_dir($runtimeDir)) {
-            return is_writable($runtimeDir);
+        if (is_link($runtimeDir)) {
+            return false;
         }
 
-        return @mkdir($runtimeDir, 0770, true)
-            || (is_dir($runtimeDir) && is_writable($runtimeDir));
+        if (!is_dir($runtimeDir)) {
+            if (!@mkdir($runtimeDir, 0700, true) && !is_dir($runtimeDir)) {
+                return false;
+            }
+        }
+
+        @chmod($runtimeDir, 0700);
+
+        return is_dir($runtimeDir)
+            && !is_link($runtimeDir)
+            && is_writable($runtimeDir);
     }
 
     private static function readSecretFile(string $secretFile): ?string
     {
-        if (!is_file($secretFile)) {
+        if (is_link($secretFile) || !is_file($secretFile)) {
             return null;
         }
 
