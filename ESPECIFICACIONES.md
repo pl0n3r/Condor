@@ -243,23 +243,19 @@ Reglas:
 
 ### D-008 — Roadmap acumulativo e inmutable hasta v1.0.0
 
-El roadmap canónico en GitHub Issue #1 funciona como **ledger histórico append-only, cronológico y ordenado** del desarrollo de Condor.
+El roadmap canónico en GitHub Issue #1 funciona como **ledger histórico append-only** del desarrollo de Condor.
 
 Reglas:
 
 - no borrar tareas, hitos, fases o entradas ya registradas;
-- conservar la historia desde la definición inicial del proyecto, no únicamente desde el comienzo de la implementación técnica;
-- mantener un orden lógico y cronológico por fases, de modo que una persona pueda recorrer la evolución completa de Condor sin reconstruirla desde otros Issues;
-- al agregar avances, extender la estructura existente en vez de sustituirla por un resumen nuevo;
 - no retirar del Issue #1 trabajo completado para “limpiar” la vista;
 - agregar trabajo nuevo como nuevas entradas;
 - cambiar a ✅ y tachar lo completado, conservando su texto y contexto;
 - conservar bloqueos resueltos como parte del historial cuando hayan sido relevantes;
 - registrar, cuando exista, versión, PR, merge SHA, validación exacta de `main`, despliegue y validación de producción;
 - mantener este nivel de trazabilidad desde el arranque hasta, como mínimo, la primera **v1.0.0 madura**;
-- **Issue #1 es el único Roadmap**: no crear Issues/volúmenes de continuación ni Roadmaps paralelos; si se aproxima un límite práctico de tamaño, reorganizar el mismo Issue #1 y utilizar sus comentarios para hitos macro adicionales sin eliminar contexto histórico;
+- si el Issue #1 alcanza un límite práctico de tamaño, crear un Issue/volumen de continuación sin borrar ni reescribir el histórico anterior; ambos deben quedar enlazados;
 - la vista para socios debe seguir siendo legible mediante secciones, fases y resúmenes, pero nunca sacrificando el histórico;
-- las microactualizaciones pueden resumirse; los hitos macro, decisiones de producto, fases, entregas, incidentes y cambios de dirección deben permanecer representados;
 - `docs/roadmap-historico/` puede usarse para snapshots o copias auxiliares, pero **nunca como sustituto que permita retirar entradas del roadmap canónico**.
 
 ### D-009 — Versión obligatoria en títulos de GitHub
