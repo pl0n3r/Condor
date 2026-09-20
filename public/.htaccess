@@ -1,0 +1,15 @@
+DirectoryIndex index.php
+
+<IfModule mod_negotiation.c>
+    Options -MultiViews
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Los archivos públicos reales (CSS, imágenes, etc.) se sirven directamente.
+    RewriteCond %{REQUEST_FILENAME} !-f
+
+    # El resto de rutas entra al front controller de Symfony.
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
