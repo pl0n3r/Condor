@@ -1575,35 +1575,6 @@ Toda automatización debe ser idempotente cuando sea posible y operar con mínim
 
 La Fase 8 queda **definida como baseline operativo**. Sus ítems permanecen activos en el roadmap únicamente cuando falte implementación, medición o evidencia real.
 
-
-### D-045 — Stack principal confirmado: Symfony + Doctrine sobre PHP 8.5
-
-Condor mantiene deliberadamente su stack actual y **no migrará a una arquitectura tipo BRVTAL ni a un backend PHP sin framework** como consecuencia del incidente de producción de V 0.1.1.
-
-Stack principal confirmado:
-
-- PHP **8.5** como runtime de backend en desarrollo, CI y producción;
-- Symfony **7.4 LTS** como framework backend;
-- Doctrine ORM/DBAL como capa de persistencia;
-- MariaDB como base de datos;
-- Twig para SSR de superficies públicas y SEO;
-- React + TypeScript + Vite para las superficies administrativas donde aporten valor;
-- arquitectura de monolito modular;
-- Playwright para E2E;
-- GitHub Actions + SonarQube Cloud + CodeRabbit para entrega y calidad;
-- Hostinger shared hosting como infraestructura inicial.
-
-Principios:
-
-- los errores de configuración de infraestructura no se usarán por sí solos como motivo para reemplazar el stack;
-- PHP 8.5 es un requisito operativo explícito mientras el stack dependa de capacidades que lo requieran;
-- CI debe ejecutar el runtime objetivo de producción para detectar incompatibilidades antes del deploy;
-- se seguirá evitando sobrearquitectura dentro de Symfony: módulos claros, dependencias justificadas y abstracciones solo cuando resuelvan una necesidad real;
-- una futura migración de framework o arquitectura requerirá evidencia técnica/productiva y decisión explícita, no una reacción a un incidente aislado.
-
-La recuperación del home al configurar Hostinger en PHP 8.5 confirma que el incidente observado no requería sustituir Symfony/Doctrine.
-
-
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
