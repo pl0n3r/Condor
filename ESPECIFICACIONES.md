@@ -437,6 +437,50 @@ Reglas:
 - el motivo puede comenzar como texto libre; una lista administrable de motivos se considera una extensión futura, no una necesidad inicial;
 - los descuentos deben admitir evolución flexible a reglas por producto y/o por pedido, sin introducir complejidad antes de que el dominio lo requiera.
 
+
+### D-020 — Configuración progresiva sin proliferación de pantallas
+
+La configurabilidad transversal no debe trasladar toda la complejidad del backend a la interfaz.
+
+Reglas:
+
+- Condor debe funcionar con valores por defecto útiles y permitir operar lo básico sin pasar primero por pantallas de configuración;
+- la UI debe usar **divulgación progresiva**: mostrar primero opciones comunes y revelar configuración avanzada solo cuando el caso de uso la necesite;
+- evitar pantallas infinitas de switches, formularios duplicados o parámetros repetidos por módulo;
+- agrupar opciones relacionadas y reutilizar defaults, herencia y plantillas cuando sea posible;
+- una capacidad puede existir en el backend y permanecer oculta/inactiva en la experiencia inicial hasta que aporte valor real;
+- la meta es máxima flexibilidad funcional con mínima carga cognitiva para el usuario.
+
+### D-021 — Estados separados para pedido, pago y cumplimiento
+
+Condor trata el ciclo comercial como dimensiones relacionadas pero independientes.
+
+Reglas:
+
+- **pedido**, **pago** y **cumplimiento/entrega** no comparten un único estado global;
+- cada dimensión mantiene estados semánticos internos mínimos y estables para que el sistema pueda aplicar reglas coherentes;
+- cada empresa puede personalizar nombres visibles y añadir etapas intermedias sin perder el significado interno;
+- todo cambio de estado relevante debe conservar trazabilidad de quién lo ejecutó, cuándo ocurrió y la transición realizada;
+- los métodos de pago son configurables por empresa, con defaults activables/desactivables y capacidad de añadir otros;
+- reglas como pagos parciales o saldo pendiente se modelan como capacidades configurables, no como obligación universal;
+- el cumplimiento del pedido cubre como defaults **envío**, **recogida** y **sin entrega física**;
+- el modelo debe poder evolucionar a cumplimientos parciales o múltiples sin obligar a exponer esa complejidad desde el inicio.
+
+### D-022 — Motor transversal de workflows personalizados
+
+Condor debe poder adaptar procesos operativos mediante workflows personalizados sin implementar un motor distinto para cada módulo.
+
+Reglas:
+
+- existirá un **motor común y transversal de workflows** reutilizable por las diferentes áreas del producto;
+- los workflows son opcionales: una empresa puede operar únicamente con flujos predefinidos/default;
+- la primera etapa prioriza workflows internos y simples;
+- el modelo conceptual debe poder evolucionar hacia **disparadores + condiciones + acciones**, con trazabilidad de cada ejecución;
+- la arquitectura debe separar el motor del detalle de cada módulo mediante contratos/interfaces estables;
+- integraciones externas, webhooks y acciones hacia terceros quedan fuera del alcance inicial;
+- aun así, el diseño debe permitir añadir adaptadores externos en el futuro sin rehacer el núcleo del motor;
+- la personalización de workflows debe respetar los invariantes del dominio, permisos, auditoría y aislamiento por tenant.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
