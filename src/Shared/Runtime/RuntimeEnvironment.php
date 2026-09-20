@@ -10,9 +10,6 @@ final class RuntimeEnvironment
 {
     private const FALLBACK_DATABASE_URL = 'mysql://condor_unconfigured:condor_unconfigured@127.0.0.1:3306/condor_unconfigured?charset=utf8mb4';
 
-    /** @var list<string> */
-    private const ENV_NAMES = ['APP_ENV', 'APP_DEBUG', 'APP_SECRET', 'DATABASE_URL'];
-
     public static function prepare(string $projectDir): void
     {
         self::defineIfMissing('APP_ENV', 'prod');
