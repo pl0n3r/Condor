@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 
-type AdminAppProps = {
+type AdminAppProps = Readonly<{
   version: string;
   logoutToken: string;
-};
+}>;
 
 type TenantContextResponse = {
   tenant: {
@@ -39,10 +39,12 @@ export function AdminApp({ version, logoutToken }: AdminAppProps) {
 
         const data = await response.json() as TenantContextResponse;
         setContext({ status: 'ready', data });
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          setContext({ status: 'error' });
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
         }
+
+        setContext({ status: 'error' });
       }
     }
 
@@ -78,7 +80,9 @@ export function AdminApp({ version, logoutToken }: AdminAppProps) {
         {context.status === 'loading' && (
           <>
             <h1>Cargando empresa…</h1>
-            <p className="muted" role="status">Preparando tu espacio de trabajo.</p>
+            <output className="muted" aria-live="polite">
+              Preparando tu espacio de trabajo.
+            </output>
           </>
         )}
 
