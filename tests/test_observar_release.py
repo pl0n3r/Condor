@@ -59,6 +59,9 @@ class ObserverTests(unittest.TestCase):
             }).encode()),
             "/": (200, "text/html", HOME),
             "/admin/login": (200, "text/html", LOGIN),
+            "/app.css": (200, "text/css", b"body{margin:0}"),
+            "/build/admin.css": (200, "text/css", b".admin{display:grid}"),
+            "/build/admin.js": (200, "application/javascript; charset=utf-8", b"window.condor=true;"),
         }
         self.hilo = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.hilo.start()
@@ -75,8 +78,45 @@ class ObserverTests(unittest.TestCase):
     def test_release_exacta_y_smoke_publico(self) -> None:
         resultado = self.observar()
         self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
-        self.assertEqual(self.server.visitas, ["/health", "/", "/admin/login"])
+        self.assertEqual(self.server.visitas, [
+            "/health", "/", "/admin/login",
+            "/app.css", "/build/admin.css", "/build/admin.js",
+        ])
         self.assertTrue(all(v["ok"] for v in resultado["comprobaciones"].values()))
+
+    def test_faltan_assets_no_declara_produccion_valida(self) -> None:
+        del self.server.respuestas["/build/admin.js"]
+        resultado = self.observar()
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["js_admin"]["ok"])
+
+    def test_html_fallback_no_pasa_por_javascript(self) -> None:
+        self.server.respuestas["/build/admin.js"] = (200, "text/html", HOME)
+        resultado = self.observar()
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["js_admin"]["ok"])
+
+    def test_css_vacio_no_valida_produccion(self) -> None:
+        self.server.respuestas["/app.css"] = (200, "text/css", b"  ")
+        resultado = self.observar()
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertIn("vacío", resultado["comprobaciones"]["css_publico"]["detalle"])
+
+    def test_css_mime_erroneo_no_valida_produccion(self) -> None:
+        self.server.respuestas["/build/admin.css"] = (200, "application/octet-stream", b"css")
+        self.assertEqual(self.observar()["estado"], "DEPLOY_OBSERVED")
+
+    def test_asset_redirigido_no_valida_produccion(self) -> None:
+        self.server.respuestas["/build/admin.js"] = (302, "application/javascript", b"")
+        resultado = self.observar()
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertIn("Redirección", resultado["comprobaciones"]["js_admin"]["detalle"])
+
+    def test_asset_demasiado_grande_no_valida_produccion(self) -> None:
+        self.server.respuestas["/build/admin.js"] = (
+            200, "application/javascript", b"a" * (modulo.MAX_BYTES + 1),
+        )
+        self.assertEqual(self.observar()["estado"], "DEPLOY_OBSERVED")
 
     def test_sha_distinto_no_observa_deploy_ni_visita_paginas(self) -> None:
         resultado = modulo.observar(self.base, VERSION, "b" * 40, intentos=1)

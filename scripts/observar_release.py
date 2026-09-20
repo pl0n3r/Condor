@@ -85,7 +85,12 @@ def obtener(origen: str, ruta: str, timeout: float) -> tuple[str, bytes]:
     solicitud = Request(
         origen + ruta,
         headers={
-            "Accept": "application/json" if ruta == "/health" else "text/html",
+            "Accept": (
+                "application/json" if ruta == "/health"
+                else "text/css" if ruta.endswith(".css")
+                else "text/javascript, application/javascript" if ruta.endswith(".js")
+                else "text/html"
+            ),
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
             "User-Agent": "Condor-Release-Observer/0.1",
@@ -140,6 +145,18 @@ def validar_pagina(tipo: str, cuerpo: bytes, version: str, login: bool) -> None:
         raise ObservacionError("El login administrativo no contiene su formulario esperado.")
 
 
+def validar_asset(tipo: str, cuerpo: bytes, ruta: str) -> None:
+    """Comprueba que el asset servido no sea una página fallback, vacío ni MIME erróneo."""
+    esperados = (
+        {"text/css"} if ruta.endswith(".css")
+        else {"text/javascript", "application/javascript"}
+    )
+    if tipo not in esperados:
+        raise ObservacionError("El recurso estático no tiene el tipo de contenido esperado.")
+    if not cuerpo.strip():
+        raise ObservacionError("El recurso estático está vacío.")
+
+
 def observar(origen: str, version: str, sha: str, *, intentos: int = 3,
             intervalo: float = 2, timeout: float = 5) -> dict[str, Any]:
     """Solo la identidad exacta permite pasar de NO_OBSERVADO a DEPLOY_OBSERVED."""
@@ -166,6 +183,21 @@ def observar(origen: str, version: str, sha: str, *, intentos: int = 3,
             tipo, cuerpo = obtener(origen, ruta, timeout)
             validar_pagina(tipo, cuerpo, version, es_login)
             evidencias[nombre] = {"ok": True, "detalle": "HTTP 200, HTML y versión visibles."}
+        except ObservacionError as error:
+            evidencias[nombre] = {"ok": False, "detalle": str(error)}
+
+    for nombre, ruta in [
+        ("css_publico", "/app.css"),
+        ("css_admin", "/build/admin.css"),
+        ("js_admin", "/build/admin.js"),
+    ]:
+        try:
+            tipo, cuerpo = obtener(origen, ruta, timeout)
+            validar_asset(tipo, cuerpo, ruta)
+            evidencias[nombre] = {
+                "ok": True,
+                "detalle": "HTTP 200 y contenido estático válido.",
+            }
         except ObservacionError as error:
             evidencias[nombre] = {"ok": False, "detalle": str(error)}
 
