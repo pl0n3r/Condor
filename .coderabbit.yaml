@@ -1,11 +1,14 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 reviews:
-  profile: assertive
+  profile: chill
   request_changes_workflow: false
 
   # Condor prioriza findings accionables sobre comentarios decorativos o walkthroughs.
   high_level_summary: false
+  high_level_summary_placeholder: ""
   review_status: false
+  review_progress: false
+  in_progress_fortune: false
   poem: false
   collapse_walkthrough: false
   sequence_diagrams: false
