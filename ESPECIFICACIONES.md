@@ -670,6 +670,186 @@ Reglas:
 - no volver a convertir “¿esto debe ser configurable?” en una pregunta recurrente cuando exista variación real entre empresas: la regla general es configurabilidad con defaults e invariantes claros;
 - cuando dos reglas puedan competir, el motor de precios debe resolverlas de forma determinista y trazable.
 
+
+### D-030 — Criterios expertos cerrados para producto, dominio y evolución
+
+Condor adopta los siguientes criterios como defaults de diseño. Son decisiones técnicas y de producto deducibles de la visión existente y no requieren aprobación caso por caso.
+
+#### Propuesta de valor y perfil inicial
+
+- propuesta de valor operativa: **Condor App centraliza y digitaliza la operación comercial de empresas colombianas, empezando por presencia web, e-commerce, catálogo, precios, inventario, clientes y pedidos, con una experiencia simple por defecto y adaptable a cada empresa**;
+- el producto no se restringe técnicamente a un sector o tamaño específico;
+- la primera validación comercial debe priorizar empresas que hoy operen con procesos manuales, hojas de cálculo, herramientas desconectadas o presencia digital insuficiente;
+- especializar marketing o ventas en un nicho futuro no debe introducir acoplamiento del dominio a ese nicho.
+
+#### Mapa de dominios y orden de evolución
+
+El monolito modular se organiza conceptualmente en:
+
+1. Identidad y acceso.
+2. Tenant/organización y entidades legales.
+3. Sedes y alcance operativo.
+4. Catálogo.
+5. Precios y reglas comerciales.
+6. Inventario.
+7. Clientes/CRM comercial básico.
+8. Canales, sitio y e-commerce.
+9. Pedidos/ventas.
+10. Pagos como registro interno y adaptadores futuros.
+11. Cumplimiento/entrega.
+12. Archivos/media.
+13. Workflows/automatización.
+14. Auditoría.
+15. Configuración/capacidades del tenant.
+16. Analítica/reportes.
+17. Integraciones.
+
+Dependencias: identidad/tenant preceden a los módulos operativos; catálogo, precios, inventario, clientes y canales alimentan pedidos; workflows e integraciones reaccionan a contratos/eventos estables y no poseen el dominio.
+
+#### Terminología canónica mínima
+
+- **Tenant / cuenta Condor**: espacio aislado contratado por una organización.
+- **Entidad legal / razón social**: persona jurídica/fiscal que opera dentro de un tenant.
+- **Sede**: ubicación o unidad operativa.
+- **Canal**: superficie/origen comercial, por ejemplo e-commerce.
+- **Fuente de inventario**: ubicación lógica que posee stock; normalmente una sede, opcionalmente stock propio de canal.
+- **Cliente**: contraparte comercial, separada del usuario de acceso.
+- **Usuario**: identidad autenticable.
+- **Rol**: conjunto configurable de permisos.
+- **Producto**: oferta comercial base.
+- **Variante**: unidad vendible concreta de un producto cuando aplique.
+- **Lista de precios**: conjunto de precios aplicables bajo un contexto comercial.
+- **Pedido**: intención/compromiso comercial registrado.
+- **Pago**: registro de cobro independiente del estado del pedido.
+- **Cumplimiento**: entrega, recogida o resolución de lo vendido.
+
+#### Configurable vs invariante
+
+Configurable por tenant cuando exista variación real: nombres visibles/etapas, roles, permisos CRUD, sedes, categorías comerciales, listas y reglas de precios, canales, fuente de inventario, backorder, compra invitado/cuenta, métodos de pago, workflows y capacidades activas.
+
+Invariantes del núcleo:
+
+- aislamiento entre tenants;
+- integridad referencial;
+- autorización server-side;
+- un precio efectivo determinista por contexto;
+- movimientos auditables para mutaciones de inventario;
+- trazabilidad de cambios sensibles;
+- estados semánticos internos estables;
+- idempotencia donde una repetición pueda duplicar efectos;
+- transacciones/locking donde la concurrencia pueda romper stock, dinero o unicidad;
+- una sola fuente efectiva de inventario por pedido en la etapa inicial;
+- una sola categoría comercial principal efectiva por cliente;
+- secretos fuera del repositorio.
+
+### D-031 — Modelo de datos y multi-tenancy inicial
+
+- usar **ULID** como identificador de dominio por defecto: opaco, portable, ordenable temporalmente y sin exponer secuencias de negocio;
+- MariaDB puede conservar índices internos técnicos cuando Doctrine lo necesite, pero URLs/contratos de dominio no deben depender de IDs secuenciales públicos;
+- toda entidad tenant-owned incluye pertenencia inequívoca al tenant o la deriva mediante una relación estructural imposible de cruzar accidentalmente;
+- el tenant activo se resuelve una sola vez por request y se propaga mediante un contexto explícito;
+- repositorios/servicios tenant-aware deben aplicar aislamiento en backend; nunca confiar en filtros del frontend;
+- las relaciones cross-tenant están prohibidas salvo entidades globales explícitas de plataforma;
+- Tenant y EntidadLegal son conceptos distintos; un tenant contiene una o varias entidades legales;
+- Usuario es identidad; Membresía relaciona usuario con tenant y permite evolución futura a multi-tenant por identidad;
+- la autorización efectiva se obtiene de membresía + roles + alcance por sede;
+- Sede pertenece al tenant y, cuando corresponda fiscalmente, puede asociarse a una entidad legal;
+- Canal pertenece al tenant y referencia su configuración comercial;
+- FuenteInventario pertenece al tenant y puede representar sede o stock lógico de canal;
+- Producto y Variante pertenecen al tenant; inventario se registra por Variante + FuenteInventario;
+- los saldos de stock son proyecciones/estado actual respaldados por movimientos auditables;
+- Cliente pertenece al tenant y referencia una categoría comercial principal opcional;
+- Pedido captura snapshots necesarios de precio, impuestos/datos comerciales y referencias para que cambios futuros de catálogo no reescriban su historia;
+- migraciones mediante Doctrine Migrations; cambios destructivos se separan en pasos expand/contract cuando haya datos reales.
+
+### D-032 — Flujo comercial, stock y consistencia
+
+Flujo de referencia:
+
+1. resolver tenant, canal y contexto comercial;
+2. resolver cliente/categoría/lista de precios cuando existan;
+3. resolver producto/variante vendible;
+4. calcular un único precio efectivo;
+5. validar disponibilidad contra la fuente de inventario del canal;
+6. crear pedido inicialmente sin exigir integración de pago;
+7. al alcanzar el estado semántico **confirmado**, reservar stock por defecto;
+8. cancelar o expirar un pedido libera reservas no consumidas;
+9. el cumplimiento confirmado convierte la reserva en consumo/salida de inventario;
+10. backorder habilitado permite exceder disponibilidad según la regla del producto;
+11. toda transición y mutación relevante queda auditada.
+
+Reglas de consistencia:
+
+- crear un borrador no reserva stock por defecto;
+- la empresa podrá evolucionar la política de reserva mediante configuración/workflow, pero el default es reserva al confirmar;
+- reservar/liberar/consumir debe ser transaccional e idempotente;
+- concurrencia de stock usa locking/estrategia atómica en persistencia;
+- un pedido no cambia retroactivamente de precio por cambios posteriores de listas/reglas;
+- errores de pago externo futuros no deben corromper el pedido ni duplicar cobros; los adaptadores usarán claves idempotentes;
+- pedido, pago y cumplimiento conservan estados separados.
+
+### D-033 — Presencia web y CMS configurable
+
+La primera estrategia de presencia web será un **sistema de temas + bloques/secciones configurables**, no un page builder de posicionamiento libre.
+
+- Twig/Symfony renderiza la superficie pública para SEO, rendimiento y simplicidad de hosting;
+- cada tenant elige tema, identidad visual y composición de bloques permitidos;
+- bloques iniciales pueden incluir hero, texto, imagen, galería, productos/categorías, beneficios, contacto, ubicación, FAQ y llamados a la acción;
+- contenido y configuración son datos del tenant, no plantillas PHP duplicadas por cliente;
+- React se usa solo en editores/interacciones administrativas donde aporte valor;
+- componentes públicos mantienen contratos de contenido estables;
+- personalización avanzada futura puede añadir nuevos bloques/temas sin convertir el núcleo en un editor visual arbitrario;
+- dominio personalizado y ruta Condor resuelven el mismo tenant y contenido.
+
+### D-034 — Seguridad, tiempo, errores y contratos de aplicación
+
+Defaults técnicos:
+
+- sesiones Symfony server-side con regeneración de ID tras login/cambios sensibles;
+- cookies HttpOnly, Secure en producción y SameSite apropiado;
+- CSRF obligatorio en mutaciones autenticadas de navegador;
+- contraseñas mediante PasswordHasher de Symfony con algoritmo recomendado/auto;
+- rate limiting en autenticación, recuperación y endpoints sensibles;
+- recuperación de contraseña mediante token de un solo uso, expiración corta y almacenamiento seguro;
+- errores públicos no exponen stack traces, SQL, rutas internas ni secretos;
+- API REST usa respuestas de error estructuradas con código estable, mensaje legible y detalles de validación por campo cuando aplique;
+- validación server-side es autoritativa;
+- fechas persistidas en UTC y convertidas a la zona horaria del tenant/usuario para presentación;
+- zona horaria inicial por defecto: **America/Bogota**;
+- locale inicial: **es-CO**;
+- moneda inicial por defecto: **COP**, pero importes se almacenan como enteros en unidad mínima o decimal exacto, nunca float binario;
+- logs técnicos y auditoría de negocio son separados;
+- auditoría registra actor, tenant, acción, entidad, identificador, timestamp y contexto/cambios relevantes sin almacenar secretos.
+
+### D-035 — Workflows, integraciones y portabilidad
+
+- motor de workflows interno y transversal basado en eventos semánticos estables;
+- cada workflow define trigger, condiciones y acciones;
+- ejecuciones tienen estado, timestamps, resultado y trazabilidad;
+- las acciones internas llaman servicios de aplicación, no escriben tablas de otros módulos directamente;
+- eventos se publican después de confirmar la transacción que originó el cambio o mediante patrón equivalente que evite efectos fantasma;
+- no se requieren colas externas inicialmente; el contrato debe permitir introducirlas cuando escala/latencia lo justifique;
+- proveedores externos se conectan mediante puertos/adaptadores;
+- pagos, email, archivos/object storage, facturación, envíos, caché y colas no deben acoplar el dominio a Hostinger;
+- archivos comienzan en almacenamiento local abstraído y pueden migrar a S3;
+- MariaDB se mantiene compatible con migración futura a servicio administrado;
+- configuración por entorno y secretos permiten mover compute sin cambiar reglas de negocio;
+- no se adoptan microservicios hasta que métricas reales justifiquen separar un módulo.
+
+### D-036 — Operación, calidad y evolución
+
+- observabilidad mínima: logs estructurados, correlation/request ID, métricas de errores/latencia y health checks sin secretos;
+- errores inesperados deben ser agregables y alertables; no depender únicamente de revisar logs manualmente;
+- backups de base de datos y archivos son programados, cifrados cuando corresponda y su restauración se prueba periódicamente;
+- performance se optimiza por medición; evitar N+1, paginar colecciones y cachear solo datos con política clara de invalidación;
+- SEO de superficies públicas: SSR, metadata, canonical, sitemap, robots, datos estructurados cuando apliquen y Core Web Vitals razonables;
+- accesibilidad: HTML semántico, teclado, labels, contraste y estados de foco como baseline;
+- CI crece de forma path-sensitive con unit/contract/integration/E2E según riesgo;
+- dependencias y vulnerabilidades se revisan automáticamente;
+- deuda técnica se registra como trabajo explícito cuando afecte seguridad, velocidad o mantenibilidad;
+- analítica de producto se instrumenta cuando existan flujos reales; inicialmente medir activación y uso de capacidades sin recolectar datos innecesarios.
+
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
