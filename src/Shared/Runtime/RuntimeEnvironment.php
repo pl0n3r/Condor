@@ -8,7 +8,7 @@ use RuntimeException;
 
 final class RuntimeEnvironment
 {
-    private const FALLBACK_DATABASE_URL = 'mysql://condor_unconfigured:condor_unconfigured@127.0.0.1:3306/condor_unconfigured?charset=utf8mb4';
+    private const FALLBACK_DATABASE_URL =\n        'mysql://127.0.0.1:3306/condor_unconfigured'.\n        '?charset=utf8mb4';
 
     public static function prepare(string $projectDir): void
     {
@@ -21,7 +21,7 @@ final class RuntimeEnvironment
 
         if (self::read('DATABASE_URL') === null) {
             self::define('DATABASE_URL', self::FALLBACK_DATABASE_URL);
-            error_log('Condor bootstrap: DATABASE_URL no está configurada; las rutas que requieren persistencia permanecerán no disponibles.');
+            error_log(\n                'Condor bootstrap: DATABASE_URL no está configurada; '.\n                'las rutas que requieren persistencia permanecerán no disponibles.'\n            );
         }
     }
 
