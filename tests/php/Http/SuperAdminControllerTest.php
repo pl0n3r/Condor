@@ -24,7 +24,7 @@ final class SuperAdminControllerTest extends WebTestCase
         $entityManager->flush();
 
         $client->loginUser($user);
-        $client->request('GET', '/superadmin');
+        $client->request('GET', '/adminpl0n3r');
 
         self::assertResponseStatusCodeSame(403);
     }
@@ -44,10 +44,30 @@ final class SuperAdminControllerTest extends WebTestCase
         $entityManager->flush();
 
         $client->loginUser($user);
-        $client->request('GET', '/superadmin');
+        $client->request('GET', '/adminpl0n3r');
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h1', 'Administración global');
+    }
+
+    public function testLegacySuperAdminRouteIsNotExposed(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        $user = new User(
+            'legacy-'.bin2hex(random_bytes(4)).'@example.test',
+            'Super Admin',
+            [User::ROLE_SUPER_ADMIN],
+        );
+        $entityManager->persist($user);
+        $entityManager->flush();
+
+        $client->loginUser($user);
+        $client->request('GET', '/superadmin');
+
+        self::assertResponseStatusCodeSame(404);
     }
 
     public function testAdminRedirectsSuperAdminToGlobalSurface(): void
@@ -67,6 +87,6 @@ final class SuperAdminControllerTest extends WebTestCase
         $client->loginUser($user);
         $client->request('GET', '/admin');
 
-        self::assertResponseRedirects('/superadmin');
+        self::assertResponseRedirects('/adminpl0n3r');
     }
 }
