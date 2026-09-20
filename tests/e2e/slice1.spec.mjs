@@ -3,19 +3,23 @@ import { expect, test } from '@playwright/test';
 const baseURL = process.env.PLAYWRIGHT_BASE_URL;
 const email = process.env.E2E_EMAIL;
 const password = process.env.E2E_PASSWORD;
+const appVersion = process.env.APP_VERSION;
 
 test.describe('Slice 1 — fundación y onboarding', () => {
-  test.skip(!baseURL || !email || !password, 'Requiere aplicación E2E ejecutándose.');
+  test.skip(
+    !baseURL || !email || !password || !appVersion,
+    'Requiere aplicación E2E ejecutándose y versión de producto resuelta.'
+  );
 
   test('muestra versión, autentica y expone el contexto tenant', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Tu empresa avanza cuando todo trabaja en conjunto.' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Condor App, inicio' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Menos sistemas aislados. Más claridad para operar.' })).toBeVisible();
-    await expect(page.locator('.site-footer').getByText('V 0.1.0')).toBeVisible();
+    await expect(page.locator('.site-footer').getByText(`V ${appVersion}`)).toBeVisible();
 
     await page.goto('/admin/login');
-    await expect(page.locator('.version-line')).toHaveText('V 0.1.0');
+    await expect(page.locator('.version-line')).toHaveText(`V ${appVersion}`);
 
     await page.getByLabel('Correo').fill(email);
     await page.getByLabel('Contraseña').fill(password);
@@ -30,7 +34,7 @@ test.describe('Slice 1 — fundación y onboarding', () => {
     const payload = await response.json();
     expect(payload.tenant.name).toBe('Empresa E2E');
     expect(payload.tenant.slug).toBe('empresa-e2e');
-    expect(payload.version).toBe('0.1.0');
+    expect(payload.version).toBe(appVersion);
   });
 
   test('el login conserva usabilidad en viewport móvil', async ({ page }) => {
@@ -48,6 +52,6 @@ test.describe('Slice 1 — fundación y onboarding', () => {
 
     await expect(page.getByRole('heading', { name: 'Tu empresa avanza cuando todo trabaja en conjunto.' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Entrar al administrador' })).toBeVisible();
-    await expect(page.locator('.site-footer').getByText('V 0.1.0')).toBeVisible();
+    await expect(page.locator('.site-footer').getByText(`V ${appVersion}`)).toBeVisible();
   });
 });
