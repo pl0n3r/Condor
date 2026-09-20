@@ -393,9 +393,16 @@ Nunca convertir automáticamente “CI verde” en “VALIDADO EN PRODUCCIÓN”
 
 ## 13. Roadmap canónico y convención de progreso
 
-El roadmap activo es **[GitHub Issue #1](https://github.com/pl0n3r/Condor/issues/1)**.
+El roadmap activo es **[GitHub Issue #1](https://github.com/pl0n3r/Condor/issues/1)** y se conserva de forma acumulativa hasta **V 1.0.0**.
 
-Convención obligatoria, heredada de BRVTAL:
+### Dos capas del mismo registro
+
+- **Cuerpo del Issue #1:** plan acumulativo, fases, tareas, estados y ruta hacia V 1.0.0. Debe mantenerse lógico, escaneable y ordenado; no se usa como feed minuto a minuto.
+- **Comentarios del Issue #1:** bitácora cronológica append-only de ejecución. Cada avance material nuevo se agrega como comentario al final cuando ocurre.
+- No insertar la bitácora operativa dentro del encabezado ni antes de las fases.
+- Una corrección posterior se registra con un comentario nuevo; no se reescriben comentarios anteriores para ocultar fallos o cambios de estado.
+
+Convención obligatoria:
 
 - ✅ ~~Completado y validado por los gates requeridos~~
 - 🚧 Pendiente / en curso
@@ -403,17 +410,18 @@ Convención obligatoria, heredada de BRVTAL:
 
 Reglas:
 
-- todo trabajo planeado relevante debe aparecer en el roadmap;
+- todo trabajo planeado relevante debe aparecer en el cuerpo del roadmap;
 - todo trabajo completado relevante permanece visible y tachado;
-- el roadmap es **append-only**: se agregan entradas nuevas y se actualiza el estado de las existentes, pero no se elimina el historial;
+- cada avance material de ejecución se registra inmediatamente como comentario cronológico del Issue #1: inicio, commit relevante, PR, CI, Sonar, CodeRabbit, finding, corrección, merge, exact-main, deploy, producción, bloqueo o desbloqueo;
+- el registro completo es **append-only** hasta V 1.0.0: cuerpo + comentarios conservan la historia; no se elimina trabajo terminado ni eventos operativos;
 - no borrar trabajo terminado para hacer el roadmap “más limpio”;
 - registrar PR y versión cuando exista una release asignada;
 - usar en los títulos del roadmap/versionados el formato visual `(V X.Y.Z)` cuando se muestre una versión;
-- **no retirar, mover ni borrar del Issue #1 las fases o tareas ya registradas antes de v1.0.0**; el roadmap es un ledger acumulativo;
+- **no retirar ni borrar del Issue #1 las fases o tareas ya registradas antes de V 1.0.0**; se permite reorganizar títulos/secciones para mejorar la lectura sin perder ninguna entrada histórica;
 - una instrucción explícita del usuario puede repriorizar el roadmap;
 - Issues específicos contienen criterios de aceptación; el roadmap contiene orden y estado;
 - después de un merge relevante, el roadmap debe reflejar la realidad, no el plan anterior;
-- hasta alcanzar una **v1.0.0 madura**, conservar un registro detallado de cada bloque relevante: tarea/hito, estado, versión cuando exista, PR, merge SHA, validación exact-main, estado de despliegue y validación de producción cuando exista;
+- hasta alcanzar una **V 1.0.0 madura**, conservar un registro detallado y acumulativo de cada bloque relevante: tarea/hito en el cuerpo y eventos de ejecución en comentarios, incluyendo PR, merge SHA, validación exact-main, despliegue y validación de producción cuando exista;
 - si el cuerpo del Issue #1 llegara a un límite práctico de tamaño, **no compactar ni borrar**: crear un volumen/Issue de continuación, dejar el Issue #1 intacto y enlazar ambos en ambas direcciones;
 - el roadmap debe conservar una lectura limpia para socios y personas no técnicas: mostrar trabajo planeado, hecho, pendiente, bloqueos, fases, PRs/versiones y progreso;
 - **no incluir en el roadmap políticas permanentes, manuales, convenciones, instrucciones operativas ni explicaciones que permanezcan fijas**; esos contenidos pertenecen a `AGENTES.md`, `ESPECIFICACIONES.md` o `GLOSARIO.md`;
@@ -596,7 +604,7 @@ Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y 
 - `ROADMAP.md` es solo un punto de entrada al Issue #1 y no mantiene una copia paralela del progreso;
 - `AGENTES.md` es el protocolo operativo canónico y hereda la estructura/reglas aplicables de BRVTAL;
 - toda PR relevante debe reflejar en el roadmap cualquier cambio real de estado antes o inmediatamente después del cierre de la entrega;
-- el roadmap funciona como un log detallado acumulativo desde el inicio del proyecto hasta, como mínimo, la primera v1.0.0 madura;
+- el roadmap funciona como registro acumulativo desde el inicio del proyecto hasta, como mínimo, la primera V 1.0.0 madura: el cuerpo conserva el plan y los comentarios conservan la cronología operativa;
 - nunca declarar VALIDADO EN PRODUCCIÓN únicamente porque CI esté verde;
 - Condor usa versión humana de producto por cada deploy;
 - el primer deploy será `0.1.0`;
