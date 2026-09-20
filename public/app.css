@@ -242,7 +242,6 @@ input {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  color: var(--muted);
   font-size: .8rem;
   background: var(--accent);
   color: #c8cec8;
