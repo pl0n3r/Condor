@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-$projectDir = __DIR__;
+$projectDir = dirname(__DIR__);
 $version = 'desconocida';
 
 try {
