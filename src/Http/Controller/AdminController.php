@@ -24,8 +24,8 @@ final class AdminController extends AbstractController
             throw new AccessDeniedException();
         }
 
-        if ($this->isGranted(User::ROLE_SUPER_ADMIN)) {
-            return $this->redirectToRoute('app_super_admin');
+        if ($this->isGranted(User::ROLE_PLATFORM_OWNER)) {
+            return $this->redirectToRoute('app_platform_owner');
         }
 
         $tenant = $currentTenantForUser->resolve($user);

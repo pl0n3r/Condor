@@ -8,9 +8,9 @@ use App\Domain\Identity\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
-final class SuperAdminControllerTest extends WebTestCase
+final class PlatformOwnerControllerTest extends WebTestCase
 {
-    public function testNormalUserCannotAccessGlobalAdministration(): void
+    public function testNormalUserCannotAccessOwnerAdministration(): void
     {
         $client = static::createClient();
         $entityManager = static::getContainer()->get(EntityManagerInterface::class);
@@ -29,16 +29,36 @@ final class SuperAdminControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(403);
     }
 
-    public function testSuperAdminCanAccessWithoutTenantMembership(): void
+    public function testLegacySuperAdminCannotAccessOwnerAdministration(): void
     {
         $client = static::createClient();
         $entityManager = static::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
 
         $user = new User(
-            'super-'.bin2hex(random_bytes(4)).'@example.test',
-            'Super Admin',
-            [User::ROLE_SUPER_ADMIN],
+            'legacy-'.bin2hex(random_bytes(4)).'@example.test',
+            'Administrador legado',
+            [User::ROLE_LEGACY_SUPER_ADMIN],
+        );
+        $entityManager->persist($user);
+        $entityManager->flush();
+
+        $client->loginUser($user);
+        $client->request('GET', '/adminpl0n3r');
+
+        self::assertResponseStatusCodeSame(403);
+    }
+
+    public function testPlatformOwnerCanAccessWithoutTenantMembership(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        $user = new User(
+            'owner-'.bin2hex(random_bytes(4)).'@example.test',
+            'Propietario',
+            [User::ROLE_PLATFORM_OWNER],
         );
         $entityManager->persist($user);
         $entityManager->flush();
@@ -48,6 +68,7 @@ final class SuperAdminControllerTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h1', 'Administración global');
+        self::assertSelectorTextContains('.eyebrow', 'Propietario de plataforma');
     }
 
     public function testLegacySuperAdminRouteIsNotExposed(): void
@@ -57,9 +78,9 @@ final class SuperAdminControllerTest extends WebTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
 
         $user = new User(
-            'legacy-'.bin2hex(random_bytes(4)).'@example.test',
-            'Super Admin',
-            [User::ROLE_SUPER_ADMIN],
+            'owner-'.bin2hex(random_bytes(4)).'@example.test',
+            'Propietario',
+            [User::ROLE_PLATFORM_OWNER],
         );
         $entityManager->persist($user);
         $entityManager->flush();
@@ -70,16 +91,16 @@ final class SuperAdminControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(404);
     }
 
-    public function testAdminRedirectsSuperAdminToGlobalSurface(): void
+    public function testAdminRedirectsOnlyPlatformOwnerToPrivateSurface(): void
     {
         $client = static::createClient();
         $entityManager = static::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
 
         $user = new User(
-            'redirect-'.bin2hex(random_bytes(4)).'@example.test',
-            'Super Admin',
-            [User::ROLE_SUPER_ADMIN],
+            'owner-'.bin2hex(random_bytes(4)).'@example.test',
+            'Propietario',
+            [User::ROLE_PLATFORM_OWNER],
         );
         $entityManager->persist($user);
         $entityManager->flush();

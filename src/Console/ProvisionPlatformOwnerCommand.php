@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console;
 
-use App\Application\Identity\ProvisionSuperAdmin;
+use App\Application\Identity\ProvisionPlatformOwner;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -14,13 +14,13 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Throwable;
 
 #[AsCommand(
-    name: 'app:super-admin:provision',
-    description: 'Crea o promueve una cuenta Super Admin global de Condor.',
+    name: 'app:platform-owner:provision',
+    description: 'Crea o migra la única cuenta propietaria de la plataforma Condor.',
 )]
-final class ProvisionSuperAdminCommand extends Command
+final class ProvisionPlatformOwnerCommand extends Command
 {
     public function __construct(
-        private readonly ProvisionSuperAdmin $provisionSuperAdmin,
+        private readonly ProvisionPlatformOwner $provisionPlatformOwner,
     ) {
         parent::__construct();
     }
@@ -32,20 +32,20 @@ final class ProvisionSuperAdminCommand extends Command
                 'email',
                 null,
                 InputOption::VALUE_REQUIRED,
-                'Correo del Super Admin',
+                'Correo del propietario de plataforma',
             )
             ->addOption(
                 'name',
                 null,
                 InputOption::VALUE_REQUIRED,
-                'Nombre visible del Super Admin',
+                'Nombre visible del propietario',
             )
             ->addOption(
                 'password-env',
                 null,
                 InputOption::VALUE_REQUIRED,
                 'Variable de entorno que contiene la contraseña',
-                'CONDOR_SUPER_ADMIN_PASSWORD',
+                'CONDOR_PLATFORM_OWNER_PASSWORD',
             );
     }
 
@@ -57,7 +57,7 @@ final class ProvisionSuperAdminCommand extends Command
 
         if (!is_string($password) || $password === '') {
             $io->error(sprintf(
-                'Define %s con la contraseña del Super Admin.',
+                'Define %s con la contraseña del propietario.',
                 $passwordEnv,
             ));
 
@@ -65,7 +65,7 @@ final class ProvisionSuperAdminCommand extends Command
         }
 
         try {
-            $user = $this->provisionSuperAdmin->execute(
+            $user = $this->provisionPlatformOwner->execute(
                 (string) $input->getOption('email'),
                 (string) $input->getOption('name'),
                 $password,
@@ -77,7 +77,7 @@ final class ProvisionSuperAdminCommand extends Command
         }
 
         $io->success(sprintf(
-            'Super Admin global aprovisionado: %s.',
+            'Propietario de plataforma aprovisionado: %s.',
             $user->email(),
         ));
 

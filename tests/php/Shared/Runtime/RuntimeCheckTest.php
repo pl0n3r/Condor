@@ -27,7 +27,7 @@ final class RuntimeCheckTest extends TestCase
         );
 
         self::assertSame('ok', $payload['status'] ?? null);
-        self::assertSame('0.1.3', $payload['version'] ?? null);
+        self::assertSame('0.1.4', $payload['version'] ?? null);
         self::assertTrue($payload['php_compatible'] ?? false);
         self::assertTrue($payload['autoload_present'] ?? false);
         self::assertTrue($payload['runtime_storage_available'] ?? false);
