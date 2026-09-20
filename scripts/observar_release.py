@@ -82,15 +82,18 @@ def validar_base_url(valor: str, permitir_http_local: bool = False) -> str:
 
 def obtener(origen: str, ruta: str, timeout: float) -> tuple[str, bytes]:
     """GET sin redirecciones, cookies ni credenciales, con cuerpo limitado."""
+    tipo_solicitado = "text/html"
+    if ruta == "/health":
+        tipo_solicitado = "application/json"
+    elif ruta.endswith(".css"):
+        tipo_solicitado = "text/css"
+    elif ruta.endswith(".js"):
+        tipo_solicitado = "text/javascript, application/javascript"
+
     solicitud = Request(
         origen + ruta,
         headers={
-            "Accept": (
-                "application/json" if ruta == "/health"
-                else "text/css" if ruta.endswith(".css")
-                else "text/javascript, application/javascript" if ruta.endswith(".js")
-                else "text/html"
-            ),
+            "Accept": tipo_solicitado,
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
             "User-Agent": "Condor-Release-Observer/0.1",
