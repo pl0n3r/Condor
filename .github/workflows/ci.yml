@@ -20,12 +20,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
+      categoria_documentacion: ${{ steps.cambios.outputs.categoria_documentacion }}
+      categoria_gobierno: ${{ steps.cambios.outputs.categoria_gobierno }}
+      categoria_frontend: ${{ steps.cambios.outputs.categoria_frontend }}
+      categoria_backend: ${{ steps.cambios.outputs.categoria_backend }}
+      categoria_migraciones: ${{ steps.cambios.outputs.categoria_migraciones }}
+      categoria_dependencias: ${{ steps.cambios.outputs.categoria_dependencias }}
+      categoria_seguridad: ${{ steps.cambios.outputs.categoria_seguridad }}
+      categoria_release: ${{ steps.cambios.outputs.categoria_release }}
       documentacion: ${{ steps.cambios.outputs.documentacion }}
-      github: ${{ steps.cambios.outputs.github }}
       pruebas_base: ${{ steps.cambios.outputs.pruebas_base }}
+      frontend: ${{ steps.cambios.outputs.frontend }}
       backend: ${{ steps.cambios.outputs.backend }}
       e2e: ${{ steps.cambios.outputs.e2e }}
+      validacion_completa: ${{ steps.cambios.outputs.validacion_completa }}
       transicion_release: ${{ steps.cambios.outputs.transicion_release }}
+      modo: ${{ steps.cambios.outputs.modo }}
+      motivo: ${{ steps.cambios.outputs.motivo }}
+      categorias: ${{ steps.cambios.outputs.categorias }}
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
