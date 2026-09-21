@@ -10,6 +10,7 @@ import re
 import sys
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import quote
@@ -22,6 +23,14 @@ TRUSTED_MARKER_LOGIN = os.getenv(
     "CONDOR_TRUSTED_MARKER_LOGIN",
     "github-actions[bot]",
 )
+
+try:
+    RESERVATION_STALE_MINUTES = max(
+        5,
+        int(os.getenv("CONDOR_RESERVATION_STALE_MINUTES", "45")),
+    )
+except ValueError:
+    RESERVATION_STALE_MINUTES = 45
 
 ALLOWED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
@@ -193,12 +202,13 @@ class GitHub:
         )
 
     def set_status(self, issue_number: int, status: str | None) -> None:
-        """Mantiene exactamente un estado de coordinación visible."""
+        """Mantiene un estado visible sin abrir una ventana transitoria sin estado."""
         self.ensure_status_labels()
-        for label in STATUS_LABELS:
-            self.remove_label(issue_number, label)
         if status:
             self.add_labels(issue_number, [status])
+        for label in STATUS_LABELS:
+            if label != status:
+                self.remove_label(issue_number, label)
 
     def branch_sha(self, branch: str) -> str | None:
         """Devuelve el SHA de una rama o None si no existe."""
@@ -267,6 +277,30 @@ class GitHub:
             {"state": "closed"},
         )
 
+    def update_pull_body(self, number: int, body: str) -> None:
+        """Actualiza metadata de coordinación sin crear un PR nuevo."""
+        self.request(
+            "PATCH",
+            f"/repos/{self.repo}/pulls/{number}",
+            {"body": body},
+        )
+
+    def commit_timestamp(self, sha: str) -> datetime | None:
+        """Obtiene el instante del commit que representa actividad de la rama."""
+        payload = self.request("GET", f"/repos/{self.repo}/commits/{sha}")
+        if not isinstance(payload, dict):
+            return None
+        commit = payload.get("commit")
+        if not isinstance(commit, dict):
+            return None
+        for key in ("committer", "author"):
+            identity = commit.get(key)
+            if isinstance(identity, dict):
+                parsed = parse_github_time(identity.get("date"))
+                if parsed is not None:
+                    return parsed
+        return None
+
     def try_assign(self, issue_number: int, login: str) -> None:
         """Intenta asignar el Issue sin convertir la asignación en requisito duro."""
         self.request(
@@ -307,6 +341,19 @@ def reservation_from_pr_body(body: str) -> str | None:
 def new_reservation_id() -> str:
     """Genera un identificador único para una sesión de trabajo."""
     return str(uuid.uuid4())
+
+
+def parse_github_time(value: Any) -> datetime | None:
+    """Convierte timestamps ISO de GitHub a UTC, ignorando valores inválidos."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def reservation_marker(
@@ -392,6 +439,52 @@ def latest_reservation(
     return latest
 
 
+def latest_reservation_timestamp(
+    comments: list[dict[str, Any]],
+    trusted_login: str = TRUSTED_MARKER_LOGIN,
+) -> datetime | None:
+    """Devuelve cuándo se publicó o actualizó el último marcador confiable."""
+    latest: datetime | None = None
+    for comment in comments:
+        user = comment.get("user")
+        if not isinstance(user, dict) or user.get("login") != trusted_login:
+            continue
+        if reservation_from_text(str(comment.get("body") or "")) is None:
+            continue
+        timestamp = parse_github_time(
+            comment.get("updated_at") or comment.get("created_at")
+        )
+        if timestamp is not None:
+            latest = timestamp
+    return latest
+
+
+def human_issue_activity_timestamp(
+    comments: list[dict[str, Any]],
+) -> datetime | None:
+    """Toma comentarios humanos útiles, excluyendo comandos de coordinación."""
+    latest: datetime | None = None
+    for comment in comments:
+        user = comment.get("user")
+        login = user.get("login") if isinstance(user, dict) else None
+        if login == TRUSTED_MARKER_LOGIN:
+            continue
+        body = str(comment.get("body") or "").strip()
+        if (
+            body == "/tomar"
+            or body == "/liberar-forzado"
+            or body.startswith("/liberar ")
+            or body.startswith("/transferir ")
+        ):
+            continue
+        timestamp = parse_github_time(
+            comment.get("updated_at") or comment.get("created_at")
+        )
+        if timestamp is not None and (latest is None or timestamp > latest):
+            latest = timestamp
+    return latest
+
+
 def file_overlaps(
     current_files: set[str],
     others: dict[int, set[str]],
@@ -426,16 +519,157 @@ def active_reservation(api: GitHub, issue_number: int) -> dict[str, Any] | None:
         return None
     return reservation
 
-def open_pulls_for_branch(api: GitHub, branch: str) -> list[int]:
-    """Lista PR abiertos que usan una rama concreta como head."""
-    result: list[int] = []
+def open_pull_records_for_branch(
+    api: GitHub,
+    branch: str,
+) -> list[dict[str, Any]]:
+    """Devuelve los PR abiertos que continúan exactamente la rama reservada."""
+    result: list[dict[str, Any]] = []
     for pull in api.open_pulls():
         head = pull.get("head")
         if isinstance(head, dict) and head.get("ref") == branch:
-            number = pull.get("number")
-            if isinstance(number, int):
-                result.append(number)
+            result.append(pull)
     return result
+
+
+def open_pulls_for_branch(api: GitHub, branch: str) -> list[int]:
+    """Lista PR abiertos que usan una rama concreta como head."""
+    result: list[int] = []
+    for pull in open_pull_records_for_branch(api, branch):
+        number = pull.get("number")
+        if isinstance(number, int):
+            result.append(number)
+    return result
+
+
+def work_activity_timestamp(
+    api: GitHub,
+    issue_number: int,
+    branch: str,
+) -> datetime | None:
+    """Calcula la señal más reciente sin contar el comando /tomar actual."""
+    candidates: list[datetime] = []
+    comments = api.issue_comments(issue_number)
+
+    for timestamp in (
+        latest_reservation_timestamp(comments),
+        human_issue_activity_timestamp(comments),
+    ):
+        if timestamp is not None:
+            candidates.append(timestamp)
+
+    branch_sha = api.branch_sha(branch)
+    if branch_sha:
+        timestamp = api.commit_timestamp(branch_sha)
+        if timestamp is not None:
+            candidates.append(timestamp)
+
+    for pull in open_pull_records_for_branch(api, branch):
+        timestamp = parse_github_time(pull.get("updated_at"))
+        if timestamp is not None:
+            candidates.append(timestamp)
+
+    return max(candidates) if candidates else None
+
+
+def work_is_stale(
+    api: GitHub,
+    issue_number: int,
+    branch: str,
+    *,
+    stale_minutes: int = RESERVATION_STALE_MINUTES,
+    now: datetime | None = None,
+) -> bool:
+    """Solo permite recuperar trabajo con evidencia suficiente de inactividad."""
+    last_activity = work_activity_timestamp(api, issue_number, branch)
+    if last_activity is None:
+        return False
+    reference = now or datetime.now(timezone.utc)
+    return reference - last_activity >= timedelta(minutes=stale_minutes)
+
+
+def rewrite_pull_reservation(body: str, reservation_id: str) -> str:
+    """Actualiza la reserva del PR existente sin perder su descripción."""
+    value = body or ""
+    visible = f"Reserva: {reservation_id}"
+    hidden = f"<!-- condor-reserva-id: {reservation_id} -->"
+
+    if RESERVATION_LINE_RE.search(value):
+        value = RESERVATION_LINE_RE.sub(visible, value)
+    else:
+        value = value.rstrip() + f"\n\n{visible}"
+
+    if RESERVATION_HIDDEN_RE.search(value):
+        value = RESERVATION_HIDDEN_RE.sub(hidden, value)
+    else:
+        value = value.rstrip() + f"\n\n{hidden}"
+
+    return value + "\n"
+
+
+def recover_stale_work(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    branch: str,
+    previous: dict[str, Any] | None,
+) -> str | None:
+    """Recupera una reserva inactiva conservando rama y PR existentes."""
+    reservation_id = new_reservation_id()
+    open_pulls = open_pull_records_for_branch(api, branch)
+    previous_owner = str(previous["owner"]) if previous else None
+    pr_text = (
+        ", ".join(
+            f"#{pull['number']}"
+            for pull in open_pulls
+            if isinstance(pull.get("number"), int)
+        )
+        or "sin PR abierto"
+    )
+
+    publish_reservation(
+        api,
+        issue_number,
+        actor,
+        reservation_id,
+        branch,
+        True,
+        "recuperacion-inactividad",
+        (
+            f"Reserva recuperada por inactividad de al menos "
+            f"{RESERVATION_STALE_MINUTES} minutos. Se conserva la rama "
+            f"{branch} y {pr_text} para continuar el trabajo existente "
+            "sin abrir una implementación paralela."
+        ),
+    )
+
+    winner = active_reservation(api, issue_number)
+    if not winner or winner["reservation_id"] != reservation_id:
+        return None
+
+    api.set_status(
+        issue_number,
+        STATUS_REVIEW if open_pulls else STATUS_RESERVED,
+    )
+    api.try_assign(issue_number, actor)
+    if previous_owner and previous_owner != actor:
+        api.try_unassign(issue_number, previous_owner)
+
+    for pull in open_pulls:
+        number = pull.get("number")
+        if not isinstance(number, int):
+            continue
+        body = str(api.pull(number).get("body") or "")
+        api.update_pull_body(
+            number,
+            rewrite_pull_reservation(body, reservation_id),
+        )
+
+    print(
+        f"Reserva recuperada: Issue #{issue_number} -> {branch} "
+        f"(@{actor}, {reservation_id}); se reutiliza {pr_text}."
+    )
+    return reservation_id
 
 
 def publish_reservation(
@@ -456,33 +690,30 @@ def publish_reservation(
     )
 
 
-def reserve_work(
-    api: GitHub,
-    issue_number: int,
-    actor: str,
-    association: str,
-) -> str | None:
-    """Reserva atómicamente un Issue sin publicar comentarios visibles."""
-    if not authorized(association):
-        raise CoordinationError(
-            f"@{actor} no tiene una asociación autorizada para reservar trabajo."
-        )
+def ensure_recovery_branch(api: GitHub, branch: str) -> bool:
+    """Garantiza la rama canónica sin reemplazar trabajo existente."""
+    if api.branch_sha(branch) is not None:
+        return True
 
-    issue = api.issue(issue_number)
-    if issue.get("pull_request"):
-        raise CoordinationError("La reserva se ejecuta sobre Issues, no PRs.")
-    if issue.get("state") != "open":
-        raise CoordinationError(f"Issue #{issue_number} no está abierto.")
-
-    labels = label_names(issue)
-    if STATUS_BLOCKED in labels or STATUS_AVAILABLE not in labels:
-        return None
-
-    branch = f"trabajo/issue-{issue_number}"
     main_sha = api.branch_sha("main")
     if not main_sha:
         raise CoordinationError("No fue posible resolver el SHA actual de main.")
 
+    if api.create_branch(branch, main_sha):
+        return True
+    return api.branch_sha(branch) is not None
+
+
+def reserve_available_work(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    branch: str,
+) -> str | None:
+    """Crea una reserva nueva para un Issue realmente disponible."""
+    main_sha = api.branch_sha("main")
+    if not main_sha:
+        raise CoordinationError("No fue posible resolver el SHA actual de main.")
     if not api.create_branch(branch, main_sha):
         return None
 
@@ -515,6 +746,90 @@ def reserve_work(
     )
     return reservation_id
 
+
+def recovery_lock_branch(issue_number: int) -> str:
+    """Nombra el lock efímero que serializa recuperaciones del mismo Issue."""
+    return f"coordinacion/lock-issue-{issue_number}"
+
+
+def recover_existing_work_if_stale(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    branch: str,
+    current: dict[str, Any] | None,
+) -> str | None:
+    """Recupera trabajo stale dentro de una sección crítica distribuida."""
+    if not work_is_stale(api, issue_number, branch):
+        return None
+    if not ensure_recovery_branch(api, branch):
+        return None
+
+    branch_sha = api.branch_sha(branch)
+    if branch_sha is None:
+        return None
+
+    lock_branch = recovery_lock_branch(issue_number)
+    if not api.create_branch(lock_branch, branch_sha):
+        return None
+
+    try:
+        if not work_is_stale(api, issue_number, branch):
+            return None
+        latest = active_reservation(api, issue_number)
+        return recover_stale_work(
+            api,
+            issue_number,
+            actor,
+            branch,
+            latest if latest is not None else current,
+        )
+    finally:
+        api.delete_branch(lock_branch)
+
+
+def reserve_work(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    association: str,
+) -> str | None:
+    """Reserva trabajo nuevo o recupera una reserva realmente inactiva."""
+    if not authorized(association):
+        raise CoordinationError(
+            f"@{actor} no tiene una asociación autorizada para reservar trabajo."
+        )
+
+    issue = api.issue(issue_number)
+    if issue.get("pull_request"):
+        raise CoordinationError("La reserva se ejecuta sobre Issues, no PRs.")
+    if issue.get("state") != "open":
+        raise CoordinationError(f"Issue #{issue_number} no está abierto.")
+
+    labels = label_names(issue)
+    if STATUS_BLOCKED in labels:
+        return None
+
+    branch = f"trabajo/issue-{issue_number}"
+    current = active_reservation(api, issue_number)
+    if current or api.branch_sha(branch):
+        return recover_existing_work_if_stale(
+            api,
+            issue_number,
+            actor,
+            branch,
+            current,
+        )
+
+    if STATUS_AVAILABLE not in labels:
+        return None
+
+    return reserve_available_work(
+        api,
+        issue_number,
+        actor,
+        branch,
+    )
 
 def transfer_work(
     api: GitHub,

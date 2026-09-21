@@ -1,761 +1,491 @@
-# Condor — contexto operativo canónico para agentes
+# Condor — manual operativo canónico para agentes
 
-> **ESTE ARCHIVO ES EL PUNTO DE ARRANQUE OBLIGATORIO PARA CHATGPT, CODEX Y CUALQUIER AGENTE DE DESARROLLO QUE TRABAJE EN CONDOR.**
+> **Punto de arranque obligatorio para ChatGPT, Codex y cualquier agente que trabaje en Condor.**
 >
-> Leer este archivo completo antes de modificar el proyecto. No se debe depender de conversaciones anteriores, memoria externa ni resúmenes humanos para continuar el trabajo.
+> Leer este archivo antes de modificar el proyecto. La continuidad debe poder reconstruirse desde GitHub y el repositorio, no desde memoria conversacional.
 >
-> Condor adopta deliberadamente las prácticas maduras de ingeniería de BRVTAL cuando son aplicables, pero **no copia su lógica de negocio, arquitectura funcional, rutas, módulos ni deuda histórica**.
+> Condor adopta prácticas maduras de ingeniería de BRVTAL cuando aplican, pero nunca copia automáticamente su lógica de negocio, módulos, rutas, esquema ni deuda histórica.
 >
-> **Identidad:** el nombre oficial y público del producto es **Condor App**. En documentación técnica, GitHub, conversaciones de desarrollo y referencias internas se usa **Condor** como nombre corto.
+> **Identidad:** producto público **Condor App**; nombre técnico corto **Condor**.
 
-## 0. Responsabilidad de cada fuente
+## 1. Fuentes de verdad y precedencia
 
-Condor separa explícitamente operación, especificación y progreso:
+Cada fuente tiene una responsabilidad distinta:
 
-- **Código fusionado en `main` + pruebas**: verdad de implementación.
-- **`AGENTES.md`**: cómo se trabaja.
-- **`ESPECIFICACIONES.md`**: decisiones durables, reglas funcionales y arquitectura.
-- **[Issue #1 — Roadmap canónico](https://github.com/pl0n3r/Condor/issues/1)**: log exclusivo de trabajo y progreso: qué está planeado, en curso, bloqueado o terminado y en qué orden se ejecuta.
-- **Issues específicos**: alcance ejecutable y criterios de aceptación.
-- **PRs**: cambio concreto y evidencia de validación.
-- **`README.md`**: presentación visual y ejecutiva del proyecto; no es roadmap acumulativo ni especificación.
-- **`GLOSARIO.md`**: traducción de términos técnicos a lenguaje de negocio para socios y personas no técnicas.
-- **`docs/`**: documentación especializada cuando el detalle ya no cabe razonablemente en las fuentes anteriores.
+- **Código fusionado en main + pruebas:** verdad de implementación.
+- **AGENTES.md:** contrato operativo de desarrollo.
+- **ESPECIFICACIONES.md:** decisiones durables de producto y arquitectura.
+- **Issue #1:** único Roadmap canónico, acumulativo y cronológico.
+- **Issues específicos:** alcance ejecutable, riesgos y criterios de aceptación.
+- **Pull Requests:** cambio concreto y evidencia de validación.
+- **README.md:** snapshot ejecutivo del deploy/candidato vigente, no historial.
+- **GLOSARIO.md:** términos técnicos explicados para seguimiento de negocio.
+- **docs/:** documentación especializada que no cabe razonablemente en las fuentes anteriores.
 
-Si una fuente contradice al código actual, contrastar el cambio más reciente y corregir la documentación durable en el mismo trabajo cuando corresponda.
+Si dos fuentes se contradicen:
 
----
+1. comprobar el código y las pruebas del SHA relevante;
+2. distinguir implementación actual de decisión durable pendiente;
+3. respetar el Issue/PR activo cuando delimite trabajo todavía no fusionado;
+4. corregir en la misma entrega la documentación que haya quedado obsoleta.
 
-## 1. Protocolo de inicio de cada sesión
-
-En cada sesión de desarrollo:
-
-1. Leer `AGENTES.md` completo.
-2. Obtener el SHA exacto actual de `main`.
-3. Revisar PRs abiertos.
-4. Revisar los gates/checks del PR activo y del SHA relevante de `main` cuando existan.
-5. Leer el [roadmap canónico — Issue #1](https://github.com/pl0n3r/Condor/issues/1).
-6. Leer el Issue específico que corresponda al siguiente trabajo.
-7. Consultar únicamente las especificaciones/documentos del área necesaria.
-8. Si un PR abierto ya cubre la tarea, continuar o corregir ese PR en vez de duplicarlo.
-9. Si un gate obligatorio de `main` está fallando por una causa del repositorio, cerrar ese problema antes de abrir trabajo dependiente nuevo.
-10. Seguir el flujo **rama → implementación → pruebas → PR → gates → correcciones → squash merge → verificación del SHA exacto de `main`**.
-11. Actualizar el roadmap cuando cambie el estado real de una tarea o hito.
-12. Actualizar `ESPECIFICACIONES.md` cuando cambie una decisión durable de producto o arquitectura.
-
-No preguntar por operaciones rutinarias que puedan resolverse con seguridad desde el repositorio. Detenerse únicamente cuando haga falta:
-
-- una credencial o permiso no disponible;
-- una decisión de producto genuinamente ambigua e imposible de deducir;
-- una operación irreversible o destructiva en producción;
-- acceso a datos sensibles o una acción protegida que requiera autorización explícita.
-
-## 1.1. Reserva obligatoria y coordinación multiagente
-
-GitHub es el **árbitro central de la cola de trabajo**. Después de que esta capacidad esté fusionada en `main`, ninguna sesión, cuenta de IA o agente puede empezar implementación nueva sin reservar primero un Issue.
-
-### Tomar trabajo
-
-1. Elegir únicamente un Issue abierto con label `estado: disponible`.
-2. Comentar exactamente `/tomar` en ese Issue.
-3. Esperar la respuesta del workflow de coordinación.
-4. La reserva exitosa crea de forma atómica la rama canónica `trabajo/issue-N`, cambia el Issue a `estado: reservado` y publica un **ID de reserva UUID**.
-5. La sesión que ejecutó `/tomar` debe conservar ese UUID y usarlo en el PR como `Reserva: <UUID>`.
-6. Si otra sesión intenta reservar el mismo Issue, la creación atómica de la rama actúa como lock: solo una puede ganar.
-7. Si la reserva es rechazada, **no trabajar esa tarea**; elegir otro Issue disponible.
-
-### Propiedad de la reserva
-
-- una reserva no vence automáticamente: el sistema es **fail-closed**;
-- compartir la misma cuenta de GitHub **no** autoriza a dos sesiones a trabajar el mismo Issue;
-- cada toma genera un ID de reserva UUID distinto, incluso bajo el mismo login;
-- una sesión solo puede continuar una reserva si conoce el UUID de su propia toma o recibió una transferencia explícita;
-- nunca adoptar el UUID visible de otra sesión solo porque se comparte la misma cuenta;
-- nunca modificar `trabajo/issue-N` si pertenece a otra sesión/agente;
-- nunca crear ramas alternativas para saltarse una reserva existente;
-- para liberar normalmente, comentar `/liberar <UUID>`;
-- para transferir el trabajo a otra sesión de la misma cuenta, comentar `/transferir <UUID>`; el workflow genera un UUID nuevo e invalida el anterior;
-- para transferir entre cuentas distintas, liberar y permitir que la nueva cuenta ejecute `/tomar`;
-- el dueño del repositorio puede resolver una reserva huérfana con `/liberar-forzado`.
-
-### Pull Requests y colisiones
-
-- después del primer commit lógico, abrir el PR pronto para hacer visible el alcance en curso;
-- el PR debe salir de `trabajo/issue-N`, incluir `Closes #N` y declarar `Reserva: <UUID>` en el cuerpo;
-- CI valida la reserva y compara los archivos del PR contra todos los demás PR abiertos hacia `main`;
-- si dos PR modifican el mismo archivo, la validación de coordinación falla y el trabajo debe repartirse, serializarse o actualizarse sobre el nuevo `main`;
-- nunca resolver una colisión sobrescribiendo silenciosamente el trabajo de otra sesión;
-- archivos globales como `README.md`, `AGENTES.md`, `ESPECIFICACIONES.md`, `GLOSARIO.md` y workflows deben tocarse solo cuando el Issue lo requiera;
-- los merges a `main` continúan siendo estrictamente seriales.
-
-### README con trabajo paralelo
-
-Para evitar que todas las ramas paralelas colisionen por el snapshot del README, una rama de trabajo normal **no actualiza README prematuramente**. Cuando ese PR pase a ser el siguiente candidato serial de merge/deploy, debe sincronizarse con el `main` más reciente y actualizar el snapshot requerido antes de sus gates finales.
+No usar AGENTES.md como Roadmap, changelog ni archivo de decisiones funcionales.
 
 ---
 
-## 2. Paralelización por defecto
+## 2. Arranque de sesión, autonomía y escalamiento
 
-La paralelización es el modo operativo normal cuando reduce tiempo sin aumentar riesgo.
+### Bootstrap obligatorio
 
-- Ejecutar en paralelo lecturas independientes, inspección de código, análisis, preparación de pruebas y revisión de gates.
-- Si existen dos o más operaciones de solo lectura independientes, agruparlas en el mismo lote cuando la herramienta lo permita.
-- Revisar en paralelo, cuando existan, estado del PR, checks del head exacto, CI, SonarCloud, CodeRabbit, comentarios y threads.
-- Mientras un gate externo procesa, aprovechar el tiempo para análisis de solo lectura de trabajo independiente.
-- Se permiten hasta **4 líneas de trabajo concurrentes** solo cuando correspondan a Issues distintos, cada uno con reserva válida, y no compitan por los mismos archivos o estado mutable.
-- Las escrituras sobre el mismo archivo, ramas dependientes o estado compartido se serializan.
-- Los merges a `main` son **siempre seriales**.
-- Antes de cada merge, volver a comprobar `main`, head exacto del PR y gates aplicables.
-- Si `main` cambió, recontrastar el PR antes de fusionar.
-- Agrupar múltiples archivos relacionados en commits lógicos; evitar tormentas de commits que reinicien CI/reviews innecesariamente.
-- Migraciones de producción, acciones destructivas y operaciones protegidas nunca se paralelizan ni se ejecutan automáticamente.
+Antes de escribir:
 
----
+1. leer AGENTES.md completo;
+2. obtener el SHA exacto actual de main;
+3. revisar PRs abiertos y trabajo reservado;
+4. revisar CI/checks del PR activo y del SHA relevante de main;
+5. leer el Roadmap #1;
+6. leer el Issue específico que corresponda;
+7. consultar solo las especificaciones/documentos necesarios para ese frente;
+8. comprobar si otro PR ya cubre el trabajo;
+9. comprobar colisiones de archivos/estado mutable;
+10. si main tiene un gate obligatorio roto por el repositorio, priorizar su causa antes de abrir trabajo dependiente.
 
-## 3. Rol operativo multidisciplinario
+### Autonomía
 
-El agente actúa por defecto como **ingeniero principal y ejecutor técnico de extremo a extremo**.
+**DEFAULT:** resolver de forma autónoma operaciones rutinarias y reversibles que el repositorio permita deducir con seguridad.
 
-Según la tarea, combinar estas capacidades sin convertirlas en etapas burocráticas separadas:
+**ESCALAR únicamente cuando haga falta:**
 
-- **Arquitectura / Product Engineering** — elegir la solución mínima mantenible que satisfaga el producto, proteger límites claros y evitar sistemas duplicados.
-- **Backend / Data Engineering** — contratos, persistencia, integridad, migraciones seguras, transacciones y consistencia.
-- **Frontend / UX / UI** — responsive, interacción, accesibilidad, jerarquía de información y calidad visual.
-- **Diseño de producto** — mantener una experiencia coherente, profesional y adecuada al mercado colombiano, evitando interfaces genéricas o inconsistentes.
-- **QA / Test Automation** — anticipar regresiones, cubrir invariantes y utilizar E2E realista cuando sea práctico.
-- **Application Security** — autenticación, autorización, sesión, CSRF, XSS/inyección, secretos, límites de confianza y findings de seguridad.
-- **Performance / Reliability** — medir caminos críticos, reducir serialización evitable, distinguir fallos internos de dependencias externas y mantener estados de error/reintento explícitos.
-- **DevOps / Release Engineering** — CI/CD, gates, release identity, observabilidad del despliegue y evidencia exacta de cada entrega.
+- credencial o permiso no disponible;
+- decisión de producto genuinamente ambigua;
+- operación irreversible/destructiva de producción;
+- acceso a datos sensibles;
+- acción protegida que requiera autorización explícita.
 
-El objetivo es responsabilizarse del recorrido completo:
-
-**instrucción → diagnóstico → diseño → implementación → pruebas → PR → revisión → merge → validación exacta de main → observación de despliegue → validación de producción cuando exista evidencia real**.
+No detener el flujo para pedir confirmación sobre lectura de código, pruebas, commits, PRs, correcciones de CI o decisiones técnicas claramente deducibles.
 
 ---
 
-## 4. Idioma y mercado
+## 3. Coordinación multiagente y paralelización
 
-Condor está orientado inicialmente a Colombia.
+GitHub es el árbitro de la cola de trabajo.
 
-### Regla de idioma
+### Reserva obligatoria
 
-Usar **español de Colombia (`es-CO`)** siempre que sea técnicamente viable en:
+**OBLIGATORIO antes de implementar trabajo nuevo o retomar trabajo existente:**
 
-- interfaz de usuario;
-- mensajes, errores, validaciones, estados vacíos y ayudas;
-- documentación;
-- Issues y sus comentarios;
-- PRs, reviews, respuestas y comentarios;
-- mensajes de commit;
-- Releases, milestones, Projects y labels;
-- nombres visibles de workflows, jobs y pasos de GitHub Actions;
-- textos de pruebas visibles para personas;
-- comentarios de código cuando realmente sean necesarios.
+1. revisar primero Issues con estado: disponible;
+2. revisar también Issues reservados/en revisión relevantes para detectar trabajo inactivo y evitar abrir un frente duplicado;
+3. si una reserva existente tiene actividad de los últimos 45 minutos, respetarla y elegir otro trabajo;
+4. si lleva al menos 45 minutos sin actividad verificable, ejecutar /tomar sobre ese mismo Issue para intentar recuperarlo;
+5. ejecutar /tomar normalmente sobre un Issue disponible cuando no exista trabajo previo reutilizable;
+6. esperar una reserva válida y conservar el UUID publicado por el bot;
+7. trabajar únicamente en la rama canónica trabajo/issue-N y reutilizar el PR existente cuando la recuperación lo indique.
 
-Mantener en inglés los elementos donde traducir reduzca compatibilidad o precisión: APIs, librerías, comandos, palabras reservadas, protocolos, formatos estándar, nombres de paquetes, claves de terceros e identificadores externos.
+La reserva válida crea o recupera el lock de trabajo sin duplicar la implementación. Abrir un Issue/PR nuevo para sustituir silenciosamente otro frente abandonado es el último recurso, no el flujo normal.
 
-### Convenciones locales
+### Propiedad de sesión y recuperación por inactividad
 
-Cuando no exista otro requisito explícito:
+- una reserva reciente protege el trabajo de otras sesiones aunque compartan la misma cuenta de GitHub;
+- el UUID visible no autoriza por sí solo a continuar una sesión ajena;
+- **la reserva no es eterna**: si no existe actividad verificable durante al menos 45 minutos, otro agente puede ejecutar /tomar y recuperar el mismo trabajo;
+- cuentan como actividad reciente los commits de la rama, actividad del PR existente y comentarios humanos útiles del Issue; los comandos de coordinación no refrescan artificialmente la reserva;
+- si no existe evidencia temporal suficiente, el coordinador falla de forma conservadora y no roba el trabajo;
+- recuperar trabajo stale genera un UUID nuevo y conserva la rama canónica trabajo/issue-N;
+- si ya existe un PR abierto para esa rama, se reutiliza y actualiza su metadata de reserva: **no se cierra ni se abre otro PR solo por cambio de agente**;
+- si dos sesiones intentan recuperar simultáneamente una reserva stale, el marcador confiable más reciente arbitra la propiedad;
+- un Issue bloqueado nunca se recupera automáticamente;
+- nunca crear una rama alternativa para saltarse una reserva vigente;
+- liberar con /liberar <UUID>;
+- transferir explícitamente entre sesiones de la misma cuenta con /transferir <UUID>;
+- /liberar-forzado queda como mecanismo excepcional del dueño del repositorio, no como flujo normal para trabajo simplemente inactivo.
 
-- locale: `es-CO`;
-- moneda: COP;
-- textos naturales para usuarios colombianos;
-- fechas y horas comprensibles para Colombia;
-- zona horaria y reglas temporales deben definirse explícitamente antes de persistir lógica sensible al tiempo.
+### PR de una reserva
 
----
+El PR debe:
 
-## 5. Identidad e infraestructura inicial
+- salir de trabajo/issue-N hacia main;
+- incluir Closes #N;
+- declarar el UUID activo de reserva;
+- abrirse temprano, después del primer bloque lógico útil;
+- evitar colisiones con archivos de otros PR abiertos.
 
-| Elemento | Valor actual |
-|---|---|
-| Nombre oficial del producto | **Condor App** |
-| Nombre corto técnico/interno | **Condor** |
-| Dominio canónico | `https://www.condorapp.com.co` |
-| Repositorio | `pl0n3r/Condor` |
-| Rama canónica | `main` |
-| Tipo | SaaS de gestión corporativa |
-| Mercado inicial | Colombia |
-| Hosting objetivo inicial | Hostinger shared hosting |
-| Backend objetivo inicial | PHP 8.5 en producción Hostinger |
-| Base de datos objetivo inicial | MariaDB / MySQL-compatible |
-| Frontend objetivo inicial | HTML + CSS + JavaScript con dependencias contenidas |
-| Navegador / E2E | Playwright |
-| CI | GitHub Actions — activo |
-| Calidad | SonarQube Cloud + CodeRabbit — activos; ampliación de gates en progreso |
-| Deploy objetivo | GitHub `main` → Hostinger |
-| Versión inicial de producto | `0.1.0` |
+Si existe colisión, repartir, serializar o sincronizar el trabajo. Nunca sobrescribir silenciosamente.
 
-Estos valores son una base, no una obligación eterna. Si las necesidades reales del producto justifican un cambio de arquitectura o plataforma, documentarlo primero en `ESPECIFICACIONES.md` y reflejar el trabajo en el roadmap.
+### Paralelización
 
-Mientras Hostinger shared hosting sea la plataforma elegida:
+**DEFAULT:** paralelizar lecturas, análisis, pruebas independientes y hasta 4 Issues reservados que no compartan archivos ni estado mutable.
 
-- PHP 8.5 es el runtime objetivo de producción y CI;
+**SERIALIZAR siempre:**
 
-- evitar requerir procesos Node de larga duración en producción;
-- evitar Docker como requisito de runtime;
-- no convertir FTP/manual deploy en el flujo normal;
-- separar despliegue de código de migraciones de base de datos.
+- escrituras al mismo archivo;
+- ramas dependientes;
+- migraciones/operaciones productivas;
+- merges a main.
 
----
+Mientras un gate externo procesa, avanzar solo trabajo independiente compatible. No iniciar una rama dependiente antes de validar el SHA exacto de main del bloque previo.
 
-## 6. Principios de arquitectura y datos
+### Archivos globales
 
-Hasta que el dominio funcional esté completamente definido:
+README.md, AGENTES.md, ESPECIFICACIONES.md, GLOSARIO.md y workflows se modifican solo cuando el Issue lo exige.
 
-- evitar sobrearquitectura;
-- construir vertical slices completos antes de crear abstracciones sin uso;
-- una sola responsabilidad clara por módulo/capa;
-- relaciones de negocio como datos estructurados, no texto duplicado;
-- servidor como autoridad final de validación;
-- permisos/autorización verificados en backend;
-- parametrizar consultas SQL;
-- utilizar transacciones cuando varias escrituras deban ser atómicas;
-- utilizar locking o estrategia equivalente cuando la concurrencia pueda romper invariantes;
-- diferenciar borrador/incompleto de publicado/activo cuando el dominio lo requiera;
-- diseñar migraciones explícitas, idempotentes cuando sea razonable y seguras ante reejecución;
-- no asumir que fusionar código significa que una migración corrió en producción;
-- no inferir multi-tenancy: definirlo antes de implementar aislamiento de datos;
-- si se adopta multiempresa, el aislamiento debe ser una propiedad arquitectónica y testeada, no un filtro de UI.
-
-Las decisiones durables pertenecen a `ESPECIFICACIONES.md`.
+Una rama paralela normal no actualiza README prematuramente. El snapshot se sincroniza cuando el PR se convierte en el siguiente candidato serial de merge/deploy.
 
 ---
 
-## 7. Seguridad mínima no negociable
+## 4. Contexto técnico y principios de implementación
 
-La seguridad se trata como requisito de entrega, no como etapa posterior.
+### Referencia mínima
+
+| Elemento | Contrato |
+| --- | --- |
+| Repositorio | pl0n3r/Condor |
+| Rama canónica | main |
+| Dominio | https://www.condorapp.com.co |
+| Mercado/locale | Colombia / es-CO |
+| Moneda por defecto | COP |
+| Backend | PHP 8.5 + Symfony 7.4 LTS |
+| Datos | MariaDB / MySQL-compatible + Doctrine |
+| Admin | React + TypeScript + Vite |
+| Público/SEO | Twig/Symfony SSR |
+| Hosting inicial | Hostinger shared hosting |
+| E2E | Playwright / Chromium |
+| Calidad | GitHub Actions + SonarQube Cloud + CodeRabbit |
+
+El detalle durable de arquitectura vive en ESPECIFICACIONES.md.
+
+### Ingeniería
+
+- construir vertical slices completos antes que abstracciones sin uso;
+- servidor como autoridad final de validación/autorización;
+- multi-tenancy como invariante testeada, nunca como filtro de UI;
+- relaciones de negocio como datos estructurados;
+- consultas parametrizadas/Doctrine;
+- transacciones cuando varias escrituras deban ser atómicas;
+- locking cuando la concurrencia pueda romper invariantes;
+- migraciones explícitas, expand-compatible y seguras ante despliegues parciales;
+- distinguir borrador/incompleto de publicado/activo cuando el dominio lo exija;
+- no asumir que merge, deploy y migración son el mismo evento;
+- secretos fuera del repositorio;
+- evitar procesos Node permanentes y Docker como requisito de runtime mientras Hostinger shared hosting siga siendo la plataforma;
+- mantener portabilidad y evitar acoplamiento innecesario a APIs propietarias del hosting.
+
+### Frontend
+
+El frontend evoluciona junto con cada slice, no al final.
+
+- exponer progresivamente superficies reales cuando el backend tenga un contrato útil;
+- compartir shell/componentes/contratos cuando Admin y propietario representen la misma capacidad;
+- no simular funcionalidad con botones/placeholders falsos;
+- mobile-first, accesibilidad y estados loading/empty/error/permission-denied reales;
+- mejoras visuales pequeñas y acumulativas, no rediseños masivos desconectados;
+- dirección pública sobria, corporativa y premium; Apple puede ser referencia de nivel de acabado, nunca plantilla ni identidad;
+- evitar estética SaaS saturada, ruido visual y dependencias visuales que degraden SSR/SEO o rendimiento.
+
+### Idioma
+
+Usar español de Colombia en superficies controlables: UI, validaciones, documentación, Issues, PRs, commits, workflows visibles y textos de pruebas. Mantener inglés cuando traducir rompa precisión o compatibilidad técnica.
+
+---
+
+## 5. Seguridad, pruebas y calidad
+
+### Seguridad no negociable
 
 Cuando aplique:
 
-- autenticación centralizada;
-- autorización server-side;
-- regeneración de session ID en transiciones sensibles;
-- cookies `HttpOnly`, `Secure` en HTTPS y política `SameSite` apropiada;
-- CSRF en operaciones mutables autenticadas;
-- passwords con algoritmos modernos de hash;
-- rate limiting en login y endpoints sensibles;
-- secretos fuera del repositorio;
-- errores públicos sin stack traces ni secretos;
+- autenticación centralizada y autorización server-side;
+- session ID regenerado en transiciones sensibles;
+- cookies HttpOnly/Secure y SameSite apropiado;
+- CSRF en mutaciones autenticadas;
+- hashes modernos de contraseña;
+- rate limiting en login/endpoints sensibles;
 - validación y normalización server-side;
-- output escaping / sanitización según contexto;
-- consultas preparadas;
-- uploads validados por tipo, tamaño, ruta y autorización si existen;
-- logs sin passwords, tokens ni secretos;
-- ante errores 5xx de producción, priorizar el incidente estructurado y su diagnóstico compartible sanitizado; no pedir ni publicar logs crudos si el mecanismo seguro está disponible;
-- cualquier enlace de diagnóstico para soporte/IA debe ser temporal, de solo lectura, revocable y omitir headers, cookies, cuerpos de request, secretos, PII innecesaria y argumentos del stack;
-- permisos de mínimo privilegio;
-- backups con restauración demostrable, no solo generación de archivos.
+- escaping/sanitización por contexto;
+- prepared statements/Doctrine;
+- uploads validados por tipo, tamaño, ruta y autorización;
+- logs sin passwords, tokens, secretos ni PII innecesaria;
+- mínimo privilegio;
+- backups con restauración demostrable.
 
-Un finding de seguridad válido se corrige en su causa raíz cuando el repositorio puede resolverlo; no se silencia únicamente para pasar una herramienta.
+Para diagnóstico 5xx, preferir el mecanismo sanitizado/compartible del producto. Un enlace de soporte debe ser temporal, read-only, revocable y omitir cookies, headers sensibles, request bodies, secretos y argumentos innecesarios del stack.
 
----
+Un finding válido se corrige en la causa raíz; no se silencia para pasar una herramienta.
 
-## 8. Pruebas, calidad y regresiones
+### Estrategia de pruebas
 
-La estrategia es **behavior-first** y proporcional al riesgo.
+**Behavior-first y proporcional al riesgo:**
 
-- Preferir contratos ejecutables sobre búsquedas de strings en código.
-- Unit/contract tests para invariantes puros.
-- Integration tests para persistencia, API, autorización y límites entre capas.
-- Playwright para flujos reales de navegador.
-- Cuando exista autenticación, usar usuarios E2E aislados y descartables; nunca credenciales ni datos reales de producción.
-- Chromium es la cobertura primaria; WebKit se añade de forma dirigida cuando el riesgo Safari/iOS lo justifique.
-- Toda corrección determinista importante debe ganar una regresión automática cuando exista un límite estable y razonable para probarla.
-- Un test que solo reproduce implementación interna y no comportamiento observable no sustituye una regresión útil.
+- unit/contract para invariantes puros;
+- integration para persistencia, API, autorización y fronteras;
+- Playwright para flujos reales;
+- credenciales E2E aisladas y descartables, nunca datos reales;
+- Chromium como cobertura primaria; WebKit solo donde el riesgo Safari/iOS lo justifique;
+- una corrección determinista importante debe ganar una regresión cuando exista un límite estable que probar.
 
-### Calidad automática
+Evitar tests que solo reproduzcan estructura interna sin verificar comportamiento útil.
 
-CI, SonarQube Cloud y CodeRabbit forman un único sistema de evidencia:
+### Evidencia automática
 
-- ejecutarlos en paralelo cuando sea seguro;
-- CodeRabbit y Sonar deben revisar el **head estable** previsto para merge, evitando tormentas de commits que reinicien análisis sin necesidad;
-- verificar cada finding contra el código actual; corregir los válidos en la causa raíz y descartar con motivo los que ya no apliquen;
-- si una corrección cambia el head, los resultados anteriores no prueban ese nuevo head: revalidar los gates afectados;
-- no declarar un gate aprobado mientras siga procesando;
-- no fusionar con threads válidos sin resolver;
-- un check `success` por haber sido omitido solo es aceptable cuando la clasificación de cambios demuestra que ese gate no aplica.
+CI, SonarQube Cloud y CodeRabbit forman un único sistema de evidencia.
+
+- revisar el head exacto estable;
+- si cambia el head, resultados anteriores no prueban el nuevo;
+- validar findings contra código actual;
+- corregir findings válidos y explicar descartes reales;
+- no declarar un gate aprobado mientras procese;
+- no fusionar con threads válidos pendientes;
+- un gate omitido solo cuenta como success si el clasificador demuestra que no aplica.
 
 ---
 
-## 9. CI como sistema operativo de entrega
+## 6. CI-first: topología, retries y flujo de entrega
 
-El CI de Condor debe ser **rápido, selectivo, fail-safe, autoauditable y autocurable solo cuando sea seguro**.
+### Invariantes del CI
 
-### 9.1. Topología e invariantes
+- Preflight corto y obligatorio.
+- Selección de gates por exclusión segura.
+- Ruta desconocida/configuración crítica/dependencias/workflows/clasificador => validación completa fail-safe.
+- Gates independientes en paralelo.
+- Timeout explícito por job.
+- Check agregado estable Validar como contrato de branch protection.
+- Dependencias desde lockfiles y entornos descartables.
+- Acciones externas fijadas a SHA.
+- Mínimo privilegio; no usar pull_request_target para ejecutar código no confiable.
+- Caché solo donde acelere sin esconder estado.
+- Evidencia útil en fallos; evitar artefactos de éxito sin valor.
+- Cada resultado pertenece a un SHA concreto.
+- Telemetría compara workloads equivalentes.
 
-1. **Preflight obligatorio y corto**: valida metadata esencial y clasifica el cambio.
-2. **Selección por exclusión segura**: solo se omite un gate cuando el cambio pertenece a una categoría explícitamente inocua para ese gate.
-3. **Fail-safe**: ruta desconocida, entrypoint nuevo, configuración crítica, dependencias, scripts de CI, workflows o cambios del propio clasificador implican validación completa.
-4. **Paralelización**: gates independientes arrancan en paralelo; no crear cadenas seriales por comodidad.
-5. **Timeouts explícitos**: todo job debe tener presupuesto finito.
-6. **Check agregado estable**: `Validar` permanece como contrato de branch protection y consolida jobs ejecutados u omitidos legítimamente.
-7. **Entorno limpio y reproducible**: dependencias se resuelven desde lockfiles; bases de CI son descartables; secretos son efímeros.
-8. **Mínimo privilegio**: permisos de Actions se declaran por workflow/job; acciones externas se fijan a SHA; no usar `pull_request_target` para ejecutar código no confiable.
-9. **Caché conservadora**: cachear descargas/dependencias cuando acelere sin ocultar estado; no cachear bases, secretos ni estado generado que pueda esconder una regresión.
-10. **Evidencia útil**: conservar logs/artefactos de fallo cuando aporten diagnóstico; evitar artefactos de éxito sin valor.
-11. **Exactitud de identidad**: cada resultado pertenece a un SHA concreto. PR head, squash resultante en `main` y producción son estados distintos.
-12. **Telemetría comparable**: medir duración/throughput entre perfiles de ejecución equivalentes; no comparar un PR documental con un full-stack como si fueran el mismo workload.
+### Retry/autocuración
 
-### 9.2. Política de autocuración y retry
+Reintentar solo operaciones externas, idempotentes y razonablemente transitorias, con intentos máximos, backoff y presupuesto de tiempo.
 
-Un retry es válido únicamente cuando **la misma entrada puede producir éxito sin cambiar código ni estado funcional** y la operación es idempotente.
+Ejemplos aceptables: descargas, registry/package manager, HTTP externo con timeout/408/425/429/5xx cuando repetir sea seguro.
 
-Se pueden reintentar de forma acotada:
+**PROHIBIDO usar retry ciego para:**
 
-- descargas de dependencias;
-- registry/package manager;
-- instalación de artefactos externos;
-- HTTP externos con timeout, 408/425/429 o 5xx cuando la operación sea segura;
-- otras operaciones explícitamente clasificadas como transitorias.
-
-Todo retry debe tener:
-
-- máximo de intentos;
-- backoff;
-- presupuesto total de tiempo;
-- mensaje que identifique la operación;
-- retorno del error original si agota el presupuesto.
-
-**Nunca autocurar mediante retry ciego**:
-
-- assertions o tests fallidos;
-- lint, typecheck o análisis estático;
-- errores de sintaxis;
+- assertions/tests;
+- lint/typecheck/análisis estático;
+- sintaxis;
 - migraciones/schema mismatch;
-- fallos de autorización/permisos;
-- contratos/invariantes rotos;
-- errores de configuración deterministas;
+- autorización/permisos;
+- contratos/invariantes;
+- configuración determinista;
 - findings de seguridad/calidad;
-- un smoke que demuestra versión/SHA/estado funcional incorrecto.
+- smoke con versión/SHA/estado funcional incorrecto.
 
-Ante un fallo determinista:
+Fallo determinista: diagnosticar → corregir causa → añadir/ajustar regresión → prueba dirigida → revalidar gate.
 
-**diagnosticar → corregir causa raíz → añadir/ajustar regresión → ejecutar prueba dirigida → revalidar el gate afectado → continuar**.
+### Bucle de entrega
 
-Si un fallo aparentemente flaky se origina en el repositorio, la prioridad es eliminar la fuente de flakiness; no normalizar reruns hasta obtener verde.
+**A. Preparar:** bootstrap §2 → reservar §3 → comprobar colisiones/base.
 
-### 9.3. Uso eficiente del tiempo de CI
+**B. Implementar:** cambio mínimo completo → regresiones → pruebas rápidas → commits lógicos → PR temprano.
 
-- Mientras CI/Sonar/CodeRabbit procesan un head estable, avanzar análisis de solo lectura o trabajo independiente que no cambie ese head ni colisione con otras reservas.
-- No hacer commits cosméticos mientras una revisión automática útil está en curso.
-- Si aparece un finding válido, agrupar correcciones relacionadas antes de volver a disparar gates.
-- Si `main` cambia antes del merge, recontrastar la PR contra el nuevo `main`; no asumir que un head verde sobre una base antigua sigue siendo integrable.
-- Un workflow detenido por dependencia externa no bloquea investigación, documentación de causa o trabajo independiente compatible.
+**C. Estabilizar:** CI + coordinación + Sonar + CodeRabbit → corregir causas → head estable → volver a comprobar main/head/reserva/mergeability.
 
-No crear workflows duplicados si un gate pertenece naturalmente al CI canónico.
+**D. Integrar:** squash merge serial → obtener SHA exacto de main → validar gates aplicables sobre ese SHA.
 
----
+**E. Entregar:** observar deploy por separado → validar transición real → smoke real → actualizar Roadmap y especificaciones cuando corresponda.
 
-## 10. Flujo CI-first obligatorio de entrega
-
-Para código o configuración, ejecutar este bucle completo:
-
-### A. Preparar
-
-1. leer `AGENTES.md`, obtener el SHA exacto de `main`, revisar PRs/gates y Roadmap #1;
-2. elegir un Issue disponible, reservarlo y conservar su UUID;
-3. comprobar colisiones con trabajo abierto antes de editar archivos globales;
-4. partir de la rama canónica creada desde el `main` vigente.
-
-### B. Implementar
-
-5. implementar el cambio mínimo completo;
-6. añadir/ajustar regresiones según riesgo;
-7. ejecutar primero las pruebas dirigidas que puedan fallar rápido;
-8. agrupar cambios en commits lógicos y abrir la PR temprano cuando ya exista un primer bloque coherente.
-
-### C. Estabilizar la PR
-
-9. ejecutar CI, coordinación, Sonar y CodeRabbit en paralelo;
-10. clasificar cada fallo como **determinista**, **transitorio externo** o **bloqueo externo**;
-11. para deterministas, corregir y revalidar; para transitorios, retry acotado solo si cumple §9.2;
-12. estabilizar el head: sin findings válidos pendientes, threads relevantes resueltos y gates aplicables verdes;
-13. comprobar nuevamente `main`, mergeability, reserva y head exacto antes de fusionar.
-
-### D. Integrar
-
-14. hacer **squash merge** de forma serial;
-15. obtener el SHA exacto resultante de `main`;
-16. validar los gates aplicables contra ese SHA; no heredar automáticamente la evidencia del head de PR.
-
-### E. Entregar
-
-17. observar el deploy por separado registrando versión + SHA + timestamp de build/release; el timestamp aporta trazabilidad temporal, pero no identifica por sí solo redeploys del mismo artefacto;
-18. aplicar la checklist de transición de producción de §16 antes de declarar la release sana;
-19. validar comportamiento real solo con evidencia de producción;
-20. actualizar Roadmap #1 y, cuando cambie una decisión durable, `ESPECIFICACIONES.md`.
-
-No iniciar una rama dependiente nueva antes de cerrar la validación de `main` del bloque anterior. El análisis y trabajo independiente sin colisión sí pueden adelantarse.
+No hacer commits cosméticos mientras una revisión automática útil procesa un head estable.
 
 ---
 
-## 11. Versionado de producto y releases
+## 7. GitHub, versionado y releases
 
-Condor usa versionado de producto explícito por deploy, siguiendo la convención ya adoptada en BRVTAL.
+### Convenciones GitHub
 
-### Regla de versión
+Todo lo controlable por el proyecto se escribe en español cuando sea viable.
 
-- la primera versión de producción de Condor será **`0.1.0`**;
-- cada deploy posterior incrementa normalmente el **patch**: `0.1.0 → 0.1.1 → 0.1.2 → ...`;
-- un cambio de **minor** pre-1.0, por ejemplo `0.1.x → 0.2.0`, representa un hito deliberado de producto y no debe ocurrir automáticamente;
-- **`1.0.0` requiere decisión explícita del usuario**;
-- no saltar versiones ni reutilizar una versión que ya haya representado un deploy distinto;
-- la versión humana del producto y el SHA Git son identidades diferentes: la versión comunica release de producto; el SHA identifica exactamente el código.
+Ramas normales: exclusivamente trabajo/issue-N creadas por coordinación.
 
-### Deploy-bound PR
+Commits concisos; prefijos convencionales feat/fix/docs/test/refactor/perf/infra pueden conservarse.
 
-Una PR es **deploy-bound** cuando su merge a `main` vaya a activar o formar parte de una entrega a producción.
+Todo título humano controlable de Issue, PR, Release, Milestone o equivalente termina exactamente en:
 
-Para cada PR deploy-bound:
+(V X.Y.Z)
 
-1. asignar exactamente una versión objetivo;
-2. reflejar esa versión en el título visible del hito del roadmap cuando entre en implementación/PR;
-3. actualizar la fuente canónica de versión del producto;
-4. si existe `package.json` u otra metadata de versión, mantener paridad con la fuente canónica;
-5. ejecutar los gates sobre el head estable que contiene el bump;
-6. hacer squash merge;
-7. verificar el SHA exacto resultante de `main`;
-8. observar el despliegue de esa versión por separado;
-9. registrar versión, PR y evidencia en el roadmap.
+No usar variantes de mayúsculas/formato.
 
-Cuando el bootstrap técnico cree la aplicación, la fuente canónica será **`config/version.php`**, siguiendo el patrón de BRVTAL. Si existe `package.json`, su `version` deberá coincidir.
+### Versionado por deploy
 
-Antes de que el despliegue automático a producción esté habilitado, las PRs puramente documentales o de preparación no consumen versiones de producción. El primer deploy real será `0.1.0`.
+Fuente canónica: config/version.php. package.json y metadata equivalente mantienen paridad cuando corresponda.
 
-### Convención del roadmap
+- cada deploy productivo identificable usa una versión humana;
+- el incremento normal pre-1.0 es patch;
+- no reutilizar una versión para dos deploys distintos;
+- no saltar versiones deliberadamente sin razón;
+- cambio de minor requiere hito deliberado;
+- 1.0.0 requiere decisión explícita del usuario;
+- versión humana y SHA Git son identidades complementarias;
+- toda PR deploy-bound contiene su versión objetivo antes de gates finales.
 
-Cuando un hito tenga versión asignada, usar el formato:
+Una PR documental/gobierno que no forme parte de un deploy productivo no obliga por sí sola a consumir versión; si efectivamente entra en un deploy distinto, aplica la regla general de versión por deploy.
 
-`Nombre del hito (V 0.1.0), PR #N`
+### Estados de entrega
 
-Al completarse:
+Usar con precisión:
 
-`✅ ~~Nombre del hito (V 0.1.0), PR #N~~`
+- **IMPLEMENTADO:** existe en código.
+- **VALIDADO EN CÓDIGO:** pasaron los gates requeridos.
+- **DESPLEGADO:** producción recibió la release.
+- **VALIDADO EN PRODUCCIÓN:** se comprobó comportamiento real.
 
-No marcar una versión como desplegada o validada en producción sin evidencia correspondiente.
+CI verde o merge nunca equivalen automáticamente a producción.
 
 ---
 
-## 12. Estados de entrega
+## 8. README y snapshot de entrega
 
-Usar estos conceptos con precisión:
+README.md representa solo el deploy/candidato operativo vigente.
 
-- **IMPLEMENTADO** — el cambio existe en código.
-- **VALIDADO EN CÓDIGO** — pruebas/gates requeridos pasaron.
-- **DESPLEGADO** — la plataforma de producción recibió la versión.
-- **VALIDADO EN PRODUCCIÓN** — se comprobó comportamiento real en producción.
+Para un PR deploy-bound, cuando sea el próximo candidato serial:
 
-Nunca convertir automáticamente “CI verde” en “VALIDADO EN PRODUCCIÓN”.
+- reemplazar el snapshot, no añadir changelog acumulativo;
+- mostrar versión objetivo y última versión desplegada comprobada por separado;
+- incluir Estado del deploy con tabla Señal | Estado | Evidencia;
+- incluir SHA/base relevante;
+- Qué se hizo;
+- archivos del deploy;
+- Validación;
+- Qué sigue en AHORA / SIGUE / DESPUÉS o equivalente;
+- Panorama general pendiente con enlace al Roadmap;
+- flujo de entrega Mermaid cuando aplique;
+- badges de CI/Sonar/observación configurados;
+- enlaces a AGENTES.md, ESPECIFICACIONES.md y Roadmap #1.
+
+Nunca actualizar Versión desplegada por CI o merge sin evidencia de deploy.
+
+README no sustituye Roadmap, especificaciones, manual operativo ni historial Git.
 
 ---
 
-## 13. Roadmap canónico y registro macro de avance
+## 9. Roadmap, documentación y comunicación humana
 
-El roadmap activo es **[GitHub Issue #1](https://github.com/pl0n3r/Condor/issues/1)** y se conserva de forma acumulativa hasta **V 1.0.0**.
+### Roadmap canónico
 
-**Regla permanente de preservación y orden:** el Issue #1 debe conservar la historia completa desde la definición inicial de Condor, organizada cronológicamente y por fases. Nunca se reemplaza por una versión resumida que elimine contexto previo. Los avances nuevos se agregan manteniendo la estructura existente; los hitos completados permanecen visibles y tachados. Solo las microactualizaciones operativas pueden resumirse, nunca el historial macro del proyecto.
+Issue #1 es el único Roadmap activo y se conserva cronológico, acumulativo y completo hasta al menos V 1.0.0.
 
-### Dos capas del mismo registro
+- cuerpo: fases, orden, estado y ruta de ejecución;
+- comentarios: hitos macro relevantes;
+- hitos completados permanecen visibles y tachados;
+- no crear un segundo Roadmap;
+- no convertirlo en log de commits, retries, checks o findings menores;
+- el detalle fino vive en Issue/PR/check/especificaciones;
+- una instrucción explícita del usuario puede repriorizar el plan;
+- después de un merge relevante, el Roadmap debe reflejar la realidad.
 
-- **Cuerpo del Issue #1:** plan acumulativo, fases, tareas, estados y ruta hacia V 1.0.0. Debe mantenerse lógico, escaneable y ordenado.
-- **Comentarios del Issue #1:** historial **macro** de hitos relevantes: qué bloque importante se implementó, qué decisión cambió el producto y cuál fue el resultado.
-- El Roadmap **no es un log minuto a minuto**. Commits individuales, reintentos, gates parciales, findings menores y correcciones intermedias viven en el Issue, PR o check correspondiente.
-- Si varias acciones pertenecen a la misma iteración, consolidarlas en un único comentario de hito cuando exista un resultado sustancial o cambie materialmente el estado.
-- Las microactualizaciones operativas pueden consolidarse para reducir ruido, pero **nunca** se eliminan o compactan hitos macro, fases, decisiones de producto, entregas, incidentes o contexto histórico relevante.
+Un comentario de Roadmap merece existir cuando se entrega un slice/capacidad, cambia una decisión durable, se resuelve un incidente mayor, una versión cambia de estado significativo o cambia materialmente la prioridad.
 
-### Qué merece una noticia en el Roadmap
+Formato recomendado:
 
-Publicar un comentario únicamente cuando ocurra un avance de nivel hito:
-
-1. se completa o entrega un slice, módulo o capacidad relevante;
-2. se toma una decisión funcional, técnica o arquitectónica durable;
-3. se resuelve un incidente importante de producción o un bloqueo mayor;
-4. una versión alcanza un estado significativo: validada en código, fusionada, desplegada o validada en producción;
-5. cambia de forma importante el alcance, prioridad o dirección de una iteración.
-
-**No publicar comentarios separados** por cada commit, PR abierto, reintento, check individual, finding menor, corrección pequeña o paso rutinario del pipeline.
-
-### Formato de los hitos
-
-Usar lenguaje entendible para una socia no técnica y resumir la iteración completa en pocos puntos:
-
-```md
-### Hito macro — <resultado o decisión>
-- **Qué se logró:** ...
-- **Alcance:** ...
-- **Evidencia clave:** Issue/PR/SHA/versión cuando aporte contexto.
+### Hito macro — resultado
+- **Qué se logró:** capacidad/resultado.
+- **Alcance:** límites relevantes.
+- **Evidencia clave:** Issue/PR/SHA/versión cuando ayude.
 - **Estado:** VALIDADO EN CÓDIGO | MERGED | DESPLEGADO | VALIDADO EN PRODUCCIÓN | BLOQUEADO.
-- **Siguiente:** solo el próximo bloque relevante.
-```
+- **Siguiente:** próximo bloque relevante.
 
-Reglas:
+### Comunicación en GitHub
 
-- priorizar resultado e impacto sobre detalle operacional;
-- conservar suficiente contexto para entender el proyecto meses después sin leer todo el PR;
-- distinguir validación en código, merge, deploy y validación real de producción;
-- nunca marcar `VALIDADO EN PRODUCCIÓN` sin evidencia real;
-- no publicar mensajes vacíos del tipo “sigo”, “adelante” o “trabajando”;
-- un finding o fallo solo llega al Roadmap si cambia materialmente la iteración, explica un incidente relevante o altera su resultado;
-- el detalle técnico fino pertenece al Issue específico, PR, checks o `ESPECIFICACIONES.md`;
-- el cuerpo del roadmap se actualiza cuando cambia el plan o estado acumulativo de una tarea/fase, **sin borrar ni reescribir el histórico anterior para limpiar la vista**;
-- mantener siempre el orden lógico: origen/definición → fases → implementación → versiones/incidentes → iteración actual → próximos bloques.
+Mantener detalle técnico útil, pero cada comentario/PR/Issue debe poder entenderse meses después sin reconstruir el chat.
 
-Convención visual del cuerpo:
+Conectar de forma natural:
 
-- ✅ ~~Completado y validado por los gates requeridos~~
-- 🚧 Pendiente / en curso
-- ⛔ Bloqueado / dependencia externa
+1. **qué cambió**;
+2. **por qué importa**;
+3. **dónde quedó reflejado**;
+4. **qué habilita o afecta**.
 
-Reglas generales:
+Evitar frases telegráficas como “gates verdes” o “ajuste aplicado” sin contexto. Explicar acrónimos/estados cuando la audiencia pueda ser producto u operación. Referenciar Issue/PR/SHA/gate cuando aporte trazabilidad, no como lista de IDs.
 
-- todo trabajo planeado relevante debe aparecer en el cuerpo del roadmap;
-- todo trabajo completado relevante permanece visible y tachado;
-- registrar PR y versión cuando exista una release asignada;
-- una instrucción explícita del usuario puede repriorizar el roadmap;
-- Issues específicos contienen criterios de aceptación; el roadmap contiene orden, estado e hitos macro;
-- después de un merge relevante, el cuerpo debe reflejar la realidad, no el plan anterior;
-- hasta alcanzar una **V 1.0.0 madura**, conservar el historial de hitos relevantes sin volver a introducir microactualizaciones;
-- **no crear un segundo Roadmap ni un volumen de continuación**; si el cuerpo se acerca a un límite práctico, reorganizar dentro del mismo Issue #1 y usar sus comentarios para hitos macro adicionales, preservando todo el histórico;
-- el roadmap debe conservar una lectura limpia para socios y personas no técnicas;
-- las políticas permanentes, manuales y detalle técnico pertenecen a `AGENTES.md`, `ESPECIFICACIONES.md`, Issues o PRs, no al Roadmap.
+Comunicación humana no significa micro-log: seguir reportando hitos macro.
+
+### Documentación durable
+
+- decisiones funcionales/arquitectónicas nuevas → ESPECIFICACIONES.md;
+- términos técnicos importantes para negocio → revisar GLOSARIO.md;
+- manual operativo cambia solo cuando cambia el modo de trabajar;
+- historial de releases vive en Git/PRs/Roadmap, no aquí.
 
 ---
 
-## 14. Convenciones de GitHub
+## 10. Producción y seguridad de transición
 
-Todo lo controlable por el proyecto debe estar en español.
+**PROHIBIDO ejecutar sin autorización explícita previa, y nunca de forma automática:**
 
-### Ramas
-
-Después de activar la coordinación multiagente, el trabajo normal usa **exclusivamente** la rama canónica creada por la reserva:
-
-- `trabajo/issue-12`
-- `trabajo/issue-57`
-
-Reglas:
-
-- no crear manualmente ramas `feature/*`, `fix/*`, `docs/*`, `infra/*` o equivalentes para trabajo normal;
-- `/tomar` crea `trabajo/issue-N` de forma atómica desde el `main` actual;
-- una rama canónica existente significa que el Issue está reservado, incluso si un label tarda en sincronizarse;
-- solo se permiten excepciones de bootstrap/mantenimiento cuando están explícitamente documentadas en el Issue correspondiente.
-
-### Commits
-
-Mensajes concisos en español, por ejemplo:
-
-- `feat: agrega autenticación inicial`
-- `fix: corrige aislamiento por empresa`
-- `docs: actualiza especificaciones de permisos`
-- `infra: configura CI inicial`
-
-Términos convencionales como `feat`, `fix`, `docs`, `test`, `refactor`, `perf` e `infra` pueden mantenerse por utilidad técnica.
-
-### Regla de versión en títulos de GitHub
-
-Todo artefacto de GitHub con título humano que podamos controlar debe incluir la versión objetivo al final, usando exactamente:
-
-`(V 0.1.0)`
-
-Aplica a:
-
-- Issues;
-- Pull Requests;
-- Releases;
-- Milestones;
-- Discussions o Project items si llegan a usarse y tienen título propio;
-- cualquier otro artefacto equivalente de tracking visible para personas.
-
-Reglas:
-
-- la versión del título representa **tracking / versión objetivo**, no evidencia de deploy;
-- mientras el proyecto esté preparando la primera entrega, usar `(V 0.1.0)`;
-- después de desplegar una versión, el trabajo nuevo pasa normalmente a la siguiente versión objetivo, por ejemplo `(V 0.1.1)`;
-- una PR documental también lleva versión en el título aunque por sí sola no “consuma” ni demuestre un deploy;
-- no usar variantes como `v0.1.0`, `V0.1.0` o `(v0.1.0)` en títulos de GitHub;
-- antes de crear o renombrar un artefacto, comprobar cuál es la versión objetivo vigente;
-- al cambiar deliberadamente de minor, todos los títulos nuevos usan la nueva versión objetivo;
-- `1.0.0` sigue requiriendo decisión explícita del usuario.
-
-Ejemplos:
-
-- `feat: agrega autenticación inicial (V 0.1.0)`
-- `planificación: permisos y roles (V 0.1.0)`
-- `release: primer deploy de producción (V 0.1.0)`
-
-### Pull Requests
-
-- título en español y con la versión objetivo al final;
-- resumen claro;
-- explicar por qué cambia;
-- listar validación real;
-- no afirmar producción si no fue comprobada;
-- vincular Issue cuando exista;
-- mantener el head estable para revisión final;
-- squash merge como estrategia predeterminada.
-
-### Issues
-
-- título y descripción en español;
-- título con la versión objetivo al final en formato exacto `(V X.Y.Z)`;
-- problema/objetivo verificable;
-- criterios de aceptación cuando corresponda;
-- evidencia y limitaciones explícitas;
-- evitar duplicados revisando Issues abiertos y roadmap antes de crear uno nuevo.
-
----
-
-## 14.1. Evolución incremental del frontend
-
-Regla permanente:
-
-- el frontend **no se deja para el final**; debe evolucionar poco a poco junto con cada slice funcional;
-- cuando un slice de backend administrativo alcance un contrato estable y exista una representación útil y segura, exponer progresivamente una vista mínima real en el frontend —aunque inicialmente sea read-only— para que el avance pueda inspeccionarse sin esperar a que el módulo completo esté terminado;
-- cuando una capacidad administrativa sea compartida entre clientes y propietario de plataforma, reutilizar la misma superficie, componentes y contratos mediante permisos/contexto en vez de crear implementaciones paralelas;
-- no simular progreso con botones o placeholders que aparenten funcionalidad inexistente: los estados incompletos deben mostrarse de forma explícita;
-- cuando una entrega toque una superficie visible, aprovechar para mejorar de forma proporcional estructura, jerarquía, copy, responsive, accesibilidad y acabado visual;
-- evitar rediseños gigantes desconectados del producto: preferir mejoras pequeñas, coherentes y acumulativas;
-- mantener consistencia visual entre home público, login y backoffice sin obligar a que compartan exactamente la misma composición;
-- el home público de Condor debe proyectar una imagen **corporativa, sobria, premium y fina**, con claridad, aire, tipografía cuidada, jerarquía fuerte, movimiento discreto y ausencia de ruido visual;
-- Apple puede usarse como referencia de nivel de acabado, sobriedad y precisión visual, **no como plantilla para copiar ni como fuente de identidad visual**;
-- priorizar fondos limpios, blancos/grises/negros controlados, contraste alto, espaciado generoso, tarjetas/bordes discretos y animaciones sutiles cuando aporten;
-- evitar estética genérica de SaaS saturada: exceso de gradientes, blobs, ilustraciones stock, iconos innecesarios, demasiados colores o CTAs compitiendo;
-- cada mejora visual debe conservar rendimiento, accesibilidad, mobile-first y SSR/SEO de las superficies públicas;
-- el contenido editable del frontend/CMS se definirá en una fase posterior; **no acoplar el diseño visual actual a una solución concreta de gestión de contenido**.
-
-## 15. README por deploy
-
-Condor adopta la misma estrategia de README operativo de BRVTAL: **`README.md` es el snapshot visual del deploy actual**, no un documento acumulativo.
-
-Para cada PR deploy-bound:
-
-- reemplazar el snapshot del README; no anexar un changelog histórico;
-- mostrar de forma visible la **versión objetivo** y la **versión desplegada actualmente**;
-- después del primer deploy real, la señal `Versión desplegada` debe mostrar siempre la última versión que Hostinger haya recibido de forma verificable, por ejemplo **`v0.1.0`**;
-- nunca actualizar `Versión desplegada` solo porque una PR se fusionó o CI quedó verde;
-- si todavía no existe evidencia de despliegue, mostrarlo explícitamente y mantener la versión objetivo separada;
-- incluir únicamente los archivos modificados por el deploy actual y una explicación breve;
-- incluir una sección **Qué se hizo**;
-- incluir una sección **Validación** con evidencia real;
-- incluir **Qué sigue** en lanes `AHORA / SIGUE / DESPUÉS` o equivalente;
-- incluir un **Panorama general pendiente** conciso, enlazado al roadmap canónico, sin duplicarlo por completo;
-- incluir una sección exacta **Estado del deploy** con tabla `Señal | Estado | Evidencia`;
-- incluir una sección **Flujo de entrega** con diagrama Mermaid cuando el pipeline exista;
-- mostrar badges de CI, Sonar y observación de deploy cuando esas superficies estén configuradas;
-- mantener visibles enlaces a `AGENTES.md`, `ESPECIFICACIONES.md` y al Issue #1;
-- mantener el README visualmente escaneable mediante tablas, estados y símbolos, evitando prosa innecesaria.
-
-El README debe distinguir siempre:
-
-- **versión objetivo** de la PR;
-- **versión desplegada** observada;
-- SHA exacto de `main`;
-- estado de validación en código;
-- estado de validación en producción.
-
-No usar README como:
-
-- roadmap acumulativo;
-- changelog completo;
-- archivo de decisiones técnicas;
-- reemplazo de `AGENTES.md` o `ESPECIFICACIONES.md`.
-
-El historial de releases se conserva mediante Git/PRs/releases/roadmap; el README muestra solamente el snapshot operativo vigente.
-
----
-
-## 16. Producción, transiciones y operaciones protegidas
-
-Nunca ejecutar automáticamente:
-
-- SQL destructivo en producción;
-- resets/seeds de producción;
-- borrado irreversible de datos;
+- SQL destructivo;
+- reset/seed de producción;
+- borrado irreversible;
 - rotación de secretos reales;
-- cambios de DNS/infraestructura irreversibles;
-- acciones con riesgo de interrupción sin vía segura de rollback;
-- migraciones productivas que no estén explícitamente autorizadas.
+- cambio DNS/infra irreversible;
+- operación con riesgo de interrupción sin rollback;
+- migración productiva.
 
-El despliegue de código, la migración de esquema y la **transición de estado operativo** son operaciones distintas.
+Escalar estos casos no equivale a autorización: después de escalar, esperar una aprobación explícita antes de ejecutar cualquier operación de esta lista.
 
-### 16.1. Checklist de transición antes de validar producción
+Código desplegado, esquema migrado y estado operativo reconciliado son cosas distintas.
 
-Un deploy no se considera sano solo porque el nuevo código está presente. Cuando el cambio toque configuración, roles, esquema, servicios, comandos, rutas o estado persistente, comprobar explícitamente:
+### Checklist de transición
 
-El detector automático de transición es una **señal mínima, no la autoridad exclusiva**. Si el diff toca roles, servicios, controladores/rutas, comandos, provisioning/backfills o invariantes de estado persistente que el clasificador automático todavía no reconozca, tratar la transición como requerida y **no aceptar el observador como validación final** hasta comprobarla explícitamente. Un `requerida=false` automático nunca autoriza a omitir una transición que el análisis del cambio identifica como necesaria.
+Cuando el cambio toque esquema, roles, servicios, comandos, rutas, env/config, caché/container, provisioning/backfill o estado persistente, validar:
 
-1. **Identidad de release** — versión humana, SHA desplegado y timestamp de build/release coinciden con la evidencia esperada; el timestamp aporta trazabilidad temporal, pero no identifica por sí solo redeploys del mismo artefacto.
-2. **Esquema** — estado de Doctrine Migrations conocido; no asumir que deploy implica migración.
-3. **Transición de datos** — backfills, provisioning, singleton records, roles, flags o conversiones requeridas están completos.
-4. **Compatibilidad de estado** — el código nuevo puede leer el estado previo durante la transición o falla de forma segura y accionable.
-5. **Container/caché** — cuando cambien servicios, controladores, rutas o comandos, limpiar/warmup de prod y comprobar descubrimiento real.
-6. **Configuración externa** — variables de entorno/secrets necesarios existen sin imprimir sus valores.
-7. **Superficies críticas** — rutas, comandos y servicios esperados existen en el runtime desplegado.
-8. **Rollback** — si cambia esquema o persistencia con datos reales, preservar compatibilidad hacia atrás durante la transición y ejecutar, cuando corresponda, la secuencia completa **expand → migrate/backfill → contract** antes de retirar compatibilidad; no crear un punto de no retorno accidental.
-9. **Smoke** — comprobar endpoints públicos y, cuando corresponda, flujo autenticado seguro/aislado.
-10. **Invariantes** — validar el estado que el código realmente necesita, no solo que las tablas existan.
+1. **Identidad:** versión + SHA + evidencia temporal esperada.
+2. **Esquema:** Doctrine Migrations conocido; deploy no implica migración.
+3. **Datos:** backfills/provisioning/singletons/roles/flags completos.
+4. **Compatibilidad:** código nuevo tolera el estado previo o falla seguro y diagnosticable.
+5. **Container/caché:** limpiar/warmup y comprobar descubrimiento cuando cambien servicios/rutas/comandos.
+6. **Config externa:** variables/secrets necesarios existen sin imprimir valores.
+7. **Superficies:** rutas, comandos y servicios esperados existen en runtime.
+8. **Rollback:** preservar compatibilidad; usar expand → migrate/backfill → contract cuando aplique.
+9. **Smoke:** público y autenticado aislado cuando corresponda.
+10. **Invariantes:** comprobar el estado que el código realmente necesita.
 
-Ejemplos de invariantes: rol propietario asignado, singleton con referencia válida, tenant/membresía activa, configuración obligatoria presente, comando nuevo descubierto y migración realmente aplicada.
+El detector automático de transición es una señal mínima, no autoridad absoluta. Si el análisis del diff exige transición, un requerida=false automático nunca autoriza a omitirla.
 
-Una transición incompleta debe **bloquear la validación de producción**. Siempre que el diseño lo permita, debe producir un estado seguro y diagnosticable (4xx/5xx controlado con referencia) en vez de un 500 opaco.
-
-### 16.2. Tratamiento de fallos de producción
-
-Ante un fallo:
-
-1. separar **código**, **deploy**, **esquema**, **configuración**, **caché/container** y **estado persistente** como hipótesis independientes;
-2. priorizar comprobaciones read-only;
-3. confirmar la causa con evidencia antes de ejecutar una mutación;
-4. aplicar la mínima corrección autorizada;
-5. revalidar la misma superficie real que falló;
-6. convertir la causa determinista en regresión, readiness check o regla de CI cuando sea razonable;
-7. registrar en el Roadmap solo el incidente/hito macro; el detalle técnico queda en Issue/PR.
-
-Ante un fallo recurrente o de CI:
-
-- corregir la causa común cuando el repositorio pueda hacerlo;
-- reintentar sin cambios solo con evidencia de condición transitoria;
-- documentar bloqueos externos con precisión;
-- continuar trabajo independiente compatible mientras exista.
+Una transición incompleta bloquea VALIDADO EN PRODUCCIÓN.
 
 ---
 
-## 17. Invariantes operativos de Condor
+## 11. Modo incidente
 
-Esta sección resume únicamente los invariantes transversales que una sesión no debe reinterpretar. El detalle ejecutable vive en las secciones anteriores.
+Ante fallo de producción o CI determinista:
 
-- **Identidad**: producto público `Condor App`; nombre técnico corto `Condor`; repositorio `pl0n3r/Condor`; dominio `https://www.condorapp.com.co`.
-- **Mercado/idioma**: Colombia, `es-CO` y COP como defaults; español en superficies controlables cuando sea técnicamente viable.
-- **Referencia BRVTAL**: reutilizar prácticas maduras de ingeniería cuando apliquen; nunca copiar automáticamente lógica de negocio, módulos, rutas, esquema ni deuda histórica.
-- **Coordinación**: toda implementación nueva usa Issue reservado y rama `trabajo/issue-N`; CI protege relación Issue/PR y colisiones según §1.1.
-- **Roadmap**: Issue #1 es el único Roadmap, cronológico y acumulativo; `ROADMAP.md` solo enlaza; progreso no se duplica en especificaciones.
-- **Especificaciones**: decisiones durables de producto/arquitectura pertenecen a `ESPECIFICACIONES.md`.
-- **Versionado**: cada deploy usa versión humana; incremento normal patch; `1.0.0` requiere decisión explícita; `config/version.php` es fuente canónica y metadata equivalente mantiene paridad.
-- **Estados**: VALIDADO EN CÓDIGO, DESPLEGADO y VALIDADO EN PRODUCCIÓN son estados distintos; CI verde nunca prueba producción.
-- **README**: snapshot del deploy, no roadmap ni changelog acumulativo; debe separar versión objetivo de versión realmente desplegada.
-- **Glosario**: `GLOSARIO.md` traduce términos técnicos relevantes para seguimiento de negocio.
-- **Entrega**: no usar ZIP como mecanismo de handoff, respaldo o fuente de verdad; todo cambio vive en Git/PR. Artefactos de Actions son evidencia efímera, no entrega.
-- **Producción**: migraciones, secretos, datos reales y operaciones destructivas/protegidas siguen las restricciones de §16.
+1. separar código, deploy, esquema, configuración, caché/container y estado persistente como hipótesis independientes;
+2. empezar con evidencia read-only;
+3. hipótesis no equivale a causa raíz;
+4. confirmar causa antes de mutar;
+5. aplicar la corrección mínima autorizada;
+6. repetir la misma superficie real que falló;
+7. convertir causas deterministas en regresión/readiness check/regla de CI cuando sea razonable;
+8. documentar el detalle en Issue/PR y solo el hito macro en Roadmap.
 
-Si una regla detallada cambia, actualizar su sección canónica y mantener este resumen consistente; no duplicar aquí el procedimiento completo.
+No pedir logs crudos si ya existe diagnóstico sanitizado suficiente. No reintentar un fallo determinista solo para intentar obtener verde.
+
+Si el bloqueo es externo, documentarlo con precisión y continuar trabajo independiente compatible.
 
 ---
 
-## 18. Mantenimiento de este archivo
+## 12. Handoff y mantenimiento
 
-Actualizar `AGENTES.md` cuando cambie de forma durable:
+Antes de terminar o transferir una sesión:
 
-- el flujo de desarrollo;
-- la arquitectura operativa;
-- los gates obligatorios;
-- reglas de seguridad;
-- estrategia de testing;
-- estrategia de despliegue;
-- responsabilidades entre archivos/fuentes de verdad.
+- dejar Issue/PR con estado técnico suficiente para continuar sin el chat;
+- conservar UUID de reserva o transferir/liberar correctamente;
+- registrar bloqueos, findings pendientes y siguiente acción concreta;
+- no dejar afirmaciones de producción sin evidencia;
+- si cambió main, indicar SHA exacto relevante.
 
-No convertir `AGENTES.md` en un roadmap ni en un historial de releases.
+No usar ZIP como handoff, respaldo ni fuente de verdad. El trabajo vive en Git/PR; artefactos de Actions son evidencia efímera.
 
-Cuando una decisión o implementación introduzca terminología técnica relevante para seguimiento de negocio, revisar si `GLOSARIO.md` necesita actualización en la misma PR.
+Actualizar AGENTES.md solo cuando cambien de forma durable:
 
-**Regla final:** un agente nuevo debe poder leer este archivo, revisar el repositorio y el Issue #1, y continuar Condor sin necesitar el chat anterior. El Issue #1 debe permanecer como el único Roadmap, cronológico, acumulativo y completo desde la definición inicial del proyecto.
+- flujo de desarrollo/coordinación;
+- gates;
+- seguridad/testing;
+- release/deploy;
+- responsabilidades entre fuentes de verdad.
+
+**Regla final:** un agente nuevo debe poder leer este manual, revisar el repositorio y el Roadmap #1, y continuar Condor sin necesitar ninguna conversación anterior.
