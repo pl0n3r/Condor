@@ -159,6 +159,11 @@ jobs:
     # if: needs.preflight.outputs.pruebas_base == 'true'
     steps:
       - run: python3 scripts/ci_change_classifier.py
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: npm run typecheck
   backend-php:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -187,6 +192,7 @@ jobs:
             )
             findings = audit_main_ci(path)
         self.assertTrue(any("gate base selectivo" in item for item in findings))
+        self.assertTrue(any("frontend selectivo" in item for item in findings))
         self.assertTrue(any("backend selectivo" in item for item in findings))
         self.assertTrue(any("E2E selectivo" in item for item in findings))
 
