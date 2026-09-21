@@ -143,22 +143,21 @@ def build_manifest(
     }
 
 
-def validate_manifest(manifest: dict[str, Any]) -> None:
-    """Valida identidad y checklist antes de permitir cualquier promoción de estado."""
-    if manifest.get("schema") != SCHEMA:
-        raise EvidenceError("El manifiesto de release usa un schema no soportado.")
-    version = manifest.get("version")
-    sha = manifest.get("sha")
-    if not isinstance(version, str) or VERSION_PATTERN.fullmatch(version) is None:
-        raise EvidenceError("El manifiesto contiene una versión inválida.")
-    if not isinstance(sha, str) or SHA_PATTERN.fullmatch(sha) is None:
-        raise EvidenceError("El manifiesto contiene un SHA inválido.")
-    if manifest.get("public_checks") != list(PUBLIC_CHECKS):
-        raise EvidenceError("El manifiesto no contiene el contrato público esperado.")
+def validated_transition_check(item: object) -> tuple[object, bool]:
+    """Valida una entrada individual del checklist y devuelve sus campos canónicos."""
+    if not isinstance(item, dict):
+        raise EvidenceError("Cada comprobación de transición debe ser un objeto.")
+    required = item.get("required")
+    if not isinstance(required, bool):
+        raise EvidenceError("Cada checks[*].required debe ser booleano.")
+    return item.get("id"), required
 
-    transition = manifest.get("transition")
+
+def validate_transition(transition: object) -> None:
+    """Valida forma, tipos y coherencia interna del checklist de transición."""
     if not isinstance(transition, dict):
         raise EvidenceError("El manifiesto no contiene checklist de transición.")
+
     transition_required = transition.get("required")
     if not isinstance(transition_required, bool):
         raise EvidenceError("transition.required debe ser booleano.")
@@ -167,16 +166,9 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
     if not isinstance(checks, list) or len(checks) != len(CHECK_IDS):
         raise EvidenceError("El checklist de transición es inválido.")
 
-    ids: list[object] = []
-    required_flags: list[bool] = []
-    for item in checks:
-        if not isinstance(item, dict):
-            raise EvidenceError("Cada comprobación de transición debe ser un objeto.")
-        ids.append(item.get("id"))
-        required = item.get("required")
-        if not isinstance(required, bool):
-            raise EvidenceError("Cada checks[*].required debe ser booleano.")
-        required_flags.append(required)
+    normalized = [validated_transition_check(item) for item in checks]
+    ids = [check_id for check_id, _ in normalized]
+    required_flags = [required for _, required in normalized]
 
     if ids != list(CHECK_IDS):
         raise EvidenceError("El checklist de transición no coincide con el contrato.")
@@ -184,6 +176,25 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
         raise EvidenceError("transition.required no coincide con el checklist.")
     if transition_required and not required_flags[-1]:
         raise EvidenceError("Una transición requerida debe exigir verificación de caché.")
+
+
+def validate_manifest(manifest: dict[str, Any]) -> None:
+    """Valida identidad y checklist antes de permitir cualquier promoción de estado."""
+    if manifest.get("schema") != SCHEMA:
+        raise EvidenceError("El manifiesto de release usa un schema no soportado.")
+
+    version = manifest.get("version")
+    if not isinstance(version, str) or VERSION_PATTERN.fullmatch(version) is None:
+        raise EvidenceError("El manifiesto contiene una versión inválida.")
+
+    sha = manifest.get("sha")
+    if not isinstance(sha, str) or SHA_PATTERN.fullmatch(sha) is None:
+        raise EvidenceError("El manifiesto contiene un SHA inválido.")
+
+    if manifest.get("public_checks") != list(PUBLIC_CHECKS):
+        raise EvidenceError("El manifiesto no contiene el contrato público esperado.")
+
+    validate_transition(manifest.get("transition"))
 
 
 def public_evidence(observation: dict[str, Any]) -> dict[str, dict[str, Any]]:
