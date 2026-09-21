@@ -54,6 +54,10 @@ TRANSITION_SCRIPT_MARKERS = (
     "provision",
     "release",
 )
+TRANSITION_FALLBACK_PREFIXES = (
+    "src/Application/",
+    "src/Infrastructure/",
+)
 
 COMPOSER_FILES = {"composer.json", "composer.lock"}
 BACKEND_CONTROL_FILES = COMPOSER_FILES | {PHPUNIT_CONFIG}
@@ -102,13 +106,23 @@ def starts(path: str, prefixes: tuple[str, ...]) -> bool:
 
 def requires_release_transition(path: str) -> bool:
     """Clasifica cambios que requieren verificar transición operativa."""
+    if (
+        path.endswith(".md")
+        or path.startswith(("docs/", "tests/"))
+    ):
+        return False
+
     if path == "bin/console" or path.startswith(TRANSITION_PREFIXES):
         return True
 
     if path.startswith("src/"):
+        if path.endswith("Query.php"):
+            return False
         if "/Entity/" in path or "/Service/" in path:
             return True
         if path.endswith("Service.php") or path == "src/Kernel.php":
+            return True
+        if path.startswith(TRANSITION_FALLBACK_PREFIXES):
             return True
 
     if path.startswith(SCRIPTS_PREFIX):
