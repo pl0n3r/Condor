@@ -18,10 +18,14 @@ jobs:
   preflight:
     name: Preflight
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       documentacion: ${{ steps.cambios.outputs.documentacion }}
       github: ${{ steps.cambios.outputs.github }}
+      pruebas_base: ${{ steps.cambios.outputs.pruebas_base }}
+      backend: ${{ steps.cambios.outputs.backend }}
       e2e: ${{ steps.cambios.outputs.e2e }}
+      transicion_release: ${{ steps.cambios.outputs.transicion_release }}
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -58,30 +62,17 @@ jobs:
           fi
 
           if [[ -n "$base" ]] && git cat-file -e "${base}^{commit}" 2>/dev/null; then
-            archivos="$(git diff --name-only "$base" "$GITHUB_SHA")"
+            git diff --name-only "$base" "$GITHUB_SHA" > /tmp/archivos-ci.txt
           else
-            archivos="$(git ls-files)"
+            git ls-files > /tmp/archivos-ci.txt
           fi
 
-          printf '%s\n' "$archivos"
-
-          if grep -Eq '(^|/)[^/]+\.md$|^docs/' <<<"$archivos"; then
-            echo "documentacion=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "documentacion=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          if grep -Eq '^\.github/|^AGENTES\.md$|^ESPECIFICACIONES\.md$|^GLOSARIO\.md$|^ROADMAP\.md$' <<<"$archivos"; then
-            echo "github=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "github=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          if grep -Eq '(^\.github/workflows/ci\.yml$|^package(-lock)?\.json$|^composer\.(json|lock)$|^playwright\.config\.mjs$|^tests/|^src/|^app/|^public/|^web/|^config/|^migrations/|^templates/|^frontend/|\.(html|twig|php|css|js|mjs|ts|tsx)$)' <<<"$archivos"; then
-            echo "e2e=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "e2e=false" >> "$GITHUB_OUTPUT"
-          fi
+          cat /tmp/archivos-ci.txt
+          python3 scripts/ci_change_classifier.py \
+            --event "$EVENTO" \
+            --format github \
+            < /tmp/archivos-ci.txt \
+            | tee -a "$GITHUB_OUTPUT"
 
       - name: Resumen preflight
         run: |
@@ -92,7 +83,10 @@ jobs:
             printf -- '- SHA: `%s`\n' "$GITHUB_SHA"
             printf -- '- Documentación modificada: `%s`\n' "${{ steps.cambios.outputs.documentacion }}"
             printf -- '- Gobierno/GitHub modificado: `%s`\n' "${{ steps.cambios.outputs.github }}"
+            printf -- '- Pruebas base requeridas: `%s`\n' "${{ steps.cambios.outputs.pruebas_base }}"
+            printf -- '- Backend requerido: `%s`\n' "${{ steps.cambios.outputs.backend }}"
             printf -- '- E2E requerido: `%s`\n' "${{ steps.cambios.outputs.e2e }}"
+            printf -- '- Transición de release requerida: `%s`\n' "${{ steps.cambios.outputs.transicion_release }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
   documentacion:
@@ -100,6 +94,7 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.documentacion == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -113,6 +108,7 @@ jobs:
     name: Validar gobierno del repositorio
     needs: preflight
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -132,8 +128,14 @@ jobs:
             .github/workflows/sonar-annotation-relay.yml \
             .github/workflows/ci-throughput-telemetry.yml \
             scripts/coordinar_trabajo.py \
+            scripts/ci_change_classifier.py \
+            scripts/ci_retry.py \
+            scripts/ci_self_audit.py \
             scripts/ci_throughput_report.py \
             tests/test_coordinar_trabajo.py \
+            tests/test_ci_change_classifier.py \
+            tests/test_ci_retry.py \
+            tests/test_ci_self_audit.py \
             tests/test_ci_throughput_report.py \
             package.json \
             package-lock.json \
@@ -144,6 +146,9 @@ jobs:
             test -f "$archivo" || { echo "::error::Falta $archivo"; exit 1; }
           done
           test ! -e AGENTS.md || { echo "::error::AGENTS.md no debe existir; el archivo canónico es AGENTES.md"; exit 1; }
+
+      - name: Autoauditar CI
+        run: python3 scripts/ci_self_audit.py
 
       - name: Validar configuración de labels
         run: python3 -m json.tool .github/labels.json >/dev/null
@@ -164,6 +169,7 @@ jobs:
     name: Validar coordinación
     needs: preflight
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       issues: read
@@ -201,15 +207,17 @@ jobs:
   pruebas-base:
     name: Pruebas de contrato e integración
     needs: preflight
+    if: needs.preflight.outputs.pruebas_base == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
-      - name: Probar telemetría de CI
-        run: python3 -m unittest tests/test_ci_throughput_report.py
+      - name: Probar herramientas internas del CI
+        run: python3 -m unittest discover -s tests -p 'test_ci_*.py'
 
       - name: Ejecutar contratos
         run: python3 -m unittest discover -s tests/contract -p 'test_*.py'
@@ -220,7 +228,9 @@ jobs:
   backend-php:
     name: Backend PHP / MariaDB
     needs: preflight
+    if: needs.preflight.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       mariadb:
         image: mariadb:11.4
@@ -262,7 +272,12 @@ jobs:
           echo "CONDOR_OWNER_PASSWORD=$owner_password" >> "$GITHUB_ENV"
 
       - name: Instalar dependencias PHP
-        run: composer install --no-interaction --prefer-dist --no-progress
+        run: |
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "composer install" \
+            -- composer install --no-interaction --prefer-dist --no-progress
 
       - name: Validar Composer y sintaxis PHP
         run: |
@@ -343,6 +358,7 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.e2e == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: read
     services:
@@ -404,8 +420,16 @@ jobs:
       - name: Instalar dependencias reproducibles
         run: |
           set -euo pipefail
-          npm ci --ignore-scripts --no-audit --no-fund
-          composer install --no-interaction --prefer-dist --no-progress
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "npm ci" \
+            -- npm ci --ignore-scripts --no-audit --no-fund
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "composer install E2E" \
+            -- composer install --no-interaction --prefer-dist --no-progress
 
       - name: Validar y construir frontend
         run: |
@@ -450,7 +474,12 @@ jobs:
           echo "- Navegador E2E: **$version**" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Instalar ffmpeg de Playwright para evidencia de fallo
-        run: ./node_modules/.bin/playwright install ffmpeg
+        run: |
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 2 \
+            --label "Playwright ffmpeg" \
+            -- ./node_modules/.bin/playwright install ffmpeg
 
       - name: Ejecutar Playwright
         run: npm run test:e2e
@@ -479,6 +508,7 @@ jobs:
     needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, backend-php, e2e]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Consolidar gates
         env:
@@ -495,8 +525,15 @@ jobs:
           [[ "$PREFLIGHT" == "success" ]] || { echo "::error::Preflight no pasó."; exit 1; }
           [[ "$GOBIERNO" == "success" ]] || { echo "::error::Gobierno no pasó."; exit 1; }
           [[ "$COORDINACION" == "success" ]] || { echo "::error::Coordinación no pasó."; exit 1; }
-          [[ "$PRUEBAS_BASE" == "success" ]] || { echo "::error::Pruebas base no pasaron."; exit 1; }
-          [[ "$BACKEND_PHP" == "success" ]] || { echo "::error::Backend PHP no pasó."; exit 1; }
+          case "$PRUEBAS_BASE" in
+            success|skipped) ;;
+            *) echo "::error::Pruebas base no pasaron."; exit 1 ;;
+          esac
+
+          case "$BACKEND_PHP" in
+            success|skipped) ;;
+            *) echo "::error::Backend PHP no pasó."; exit 1 ;;
+          esac
 
           case "$E2E" in
             success|skipped) ;;

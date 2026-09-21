@@ -27,6 +27,7 @@ jobs:
     name: Publicar hallazgos de Sonar en la PR
     if: github.event_name == 'workflow_dispatch' || github.event.check_run.name == 'SonarCloud Code Analysis'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Leer anotaciones y actualizar comentario
         shell: bash

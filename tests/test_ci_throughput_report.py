@@ -44,6 +44,15 @@ def run(
     }
 
 
+def job_pages(*names: str) -> list[dict]:
+    return [{
+        "jobs": [
+            {"name": name, "conclusion": "success"}
+            for name in names
+        ]
+    }]
+
+
 class ThroughputTests(unittest.TestCase):
     """Cubre cálculo de tiempos, baseline y alertas."""
 
@@ -69,6 +78,21 @@ class ThroughputTests(unittest.TestCase):
         }
         selected = comparable_runs(history, 99, "pull_request")
         self.assertEqual([item["run_id"] for item in selected], [4, 1])
+
+    def test_history_filters_same_execution_profile(self) -> None:
+        history = {"workflow_runs": [run(1, 20), run(2, 21)]}
+        historical_jobs = [
+            {"run_id": 1, "pages": job_pages("Backend PHP / MariaDB")},
+            {"run_id": 2, "pages": job_pages("Playwright Chromium")},
+        ]
+        selected = comparable_runs(
+            history,
+            99,
+            "pull_request",
+            ("Backend PHP / MariaDB",),
+            historical_jobs,
+        )
+        self.assertEqual([item["run_id"] for item in selected], [1])
 
     def test_history_is_limited_to_five(self) -> None:
         """La línea base no crece sin límite."""
@@ -151,9 +175,17 @@ class ThroughputTests(unittest.TestCase):
                 "conclusion": "success",
                 "started_at": "2026-09-19T10:00:00Z",
                 "updated_at": "2026-09-19T10:00:20Z",
+                "history_jobs": [
+                    {
+                        "run_id": run_id,
+                        "pages": job_pages("Validar gobierno"),
+                    }
+                    for run_id in (1, 2, 3)
+                ],
             },
         )
         self.assertEqual(report["workflow_wall_seconds"], 20)
+        self.assertEqual(report["execution_profile"], ["Validar gobierno"])
         self.assertEqual(report["critical_path"]["dominant_job"], "Validar gobierno")
         self.assertEqual(report["regression"]["status"], "normal")
         summary = markdown_summary(report)

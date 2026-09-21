@@ -230,8 +230,17 @@ def ejecutar_con_reintentos(
     return False, "La comprobación no produjo resultado.", intentos
 
 
-def observar(origen: str, version: str, sha: str, *, intentos: int = 3,
-            intervalo: float = 2, timeout: float = 5) -> dict[str, Any]:
+def observar(
+    origen: str,
+    version: str,
+    sha: str,
+    *,
+    intentos: int = 3,
+    intervalo: float = 2,
+    timeout: float = 5,
+    transicion_requerida: bool = False,
+    transicion_verificada: bool = False,
+) -> dict[str, Any]:
     """Solo la identidad exacta permite pasar de NO_OBSERVADO a DEPLOY_OBSERVED."""
     evidencias: dict[str, dict[str, Any]] = {}
 
@@ -302,6 +311,17 @@ def observar(origen: str, version: str, sha: str, *, intentos: int = 3,
             "intento": intento,
         }
 
+    if transicion_requerida:
+        evidencias["transicion_release"] = {
+            "ok": transicion_verificada,
+            "detalle": (
+                "Transición operativa verificada de forma independiente."
+                if transicion_verificada
+                else "La release requiere transición de esquema/configuración/comandos "
+                "y todavía no existe verificación operativa."
+            ),
+        }
+
     valido = all(item["ok"] for item in evidencias.values())
     return {
         "estado": "VALIDATED_IN_PRODUCTION" if valido else "DEPLOY_OBSERVED",
@@ -336,6 +356,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--intervalo", type=float, default=2)
     parser.add_argument("--timeout", type=float, default=5)
     parser.add_argument("--markdown", action="store_true", help="Salida para el Job Summary")
+    parser.add_argument(
+        "--transicion-requerida",
+        action="store_true",
+        help="Impide validar producción hasta confirmar la transición operativa.",
+    )
+    parser.add_argument(
+        "--transicion-verificada",
+        action="store_true",
+        help="Confirma que la transición requerida fue comprobada fuera del deploy de código.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -349,8 +379,21 @@ def main(argv: list[str] | None = None) -> int:
     except ObservacionError as error:
         parser.error(str(error))
 
-    resultado = observar(origen, args.version, args.sha, intentos=args.intentos,
-                        intervalo=args.intervalo, timeout=args.timeout)
+    if args.transicion_verificada and not args.transicion_requerida:
+        parser.error(
+            "--transicion-verificada solo es válida junto con --transicion-requerida."
+        )
+
+    resultado = observar(
+        origen,
+        args.version,
+        args.sha,
+        intentos=args.intentos,
+        intervalo=args.intervalo,
+        timeout=args.timeout,
+        transicion_requerida=args.transicion_requerida,
+        transicion_verificada=args.transicion_verificada,
+    )
     reporte = json.dumps(resultado, ensure_ascii=False, indent=2) + "\n"
     print(resumen(resultado) if args.markdown else reporte, end="")
     return 0 if resultado["estado"] == "VALIDATED_IN_PRODUCTION" else 1

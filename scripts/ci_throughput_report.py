@@ -51,6 +51,30 @@ def flatten_jobs(pages: Any) -> list[dict[str, Any]]:
     return jobs
 
 
+def execution_profile(job_pages: Any) -> tuple[str, ...]:
+    """Identifica la topología realmente ejecutada, excluyendo bordes fijos."""
+    names = {
+        str(job.get("name") or "")
+        for job in flatten_jobs(job_pages)
+        if job.get("conclusion") != "skipped"
+        and str(job.get("name") or "") not in EDGE_JOBS
+    }
+    names.discard("")
+    return tuple(sorted(names))
+
+
+def historical_job_pages(history_jobs: Any, run_id: int) -> Any:
+    """Recupera los jobs capturados para un run histórico."""
+    if not isinstance(history_jobs, list):
+        return []
+    for item in history_jobs:
+        if not isinstance(item, dict):
+            continue
+        if int(item.get("run_id") or 0) == run_id:
+            return item.get("pages", [])
+    return []
+
+
 def timed_job(job: dict[str, Any]) -> dict[str, Any]:
     """Reduce un job de GitHub a los campos necesarios para telemetría."""
     return {
@@ -77,6 +101,8 @@ def comparable_run(
     run: dict[str, Any],
     current_run_id: int,
     event: str,
+    current_profile: tuple[str, ...] | None = None,
+    history_jobs: Any = None,
 ) -> dict[str, Any] | None:
     """Normaliza un run si sirve como muestra de línea base."""
     if int(run.get("id") or 0) == current_run_id:
@@ -88,11 +114,19 @@ def comparable_run(
     if run.get("event") != event:
         return None
 
+    run_id = int(run["id"])
+    if current_profile is not None:
+        candidate_profile = execution_profile(
+            historical_job_pages(history_jobs, run_id)
+        )
+        if candidate_profile != current_profile:
+            return None
+
     duration = run_wall_seconds(run)
     if duration is None:
         return None
     return {
-        "run_id": int(run["id"]),
+        "run_id": run_id,
         "head_sha": str(run.get("head_sha") or ""),
         "duration_seconds": duration,
         "run_started_at": run.get("run_started_at"),
@@ -103,6 +137,8 @@ def comparable_runs(
     history: Any,
     current_run_id: int,
     event: str,
+    current_profile: tuple[str, ...] | None = None,
+    history_jobs: Any = None,
 ) -> list[dict[str, Any]]:
     """Selecciona hasta cinco runs exitosos comparables al run observado."""
     if not isinstance(history, dict):
@@ -115,7 +151,13 @@ def comparable_runs(
     for run in values:
         if not isinstance(run, dict):
             continue
-        candidate = comparable_run(run, current_run_id, event)
+        candidate = comparable_run(
+            run,
+            current_run_id,
+            event,
+            current_profile,
+            history_jobs,
+        )
         if candidate is not None:
             candidates.append(candidate)
 
@@ -221,7 +263,15 @@ def build_report(
     event = str(metadata["event"])
     conclusion = str(metadata["conclusion"])
     wall = elapsed_seconds(metadata["started_at"], metadata["updated_at"])
-    baseline = comparable_runs(history, run_id, event)
+    profile = execution_profile(job_pages)
+    history_jobs = metadata.get("history_jobs", [])
+    baseline = comparable_runs(
+        history,
+        run_id,
+        event,
+        profile,
+        history_jobs,
+    )
     return {
         "run_id": run_id,
         "source_sha": str(metadata["source_sha"]),
@@ -230,6 +280,7 @@ def build_report(
         "workflow_started_at": metadata["started_at"],
         "workflow_updated_at": metadata["updated_at"],
         "workflow_wall_seconds": wall,
+        "execution_profile": list(profile),
         "critical_path": critical_path(jobs),
         "baseline": {
             "runs": baseline,
@@ -275,6 +326,9 @@ def markdown_summary(report: dict[str, Any]) -> str:
         f"- Evento: `{report['event']}`",
         f"- Resultado del CI: **{report['conclusion']}**",
         f"- Wall time: **{display_seconds(report['workflow_wall_seconds'])}**",
+        "- Perfil ejecutado: **"
+        + (", ".join(report.get("execution_profile", [])) or "sin gates variables")
+        + "**",
         f"- Línea base: **{display_seconds(baseline)}** "
         f"({regression['sample_count']} runs comparables)",
         f"- Estado: **{status_label(str(regression['status']))}**",
@@ -332,6 +386,7 @@ def main() -> None:
 
     jobs = payload.get("jobs", []) if isinstance(payload, dict) else []
     history = payload.get("history", {}) if isinstance(payload, dict) else {}
+    history_jobs = payload.get("history_jobs", []) if isinstance(payload, dict) else []
     output = build_report(
         jobs,
         history,
@@ -342,6 +397,7 @@ def main() -> None:
             "conclusion": args.conclusion,
             "started_at": args.started_at,
             "updated_at": args.updated_at,
+            "history_jobs": history_jobs,
         },
     )
     print(json.dumps(output, indent=2, sort_keys=True))

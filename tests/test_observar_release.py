@@ -84,6 +84,29 @@ class ObserverTests(unittest.TestCase):
         ])
         self.assertTrue(all(v["ok"] for v in resultado["comprobaciones"].values()))
 
+    def test_transition_required_without_verification_blocks_validation(self) -> None:
+        resultado = modulo.observar(
+            self.base,
+            VERSION,
+            SHA,
+            intentos=1,
+            transicion_requerida=True,
+        )
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["transicion_release"]["ok"])
+
+    def test_verified_transition_allows_validation(self) -> None:
+        resultado = modulo.observar(
+            self.base,
+            VERSION,
+            SHA,
+            intentos=1,
+            transicion_requerida=True,
+            transicion_verificada=True,
+        )
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertTrue(resultado["comprobaciones"]["transicion_release"]["ok"])
+
     def test_faltan_assets_no_declara_produccion_valida(self) -> None:
         del self.server.respuestas["/build/admin.js"]
         resultado = self.observar()
