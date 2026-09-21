@@ -101,7 +101,7 @@ export function PlatformOwnerApp({
       ]}
     >
       {selected && (
-        <div className="platform-context-bar" role="status">
+        <output className="platform-context-bar" aria-live="polite">
           <div>
             <strong>Modo propietario · Contexto de empresa</strong>
             <span>{selected.name}</span>
@@ -113,7 +113,7 @@ export function PlatformOwnerApp({
           >
             Volver al centro global
           </button>
-        </div>
+        </output>
       )}
 
       <span className="eyebrow">Propietario de plataforma</span>
