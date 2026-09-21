@@ -323,7 +323,14 @@ def risk_reasons(files: list[str], values: dict[str, bool]) -> list[str]:
         ("migraciones", values["categoria_migraciones"]),
         ("dependencias", values["categoria_dependencias"]),
         ("release", values["categoria_release"]),
-        ("workflow", any(path.startswith(WORKFLOW_PREFIX) for path in files)),
+        (
+            "workflow",
+            any(
+                path.startswith(WORKFLOW_PREFIX)
+                or path.startswith(".github/actions/")
+                for path in files
+            ),
+        ),
         ("ci-critico", any(path in CI_CRITICAL for path in files)),
     )
     return [name for name, enabled in flags if enabled]
