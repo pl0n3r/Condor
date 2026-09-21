@@ -252,84 +252,142 @@ Un finding de seguridad válido se corrige en su causa raíz cuando el repositor
 
 ---
 
-## 8. Pruebas y calidad
+## 8. Pruebas, calidad y regresiones
 
-La estrategia es **behavior-first**.
+La estrategia es **behavior-first** y proporcional al riesgo.
 
 - Preferir contratos ejecutables sobre búsquedas de strings en código.
 - Unit/contract tests para invariantes puros.
-- Integration tests para persistencia, API y límites entre capas.
-- Playwright para flujos de navegador.
-- Cuando exista autenticación, usar un usuario E2E aislado y descartable para tanta cobertura realista como sea razonable.
-- Nunca usar credenciales reales de producción en E2E.
-- Nunca mutar datos reales de producción para “probar”.
-- Chromium será la cobertura de navegador principal; WebKit se añade de forma dirigida cuando el riesgo Safari/iOS lo justifique.
-- Toda corrección determinista importante debería ganar una regresión automática si existe un límite estable y razonable para probarla.
+- Integration tests para persistencia, API, autorización y límites entre capas.
+- Playwright para flujos reales de navegador.
+- Cuando exista autenticación, usar usuarios E2E aislados y descartables; nunca credenciales ni datos reales de producción.
+- Chromium es la cobertura primaria; WebKit se añade de forma dirigida cuando el riesgo Safari/iOS lo justifique.
+- Toda corrección determinista importante debe ganar una regresión automática cuando exista un límite estable y razonable para probarla.
+- Un test que solo reproduce implementación interna y no comportamiento observable no sustituye una regresión útil.
 
 ### Calidad automática
 
-Cuando estén configurados:
+CI, SonarQube Cloud y CodeRabbit forman un único sistema de evidencia:
 
-- SonarCloud aplica enfoque Clean as You Code;
-- CodeRabbit revisa el head estable previsto para merge, no cada commit intermedio si eso introduce ruido;
-- CI, Sonar y CodeRabbit deben solaparse en paralelo siempre que sea seguro;
-- findings válidos se corrigen antes del merge;
-- si una corrección cambia el head, revalidar los gates afectados en ese head exacto.
-
-No declarar un gate como aprobado mientras siga procesando.
+- ejecutarlos en paralelo cuando sea seguro;
+- CodeRabbit y Sonar deben revisar el **head estable** previsto para merge, evitando tormentas de commits que reinicien análisis sin necesidad;
+- verificar cada finding contra el código actual; corregir los válidos en la causa raíz y descartar con motivo los que ya no apliquen;
+- si una corrección cambia el head, los resultados anteriores no prueban ese nuevo head: revalidar los gates afectados;
+- no declarar un gate aprobado mientras siga procesando;
+- no fusionar con threads válidos sin resolver;
+- un check `success` por haber sido omitido solo es aceptable cuando la clasificación de cambios demuestra que ese gate no aplica.
 
 ---
 
-## 9. Contrato de CI y entrega
+## 9. CI como sistema operativo de entrega
 
-El CI de Condor debe evolucionar hacia un flujo rápido y selectivo inspirado en BRVTAL:
+El CI de Condor debe ser **rápido, selectivo, fail-safe, autoauditable y autocurable solo cuando sea seguro**.
 
-1. **preflight** siempre corto y obligatorio;
-2. clasificar archivos modificados;
-3. ejecutar en paralelo solo los gates relevantes;
-4. mantener un check agregado final estable para protección de `main`;
-5. incluir contexto útil en GitHub Actions Job Summary;
-6. validar PRs y el SHA exacto de `main`;
-7. medir throughput antes de optimizar runner/sharding/topología.
+### 9.1. Topología e invariantes
 
-Gates previstos a medida que la aplicación crezca:
+1. **Preflight obligatorio y corto**: valida metadata esencial y clasifica el cambio.
+2. **Selección por exclusión segura**: solo se omite un gate cuando el cambio pertenece a una categoría explícitamente inocua para ese gate.
+3. **Fail-safe**: ruta desconocida, entrypoint nuevo, configuración crítica, dependencias, scripts de CI, workflows o cambios del propio clasificador implican validación completa.
+4. **Paralelización**: gates independientes arrancan en paralelo; no crear cadenas seriales por comodidad.
+5. **Timeouts explícitos**: todo job debe tener presupuesto finito.
+6. **Check agregado estable**: `Validar` permanece como contrato de branch protection y consolida jobs ejecutados u omitidos legítimamente.
+7. **Entorno limpio y reproducible**: dependencias se resuelven desde lockfiles; bases de CI son descartables; secretos son efímeros.
+8. **Mínimo privilegio**: permisos de Actions se declaran por workflow/job; acciones externas se fijan a SHA; no usar `pull_request_target` para ejecutar código no confiable.
+9. **Caché conservadora**: cachear descargas/dependencias cuando acelere sin ocultar estado; no cachear bases, secretos ni estado generado que pueda esconder una regresión.
+10. **Evidencia útil**: conservar logs/artefactos de fallo cuando aporten diagnóstico; evitar artefactos de éxito sin valor.
+11. **Exactitud de identidad**: cada resultado pertenece a un SHA concreto. PR head, squash resultante en `main` y producción son estados distintos.
+12. **Telemetría comparable**: medir duración/throughput entre perfiles de ejecución equivalentes; no comparar un PR documental con un full-stack como si fueran el mismo workload.
 
-- sintaxis/lint/contratos rápidos;
-- integración con MariaDB descartable;
-- browser Chromium;
-- real-stack autenticado cuando exista;
-- WebKit dirigido;
-- recuperación/backups cuando exista esa superficie;
-- seguridad/análisis estático.
+### 9.2. Política de autocuración y retry
+
+Un retry es válido únicamente cuando **la misma entrada puede producir éxito sin cambiar código ni estado funcional** y la operación es idempotente.
+
+Se pueden reintentar de forma acotada:
+
+- descargas de dependencias;
+- registry/package manager;
+- instalación de artefactos externos;
+- HTTP externos con timeout, 408/425/429 o 5xx cuando la operación sea segura;
+- otras operaciones explícitamente clasificadas como transitorias.
+
+Todo retry debe tener:
+
+- máximo de intentos;
+- backoff;
+- presupuesto total de tiempo;
+- mensaje que identifique la operación;
+- retorno del error original si agota el presupuesto.
+
+**Nunca autocurar mediante retry ciego**:
+
+- assertions o tests fallidos;
+- lint, typecheck o análisis estático;
+- errores de sintaxis;
+- migraciones/schema mismatch;
+- fallos de autorización/permisos;
+- contratos/invariantes rotos;
+- errores de configuración deterministas;
+- findings de seguridad/calidad;
+- un smoke que demuestra versión/SHA/estado funcional incorrecto.
+
+Ante un fallo determinista:
+
+**diagnosticar → corregir causa raíz → añadir/ajustar regresión → ejecutar prueba dirigida → revalidar el gate afectado → continuar**.
+
+Si un fallo aparentemente flaky se origina en el repositorio, la prioridad es eliminar la fuente de flakiness; no normalizar reruns hasta obtener verde.
+
+### 9.3. Uso eficiente del tiempo de CI
+
+- Mientras CI/Sonar/CodeRabbit procesan un head estable, avanzar análisis de solo lectura o trabajo independiente que no cambie ese head ni colisione con otras reservas.
+- No hacer commits cosméticos mientras una revisión automática útil está en curso.
+- Si aparece un finding válido, agrupar correcciones relacionadas antes de volver a disparar gates.
+- Si `main` cambia antes del merge, recontrastar la PR contra el nuevo `main`; no asumir que un head verde sobre una base antigua sigue siendo integrable.
+- Un workflow detenido por dependencia externa no bloquea investigación, documentación de causa o trabajo independiente compatible.
 
 No crear workflows duplicados si un gate pertenece naturalmente al CI canónico.
 
 ---
 
-## 10. Flujo obligatorio de entrega
+## 10. Flujo CI-first obligatorio de entrega
 
-Para trabajo normal de código o configuración:
+Para código o configuración, ejecutar este bucle completo:
 
-1. partir del `main` exacto actual;
-2. elegir un Issue con `estado: disponible`;
-3. reservarlo con `/tomar` y esperar confirmación;
-4. trabajar exclusivamente en la rama canónica `trabajo/issue-N` creada por la reserva;
-5. implementar el cambio lógico;
-6. añadir/ajustar pruebas aplicables;
-7. ejecutar pruebas dirigidas;
-8. abrir PR a `main` desde esa rama e incluir `Closes #N`;
-9. ejecutar/revisar CI, coordinación, SonarCloud y CodeRabbit en paralelo cuando estén disponibles;
-10. corregir findings válidos en la misma rama;
-11. comprobar nuevamente el head exacto y el `main` actual;
-12. hacer **squash merge**;
-13. obtener el SHA exacto resultante de `main`;
-14. validar los gates que correspondan contra ese SHA;
-15. observar despliegue por separado;
-16. validar producción solo con evidencia real;
-17. actualizar el roadmap con el resultado;
-18. actualizar especificaciones si cambió una decisión durable.
+### A. Preparar
 
-No iniciar una rama dependiente nueva antes de cerrar la validación de `main` del bloque anterior. El análisis de solo lectura para trabajo futuro sí puede adelantarse.
+1. leer `AGENTES.md`, obtener el SHA exacto de `main`, revisar PRs/gates y Roadmap #1;
+2. elegir un Issue disponible, reservarlo y conservar su UUID;
+3. comprobar colisiones con trabajo abierto antes de editar archivos globales;
+4. partir de la rama canónica creada desde el `main` vigente.
+
+### B. Implementar
+
+5. implementar el cambio mínimo completo;
+6. añadir/ajustar regresiones según riesgo;
+7. ejecutar primero las pruebas dirigidas que puedan fallar rápido;
+8. agrupar cambios en commits lógicos y abrir la PR temprano cuando ya exista un primer bloque coherente.
+
+### C. Estabilizar la PR
+
+9. ejecutar CI, coordinación, Sonar y CodeRabbit en paralelo;
+10. clasificar cada fallo como **determinista**, **transitorio externo** o **bloqueo externo**;
+11. para deterministas, corregir y revalidar; para transitorios, retry acotado solo si cumple §9.2;
+12. estabilizar el head: sin findings válidos pendientes, threads relevantes resueltos y gates aplicables verdes;
+13. comprobar nuevamente `main`, mergeability, reserva y head exacto antes de fusionar.
+
+### D. Integrar
+
+14. hacer **squash merge** de forma serial;
+15. obtener el SHA exacto resultante de `main`;
+16. validar los gates aplicables contra ese SHA; no heredar automáticamente la evidencia del head de PR.
+
+### E. Entregar
+
+17. observar el deploy por separado registrando versión + SHA + timestamp de build/release; el timestamp aporta trazabilidad temporal, pero no identifica por sí solo redeploys del mismo artefacto;
+18. aplicar la checklist de transición de producción de §16 antes de declarar la release sana;
+19. validar comportamiento real solo con evidencia de producción;
+20. actualizar Roadmap #1 y, cuando cambie una decisión durable, `ESPECIFICACIONES.md`.
+
+No iniciar una rama dependiente nueva antes de cerrar la validación de `main` del bloque anterior. El análisis y trabajo independiente sin colisión sí pueden adelantarse.
 
 ---
 
@@ -553,6 +611,9 @@ Ejemplos:
 Regla permanente:
 
 - el frontend **no se deja para el final**; debe evolucionar poco a poco junto con cada slice funcional;
+- cuando un slice de backend administrativo alcance un contrato estable y exista una representación útil y segura, exponer progresivamente una vista mínima real en el frontend —aunque inicialmente sea read-only— para que el avance pueda inspeccionarse sin esperar a que el módulo completo esté terminado;
+- cuando una capacidad administrativa sea compartida entre clientes y propietario de plataforma, reutilizar la misma superficie, componentes y contratos mediante permisos/contexto en vez de crear implementaciones paralelas;
+- no simular progreso con botones o placeholders que aparenten funcionalidad inexistente: los estados incompletos deben mostrarse de forma explícita;
 - cuando una entrega toque una superficie visible, aprovechar para mejorar de forma proporcional estructura, jerarquía, copy, responsive, accesibilidad y acabado visual;
 - evitar rediseños gigantes desconectados del producto: preferir mejoras pequeñas, coherentes y acumulativas;
 - mantener consistencia visual entre home público, login y backoffice sin obligar a que compartan exactamente la misma composición;
@@ -604,7 +665,7 @@ El historial de releases se conserva mediante Git/PRs/releases/roadmap; el READM
 
 ---
 
-## 16. Producción y operaciones protegidas
+## 16. Producción, transiciones y operaciones protegidas
 
 Nunca ejecutar automáticamente:
 
@@ -613,59 +674,71 @@ Nunca ejecutar automáticamente:
 - borrado irreversible de datos;
 - rotación de secretos reales;
 - cambios de DNS/infraestructura irreversibles;
-- acciones que puedan interrumpir producción sin una vía segura de rollback;
+- acciones con riesgo de interrupción sin vía segura de rollback;
 - migraciones productivas que no estén explícitamente autorizadas.
 
-El despliegue de código y la migración de datos son operaciones distintas.
+El despliegue de código, la migración de esquema y la **transición de estado operativo** son operaciones distintas.
 
-Ante un fallo recurrente:
+### 16.1. Checklist de transición antes de validar producción
 
-1. determinar si es determinista, de timing o externo;
-2. corregir la causa común cuando el repositorio pueda hacerlo;
-3. añadir contrato/regresión si corresponde;
-4. reintentar sin cambios solo cuando exista evidencia de condición realmente transitoria;
-5. documentar bloqueos externos con precisión y continuar trabajo independiente.
+Un deploy no se considera sano solo porque el nuevo código está presente. Cuando el cambio toque configuración, roles, esquema, servicios, comandos, rutas o estado persistente, comprobar explícitamente:
+
+El detector automático de transición es una **señal mínima, no la autoridad exclusiva**. Si el diff toca roles, servicios, controladores/rutas, comandos, provisioning/backfills o invariantes de estado persistente que el clasificador automático todavía no reconozca, tratar la transición como requerida y **no aceptar el observador como validación final** hasta comprobarla explícitamente. Un `requerida=false` automático nunca autoriza a omitir una transición que el análisis del cambio identifica como necesaria.
+
+1. **Identidad de release** — versión humana, SHA desplegado y timestamp de build/release coinciden con la evidencia esperada; el timestamp aporta trazabilidad temporal, pero no identifica por sí solo redeploys del mismo artefacto.
+2. **Esquema** — estado de Doctrine Migrations conocido; no asumir que deploy implica migración.
+3. **Transición de datos** — backfills, provisioning, singleton records, roles, flags o conversiones requeridas están completos.
+4. **Compatibilidad de estado** — el código nuevo puede leer el estado previo durante la transición o falla de forma segura y accionable.
+5. **Container/caché** — cuando cambien servicios, controladores, rutas o comandos, limpiar/warmup de prod y comprobar descubrimiento real.
+6. **Configuración externa** — variables de entorno/secrets necesarios existen sin imprimir sus valores.
+7. **Superficies críticas** — rutas, comandos y servicios esperados existen en el runtime desplegado.
+8. **Rollback** — si cambia esquema o persistencia con datos reales, preservar compatibilidad hacia atrás durante la transición y ejecutar, cuando corresponda, la secuencia completa **expand → migrate/backfill → contract** antes de retirar compatibilidad; no crear un punto de no retorno accidental.
+9. **Smoke** — comprobar endpoints públicos y, cuando corresponda, flujo autenticado seguro/aislado.
+10. **Invariantes** — validar el estado que el código realmente necesita, no solo que las tablas existan.
+
+Ejemplos de invariantes: rol propietario asignado, singleton con referencia válida, tenant/membresía activa, configuración obligatoria presente, comando nuevo descubierto y migración realmente aplicada.
+
+Una transición incompleta debe **bloquear la validación de producción**. Siempre que el diseño lo permita, debe producir un estado seguro y diagnosticable (4xx/5xx controlado con referencia) en vez de un 500 opaco.
+
+### 16.2. Tratamiento de fallos de producción
+
+Ante un fallo:
+
+1. separar **código**, **deploy**, **esquema**, **configuración**, **caché/container** y **estado persistente** como hipótesis independientes;
+2. priorizar comprobaciones read-only;
+3. confirmar la causa con evidencia antes de ejecutar una mutación;
+4. aplicar la mínima corrección autorizada;
+5. revalidar la misma superficie real que falló;
+6. convertir la causa determinista en regresión, readiness check o regla de CI cuando sea razonable;
+7. registrar en el Roadmap solo el incidente/hito macro; el detalle técnico queda en Issue/PR.
+
+Ante un fallo recurrente o de CI:
+
+- corregir la causa común cuando el repositorio pueda hacerlo;
+- reintentar sin cambios solo con evidencia de condición transitoria;
+- documentar bloqueos externos con precisión;
+- continuar trabajo independiente compatible mientras exista.
 
 ---
 
-## 17. Reglas ya acordadas para Condor
+## 17. Invariantes operativos de Condor
 
-Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y deben considerarse obligatorias hasta que el usuario las cambie explícitamente:
+Esta sección resume únicamente los invariantes transversales que una sesión no debe reinterpretar. El detalle ejecutable vive en las secciones anteriores.
 
-- toda implementación nueva requiere una reserva de Issue mediante `/tomar`; GitHub es el lock central de coordinación multiagente;
-- toda reserva usa la rama canónica `trabajo/issue-N` y no vence automáticamente;
-- CI debe rechazar PRs sin relación válida `Closes #N` o con archivos solapados con otros PR abiertos;
-- el nombre oficial y público del producto es `Condor App`;
-- en documentación técnica, GitHub y conversación de desarrollo se usa `Condor` como nombre corto;
-- el dominio canónico es `https://www.condorapp.com.co`;
-- el repositorio oficial es `pl0n3r/Condor`;
-- Condor reutiliza la infraestructura y las prácticas maduras de BRVTAL cuando tengan sentido;
-- no se copia automáticamente lógica de negocio, módulos, rutas, esquema de datos ni deuda histórica de BRVTAL;
-- GitHub y todo lo controlable por el proyecto se escribe en español siempre que sea técnicamente viable;
-- el producto está pensado inicialmente para Colombia y usa `es-CO` y COP como defaults;
-- el roadmap canónico vive en GitHub Issue #1;
-- el roadmap registra de forma acumulativa los hitos, trabajo relevante, pendientes y bloqueos principales;
-- la convención visual es exactamente: ✅ ~~completado~~, 🚧 pendiente/en curso, ⛔ bloqueado;
-- los elementos completados relevantes se conservan tachados en el cuerpo del roadmap;
-- el roadmap se mantiene **ordenado y completo**, no reducido: los comentarios registran hitos macro y el detalle operacional vive en Issues/PRs; nunca se crea un segundo Roadmap para dividir el histórico;
-- el roadmap no es el archivo de especificaciones ni un repositorio de políticas; contiene únicamente trabajo/progreso e historial de ejecución;
-- `ESPECIFICACIONES.md` contiene decisiones durables, reglas funcionales y detalle arquitectónico;
-- el roadmap debe poder ser leído por una socia o stakeholder para entender el avance en tiempo real sin necesitar contexto técnico;
-- `ROADMAP.md` es solo un punto de entrada al Issue #1 y no mantiene una copia paralela del progreso;
-- `AGENTES.md` es el protocolo operativo canónico y hereda la estructura/reglas aplicables de BRVTAL;
-- toda PR relevante debe reflejar en el roadmap cualquier cambio real de estado antes o inmediatamente después del cierre de la entrega;
-- el roadmap funciona como un registro macro acumulativo desde el inicio del proyecto hasta, como mínimo, la primera v1.0.0 madura;
-- nunca declarar VALIDADO EN PRODUCCIÓN únicamente porque CI esté verde;
-- Condor usa versión humana de producto por cada deploy;
-- el primer deploy será `0.1.0`;
-- el incremento normal por deploy es patch (`0.1.1`, `0.1.2`, ...);
-- todos los títulos visibles de GitHub usan la versión objetivo al final con formato exacto `(V X.Y.Z)`;
-- los saltos minor son hitos deliberados y `1.0.0` requiere decisión explícita del usuario;
-- cuando exista la aplicación, `config/version.php` será la fuente canónica de versión y cualquier metadata equivalente deberá mantener paridad;
-- el README usa la misma estrategia de snapshot por deploy que BRVTAL;
-- el README debe mostrar siempre y por separado la versión objetivo y la versión realmente desplegada; tras el primer deploy, la señal visible será por ejemplo `v0.1.0`, pero nunca se inferirá desde CI;
-- `GLOSARIO.md` debe mantenerse actualizado con los términos técnicos relevantes que aparezcan en superficies visibles para socios, usando lenguaje de negocio y ejemplos de Condor cuando ayuden.
-- **No usar archivos ZIP como mecanismo de entrega, respaldo, transferencia de código o handoff del proyecto.** Todo cambio de código/documentación debe quedar directamente versionado en GitHub mediante commits, ramas, PRs y merges; no enviar paquetes ZIP al usuario ni usar ZIP como sustituto del repositorio. Los artefactos internos automáticos de GitHub Actions solo pueden existir como evidencia técnica efímera cuando una herramienta los genere de forma inevitable, nunca como fuente de verdad ni como canal de entrega.
+- **Identidad**: producto público `Condor App`; nombre técnico corto `Condor`; repositorio `pl0n3r/Condor`; dominio `https://www.condorapp.com.co`.
+- **Mercado/idioma**: Colombia, `es-CO` y COP como defaults; español en superficies controlables cuando sea técnicamente viable.
+- **Referencia BRVTAL**: reutilizar prácticas maduras de ingeniería cuando apliquen; nunca copiar automáticamente lógica de negocio, módulos, rutas, esquema ni deuda histórica.
+- **Coordinación**: toda implementación nueva usa Issue reservado y rama `trabajo/issue-N`; CI protege relación Issue/PR y colisiones según §1.1.
+- **Roadmap**: Issue #1 es el único Roadmap, cronológico y acumulativo; `ROADMAP.md` solo enlaza; progreso no se duplica en especificaciones.
+- **Especificaciones**: decisiones durables de producto/arquitectura pertenecen a `ESPECIFICACIONES.md`.
+- **Versionado**: cada deploy usa versión humana; incremento normal patch; `1.0.0` requiere decisión explícita; `config/version.php` es fuente canónica y metadata equivalente mantiene paridad.
+- **Estados**: VALIDADO EN CÓDIGO, DESPLEGADO y VALIDADO EN PRODUCCIÓN son estados distintos; CI verde nunca prueba producción.
+- **README**: snapshot del deploy, no roadmap ni changelog acumulativo; debe separar versión objetivo de versión realmente desplegada.
+- **Glosario**: `GLOSARIO.md` traduce términos técnicos relevantes para seguimiento de negocio.
+- **Entrega**: no usar ZIP como mecanismo de handoff, respaldo o fuente de verdad; todo cambio vive en Git/PR. Artefactos de Actions son evidencia efímera, no entrega.
+- **Producción**: migraciones, secretos, datos reales y operaciones destructivas/protegidas siguen las restricciones de §16.
+
+Si una regla detallada cambia, actualizar su sección canónica y mantener este resumen consistente; no duplicar aquí el procedimiento completo.
 
 ---
 
