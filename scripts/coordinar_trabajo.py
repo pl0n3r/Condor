@@ -10,6 +10,7 @@ import re
 import sys
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import quote
@@ -22,6 +23,14 @@ TRUSTED_MARKER_LOGIN = os.getenv(
     "CONDOR_TRUSTED_MARKER_LOGIN",
     "github-actions[bot]",
 )
+
+try:
+    RESERVATION_STALE_MINUTES = max(
+        5,
+        int(os.getenv("CONDOR_RESERVATION_STALE_MINUTES", "45")),
+    )
+except ValueError:
+    RESERVATION_STALE_MINUTES = 45
 
 ALLOWED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
@@ -268,6 +277,30 @@ class GitHub:
             {"state": "closed"},
         )
 
+    def update_pull_body(self, number: int, body: str) -> None:
+        """Actualiza metadata de coordinación sin crear un PR nuevo."""
+        self.request(
+            "PATCH",
+            f"/repos/{self.repo}/pulls/{number}",
+            {"body": body},
+        )
+
+    def commit_timestamp(self, sha: str) -> datetime | None:
+        """Obtiene el instante del commit que representa actividad de la rama."""
+        payload = self.request("GET", f"/repos/{self.repo}/commits/{sha}")
+        if not isinstance(payload, dict):
+            return None
+        commit = payload.get("commit")
+        if not isinstance(commit, dict):
+            return None
+        for key in ("committer", "author"):
+            identity = commit.get(key)
+            if isinstance(identity, dict):
+                parsed = parse_github_time(identity.get("date"))
+                if parsed is not None:
+                    return parsed
+        return None
+
     def try_assign(self, issue_number: int, login: str) -> None:
         """Intenta asignar el Issue sin convertir la asignación en requisito duro."""
         self.request(
@@ -308,6 +341,19 @@ def reservation_from_pr_body(body: str) -> str | None:
 def new_reservation_id() -> str:
     """Genera un identificador único para una sesión de trabajo."""
     return str(uuid.uuid4())
+
+
+def parse_github_time(value: Any) -> datetime | None:
+    """Convierte timestamps ISO de GitHub a UTC, ignorando valores inválidos."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def reservation_marker(
