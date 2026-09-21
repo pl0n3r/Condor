@@ -306,6 +306,24 @@ def job_commands(block: str) -> list[str]:
     return commands
 
 
+def audit_release_observer(path: Path) -> list[str]:
+    """Exige que observar-release use de forma efectiva el detector canónico."""
+    text = path.read_text(encoding="utf-8")
+    for step in step_blocks(text):
+        run = "\n".join(run_content(step))
+        if (
+            "scripts/ci_change_classifier.py" in run
+            and "--format json" in run
+            and "transicion_release" in run
+            and 'requerida=$requiere' in run
+        ):
+            return []
+    return [
+        f"{path}: observar-release debe extraer transicion_release del "
+        "ci_change_classifier.py y publicar ese mismo valor como requerida."
+    ]
+
+
 def audit_main_ci(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
     jobs = job_blocks(text)
@@ -375,6 +393,12 @@ def audit_repository(root: Path = ROOT) -> list[str]:
         findings.append("Falta .github/workflows/ci.yml.")
     else:
         findings.extend(audit_main_ci(main_ci))
+
+    release_observer = root / WORKFLOW_RELATIVE_DIR / "observar-release.yml"
+    if not release_observer.is_file():
+        findings.append("Falta .github/workflows/observar-release.yml.")
+    else:
+        findings.extend(audit_release_observer(release_observer))
 
     return findings
 
