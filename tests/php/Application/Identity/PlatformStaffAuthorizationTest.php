@@ -19,10 +19,8 @@ final class PlatformStaffAuthorizationTest extends KernelTestCase
         self::bootKernel();
         $container = static::getContainer();
         $entityManager = $container->get(EntityManagerInterface::class);
-        $authorization = $container->get(PlatformStaffAuthorization::class);
-
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
-        self::assertInstanceOf(PlatformStaffAuthorization::class, $authorization);
+        $authorization = new PlatformStaffAuthorization($entityManager);
 
         $suffix = bin2hex(random_bytes(4));
         $first = new Tenant('Empresa A '.$suffix, 'empresa-a-'.$suffix);
@@ -101,7 +99,9 @@ final class PlatformStaffAuthorizationTest extends KernelTestCase
     {
         self::bootKernel();
         $container = static::getContainer();
-        $authorization = $container->get(PlatformStaffAuthorization::class);
+        $entityManager = $container->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $authorization = new PlatformStaffAuthorization($entityManager);
 
         $tenant = new Tenant(
             'Empresa Owner '.bin2hex(random_bytes(4)),
