@@ -40,6 +40,11 @@ CHECK_IDS = (
     "configuracion",
     "cache",
 )
+OBSERVATION_STATES = {
+    "NO_OBSERVADO",
+    "DEPLOY_OBSERVED",
+    "VALIDATED_IN_PRODUCTION",
+}
 
 
 class EvidenceError(ValueError):
@@ -47,6 +52,7 @@ class EvidenceError(ValueError):
 
 
 def normalized_paths(paths: Iterable[str]) -> list[str]:
+    """Normaliza el diff sin alterar nombres válidos de archivos."""
     return sorted({path.strip() for path in paths if path.strip()})
 
 
@@ -138,6 +144,7 @@ def build_manifest(
 
 
 def validate_manifest(manifest: dict[str, Any]) -> None:
+    """Valida identidad y checklist antes de permitir cualquier promoción de estado."""
     if manifest.get("schema") != SCHEMA:
         raise EvidenceError("El manifiesto de release usa un schema no soportado.")
     version = manifest.get("version")
@@ -152,16 +159,31 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
     transition = manifest.get("transition")
     if not isinstance(transition, dict):
         raise EvidenceError("El manifiesto no contiene checklist de transición.")
+    transition_required = transition.get("required")
+    if not isinstance(transition_required, bool):
+        raise EvidenceError("transition.required debe ser booleano.")
+
     checks = transition.get("checks")
-    if not isinstance(checks, list):
+    if not isinstance(checks, list) or len(checks) != len(CHECK_IDS):
         raise EvidenceError("El checklist de transición es inválido.")
-    ids = [
-        item.get("id")
-        for item in checks
-        if isinstance(item, dict)
-    ]
+
+    ids: list[object] = []
+    required_flags: list[bool] = []
+    for item in checks:
+        if not isinstance(item, dict):
+            raise EvidenceError("Cada comprobación de transición debe ser un objeto.")
+        ids.append(item.get("id"))
+        required = item.get("required")
+        if not isinstance(required, bool):
+            raise EvidenceError("Cada checks[*].required debe ser booleano.")
+        required_flags.append(required)
+
     if ids != list(CHECK_IDS):
         raise EvidenceError("El checklist de transición no coincide con el contrato.")
+    if transition_required != any(required_flags):
+        raise EvidenceError("transition.required no coincide con el checklist.")
+    if transition_required and not required_flags[-1]:
+        raise EvidenceError("Una transición requerida debe exigir verificación de caché.")
 
 
 def public_evidence(observation: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -225,9 +247,14 @@ def release_state(
     required_pending: list[str],
 ) -> str:
     """Mantiene separados identidad observada, deploy y validación."""
+    if observation_state not in OBSERVATION_STATES:
+        raise EvidenceError("La observación contiene un estado no soportado.")
+
     identity_observed = same_identity and public["health"]["ok"]
     if not identity_observed or observation_state == "NO_OBSERVADO":
         return "NO_OBSERVADO"
+    if observation_state == "DEPLOY_OBSERVED":
+        return "DEPLOY_OBSERVED"
     if all(item["ok"] for item in public.values()) and not required_pending:
         return "VALIDATED_IN_PRODUCTION"
     return "DEPLOY_OBSERVED"
@@ -275,6 +302,7 @@ def finalize(
     }
 
 def markdown(evidence: dict[str, Any]) -> str:
+    """Renderiza la misma evidencia estructurada como resumen humano."""
     lines = [
         "## Evidencia de release Condor",
         "",
@@ -349,6 +377,7 @@ def load_envelope() -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Expone generación y consolidación como CLI determinista."""
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
