@@ -12,6 +12,7 @@ use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Throwable;
 
 final readonly class ErrorIncidentSubscriber
@@ -20,6 +21,7 @@ final readonly class ErrorIncidentSubscriber
         private ErrorIncidentRecorder $recorder,
         private ErrorIncidentPresenter $presenter,
         private TokenStorageInterface $tokenStorage,
+        private AuthorizationCheckerInterface $authorizationChecker,
         private string $environment,
     ) {
     }
@@ -84,7 +86,10 @@ final readonly class ErrorIncidentSubscriber
             $user = $this->tokenStorage->getToken()?->getUser();
 
             return $user instanceof User
-                && $user->hasRole(User::ROLE_PLATFORM_OWNER);
+                && $user->isActive()
+                && $this->authorizationChecker->isGranted(
+                    User::ROLE_PLATFORM_OWNER,
+                );
         } catch (Throwable) {
             return false;
         }
