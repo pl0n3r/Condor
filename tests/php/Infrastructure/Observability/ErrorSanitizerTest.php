@@ -29,6 +29,28 @@ final class ErrorSanitizerTest extends TestCase
         self::assertStringContainsString('[EMAIL]', $message);
     }
 
+    public function testItRedactsBasicAuthorizationAndJsonTokens(): void
+    {
+        $sanitizer = new ErrorSanitizer('/srv/condor');
+        $error = new RuntimeException(
+            'Authorization: Basic dXNlcjpwYXNz '.
+            '{"token": "json-secret-value"}'
+        );
+
+        $message = $sanitizer->message($error);
+
+        self::assertStringNotContainsString('dXNlcjpwYXNz', $message);
+        self::assertStringNotContainsString('json-secret-value', $message);
+        self::assertStringContainsString(
+            'Authorization=[REDACTED]',
+            $message,
+        );
+        self::assertStringContainsString(
+            '"token": "[REDACTED]"',
+            $message,
+        );
+    }
+
     public function testItNeverPublishesSqlOrDatabaseParameters(): void
     {
         $sanitizer = new ErrorSanitizer('/srv/condor');
