@@ -34,6 +34,13 @@ type PlatformContextResponse = {
     active_membership_count: number;
   };
   tenants: TenantSummary[];
+  tenant_pagination: {
+    page: number;
+    per_page: number;
+    total: number;
+    has_previous: boolean;
+    has_next: boolean;
+  };
   selected_tenant: SelectedTenant | null;
   version: string;
 };
@@ -56,13 +63,14 @@ export function PlatformOwnerApp({
 }: PlatformOwnerAppProps) {
   const [state, setState] = useState<State>({ status: 'loading' });
   const requestSequence = useRef(0);
+  const globalPage = useRef(1);
 
-  async function loadContext(tenantId?: string) {
+  async function loadContext(tenantId?: string, page = 1) {
     const requestId = ++requestSequence.current;
     setState({ status: 'loading' });
 
     try {
-      const response = await fetch(platformOwnerContextPath(tenantId), {
+      const response = await fetch(platformOwnerContextPath(tenantId, page), {
         credentials: 'same-origin',
         headers: { Accept: 'application/json' },
       });
@@ -87,6 +95,9 @@ export function PlatformOwnerApp({
 
       const data = await response.json() as PlatformContextResponse;
       if (requestId === requestSequence.current) {
+        if (data.mode === 'global') {
+          globalPage.current = data.tenant_pagination.page;
+        }
         setState({ status: 'ready', data });
       }
     } catch {
@@ -131,7 +142,7 @@ export function PlatformOwnerApp({
           <button
             className="button button-context"
             type="button"
-            onClick={() => void loadContext()}
+            onClick={() => void loadContext(undefined, globalPage.current)}
           >
             Volver al centro global
           </button>
@@ -227,7 +238,8 @@ export function PlatformOwnerApp({
                     <h2 id="tenant-list-title">Clientes de la plataforma</h2>
                   </div>
                   <span className="muted">
-                    {state.data.tenants.length} registradas
+                    {state.data.tenants.length} de{' '}
+                    {state.data.tenant_pagination.total} registradas
                   </span>
                 </div>
 
@@ -256,13 +268,57 @@ export function PlatformOwnerApp({
                         <button
                           className="button button-secondary tenant-open"
                           type="button"
-                          onClick={() => void loadContext(tenant.id)}
+                          onClick={() => (
+                            void loadContext(
+                              tenant.id,
+                              state.data.tenant_pagination.page,
+                            )
+                          )}
                         >
                           Ver como propietario
                         </button>
                       </article>
                     ))}
                   </div>
+                )}
+
+                {state.data.tenant_pagination.total > 0 && (
+                  <nav
+                    className="tenant-pagination"
+                    aria-label="Paginación de empresas"
+                  >
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      disabled={
+                        !state.data.tenant_pagination.has_previous
+                      }
+                      onClick={() => (
+                        void loadContext(
+                          undefined,
+                          state.data.tenant_pagination.page - 1,
+                        )
+                      )}
+                    >
+                      Anterior
+                    </button>
+                    <span className="muted">
+                      Página {state.data.tenant_pagination.page}
+                    </span>
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      disabled={!state.data.tenant_pagination.has_next}
+                      onClick={() => (
+                        void loadContext(
+                          undefined,
+                          state.data.tenant_pagination.page + 1,
+                        )
+                      )}
+                    >
+                      Siguiente
+                    </button>
+                  </nav>
                 )}
               </section>
             </>
