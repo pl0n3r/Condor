@@ -94,6 +94,28 @@ class ThroughputTests(unittest.TestCase):
         )
         self.assertEqual([item["run_id"] for item in selected], [1])
 
+    def test_missing_historical_jobs_are_not_treated_as_empty_profile(self) -> None:
+        history = {"workflow_runs": [run(1, 20)]}
+        selected = comparable_runs(
+            history,
+            99,
+            "pull_request",
+            (),
+            [],
+        )
+        self.assertEqual(selected, [])
+
+    def test_explicit_empty_historical_profile_remains_comparable(self) -> None:
+        history = {"workflow_runs": [run(1, 20)]}
+        selected = comparable_runs(
+            history,
+            99,
+            "pull_request",
+            (),
+            [{"run_id": 1, "pages": []}],
+        )
+        self.assertEqual([item["run_id"] for item in selected], [1])
+
     def test_history_is_limited_to_five(self) -> None:
         """La línea base no crece sin límite."""
         history = {"workflow_runs": [run(i, 20 + i) for i in range(1, 9)]}
