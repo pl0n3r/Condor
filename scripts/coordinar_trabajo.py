@@ -747,6 +747,11 @@ def reserve_available_work(
     return reservation_id
 
 
+def recovery_lock_branch(issue_number: int) -> str:
+    """Nombra el lock efímero que serializa recuperaciones del mismo Issue."""
+    return f"coordinacion/lock-issue-{issue_number}"
+
+
 def recover_existing_work_if_stale(
     api: GitHub,
     issue_number: int,
@@ -754,18 +759,33 @@ def recover_existing_work_if_stale(
     branch: str,
     current: dict[str, Any] | None,
 ) -> str | None:
-    """Recupera trabajo existente solo después de comprobar inactividad."""
+    """Recupera trabajo stale dentro de una sección crítica distribuida."""
     if not work_is_stale(api, issue_number, branch):
         return None
     if not ensure_recovery_branch(api, branch):
         return None
-    return recover_stale_work(
-        api,
-        issue_number,
-        actor,
-        branch,
-        current,
-    )
+
+    branch_sha = api.branch_sha(branch)
+    if branch_sha is None:
+        return None
+
+    lock_branch = recovery_lock_branch(issue_number)
+    if not api.create_branch(lock_branch, branch_sha):
+        return None
+
+    try:
+        if not work_is_stale(api, issue_number, branch):
+            return None
+        latest = active_reservation(api, issue_number)
+        return recover_stale_work(
+            api,
+            issue_number,
+            actor,
+            branch,
+            latest if latest is not None else current,
+        )
+    finally:
+        api.delete_branch(lock_branch)
 
 
 def reserve_work(
