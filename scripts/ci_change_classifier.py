@@ -85,7 +85,7 @@ KNOWN_ROOT_FILES = (
     | FRONTEND_CONTROL_FILES
     | GOVERNANCE_ROOT_FILES
     | RELEASE_ROOT_FILES
-    | {PHPUNIT_CONFIG, "index.html", "bin/console"}
+    | {PHPUNIT_CONFIG, "index.html", "bin/console", "pyproject.toml"}
 )
 
 TRANSITION_PREFIXES = (
@@ -339,10 +339,9 @@ def classify(paths: Iterable[str], event: str) -> Selection:
 
     workflow_changed = any(path.startswith(WORKFLOW_PREFIX) for path in files)
     ci_critical = any(path in CI_CRITICAL for path in files)
-    runtime_changed = (
-        values["categoria_frontend"]
-        or values["categoria_backend"]
-        or values["categoria_migraciones"]
+    runtime_changed = any(
+        is_frontend_runtime(path) or is_backend_runtime(path)
+        for path in files
     )
     high_risk = (
         runtime_changed
