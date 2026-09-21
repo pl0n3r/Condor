@@ -8,36 +8,33 @@
 {% endblock %}
 
 {% block body %}
-<section class="admin-shell" aria-label="Administración propietaria de Condor">
-    <aside class="sidebar">
-        <strong>Condor App</strong>
-        <nav aria-label="Navegación propietaria">
-            <a href="{{ path('app_platform_owner') }}" aria-current="page">Plataforma</a>
-            <a href="{{ path('app_platform_diagnostics') }}">Diagnósticos</a>
-        </nav>
-        <form method="post" action="{{ path('app_logout') }}">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token('logout') }}">
-            <button class="button button-secondary" type="submit">Cerrar sesión</button>
-        </form>
-    </aside>
+<div
+    id="condor-platform-root"
+    data-version="{{ app_version }}"
+    data-logout-token="{{ csrf_token('logout') }}"
+>
+    <section class="admin-shell admin-shell-platform" aria-label="Centro de control de Condor">
+        <aside class="sidebar">
+            <div class="brand-block">
+                <strong>Condor App</strong>
+                <span>V {{ app_version }}</span>
+            </div>
+            <nav aria-label="Navegación de plataforma">
+                <a href="{{ path('app_platform_owner') }}" aria-current="page">Centro de control</a>
+                <a href="{{ path('app_platform_diagnostics') }}">Diagnósticos</a>
+            </nav>
+            <form method="post" action="{{ path('app_logout') }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('logout') }}">
+                <button class="button button-secondary" type="submit">Cerrar sesión</button>
+            </form>
+        </aside>
 
-    <div class="workspace">
-        <span class="eyebrow">Propietario de plataforma</span>
-        <h1>Administración global</h1>
-        <p class="muted">Acceso propietario exclusivo, separado de los administradores de empresas y sedes.</p>
-
-        <div class="feature-grid" aria-label="Resumen de plataforma">
-            <article class="feature-card">
-                <span>Empresas</span>
-                <strong>{{ tenant_count }}</strong>
-            </article>
-            <article class="feature-card">
-                <span>Usuarios</span>
-                <strong>{{ user_count }}</strong>
-            </article>
+        <div class="workspace">
+            <span class="eyebrow">Propietario de plataforma</span>
+            <h1>Preparando centro de control…</h1>
+            <p class="muted">Cargando estado real de Condor.</p>
         </div>
-
-        <p class="version-line">V {{ app_version }}</p>
-    </div>
-</section>
+    </section>
+</div>
+<script type="module" src="/build/admin.js"></script>
 {% endblock %}
