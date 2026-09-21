@@ -28,9 +28,15 @@ final readonly class PlatformOwnerTenantContext
     public function metrics(): array
     {
         return [
-            'tenant_count' => $this->entityManager->getRepository(Tenant::class)->count([]),
-            'user_count' => $this->entityManager->getRepository(User::class)->count([]),
-            'branch_count' => $this->entityManager->getRepository(Branch::class)->count([]),
+            'tenant_count' => $this->entityManager
+                ->getRepository(Tenant::class)
+                ->count([]),
+            'user_count' => $this->entityManager
+                ->getRepository(User::class)
+                ->count([]),
+            'branch_count' => $this->entityManager
+                ->getRepository(Branch::class)
+                ->count([]),
             'active_membership_count' => $this->entityManager
                 ->getRepository(Membership::class)
                 ->count(['active' => true]),
@@ -52,9 +58,19 @@ final readonly class PlatformOwnerTenantContext
             [],
             ['name' => 'ASC'],
         );
+        $branchCounts = $this->branchCountsByTenant();
+        $membershipCounts = $this->activeMembershipCountsByTenant();
 
         return array_values(array_map(
-            fn (Tenant $tenant): array => $this->tenantSummary($tenant),
+            static fn (Tenant $tenant): array => [
+                'id' => $tenant->id(),
+                'name' => $tenant->name(),
+                'slug' => $tenant->slug(),
+                'branch_count' => $branchCounts[$tenant->id()] ?? 0,
+                'active_membership_count' => (
+                    $membershipCounts[$tenant->id()] ?? 0
+                ),
+            ],
             array_values(array_filter(
                 $tenants,
                 static fn (mixed $tenant): bool => $tenant instanceof Tenant,
@@ -79,7 +95,10 @@ final readonly class PlatformOwnerTenantContext
      */
     public function tenant(string $tenantId): array
     {
-        $tenant = $this->entityManager->getRepository(Tenant::class)->find($tenantId);
+        $tenant = $this->entityManager
+            ->getRepository(Tenant::class)
+            ->find($tenantId);
+
         if (!$tenant instanceof Tenant) {
             throw new NotFoundHttpException('Empresa no encontrada.');
         }
@@ -128,5 +147,57 @@ final readonly class PlatformOwnerTenantContext
                 ->getRepository(Membership::class)
                 ->count(['tenant' => $tenant, 'active' => true]),
         ];
+    }
+
+    /** @return array<string, int> */
+    private function branchCountsByTenant(): array
+    {
+        $rows = $this->entityManager
+            ->createQueryBuilder()
+            ->select('IDENTITY(branch.tenant) AS tenant_id')
+            ->addSelect('COUNT(branch.id) AS aggregate_count')
+            ->from(Branch::class, 'branch')
+            ->groupBy('branch.tenant')
+            ->getQuery()
+            ->getArrayResult();
+
+        return $this->indexCounts($rows);
+    }
+
+    /** @return array<string, int> */
+    private function activeMembershipCountsByTenant(): array
+    {
+        $rows = $this->entityManager
+            ->createQueryBuilder()
+            ->select('IDENTITY(membership.tenant) AS tenant_id')
+            ->addSelect('COUNT(membership.id) AS aggregate_count')
+            ->from(Membership::class, 'membership')
+            ->where('membership.active = :active')
+            ->setParameter('active', true)
+            ->groupBy('membership.tenant')
+            ->getQuery()
+            ->getArrayResult();
+
+        return $this->indexCounts($rows);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return array<string, int>
+     */
+    private function indexCounts(array $rows): array
+    {
+        $counts = [];
+
+        foreach ($rows as $row) {
+            $tenantId = $row['tenant_id'] ?? null;
+            if (!is_string($tenantId) || $tenantId === '') {
+                continue;
+            }
+
+            $counts[$tenantId] = (int) ($row['aggregate_count'] ?? 0);
+        }
+
+        return $counts;
     }
 }
