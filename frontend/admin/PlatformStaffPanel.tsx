@@ -51,10 +51,12 @@ type StaffResponse = {
 
 type PlatformStaffPanelProps = Readonly<{
   csrfToken: string;
+  refreshKey: number;
 }>;
 
 export function PlatformStaffPanel({
   csrfToken,
+  refreshKey,
 }: PlatformStaffPanelProps) {
   const [data, setData] = useState<StaffResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,7 +105,7 @@ export function PlatformStaffPanel({
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [refreshKey]);
 
   function toggleAction(action: string) {
     setActions((current) => (
