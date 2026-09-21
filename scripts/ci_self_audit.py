@@ -306,21 +306,83 @@ def job_commands(block: str) -> list[str]:
     return commands
 
 
+def active_shell_lines(step: list[str]) -> list[str]:
+    """Devuelve líneas shell ejecutables, sin blancos ni comentarios completos."""
+    return [
+        line.strip()
+        for line in run_content(step)
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+
+
+def valid_release_transition_flow(step: list[str]) -> bool:
+    """Valida el flujo canónico desde clasificador hasta GITHUB_OUTPUT."""
+    lines = active_shell_lines(step)
+    assignment_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if line.startswith('requiere="$(')
+        ),
+        None,
+    )
+    if assignment_index is None:
+        return False
+
+    control_prefixes = ("if ", "for ", "while ", "until ", "case ", "select ")
+    if any(
+        line.startswith(control_prefixes)
+        for line in lines[:assignment_index]
+    ):
+        return False
+
+    end_index = next(
+        (
+            index
+            for index in range(assignment_index + 1, len(lines))
+            if lines[index] == ')"'
+        ),
+        None,
+    )
+    if end_index is None:
+        return False
+
+    assignment = "\n".join(lines[assignment_index:end_index + 1])
+    if (
+        "scripts/ci_change_classifier.py" not in assignment
+        or "--format json" not in assignment
+        or '["transicion_release"]' not in assignment
+    ):
+        return False
+
+    publish_index = end_index + 1
+    if publish_index >= len(lines):
+        return False
+    if re.fullmatch(
+        r'echo\s+"requerida=\$requiere"\s*>>\s*"\$GITHUB_OUTPUT"',
+        lines[publish_index],
+    ) is None:
+        return False
+
+    if any(
+        line.startswith("requiere=")
+        for line in lines[end_index + 1:]
+        if line != lines[publish_index]
+    ):
+        return False
+
+    return True
+
+
 def audit_release_observer(path: Path) -> list[str]:
     """Exige que observar-release use de forma efectiva el detector canónico."""
     text = path.read_text(encoding="utf-8")
-    for step in step_blocks(text):
-        run = "\n".join(run_content(step))
-        if (
-            "scripts/ci_change_classifier.py" in run
-            and "--format json" in run
-            and "transicion_release" in run
-            and 'requerida=$requiere' in run
-        ):
-            return []
+    if any(valid_release_transition_flow(step) for step in step_blocks(text)):
+        return []
     return [
         f"{path}: observar-release debe extraer transicion_release del "
-        "ci_change_classifier.py y publicar ese mismo valor como requerida."
+        "ci_change_classifier.py, publicarlo en GITHUB_OUTPUT y no "
+        "sobrescribir la decisión después."
     ]
 
 
