@@ -17,7 +17,7 @@
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base de código | ✅ **V 0.1.8 EN MAIN** | SHA `420b5ff85074fb1b33d587c7f4787c0430d6a8ff` |
+| Base de código | ✅ **V 0.1.8 EN MAIN** | SHA `79bd9db59a61cc8e211321c0fd52392ecbf1ddc2` |
 | Producción comprobada | ✅ **V 0.1.4 VALIDADA EN PRODUCCIÓN** | último smoke real documentado |
 | V 0.1.5–0.1.8 | ✅ **MERGED / NO INFERIR PRODUCCIÓN** | observabilidad, CI, permisos y transición de release integrados |
 | Dominios personalizados | ✅ **DECISIÓN DOCUMENTADA** | D-049 / Issue #114, sin consumir una release productiva |
