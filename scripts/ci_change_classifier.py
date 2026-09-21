@@ -33,10 +33,27 @@ CONFIG_PREFIX = "config/"
 MIGRATIONS_PREFIX = "migrations/"
 TEMPLATES_PREFIX = "templates/"
 PUBLIC_PREFIX = "public/"
+SCRIPTS_PREFIX = "scripts/"
 PHPUNIT_CONFIG = "phpunit.xml.dist"
 PACKAGE_JSON = "package.json"
 PACKAGE_LOCK = "package-lock.json"
 PLAYWRIGHT_CONFIG = "playwright.config.mjs"
+
+TRANSITION_PREFIXES = (
+    MIGRATIONS_PREFIX,
+    CONFIG_PREFIX,
+    "src/Console/",
+    "src/Http/Controller/",
+    "src/Domain/Identity/",
+    "src/Application/Identity/",
+)
+TRANSITION_SCRIPT_MARKERS = (
+    "backfill",
+    "deploy",
+    "migrat",
+    "provision",
+    "release",
+)
 
 COMPOSER_FILES = {"composer.json", "composer.lock"}
 BACKEND_CONTROL_FILES = COMPOSER_FILES | {PHPUNIT_CONFIG}
@@ -83,6 +100,24 @@ def starts(path: str, prefixes: tuple[str, ...]) -> bool:
     return path.startswith(prefixes)
 
 
+def requires_release_transition(path: str) -> bool:
+    """Clasifica cambios que requieren verificar transición operativa."""
+    if path == "bin/console" or path.startswith(TRANSITION_PREFIXES):
+        return True
+
+    if path.startswith("src/"):
+        if "/Entity/" in path or "/Service/" in path:
+            return True
+        if path.endswith("Service.php") or path == "src/Kernel.php":
+            return True
+
+    if path.startswith(SCRIPTS_PREFIX):
+        lowered = path.lower()
+        return any(marker in lowered for marker in TRANSITION_SCRIPT_MARKERS)
+
+    return False
+
+
 def classify(paths: Iterable[str], event: str) -> Selection:
     """Devuelve la selección fail-safe de gates para un conjunto de cambios."""
     files = normalized(paths)
@@ -96,7 +131,7 @@ def classify(paths: Iterable[str], event: str) -> Selection:
         for path in files
     )
     transicion_release = any(
-        path.startswith((MIGRATIONS_PREFIX, CONFIG_PREFIX, "src/Console/"))
+        requires_release_transition(path)
         for path in files
     )
 
@@ -124,7 +159,7 @@ def classify(paths: Iterable[str], event: str) -> Selection:
         )
 
     pruebas_base = any(
-        starts(path, ("scripts/", "tests/", GITHUB_PREFIX))
+        starts(path, (SCRIPTS_PREFIX, "tests/", GITHUB_PREFIX))
         or path in {"pyproject.toml", PHPUNIT_CONFIG}
         for path in files
     )
