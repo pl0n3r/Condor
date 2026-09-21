@@ -261,6 +261,41 @@ jobs:
       - name: Ejecutar integraciones
         run: python3 -m unittest discover -s tests/integration -p 'test_*.py'
 
+  frontend:
+    name: Frontend TypeScript / build
+    needs: preflight
+    if: needs.preflight.outputs.frontend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Instalar dependencias reproducibles
+        run: |
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "npm ci frontend" \
+            -- npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Validar TypeScript y build reproducible
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm run build:admin
+          test -s public/build/admin.js
+          test -s public/build/admin.css
+          git diff --exit-code -- public/build
+
   backend-php:
     name: Backend PHP / MariaDB
     needs: preflight
