@@ -33,6 +33,18 @@ final class PlatformOwnerContextController extends AbstractController
         }
 
         $tenantId = trim((string) $request->query->get('tenant', ''));
+        $page = max(1, $request->query->getInt('page', 1));
+        $perPage = max(
+            1,
+            min(
+                PlatformOwnerTenantContext::MAX_PAGE_SIZE,
+                $request->query->getInt(
+                    'per_page',
+                    PlatformOwnerTenantContext::DEFAULT_PAGE_SIZE,
+                ),
+            ),
+        );
+        $tenantPage = $context->tenantPage($page, $perPage);
 
         return $this->json([
             'mode' => $tenantId === '' ? 'global' : 'tenant',
@@ -42,7 +54,14 @@ final class PlatformOwnerContextController extends AbstractController
                 'role' => 'platform_owner',
             ],
             'metrics' => $context->metrics(),
-            'tenants' => $context->tenants(),
+            'tenants' => $tenantPage['items'],
+            'tenant_pagination' => [
+                'page' => $tenantPage['page'],
+                'per_page' => $tenantPage['per_page'],
+                'total' => $tenantPage['total'],
+                'has_previous' => $tenantPage['has_previous'],
+                'has_next' => $tenantPage['has_next'],
+            ],
             'selected_tenant' => $tenantId === ''
                 ? null
                 : $context->tenant($tenantId),
