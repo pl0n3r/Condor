@@ -690,62 +690,30 @@ def publish_reservation(
     )
 
 
-def reserve_work(
-    api: GitHub,
-    issue_number: int,
-    actor: str,
-    association: str,
-) -> str | None:
-    """Reserva trabajo nuevo o recupera una reserva realmente inactiva."""
-    if not authorized(association):
-        raise CoordinationError(
-            f"@{actor} no tiene una asociación autorizada para reservar trabajo."
-        )
-
-    issue = api.issue(issue_number)
-    if issue.get("pull_request"):
-        raise CoordinationError("La reserva se ejecuta sobre Issues, no PRs.")
-    if issue.get("state") != "open":
-        raise CoordinationError(f"Issue #{issue_number} no está abierto.")
-
-    labels = label_names(issue)
-    if STATUS_BLOCKED in labels:
-        return None
-
-    branch = f"trabajo/issue-{issue_number}"
-    current = active_reservation(api, issue_number)
-    branch_sha = api.branch_sha(branch)
-
-    if current or branch_sha:
-        if not work_is_stale(api, issue_number, branch):
-            return None
-
-        if branch_sha is None:
-            main_sha = api.branch_sha("main")
-            if not main_sha:
-                raise CoordinationError(
-                    "No fue posible resolver el SHA actual de main."
-                )
-            if not api.create_branch(branch, main_sha):
-                branch_sha = api.branch_sha(branch)
-                if branch_sha is None:
-                    return None
-
-        return recover_stale_work(
-            api,
-            issue_number,
-            actor,
-            branch,
-            current,
-        )
-
-    if STATUS_AVAILABLE not in labels:
-        return None
+def ensure_recovery_branch(api: GitHub, branch: str) -> bool:
+    """Garantiza la rama canónica sin reemplazar trabajo existente."""
+    if api.branch_sha(branch) is not None:
+        return True
 
     main_sha = api.branch_sha("main")
     if not main_sha:
         raise CoordinationError("No fue posible resolver el SHA actual de main.")
 
+    if api.create_branch(branch, main_sha):
+        return True
+    return api.branch_sha(branch) is not None
+
+
+def reserve_available_work(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    branch: str,
+) -> str | None:
+    """Crea una reserva nueva para un Issue realmente disponible."""
+    main_sha = api.branch_sha("main")
+    if not main_sha:
+        raise CoordinationError("No fue posible resolver el SHA actual de main.")
     if not api.create_branch(branch, main_sha):
         return None
 
@@ -777,6 +745,71 @@ def reserve_work(
         f"(@{actor}, {reservation_id})"
     )
     return reservation_id
+
+
+def recover_existing_work_if_stale(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    branch: str,
+    current: dict[str, Any] | None,
+) -> str | None:
+    """Recupera trabajo existente solo después de comprobar inactividad."""
+    if not work_is_stale(api, issue_number, branch):
+        return None
+    if not ensure_recovery_branch(api, branch):
+        return None
+    return recover_stale_work(
+        api,
+        issue_number,
+        actor,
+        branch,
+        current,
+    )
+
+
+def reserve_work(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    association: str,
+) -> str | None:
+    """Reserva trabajo nuevo o recupera una reserva realmente inactiva."""
+    if not authorized(association):
+        raise CoordinationError(
+            f"@{actor} no tiene una asociación autorizada para reservar trabajo."
+        )
+
+    issue = api.issue(issue_number)
+    if issue.get("pull_request"):
+        raise CoordinationError("La reserva se ejecuta sobre Issues, no PRs.")
+    if issue.get("state") != "open":
+        raise CoordinationError(f"Issue #{issue_number} no está abierto.")
+
+    labels = label_names(issue)
+    if STATUS_BLOCKED in labels:
+        return None
+
+    branch = f"trabajo/issue-{issue_number}"
+    current = active_reservation(api, issue_number)
+    if current or api.branch_sha(branch):
+        return recover_existing_work_if_stale(
+            api,
+            issue_number,
+            actor,
+            branch,
+            current,
+        )
+
+    if STATUS_AVAILABLE not in labels:
+        return None
+
+    return reserve_available_work(
+        api,
+        issue_number,
+        actor,
+        branch,
+    )
 
 def transfer_work(
     api: GitHub,
