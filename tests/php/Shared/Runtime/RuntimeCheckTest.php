@@ -26,8 +26,12 @@ final class RuntimeCheckTest extends TestCase
             JSON_THROW_ON_ERROR
         );
 
+        $versionConfig = require dirname(__DIR__, 4).'/config/version.php';
+        self::assertIsArray($versionConfig);
+        self::assertIsString($versionConfig['version'] ?? null);
+
         self::assertSame('ok', $payload['status'] ?? null);
-        self::assertSame('0.1.4', $payload['version'] ?? null);
+        self::assertSame($versionConfig['version'], $payload['version'] ?? null);
         self::assertTrue($payload['php_compatible'] ?? false);
         self::assertTrue($payload['autoload_present'] ?? false);
         self::assertTrue($payload['runtime_storage_available'] ?? false);
