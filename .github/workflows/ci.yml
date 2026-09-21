@@ -576,7 +576,7 @@ jobs:
 
   validar:
     name: Validar
-    needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, backend-php, e2e]
+    needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, frontend, backend-php, e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -588,8 +588,12 @@ jobs:
           GOBIERNO: ${{ needs.gobierno.result }}
           COORDINACION: ${{ needs.coordinacion.result }}
           PRUEBAS_BASE: ${{ needs.pruebas-base.result }}
+          FRONTEND: ${{ needs.frontend.result }}
           BACKEND_PHP: ${{ needs.backend-php.result }}
           E2E: ${{ needs.e2e.result }}
+          MODO: ${{ needs.preflight.outputs.modo }}
+          MOTIVO: ${{ needs.preflight.outputs.motivo }}
+          CATEGORIAS: ${{ needs.preflight.outputs.categorias }}
         run: |
           set -euo pipefail
 
@@ -599,6 +603,11 @@ jobs:
           case "$PRUEBAS_BASE" in
             success|skipped) ;;
             *) echo "::error::Pruebas base no pasaron."; exit 1 ;;
+          esac
+
+          case "$FRONTEND" in
+            success|skipped) ;;
+            *) echo "::error::Frontend no pasó."; exit 1 ;;
           esac
 
           case "$BACKEND_PHP" in
@@ -623,7 +632,11 @@ jobs:
             echo "- Documentación: **$DOCUMENTACION**"
             echo "- Gobierno: **$GOBIERNO**"
             echo "- Coordinación: **$COORDINACION**"
+            echo "- Modo de selección: **$MODO**"
+            echo "- Categorías: `$CATEGORIAS`"
+            echo "- Motivo: `$MOTIVO`"
             echo "- Pruebas base: **$PRUEBAS_BASE**"
+            echo "- Frontend: **$FRONTEND**"
             echo "- Backend PHP: **$BACKEND_PHP**"
             echo "- Playwright: **$E2E**"
             echo "- Resultado agregado: **success**"
