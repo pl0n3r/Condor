@@ -102,7 +102,7 @@ function parseInternalErrorPayload(value: unknown): InternalErrorPayload | null 
     !isOwnerDiagnostic(value.diagnostic) ||
     value.diagnostic.incident_id !== value.error_id
   ) {
-    return null;
+    return { error_id: value.error_id };
   }
 
   return {
