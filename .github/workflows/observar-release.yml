@@ -82,7 +82,7 @@ jobs:
           python3 scripts/release_evidence.py manifest \
             --sha "$SHA_ESPERADO" \
             --expected-version "$VERSION_ESPERADA" \
-            --changes /tmp/cambios-release.txt \
+            < /tmp/cambios-release.txt \
             > /tmp/release-manifest.json
 
           echo "Transición operativa requerida: $requiere" >> "$GITHUB_STEP_SUMMARY"
@@ -122,9 +122,6 @@ jobs:
           set -euo pipefail
           args=(
             finalize
-            --manifest /tmp/release-manifest.json
-            --observation /tmp/release-observation.json
-            --json-out /tmp/release-evidence.json
             --markdown
           )
 
@@ -134,5 +131,9 @@ jobs:
           [[ "$CONFIGURACION" == "true" ]] && args+=(--verified configuracion)
           [[ "$CACHE" == "true" ]] && args+=(--verified cache)
 
-          python3 scripts/release_evidence.py "${args[@]}" \
+          jq -n \
+            --slurpfile manifest /tmp/release-manifest.json \
+            --slurpfile observation /tmp/release-observation.json \
+            '{manifest: $manifest[0], observation: $observation[0]}' \
+            | python3 scripts/release_evidence.py "${args[@]}" \
             | tee -a "$GITHUB_STEP_SUMMARY"
