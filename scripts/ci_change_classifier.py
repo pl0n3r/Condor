@@ -30,8 +30,8 @@ CANONICAL_DOCS = {
 
 GITHUB_PREFIX = ".github/"
 DOCS_PREFIX = "docs/"
-TESTS_PREFIX = TESTS_PREFIX
-SRC_PREFIX = SRC_PREFIX
+TESTS_PREFIX = "tests/"
+SRC_PREFIX = "src/"
 CONFIG_PREFIX = "config/"
 MIGRATIONS_PREFIX = "migrations/"
 TEMPLATES_PREFIX = "templates/"
@@ -227,9 +227,9 @@ def classify(paths: Iterable[str], event: str) -> Selection:
         or starts(
             path,
             (
-                "docs/",
+                DOCS_PREFIX,
                 GITHUB_PREFIX,
-                "scripts/",
+                SCRIPTS_PREFIX,
                 TESTS_PREFIX,
                 SRC_PREFIX,
                 CONFIG_PREFIX,
