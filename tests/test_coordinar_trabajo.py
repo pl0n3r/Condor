@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from scripts.coordinar_trabajo import (
     CoordinationError,
@@ -198,6 +199,31 @@ class LimpiezaRamaTests(unittest.TestCase):
         api.request = request  # type: ignore[method-assign]
         with self.assertRaises(GitHubError):
             api.delete_branch("trabajo/issue-19")
+
+
+class WorkflowCoordinacionTests(unittest.TestCase):
+    """Cubre el cableado declarativo entre GitHub Events y el coordinador."""
+
+    def test_issue_comment_routes_only_supported_commands_to_coordinator(self) -> None:
+        """El workflow escucha comentarios y delega únicamente comandos soportados."""
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "coordinacion-trabajo.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("issue_comment:", workflow)
+        self.assertIn("types: [created, edited]", workflow)
+        self.assertIn("github.event.issue.pull_request == null", workflow)
+        self.assertIn("github.event.comment.body == '/tomar'", workflow)
+        self.assertIn("github.event.comment.body == '/liberar-forzado'", workflow)
+        self.assertIn("startsWith(github.event.comment.body, '/liberar ')", workflow)
+        self.assertIn("startsWith(github.event.comment.body, '/transferir ')", workflow)
+        self.assertIn("github.event.comment.author_association", workflow)
+        self.assertIn("python3 scripts/coordinar_trabajo.py comentario", workflow)
+        self.assertIn('--body "$CUERPO"', workflow)
+
 
 
 class CoordinacionTests(unittest.TestCase):
