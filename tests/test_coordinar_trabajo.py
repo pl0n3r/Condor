@@ -29,6 +29,7 @@ from scripts.coordinar_trabajo import (
     reserve_work,
     rewrite_pull_reservation,
     transfer_work,
+    work_activity_timestamp,
     work_is_stale,
     update_issue_label_state,
     update_issue_state,
@@ -535,6 +536,33 @@ class CoordinacionTests(unittest.TestCase):
         self.assertEqual(reservation["owner"], "pl0n3r")
         self.assertEqual(reservation["reason"], "recuperacion-inactividad")
         self.assertNotIn("coordinacion/lock-issue-12", api.branches)
+
+    def test_pull_metadata_does_not_refresh_work_lease(self) -> None:
+        """Bots y checks pueden tocar el PR sin ocultar una reserva abandonada."""
+        api = FakeGitHub()
+        add_active_reservation(api)
+        stale = "2020-01-01T00:00:00+00:00"
+        api.comments[-1]["created_at"] = stale
+        api.comments[-1]["updated_at"] = stale
+        api.commit_times["abc123"] = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        api.pulls[15] = {
+            "number": 15,
+            "state": "open",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "head": {"ref": "trabajo/issue-12"},
+        }
+
+        activity = work_activity_timestamp(api, 12, "trabajo/issue-12")
+
+        self.assertEqual(activity, datetime(2020, 1, 1, tzinfo=timezone.utc))
+        self.assertTrue(
+            work_is_stale(
+                api,
+                12,
+                "trabajo/issue-12",
+                now=datetime(2020, 1, 1, 0, 31, tzinfo=timezone.utc),
+            )
+        )
 
     def test_concurrent_stale_recovery_cannot_enter_existing_lock(self) -> None:
         """Un segundo recuperador no entra mientras exista el lock efímero."""

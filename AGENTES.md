@@ -76,9 +76,10 @@ GitHub es el árbitro de la cola de trabajo.
 
 1. revisar primero Issues con estado: disponible;
 2. revisar también Issues reservados/en revisión relevantes para detectar trabajo inactivo y evitar abrir un frente duplicado;
-3. si una reserva existente tiene actividad de los últimos 45 minutos, respetarla y elegir otro trabajo;
-4. si lleva al menos 45 minutos sin actividad verificable, ejecutar /tomar sobre ese mismo Issue para intentar recuperarlo;
-5. ejecutar /tomar normalmente sobre un Issue disponible cuando no exista trabajo previo reutilizable;
+3. si existe uno o más Issues con estado: requiere recuperación, elegir primero el más antiguo compatible y ejecutar /tomar sobre ese mismo Issue;
+4. si una reserva existente tiene actividad verificable de los últimos 30 minutos, respetarla y elegir otro trabajo;
+5. si lleva al menos 30 minutos sin actividad verificable, ejecutar /tomar sobre ese mismo Issue para recuperarlo antes de abrir trabajo nuevo;
+6. ejecutar /tomar normalmente sobre un Issue disponible solo cuando no exista trabajo previo recuperable;
 6. esperar una reserva válida y conservar el UUID publicado por el bot;
 7. trabajar únicamente en la rama canónica trabajo/issue-N y reutilizar el PR existente cuando la recuperación lo indique.
 
@@ -88,8 +89,9 @@ La reserva válida crea o recupera el lock de trabajo sin duplicar la implementa
 
 - una reserva reciente protege el trabajo de otras sesiones aunque compartan la misma cuenta de GitHub;
 - el UUID visible no autoriza por sí solo a continuar una sesión ajena;
-- **la reserva no es eterna**: si no existe actividad verificable durante al menos 45 minutos, otro agente puede ejecutar /tomar y recuperar el mismo trabajo;
-- cuentan como actividad reciente los commits de la rama, actividad del PR existente y comentarios humanos útiles del Issue; los comandos de coordinación no refrescan artificialmente la reserva;
+- **la reserva no es eterna**: si no existe actividad verificable durante al menos 30 minutos, otro agente puede ejecutar /tomar y recuperar el mismo trabajo;
+- cuentan como actividad reciente únicamente los commits de la rama y comentarios humanos útiles del Issue; `updated_at` del PR, bots, checks, Sonar, CodeRabbit, etiquetas y comandos de coordinación no refrescan artificialmente la reserva;
+- cada hora el coordinador marca como `estado: requiere recuperación` las reservas que cumplen el umbral. Ese marcador no libera, borra ni reasigna trabajo: solo lo prioriza para que el siguiente agente lo recupere de forma atómica;
 - si no existe evidencia temporal suficiente, el coordinador falla de forma conservadora y no roba el trabajo;
 - recuperar trabajo stale genera un UUID nuevo y conserva la rama canónica trabajo/issue-N;
 - si ya existe un PR abierto para esa rama, se reutiliza y actualiza su metadata de reserva: **no se cierra ni se abre otro PR solo por cambio de agente**;

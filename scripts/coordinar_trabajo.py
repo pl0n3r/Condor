@@ -27,15 +27,16 @@ TRUSTED_MARKER_LOGIN = os.getenv(
 try:
     RESERVATION_STALE_MINUTES = max(
         5,
-        int(os.getenv("CONDOR_RESERVATION_STALE_MINUTES", "45")),
+        int(os.getenv("CONDOR_RESERVATION_STALE_MINUTES", "30")),
     )
 except ValueError:
-    RESERVATION_STALE_MINUTES = 45
+    RESERVATION_STALE_MINUTES = 30
 
 ALLOWED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 STATUS_AVAILABLE = "estado: disponible"
 STATUS_RESERVED = "estado: reservado"
+STATUS_RECOVERY = "estado: requiere recuperación"
 STATUS_REVIEW = "estado: en revisión"
 STATUS_COMPLETED = "estado: completado"
 STATUS_CANCELLED = "estado: cancelado"
@@ -44,6 +45,7 @@ STATUS_BLOCKED = "estado: bloqueado"
 STATUS_LABELS: dict[str, tuple[str, str]] = {
     STATUS_AVAILABLE: ("2DA44E", "Trabajo disponible para ser reservado."),
     STATUS_RESERVED: ("FBCA04", "Trabajo reservado por una sesión o agente."),
+    STATUS_RECOVERY: ("D93F0B", "Reserva inactiva: debe recuperarse antes de tomar trabajo nuevo."),
     STATUS_REVIEW: ("1D76DB", "Trabajo con Pull Request listo para revisión."),
     STATUS_COMPLETED: ("0E8A16", "Trabajo completado."),
     STATUS_CANCELLED: ("6E7781", "Trabajo cerrado sin completarse."),
@@ -259,6 +261,14 @@ class GitHub:
     def open_pulls(self) -> list[dict[str, Any]]:
         """Obtiene todos los Pull Requests abiertos."""
         return self.paginate(f"/repos/{self.repo}/pulls?state=open")
+
+    def open_issues(self) -> list[dict[str, Any]]:
+        """Obtiene Issues abiertos, sin incluir Pull Requests."""
+        return [
+            issue
+            for issue in self.paginate(f"/repos/{self.repo}/issues?state=open")
+            if not issue.get("pull_request")
+        ]
 
     def pull_files(self, number: int) -> set[str]:
         """Devuelve los archivos modificados por un Pull Request."""
@@ -564,12 +574,25 @@ def work_activity_timestamp(
         if timestamp is not None:
             candidates.append(timestamp)
 
-    for pull in open_pull_records_for_branch(api, branch):
-        timestamp = parse_github_time(pull.get("updated_at"))
-        if timestamp is not None:
-            candidates.append(timestamp)
-
     return max(candidates) if candidates else None
+
+
+def mark_stale_reservations(api: GitHub) -> int:
+    """Hace visibles las reservas recuperables, sin liberar ni tomar trabajo."""
+    marked = 0
+    for issue in api.open_issues():
+        number = issue.get("number")
+        if not isinstance(number, int) or STATUS_BLOCKED in label_names(issue):
+            continue
+        branch = f"trabajo/issue-{number}"
+        if not (active_reservation(api, number) or api.branch_sha(branch)):
+            continue
+        if not work_is_stale(api, number, branch):
+            continue
+        api.set_status(number, STATUS_RECOVERY)
+        marked += 1
+    print(f"Reservas recuperables marcadas: {marked}")
+    return marked
 
 
 def work_is_stale(
@@ -1344,6 +1367,9 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--pr", required=True, type=int)
     validate.add_argument("--require-reservation", action="store_true")
 
+    sweep = sub.add_parser("marcar-inactivas")
+    sweep.add_argument("--repo", required=True)
+
     return parser
 
 
@@ -1369,6 +1395,8 @@ def main() -> int:
             update_issue_label_state(api, args.issue, args.actor, args.label)
         elif args.command == "validar-pr":
             validate_pull(api, args.pr, args.require_reservation)
+        elif args.command == "marcar-inactivas":
+            mark_stale_reservations(api)
         else:
             parser.error("Comando no soportado.")
     except (CoordinationError, GitHubError) as exc:
