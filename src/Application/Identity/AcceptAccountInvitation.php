@@ -78,6 +78,7 @@ final readonly class AcceptAccountInvitation
                     .'WHERE id = :id FOR UPDATE',
                     ['id' => $invitation->id()],
                 )->fetchOne();
+                $this->entityManager->refresh($invitation);
 
                 $now = self::now();
                 if (!$invitation->isUsableAt($now)) {
