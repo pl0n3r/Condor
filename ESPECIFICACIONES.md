@@ -323,10 +323,13 @@ GitHub es la autoridad central para coordinar múltiples cuentas de IA, agentes 
 
 Reglas:
 
-- todo trabajo de implementación parte de un Issue abierto marcado `estado: disponible`;
-- el comando `/tomar` intenta crear de forma atómica `trabajo/issue-N`; la creación de esa rama funciona como lock distribuido;
+- todo trabajo de implementación parte de un Issue abierto marcado `estado: disponible` o de la recuperación válida de una reserva inactiva existente;
+- para trabajo nuevo, el comando `/tomar` intenta crear de forma atómica `trabajo/issue-N`; la creación de esa rama funciona como lock distribuido;
 - solo una reserva puede existir para un Issue;
-- una reserva es fail-closed y no expira automáticamente;
+- una reserva con actividad verificable reciente permanece protegida y no puede ser asumida por otra sesión;
+- la ventana inicial de actividad es de **45 minutos**; cuentan los commits de la rama, la actividad del PR existente y los comentarios humanos útiles del Issue, pero no los comandos de coordinación por sí solos;
+- después de al menos 45 minutos sin actividad verificable, `/tomar` puede recuperar la reserva conservando la rama canónica y únicamente el PR abierto asociado a esa rama; la recuperación genera un UUID nuevo, reemplaza la metadata `Reserva: <UUID>` del PR e invalida el UUID anterior;
+- la recuperación es fail-closed: si no existe evidencia temporal suficiente, el coordinador conserva la reserva vigente; un Issue bloqueado nunca se recupera automáticamente;
 - cada reserva recibe un UUID de sesión único;
 - `/liberar <UUID>` libera una reserva normal, `/transferir <UUID>` rota explícitamente el ID para otra sesión y `/liberar-forzado` queda restringido al dueño del repositorio;
 - compartir una cuenta de GitHub no permite a dos sesiones asumir simultáneamente la misma reserva;
