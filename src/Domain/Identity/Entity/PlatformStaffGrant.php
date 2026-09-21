@@ -70,14 +70,32 @@ class PlatformStaffGrant
         $this->updatedAt = $this->createdAt;
     }
 
-    public function id(): string { return $this->id; }
-    public function staff(): User { return $this->staff; }
-    public function tenant(): ?Tenant { return $this->tenant; }
-    public function scopeKey(): string { return $this->scopeKey; }
-    public function moduleKey(): string { return $this->moduleKey; }
+    public function id(): string
+    {
+        return $this->id;
+    }
+    public function staff(): User
+    {
+        return $this->staff;
+    }
+    public function tenant(): ?Tenant
+    {
+        return $this->tenant;
+    }
+    public function scopeKey(): string
+    {
+        return $this->scopeKey;
+    }
+    public function moduleKey(): string
+    {
+        return $this->moduleKey;
+    }
 
     /** @return list<string> */
-    public function actions(): array { return $this->actions; }
+    public function actions(): array
+    {
+        return $this->actions;
+    }
 
     public function covers(Tenant $tenant): bool
     {
