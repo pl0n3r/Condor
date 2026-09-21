@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timezone
+from pathlib import Path
 
 from scripts.coordinar_trabajo import (
     CoordinationError,
@@ -25,7 +27,9 @@ from scripts.coordinar_trabajo import (
     reservation_from_pr_body,
     reservation_marker,
     reserve_work,
+    rewrite_pull_reservation,
     transfer_work,
+    work_is_stale,
     update_issue_label_state,
     update_issue_state,
     update_pr_state,
@@ -57,6 +61,9 @@ class FakeGitHub:
         self.status_history: list[str | None] = []
         self.assignees: set[str] = set()
         self.fail_comment = False
+        self.commit_times = {
+            "abc123": datetime.now(timezone.utc),
+        }
 
     def issue(self, number: int) -> dict:
         """Devuelve el Issue falso."""
@@ -72,7 +79,15 @@ class FakeGitHub:
         assert issue_number == 12
         if self.fail_comment:
             raise CoordinationError("fallo simulado de comentario")
-        self.comments.append({"body": body, "user": {"login": BOT}})
+        now = datetime.now(timezone.utc).isoformat()
+        self.comments.append(
+            {
+                "body": body,
+                "user": {"login": BOT},
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
 
     def set_status(self, issue_number: int, status: str | None) -> None:
         """Reemplaza el estado visible del Issue."""
@@ -123,6 +138,14 @@ class FakeGitHub:
         """Cierra un PR falso."""
         self.pulls[number]["state"] = "closed"
 
+    def update_pull_body(self, number: int, body: str) -> None:
+        """Actualiza el cuerpo del PR sin crear otro."""
+        self.pulls[number]["body"] = body
+
+    def commit_timestamp(self, sha: str):
+        """Devuelve actividad conocida de un commit falso."""
+        return self.commit_times.get(sha)
+
     def try_assign(self, issue_number: int, login: str) -> None:
         """Asigna el Issue."""
         assert issue_number == 12
@@ -153,6 +176,8 @@ def add_active_reservation(
                 True,
                 "tomar",
             ),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
     )
 
@@ -198,6 +223,107 @@ class LimpiezaRamaTests(unittest.TestCase):
         api.request = request  # type: ignore[method-assign]
         with self.assertRaises(GitHubError):
             api.delete_branch("trabajo/issue-19")
+
+
+class WorkflowCoordinacionTests(unittest.TestCase):
+    """Cubre el cableado declarativo entre GitHub Events y el coordinador."""
+
+    @staticmethod
+    def yaml_block(text: str, header: str, indent: int) -> str:
+        """Aísla una clave YAML por nivel para evitar falsos positivos globales."""
+        lines = text.splitlines()
+        target = (" " * indent) + header
+        start = next(
+            (index for index, line in enumerate(lines) if line == target),
+            None,
+        )
+        if start is None:
+            raise AssertionError(f"No existe la sección YAML {header!r}.")
+
+        block = [lines[start]]
+        for line in lines[start + 1 :]:
+            stripped = line.lstrip()
+            current_indent = len(line) - len(stripped)
+            if stripped and not stripped.startswith("#") and current_indent <= indent:
+                break
+            block.append(line)
+
+        return "\n".join(block)
+
+    def test_issue_comment_routes_only_supported_commands_to_coordinator(self) -> None:
+        """El job correcto recibe el evento, identidad y argumentos esperados."""
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "coordinacion-trabajo.yml"
+        ).read_text(encoding="utf-8")
+
+        event_block = self.yaml_block(workflow, "issue_comment:", 2)
+        self.assertIn("types: [created, edited]", event_block)
+
+        job_block = self.yaml_block(workflow, "comando-comentario:", 2)
+        self.assertIn("github.event.issue.pull_request == null", job_block)
+        self.assertIn(
+            "github.event.sender.login == github.event.comment.user.login",
+            job_block,
+        )
+        self.assertIn("github.event.comment.body == '/tomar'", job_block)
+        self.assertIn("github.event.comment.body == '/liberar-forzado'", job_block)
+        self.assertIn(
+            "startsWith(github.event.comment.body, '/liberar ')",
+            job_block,
+        )
+        self.assertIn(
+            "startsWith(github.event.comment.body, '/transferir ')",
+            job_block,
+        )
+
+        env_block = self.yaml_block(job_block, "env:", 8)
+        self.assertIn(
+            "ACTOR: ${{ github.event.comment.user.login }}",
+            env_block,
+        )
+        self.assertIn(
+            "ASOCIACION: ${{ github.event.comment.author_association }}",
+            env_block,
+        )
+        self.assertIn("CUERPO: ${{ github.event.comment.body }}", env_block)
+
+        self.assertIn(
+            "python3 scripts/coordinar_trabajo.py comentario",
+            job_block,
+        )
+        self.assertIn('--repo "$REPOSITORIO"', job_block)
+        self.assertIn('--issue "$ISSUE"', job_block)
+        self.assertIn('--actor "$ACTOR"', job_block)
+        self.assertIn('--association "$ASOCIACION"', job_block)
+        self.assertIn('--body "$CUERPO"', job_block)
+
+
+
+class EstadoCoordinacionTests(unittest.TestCase):
+    """Cubre transiciones de estado visibles sin ventanas intermedias inválidas."""
+
+    def test_set_status_adds_target_before_removing_previous_labels(self) -> None:
+        """El nuevo estado se publica antes de retirar estados anteriores."""
+        api = GitHub("pl0n3r/Condor", "token-prueba")
+        events: list[tuple[str, str]] = []
+
+        api.ensure_status_labels = lambda: None  # type: ignore[method-assign]
+        api.add_labels = (  # type: ignore[method-assign]
+            lambda issue_number, labels: events.append(("add", labels[0]))
+        )
+        api.remove_label = (  # type: ignore[method-assign]
+            lambda issue_number, label: events.append(("remove", label))
+        )
+
+        api.set_status(12, STATUS_REVIEW)
+
+        self.assertEqual(events[0], ("add", STATUS_REVIEW))
+        self.assertNotIn(("remove", STATUS_REVIEW), events)
+        self.assertIn(("remove", STATUS_RESERVED), events)
+        self.assertIn(("remove", STATUS_AVAILABLE), events)
 
 
 class CoordinacionTests(unittest.TestCase):
@@ -360,6 +486,101 @@ class CoordinacionTests(unittest.TestCase):
         self.assertIsNone(result)
         self.assertEqual(api.status_history, [])
         self.assertIsNone(active_reservation(api, 12))
+
+    def test_fresh_reservation_cannot_be_recovered(self) -> None:
+        """Una reserva con actividad reciente sigue protegida."""
+        api = FakeGitHub()
+        add_active_reservation(api)
+
+        result = reserve_work(api, 12, "otra-sesion", "MEMBER")
+
+        self.assertIsNone(result)
+        reservation = active_reservation(api, 12)
+        self.assertIsNotNone(reservation)
+        assert reservation is not None
+        self.assertEqual(reservation["reservation_id"], SESSION_A)
+
+    def test_stale_reservation_reuses_existing_branch_and_pr(self) -> None:
+        """Una reserva vieja cambia de sesión sin cerrar ni duplicar su PR."""
+        api = FakeGitHub()
+        add_active_reservation(api, owner="agente-anterior")
+        stale = "2020-01-01T00:00:00+00:00"
+        api.comments[-1]["created_at"] = stale
+        api.comments[-1]["updated_at"] = stale
+        api.commit_times["abc123"] = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        api.pulls[15] = {
+            "number": 15,
+            "state": "open",
+            "draft": False,
+            "updated_at": stale,
+            "body": (
+                f"Closes #12\n\nReserva: {SESSION_A}\n\n"
+                f"<!-- condor-reserva-id: {SESSION_A} -->"
+            ),
+            "head": {"ref": "trabajo/issue-12"},
+            "base": {"ref": "main"},
+        }
+
+        session = reserve_work(api, 12, "pl0n3r", "OWNER")
+
+        self.assertIsNotNone(session)
+        self.assertNotEqual(session, SESSION_A)
+        self.assertEqual(api.pulls[15]["state"], "open")
+        self.assertIn("trabajo/issue-12", api.branches)
+        self.assertEqual(api.status_history[-1], STATUS_REVIEW)
+        self.assertEqual(reservation_from_pr_body(api.pulls[15]["body"]), session)
+        reservation = active_reservation(api, 12)
+        self.assertIsNotNone(reservation)
+        assert reservation is not None
+        self.assertEqual(reservation["owner"], "pl0n3r")
+        self.assertEqual(reservation["reason"], "recuperacion-inactividad")
+        self.assertNotIn("coordinacion/lock-issue-12", api.branches)
+
+    def test_concurrent_stale_recovery_cannot_enter_existing_lock(self) -> None:
+        """Un segundo recuperador no entra mientras exista el lock efímero."""
+        api = FakeGitHub()
+        add_active_reservation(api, owner="agente-anterior")
+        stale = "2020-01-01T00:00:00+00:00"
+        api.comments[-1]["created_at"] = stale
+        api.comments[-1]["updated_at"] = stale
+        api.commit_times["abc123"] = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        api.branches["coordinacion/lock-issue-12"] = "abc123"
+
+        session = reserve_work(api, 12, "pl0n3r", "OWNER")
+
+        self.assertIsNone(session)
+        reservation = active_reservation(api, 12)
+        self.assertIsNotNone(reservation)
+        assert reservation is not None
+        self.assertEqual(reservation["reservation_id"], SESSION_A)
+
+    def test_stale_detection_is_fail_closed_without_activity_evidence(self) -> None:
+        """Sin timestamps verificables una reserva no se roba automáticamente."""
+        api = FakeGitHub()
+        api.branches["trabajo/issue-12"] = "sin-fecha"
+        api.commit_times.clear()
+
+        self.assertFalse(
+            work_is_stale(
+                api,
+                12,
+                "trabajo/issue-12",
+                now=datetime(2030, 1, 1, tzinfo=timezone.utc),
+            )
+        )
+
+    def test_rewrite_pull_reservation_keeps_pr_and_updates_both_markers(self) -> None:
+        """La recuperación actualiza metadata sin reconstruir la descripción."""
+        body = (
+            f"Resumen útil\n\nReserva: {SESSION_A}\n\n"
+            f"<!-- condor-reserva-id: {SESSION_A} -->\n"
+        )
+
+        updated = rewrite_pull_reservation(body, SESSION_B)
+
+        self.assertIn("Resumen útil", updated)
+        self.assertEqual(reservation_from_pr_body(updated), SESSION_B)
+        self.assertNotIn(SESSION_A, updated)
 
     def test_blocked_issue_cannot_be_reserved(self) -> None:
         """Un Issue bloqueado no entra a la cola de trabajo."""
