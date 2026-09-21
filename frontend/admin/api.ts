@@ -45,3 +45,16 @@ export function membershipRolePath(
     safeUlid(roleId)
   );
 }
+
+
+export function platformOwnerContextPath(tenantId?: string): string {
+  if (!tenantId) {
+    return '/adminpl0n3r/api/context';
+  }
+
+  const params = new URLSearchParams({
+    tenant: safeUlid(tenantId),
+  });
+
+  return '/adminpl0n3r/api/context?' + params.toString();
+}
