@@ -58,13 +58,19 @@ export function AdminApp({
       if (response.status === 403) {
         const denied = await response.json() as {
           error?: string;
+          message?: string;
           tenant?: TenantContextResponse['tenant'];
+          details?: {
+            tenant?: TenantContextResponse['tenant'];
+          };
         };
-        if (denied.tenant) {
+        const tenant = denied.details?.tenant ?? denied.tenant;
+        if (tenant) {
           setContext({
             status: 'denied',
-            tenant: denied.tenant,
+            tenant,
             message:
+              denied.message ??
               denied.error ??
               'No tienes una sede asignada en esta empresa.',
           });
