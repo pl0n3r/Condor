@@ -87,18 +87,42 @@ jobs:
             | tee -a "$GITHUB_OUTPUT"
 
       - name: Resumen preflight
+        env:
+          MODO: ${{ steps.cambios.outputs.modo }}
+          MOTIVO: ${{ steps.cambios.outputs.motivo }}
+          CATEGORIAS: ${{ steps.cambios.outputs.categorias }}
+          DOCUMENTACION: ${{ steps.cambios.outputs.documentacion }}
+          PRUEBAS_BASE: ${{ steps.cambios.outputs.pruebas_base }}
+          FRONTEND: ${{ steps.cambios.outputs.frontend }}
+          BACKEND: ${{ steps.cambios.outputs.backend }}
+          E2E: ${{ steps.cambios.outputs.e2e }}
+          COMPLETA: ${{ steps.cambios.outputs.validacion_completa }}
+          TRANSICION: ${{ steps.cambios.outputs.transicion_release }}
         run: |
+          set -euo pipefail
+          decision() {
+            if [[ "$1" == "true" ]]; then printf 'ejecutar'; else printf 'omitir'; fi
+          }
           {
             echo "## Preflight Condor"
             echo
             printf -- '- Evento: `%s`\n' "$GITHUB_EVENT_NAME"
             printf -- '- SHA: `%s`\n' "$GITHUB_SHA"
-            printf -- '- Documentación modificada: `%s`\n' "${{ steps.cambios.outputs.documentacion }}"
-            printf -- '- Gobierno/GitHub modificado: `%s`\n' "${{ steps.cambios.outputs.github }}"
-            printf -- '- Pruebas base requeridas: `%s`\n' "${{ steps.cambios.outputs.pruebas_base }}"
-            printf -- '- Backend requerido: `%s`\n' "${{ steps.cambios.outputs.backend }}"
-            printf -- '- E2E requerido: `%s`\n' "${{ steps.cambios.outputs.e2e }}"
-            printf -- '- Transición de release requerida: `%s`\n' "${{ steps.cambios.outputs.transicion_release }}"
+            printf -- '- Modo: **%s**\n' "$MODO"
+            printf -- '- Categorías: `%s`\n' "$CATEGORIAS"
+            printf -- '- Motivo: `%s`\n' "$MOTIVO"
+            printf -- '- Validación completa: `%s`\n' "$COMPLETA"
+            printf -- '- Transición de release requerida: `%s`\n' "$TRANSICION"
+            echo
+            echo "| Gate | Decisión | Razón |"
+            echo "| --- | --- | --- |"
+            printf '| Documentación | **%s** | categoría documental: `%s` |\n' "$(decision "$DOCUMENTACION")" "$DOCUMENTACION"
+            printf '| Gobierno | **ejecutar** | invariante obligatoria del repositorio |\n'
+            printf '| Coordinación | **ejecutar** | reserva y colisiones siempre verificables |\n'
+            printf '| Contratos/integración | **%s** | %s |\n' "$(decision "$PRUEBAS_BASE")" "$MOTIVO"
+            printf '| Frontend rápido | **%s** | %s |\n' "$(decision "$FRONTEND")" "$MOTIVO"
+            printf '| Backend/MariaDB | **%s** | %s |\n' "$(decision "$BACKEND")" "$MOTIVO"
+            printf '| Playwright/runtime | **%s** | %s |\n' "$(decision "$E2E")" "$MOTIVO"
           } >> "$GITHUB_STEP_SUMMARY"
 
   documentacion:
