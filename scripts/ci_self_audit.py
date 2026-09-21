@@ -22,9 +22,18 @@ WRITE_ALL_RE = re.compile(
 )
 
 
+def active_yaml_lines(text: str) -> list[str]:
+    """Ignora comentarios completos antes de evaluar estructura del workflow."""
+    return [
+        line
+        for line in text.splitlines()
+        if not line.lstrip().startswith("#")
+    ]
+
+
 def job_blocks(text: str) -> dict[str, str]:
-    """Extrae bloques de jobs mediante la indentación estable de Actions YAML."""
-    lines = text.splitlines()
+    """Extrae jobs reales por indentación sin aceptar comentarios como config."""
+    lines = active_yaml_lines(text)
     inside = False
     current: str | None = None
     buffers: dict[str, list[str]] = {}
@@ -48,6 +57,34 @@ def job_blocks(text: str) -> dict[str, str]:
             buffers[current].append(line)
 
     return {name: "\n".join(lines_) for name, lines_ in buffers.items()}
+
+
+def job_value(block: str, key: str) -> str | None:
+    """Lee una clave declarada directamente en jobs.<id>, no texto anidado."""
+    prefix = f"    {key}:"
+    for line in block.splitlines():
+        if not line.startswith(prefix):
+            continue
+        return line[len(prefix):].strip().split(" #", 1)[0].strip()
+    return None
+
+
+def workflow_section_value(text: str, section: str, key: str) -> str | None:
+    """Lee una clave directa de una sección top-level simple."""
+    lines = active_yaml_lines(text)
+    section_line = f"{section}:"
+    inside = False
+    prefix = f"  {key}:"
+    for line in lines:
+        if not inside:
+            if line == section_line:
+                inside = True
+            continue
+        if line and not line.startswith(" "):
+            break
+        if line.startswith(prefix):
+            return line[len(prefix):].strip().split(" #", 1)[0].strip()
+    return None
 
 
 def step_blocks(text: str) -> list[list[str]]:
@@ -159,6 +196,37 @@ def logical_shell_commands(step: list[str]) -> list[str]:
         commands.append(" ".join(buffer))
     return commands
 
+def audit_job_workflow_uses(path: Path, text: str) -> list[str]:
+    """Audita referencias reusable-workflow declaradas a nivel de job."""
+    findings: list[str] = []
+    for name, block in job_blocks(text).items():
+        reference = job_value(block, "uses")
+        if reference is None:
+            continue
+        if reference.startswith("./"):
+            if (
+                not reference.startswith("./.github/workflows/")
+                or not reference.endswith(".yml")
+                or "@" in reference
+            ):
+                findings.append(
+                    f"{path}: job '{name}' usa workflow local inválido: {reference}."
+                )
+            continue
+        if reference.startswith("$/") or "@" not in reference:
+            findings.append(
+                f"{path}: job '{name}' usa workflow externo sin SHA fijo: {reference}."
+            )
+            continue
+        _, ref = reference.rsplit("@", 1)
+        if not PIN_RE.fullmatch(ref):
+            findings.append(
+                f"{path}: job '{name}' usa workflow externo sin SHA de "
+                f"40 caracteres: {reference}."
+            )
+    return findings
+
+
 def audit_action_pins(path: Path, text: str) -> list[str]:
     findings: list[str] = []
     for step in step_blocks(text):
@@ -184,6 +252,7 @@ def audit_action_pins(path: Path, text: str) -> list[str]:
                 f"{path}: checkout debe usar persist-credentials: false "
                 "dentro de su propio bloque with."
             )
+    findings.extend(audit_job_workflow_uses(path, text))
     return findings
 
 
@@ -207,44 +276,87 @@ def audit_retry_wrappers(path: Path, text: str) -> list[str]:
 
 def audit_workflow(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
+    active_text = "\n".join(active_yaml_lines(text))
     findings: list[str] = []
 
-    if "pull_request_target:" in text:
+    if "pull_request_target:" in active_text:
         findings.append(f"{path}: pull_request_target no está permitido.")
-    if "continue-on-error: true" in text:
+    if "continue-on-error: true" in active_text:
         findings.append(
             f"{path}: continue-on-error: true puede ocultar fallos deterministas."
         )
-    if WRITE_ALL_RE.search(text):
+    if WRITE_ALL_RE.search(active_text):
         findings.append(f"{path}: permissions: write-all no está permitido.")
 
     for name, block in job_blocks(text).items():
-        if "runs-on:" in block and "timeout-minutes:" not in block:
+        if job_value(block, "runs-on") is not None and job_value(
+            block, "timeout-minutes"
+        ) is None:
             findings.append(f"{path}: job '{name}' no tiene timeout-minutes.")
 
     findings.extend(audit_action_pins(path, text))
     return findings
 
 
+def job_commands(block: str) -> list[str]:
+    """Devuelve comandos reales de los steps de un job."""
+    commands: list[str] = []
+    for step in step_blocks(block):
+        commands.extend(logical_shell_commands(step))
+    return commands
+
+
 def audit_main_ci(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
-    required = {
-        "cancel-in-progress: true": "cancelación de runs obsoletos",
+    jobs = job_blocks(text)
+    findings: list[str] = []
+
+    if workflow_section_value(text, "concurrency", "cancel-in-progress") != "true":
+        findings.append(f"{path}: falta cancelación de runs obsoletos.")
+
+    command_text = "\n".join(
+        command
+        for block in jobs.values()
+        for command in job_commands(block)
+    )
+    required_commands = {
         "scripts/ci_change_classifier.py": "clasificación testeable de cambios",
         "scripts/ci_retry.py": "reintentos seguros",
         "scripts/ci_self_audit.py": "autoauditoría del CI",
-        "needs.preflight.outputs.pruebas_base == 'true'": "gate base selectivo",
-        "needs.preflight.outputs.backend == 'true'": "backend selectivo",
-        "needs.preflight.outputs.e2e == 'true'": "E2E selectivo",
+    }
+    for token, description in required_commands.items():
+        if token not in command_text:
+            findings.append(f"{path}: falta {description}.")
+
+    required_job_conditions = {
+        "pruebas-base": (
+            "needs.preflight.outputs.pruebas_base == 'true'",
+            "gate base selectivo",
+        ),
+        "backend-php": (
+            "needs.preflight.outputs.backend == 'true'",
+            "backend selectivo",
+        ),
+        "e2e": (
+            "needs.preflight.outputs.e2e == 'true'",
+            "E2E selectivo",
+        ),
+    }
+    for job_name, (condition, description) in required_job_conditions.items():
+        block = jobs.get(job_name)
+        if block is None or condition not in (job_value(block, "if") or ""):
+            findings.append(f"{path}: falta {description}.")
+
+    final_commands = "\n".join(job_commands(jobs.get("validar", "")))
+    required_final = {
         'case "$PRUEBAS_BASE" in': "aceptación explícita de gate base omitido",
         'case "$BACKEND_PHP" in': "aceptación explícita de backend omitido",
+        'case "$E2E" in': "aceptación explícita de E2E omitido",
     }
+    for token, description in required_final.items():
+        if token not in final_commands:
+            findings.append(f"{path}: falta {description}.")
 
-    findings = [
-        f"{path}: falta {description}."
-        for token, description in required.items()
-        if token not in text
-    ]
     findings.extend(audit_retry_wrappers(path, text))
     return findings
 
