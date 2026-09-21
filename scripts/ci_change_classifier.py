@@ -49,6 +49,7 @@ E2E_CONTROL_FILES = COMPOSER_FILES | {
 CI_CRITICAL = {
     ".github/workflows/ci.yml",
     ".github/workflows/ci-throughput-telemetry.yml",
+    ".github/workflows/observar-release.yml",
     "scripts/ci_change_classifier.py",
     "scripts/ci_retry.py",
     "scripts/ci_self_audit.py",
