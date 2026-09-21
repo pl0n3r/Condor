@@ -13,6 +13,9 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final readonly class PlatformOwnerTenantContext
 {
+    public const DEFAULT_PAGE_SIZE = 24;
+    public const MAX_PAGE_SIZE = 50;
+
     public function __construct(private EntityManagerInterface $entityManager)
     {
     }
@@ -44,38 +47,67 @@ final readonly class PlatformOwnerTenantContext
     }
 
     /**
-     * @return list<array{
-     *   id: string,
-     *   name: string,
-     *   slug: string,
-     *   branch_count: int,
-     *   active_membership_count: int
-     * }>
+     * @return array{
+     *   items: list<array{
+     *     id: string,
+     *     name: string,
+     *     slug: string,
+     *     branch_count: int,
+     *     active_membership_count: int
+     *   }>,
+     *   page: int,
+     *   per_page: int,
+     *   total: int,
+     *   has_previous: bool,
+     *   has_next: bool
+     * }
      */
-    public function tenants(): array
-    {
-        $tenants = $this->entityManager->getRepository(Tenant::class)->findBy(
-            [],
-            ['name' => 'ASC'],
-        );
-        $branchCounts = $this->branchCountsByTenant();
-        $membershipCounts = $this->activeMembershipCountsByTenant();
+    public function tenantPage(
+        int $page,
+        int $perPage = self::DEFAULT_PAGE_SIZE,
+    ): array {
+        $page = max(1, $page);
+        $perPage = max(1, min(self::MAX_PAGE_SIZE, $perPage));
+        $repository = $this->entityManager->getRepository(Tenant::class);
+        $total = $repository->count([]);
+        $offset = ($page - 1) * $perPage;
 
-        return array_values(array_map(
-            static fn (Tenant $tenant): array => [
-                'id' => $tenant->id(),
-                'name' => $tenant->name(),
-                'slug' => $tenant->slug(),
-                'branch_count' => $branchCounts[$tenant->id()] ?? 0,
-                'active_membership_count' => (
-                    $membershipCounts[$tenant->id()] ?? 0
-                ),
-            ],
-            array_values(array_filter(
-                $tenants,
-                static fn (mixed $tenant): bool => $tenant instanceof Tenant,
-            )),
+        $rows = $repository->findBy(
+            [],
+            ['name' => 'ASC', 'id' => 'ASC'],
+            $perPage,
+            $offset,
+        );
+        $tenants = array_values(array_filter(
+            $rows,
+            static fn (mixed $tenant): bool => $tenant instanceof Tenant,
         ));
+        $tenantIds = array_map(
+            static fn (Tenant $tenant): string => $tenant->id(),
+            $tenants,
+        );
+        $branchCounts = $this->branchCountsByTenant($tenantIds);
+        $membershipCounts = $this->activeMembershipCountsByTenant($tenantIds);
+
+        return [
+            'items' => array_values(array_map(
+                static fn (Tenant $tenant): array => [
+                    'id' => $tenant->id(),
+                    'name' => $tenant->name(),
+                    'slug' => $tenant->slug(),
+                    'branch_count' => $branchCounts[$tenant->id()] ?? 0,
+                    'active_membership_count' => (
+                        $membershipCounts[$tenant->id()] ?? 0
+                    ),
+                ],
+                $tenants,
+            )),
+            'page' => $page,
+            'per_page' => $perPage,
+            'total' => $total,
+            'has_previous' => $page > 1,
+            'has_next' => ($offset + count($tenants)) < $total,
+        ];
     }
 
     /**
@@ -149,14 +181,23 @@ final readonly class PlatformOwnerTenantContext
         ];
     }
 
-    /** @return array<string, int> */
-    private function branchCountsByTenant(): array
+    /**
+     * @param list<string> $tenantIds
+     * @return array<string, int>
+     */
+    private function branchCountsByTenant(array $tenantIds): array
     {
+        if ($tenantIds === []) {
+            return [];
+        }
+
         $rows = $this->entityManager
             ->createQueryBuilder()
             ->select('IDENTITY(branch.tenant) AS tenant_id')
             ->addSelect('COUNT(branch.id) AS aggregate_count')
             ->from(Branch::class, 'branch')
+            ->where('IDENTITY(branch.tenant) IN (:tenantIds)')
+            ->setParameter('tenantIds', $tenantIds)
             ->groupBy('branch.tenant')
             ->getQuery()
             ->getArrayResult();
@@ -164,16 +205,25 @@ final readonly class PlatformOwnerTenantContext
         return $this->indexCounts($rows);
     }
 
-    /** @return array<string, int> */
-    private function activeMembershipCountsByTenant(): array
+    /**
+     * @param list<string> $tenantIds
+     * @return array<string, int>
+     */
+    private function activeMembershipCountsByTenant(array $tenantIds): array
     {
+        if ($tenantIds === []) {
+            return [];
+        }
+
         $rows = $this->entityManager
             ->createQueryBuilder()
             ->select('IDENTITY(membership.tenant) AS tenant_id')
             ->addSelect('COUNT(membership.id) AS aggregate_count')
             ->from(Membership::class, 'membership')
             ->where('membership.active = :active')
+            ->andWhere('IDENTITY(membership.tenant) IN (:tenantIds)')
             ->setParameter('active', true)
+            ->setParameter('tenantIds', $tenantIds)
             ->groupBy('membership.tenant')
             ->getQuery()
             ->getArrayResult();
