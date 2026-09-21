@@ -1695,6 +1695,118 @@ El desarrollo administrativo evita acumular backend útil durante largos periodo
 - cada slice debe dejar al propietario una forma proporcional de inspeccionar su avance desde el frontend cuando hacerlo sea técnicamente útil y seguro.
 
 
+
+### D-049 — Storefront público por slug y dominio personalizado
+
+Condor sirve una única experiencia pública por tenant, accesible tanto desde una ruta de plataforma como desde uno o más dominios personalizados verificados. El dominio personalizado no crea una copia del sitio ni una segunda aplicación.
+
+#### Identidad pública del tenant
+
+- cada tenant conserva un `slug` único y estable para su entrada bajo Condor, por ejemplo `https://www.condorapp.com.co/<slug>`;
+- un dominio personalizado del cliente puede servir exactamente el mismo storefront sin redirección visible hacia Condor;
+- la resolución se centraliza en un `TenantResolver` o abstracción equivalente;
+- el resolver identifica tenant por **host personalizado verificado** o, cuando el host corresponde a Condor, por **slug de ruta**;
+- un host desconocido falla cerrado y nunca selecciona un tenant por aproximación;
+- resolver tenant no sustituye filtros tenant-scoped ni permisos: el aislamiento sigue siendo obligatorio en todas las consultas y mutaciones.
+
+#### Modelo de dominios
+
+Los dominios personalizados se modelan como datos persistentes de Condor y no como configuración hardcodeada.
+
+La entidad `TenantDomain` o equivalente debe poder representar:
+
+- tenant propietario;
+- host normalizado y único globalmente;
+- tipo de dominio: personalizado, plataforma o futuro subdominio;
+- estado operacional: `pending_verification`, `verified`, `active`, `failed`, `disabled`;
+- indicador de dominio primario;
+- mecanismo/token de verificación cuando corresponda;
+- timestamps de alta, verificación y última comprobación;
+- diagnóstico de fallo sanitizado, sin exponer secretos ni datos sensibles.
+
+Un mismo host no puede pertenecer simultáneamente a dos tenants activos.
+
+#### Conexión del dominio
+
+El flujo inicial de conexión es:
+
+1. registrar dominio en Condor;
+2. normalizar y validar sintaxis;
+3. mostrar instrucciones de apuntamiento compatibles con el proveedor del cliente;
+4. comprobar que el dominio llega a la infraestructura esperada;
+5. verificar control/propiedad cuando sea necesario;
+6. comprobar HTTPS/TLS;
+7. marcar el dominio como `active`;
+8. empezar a servir el storefront del tenant bajo ese host.
+
+El DNS no apunta a una ruta `/slug`; apunta el host del cliente a la infraestructura de Condor y el tenant se resuelve desde el `Host` HTTP validado.
+
+Condor no modifica DNS del cliente automáticamente salvo que exista una integración futura explícitamente autorizada.
+
+#### Host y seguridad
+
+- el header `Host` solo se acepta cuando coincide con un dominio registrado o con hosts propios conocidos de Condor;
+- proteger generación de URLs absolutas, redirects, canonical, emails y callbacks frente a Host Header Injection;
+- retirar/desactivar un dominio debe cortar inmediatamente su capacidad de seleccionar tenant;
+- admin, login y APIs internas no se exponen automáticamente bajo dominios de storefront;
+- un dominio personalizado nunca otorga permisos adicionales;
+- la configuración DNS/TLS es una transición operativa separada del merge de código;
+- el dominio no se declara listo hasta que apuntamiento, propiedad cuando aplique y HTTPS tengan evidencia suficiente.
+
+#### Dominio primario, SEO e integraciones
+
+Cada storefront tiene una URL pública primaria efectiva.
+
+Cuando un dominio personalizado activo sea el primario, debe usarse como base para:
+
+- `canonical`;
+- sitemap;
+- Open Graph;
+- URLs absolutas;
+- IndexNow;
+- feeds y enlaces públicos.
+
+La ruta bajo `condorapp.com.co/<slug>` puede mantenerse como fallback, pero el producto debe evitar contenido duplicado con canonical consistente y, cuando corresponda, redirección 301 controlada. Nunca redirigir antes de que el dominio personalizado esté comprobado como estable.
+
+#### Administración
+
+El Admin del tenant debe poder ver progresivamente:
+
+- dominio configurado;
+- estado de verificación;
+- instrucciones de conexión;
+- último chequeo y error sanitizado;
+- acción de reintento;
+- dominio primario cuando exista más de uno.
+
+El Super Admin debe poder inspeccionar globalmente:
+
+- tenant ↔ dominio;
+- estado DNS/HTTP/TLS;
+- última verificación;
+- errores sanitizados;
+- desactivación/revocación por seguridad.
+
+#### Storefront mínimo inicial
+
+Para desbloquear clientes reales antes de completar todo el e-commerce, Condor puede entregar un storefront mínimo pero real:
+
+- render server-side con Twig/Symfony;
+- identidad básica del negocio;
+- datos reales del tenant;
+- resolución por slug y por dominio;
+- 404/host desconocido fail-closed;
+- misma vista/tenant desde ambas entradas;
+- pruebas negativas de aislamiento entre tenants;
+- base preparada para catálogo, productos, SEO y e-commerce sin rehacer la resolución de tenant.
+
+#### Hosting y portabilidad
+
+Mientras Condor opere en Hostinger shared hosting se debe confirmar la capacidad real para asociar múltiples dominios al mismo document root y la emisión/renovación de TLS para dominios adicionales.
+
+La asociación dominio → tenant permanece en Condor y no se codifica como una regla propietaria del hosting, de forma que una futura migración a AWS u otra infraestructura no requiera rediseñar el producto.
+
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
