@@ -193,12 +193,13 @@ class GitHub:
         )
 
     def set_status(self, issue_number: int, status: str | None) -> None:
-        """Mantiene exactamente un estado de coordinación visible."""
+        """Mantiene un estado visible sin abrir una ventana transitoria sin estado."""
         self.ensure_status_labels()
-        for label in STATUS_LABELS:
-            self.remove_label(issue_number, label)
         if status:
             self.add_labels(issue_number, [status])
+        for label in STATUS_LABELS:
+            if label != status:
+                self.remove_label(issue_number, label)
 
     def branch_sha(self, branch: str) -> str | None:
         """Devuelve el SHA de una rama o None si no existe."""
