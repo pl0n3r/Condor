@@ -413,6 +413,10 @@ def audit_main_ci(path: Path) -> list[str]:
             "needs.preflight.outputs.pruebas_base == 'true'",
             "gate base selectivo",
         ),
+        "frontend": (
+            "needs.preflight.outputs.frontend == 'true'",
+            "frontend selectivo",
+        ),
         "backend-php": (
             "needs.preflight.outputs.backend == 'true'",
             "backend selectivo",
@@ -430,6 +434,7 @@ def audit_main_ci(path: Path) -> list[str]:
     final_commands = "\n".join(job_commands(jobs.get("validar", "")))
     required_final = {
         'case "$PRUEBAS_BASE" in': "aceptación explícita de gate base omitido",
+        'case "$FRONTEND" in': "aceptación explícita de frontend omitido",
         'case "$BACKEND_PHP" in': "aceptación explícita de backend omitido",
         'case "$E2E" in': "aceptación explícita de E2E omitido",
     }
