@@ -246,6 +246,13 @@ final class PlatformStaffControllerTest extends WebTestCase
         self::assertTrue(method_exists($sessionFactory, 'createSession'));
 
         $session = $sessionFactory->createSession();
+        $existingCookie = $client->getCookieJar()->get(
+            $session->getName(),
+        );
+        if ($existingCookie !== null) {
+            $session->setId((string) $existingCookie->getValue());
+        }
+
         $session->start();
         $request->setSession($session);
 
