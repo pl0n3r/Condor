@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
 import { platformOwnerContextPath } from './api';
@@ -41,6 +41,8 @@ type PlatformContextResponse = {
 type State =
   | { status: 'loading' }
   | { status: 'ready'; data: PlatformContextResponse }
+  | { status: 'permission-denied' }
+  | { status: 'not-found' }
   | { status: 'error' };
 
 type PlatformOwnerAppProps = Readonly<{
@@ -53,8 +55,10 @@ export function PlatformOwnerApp({
   logoutToken,
 }: PlatformOwnerAppProps) {
   const [state, setState] = useState<State>({ status: 'loading' });
+  const requestSequence = useRef(0);
 
   async function loadContext(tenantId?: string) {
+    const requestId = ++requestSequence.current;
     setState({ status: 'loading' });
 
     try {
@@ -63,14 +67,32 @@ export function PlatformOwnerApp({
         headers: { Accept: 'application/json' },
       });
 
+      if (requestId !== requestSequence.current) {
+        return;
+      }
+
+      if (response.status === 403) {
+        setState({ status: 'permission-denied' });
+        return;
+      }
+
+      if (response.status === 404) {
+        setState({ status: 'not-found' });
+        return;
+      }
+
       if (!response.ok) {
         throw new Error('No fue posible cargar el centro de control');
       }
 
       const data = await response.json() as PlatformContextResponse;
-      setState({ status: 'ready', data });
+      if (requestId === requestSequence.current) {
+        setState({ status: 'ready', data });
+      }
     } catch {
-      setState({ status: 'error' });
+      if (requestId === requestSequence.current) {
+        setState({ status: 'error' });
+      }
     }
   }
 
@@ -125,6 +147,21 @@ export function PlatformOwnerApp({
             Cargando estado real de Condor.
           </output>
         </>
+      )}
+
+      {state.status === 'permission-denied' && (
+        <div className="alert alert-error" role="alert">
+          <strong>Acceso no autorizado.</strong>{' '}
+          Tu sesión no tiene permisos para consultar este contexto de
+          plataforma.
+        </div>
+      )}
+
+      {state.status === 'not-found' && (
+        <div className="alert alert-error" role="alert">
+          <strong>Empresa no encontrada.</strong>{' '}
+          El tenant seleccionado ya no existe o dejó de estar disponible.
+        </div>
       )}
 
       {state.status === 'error' && (
@@ -266,21 +303,27 @@ export function PlatformOwnerApp({
                   </div>
                 </div>
 
-                <div className="tenant-grid">
-                  {selected.branches.map((branch) => (
-                    <article className="tenant-card" key={branch.id}>
-                      <div>
-                        <span className="tenant-slug">{branch.slug}</span>
-                        <h3>{branch.name}</h3>
-                      </div>
-                      <p className="muted">
-                        {branch.is_default
-                          ? 'Sede principal'
-                          : 'Sede operativa'}
-                      </p>
-                    </article>
-                  ))}
-                </div>
+                {selected.branches.length === 0 ? (
+                  <div className="platform-empty">
+                    Esta empresa todavía no tiene sedes configuradas.
+                  </div>
+                ) : (
+                  <div className="tenant-grid">
+                    {selected.branches.map((branch) => (
+                      <article className="tenant-card" key={branch.id}>
+                        <div>
+                          <span className="tenant-slug">{branch.slug}</span>
+                          <h3>{branch.name}</h3>
+                        </div>
+                        <p className="muted">
+                          {branch.is_default
+                            ? 'Sede principal'
+                            : 'Sede operativa'}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                )}
 
                 <div className="platform-readonly-note" role="note">
                   Este primer contexto es deliberadamente de solo lectura.
