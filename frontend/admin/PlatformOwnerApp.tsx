@@ -68,12 +68,19 @@ export function PlatformOwnerApp({
   tenantToken,
 }: PlatformOwnerAppProps) {
   const [state, setState] = useState<State>({ status: 'loading' });
+  const [platformRevision, setPlatformRevision] = useState(0);
   const requestSequence = useRef(0);
   const globalPage = useRef(1);
 
-  async function loadContext(tenantId?: string, page = 1) {
+  async function loadContext(
+    tenantId?: string,
+    page = 1,
+    showLoading = true,
+  ) {
     const requestId = ++requestSequence.current;
-    setState({ status: 'loading' });
+    if (showLoading) {
+      setState({ status: 'loading' });
+    }
 
     try {
       const response = await fetch(platformOwnerContextPath(tenantId, page), {
@@ -239,7 +246,10 @@ export function PlatformOwnerApp({
 
               <PlatformTenantCreationPanel
                 csrfToken={tenantToken}
-                onCreated={() => void loadContext(undefined, 1)}
+                onCreated={() => {
+                  setPlatformRevision((current) => current + 1);
+                  void loadContext(undefined, 1, false);
+                }}
               />
 
               <section className="platform-section" aria-labelledby="tenant-list-title">
@@ -333,7 +343,10 @@ export function PlatformOwnerApp({
                 )}
               </section>
 
-              <PlatformStaffPanel csrfToken={staffToken} />
+              <PlatformStaffPanel
+                csrfToken={staffToken}
+                refreshKey={platformRevision}
+              />
             </>
           )}
 
