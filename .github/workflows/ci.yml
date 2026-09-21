@@ -20,12 +20,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
+      categoria_documentacion: ${{ steps.cambios.outputs.categoria_documentacion }}
+      categoria_gobierno: ${{ steps.cambios.outputs.categoria_gobierno }}
+      categoria_frontend: ${{ steps.cambios.outputs.categoria_frontend }}
+      categoria_backend: ${{ steps.cambios.outputs.categoria_backend }}
+      categoria_migraciones: ${{ steps.cambios.outputs.categoria_migraciones }}
+      categoria_dependencias: ${{ steps.cambios.outputs.categoria_dependencias }}
+      categoria_seguridad: ${{ steps.cambios.outputs.categoria_seguridad }}
+      categoria_release: ${{ steps.cambios.outputs.categoria_release }}
       documentacion: ${{ steps.cambios.outputs.documentacion }}
-      github: ${{ steps.cambios.outputs.github }}
       pruebas_base: ${{ steps.cambios.outputs.pruebas_base }}
+      frontend: ${{ steps.cambios.outputs.frontend }}
       backend: ${{ steps.cambios.outputs.backend }}
       e2e: ${{ steps.cambios.outputs.e2e }}
+      validacion_completa: ${{ steps.cambios.outputs.validacion_completa }}
       transicion_release: ${{ steps.cambios.outputs.transicion_release }}
+      modo: ${{ steps.cambios.outputs.modo }}
+      motivo: ${{ steps.cambios.outputs.motivo }}
+      categorias: ${{ steps.cambios.outputs.categorias }}
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -75,18 +87,42 @@ jobs:
             | tee -a "$GITHUB_OUTPUT"
 
       - name: Resumen preflight
+        env:
+          MODO: ${{ steps.cambios.outputs.modo }}
+          MOTIVO: ${{ steps.cambios.outputs.motivo }}
+          CATEGORIAS: ${{ steps.cambios.outputs.categorias }}
+          DOCUMENTACION: ${{ steps.cambios.outputs.documentacion }}
+          PRUEBAS_BASE: ${{ steps.cambios.outputs.pruebas_base }}
+          FRONTEND: ${{ steps.cambios.outputs.frontend }}
+          BACKEND: ${{ steps.cambios.outputs.backend }}
+          E2E: ${{ steps.cambios.outputs.e2e }}
+          COMPLETA: ${{ steps.cambios.outputs.validacion_completa }}
+          TRANSICION: ${{ steps.cambios.outputs.transicion_release }}
         run: |
+          set -euo pipefail
+          decision() {
+            if [[ "$1" == "true" ]]; then printf 'ejecutar'; else printf 'omitir'; fi
+          }
           {
             echo "## Preflight Condor"
             echo
             printf -- '- Evento: `%s`\n' "$GITHUB_EVENT_NAME"
             printf -- '- SHA: `%s`\n' "$GITHUB_SHA"
-            printf -- '- Documentación modificada: `%s`\n' "${{ steps.cambios.outputs.documentacion }}"
-            printf -- '- Gobierno/GitHub modificado: `%s`\n' "${{ steps.cambios.outputs.github }}"
-            printf -- '- Pruebas base requeridas: `%s`\n' "${{ steps.cambios.outputs.pruebas_base }}"
-            printf -- '- Backend requerido: `%s`\n' "${{ steps.cambios.outputs.backend }}"
-            printf -- '- E2E requerido: `%s`\n' "${{ steps.cambios.outputs.e2e }}"
-            printf -- '- Transición de release requerida: `%s`\n' "${{ steps.cambios.outputs.transicion_release }}"
+            printf -- '- Modo: **%s**\n' "$MODO"
+            printf -- '- Categorías: `%s`\n' "$CATEGORIAS"
+            printf -- '- Motivo: `%s`\n' "$MOTIVO"
+            printf -- '- Validación completa: `%s`\n' "$COMPLETA"
+            printf -- '- Transición de release requerida: `%s`\n' "$TRANSICION"
+            echo
+            echo "| Gate | Decisión | Razón |"
+            echo "| --- | --- | --- |"
+            printf '| Documentación | **%s** | categoría documental: `%s` |\n' "$(decision "$DOCUMENTACION")" "$DOCUMENTACION"
+            printf '| Gobierno | **ejecutar** | invariante obligatoria del repositorio |\n'
+            printf '| Coordinación | **ejecutar** | reserva y colisiones siempre verificables |\n'
+            printf '| Contratos/integración | **%s** | %s |\n' "$(decision "$PRUEBAS_BASE")" "$MOTIVO"
+            printf '| Frontend rápido | **%s** | %s |\n' "$(decision "$FRONTEND")" "$MOTIVO"
+            printf '| Backend/MariaDB | **%s** | %s |\n' "$(decision "$BACKEND")" "$MOTIVO"
+            printf '| Playwright/runtime | **%s** | %s |\n' "$(decision "$E2E")" "$MOTIVO"
           } >> "$GITHUB_STEP_SUMMARY"
 
   documentacion:
@@ -224,6 +260,41 @@ jobs:
 
       - name: Ejecutar integraciones
         run: python3 -m unittest discover -s tests/integration -p 'test_*.py'
+
+  frontend:
+    name: Frontend TypeScript / build
+    needs: preflight
+    if: needs.preflight.outputs.frontend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Instalar dependencias reproducibles
+        run: |
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "npm ci frontend" \
+            -- npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Validar TypeScript y build reproducible
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm run build:admin
+          test -s public/build/admin.js
+          test -s public/build/admin.css
+          git diff --exit-code -- public/build
 
   backend-php:
     name: Backend PHP / MariaDB
@@ -505,7 +576,7 @@ jobs:
 
   validar:
     name: Validar
-    needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, backend-php, e2e]
+    needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, frontend, backend-php, e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -517,8 +588,12 @@ jobs:
           GOBIERNO: ${{ needs.gobierno.result }}
           COORDINACION: ${{ needs.coordinacion.result }}
           PRUEBAS_BASE: ${{ needs.pruebas-base.result }}
+          FRONTEND: ${{ needs.frontend.result }}
           BACKEND_PHP: ${{ needs.backend-php.result }}
           E2E: ${{ needs.e2e.result }}
+          MODO: ${{ needs.preflight.outputs.modo }}
+          MOTIVO: ${{ needs.preflight.outputs.motivo }}
+          CATEGORIAS: ${{ needs.preflight.outputs.categorias }}
         run: |
           set -euo pipefail
 
@@ -528,6 +603,11 @@ jobs:
           case "$PRUEBAS_BASE" in
             success|skipped) ;;
             *) echo "::error::Pruebas base no pasaron."; exit 1 ;;
+          esac
+
+          case "$FRONTEND" in
+            success|skipped) ;;
+            *) echo "::error::Frontend no pasó."; exit 1 ;;
           esac
 
           case "$BACKEND_PHP" in
@@ -552,7 +632,11 @@ jobs:
             echo "- Documentación: **$DOCUMENTACION**"
             echo "- Gobierno: **$GOBIERNO**"
             echo "- Coordinación: **$COORDINACION**"
+            echo "- Modo de selección: **$MODO**"
+            printf -- '- Categorías: `%s`\n' "$CATEGORIAS"
+            printf -- '- Motivo: `%s`\n' "$MOTIVO"
             echo "- Pruebas base: **$PRUEBAS_BASE**"
+            echo "- Frontend: **$FRONTEND**"
             echo "- Backend PHP: **$BACKEND_PHP**"
             echo "- Playwright: **$E2E**"
             echo "- Resultado agregado: **success**"

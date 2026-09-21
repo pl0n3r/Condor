@@ -159,6 +159,11 @@ jobs:
     # if: needs.preflight.outputs.pruebas_base == 'true'
     steps:
       - run: python3 scripts/ci_change_classifier.py
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: npm run typecheck
   backend-php:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -187,8 +192,64 @@ jobs:
             )
             findings = audit_main_ci(path)
         self.assertTrue(any("gate base selectivo" in item for item in findings))
+        self.assertTrue(any("frontend selectivo" in item for item in findings))
         self.assertTrue(any("backend selectivo" in item for item in findings))
         self.assertTrue(any("E2E selectivo" in item for item in findings))
+
+    def test_main_ci_requires_explanatory_preflight_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: CI
+on: push
+concurrency:
+  cancel-in-progress: true
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: python3 scripts/ci_change_classifier.py
+  pruebas-base:
+    if: needs.preflight.outputs.pruebas_base == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: python3 scripts/ci_self_audit.py
+  frontend:
+    if: needs.preflight.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: python3 scripts/ci_retry.py -- npm ci
+  backend-php:
+    if: needs.preflight.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: python3 scripts/ci_retry.py -- composer install
+  e2e:
+    if: needs.preflight.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: true
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          case "$PRUEBAS_BASE" in success|skipped) ;; esac
+          case "$FRONTEND" in success|skipped) ;; esac
+          case "$BACKEND_PHP" in success|skipped) ;; esac
+          case "$E2E" in success|skipped) ;; esac
+""",
+            )
+            findings = audit_main_ci(path)
+        self.assertTrue(
+            any("resumen explicativo de gates" in item for item in findings)
+        )
+        self.assertTrue(any("output de modo" in item for item in findings))
 
     def test_release_observer_must_reuse_transition_classifier(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
