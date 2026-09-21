@@ -164,6 +164,75 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
         raise EvidenceError("El checklist de transición no coincide con el contrato.")
 
 
+def public_evidence(observation: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Normaliza el contrato de smoke y marca comprobaciones ausentes."""
+    raw_checks = observation.get("comprobaciones")
+    observation_checks = raw_checks if isinstance(raw_checks, dict) else {}
+    public: dict[str, dict[str, Any]] = {}
+
+    for check_id in PUBLIC_CHECKS:
+        raw = observation_checks.get(check_id)
+        if not isinstance(raw, dict):
+            public[check_id] = {
+                "ok": False,
+                "clase": "funcional",
+                "detalle": "No se registró esta comprobación.",
+            }
+            continue
+
+        public[check_id] = {
+            "ok": raw.get("ok") is True,
+            "clase": raw.get("clase", "desconocido"),
+            "detalle": str(raw.get("detalle", "Sin evidencia.")),
+            **(
+                {"intento": raw["intento"]}
+                if isinstance(raw.get("intento"), int)
+                else {}
+            ),
+        }
+
+    return public
+
+
+def transition_evidence(
+    manifest: dict[str, Any],
+    verified: set[str],
+) -> tuple[dict[str, dict[str, bool]], list[str]]:
+    """Evalúa únicamente el checklist requerido por el manifiesto."""
+    checks: dict[str, dict[str, bool]] = {}
+    pending: list[str] = []
+
+    for item in manifest["transition"]["checks"]:
+        check_id = item["id"]
+        required = item.get("required") is True
+        is_verified = check_id in verified
+        checks[check_id] = {
+            "required": required,
+            "verified": is_verified,
+            "ok": (not required) or is_verified,
+        }
+        if required and not is_verified:
+            pending.append(check_id)
+
+    return checks, pending
+
+
+def release_state(
+    *,
+    same_identity: bool,
+    observation_state: object,
+    public: dict[str, dict[str, Any]],
+    required_pending: list[str],
+) -> str:
+    """Mantiene separados identidad observada, deploy y validación."""
+    identity_observed = same_identity and public["health"]["ok"]
+    if not identity_observed or observation_state == "NO_OBSERVADO":
+        return "NO_OBSERVADO"
+    if all(item["ok"] for item in public.values()) and not required_pending:
+        return "VALIDATED_IN_PRODUCTION"
+    return "DEPLOY_OBSERVED"
+
+
 def finalize(
     manifest: dict[str, Any],
     observation: dict[str, Any],
@@ -172,61 +241,24 @@ def finalize(
     """Combina identidad, smoke y transición sin convertir deploy en validación implícita."""
     validate_manifest(manifest)
     verified_set = set(verified)
-    unknown = verified_set.difference(CHECK_IDS)
-    if unknown:
+    if verified_set.difference(CHECK_IDS):
         raise EvidenceError("Se intentó verificar una comprobación de transición desconocida.")
 
     same_identity = (
         observation.get("version_esperada") == manifest["version"]
         and observation.get("sha_esperado") == manifest["sha"]
     )
-    observation_checks = observation.get("comprobaciones")
-    if not isinstance(observation_checks, dict):
-        observation_checks = {}
-
-    public: dict[str, dict[str, Any]] = {}
-    for check_id in PUBLIC_CHECKS:
-        raw = observation_checks.get(check_id)
-        if isinstance(raw, dict):
-            public[check_id] = {
-                "ok": raw.get("ok") is True,
-                "clase": raw.get("clase", "desconocido"),
-                "detalle": str(raw.get("detalle", "Sin evidencia.")),
-                **(
-                    {"intento": raw["intento"]}
-                    if isinstance(raw.get("intento"), int)
-                    else {}
-                ),
-            }
-        else:
-            public[check_id] = {
-                "ok": False,
-                "clase": "funcional",
-                "detalle": "No se registró esta comprobación.",
-            }
-
-    transition_checks: dict[str, dict[str, bool]] = {}
-    required_pending: list[str] = []
-    for item in manifest["transition"]["checks"]:
-        check_id = item["id"]
-        required = item.get("required") is True
-        is_verified = check_id in verified_set
-        transition_checks[check_id] = {
-            "required": required,
-            "verified": is_verified,
-            "ok": (not required) or is_verified,
-        }
-        if required and not is_verified:
-            required_pending.append(check_id)
-
-    public_ok = all(item["ok"] for item in public.values())
-    identity_observed = same_identity and public["health"]["ok"]
-    if not identity_observed or observation.get("estado") == "NO_OBSERVADO":
-        state = "NO_OBSERVADO"
-    elif public_ok and not required_pending:
-        state = "VALIDATED_IN_PRODUCTION"
-    else:
-        state = "DEPLOY_OBSERVED"
+    public = public_evidence(observation)
+    transition_checks, required_pending = transition_evidence(
+        manifest,
+        verified_set,
+    )
+    state = release_state(
+        same_identity=same_identity,
+        observation_state=observation.get("estado"),
+        public=public,
+        required_pending=required_pending,
+    )
 
     return {
         "schema": SCHEMA,
@@ -241,7 +273,6 @@ def finalize(
             "pending": required_pending,
         },
     }
-
 
 def markdown(evidence: dict[str, Any]) -> str:
     lines = [
