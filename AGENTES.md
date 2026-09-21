@@ -480,6 +480,7 @@ Reglas:
 - no reescribir retroactivamente todo el historial solo para uniformar estilo; aplicar la pauta hacia adelante y mejorar comentarios futuros;
 - conservar la regla de **hitos macro**: una comunicación más humana no autoriza microactualizaciones minuto a minuto;
 - cuando un fallo o finding sea relevante, explicar brevemente su impacto funcional u operativo y cómo se resolvió, no solo nombrar la herramienta que lo detectó;
+- aplicar esta misma pauta a descripciones de PR, comentarios de Issues/Roadmap, respuestas de revisión y notas de avance: cada texto debe poder entenderse por sí solo meses después sin depender del chat que originó el cambio;
 - en PRs e Issues de producto, priorizar el lenguaje de capacidad/impacto; en revisiones técnicas, mantener precisión de archivo, línea y riesgo cuando sea necesario.
 
 Ejemplo preferido:
