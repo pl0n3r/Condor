@@ -11,8 +11,28 @@ on:
         description: 'SHA completo del merge desplegado en Hostinger'
         required: true
         type: string
-      transicion_verificada:
-        description: 'Confirmé por separado la transición operativa requerida'
+      migraciones_verificadas:
+        description: 'Confirmé migraciones requeridas por esta release'
+        required: false
+        default: false
+        type: boolean
+      roles_verificados:
+        description: 'Confirmé roles/permisos requeridos por esta release'
+        required: false
+        default: false
+        type: boolean
+      comandos_verificados:
+        description: 'Confirmé comandos/provisionamiento requeridos por esta release'
+        required: false
+        default: false
+        type: boolean
+      configuracion_verificada:
+        description: 'Confirmé configuración operativa requerida por esta release'
+        required: false
+        default: false
+        type: boolean
+      cache_verificada:
+        description: 'Confirmé limpieza/warmup de caché cuando aplica'
         required: false
         default: false
         type: boolean
@@ -33,45 +53,100 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
-      - name: Probar observador sin tocar producción
-        run: python3 -m unittest tests/test_observar_release.py
+      - name: Probar evidencia sin tocar producción
+        run: |
+          python3 -m unittest \
+            tests/test_observar_release.py \
+            tests/test_release_evidence.py \
+            tests/contract/test_release_evidence_contract.py \
+            tests/integration/test_release_evidence_integration.py
 
-      - name: Detectar transición de release
+      - name: Detectar transición y generar manifiesto
         id: transicion
         env:
+          VERSION_ESPERADA: ${{ inputs.version }}
           SHA_ESPERADO: ${{ inputs.sha }}
         run: |
           set -euo pipefail
           git diff --name-only "${SHA_ESPERADO}^" "$SHA_ESPERADO" > /tmp/cambios-release.txt
-          cat /tmp/cambios-release.txt
 
           requiere="$(
-            python3 scripts/ci_change_classifier.py               --event pull_request               --format json               < /tmp/cambios-release.txt             | python3 -c 'import json, sys; print(str(json.load(sys.stdin)["transicion_release"]).lower())'
+            python3 scripts/ci_change_classifier.py \
+              --event pull_request \
+              --format json \
+              < /tmp/cambios-release.txt \
+            | python3 -c 'import json, sys; print(str(json.load(sys.stdin)["transicion_release"]).lower())'
           )"
           echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
+
+          python3 scripts/release_evidence.py manifest \
+            --sha "$SHA_ESPERADO" \
+            --expected-version "$VERSION_ESPERADA" \
+            < /tmp/cambios-release.txt \
+            > /tmp/release-manifest.json
+
           echo "Transición operativa requerida: $requiere" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Observar producción en modo solo lectura
+        id: smoke
         env:
           VERSION_ESPERADA: ${{ inputs.version }}
           SHA_ESPERADO: ${{ inputs.sha }}
-          TRANSICION_REQUERIDA: ${{ steps.transicion.outputs.requerida }}
-          TRANSICION_VERIFICADA: ${{ inputs.transicion_verificada }}
+        run: |
+          set -euo pipefail
+          set +e
+          python3 scripts/observar_release.py \
+            --version "$VERSION_ESPERADA" \
+            --sha "$SHA_ESPERADO" \
+            --intentos 5 \
+            --intervalo 4 \
+            --timeout 5 \
+            > /tmp/release-observation.json
+          estado_observador=$?
+          set -e
+
+          if (( estado_observador > 1 )); then
+            echo "::error::El observador no pudo producir evidencia válida."
+            exit "$estado_observador"
+          fi
+          echo "estado_cli=$estado_observador" >> "$GITHUB_OUTPUT"
+
+      - name: Consolidar evidencia y checklist de transición
+        env:
+          MIGRACIONES: ${{ inputs.migraciones_verificadas }}
+          ROLES: ${{ inputs.roles_verificados }}
+          COMANDOS: ${{ inputs.comandos_verificados }}
+          CONFIGURACION: ${{ inputs.configuracion_verificada }}
+          CACHE: ${{ inputs.cache_verificada }}
         run: |
           set -euo pipefail
           args=(
-            --version "$VERSION_ESPERADA"
-            --sha "$SHA_ESPERADO"
-            --intentos 5
-            --intervalo 4
-            --timeout 5
+            finalize
             --markdown
           )
-          if [[ "$TRANSICION_REQUERIDA" == "true" ]]; then
-            args+=(--transicion-requerida)
-          fi
-          if [[ "$TRANSICION_VERIFICADA" == "true" ]]; then
-            args+=(--transicion-verificada)
-          fi
-          python3 scripts/observar_release.py "${args[@]}" \
+
+          [[ "$MIGRACIONES" == "true" ]] && args+=(--verified migraciones)
+          [[ "$ROLES" == "true" ]] && args+=(--verified roles)
+          [[ "$COMANDOS" == "true" ]] && args+=(--verified comandos)
+          [[ "$CONFIGURACION" == "true" ]] && args+=(--verified configuracion)
+          [[ "$CACHE" == "true" ]] && args+=(--verified cache)
+
+          set +e
+          jq -n \
+            --slurpfile manifest /tmp/release-manifest.json \
+            --slurpfile observation /tmp/release-observation.json \
+            '{manifest: $manifest[0], observation: $observation[0]}' \
+            | python3 scripts/release_evidence.py "${args[@]}" \
             | tee -a "$GITHUB_STEP_SUMMARY"
+          estados=("${PIPESTATUS[@]}")
+          set -e
+
+          if (( estados[0] != 0 )); then
+            exit "${estados[0]}"
+          fi
+          if (( estados[1] > 1 )); then
+            exit "${estados[1]}"
+          fi
+          if (( estados[2] != 0 )); then
+            exit "${estados[2]}"
+          fi

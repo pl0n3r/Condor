@@ -158,6 +158,7 @@ class ObserverTests(unittest.TestCase):
     def test_version_distinta_no_observa_deploy(self) -> None:
         resultado = modulo.observar(self.base, "0.1.1", SHA, intentos=1)
         self.assertEqual(resultado["estado"], "NO_OBSERVADO")
+        self.assertEqual(resultado["comprobaciones"]["health"]["clase"], "funcional")
 
     def test_health_5xx_y_json_invalido_no_observan_deploy(self) -> None:
         for codigo, cuerpo in [(503, b"fallo"), (200, b"{mal json")]:
@@ -211,6 +212,7 @@ class ObserverTests(unittest.TestCase):
             resultado = self.observar()
         self.assertEqual(resultado["estado"], "NO_OBSERVADO")
         self.assertEqual(resultado["comprobaciones"]["health"]["intento"], 2)
+        self.assertEqual(resultado["comprobaciones"]["health"]["clase"], "transitorio")
         sleep.assert_called_once_with(0)
 
     def test_home_transitorio_se_recupera_dentro_del_presupuesto(self) -> None:
