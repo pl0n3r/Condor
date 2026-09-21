@@ -714,44 +714,24 @@ Ante un fallo recurrente o de CI:
 
 ---
 
-## 17. Reglas ya acordadas para Condor
+## 17. Invariantes operativos de Condor
 
-Estas reglas provienen de las decisiones tomadas desde el inicio del proyecto y deben considerarse obligatorias hasta que el usuario las cambie explícitamente:
+Esta sección resume únicamente los invariantes transversales que una sesión no debe reinterpretar. El detalle ejecutable vive en las secciones anteriores.
 
-- toda implementación nueva requiere una reserva de Issue mediante `/tomar`; GitHub es el lock central de coordinación multiagente;
-- toda reserva usa la rama canónica `trabajo/issue-N` y no vence automáticamente;
-- CI debe rechazar PRs sin relación válida `Closes #N` o con archivos solapados con otros PR abiertos;
-- el nombre oficial y público del producto es `Condor App`;
-- en documentación técnica, GitHub y conversación de desarrollo se usa `Condor` como nombre corto;
-- el dominio canónico es `https://www.condorapp.com.co`;
-- el repositorio oficial es `pl0n3r/Condor`;
-- Condor reutiliza la infraestructura y las prácticas maduras de BRVTAL cuando tengan sentido;
-- no se copia automáticamente lógica de negocio, módulos, rutas, esquema de datos ni deuda histórica de BRVTAL;
-- GitHub y todo lo controlable por el proyecto se escribe en español siempre que sea técnicamente viable;
-- el producto está pensado inicialmente para Colombia y usa `es-CO` y COP como defaults;
-- el roadmap canónico vive en GitHub Issue #1;
-- el roadmap registra de forma acumulativa los hitos, trabajo relevante, pendientes y bloqueos principales;
-- la convención visual es exactamente: ✅ ~~completado~~, 🚧 pendiente/en curso, ⛔ bloqueado;
-- los elementos completados relevantes se conservan tachados en el cuerpo del roadmap;
-- el roadmap se mantiene **ordenado y completo**, no reducido: los comentarios registran hitos macro y el detalle operacional vive en Issues/PRs; nunca se crea un segundo Roadmap para dividir el histórico;
-- el roadmap no es el archivo de especificaciones ni un repositorio de políticas; contiene únicamente trabajo/progreso e historial de ejecución;
-- `ESPECIFICACIONES.md` contiene decisiones durables, reglas funcionales y detalle arquitectónico;
-- el roadmap debe poder ser leído por una socia o stakeholder para entender el avance en tiempo real sin necesitar contexto técnico;
-- `ROADMAP.md` es solo un punto de entrada al Issue #1 y no mantiene una copia paralela del progreso;
-- `AGENTES.md` es el protocolo operativo canónico y hereda la estructura/reglas aplicables de BRVTAL;
-- toda PR relevante debe reflejar en el roadmap cualquier cambio real de estado antes o inmediatamente después del cierre de la entrega;
-- el roadmap funciona como un registro macro acumulativo desde el inicio del proyecto hasta, como mínimo, la primera v1.0.0 madura;
-- nunca declarar VALIDADO EN PRODUCCIÓN únicamente porque CI esté verde;
-- Condor usa versión humana de producto por cada deploy;
-- el primer deploy será `0.1.0`;
-- el incremento normal por deploy es patch (`0.1.1`, `0.1.2`, ...);
-- todos los títulos visibles de GitHub usan la versión objetivo al final con formato exacto `(V X.Y.Z)`;
-- los saltos minor son hitos deliberados y `1.0.0` requiere decisión explícita del usuario;
-- cuando exista la aplicación, `config/version.php` será la fuente canónica de versión y cualquier metadata equivalente deberá mantener paridad;
-- el README usa la misma estrategia de snapshot por deploy que BRVTAL;
-- el README debe mostrar siempre y por separado la versión objetivo y la versión realmente desplegada; tras el primer deploy, la señal visible será por ejemplo `v0.1.0`, pero nunca se inferirá desde CI;
-- `GLOSARIO.md` debe mantenerse actualizado con los términos técnicos relevantes que aparezcan en superficies visibles para socios, usando lenguaje de negocio y ejemplos de Condor cuando ayuden.
-- **No usar archivos ZIP como mecanismo de entrega, respaldo, transferencia de código o handoff del proyecto.** Todo cambio de código/documentación debe quedar directamente versionado en GitHub mediante commits, ramas, PRs y merges; no enviar paquetes ZIP al usuario ni usar ZIP como sustituto del repositorio. Los artefactos internos automáticos de GitHub Actions solo pueden existir como evidencia técnica efímera cuando una herramienta los genere de forma inevitable, nunca como fuente de verdad ni como canal de entrega.
+- **Identidad**: producto público `Condor App`; nombre técnico corto `Condor`; repositorio `pl0n3r/Condor`; dominio `https://www.condorapp.com.co`.
+- **Mercado/idioma**: Colombia, `es-CO` y COP como defaults; español en superficies controlables cuando sea técnicamente viable.
+- **Referencia BRVTAL**: reutilizar prácticas maduras de ingeniería cuando apliquen; nunca copiar automáticamente lógica de negocio, módulos, rutas, esquema ni deuda histórica.
+- **Coordinación**: toda implementación nueva usa Issue reservado y rama `trabajo/issue-N`; CI protege relación Issue/PR y colisiones según §1.1.
+- **Roadmap**: Issue #1 es el único Roadmap, cronológico y acumulativo; `ROADMAP.md` solo enlaza; progreso no se duplica en especificaciones.
+- **Especificaciones**: decisiones durables de producto/arquitectura pertenecen a `ESPECIFICACIONES.md`.
+- **Versionado**: cada deploy usa versión humana; incremento normal patch; `1.0.0` requiere decisión explícita; `config/version.php` es fuente canónica y metadata equivalente mantiene paridad.
+- **Estados**: VALIDADO EN CÓDIGO, DESPLEGADO y VALIDADO EN PRODUCCIÓN son estados distintos; CI verde nunca prueba producción.
+- **README**: snapshot del deploy, no roadmap ni changelog acumulativo; debe separar versión objetivo de versión realmente desplegada.
+- **Glosario**: `GLOSARIO.md` traduce términos técnicos relevantes para seguimiento de negocio.
+- **Entrega**: no usar ZIP como mecanismo de handoff, respaldo o fuente de verdad; todo cambio vive en Git/PR. Artefactos de Actions son evidencia efímera, no entrega.
+- **Producción**: migraciones, secretos, datos reales y operaciones destructivas/protegidas siguen las restricciones de §16.
+
+Si una regla detallada cambia, actualizar su sección canónica y mantener este resumen consistente; no duplicar aquí el procedimiento completo.
 
 ---
 
