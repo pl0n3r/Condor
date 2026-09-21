@@ -28,12 +28,22 @@ CANONICAL_DOCS = {
     "ROADMAP.md",
 }
 
+GITHUB_PREFIX = ".github/"
+CONFIG_PREFIX = "config/"
+MIGRATIONS_PREFIX = "migrations/"
+TEMPLATES_PREFIX = "templates/"
+PUBLIC_PREFIX = "public/"
+PHPUNIT_CONFIG = "phpunit.xml.dist"
+PACKAGE_JSON = "package.json"
+PACKAGE_LOCK = "package-lock.json"
+PLAYWRIGHT_CONFIG = "playwright.config.mjs"
+
 COMPOSER_FILES = {"composer.json", "composer.lock"}
-BACKEND_CONTROL_FILES = COMPOSER_FILES | {"phpunit.xml.dist"}
+BACKEND_CONTROL_FILES = COMPOSER_FILES | {PHPUNIT_CONFIG}
 E2E_CONTROL_FILES = COMPOSER_FILES | {
-    "package.json",
-    "package-lock.json",
-    "playwright.config.mjs",
+    PACKAGE_JSON,
+    PACKAGE_LOCK,
+    PLAYWRIGHT_CONFIG,
 }
 
 CI_CRITICAL = {
@@ -49,9 +59,9 @@ CI_CRITICAL = {
     "tests/test_ci_throughput_report.py",
     "tests/contract/test_tooling_contract.py",
     "tests/integration/test_tooling_integration.py",
-    "package.json",
-    "package-lock.json",
-    "playwright.config.mjs",
+    PACKAGE_JSON,
+    PACKAGE_LOCK,
+    PLAYWRIGHT_CONFIG,
 } | COMPOSER_FILES
 
 
@@ -81,11 +91,11 @@ def classify(paths: Iterable[str], event: str) -> Selection:
         for path in files
     )
     github = any(
-        path.startswith(".github/") or path in CANONICAL_DOCS
+        path.startswith(GITHUB_PREFIX) or path in CANONICAL_DOCS
         for path in files
     )
     transicion_release = any(
-        path.startswith(("migrations/", "config/", "src/Console/"))
+        path.startswith((MIGRATIONS_PREFIX, CONFIG_PREFIX, "src/Console/"))
         for path in files
     )
 
@@ -113,8 +123,8 @@ def classify(paths: Iterable[str], event: str) -> Selection:
         )
 
     pruebas_base = any(
-        starts(path, ("scripts/", "tests/", ".github/"))
-        or path in {"pyproject.toml", "phpunit.xml.dist"}
+        starts(path, ("scripts/", "tests/", GITHUB_PREFIX))
+        or path in {"pyproject.toml", PHPUNIT_CONFIG}
         for path in files
     )
 
@@ -123,13 +133,13 @@ def classify(paths: Iterable[str], event: str) -> Selection:
             path,
             (
                 "src/",
-                "config/",
-                "migrations/",
-                "templates/",
+                CONFIG_PREFIX,
+                MIGRATIONS_PREFIX,
+                TEMPLATES_PREFIX,
                 "tests/php/",
             ),
         )
-        or path.startswith("public/") and path.endswith(".php")
+        or path.startswith(PUBLIC_PREFIX) and path.endswith(".php")
         or path in BACKEND_CONTROL_FILES
         for path in files
     )
@@ -146,7 +156,7 @@ def classify(paths: Iterable[str], event: str) -> Selection:
                 "tests/e2e/",
             ),
         )
-        or starts(path, ("public/",))
+        or path.startswith(PUBLIC_PREFIX)
         or path in E2E_CONTROL_FILES
         for path in files
     )
@@ -161,23 +171,23 @@ def classify(paths: Iterable[str], event: str) -> Selection:
             path,
             (
                 "docs/",
-                ".github/",
+                GITHUB_PREFIX,
                 "scripts/",
                 "tests/",
                 "src/",
-                "config/",
-                "migrations/",
-                "templates/",
+                CONFIG_PREFIX,
+                MIGRATIONS_PREFIX,
+                TEMPLATES_PREFIX,
                 "frontend/",
-                "public/",
+                PUBLIC_PREFIX,
             ),
         )
         or path in {
             "pyproject.toml",
-            "phpunit.xml.dist",
-            "package.json",
-            "package-lock.json",
-            "playwright.config.mjs",
+            PHPUNIT_CONFIG,
+            PACKAGE_JSON,
+            PACKAGE_LOCK,
+            PLAYWRIGHT_CONFIG,
             "composer.json",
             "composer.lock",
         }

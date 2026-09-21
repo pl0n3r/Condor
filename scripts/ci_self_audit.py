@@ -102,50 +102,62 @@ def checkout_has_safe_credentials(step: list[str]) -> bool:
     return False
 
 
+def run_directive(line: str) -> str | None:
+    """Devuelve el payload de una directiva YAML run: sin regex ambigua."""
+    stripped = line.lstrip()
+    if stripped.startswith("- "):
+        stripped = stripped[2:].lstrip()
+    if not stripped.startswith("run:"):
+        return None
+    return stripped[4:].strip()
+
+
+def indented_run_lines(lines: list[str], run_indent: int) -> list[str]:
+    """Extrae solo las líneas pertenecientes al bloque run actual."""
+    content: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip())
+        if stripped and indent <= run_indent and not stripped.startswith("#"):
+            break
+        if indent > run_indent:
+            content.append(line)
+    return content
+
+
+def run_content(step: list[str]) -> list[str]:
+    """Localiza la única directiva run de un step y devuelve su contenido."""
+    for index, line in enumerate(step):
+        payload = run_directive(line)
+        if payload is None:
+            continue
+        if payload not in {"", "|", ">"}:
+            return [payload]
+        run_indent = len(line) - len(line.lstrip())
+        return indented_run_lines(step[index + 1:], run_indent)
+    return []
+
+
 def logical_shell_commands(step: list[str]) -> list[str]:
     """Une continuaciones de shell dentro de un único step run."""
     commands: list[str] = []
-    in_run = False
-    run_indent = 0
     buffer: list[str] = []
 
-    def flush() -> None:
-        if buffer:
-            commands.append(" ".join(buffer))
-            buffer.clear()
-
-    for line in step:
-        stripped = line.strip()
-        indent = len(line) - len(line.lstrip())
-
-        if not in_run:
-            match = re.match(r"^\s*(?:-\s*)?run:\s*(.*)$", line)
-            if not match:
-                continue
-            in_run = True
-            run_indent = indent
-            inline = match.group(1).strip()
-            if inline not in {"", "|", ">"}:
-                commands.append(inline)
+    for line in run_content(step):
+        piece = line.strip()
+        if not piece or piece.startswith("#"):
+            continue
+        if piece.endswith("\\"):
+            buffer.append(piece[:-1].rstrip())
             continue
 
-        if stripped and indent <= run_indent and not stripped.startswith("#"):
-            flush()
-            break
-        if not stripped or stripped.startswith("#"):
-            continue
-
-        piece = stripped
-        continued = piece.endswith("\\")
-        if continued:
-            piece = piece[:-1].rstrip()
         buffer.append(piece)
-        if not continued:
-            flush()
+        commands.append(" ".join(buffer))
+        buffer.clear()
 
-    flush()
+    if buffer:
+        commands.append(" ".join(buffer))
     return commands
-
 
 def audit_action_pins(path: Path, text: str) -> list[str]:
     findings: list[str] = []
