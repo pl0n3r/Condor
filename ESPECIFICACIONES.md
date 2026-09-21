@@ -1726,6 +1726,8 @@ La entidad `TenantDomain` o equivalente debe poder representar:
 
 Un mismo host no puede pertenecer simultáneamente a dos tenants activos.
 
+El primer cliente real y los siguientes usan exactamente el mismo flujo de registro y resolución; no se admiten excepciones por cliente codificadas en rutas, configuración o plantillas.
+
 #### Conexión del dominio
 
 El flujo inicial de conexión es:
