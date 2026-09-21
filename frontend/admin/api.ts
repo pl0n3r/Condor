@@ -47,14 +47,21 @@ export function membershipRolePath(
 }
 
 
-export function platformOwnerContextPath(tenantId?: string): string {
-  if (!tenantId) {
-    return '/adminpl0n3r/api/context';
+export function platformOwnerContextPath(
+  tenantId?: string,
+  page = 1,
+): string {
+  const params = new URLSearchParams();
+
+  if (tenantId) {
+    params.set('tenant', safeUlid(tenantId));
   }
 
-  const params = new URLSearchParams({
-    tenant: safeUlid(tenantId),
-  });
+  if (page > 1) {
+    params.set('page', String(Math.max(1, Math.trunc(page))));
+  }
 
-  return '/adminpl0n3r/api/context?' + params.toString();
+  const query = params.toString();
+
+  return '/adminpl0n3r/api/context' + (query ? '?' + query : '');
 }
