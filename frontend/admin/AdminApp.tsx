@@ -1,9 +1,19 @@
 import { useEffect, useState } from 'react';
+import { AccessManagement } from './AccessManagement';
+import { contextPath } from './api';
 
 type AdminAppProps = Readonly<{
   version: string;
   logoutToken: string;
+  accessToken: string;
 }>;
+
+type Branch = {
+  id: string;
+  name: string;
+  slug: string;
+  is_default: boolean;
+};
 
 type TenantContextResponse = {
   tenant: {
@@ -11,46 +21,68 @@ type TenantContextResponse = {
     name: string;
     slug: string;
   };
+  branches: Branch[];
+  active_branch: Branch;
+  permissions: string[];
   version: string;
 };
 
 type ContextState =
   | { status: 'loading' }
   | { status: 'ready'; data: TenantContextResponse }
+  | {
+      status: 'denied';
+      tenant: TenantContextResponse['tenant'];
+      message: string;
+    }
   | { status: 'error' };
 
-export function AdminApp({ version, logoutToken }: AdminAppProps) {
-  const [context, setContext] = useState<ContextState>({ status: 'loading' });
+export function AdminApp({
+  version,
+  logoutToken,
+  accessToken,
+}: AdminAppProps) {
+  const [context, setContext] = useState<ContextState>({
+    status: 'loading',
+  });
 
-  useEffect(() => {
-    const controller = new AbortController();
+  async function loadContext(branchId?: string) {
+    try {
+      const response = await fetch(contextPath(branchId), {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+      });
 
-    async function loadContext() {
-      try {
-        const response = await fetch('/api/v1/context', {
-          credentials: 'same-origin',
-          signal: controller.signal,
-          headers: { Accept: 'application/json' },
-        });
-
-        if (!response.ok) {
-          throw new Error('No fue posible cargar el contexto');
-        }
-
-        const data = await response.json() as TenantContextResponse;
-        setContext({ status: 'ready', data });
-      } catch (error: unknown) {
-        if (error instanceof Error && error.name === 'AbortError') {
+      if (response.status === 403) {
+        const denied = await response.json() as {
+          error?: string;
+          tenant?: TenantContextResponse['tenant'];
+        };
+        if (denied.tenant) {
+          setContext({
+            status: 'denied',
+            tenant: denied.tenant,
+            message:
+              denied.error ??
+              'No tienes una sede asignada en esta empresa.',
+          });
           return;
         }
-
-        setContext({ status: 'error' });
       }
+
+      if (!response.ok) {
+        throw new Error('No fue posible cargar el contexto');
+      }
+
+      const data = await response.json() as TenantContextResponse;
+      setContext({ status: 'ready', data });
+    } catch {
+      setContext({ status: 'error' });
     }
+  }
 
+  useEffect(() => {
     void loadContext();
-
-    return () => controller.abort();
   }, []);
 
   return (
@@ -65,10 +97,15 @@ export function AdminApp({ version, logoutToken }: AdminAppProps) {
           <a href="/admin" aria-current="page">
             Inicio
           </a>
+          <a href="#roles">Roles y permisos</a>
         </nav>
 
         <form method="post" action="/admin/logout">
-          <input type="hidden" name="_csrf_token" value={logoutToken} />
+          <input
+            type="hidden"
+            name="_csrf_token"
+            value={logoutToken}
+          />
           <button className="button button-secondary" type="submit">
             Cerrar sesión
           </button>
@@ -77,6 +114,7 @@ export function AdminApp({ version, logoutToken }: AdminAppProps) {
 
       <div className="workspace">
         <span className="eyebrow">Administrador</span>
+
         {context.status === 'loading' && (
           <>
             <h1>Cargando empresa…</h1>
@@ -88,31 +126,78 @@ export function AdminApp({ version, logoutToken }: AdminAppProps) {
 
         {context.status === 'error' && (
           <div className="alert alert-error" role="alert">
-            No pudimos cargar el contexto de tu empresa. Recarga la página para intentarlo de nuevo.
+            No pudimos cargar el contexto de tu empresa. Recarga la
+            página para intentarlo de nuevo.
           </div>
+        )}
+
+        {context.status === 'denied' && (
+          <>
+            <h1>{context.tenant.name}</h1>
+            <div className="alert alert-error" role="alert">
+              <strong>Acceso a sedes no disponible.</strong>{' '}
+              <span>{context.message}</span>
+            </div>
+          </>
         )}
 
         {context.status === 'ready' && (
           <>
-            <h1>{context.data.tenant.name}</h1>
-            <p className="muted">
-              Contexto activo: <strong>{context.data.tenant.slug}</strong>
-            </p>
+            <div className="workspace-heading">
+              <div>
+                <h1>{context.data.tenant.name}</h1>
+                <p className="muted">
+                  Contexto activo:{' '}
+                  <strong>{context.data.tenant.slug}</strong>
+                </p>
+              </div>
 
-            <div className="foundation-grid" aria-label="Estado del Slice 1">
+              <label className="branch-picker">
+                <span>Sede activa</span>
+                <select
+                  value={context.data.active_branch.id}
+                  onChange={(event) => {
+                    setContext({ status: 'loading' });
+                    void loadContext(event.target.value);
+                  }}
+                >
+                  {context.data.branches.map((branch) => (
+                    <option value={branch.id} key={branch.id}>
+                      {branch.name}
+                      {branch.is_default ? ' · principal' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div
+              className="foundation-grid"
+              aria-label="Estado de la empresa"
+            >
               <article>
                 <strong>Tenant</strong>
                 <span>Aislamiento y contexto activos</span>
               </article>
               <article>
-                <strong>Sede principal</strong>
-                <span>Creación predeterminada incluida</span>
+                <strong>Sede activa</strong>
+                <span>{context.data.active_branch.name}</span>
               </article>
               <article>
-                <strong>Acceso</strong>
-                <span>Login y API comparten las mismas reglas del backend</span>
+                <strong>Permisos efectivos</strong>
+                <span>
+                  {context.data.permissions.length} capacidades en esta
+                  sede
+                </span>
               </article>
             </div>
+
+            <AccessManagement
+              key={context.data.active_branch.id}
+              branchId={context.data.active_branch.id}
+              permissions={context.data.permissions}
+              csrfToken={accessToken}
+            />
           </>
         )}
       </div>
