@@ -72,15 +72,17 @@ GitHub es el árbitro de la cola de trabajo.
 
 ### Reserva obligatoria
 
-**OBLIGATORIO antes de implementar trabajo nuevo:**
+**OBLIGATORIO antes de implementar trabajo nuevo o retomar trabajo existente:**
 
-1. elegir un Issue abierto con estado: disponible;
-2. ejecutar /tomar mediante el mecanismo de coordinación;
-3. esperar una reserva válida;
-4. conservar el UUID publicado por el bot;
-5. trabajar únicamente en la rama canónica trabajo/issue-N.
+1. revisar primero Issues con estado: disponible;
+2. revisar también Issues reservados/en revisión relevantes para detectar trabajo inactivo y evitar abrir un frente duplicado;
+3. si una reserva existente tiene actividad de los últimos 45 minutos, respetarla y elegir otro trabajo;
+4. si lleva al menos 45 minutos sin actividad verificable, ejecutar /tomar sobre ese mismo Issue para intentar recuperarlo;
+5. ejecutar /tomar normalmente sobre un Issue disponible cuando no exista trabajo previo reutilizable;
+6. esperar una reserva válida y conservar el UUID publicado por el bot;
+7. trabajar únicamente en la rama canónica trabajo/issue-N y reutilizar el PR existente cuando la recuperación lo indique.
 
-La reserva válida crea atómicamente la rama, cambia el estado y publica metadata confiable.
+La reserva válida crea o recupera el lock de trabajo sin duplicar la implementación. Abrir un Issue/PR nuevo para sustituir silenciosamente otro frente abandonado es el último recurso, no el flujo normal.
 
 ### Propiedad de sesión y recuperación por inactividad
 
