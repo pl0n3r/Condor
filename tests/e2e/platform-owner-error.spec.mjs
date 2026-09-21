@@ -33,7 +33,6 @@ test.describe('Super Admin — recuperación segura ante 5xx', () => {
 
     const bundleResponse = await page.request.get('/build/admin.js');
     expect(bundleResponse.ok()).toBeTruthy();
-    const bundle = await bundleResponse.text();
 
     await page.setContent(`
       <div
@@ -41,11 +40,8 @@ test.describe('Super Admin — recuperación segura ante 5xx', () => {
         data-version="0.1.10"
         data-logout-token="test-token"
       ></div>
+      <script type="module" src="/build/admin.js"></script>
     `);
-    await page.addScriptTag({
-      type: 'module',
-      content: bundle,
-    });
 
     const alert = page.getByRole('alert');
     await expect(alert).toContainText(
