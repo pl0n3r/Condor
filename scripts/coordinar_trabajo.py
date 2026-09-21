@@ -696,7 +696,7 @@ def reserve_work(
     actor: str,
     association: str,
 ) -> str | None:
-    """Reserva atómicamente un Issue sin publicar comentarios visibles."""
+    """Reserva trabajo nuevo o recupera una reserva realmente inactiva."""
     if not authorized(association):
         raise CoordinationError(
             f"@{actor} no tiene una asociación autorizada para reservar trabajo."
@@ -709,10 +709,39 @@ def reserve_work(
         raise CoordinationError(f"Issue #{issue_number} no está abierto.")
 
     labels = label_names(issue)
-    if STATUS_BLOCKED in labels or STATUS_AVAILABLE not in labels:
+    if STATUS_BLOCKED in labels:
         return None
 
     branch = f"trabajo/issue-{issue_number}"
+    current = active_reservation(api, issue_number)
+    branch_sha = api.branch_sha(branch)
+
+    if current or branch_sha:
+        if not work_is_stale(api, issue_number, branch):
+            return None
+
+        if branch_sha is None:
+            main_sha = api.branch_sha("main")
+            if not main_sha:
+                raise CoordinationError(
+                    "No fue posible resolver el SHA actual de main."
+                )
+            if not api.create_branch(branch, main_sha):
+                branch_sha = api.branch_sha(branch)
+                if branch_sha is None:
+                    return None
+
+        return recover_stale_work(
+            api,
+            issue_number,
+            actor,
+            branch,
+            current,
+        )
+
+    if STATUS_AVAILABLE not in labels:
+        return None
+
     main_sha = api.branch_sha("main")
     if not main_sha:
         raise CoordinationError("No fue posible resolver el SHA actual de main.")
@@ -748,7 +777,6 @@ def reserve_work(
         f"(@{actor}, {reservation_id})"
     )
     return reservation_id
-
 
 def transfer_work(
     api: GitHub,
