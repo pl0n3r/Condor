@@ -12,7 +12,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
 
 final class RequestIdSubscriber
 {
-    private const ATTRIBUTE = '_condor_request_id';
+    public const ATTRIBUTE = '_condor_request_id';
 
     #[AsEventListener(event: KernelEvents::REQUEST, priority: 250)]
     public function onRequest(RequestEvent $event): void

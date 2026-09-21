@@ -1,0 +1,30 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Enlace diagnóstico · Condor App{% endblock %}
+
+{% block head %}
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/build/admin.css">
+{% endblock %}
+
+{% block body %}
+<section class="admin-shell" aria-label="Enlace diagnóstico temporal">
+    <aside class="sidebar">
+        <strong>Condor App</strong>
+        <nav aria-label="Navegación propietaria">
+            <a href="{{ path('app_platform_owner') }}">Plataforma</a>
+            <a href="{{ path('app_platform_diagnostics') }}">Diagnósticos</a>
+        </nav>
+    </aside>
+
+    <div class="workspace">
+        <span class="eyebrow">Diagnóstico compartible</span>
+        <h1>Enlace temporal creado</h1>
+        <p class="muted">Vence {{ share.expiresAt|date('Y-m-d H:i:s', 'UTC') }} UTC. El token no se guarda en texto plano.</p>
+        <p><code style="word-break:break-all">{{ share_url }}</code></p>
+        <p class="muted">Copia este enlace y compártelo solo con quien vaya a diagnosticar el error. Puedes revocarlo desde Diagnósticos.</p>
+        <a class="button" href="{{ path('app_platform_diagnostics') }}">Volver a diagnósticos</a>
+        <p class="version-line">V {{ app_version }}</p>
+    </div>
+</section>
+{% endblock %}

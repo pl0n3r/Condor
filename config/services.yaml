@@ -13,3 +13,11 @@ services:
   App\Shared\Version\AppVersion:
     arguments:
       $projectDir: '%kernel.project_dir%'
+
+  App\Infrastructure\Observability\ErrorSanitizer:
+    arguments:
+      $projectDir: '%kernel.project_dir%'
+
+  App\Infrastructure\Observability\ErrorIncidentSubscriber:
+    arguments:
+      $environment: '%kernel.environment%'

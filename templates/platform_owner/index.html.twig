@@ -13,6 +13,7 @@
         <strong>Condor App</strong>
         <nav aria-label="Navegación propietaria">
             <a href="{{ path('app_platform_owner') }}" aria-current="page">Plataforma</a>
+            <a href="{{ path('app_platform_diagnostics') }}">Diagnósticos</a>
         </nav>
         <form method="post" action="{{ path('app_logout') }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token('logout') }}">

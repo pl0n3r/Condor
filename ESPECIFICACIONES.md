@@ -1641,6 +1641,31 @@ Reglas:
 - correo, contraseña y demás credenciales reales del propietario permanecen fuera del repositorio y de documentación pública;
 - una futura transferencia de propiedad deberá ser una operación explícita, auditada y diseñada como tal; nunca se implementará simplemente concediendo `ROLE_PLATFORM_OWNER` a una segunda cuenta.
 
+### D-047 — Diagnóstico seguro y compartible de errores
+
+Condor debe permitir investigar fallos de producción sin convertir logs internos en una superficie pública ni depender de que el propietario copie manualmente información sensible.
+
+Reglas:
+
+- todo fallo interno HTTP 5xx obtiene un **error ID** y conserva el `request_id`/correlation ID de la solicitud;
+- el incidente persistido contiene únicamente contexto técnico acotado: timestamp UTC, status HTTP, método, nombre de ruta, clase de excepción, mensaje sanitizado, fingerprint, versión/SHA de release y stack acotado sin argumentos;
+- no se almacenan headers, cookies, cuerpos de request, query strings completas, passwords, tokens, authorization headers, DSN, variables de entorno ni PII innecesaria;
+- paths del stack se normalizan a rutas relativas al proyecto o basename; nunca se publica la ruta absoluta del servidor;
+- el propietario puede inspeccionar incidentes desde `/adminpl0n3r/diagnosticos`;
+- compartir un diagnóstico es una acción explícita del propietario y genera un token criptográficamente aleatorio de 256 bits, almacenado únicamente como hash;
+- el enlace compartido es de solo lectura, expira a los **30 minutos**, puede revocarse y responde con `Cache-Control: no-store`, `X-Robots-Tag: noindex,nofollow` y `Referrer-Policy: no-referrer`;
+- la vista compartida expone exclusivamente el payload sanitizado necesario para depuración; nunca el log crudo ni contexto de autenticación;
+- tokens inválidos, vencidos o revocados responden como recurso no disponible sin revelar si alguna vez existieron;
+- la retención inicial de incidentes es **14 días** y puede depurarse mediante comando/cron acotado; ningún proceso residente es requisito;
+- si la persistencia del incidente falla, Condor debe seguir entregando una respuesta 500 segura con referencia y usar el log de runtime solo como fallback, sin filtrar el error original al cliente;
+- el mecanismo es un adapter operativo compatible con Hostinger y podrá migrar posteriormente a un proveedor de observabilidad sin cambiar el contrato de seguridad.
+
+Regla de depuración para agentes:
+
+- ante un 5xx reportado, buscar primero el error ID y, cuando el propietario lo autorice, usar el enlace temporal sanitizado como evidencia principal;
+- no solicitar contraseñas, secretos ni dumps/logs crudos cuando el diagnóstico compartible sea suficiente;
+- una referencia o enlace diagnóstico no equivale por sí sola a autorización para mutar producción.
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
