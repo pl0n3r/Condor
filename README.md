@@ -17,7 +17,7 @@
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base de código | ✅ **V 0.1.7 EN MAIN** | SHA `78f65d94053f22c63b70e530d592293ee8dbeb7d` |
+| Base de código | ✅ **V 0.1.7 EN MAIN** | SHA `4d8f8488ab99e338eb533fea3fcef5e34fac4643` |
 | Producción comprobada | ✅ **V 0.1.4 VALIDADA EN PRODUCCIÓN** | último smoke real documentado |
 | V 0.1.5–0.1.7 | ✅ **MERGED / NO INFERIR PRODUCCIÓN** | observabilidad, CI y permisos por sede integrados |
 | V 0.1.8 | 🚧 **EN VALIDACIÓN DE CÓDIGO** | Issue #107 / PR de entrega |
