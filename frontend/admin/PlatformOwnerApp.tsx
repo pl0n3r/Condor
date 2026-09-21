@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
+import { PlatformStaffPanel } from './PlatformStaffPanel';
+import { PlatformTenantCreationPanel } from './PlatformTenantCreationPanel';
 import { platformOwnerContextPath } from './api';
 
 type TenantSummary = {
@@ -55,11 +57,15 @@ type State =
 type PlatformOwnerAppProps = Readonly<{
   version: string;
   logoutToken: string;
+  staffToken: string;
+  tenantToken: string;
 }>;
 
 export function PlatformOwnerApp({
   version,
   logoutToken,
+  staffToken,
+  tenantToken,
 }: PlatformOwnerAppProps) {
   const [state, setState] = useState<State>({ status: 'loading' });
   const requestSequence = useRef(0);
@@ -231,6 +237,11 @@ export function PlatformOwnerApp({
                 ]}
               />
 
+              <PlatformTenantCreationPanel
+                csrfToken={tenantToken}
+                onCreated={() => void loadContext(undefined, 1)}
+              />
+
               <section className="platform-section" aria-labelledby="tenant-list-title">
                 <div className="section-heading compact">
                   <div>
@@ -321,6 +332,8 @@ export function PlatformOwnerApp({
                   </nav>
                 )}
               </section>
+
+              <PlatformStaffPanel csrfToken={staffToken} />
             </>
           )}
 
