@@ -68,9 +68,10 @@ class ReleaseEvidenceTests(unittest.TestCase):
 
     def test_manifest_rejects_requested_version_different_from_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
+            version_file = self.version_file(tmp, "0.1.11")
             with self.assertRaises(module.EvidenceError):
                 module.build_manifest(
-                    version_file=self.version_file(tmp, "0.1.11"),
+                    version_file=version_file,
                     sha=SHA,
                     changed_paths=["README.md"],
                     expected_version=VERSION,
