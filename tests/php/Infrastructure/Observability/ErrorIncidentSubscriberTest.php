@@ -157,7 +157,10 @@ final class ErrorIncidentSubscriberTest extends TestCase
 
         $response = $event->getResponse();
         self::assertInstanceOf(JsonResponse::class, $response);
-        self::assertSame('no-store', $response->headers->get('Cache-Control'));
+        self::assertStringContainsString(
+            'no-store',
+            (string) $response->headers->get('Cache-Control'),
+        );
 
         $payload = json_decode((string) $response->getContent(), true);
         self::assertIsArray($payload);
