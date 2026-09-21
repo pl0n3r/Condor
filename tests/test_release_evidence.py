@@ -142,25 +142,28 @@ class ReleaseEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             manifest = self.manifest(tmp, ["README.md"])
         manifest["transition"]["required"] = "false"
+        observation = self.observation()
 
         with self.assertRaises(module.EvidenceError):
-            module.finalize(manifest, self.observation(), [])
+            module.finalize(manifest, observation, [])
 
     def test_manifest_rejects_non_boolean_check_required(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             manifest = self.manifest(tmp, ["README.md"])
         manifest["transition"]["checks"][0]["required"] = 1
+        observation = self.observation()
 
         with self.assertRaises(module.EvidenceError):
-            module.finalize(manifest, self.observation(), [])
+            module.finalize(manifest, observation, [])
 
     def test_manifest_rejects_incoherent_transition_flag(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             manifest = self.manifest(tmp, ["README.md"])
         manifest["transition"]["required"] = True
+        observation = self.observation()
 
         with self.assertRaises(module.EvidenceError):
-            module.finalize(manifest, self.observation(), [])
+            module.finalize(manifest, observation, [])
 
     def test_unknown_observation_state_never_promotes_release(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
