@@ -132,6 +132,15 @@ final class PlatformOwnerControllerTest extends WebTestCase
         self::assertGreaterThanOrEqual(1, $payload['metrics']['tenant_count']);
         self::assertGreaterThanOrEqual(1, $payload['metrics']['branch_count']);
         self::assertGreaterThanOrEqual(1, $payload['metrics']['active_membership_count']);
+        self::assertSame(1, $payload['tenant_pagination']['page']);
+        self::assertSame(
+            24,
+            $payload['tenant_pagination']['per_page'],
+        );
+        self::assertGreaterThanOrEqual(
+            1,
+            $payload['tenant_pagination']['total'],
+        );
 
         $tenantPayload = null;
         foreach ($payload['tenants'] as $candidate) {
@@ -145,6 +154,80 @@ final class PlatformOwnerControllerTest extends WebTestCase
         self::assertSame($tenant->name(), $tenantPayload['name']);
         self::assertSame(1, $tenantPayload['branch_count']);
         self::assertSame(1, $tenantPayload['active_membership_count']);
+    }
+
+    public function testOwnerContextPaginatesGlobalTenantList(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        $suffix = bin2hex(random_bytes(4));
+        $owner = new User(
+            'owner-page-'.$suffix.'@example.test',
+            'Propietario Paginación',
+            [User::ROLE_PLATFORM_OWNER],
+        );
+        $first = new Tenant(
+            '000 Página A '.$suffix,
+            'pagina-a-'.$suffix,
+        );
+        $second = new Tenant(
+            '000 Página B '.$suffix,
+            'pagina-b-'.$suffix,
+        );
+
+        foreach ([$owner, $first, $second] as $entity) {
+            $entityManager->persist($entity);
+        }
+        $entityManager->flush();
+
+        $client->loginUser($owner);
+        $client->request(
+            'GET',
+            '/adminpl0n3r/api/context?page=1&per_page=1',
+        );
+        self::assertResponseIsSuccessful();
+
+        $firstPage = json_decode(
+            (string) $client->getResponse()->getContent(),
+            true,
+        );
+        self::assertIsArray($firstPage);
+        self::assertCount(1, $firstPage['tenants']);
+        self::assertSame(1, $firstPage['tenant_pagination']['page']);
+        self::assertSame(1, $firstPage['tenant_pagination']['per_page']);
+        self::assertGreaterThanOrEqual(
+            2,
+            $firstPage['tenant_pagination']['total'],
+        );
+        self::assertFalse(
+            $firstPage['tenant_pagination']['has_previous'],
+        );
+        self::assertTrue($firstPage['tenant_pagination']['has_next']);
+
+        $firstId = $firstPage['tenants'][0]['id'];
+
+        $client->request(
+            'GET',
+            '/adminpl0n3r/api/context?page=2&per_page=1',
+        );
+        self::assertResponseIsSuccessful();
+
+        $secondPage = json_decode(
+            (string) $client->getResponse()->getContent(),
+            true,
+        );
+        self::assertIsArray($secondPage);
+        self::assertCount(1, $secondPage['tenants']);
+        self::assertSame(2, $secondPage['tenant_pagination']['page']);
+        self::assertTrue(
+            $secondPage['tenant_pagination']['has_previous'],
+        );
+        self::assertNotSame(
+            $firstId,
+            $secondPage['tenants'][0]['id'],
+        );
     }
 
     public function testOwnerCanSelectTenantContextWithoutChangingActorIdentity(): void
