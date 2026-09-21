@@ -9,7 +9,9 @@ use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
@@ -40,11 +42,10 @@ final class PlatformStaffControllerTest extends WebTestCase
         $client->request('GET', '/adminpl0n3r');
         self::assertResponseIsSuccessful();
 
-        $csrf = $container->get(CsrfTokenManagerInterface::class);
-        self::assertInstanceOf(CsrfTokenManagerInterface::class, $csrf);
-        $managementToken = $csrf
-            ->getToken('platform_staff_management')
-            ->getValue();
+        $managementToken = $this->csrfToken(
+            $client,
+            'platform_staff_management',
+        );
 
         $email = 'staff-'.$suffix.'@example.test';
         $client->jsonRequest(
@@ -108,9 +109,10 @@ final class PlatformStaffControllerTest extends WebTestCase
             'Activa tu cuenta de Condor',
         );
 
-        $activationCsrf = $csrf
-            ->getToken('invitation_accept_'.$invitation->id())
-            ->getValue();
+        $activationCsrf = $this->csrfToken(
+            $client,
+            'invitation_accept_'.$invitation->id(),
+        );
         $plainPassword = 'ClaveNuevaSegura-2026!';
         $client->request(
             'POST',
@@ -190,6 +192,11 @@ final class PlatformStaffControllerTest extends WebTestCase
         $client->request('GET', '/adminpl0n3r');
         self::assertResponseIsSuccessful();
 
+        $managementToken = $this->csrfToken(
+            $client,
+            'platform_staff_management',
+        );
+
         $email = 'rejected-'.$suffix.'@example.test';
         $body = [
             'email' => $email,
@@ -208,22 +215,38 @@ final class PlatformStaffControllerTest extends WebTestCase
         );
         self::assertResponseStatusCodeSame(403);
 
-        $csrf = $container->get(CsrfTokenManagerInterface::class);
-        self::assertInstanceOf(CsrfTokenManagerInterface::class, $csrf);
         $client->jsonRequest(
             'POST',
             '/adminpl0n3r/api/staff/invitations',
             $body,
-            [
-                'HTTP_X_CSRF_TOKEN' => $csrf
-                    ->getToken('platform_staff_management')
-                    ->getValue(),
-            ],
+            ['HTTP_X_CSRF_TOKEN' => $managementToken],
         );
         self::assertResponseStatusCodeSame(422);
         self::assertNull(
             $entityManager->getRepository(User::class)
                 ->findOneBy(['email' => $email]),
         );
+    }
+
+    private function csrfToken(
+        KernelBrowser $client,
+        string $tokenId,
+    ): string {
+        $request = $client->getRequest();
+        self::assertNotNull($request);
+
+        $container = static::getContainer();
+        $requestStack = $container->get(RequestStack::class);
+        $csrf = $container->get(CsrfTokenManagerInterface::class);
+
+        self::assertInstanceOf(RequestStack::class, $requestStack);
+        self::assertInstanceOf(CsrfTokenManagerInterface::class, $csrf);
+
+        $requestStack->push($request);
+        try {
+            return $csrf->getToken($tokenId)->getValue();
+        } finally {
+            $requestStack->pop();
+        }
     }
 }
