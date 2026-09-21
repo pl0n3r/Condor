@@ -53,6 +53,52 @@ class ChangeClassifierTests(unittest.TestCase):
         result = classify(["config/packages/security.yaml"], "pull_request")
         self.assertTrue(result.transicion_release)
 
+    def test_console_command_marks_release_transition(self) -> None:
+        result = classify(["src/Console/ReconcileOwnerCommand.php"], "pull_request")
+        self.assertTrue(result.transicion_release)
+
+    def test_controller_or_route_marks_release_transition(self) -> None:
+        result = classify(["src/Http/Controller/AdminController.php"], "pull_request")
+        self.assertTrue(result.transicion_release)
+
+    def test_identity_role_marks_release_transition(self) -> None:
+        result = classify(["src/Domain/Identity/Entity/Role.php"], "pull_request")
+        self.assertTrue(result.transicion_release)
+
+    def test_service_marks_release_transition(self) -> None:
+        result = classify(["src/Application/Billing/InvoiceService.php"], "pull_request")
+        self.assertTrue(result.transicion_release)
+
+    def test_entity_invariant_marks_release_transition(self) -> None:
+        result = classify(["src/Domain/Catalog/Entity/Product.php"], "pull_request")
+        self.assertTrue(result.transicion_release)
+
+    def test_provisioning_script_marks_release_transition(self) -> None:
+        result = classify(["scripts/provision_platform_owner.py"], "pull_request")
+        self.assertTrue(result.transicion_release)
+
+    def test_bin_console_marks_release_transition(self) -> None:
+        result = classify(["bin/console"], "pull_request")
+        self.assertTrue(result.transicion_release)
+
+    def test_unknown_application_use_case_marks_release_transition(self) -> None:
+        result = classify(
+            ["src/Application/Onboarding/CreateTenant.php"],
+            "pull_request",
+        )
+        self.assertTrue(result.transicion_release)
+
+    def test_tests_do_not_mark_release_transition(self) -> None:
+        result = classify(
+            ["tests/php/Application/Onboarding/CreateTenantTest.php"],
+            "pull_request",
+        )
+        self.assertFalse(result.transicion_release)
+
+    def test_ordinary_application_change_does_not_force_transition(self) -> None:
+        result = classify(["src/Application/Catalog/ProductQuery.php"], "pull_request")
+        self.assertFalse(result.transicion_release)
+
     def test_docs_do_not_mark_release_transition(self) -> None:
         result = classify(["README.md"], "pull_request")
         self.assertFalse(result.transicion_release)
