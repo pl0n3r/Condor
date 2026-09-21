@@ -72,14 +72,11 @@ flowchart LR
     G --> H[Identificar o confirmar causa real]
 ```
 
-## Qué sigue
+## Seguimiento
 
-| Horizonte | Bloque |
-| --- | --- |
-| **AHORA** | resolver #133 y diagnosticar el 500 real del Super Admin |
-| **SIGUE** | continuar staff de plataforma e invitaciones — #116 / PR #122 |
-| **DESPUÉS** | contratos REST/errores administrativos — #127 |
-| **PARALELO SEGURO** | optimización CI — #126 / PR #132 |
+El orden de trabajo y los próximos bloques viven exclusivamente en el
+[Roadmap canónico #1](https://github.com/pl0n3r/Condor/issues/1).
+Los Issues activos conservan el alcance ejecutable de cada frente.
 
 ## Fuentes de verdad
 
