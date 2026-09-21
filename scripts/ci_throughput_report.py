@@ -66,13 +66,16 @@ def execution_profile(job_pages: Any) -> tuple[str, ...]:
 def historical_job_pages(history_jobs: Any, run_id: int) -> Any:
     """Recupera los jobs capturados para un run histórico."""
     if not isinstance(history_jobs, list):
-        return []
+        return None
     for item in history_jobs:
         if not isinstance(item, dict):
             continue
-        if int(item.get("run_id") or 0) == run_id:
-            return item.get("pages", [])
-    return []
+        if int(item.get("run_id") or 0) != run_id:
+            continue
+        if "pages" not in item:
+            return None
+        return item["pages"]
+    return None
 
 
 def timed_job(job: dict[str, Any]) -> dict[str, Any]:
@@ -116,9 +119,10 @@ def comparable_run(
 
     run_id = int(run["id"])
     if current_profile is not None:
-        candidate_profile = execution_profile(
-            historical_job_pages(history_jobs, run_id)
-        )
+        candidate_pages = historical_job_pages(history_jobs, run_id)
+        if candidate_pages is None:
+            return None
+        candidate_profile = execution_profile(candidate_pages)
         if candidate_profile != current_profile:
             return None
 
