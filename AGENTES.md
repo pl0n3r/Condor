@@ -82,17 +82,21 @@ GitHub es el árbitro de la cola de trabajo.
 
 La reserva válida crea atómicamente la rama, cambia el estado y publica metadata confiable.
 
-### Propiedad de sesión
+### Propiedad de sesión y recuperación por inactividad
 
-- una reserva no expira sola;
-- compartir la misma cuenta de GitHub no autoriza a otra sesión a reutilizar el UUID;
-- nunca adoptar una reserva ajena solo porque el UUID sea visible;
-- nunca modificar trabajo/issue-N de otra sesión;
-- nunca crear una rama alternativa para saltarse un lock;
+- una reserva reciente protege el trabajo de otras sesiones aunque compartan la misma cuenta de GitHub;
+- el UUID visible no autoriza por sí solo a continuar una sesión ajena;
+- **la reserva no es eterna**: si no existe actividad verificable durante al menos 45 minutos, otro agente puede ejecutar /tomar y recuperar el mismo trabajo;
+- cuentan como actividad reciente los commits de la rama, actividad del PR existente y comentarios humanos útiles del Issue; los comandos de coordinación no refrescan artificialmente la reserva;
+- si no existe evidencia temporal suficiente, el coordinador falla de forma conservadora y no roba el trabajo;
+- recuperar trabajo stale genera un UUID nuevo y conserva la rama canónica trabajo/issue-N;
+- si ya existe un PR abierto para esa rama, se reutiliza y actualiza su metadata de reserva: **no se cierra ni se abre otro PR solo por cambio de agente**;
+- si dos sesiones intentan recuperar simultáneamente una reserva stale, el marcador confiable más reciente arbitra la propiedad;
+- un Issue bloqueado nunca se recupera automáticamente;
+- nunca crear una rama alternativa para saltarse una reserva vigente;
 - liberar con /liberar <UUID>;
-- transferir entre sesiones de la misma cuenta con /transferir <UUID>;
-- el dueño del repositorio puede recuperar una reserva huérfana con /liberar-forzado;
-- una rama canónica existente sigue siendo lock aunque los labels estén en transición.
+- transferir explícitamente entre sesiones de la misma cuenta con /transferir <UUID>;
+- /liberar-forzado queda como mecanismo excepcional del dueño del repositorio, no como flujo normal para trabajo simplemente inactivo.
 
 ### PR de una reserva
 
