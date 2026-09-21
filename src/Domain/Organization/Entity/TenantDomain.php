@@ -57,6 +57,11 @@ class TenantDomain
         return $this->hostname;
     }
 
+    public function isPrimary(): bool
+    {
+        return $this->primary;
+    }
+
     public function isVerified(): bool
     {
         return $this->verified;
