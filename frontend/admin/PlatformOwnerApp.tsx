@@ -57,9 +57,59 @@ type OwnerDiagnostic = {
 };
 
 type InternalErrorPayload = {
-  error_id?: string;
+  error_id: string;
   diagnostic?: OwnerDiagnostic;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+function isOwnerDiagnostic(value: unknown): value is OwnerDiagnostic {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isNonEmptyString(value.incident_id) &&
+    isNonEmptyString(value.request_id) &&
+    typeof value.status === 'number' &&
+    Number.isInteger(value.status) &&
+    value.status >= 500 &&
+    value.status <= 599 &&
+    isNonEmptyString(value.route) &&
+    isNonEmptyString(value.exception) &&
+    typeof value.message === 'string' &&
+    isNonEmptyString(value.version) &&
+    isNonEmptyString(value.release_sha)
+  );
+}
+
+function parseInternalErrorPayload(value: unknown): InternalErrorPayload | null {
+  if (!isRecord(value) || !isNonEmptyString(value.error_id)) {
+    return null;
+  }
+
+  if (value.diagnostic === undefined) {
+    return { error_id: value.error_id };
+  }
+
+  if (
+    !isOwnerDiagnostic(value.diagnostic) ||
+    value.diagnostic.incident_id !== value.error_id
+  ) {
+    return null;
+  }
+
+  return {
+    error_id: value.error_id,
+    diagnostic: value.diagnostic,
+  };
+}
 
 type State =
   | { status: 'loading' }
@@ -112,7 +162,8 @@ export function PlatformOwnerApp({
       if (response.status >= 500) {
         let payload: InternalErrorPayload | null = null;
         try {
-          payload = await response.json() as InternalErrorPayload;
+          const rawPayload: unknown = await response.json();
+          payload = parseInternalErrorPayload(rawPayload);
         } catch {
           payload = null;
         }
