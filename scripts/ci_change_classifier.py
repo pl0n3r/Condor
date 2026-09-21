@@ -29,6 +29,9 @@ CANONICAL_DOCS = {
 }
 
 GITHUB_PREFIX = ".github/"
+DOCS_PREFIX = "docs/"
+TESTS_PREFIX = TESTS_PREFIX
+SRC_PREFIX = SRC_PREFIX
 CONFIG_PREFIX = "config/"
 MIGRATIONS_PREFIX = "migrations/"
 TEMPLATES_PREFIX = "templates/"
@@ -104,31 +107,35 @@ def starts(path: str, prefixes: tuple[str, ...]) -> bool:
     return path.startswith(prefixes)
 
 
+def source_requires_release_transition(path: str) -> bool:
+    """Clasifica cambios runtime bajo src/ sin penalizar queries read-only."""
+    if path.endswith("Query.php"):
+        return False
+    return (
+        "/Entity/" in path
+        or "/Service/" in path
+        or path.endswith("Service.php")
+        or path == "src/Kernel.php"
+        or path.startswith(TRANSITION_FALLBACK_PREFIXES)
+    )
+
+
+def script_requires_release_transition(path: str) -> bool:
+    """Detecta scripts explícitamente asociados a una transición operativa."""
+    lowered = path.lower()
+    return any(marker in lowered for marker in TRANSITION_SCRIPT_MARKERS)
+
+
 def requires_release_transition(path: str) -> bool:
     """Clasifica cambios que requieren verificar transición operativa."""
-    if (
-        path.endswith(".md")
-        or path.startswith(("docs/", "tests/"))
-    ):
+    if path.endswith(".md") or path.startswith((DOCS_PREFIX, TESTS_PREFIX)):
         return False
-
     if path == "bin/console" or path.startswith(TRANSITION_PREFIXES):
         return True
-
-    if path.startswith("src/"):
-        if path.endswith("Query.php"):
-            return False
-        if "/Entity/" in path or "/Service/" in path:
-            return True
-        if path.endswith("Service.php") or path == "src/Kernel.php":
-            return True
-        if path.startswith(TRANSITION_FALLBACK_PREFIXES):
-            return True
-
+    if path.startswith(SRC_PREFIX):
+        return source_requires_release_transition(path)
     if path.startswith(SCRIPTS_PREFIX):
-        lowered = path.lower()
-        return any(marker in lowered for marker in TRANSITION_SCRIPT_MARKERS)
-
+        return script_requires_release_transition(path)
     return False
 
 
@@ -137,7 +144,7 @@ def classify(paths: Iterable[str], event: str) -> Selection:
     files = normalized(paths)
 
     documentacion = any(
-        path.endswith(".md") or path.startswith("docs/")
+        path.endswith(".md") or path.startswith(DOCS_PREFIX)
         for path in files
     )
     github = any(
@@ -173,7 +180,7 @@ def classify(paths: Iterable[str], event: str) -> Selection:
         )
 
     pruebas_base = any(
-        starts(path, (SCRIPTS_PREFIX, "tests/", GITHUB_PREFIX))
+        starts(path, (SCRIPTS_PREFIX, TESTS_PREFIX, GITHUB_PREFIX))
         or path in {"pyproject.toml", PHPUNIT_CONFIG}
         for path in files
     )
@@ -182,7 +189,7 @@ def classify(paths: Iterable[str], event: str) -> Selection:
         starts(
             path,
             (
-                "src/",
+                SRC_PREFIX,
                 CONFIG_PREFIX,
                 MIGRATIONS_PREFIX,
                 TEMPLATES_PREFIX,
@@ -198,7 +205,7 @@ def classify(paths: Iterable[str], event: str) -> Selection:
         starts(
             path,
             (
-                "src/",
+                SRC_PREFIX,
                 "config/",
                 "migrations/",
                 "templates/",
@@ -223,8 +230,8 @@ def classify(paths: Iterable[str], event: str) -> Selection:
                 "docs/",
                 GITHUB_PREFIX,
                 "scripts/",
-                "tests/",
-                "src/",
+                TESTS_PREFIX,
+                SRC_PREFIX,
                 CONFIG_PREFIX,
                 MIGRATIONS_PREFIX,
                 TEMPLATES_PREFIX,
