@@ -76,6 +76,51 @@ jobs:
             findings = audit_workflow(path)
         self.assertTrue(any("write-all" in item for item in findings))
 
+    def test_commented_timeout_does_not_satisfy_job_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Bad
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # timeout-minutes: 5
+    steps:
+      - run: true
+""",
+            )
+            findings = audit_workflow(path)
+        self.assertTrue(any("timeout-minutes" in item for item in findings))
+
+    def test_detects_unpinned_job_level_reusable_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Bad
+on: push
+jobs:
+  reuse:
+    uses: org/repo/.github/workflows/ci.yml@main
+""",
+            )
+            findings = audit_workflow(path)
+        self.assertTrue(any("workflow externo" in item for item in findings))
+
+    def test_allows_local_job_level_reusable_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Good
+on: push
+jobs:
+  reuse:
+    uses: ./.github/workflows/reuse.yml
+""",
+            )
+            findings = audit_workflow(path)
+        self.assertFalse(any("workflow local" in item for item in findings))
+
     def test_detects_continue_on_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self.write_workflow(
@@ -93,6 +138,52 @@ jobs:
             )
             findings = audit_workflow(path)
         self.assertTrue(any("continue-on-error" in item for item in findings))
+
+    def test_main_ci_does_not_accept_gate_conditions_from_comments(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: CI
+on: push
+concurrency:
+  cancel-in-progress: true
+jobs:
+  pruebas-base:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # if: needs.preflight.outputs.pruebas_base == 'true'
+    steps:
+      - run: python3 scripts/ci_change_classifier.py
+  backend-php:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: python3 scripts/ci_retry.py -- npm ci
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: python3 scripts/ci_self_audit.py
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          case "$PRUEBAS_BASE" in
+            success|skipped) ;;
+          esac
+          case "$BACKEND_PHP" in
+            success|skipped) ;;
+          esac
+          case "$E2E" in
+            success|skipped) ;;
+          esac
+""",
+            )
+            findings = audit_main_ci(path)
+        self.assertTrue(any("gate base selectivo" in item for item in findings))
+        self.assertTrue(any("backend selectivo" in item for item in findings))
+        self.assertTrue(any("E2E selectivo" in item for item in findings))
 
     def test_retry_must_wrap_each_install_command(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
