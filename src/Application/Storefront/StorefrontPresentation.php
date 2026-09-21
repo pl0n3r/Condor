@@ -62,13 +62,16 @@ final readonly class StorefrontPresentation
         $domains = $this->entityManager->getRepository(TenantDomain::class)
             ->findBy(['tenant' => $tenant], ['hostname' => 'ASC']);
 
-        return array_map(static fn (TenantDomain $domain): array => [
-            'host' => $domain->hostname(),
-            'primary' => $domain->isPrimary(),
-            'verified' => $domain->isVerified(),
-            'status' => $domain->isVerified()
-                ? 'Verificado en Condor; DNS y TLS requieren comprobación operativa'
-                : 'Pendiente de verificación',
-        ], $domains);
+        return array_map(
+            static fn (TenantDomain $domain): array => [
+                'host' => $domain->hostname(),
+                'primary' => $domain->isPrimary(),
+                'verified' => $domain->isVerified(),
+                'status' => $domain->isVerified()
+                    ? 'Verificado en Condor; DNS y TLS requieren comprobación operativa'
+                    : 'Pendiente de verificación',
+            ],
+            $domains,
+        );
     }
 }
