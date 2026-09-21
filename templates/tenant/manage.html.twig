@@ -21,7 +21,7 @@
     </div>
 
     {% if saved %}
-        <p class="storefront-admin-notice" role="status">Los cambios del sitio fueron guardados.</p>
+        <output class="storefront-admin-notice">Los cambios del sitio fueron guardados.</output>
     {% endif %}
     {% for error in errors %}
         <p class="alert alert-error" role="alert">{{ error }}</p>
