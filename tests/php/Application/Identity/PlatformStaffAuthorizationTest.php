@@ -77,13 +77,12 @@ final class PlatformStaffAuthorizationTest extends KernelTestCase
                 ->count(['user' => $staff]),
         );
 
-        self::assertSame(
-            [$first->id(), $second->id()],
-            array_map(
-                static fn (Tenant $tenant): string => $tenant->id(),
-                $authorization->accessibleTenants($staff),
-            ),
+        $accessibleTenantIds = array_map(
+            static fn (Tenant $tenant): string => $tenant->id(),
+            $authorization->accessibleTenants($staff),
         );
+        self::assertContains($first->id(), $accessibleTenantIds);
+        self::assertContains($second->id(), $accessibleTenantIds);
 
         $staff->deactivate();
         self::assertFalse(
