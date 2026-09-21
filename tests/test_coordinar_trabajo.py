@@ -226,6 +226,30 @@ class WorkflowCoordinacionTests(unittest.TestCase):
 
 
 
+class EstadoCoordinacionTests(unittest.TestCase):
+    """Cubre transiciones de estado visibles sin ventanas intermedias inválidas."""
+
+    def test_set_status_adds_target_before_removing_previous_labels(self) -> None:
+        """El nuevo estado se publica antes de retirar estados anteriores."""
+        api = GitHub("pl0n3r/Condor", "token-prueba")
+        events: list[tuple[str, str]] = []
+
+        api.ensure_status_labels = lambda: None  # type: ignore[method-assign]
+        api.add_labels = (  # type: ignore[method-assign]
+            lambda issue_number, labels: events.append(("add", labels[0]))
+        )
+        api.remove_label = (  # type: ignore[method-assign]
+            lambda issue_number, label: events.append(("remove", label))
+        )
+
+        api.set_status(12, STATUS_REVIEW)
+
+        self.assertEqual(events[0], ("add", STATUS_REVIEW))
+        self.assertNotIn(("remove", STATUS_REVIEW), events)
+        self.assertIn(("remove", STATUS_RESERVED), events)
+        self.assertIn(("remove", STATUS_AVAILABLE), events)
+
+
 class CoordinacionTests(unittest.TestCase):
     """Cubre contratos de reserva, sesión, transición y colisiones."""
 
