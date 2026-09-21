@@ -138,6 +138,49 @@ class ReleaseEvidenceTests(unittest.TestCase):
         self.assertEqual(evidence["estado"], "VALIDATED_IN_PRODUCTION")
         self.assertEqual(evidence["transition"]["pending"], [])
 
+    def test_manifest_rejects_non_boolean_transition_required(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = self.manifest(tmp, ["README.md"])
+        manifest["transition"]["required"] = "false"
+
+        with self.assertRaises(module.EvidenceError):
+            module.finalize(manifest, self.observation(), [])
+
+    def test_manifest_rejects_non_boolean_check_required(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = self.manifest(tmp, ["README.md"])
+        manifest["transition"]["checks"][0]["required"] = 1
+
+        with self.assertRaises(module.EvidenceError):
+            module.finalize(manifest, self.observation(), [])
+
+    def test_manifest_rejects_incoherent_transition_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = self.manifest(tmp, ["README.md"])
+        manifest["transition"]["required"] = True
+
+        with self.assertRaises(module.EvidenceError):
+            module.finalize(manifest, self.observation(), [])
+
+    def test_unknown_observation_state_never_promotes_release(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = self.manifest(tmp, ["README.md"])
+        observation = self.observation(state="UNKNOWN")
+
+        with self.assertRaises(module.EvidenceError):
+            module.finalize(manifest, observation, [])
+
+    def test_deploy_observed_state_is_not_promoted_by_complete_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = self.manifest(tmp, ["README.md"])
+
+        evidence = module.finalize(
+            manifest,
+            self.observation(state="DEPLOY_OBSERVED"),
+            [],
+        )
+        self.assertEqual(evidence["estado"], "DEPLOY_OBSERVED")
+
     def test_missing_public_check_keeps_deploy_only_observed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             manifest = self.manifest(tmp, ["README.md"])
