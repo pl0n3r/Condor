@@ -240,6 +240,11 @@ class WorkflowCoordinacionTests(unittest.TestCase):
         self.assertIn("issue_comment:", workflow)
         self.assertIn("types: [created, edited]", workflow)
         self.assertIn("github.event.issue.pull_request == null", workflow)
+        self.assertIn(
+            "github.event.sender.login == github.event.comment.user.login",
+            workflow,
+        )
+        self.assertIn("ACTOR: ${{ github.event.comment.user.login }}", workflow)
         self.assertIn("github.event.comment.body == '/tomar'", workflow)
         self.assertIn("github.event.comment.body == '/liberar-forzado'", workflow)
         self.assertIn("startsWith(github.event.comment.body, '/liberar ')", workflow)
@@ -486,6 +491,25 @@ class CoordinacionTests(unittest.TestCase):
         assert reservation is not None
         self.assertEqual(reservation["owner"], "pl0n3r")
         self.assertEqual(reservation["reason"], "recuperacion-inactividad")
+        self.assertNotIn("coordinacion/lock-issue-12", api.branches)
+
+    def test_concurrent_stale_recovery_cannot_enter_existing_lock(self) -> None:
+        """Un segundo recuperador no entra mientras exista el lock efímero."""
+        api = FakeGitHub()
+        add_active_reservation(api, owner="agente-anterior")
+        stale = "2020-01-01T00:00:00+00:00"
+        api.comments[-1]["created_at"] = stale
+        api.comments[-1]["updated_at"] = stale
+        api.commit_times["abc123"] = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        api.branches["coordinacion/lock-issue-12"] = "abc123"
+
+        session = reserve_work(api, 12, "pl0n3r", "OWNER")
+
+        self.assertIsNone(session)
+        reservation = active_reservation(api, 12)
+        self.assertIsNotNone(reservation)
+        assert reservation is not None
+        self.assertEqual(reservation["reservation_id"], SESSION_A)
 
     def test_stale_detection_is_fail_closed_without_activity_evidence(self) -> None:
         """Sin timestamps verificables una reserva no se roba automáticamente."""
