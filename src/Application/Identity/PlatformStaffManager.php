@@ -163,6 +163,7 @@ final readonly class PlatformStaffManager
                 }
 
                 $invitation = $this->invitationFor($staff);
+                $this->lockInvitation($invitation);
                 [$rawToken, $tokenHash] = self::newToken();
                 $invitation->reissue(
                     $tokenHash,
@@ -364,6 +365,16 @@ final readonly class PlatformStaffManager
         }
 
         return $invitation;
+    }
+
+    private function lockInvitation(AccountInvitation $invitation): void
+    {
+        $this->entityManager->getConnection()->executeQuery(
+            'SELECT id FROM condor_account_invitation '
+            .'WHERE id = :id FOR UPDATE',
+            ['id' => $invitation->id()],
+        )->fetchOne();
+        $this->entityManager->refresh($invitation);
     }
 
     private function assertOwnerFresh(User $actor): void
