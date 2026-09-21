@@ -27,6 +27,12 @@ class ChangeClassifierTests(unittest.TestCase):
         self.assertTrue(result.backend)
         self.assertTrue(result.e2e)
 
+    def test_release_observer_change_runs_full_validation(self) -> None:
+        result = classify([".github/workflows/observar-release.yml"], "pull_request")
+        self.assertTrue(result.pruebas_base)
+        self.assertTrue(result.backend)
+        self.assertTrue(result.e2e)
+
     def test_runtime_entrypoint_unknown_to_classifier_runs_full_stack(self) -> None:
         result = classify(["bin/console"], "pull_request")
         self.assertTrue(result.pruebas_base)
