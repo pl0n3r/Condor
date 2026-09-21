@@ -315,6 +315,9 @@
 }
 
 .platform-context-bar {
+  position: sticky;
+  top: var(--space-4);
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: space-between;
