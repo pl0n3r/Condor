@@ -1,15 +1,15 @@
-# Condor App — Snapshot de deploy V 0.1.8
+# Condor App — Snapshot de deploy V 0.1.9
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** impedir que una transición operativa necesaria quede oculta durante un release y evitar validar producción con estado incompleto.
+> **Objetivo actual:** convertir el Super Admin en un centro de control real, compartiendo la misma base visual del Admin y permitiendo entrar al contexto de una empresa sin suplantar usuarios.
 
 <p align="center">
   <strong>Producto:</strong> Condor App ·
   <strong>Dominio:</strong> condorapp.com.co ·
   <strong>Runtime producción:</strong> PHP 8.5 ·
-  <strong>Versión objetivo:</strong> V 0.1.8 ·
+  <strong>Versión objetivo:</strong> V 0.1.9 ·
   <strong>Versión desplegada comprobada:</strong> V 0.1.4
 </p>
 
@@ -17,40 +17,46 @@
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base de código | ✅ **V 0.1.7 EN MAIN** | SHA `4d8f8488ab99e338eb533fea3fcef5e34fac4643` |
+| Base de código | ✅ **V 0.1.8 EN MAIN** | SHA `420b5ff85074fb1b33d587c7f4787c0430d6a8ff` |
 | Producción comprobada | ✅ **V 0.1.4 VALIDADA EN PRODUCCIÓN** | último smoke real documentado |
-| V 0.1.5–0.1.7 | ✅ **MERGED / NO INFERIR PRODUCCIÓN** | observabilidad, CI y permisos por sede integrados |
-| V 0.1.8 | 🚧 **EN VALIDACIÓN DE CÓDIGO** | Issue #107 / PR de entrega |
-| Detector de transición | ✅ **AMPLIADO** | esquema, configuración, comandos, rutas/controladores, identidad/roles, entidades, servicios y scripts operativos |
-| Observador de release | ✅ **UNIFICADO** | reutiliza el clasificador canónico; sin regex paralela |
-| Autoauditoría | ✅ **ENDURECIDA** | rechaza un clasificador invocado cuyo resultado no controle `requerida` |
-| Producción V 0.1.8 | ⏳ **NO VALIDADA** | requiere merge, exact-main, transición, deploy observado y smoke real |
+| V 0.1.5–0.1.8 | ✅ **MERGED / NO INFERIR PRODUCCIÓN** | observabilidad, CI, permisos y transición de release integrados |
+| Dominios personalizados | ✅ **DECISIÓN DOCUMENTADA** | D-049 / Issue #114, sin consumir una release productiva |
+| V 0.1.9 | 🚧 **EN VALIDACIÓN DE CÓDIGO** | Issue #113 / PR #118 |
+| Super Admin compartido | ✅ **IMPLEMENTADO** | shell común, métricas reales y contexto read-only por tenant |
+| Producción V 0.1.9 | ⏳ **NO VALIDADA** | requiere merge, exact-main, transición, deploy observado y smoke real |
 
 ## Qué se hizo
 
-- Centralización de la señal `transicion_release` en el clasificador canónico.
-- Cobertura explícita de cambios de esquema, configuración, comandos, rutas/controladores, roles, entidades persistentes, servicios y scripts de provisioning/backfill/deploy/release.
-- `observar-release` deja de mantener lógica de detección paralela.
-- Autoauditoría para comprobar que el resultado `transicion_release` se usa realmente en la decisión del workflow.
-- Regresiones positivas y negativas para evitar falsos verdes.
-- La detección automática sigue siendo una señal de seguridad: no ejecuta migraciones ni mutaciones de producción.
+- `/admin` y `/adminpl0n3r` reutilizan el mismo shell administrativo y componentes de resumen.
+- El centro de control global carga métricas reales de empresas, usuarios, sedes y membresías.
+- El propietario puede seleccionar una empresa sin cambiar su identidad autenticada.
+- Una barra persistente deja claro cuándo se está operando dentro del contexto de un tenant.
+- El primer contexto de empresa es deliberadamente read-only hasta que cada módulo compartido tenga autorización server-side segura.
+- Se añadieron pruebas HTTP para acceso propietario, rechazo de usuarios normales, selección de tenant, actor real y tenant inexistente.
+- Los assets compilados del Admin/Super Admin quedan versionados junto con el código fuente.
 
-## Archivos de esta entrega
+## Archivos principales de esta entrega
 
-- `.github/workflows/observar-release.yml`
-- `scripts/ci_change_classifier.py`
-- `scripts/ci_self_audit.py`
-- `tests/test_ci_change_classifier.py`
-- `tests/test_ci_self_audit.py`
-- `config/version.php`
-- `package.json`
-- `package-lock.json`
-- `README.md`
+- `frontend/admin/AdminShell.tsx`
+- `frontend/admin/OverviewGrid.tsx`
+- `frontend/admin/PlatformOwnerApp.tsx`
+- `frontend/admin/AdminApp.tsx`
+- `frontend/admin/api.ts`
+- `frontend/admin/main.tsx`
+- `frontend/admin/admin.css`
+- `src/Application/Identity/PlatformOwnerTenantContext.php`
+- `src/Http/Controller/PlatformOwnerContextController.php`
+- `src/Http/Controller/PlatformOwnerController.php`
+- `templates/platform_owner/index.html.twig`
+- `tests/php/Http/PlatformOwnerControllerTest.php`
+- assets compilados de administración
+- metadata de versión V 0.1.9
 
 ## Validación
 
-- CI Condor debe quedar verde sobre el head estable de la PR.
-- SonarQube Cloud y CodeRabbit deben validar ese mismo head.
+- Backend PHP/MariaDB, contratos/integración y Playwright deben quedar verdes sobre el head final.
+- SonarQube Cloud debe mantener Quality Gate aprobado y 0 hallazgos nuevos.
+- CodeRabbit debe revisar el mismo head sin findings accionables pendientes.
 - Después del merge se valida por separado el SHA exacto de `main`.
 - Ningún gate de código equivale a `VALIDADO EN PRODUCCIÓN`.
 
@@ -58,27 +64,30 @@
 
 ```mermaid
 flowchart LR
-    A[PR V0.1.8] --> B[Clasificador único]
-    B --> C[CI + autoauditoría]
+    A[PR #118 · V0.1.9] --> B[Centro de control global]
+    B --> C[CI + Playwright + MariaDB]
     C --> D[SonarQube + CodeRabbit]
     D --> E[Squash merge]
     E --> F[Validar SHA exacto de main]
-    F --> G[Verificar transición real]
+    F --> G[Verificar transición]
     G --> H[Observar deploy]
-    H --> I[Smoke de producción]
+    H --> I[Smoke real]
 ```
 
 ## Qué sigue
 
 | Horizonte | Bloque |
 | --- | --- |
-| **AHORA** | cerrar gates y merge de V 0.1.8 |
-| **SIGUE** | formalizar y comenzar la administración unificada Admin/Super Admin con contexto de empresa |
-| **DESPUÉS** | mostrar progresivamente en el Super Admin los siguientes slices de backend mediante superficies compartidas |
+| **AHORA** | cerrar #113 / PR #118 y validar V 0.1.9 en código |
+| **SIGUE** | staff de plataforma, invitaciones y notificaciones — Issue #116 |
+| **EN PARALELO** | storefront mínimo y conexión del primer dominio real sobre D-049 |
+| **DESPUÉS** | habilitar módulos compartidos del Admin dentro del contexto propietario de forma progresiva |
 
 ## Fuentes de verdad
 
 - [AGENTES.md](AGENTES.md) — protocolo operativo.
 - [ESPECIFICACIONES.md](ESPECIFICACIONES.md) — decisiones durables.
 - [Roadmap #1](https://github.com/pl0n3r/Condor/issues/1) — único Roadmap canónico.
-- [Issue #107](https://github.com/pl0n3r/Condor/issues/107) — detección automática de transición.
+- [Issue #113](https://github.com/pl0n3r/Condor/issues/113) / [PR #118](https://github.com/pl0n3r/Condor/pull/118) — centro de control V 0.1.9.
+- [Issue #116](https://github.com/pl0n3r/Condor/issues/116) — staff, invitaciones y notificaciones.
+- [Issue #114](https://github.com/pl0n3r/Condor/issues/114) — dominios personalizados/storefront.
