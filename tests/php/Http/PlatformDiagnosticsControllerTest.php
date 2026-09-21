@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace App\Tests\Http;
 
 use App\Domain\Identity\Entity\User;
+use App\Domain\Observability\Entity\DiagnosticShare;
 use App\Domain\Observability\Entity\ErrorIncident;
+use DateInterval;
+use DateTimeImmutable;
+use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
@@ -116,5 +120,61 @@ final class PlatformDiagnosticsControllerTest extends WebTestCase
             'token',
             strtolower((string) $client->getResponse()->getContent()),
         );
+    }
+
+    public function testRevokedAndExpiredSharesAreIndistinguishableFromUnknownToken(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        $incident = new ErrorIncident(
+            requestId: '01KTESTREQUESTID0000000001',
+            status: 500,
+            method: 'GET',
+            routeName: 'app_platform_owner',
+            exceptionClass: 'RuntimeException',
+            message: 'mensaje sanitizado',
+            fingerprint: str_repeat('c', 64),
+            version: '0.1.5',
+            releaseSha: str_repeat('d', 40),
+            trace: [],
+        );
+
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $revokedToken = bin2hex(random_bytes(32));
+        $revoked = new DiagnosticShare(
+            $incident,
+            hash('sha256', $revokedToken),
+            $now->add(new DateInterval('PT30M')),
+        );
+        $revoked->revoke();
+
+        $expiredToken = bin2hex(random_bytes(32));
+        $expired = new DiagnosticShare(
+            $incident,
+            hash('sha256', $expiredToken),
+            $now->sub(new DateInterval('PT1M')),
+        );
+
+        $entityManager->persist($incident);
+        $entityManager->persist($revoked);
+        $entityManager->persist($expired);
+        $entityManager->flush();
+
+        $client->request('GET', '/support/diagnostics/'.str_repeat('f', 64));
+        self::assertResponseStatusCodeSame(404);
+        $genericBody = (string) $client->getResponse()->getContent();
+
+        foreach ([$revokedToken, $expiredToken] as $token) {
+            $client->request('GET', '/support/diagnostics/'.$token);
+
+            self::assertResponseStatusCodeSame(404);
+            self::assertSame($genericBody, (string) $client->getResponse()->getContent());
+            self::assertStringContainsString(
+                'no-store',
+                (string) $client->getResponse()->headers->get('Cache-Control'),
+            );
+        }
     }
 }
