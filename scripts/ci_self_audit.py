@@ -408,6 +408,18 @@ def audit_main_ci(path: Path) -> list[str]:
         if token not in command_text:
             findings.append(f"{path}: falta {description}.")
 
+    preflight = jobs.get("preflight", "")
+    required_preflight_tokens = {
+        "steps.cambios.outputs.modo": "output de modo del clasificador",
+        "steps.cambios.outputs.motivo": "output de motivo del clasificador",
+        "steps.cambios.outputs.categorias": "output de categorías del clasificador",
+        "steps.cambios.outputs.frontend": "output del gate frontend",
+        "| Gate | Decisión | Razón |": "resumen explicativo de gates",
+    }
+    for token, description in required_preflight_tokens.items():
+        if token not in preflight:
+            findings.append(f"{path}: falta {description}.")
+
     required_job_conditions = {
         "pruebas-base": (
             "needs.preflight.outputs.pruebas_base == 'true'",
