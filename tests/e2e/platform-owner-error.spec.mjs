@@ -8,7 +8,7 @@ test.describe('Super Admin — recuperación segura ante 5xx', () => {
     'Requiere aplicación E2E ejecutándose para cargar el bundle real.',
   );
 
-  test('descarta diagnóstico malformado y conserva el error genérico', async ({ page }) => {
+  test('descarta diagnóstico malformado y conserva la referencia segura', async ({ page }) => {
     await page.route('**/adminpl0n3r/api/context*', async (route) => {
       await route.fulfill({
         status: 500,
@@ -48,7 +48,9 @@ test.describe('Super Admin — recuperación segura ante 5xx', () => {
       'No pudimos cargar el centro de control.',
     );
     await expect(page.locator('.platform-error-diagnostic')).toHaveCount(0);
-    await expect(alert).not.toContainText('Referencia:');
+    await expect(alert).toContainText(
+      'Referencia: 01KTESTERRORPAYLOAD000000000',
+    );
     await expect(alert).not.toContainText('[object Object]');
   });
 });
