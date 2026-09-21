@@ -131,9 +131,22 @@ jobs:
           [[ "$CONFIGURACION" == "true" ]] && args+=(--verified configuracion)
           [[ "$CACHE" == "true" ]] && args+=(--verified cache)
 
+          set +e
           jq -n \
             --slurpfile manifest /tmp/release-manifest.json \
             --slurpfile observation /tmp/release-observation.json \
             '{manifest: $manifest[0], observation: $observation[0]}' \
             | python3 scripts/release_evidence.py "${args[@]}" \
             | tee -a "$GITHUB_STEP_SUMMARY"
+          estados=("${PIPESTATUS[@]}")
+          set -e
+
+          if (( estados[0] != 0 )); then
+            exit "${estados[0]}"
+          fi
+          if (( estados[1] > 1 )); then
+            exit "${estados[1]}"
+          fi
+          if (( estados[2] != 0 )); then
+            exit "${estados[2]}"
+          fi
