@@ -81,6 +81,20 @@ class ChangeClassifierTests(unittest.TestCase):
         result = classify(["bin/console"], "pull_request")
         self.assertTrue(result.transicion_release)
 
+    def test_unknown_application_use_case_marks_release_transition(self) -> None:
+        result = classify(
+            ["src/Application/Onboarding/CreateTenant.php"],
+            "pull_request",
+        )
+        self.assertTrue(result.transicion_release)
+
+    def test_tests_do_not_mark_release_transition(self) -> None:
+        result = classify(
+            ["tests/php/Application/Onboarding/CreateTenantTest.php"],
+            "pull_request",
+        )
+        self.assertFalse(result.transicion_release)
+
     def test_ordinary_application_change_does_not_force_transition(self) -> None:
         result = classify(["src/Application/Catalog/ProductQuery.php"], "pull_request")
         self.assertFalse(result.transicion_release)
