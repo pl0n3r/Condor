@@ -465,6 +465,32 @@ El roadmap activo es **[GitHub Issue #1](https://github.com/pl0n3r/Condor/issues
 - Si varias acciones pertenecen a la misma iteración, consolidarlas en un único comentario de hito cuando exista un resultado sustancial o cambie materialmente el estado.
 - Las microactualizaciones operativas pueden consolidarse para reducir ruido, pero **nunca** se eliminan o compactan hitos macro, fases, decisiones de producto, entregas, incidentes o contexto histórico relevante.
 
+### Tono y contexto de los comentarios en GitHub
+
+La trazabilidad técnica se conserva, pero los comentarios deben poder entenderse sin reconstruir mentalmente el trabajo desde commits o código.
+
+Reglas:
+
+- mantener el nivel de detalle actual cuando aporte valor; esta regla **no busca resumir más**, sino explicar mejor;
+- evitar frases telegráficas aisladas como “decisiones durables incorporadas”, “gates verdes” o “ajuste aplicado” si no explican el contexto;
+- cuando se comunique un cambio relevante, conectar de forma natural cuatro preguntas: **qué cambió, por qué importa, dónde quedó reflejado y qué habilita o afecta**;
+- escribir en español claro, natural y profesional, con un tono más humano que un log de máquina;
+- conservar referencias a Issue, PR, SHA, versión o gate cuando aporten trazabilidad, pero no convertir el comentario en una lista de identificadores sin explicación;
+- explicar acrónimos o estados técnicos cuando el comentario pueda ser leído por producto, operación o una persona no inmersa en el código;
+- no reescribir retroactivamente todo el historial solo para uniformar estilo; aplicar la pauta hacia adelante y mejorar comentarios futuros;
+- conservar la regla de **hitos macro**: una comunicación más humana no autoriza microactualizaciones minuto a minuto;
+- cuando un fallo o finding sea relevante, explicar brevemente su impacto funcional u operativo y cómo se resolvió, no solo nombrar la herramienta que lo detectó;
+- aplicar esta misma pauta a descripciones de PR, comentarios de Issues/Roadmap, respuestas de revisión y notas de avance: cada texto debe poder entenderse por sí solo meses después sin depender del chat que originó el cambio;
+- en PRs e Issues de producto, priorizar el lenguaje de capacidad/impacto; en revisiones técnicas, mantener precisión de archivo, línea y riesgo cuando sea necesario.
+
+Ejemplo preferido:
+
+> Se definió que el staff de plataforma tendrá permisos CRUD por cliente y módulo. La decisión quedó documentada en ESPECIFICACIONES.md porque afecta el modelo de autorización y la administración global. Esto permitirá delegar operación sobre clientes concretos sin conceder privilegios de propietario.
+
+En lugar de:
+
+> Decisiones durables incorporadas en especificaciones.
+
 ### Qué merece una noticia en el Roadmap
 
 Publicar un comentario únicamente cuando ocurra un avance de nivel hito:
