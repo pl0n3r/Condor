@@ -313,7 +313,6 @@ def full_selection(
 
 def risk_reasons(files: list[str], values: dict[str, bool]) -> list[str]:
     """Resume las razones que obligan a ejecutar el stack completo."""
-    reasons: list[str] = []
     runtime_changed = any(
         is_frontend_runtime(path) or is_backend_runtime(path)
         for path in files
