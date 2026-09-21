@@ -59,6 +59,7 @@ PACKAGE_JSON = "package.json"
 PACKAGE_LOCK = "package-lock.json"
 PLAYWRIGHT_CONFIG = "playwright.config.mjs"
 TSCONFIG = "tsconfig.json"
+BIN_CONSOLE = "bin/console"
 VITE_CONFIG = "vite.config.ts"
 
 DEPENDENCY_FILES = {
@@ -86,7 +87,7 @@ KNOWN_ROOT_FILES = (
     | FRONTEND_CONTROL_FILES
     | GOVERNANCE_ROOT_FILES
     | RELEASE_ROOT_FILES
-    | {PHPUNIT_CONFIG, "index.html", "bin/console", "pyproject.toml"}
+    | {PHPUNIT_CONFIG, "index.html", BIN_CONSOLE, "pyproject.toml"}
 )
 
 TRANSITION_PREFIXES = (
@@ -174,7 +175,7 @@ def requires_release_transition(path: str) -> bool:
     """Clasifica cambios que requieren verificar transición operativa."""
     if path.endswith(".md") or path.startswith((DOCS_PREFIX, TESTS_PREFIX)):
         return False
-    if path == "bin/console" or path.startswith(TRANSITION_PREFIXES):
+    if path == BIN_CONSOLE or path.startswith(TRANSITION_PREFIXES):
         return True
     if path.startswith(SRC_PREFIX):
         return source_requires_release_transition(path)
@@ -210,7 +211,7 @@ def is_frontend_runtime(path: str) -> bool:
 def is_backend_runtime(path: str) -> bool:
     return (
         path.startswith((SRC_PREFIX, CONFIG_PREFIX, MIGRATIONS_PREFIX))
-        or path == "bin/console"
+        or path == BIN_CONSOLE
         or (path.startswith(PUBLIC_PREFIX) and path.endswith(".php"))
         or path == PHPUNIT_CONFIG
     )
@@ -310,13 +311,65 @@ def full_selection(
     )
 
 
+def risk_reasons(files: list[str], values: dict[str, bool]) -> list[str]:
+    """Resume las razones que obligan a ejecutar el stack completo."""
+    reasons: list[str] = []
+    runtime_changed = any(
+        is_frontend_runtime(path) or is_backend_runtime(path)
+        for path in files
+    )
+    flags = (
+        ("runtime", runtime_changed),
+        ("seguridad", values["categoria_seguridad"]),
+        ("migraciones", values["categoria_migraciones"]),
+        ("dependencias", values["categoria_dependencias"]),
+        ("release", values["categoria_release"]),
+        ("workflow", any(path.startswith(WORKFLOW_PREFIX) for path in files)),
+        ("ci-critico", any(path in CI_CRITICAL for path in files)),
+    )
+    return [name for name, enabled in flags if enabled]
+
+
+def selective_selection(
+    files: list[str],
+    values: dict[str, bool],
+    transition: bool,
+) -> Selection:
+    """Selecciona gates dirigidos para tests/herramientas sin runtime."""
+    pruebas_base = any(
+        path.startswith((SCRIPTS_PREFIX, TESTS_PREFIX))
+        or path == "pyproject.toml"
+        for path in files
+    )
+    backend = any(path.startswith("tests/php/") for path in files)
+    frontend = any(path.startswith("tests/e2e/") for path in files)
+    quick = not (pruebas_base or backend or frontend)
+
+    return Selection(
+        **values,
+        documentacion=values["categoria_documentacion"],
+        pruebas_base=pruebas_base,
+        frontend=frontend,
+        backend=backend,
+        e2e=frontend,
+        validacion_completa=False,
+        transicion_release=transition,
+        modo="rapido" if quick else "selectivo",
+        motivo=(
+            "documentacion-gobierno-sin-runtime"
+            if quick
+            else "pruebas-o-herramientas-selectivas"
+        ),
+        categorias=category_text(values),
+    )
+
+
 def classify(paths: Iterable[str], event: str) -> Selection:
     """Devuelve categorías y gates con fallback fail-safe."""
     files = normalized(paths)
     values = categories(files)
     transition = any(requires_release_transition(path) for path in files)
 
-    # Main/dispatch nunca heredan optimizaciones del PR.
     if event != "pull_request":
         return full_selection(
             values,
@@ -329,80 +382,22 @@ def classify(paths: Iterable[str], event: str) -> Selection:
             transicion_release=transition,
             motivo="diff-vacio-fail-safe",
         )
-
-    unknown = any(not is_known(path) for path in files)
-    if unknown:
+    if any(not is_known(path) for path in files):
         return full_selection(
             values,
             transicion_release=transition,
             motivo="ruta-desconocida-fail-safe",
         )
 
-    workflow_changed = any(path.startswith(WORKFLOW_PREFIX) for path in files)
-    ci_critical = any(path in CI_CRITICAL for path in files)
-    runtime_changed = any(
-        is_frontend_runtime(path) or is_backend_runtime(path)
-        for path in files
-    )
-    high_risk = (
-        runtime_changed
-        or values["categoria_dependencias"]
-        or values["categoria_seguridad"]
-        or values["categoria_release"]
-        or workflow_changed
-        or ci_critical
-    )
-    if high_risk:
-        reason_parts: list[str] = []
-        if runtime_changed:
-            reason_parts.append("runtime")
-        if values["categoria_seguridad"]:
-            reason_parts.append("seguridad")
-        if values["categoria_migraciones"]:
-            reason_parts.append("migraciones")
-        if values["categoria_dependencias"]:
-            reason_parts.append("dependencias")
-        if values["categoria_release"]:
-            reason_parts.append("release")
-        if workflow_changed:
-            reason_parts.append("workflow")
-        if ci_critical:
-            reason_parts.append("ci-critico")
-
+    reasons = risk_reasons(files, values)
+    if reasons:
         return full_selection(
             values,
             transicion_release=transition,
-            motivo="stack-completo:" + ",".join(dict.fromkeys(reason_parts)),
+            motivo="stack-completo:" + ",".join(reasons),
         )
 
-    pruebas_base = any(
-        path.startswith((SCRIPTS_PREFIX, TESTS_PREFIX))
-        or path == "pyproject.toml"
-        for path in files
-    )
-    backend = any(path.startswith("tests/php/") for path in files)
-    frontend = any(path.startswith("tests/e2e/") for path in files)
-    e2e = frontend
-
-    quick = not (pruebas_base or backend or frontend or e2e)
-    return Selection(
-        **values,
-        documentacion=values["categoria_documentacion"],
-        pruebas_base=pruebas_base,
-        frontend=frontend,
-        backend=backend,
-        e2e=e2e,
-        validacion_completa=False,
-        transicion_release=transition,
-        modo="rapido" if quick else "selectivo",
-        motivo=(
-            "documentacion-gobierno-sin-runtime"
-            if quick
-            else "pruebas-o-herramientas-selectivas"
-        ),
-        categorias=category_text(values),
-    )
-
+    return selective_selection(files, values, transition)
 
 def bool_text(value: bool) -> str:
     return "true" if value else "false"
