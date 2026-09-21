@@ -11,12 +11,14 @@ from pathlib import Path
 from typing import Any, Iterable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT = SCRIPT_DIR.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from ci_change_classifier import classify, script_requires_release_transition
 
 SCHEMA = "condor.release-evidence.v1"
+CANONICAL_VERSION_FILE = ROOT / "config" / "version.php"
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}\Z", re.ASCII)
 VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+\Z", re.ASCII)
 VERSION_ASSIGNMENT = re.compile(
@@ -49,7 +51,7 @@ def normalized_paths(paths: Iterable[str]) -> list[str]:
 
 
 def read_version(path: Path) -> str:
-    """Lee la única versión canónica de config/version.php."""
+    """Lee una fuente de versión controlada por el repositorio."""
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as error:
@@ -299,23 +301,20 @@ def markdown(evidence: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def load_json(path: Path, label: str) -> dict[str, Any]:
+def load_envelope() -> tuple[dict[str, Any], dict[str, Any]]:
+    """Lee manifiesto y observación por stdin; el CLI no acepta rutas arbitrarias."""
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        raise EvidenceError(f"No se pudo leer {label} como JSON válido.") from error
-    if not isinstance(value, dict):
-        raise EvidenceError(f"{label} debe ser un objeto JSON.")
-    return value
+        payload = json.load(sys.stdin)
+    except ValueError as error:
+        raise EvidenceError("La entrada de evidencia no es JSON válido.") from error
+    if not isinstance(payload, dict):
+        raise EvidenceError("La entrada de evidencia debe ser un objeto JSON.")
 
-
-def parse_changed_paths(path: Path | None) -> list[str]:
-    if path is None:
-        return [line.rstrip("\n") for line in sys.stdin]
-    try:
-        return path.read_text(encoding="utf-8").splitlines()
-    except OSError as error:
-        raise EvidenceError("No se pudo leer la lista de cambios.") from error
+    manifest = payload.get("manifest")
+    observation = payload.get("observation")
+    if not isinstance(manifest, dict) or not isinstance(observation, dict):
+        raise EvidenceError("La entrada debe contener manifest y observation.")
+    return manifest, observation
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -325,43 +324,31 @@ def main(argv: list[str] | None = None) -> int:
     manifest_parser = subparsers.add_parser("manifest")
     manifest_parser.add_argument("--sha", required=True)
     manifest_parser.add_argument("--expected-version")
-    manifest_parser.add_argument(
-        "--version-file",
-        type=Path,
-        default=Path("config/version.php"),
-    )
-    manifest_parser.add_argument("--changes", type=Path)
 
     finalize_parser = subparsers.add_parser("finalize")
-    finalize_parser.add_argument("--manifest", type=Path, required=True)
-    finalize_parser.add_argument("--observation", type=Path, required=True)
     finalize_parser.add_argument(
         "--verified",
         action="append",
         default=[],
         choices=CHECK_IDS,
     )
-    finalize_parser.add_argument("--json-out", type=Path)
     finalize_parser.add_argument("--markdown", action="store_true")
 
     args = parser.parse_args(argv)
     try:
         if args.command == "manifest":
             manifest = build_manifest(
-                version_file=args.version_file,
+                version_file=CANONICAL_VERSION_FILE,
                 sha=args.sha,
-                changed_paths=parse_changed_paths(args.changes),
+                changed_paths=sys.stdin.read().splitlines(),
                 expected_version=args.expected_version,
             )
             print(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
 
-        manifest = load_json(args.manifest, "el manifiesto")
-        observation = load_json(args.observation, "la observación")
+        manifest, observation = load_envelope()
         evidence = finalize(manifest, observation, args.verified)
         payload = json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-        if args.json_out is not None:
-            args.json_out.write_text(payload, encoding="utf-8")
         print(markdown(evidence) if args.markdown else payload, end="")
         return 0 if evidence["estado"] == "VALIDATED_IN_PRODUCTION" else 1
     except EvidenceError as error:
