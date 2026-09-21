@@ -37,6 +37,9 @@ final class PlatformStaffControllerTest extends WebTestCase
         $entityManager->flush();
 
         $client->loginUser($owner);
+        $client->request('GET', '/adminpl0n3r');
+        self::assertResponseIsSuccessful();
+
         $csrf = $container->get(CsrfTokenManagerInterface::class);
         self::assertInstanceOf(CsrfTokenManagerInterface::class, $csrf);
         $managementToken = $csrf
@@ -184,6 +187,8 @@ final class PlatformStaffControllerTest extends WebTestCase
         $entityManager->persist($owner);
         $entityManager->flush();
         $client->loginUser($owner);
+        $client->request('GET', '/adminpl0n3r');
+        self::assertResponseIsSuccessful();
 
         $email = 'rejected-'.$suffix.'@example.test';
         $body = [
