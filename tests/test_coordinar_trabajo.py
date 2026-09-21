@@ -228,8 +228,30 @@ class LimpiezaRamaTests(unittest.TestCase):
 class WorkflowCoordinacionTests(unittest.TestCase):
     """Cubre el cableado declarativo entre GitHub Events y el coordinador."""
 
+    @staticmethod
+    def yaml_block(text: str, header: str, indent: int) -> str:
+        """Aísla una clave YAML por nivel para evitar falsos positivos globales."""
+        lines = text.splitlines()
+        target = (" " * indent) + header
+        start = next(
+            (index for index, line in enumerate(lines) if line == target),
+            None,
+        )
+        if start is None:
+            raise AssertionError(f"No existe la sección YAML {header!r}.")
+
+        block = [lines[start]]
+        for line in lines[start + 1 :]:
+            stripped = line.lstrip()
+            current_indent = len(line) - len(stripped)
+            if stripped and not stripped.startswith("#") and current_indent <= indent:
+                break
+            block.append(line)
+
+        return "\n".join(block)
+
     def test_issue_comment_routes_only_supported_commands_to_coordinator(self) -> None:
-        """El workflow escucha comentarios y delega únicamente comandos soportados."""
+        """El job correcto recibe el evento, identidad y argumentos esperados."""
         workflow = (
             Path(__file__).resolve().parents[1]
             / ".github"
@@ -237,25 +259,46 @@ class WorkflowCoordinacionTests(unittest.TestCase):
             / "coordinacion-trabajo.yml"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("issue_comment:", workflow)
-        self.assertIn("types: [created, edited]", workflow)
-        self.assertIn("github.event.issue.pull_request == null", workflow)
+        event_block = self.yaml_block(workflow, "issue_comment:", 2)
+        self.assertIn("types: [created, edited]", event_block)
+
+        job_block = self.yaml_block(workflow, "comando-comentario:", 2)
+        self.assertIn("github.event.issue.pull_request == null", job_block)
         self.assertIn(
             "github.event.sender.login == github.event.comment.user.login",
-            workflow,
+            job_block,
         )
-        self.assertIn("ACTOR: ${{ github.event.comment.user.login }}", workflow)
-        self.assertIn("github.event.comment.body == '/tomar'", workflow)
-        self.assertIn("github.event.comment.body == '/liberar-forzado'", workflow)
-        self.assertIn("startsWith(github.event.comment.body, '/liberar ')", workflow)
-        self.assertIn("startsWith(github.event.comment.body, '/transferir ')", workflow)
-        self.assertIn("github.event.comment.author_association", workflow)
-        self.assertIn("python3 scripts/coordinar_trabajo.py comentario", workflow)
-        self.assertIn('--repo "$REPOSITORIO"', workflow)
-        self.assertIn('--issue "$ISSUE"', workflow)
-        self.assertIn('--actor "$ACTOR"', workflow)
-        self.assertIn('--association "$ASOCIACION"', workflow)
-        self.assertIn('--body "$CUERPO"', workflow)
+        self.assertIn("github.event.comment.body == '/tomar'", job_block)
+        self.assertIn("github.event.comment.body == '/liberar-forzado'", job_block)
+        self.assertIn(
+            "startsWith(github.event.comment.body, '/liberar ')",
+            job_block,
+        )
+        self.assertIn(
+            "startsWith(github.event.comment.body, '/transferir ')",
+            job_block,
+        )
+
+        env_block = self.yaml_block(job_block, "env:", 8)
+        self.assertIn(
+            "ACTOR: ${{ github.event.comment.user.login }}",
+            env_block,
+        )
+        self.assertIn(
+            "ASOCIACION: ${{ github.event.comment.author_association }}",
+            env_block,
+        )
+        self.assertIn("CUERPO: ${{ github.event.comment.body }}", env_block)
+
+        self.assertIn(
+            "python3 scripts/coordinar_trabajo.py comentario",
+            job_block,
+        )
+        self.assertIn('--repo "$REPOSITORIO"', job_block)
+        self.assertIn('--issue "$ISSUE"', job_block)
+        self.assertIn('--actor "$ACTOR"', job_block)
+        self.assertIn('--association "$ASOCIACION"', job_block)
+        self.assertIn('--body "$CUERPO"', job_block)
 
 
 
