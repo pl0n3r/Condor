@@ -230,6 +230,36 @@ final class PlatformOwnerControllerTest extends WebTestCase
         );
     }
 
+    public function testOwnerContextCapsTenantPageSize(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        $owner = new User(
+            'owner-page-cap-'.bin2hex(random_bytes(4)).'@example.test',
+            'Propietario Límite',
+            [User::ROLE_PLATFORM_OWNER],
+        );
+        $entityManager->persist($owner);
+        $entityManager->flush();
+
+        $client->loginUser($owner);
+        $client->request(
+            'GET',
+            '/adminpl0n3r/api/context?page=0&per_page=500',
+        );
+        self::assertResponseIsSuccessful();
+
+        $payload = json_decode(
+            (string) $client->getResponse()->getContent(),
+            true,
+        );
+        self::assertIsArray($payload);
+        self::assertSame(1, $payload['tenant_pagination']['page']);
+        self::assertSame(50, $payload['tenant_pagination']['per_page']);
+    }
+
     public function testOwnerCanSelectTenantContextWithoutChangingActorIdentity(): void
     {
         $client = static::createClient();
