@@ -126,10 +126,31 @@ final class PlatformStaffControllerTest extends WebTestCase
         );
 
         self::assertResponseRedirects('/admin/login');
+
+        $freshContainer = static::getContainer();
+        $freshEntityManager = $freshContainer->get(
+            EntityManagerInterface::class,
+        );
+        self::assertInstanceOf(
+            EntityManagerInterface::class,
+            $freshEntityManager,
+        );
+
+        $staff = $freshEntityManager
+            ->getRepository(User::class)
+            ->find($staff->id());
+        $invitation = $freshEntityManager
+            ->getRepository(AccountInvitation::class)
+            ->find($invitation->id());
+
+        self::assertInstanceOf(User::class, $staff);
+        self::assertInstanceOf(AccountInvitation::class, $invitation);
         self::assertTrue($staff->isActive());
         self::assertNotNull($invitation->consumedAt());
 
-        $hasher = $container->get(UserPasswordHasherInterface::class);
+        $hasher = $freshContainer->get(
+            UserPasswordHasherInterface::class,
+        );
         self::assertInstanceOf(UserPasswordHasherInterface::class, $hasher);
         self::assertTrue(
             $hasher->isPasswordValid($staff, $plainPassword),
