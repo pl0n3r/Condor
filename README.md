@@ -54,6 +54,7 @@
 - `templates/platform_owner/index.html.twig`
 - `tests/php/Http/PlatformDiagnosticsControllerTest.php`
 - `tests/php/Infrastructure/Observability/ErrorSanitizerTest.php`
+- `tests/php/Shared/Runtime/RuntimeCheckTest.php`
 - `config/packages/security.yaml`, `config/services.yaml`
 - `config/version.php`, `package.json`, `package-lock.json`
 - `AGENTES.md`, `ESPECIFICACIONES.md`, `README.md`
