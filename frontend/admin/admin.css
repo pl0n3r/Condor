@@ -45,3 +45,171 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.workspace-heading,
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.section-heading.compact {
+  align-items: center;
+}
+
+.branch-picker,
+.field {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.branch-picker select,
+.field input {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.access-panel {
+  margin-top: var(--space-8);
+  padding-top: var(--space-8);
+  border-top: 1px solid var(--border);
+}
+
+.access-panel h2,
+.access-panel h3 {
+  margin-top: 0;
+}
+
+.access-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.7fr) minmax(420px, 1.3fr);
+  gap: var(--space-6);
+  margin-top: var(--space-5);
+}
+
+.role-list,
+.membership-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.role-card,
+.membership-card,
+.role-editor {
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.role-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.role-card > div:first-child,
+.membership-card > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.role-card span,
+.membership-card span,
+.membership-card small {
+  color: var(--muted);
+}
+
+.role-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.role-actions .button,
+.section-heading .button {
+  width: auto;
+}
+
+.role-editor {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.permission-matrix {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.permission-matrix fieldset {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.permission-matrix legend {
+  padding: 0 var(--space-2);
+  font-weight: 650;
+}
+
+.permission-actions,
+.membership-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.permission-actions label,
+.membership-roles label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.access-message {
+  display: block;
+  margin-top: var(--space-3);
+  color: var(--muted);
+}
+
+.membership-section {
+  margin-top: var(--space-8);
+}
+
+.membership-card {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.6fr) minmax(320px, 1.4fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .workspace-heading,
+  .section-heading,
+  .role-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .access-layout,
+  .membership-card {
+    grid-template-columns: 1fr;
+  }
+
+  .branch-picker {
+    width: 100%;
+  }
+}
