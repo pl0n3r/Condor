@@ -45,12 +45,32 @@ type PlatformContextResponse = {
   version: string;
 };
 
+type OwnerDiagnostic = {
+  incident_id: string;
+  request_id: string;
+  status: number;
+  route: string;
+  exception: string;
+  message: string;
+  version: string;
+  release_sha: string;
+};
+
+type InternalErrorPayload = {
+  error_id?: string;
+  diagnostic?: OwnerDiagnostic;
+};
+
 type State =
   | { status: 'loading' }
   | { status: 'ready'; data: PlatformContextResponse }
   | { status: 'permission-denied' }
   | { status: 'not-found' }
-  | { status: 'error' };
+  | {
+      status: 'error';
+      errorId?: string;
+      diagnostic?: OwnerDiagnostic;
+    };
 
 type PlatformOwnerAppProps = Readonly<{
   version: string;
@@ -86,6 +106,24 @@ export function PlatformOwnerApp({
 
       if (response.status === 404) {
         setState({ status: 'not-found' });
+        return;
+      }
+
+      if (response.status >= 500) {
+        let payload: InternalErrorPayload | null = null;
+        try {
+          payload = await response.json() as InternalErrorPayload;
+        } catch {
+          payload = null;
+        }
+
+        if (requestId === requestSequence.current) {
+          setState({
+            status: 'error',
+            errorId: payload?.error_id,
+            diagnostic: payload?.diagnostic,
+          });
+        }
         return;
       }
 
@@ -176,9 +214,59 @@ export function PlatformOwnerApp({
       )}
 
       {state.status === 'error' && (
-        <div className="alert alert-error" role="alert">
-          No pudimos cargar el centro de control. Recarga la página para
-          intentarlo de nuevo.
+        <div className="alert alert-error platform-error" role="alert">
+          <strong>No pudimos cargar el centro de control.</strong>
+          <span>
+            El incidente quedó registrado de forma segura.
+            {state.errorId && (
+              <> Referencia: <code>{state.errorId}</code>.</>
+            )}
+          </span>
+
+          {state.diagnostic && (
+            <div className="platform-error-diagnostic">
+              <p>
+                Detalle sanitizado visible solo para el propietario de
+                plataforma.
+              </p>
+              <dl>
+                <div>
+                  <dt>HTTP</dt>
+                  <dd>{state.diagnostic.status}</dd>
+                </div>
+                <div>
+                  <dt>Ruta</dt>
+                  <dd><code>{state.diagnostic.route}</code></dd>
+                </div>
+                <div>
+                  <dt>Excepción</dt>
+                  <dd><code>{state.diagnostic.exception}</code></dd>
+                </div>
+                <div>
+                  <dt>Mensaje</dt>
+                  <dd><code>{state.diagnostic.message}</code></dd>
+                </div>
+                <div>
+                  <dt>Request ID</dt>
+                  <dd><code>{state.diagnostic.request_id}</code></dd>
+                </div>
+                <div>
+                  <dt>Versión</dt>
+                  <dd>{state.diagnostic.version}</dd>
+                </div>
+                <div>
+                  <dt>Release SHA</dt>
+                  <dd><code>{state.diagnostic.release_sha}</code></dd>
+                </div>
+              </dl>
+              <a
+                className="button button-secondary platform-error-link"
+                href="/adminpl0n3r/diagnosticos"
+              >
+                Abrir diagnósticos
+              </a>
+            </div>
+          )}
         </div>
       )}
 
