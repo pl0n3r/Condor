@@ -64,10 +64,14 @@ class ReleaseEvidenceContractTests(unittest.TestCase):
             "scripts/release_evidence.py manifest",
             "scripts/release_evidence.py",
             "finalize",
-            "--json-out /tmp/release-evidence.json",
+            "--slurpfile manifest /tmp/release-manifest.json",
+            "--slurpfile observation /tmp/release-observation.json",
         ):
             self.assertIn(token, workflow)
         self.assertNotIn("transicion_verificada:", workflow)
+        self.assertNotIn("--manifest /tmp/", workflow)
+        self.assertNotIn("--observation /tmp/", workflow)
+        self.assertNotIn("--json-out", workflow)
 
 
 if __name__ == "__main__":
