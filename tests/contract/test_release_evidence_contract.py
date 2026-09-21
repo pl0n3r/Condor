@@ -66,6 +66,8 @@ class ReleaseEvidenceContractTests(unittest.TestCase):
             "finalize",
             "--slurpfile manifest /tmp/release-manifest.json",
             "--slurpfile observation /tmp/release-observation.json",
+            'estados=("${PIPESTATUS[@]}")',
+            "if (( estados[1] > 1 )); then",
         ):
             self.assertIn(token, workflow)
         self.assertNotIn("transicion_verificada:", workflow)
