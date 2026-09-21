@@ -66,6 +66,45 @@ final class Version20260921183000 extends AbstractMigration // NOSONAR -- nombre
             SQL);
 
         $this->addSql(<<<'SQL'
+            CREATE TABLE condor_notification_preference (
+                id VARCHAR(26) NOT NULL,
+                user_id VARCHAR(26) NOT NULL,
+                event_key VARCHAR(120) NOT NULL,
+                channel_key VARCHAR(32) NOT NULL,
+                enabled TINYINT(1) NOT NULL,
+                created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                updated_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                INDEX IDX_NOTIFICATION_PREFERENCE_USER (user_id),
+                UNIQUE INDEX uniq_notification_preference (user_id, event_key, channel_key),
+                CONSTRAINT FK_NOTIFICATION_PREFERENCE_USER FOREIGN KEY (user_id)
+                    REFERENCES condor_user (id) ON DELETE CASCADE,
+                PRIMARY KEY(id)
+            ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
+            SQL);
+
+        $this->addSql(<<<'SQL'
+            CREATE TABLE condor_notification_delivery (
+                id VARCHAR(26) NOT NULL,
+                user_id VARCHAR(26) NOT NULL,
+                event_key VARCHAR(120) NOT NULL,
+                channel_key VARCHAR(32) NOT NULL,
+                payload JSON NOT NULL,
+                status VARCHAR(24) NOT NULL,
+                attempt_count INT NOT NULL,
+                last_error VARCHAR(255) DEFAULT NULL,
+                available_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                delivered_at DATETIME DEFAULT NULL COMMENT '(DC2Type:datetime_immutable)',
+                created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                updated_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                INDEX IDX_NOTIFICATION_DELIVERY_USER (user_id),
+                INDEX idx_notification_delivery_pending (status, available_at),
+                CONSTRAINT FK_NOTIFICATION_DELIVERY_USER FOREIGN KEY (user_id)
+                    REFERENCES condor_user (id) ON DELETE CASCADE,
+                PRIMARY KEY(id)
+            ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
+            SQL);
+
+        $this->addSql(<<<'SQL'
             CREATE TABLE condor_platform_audit_event (
                 id VARCHAR(26) NOT NULL,
                 actor_user_id VARCHAR(26) NOT NULL,
@@ -93,11 +132,23 @@ final class Version20260921183000 extends AbstractMigration // NOSONAR -- nombre
         $auditCount = (int) $this->connection->fetchOne(
             'SELECT COUNT(*) FROM condor_platform_audit_event',
         );
+        $preferenceCount = (int) $this->connection->fetchOne(
+            'SELECT COUNT(*) FROM condor_notification_preference',
+        );
+        $deliveryCount = (int) $this->connection->fetchOne(
+            'SELECT COUNT(*) FROM condor_notification_delivery',
+        );
         $this->abortIf(
-            $invitationCount > 0 || $grantCount > 0 || $auditCount > 0,
-            'Rollback bloqueado: existen invitaciones, permisos o auditoría de plataforma.',
+            $invitationCount > 0
+            || $grantCount > 0
+            || $auditCount > 0
+            || $preferenceCount > 0
+            || $deliveryCount > 0,
+            'Rollback bloqueado: existen invitaciones, permisos, notificaciones o auditoría de plataforma.',
         );
 
+        $this->addSql('DROP TABLE condor_notification_delivery');
+        $this->addSql('DROP TABLE condor_notification_preference');
         $this->addSql('DROP TABLE condor_platform_audit_event');
         $this->addSql('DROP TABLE condor_account_invitation');
         $this->addSql('DROP TABLE condor_platform_staff_grant');
