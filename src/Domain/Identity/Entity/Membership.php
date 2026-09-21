@@ -13,6 +13,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_membership')]
 #[ORM\UniqueConstraint(name: 'uniq_membership_tenant_user', columns: ['tenant_id', 'user_id'])]
+#[ORM\UniqueConstraint(name: 'uniq_membership_tenant_id', columns: ['tenant_id', 'id'])]
 class Membership
 {
     public const ROLE_OWNER = 'OWNER';
@@ -47,6 +48,11 @@ class Membership
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
+    public function id(): string
+    {
+        return $this->id;
+    }
+
     public function tenant(): Tenant
     {
         return $this->tenant;
@@ -61,4 +67,10 @@ class Membership
     {
         return $this->roleKey;
     }
+
+    public function isActive(): bool
+    {
+        return $this->active;
+    }
 }
+
