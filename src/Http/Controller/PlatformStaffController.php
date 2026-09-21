@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
+use App\Application\Identity\PlatformOwnerTenantContext;
 use App\Application\Identity\PlatformStaffInvitationResult;
 use App\Application\Identity\PlatformStaffManager;
 use App\Domain\Identity\Entity\User;
@@ -28,6 +29,7 @@ final class PlatformStaffController extends AbstractController
 {
     public function __construct(
         private readonly PlatformStaffManager $manager,
+        private readonly PlatformOwnerTenantContext $tenantContext,
         private readonly EntityManagerInterface $entityManager,
         private readonly RateLimiterFactory $platformStaffInviteResendLimiter,
     ) {
@@ -38,9 +40,23 @@ final class PlatformStaffController extends AbstractController
     {
         $owner = $this->owner();
 
+        $tenantPage = $this->tenantContext->tenantPage(
+            1,
+            PlatformOwnerTenantContext::MAX_PAGE_SIZE,
+        );
+
         return $this->json([
             'staff' => $this->manager->overview($owner),
             'catalog' => PermissionCatalog::definitions(),
+            'tenant_options' => array_map(
+                static fn (array $tenant): array => [
+                    'id' => $tenant['id'],
+                    'name' => $tenant['name'],
+                    'slug' => $tenant['slug'],
+                ],
+                $tenantPage['items'],
+            ),
+            'tenant_options_truncated' => $tenantPage['has_next'],
         ]);
     }
 
