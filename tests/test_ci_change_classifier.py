@@ -106,6 +106,15 @@ class ChangeClassifierTests(unittest.TestCase):
         self.assertTrue(result.e2e)
         self.assertIn("workflow", result.motivo)
 
+    def test_composite_action_change_runs_full_stack(self) -> None:
+        result = classify([".github/actions/setup/action.yml"], "pull_request")
+        self.assertTrue(result.categoria_gobierno)
+        self.assertTrue(result.validacion_completa)
+        self.assertTrue(result.frontend)
+        self.assertTrue(result.backend)
+        self.assertTrue(result.e2e)
+        self.assertIn("workflow", result.motivo)
+
     def test_ci_classifier_change_runs_full_stack(self) -> None:
         result = classify(["scripts/ci_change_classifier.py"], "pull_request")
         self.assertTrue(result.categoria_gobierno)
