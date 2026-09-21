@@ -233,6 +233,104 @@ jobs:
             findings = audit_release_observer(path)
         self.assertTrue(any("transicion_release" in item for item in findings))
 
+    def test_release_observer_rejects_commented_transition_flow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Release
+on: workflow_dispatch
+jobs:
+  observar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          # requiere="$(
+          #   python3 scripts/ci_change_classifier.py --format json
+          #   | python3 -c 'print(data["transicion_release"])'
+          # )"
+          # echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
+          echo "sin clasificador"
+""",
+            )
+            findings = audit_release_observer(path)
+        self.assertTrue(any("transicion_release" in item for item in findings))
+
+    def test_release_observer_rejects_transition_without_github_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Release
+on: workflow_dispatch
+jobs:
+  observar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          requiere="$(
+            python3 scripts/ci_change_classifier.py \
+              --event pull_request \
+              --format json < cambios.txt \
+            | python3 -c 'import json, sys; print(str(json.load(sys.stdin)["transicion_release"]).lower())'
+          )"
+          echo "requerida=$requiere" > /tmp/requerida.txt
+""",
+            )
+            findings = audit_release_observer(path)
+        self.assertTrue(any("GITHUB_OUTPUT" in item for item in findings))
+
+    def test_release_observer_rejects_transition_reassignment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Release
+on: workflow_dispatch
+jobs:
+  observar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          requiere="$(
+            python3 scripts/ci_change_classifier.py \
+              --event pull_request \
+              --format json < cambios.txt \
+            | python3 -c 'import json, sys; print(str(json.load(sys.stdin)["transicion_release"]).lower())'
+          )"
+          echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
+          requiere=false
+""",
+            )
+            findings = audit_release_observer(path)
+        self.assertTrue(any("sobrescribir" in item for item in findings))
+
+    def test_release_observer_rejects_transition_inside_dead_control_flow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Release
+on: workflow_dispatch
+jobs:
+  observar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          if false; then
+            requiere="$(
+              python3 scripts/ci_change_classifier.py \
+                --event pull_request \
+                --format json < cambios.txt \
+              | python3 -c 'import json, sys; print(str(json.load(sys.stdin)["transicion_release"]).lower())'
+            )"
+            echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
+          fi
+""",
+            )
+            findings = audit_release_observer(path)
+        self.assertTrue(any("transicion_release" in item for item in findings))
+
     def test_release_observer_accepts_effective_transition_classifier(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self.write_workflow(
