@@ -184,6 +184,45 @@ final class PlatformOwnerControllerTest extends WebTestCase
         self::assertTrue($payload['selected_tenant']['branches'][0]['is_default']);
     }
 
+    public function testOwnerContextKeepsExplicitEmptyBranchState(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        $suffix = bin2hex(random_bytes(4));
+        $owner = new User(
+            'owner-empty-'.$suffix.'@example.test',
+            'Propietario Sin Sedes',
+            [User::ROLE_PLATFORM_OWNER],
+        );
+        $tenant = new Tenant(
+            'Empresa Sin Sedes '.$suffix,
+            'empresa-sin-sedes-'.$suffix,
+        );
+
+        $entityManager->persist($owner);
+        $entityManager->persist($tenant);
+        $entityManager->flush();
+
+        $client->loginUser($owner);
+        $client->request(
+            'GET',
+            '/adminpl0n3r/api/context?tenant='.urlencode($tenant->id()),
+        );
+
+        self::assertResponseIsSuccessful();
+
+        $payload = json_decode(
+            (string) $client->getResponse()->getContent(),
+            true,
+        );
+        self::assertIsArray($payload);
+        self::assertSame($tenant->id(), $payload['selected_tenant']['id']);
+        self::assertSame(0, $payload['selected_tenant']['branch_count']);
+        self::assertSame([], $payload['selected_tenant']['branches']);
+    }
+
     public function testUnknownTenantContextReturnsNotFound(): void
     {
         $client = static::createClient();
