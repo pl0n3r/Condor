@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       transicion_verificada:
-        description: 'Confirmé por separado migraciones/configuración/comandos requeridos'
+        description: 'Confirmé por separado la transición operativa requerida'
         required: false
         default: false
         type: boolean
@@ -45,10 +45,9 @@ jobs:
           git diff --name-only "${SHA_ESPERADO}^" "$SHA_ESPERADO" > /tmp/cambios-release.txt
           cat /tmp/cambios-release.txt
 
-          requiere=false
-          if grep -Eq '^(migrations/|config/|src/Console/)' /tmp/cambios-release.txt; then
-            requiere=true
-          fi
+          requiere="$(
+            python3 scripts/ci_change_classifier.py               --event pull_request               --format json               < /tmp/cambios-release.txt             | python3 -c 'import json, sys; print(str(json.load(sys.stdin)["transicion_release"]).lower())'
+          )"
           echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
           echo "Transición operativa requerida: $requiere" >> "$GITHUB_STEP_SUMMARY"
 
