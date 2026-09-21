@@ -414,7 +414,7 @@ Comunicación humana no significa micro-log: seguir reportando hitos macro.
 
 ## 10. Producción y seguridad de transición
 
-**PROHIBIDO ejecutar automáticamente:**
+**PROHIBIDO ejecutar sin autorización explícita previa, y nunca de forma automática:**
 
 - SQL destructivo;
 - reset/seed de producción;
@@ -422,7 +422,9 @@ Comunicación humana no significa micro-log: seguir reportando hitos macro.
 - rotación de secretos reales;
 - cambio DNS/infra irreversible;
 - operación con riesgo de interrupción sin rollback;
-- migración productiva no autorizada explícitamente.
+- migración productiva.
+
+Escalar estos casos no equivale a autorización: después de escalar, esperar una aprobación explícita antes de ejecutar cualquier operación de esta lista.
 
 Código desplegado, esquema migrado y estado operativo reconciliado son cosas distintas.
 
