@@ -11,6 +11,11 @@ on:
         description: 'SHA completo del merge desplegado en Hostinger'
         required: true
         type: string
+      transicion_verificada:
+        description: 'Confirmé por separado migraciones/configuración/comandos requeridos'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -24,21 +29,50 @@ jobs:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ inputs.sha }}
+          fetch-depth: 2
           persist-credentials: false
 
       - name: Probar observador sin tocar producción
         run: python3 -m unittest tests/test_observar_release.py
 
+      - name: Detectar transición de release
+        id: transicion
+        env:
+          SHA_ESPERADO: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          git diff --name-only "${SHA_ESPERADO}^" "$SHA_ESPERADO" > /tmp/cambios-release.txt
+          cat /tmp/cambios-release.txt
+
+          requiere=false
+          if grep -Eq '^(migrations/|config/|src/Console/)' /tmp/cambios-release.txt; then
+            requiere=true
+          fi
+          echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
+          echo "Transición operativa requerida: $requiere" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Observar producción en modo solo lectura
         env:
           VERSION_ESPERADA: ${{ inputs.version }}
           SHA_ESPERADO: ${{ inputs.sha }}
+          TRANSICION_REQUERIDA: ${{ steps.transicion.outputs.requerida }}
+          TRANSICION_VERIFICADA: ${{ inputs.transicion_verificada }}
         run: |
           set -euo pipefail
-          python3 scripts/observar_release.py \
-            --version "$VERSION_ESPERADA" \
-            --sha "$SHA_ESPERADO" \
-            --intentos 5 \
-            --intervalo 4 \
-            --timeout 5 \
-            --markdown | tee -a "$GITHUB_STEP_SUMMARY"
+          args=(
+            --version "$VERSION_ESPERADA"
+            --sha "$SHA_ESPERADO"
+            --intentos 5
+            --intervalo 4
+            --timeout 5
+            --markdown
+          )
+          if [[ "$TRANSICION_REQUERIDA" == "true" ]]; then
+            args+=(--transicion-requerida)
+          fi
+          if [[ "$TRANSICION_VERIFICADA" == "true" ]]; then
+            args+=(--transicion-verificada)
+          fi
+          python3 scripts/observar_release.py "${args[@]}" \
+            | tee -a "$GITHUB_STEP_SUMMARY"

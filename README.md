@@ -1,81 +1,74 @@
-# Condor App — Snapshot de deploy V 0.1.5
+# Condor App — Snapshot de deploy V 0.1.6
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** hacer que los errores 5xx de producción sean investigables de forma segura sin exponer logs crudos, secretos ni datos sensibles.
+> **Objetivo actual:** convertir el CI de Condor en un sistema autoauditable, selectivo y autocurable solo ante fallos externos realmente transitorios.
 
 <p align="center">
   <strong>Producto:</strong> Condor App ·
   <strong>Dominio:</strong> condorapp.com.co ·
   <strong>Runtime producción:</strong> PHP 8.5 ·
-  <strong>Versión objetivo:</strong> V 0.1.5 ·
-  <strong>Versión desplegada:</strong> V 0.1.4
+  <strong>Versión objetivo:</strong> V 0.1.6 ·
+  <strong>Versión desplegada comprobada:</strong> V 0.1.4
 </p>
 
 ## Estado del deploy
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Producción vigente | ✅ **V 0.1.4 VALIDADA EN PRODUCCIÓN** | propietario único operativo y acceso real a `/adminpl0n3r` restaurado/validado |
-| Base de esta entrega | ✅ **SIN DIVERGENCIA** | PR #94 parte del `main` exacto `f6fe2ef75e44681fde199fdf67e672312374e086` |
-| V 0.1.5 | 🚧 **EN VALIDACIÓN DE CÓDIGO** | Issue #93 / PR #94 |
-| Diagnóstico seguro | ✅ **IMPLEMENTADO** | error ID, request ID, fingerprint, versión/SHA y traza acotada |
-| Enlaces compartibles | ✅ **IMPLEMENTADOS** | 256 bits, hash persistido, solo lectura, 30 min, revocables |
-| Sanitización | ✅ **ENDURECIDA** | SQL/params DBAL redactados, secretos/PII básicos filtrados y UTF-8 seguro |
-| Producción V 0.1.5 | ⏳ **NO DESPLEGADA** | requiere merge, deploy observado y transición de esquema separada |
+| Base de código | ✅ **V 0.1.5 EN MAIN** | SHA `cda816fdd34f63eaa941e1aca524fe25af48b7f2` |
+| Producción comprobada | ✅ **V 0.1.4 VALIDADA EN PRODUCCIÓN** | último smoke real documentado |
+| V 0.1.5 | ⏳ **MERGED, NO INFERIR PRODUCCIÓN** | observabilidad segura integrada; deploy/migración se validan aparte |
+| V 0.1.6 | 🚧 **EN VALIDACIÓN DE CÓDIGO** | Issue #89 / PR #90 |
+| CI selectivo | ✅ **IMPLEMENTADO** | clasificación de cambios y gates fail-safe |
+| Autoauditoría | ✅ **IMPLEMENTADA** | timeouts, permisos, checkout y wrappers revisados por contrato |
+| Autocuración | ✅ **ACOTADA** | retries solo para señales externas/transitorias autorizadas |
+| Producción V 0.1.6 | ⏳ **NO VALIDADA** | requiere merge, exact-main, deploy observado y smoke real |
 
 ## Qué se hizo
 
-- Registro estructurado de incidentes 5xx con referencia segura para soporte.
-- Panel exclusivo del propietario en `/adminpl0n3r/diagnosticos`.
-- Enlaces temporales de diagnóstico sin headers, cookies, bodies, argumentos del stack, DSN ni secretos.
-- Respuesta 5xx negociada: HTML para navegación y JSON genérico para clientes JSON.
-- Redacción completa de SQL/parámetros en errores de base de datos.
-- Truncado que preserva UTF-8 válido incluso ante bytes corruptos.
-- Regresiones para impedir que tokens desconocidos, expirados o revocados revelen estados distintos.
-- Comando `app:diagnostics:prune` con retención inicial de 14 días.
+- Clasificación de cambios para evitar gates pesados cuando no aportan cobertura.
+- Auditoría automática del propio CI para prevenir drift de seguridad y configuración.
+- Reintentos con backoff únicamente ante fallos externos/transitorios verificables.
+- Timeouts explícitos y permisos mínimos en workflows críticos.
+- Telemetría de throughput para identificar el gate dominante sin bloquear entregas.
+- Observador de releases con verificación explícita de transiciones operativas antes de declarar producción válida.
+- Regresiones para rutas especiales como `bin/console`, wrappers por comando y fallos deterministas.
 
 ## Archivos de esta entrega
 
-- `migrations/Version20260920221000.php`
-- `src/Application/Observability/DiagnosticShareService.php`
-- `src/Console/PruneDiagnosticsCommand.php`
-- `src/Domain/Observability/Entity/DiagnosticShare.php`
-- `src/Domain/Observability/Entity/ErrorIncident.php`
-- `src/Http/Controller/PlatformDiagnosticsController.php`
-- `src/Http/Controller/SharedDiagnosticController.php`
-- `src/Infrastructure/Http/RequestIdSubscriber.php`
-- `src/Infrastructure/Observability/ErrorIncidentRecorder.php`
-- `src/Infrastructure/Observability/ErrorIncidentSubscriber.php`
-- `src/Infrastructure/Observability/ErrorSanitizer.php`
-- `templates/platform_owner/diagnostic_share.html.twig`
-- `templates/platform_owner/diagnostics.html.twig`
-- `templates/platform_owner/index.html.twig`
-- `tests/php/Http/PlatformDiagnosticsControllerTest.php`
-- `tests/php/Infrastructure/Observability/ErrorSanitizerTest.php`
-- `tests/php/Shared/Runtime/RuntimeCheckTest.php`
-- `config/packages/security.yaml`, `config/services.yaml`
+- `.github/workflows/ci.yml`
+- `.github/workflows/ci-throughput-telemetry.yml`
+- `.github/workflows/observar-release.yml`
+- `.github/workflows/coordinacion-trabajo.yml`
+- `.github/workflows/sincronizar-gobierno.yml`
+- `.github/workflows/sonar-annotation-relay.yml`
+- `scripts/ci_change_classifier.py`
+- `scripts/ci_retry.py`
+- `scripts/ci_self_audit.py`
+- `scripts/ci_throughput_report.py`
+- `scripts/observar_release.py`
+- pruebas de contrato asociadas
 - `config/version.php`, `package.json`, `package-lock.json`
-- `AGENTES.md`, `ESPECIFICACIONES.md`, `README.md`
 
 ## Validación
 
-- V 0.1.4: ✅ validada en producción.
-- V 0.1.5: 🚧 CI, SonarQube y CodeRabbit deben quedar verdes sobre el head final después de estos hardenings.
-- Migración `Version20260920221000`: **no se ejecuta automáticamente en producción**; deploy de código y transición de esquema se validan por separado.
-- Ningún estado de CI se interpreta como `VALIDADO EN PRODUCCIÓN`.
+- Findings conocidos de CodeRabbit del PR #90: corregidos antes de esta sincronización.
+- Rama reconciliada sobre el `main` exacto V 0.1.5, preservando la autocuración más reciente del observador.
+- CI, SonarQube y CodeRabbit: deben revalidarse sobre el nuevo head exacto.
+- Ningún estado de CI equivale a `VALIDADO EN PRODUCCIÓN`.
 
 ## Flujo de entrega
 
 ```mermaid
 flowchart LR
-    A[PR #94 · V0.1.5] --> B[CI + PHPUnit + Playwright]
+    A[PR #90 · V0.1.6] --> B[CI selectivo + autoauditoría]
     B --> C[SonarQube + CodeRabbit]
     C --> D[Squash merge]
     D --> E[Validar SHA exacto de main]
     E --> F[Observar deploy]
-    F --> G[Transición de esquema separada]
+    F --> G[Verificar transición si aplica]
     G --> H[Smoke real de producción]
 ```
 
@@ -83,13 +76,13 @@ flowchart LR
 
 | Horizonte | Bloque |
 | --- | --- |
-| **AHORA** | cerrar findings y gates finales de PR #94 / V 0.1.5 |
-| **SIGUE** | PR #90 — CI autoauditable, autooptimizado y autocurable / V 0.1.6 |
-| **DESPUÉS** | PR #103 — roles y permisos configurables por sede / V 0.1.7 |
+| **AHORA** | cerrar gates finales de PR #90 / V 0.1.6 |
+| **SIGUE** | sincronizar y cerrar PR #103 — roles y permisos configurables por sede / V 0.1.7 |
+| **DESPUÉS** | continuar el siguiente slice funcional según Roadmap #1 |
 
 ## Fuentes de verdad
 
 - [AGENTES.md](AGENTES.md) — protocolo operativo.
 - [ESPECIFICACIONES.md](ESPECIFICACIONES.md) — decisiones durables.
 - [Roadmap #1](https://github.com/pl0n3r/Condor/issues/1) — único Roadmap canónico.
-- [Issue #93](https://github.com/pl0n3r/Condor/issues/93) / [PR #94](https://github.com/pl0n3r/Condor/pull/94) — entrega V 0.1.5.
+- [Issue #89](https://github.com/pl0n3r/Condor/issues/89) / [PR #90](https://github.com/pl0n3r/Condor/pull/90) — entrega V 0.1.6.
