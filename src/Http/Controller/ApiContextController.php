@@ -8,6 +8,7 @@ use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Branch;
+use App\Infrastructure\Http\ApiErrorResponseFactory;
 use App\Shared\Version\AppVersion;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -27,6 +28,7 @@ final class ApiContextController extends AbstractController
         BranchAuthorization $authorization,
         EntityManagerInterface $entityManager,
         AppVersion $version,
+        ApiErrorResponseFactory $apiErrors,
     ): JsonResponse {
         $user = $this->getUser();
         if (!$user instanceof User) {
@@ -66,14 +68,19 @@ final class ApiContextController extends AbstractController
         ));
 
         if ($branches === []) {
-            return $this->json([
-                'error' => 'No tienes una sede asignada en esta empresa.',
-                'tenant' => [
-                    'id' => $tenant->id(),
-                    'name' => $tenant->name(),
-                    'slug' => $tenant->slug(),
+            return $apiErrors->create(
+                $request,
+                'branch_scope_required',
+                'No tienes una sede asignada en esta empresa.',
+                Response::HTTP_FORBIDDEN,
+                [
+                    'tenant' => [
+                        'id' => $tenant->id(),
+                        'name' => $tenant->name(),
+                        'slug' => $tenant->slug(),
+                    ],
                 ],
-            ], Response::HTTP_FORBIDDEN);
+            );
         }
 
         $requestedBranch = trim(
