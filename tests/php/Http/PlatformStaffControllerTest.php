@@ -11,6 +11,7 @@ use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\BrowserKit\Cookie;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
@@ -238,15 +239,28 @@ final class PlatformStaffControllerTest extends WebTestCase
         $container = static::getContainer();
         $requestStack = $container->get(RequestStack::class);
         $csrf = $container->get(CsrfTokenManagerInterface::class);
+        $sessionFactory = $container->get('session.factory');
 
         self::assertInstanceOf(RequestStack::class, $requestStack);
         self::assertInstanceOf(CsrfTokenManagerInterface::class, $csrf);
+        self::assertTrue(method_exists($sessionFactory, 'createSession'));
+
+        $session = $sessionFactory->createSession();
+        $session->start();
+        $request->setSession($session);
 
         $requestStack->push($request);
         try {
-            return $csrf->getToken($tokenId)->getValue();
+            $value = $csrf->getToken($tokenId)->getValue();
+            $session->save();
         } finally {
             $requestStack->pop();
         }
+
+        $client->getCookieJar()->set(
+            new Cookie($session->getName(), $session->getId()),
+        );
+
+        return $value;
     }
 }
