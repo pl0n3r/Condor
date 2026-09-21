@@ -314,6 +314,23 @@
   width: 100%;
 }
 
+.tenant-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.tenant-pagination .button {
+  width: auto;
+}
+
+.tenant-pagination .button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .platform-context-bar {
   position: sticky;
   top: var(--space-4);
@@ -366,7 +383,8 @@
 
 @media (max-width: 700px) {
   .platform-heading,
-  .platform-context-bar {
+  .platform-context-bar,
+  .tenant-pagination {
     align-items: stretch;
     flex-direction: column;
   }
