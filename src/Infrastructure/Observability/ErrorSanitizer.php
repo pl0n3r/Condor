@@ -17,6 +17,15 @@ final readonly class ErrorSanitizer
 
     public function message(Throwable $error): string
     {
+        $rawMessage = $this->validUtf8($error->getMessage());
+
+        if (
+            str_starts_with($error::class, 'Doctrine\\DBAL\\')
+            || preg_match('/\\bSQLSTATE(?:\\[[^\\]]+\\])?/i', $rawMessage) === 1
+        ) {
+            return 'Error de base de datos; SQL y parámetros redactados.';
+        }
+
         $message = preg_replace(
             [
                 '/\\bBearer\\s+[A-Za-z0-9._~+\\/-]+=*/i',
@@ -33,7 +42,7 @@ final readonly class ErrorSanitizer
                 '[EMAIL]',
                 '$1?[REDACTED]',
             ],
-            $error->getMessage(),
+            $rawMessage,
         );
 
         $message = is_string($message) ? trim($message) : '';
@@ -41,7 +50,7 @@ final readonly class ErrorSanitizer
             $message = '(sin mensaje)';
         }
 
-        return substr($message, 0, self::MAX_MESSAGE);
+        return $this->truncateUtf8Bytes($message, self::MAX_MESSAGE);
     }
 
     /**
@@ -102,6 +111,39 @@ final readonly class ErrorSanitizer
                 (string) ($origin['line'] ?? ''),
             ]),
         );
+    }
+
+    private function validUtf8(string $value): string
+    {
+        if (preg_match('//u', $value) === 1) {
+            return $value;
+        }
+
+        $encoded = json_encode(
+            $value,
+            JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+        );
+        if (!is_string($encoded)) {
+            return '';
+        }
+
+        $decoded = json_decode($encoded, true);
+
+        return is_string($decoded) ? $decoded : '';
+    }
+
+    private function truncateUtf8Bytes(string $value, int $maxBytes): string
+    {
+        if (strlen($value) <= $maxBytes) {
+            return $value;
+        }
+
+        $slice = substr($value, 0, $maxBytes);
+        while ($slice !== '' && preg_match('//u', $slice) !== 1) {
+            $slice = substr($slice, 0, -1);
+        }
+
+        return $slice;
     }
 
     private function safeFile(string $file): string
