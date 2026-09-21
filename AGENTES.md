@@ -382,7 +382,7 @@ Para código o configuración, ejecutar este bucle completo:
 
 ### E. Entregar
 
-17. observar el deploy por separado usando versión + SHA;
+17. observar el deploy por separado registrando versión + SHA + timestamp de build/release; el timestamp aporta trazabilidad temporal, pero no identifica por sí solo redeploys del mismo artefacto;
 18. aplicar la checklist de transición de producción de §16 antes de declarar la release sana;
 19. validar comportamiento real solo con evidencia de producción;
 20. actualizar Roadmap #1 y, cuando cambie una decisión durable, `ESPECIFICACIONES.md`.
@@ -685,14 +685,14 @@ Un deploy no se considera sano solo porque el nuevo código está presente. Cuan
 
 El detector automático de transición es una **señal mínima, no la autoridad exclusiva**. Si el diff toca roles, servicios, controladores/rutas, comandos, provisioning/backfills o invariantes de estado persistente que el clasificador automático todavía no reconozca, tratar la transición como requerida y **no aceptar el observador como validación final** hasta comprobarla explícitamente. Un `requerida=false` automático nunca autoriza a omitir una transición que el análisis del cambio identifica como necesaria.
 
-1. **Identidad de release** — versión humana y SHA desplegado coinciden con lo esperado.
+1. **Identidad de release** — versión humana, SHA desplegado y timestamp de build/release coinciden con la evidencia esperada; el timestamp aporta trazabilidad temporal, pero no identifica por sí solo redeploys del mismo artefacto.
 2. **Esquema** — estado de Doctrine Migrations conocido; no asumir que deploy implica migración.
 3. **Transición de datos** — backfills, provisioning, singleton records, roles, flags o conversiones requeridas están completos.
 4. **Compatibilidad de estado** — el código nuevo puede leer el estado previo durante la transición o falla de forma segura y accionable.
 5. **Container/caché** — cuando cambien servicios, controladores, rutas o comandos, limpiar/warmup de prod y comprobar descubrimiento real.
 6. **Configuración externa** — variables de entorno/secrets necesarios existen sin imprimir sus valores.
 7. **Superficies críticas** — rutas, comandos y servicios esperados existen en el runtime desplegado.
-8. **Rollback** — si cambia persistencia real, evaluar compatibilidad hacia atrás o usar estrategia expand/contract; no crear un punto de no retorno accidental.
+8. **Rollback** — si cambia esquema o persistencia con datos reales, preservar compatibilidad hacia atrás durante la transición y ejecutar, cuando corresponda, la secuencia completa **expand → migrate/backfill → contract** antes de retirar compatibilidad; no crear un punto de no retorno accidental.
 9. **Smoke** — comprobar endpoints públicos y, cuando corresponda, flujo autenticado seguro/aislado.
 10. **Invariantes** — validar el estado que el código realmente necesita, no solo que las tablas existan.
 
