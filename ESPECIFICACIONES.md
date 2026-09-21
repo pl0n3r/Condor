@@ -1842,9 +1842,10 @@ Condor distingue de forma explícita entre **propietario de plataforma**, **staf
 - el envío se realiza mediante un **contrato/adaptador**; identidad, dominio y aplicación no dependen de Hostinger ni de un proveedor SMTP concreto;
 - remitente, URL base pública y credenciales pertenecen a configuración/secretos de entorno, nunca al dominio ni al código;
 - las URLs absolutas de email se construyen desde una base confiable configurada, nunca desde el header `Host` de una petición;
-- el primer backend puede usar una **outbox persistente** antes de conectar un transporte real; esto permite reintentos, auditoría y cambio de proveedor sin rehacer los casos de uso;
-- una operación que crea una invitación persiste también el mensaje/outbox necesario dentro de la misma transacción, evitando “cuenta creada pero correo olvidado”;
-- un fallo posterior del proveedor no revierte una invitación ya confirmada; queda estado reintentable y diagnóstico sanitizado;
+- las notificaciones ordinarias pueden usar una **outbox persistente** antes de conectar un transporte real; esto permite reintentos, auditoría y cambio de proveedor sin rehacer los casos de uso;
+- una outbox genérica **nunca persiste tokens de activación, recuperación ni otros secretos en texto plano**;
+- el email sensible de invitación se entrega mediante un puerto transaccional mientras el token bruto sigue únicamente en memoria; si en el futuro se requieren reintentos durables de ese mensaje, deberá existir un sobre cifrado explícito con clave fuera de la base de datos o un mecanismo seguro regenerable, sin debilitar el hash canónico de la invitación;
+- un fallo del proveedor debe quedar diagnosticado de forma sanitizada y permitir reemisión controlada de la invitación, sin reutilizar el token anterior;
 - SPF, DKIM, DMARC, rebotes y reputación pertenecen a la transición operativa del proveedor de correo, no al núcleo de identidad.
 
 #### Notificaciones
