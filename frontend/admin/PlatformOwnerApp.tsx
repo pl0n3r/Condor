@@ -102,10 +102,10 @@ export function PlatformOwnerApp({
     >
       {selected && (
         <output className="platform-context-bar" aria-live="polite">
-          <div>
+          <span className="platform-context-copy">
             <strong>Modo propietario · Contexto de empresa</strong>
             <span>{selected.name}</span>
-          </div>
+          </span>
           <button
             className="button button-context"
             type="button"
