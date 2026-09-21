@@ -1666,6 +1666,35 @@ Regla de depuración para agentes:
 - no solicitar contraseñas, secretos ni dumps/logs crudos cuando el diagnóstico compartible sea suficiente;
 - una referencia o enlace diagnóstico no equivale por sí sola a autorización para mutar producción.
 
+
+### D-048 — Administración unificada y contexto operativo del propietario de plataforma
+
+Condor mantiene una sola base administrativa. La administración de tenants y el centro de control del propietario de plataforma comparten shell, design system, componentes y módulos siempre que representen la misma capacidad de negocio. El propietario de plataforma obtiene capacidades adicionales; no una segunda aplicación duplicada.
+
+Reglas:
+
+- `/admin` continúa siendo la entrada administrativa ordinaria para usuarios de tenants y `/adminpl0n3r` continúa reservado a `ROLE_PLATFORM_OWNER`;
+- `/adminpl0n3r` debe extender la experiencia administrativa común con módulos globales exclusivos de plataforma, no reemplazarla por un producto paralelo;
+- módulos, tablas, formularios, navegación y patrones de interacción compartidos se implementan una sola vez y se reutilizan en ambos contextos;
+- el propietario puede seleccionar tenant y, cuando aplique, sede, para entrar en un **modo de contexto administrativo** que use la misma superficie funcional del administrador del cliente;
+- cambiar de contexto no cambia la identidad autenticada ni elimina `ROLE_PLATFORM_OWNER`; no se implementa como suplantación silenciosa de otro usuario;
+- toda autorización sigue siendo server-side y cada operación contextual conserva suficiente trazabilidad para identificar al actor real y al tenant/sede sobre los que actuó;
+- mientras exista un contexto de tenant/sede activo, la interfaz muestra una **barra de contexto persistentemente visible** con tratamiento cromático distintivo, tenant/sede actual, indicación inequívoca del modo y una acción directa para volver al centro de control global;
+- el tratamiento visual del centro de control global puede ser más avanzado, tecnológico y orientado a observabilidad/operación, pero conserva el mismo lenguaje visual, tokens y primitives del sistema de diseño;
+- los dashboards globales de plataforma pueden combinar salud del sistema, tenants, seguridad, observabilidad, operaciones, configuración interna y métricas agregadas que no corresponden a un administrador de tenant;
+- una futura capacidad para “ver exactamente como un usuario específico” se considera una función de impersonación separada y deberá diseñarse de forma explícita, auditada y revocable.
+
+#### Progreso funcional visible
+
+El desarrollo administrativo evita acumular backend útil durante largos periodos sin una representación visible para el propietario. Cuando un vertical slice alcance un contrato suficientemente estable y exista una representación segura:
+
+- se expone progresivamente una vista mínima real en administración, incluso si al principio es read-only;
+- no se crean controles falsos, placeholders que aparenten funcionar ni estados que oculten que una capacidad sigue incompleta;
+- cuando la capacidad sea compartida por tenant y plataforma, la primera superficie reutilizable debe servir tanto a `/admin` como a `/adminpl0n3r` mediante permisos y contexto;
+- seguridad, aislamiento multi-tenant, autorización en backend y calidad automática siguen siendo requisitos de entrega y no se degradan para mostrar progreso antes;
+- cada slice debe dejar al propietario una forma proporcional de inspeccionar su avance desde el frontend cuando hacerlo sea técnicamente útil y seguro.
+
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
