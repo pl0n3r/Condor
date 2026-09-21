@@ -439,6 +439,52 @@ def latest_reservation(
     return latest
 
 
+def latest_reservation_timestamp(
+    comments: list[dict[str, Any]],
+    trusted_login: str = TRUSTED_MARKER_LOGIN,
+) -> datetime | None:
+    """Devuelve cuándo se publicó o actualizó el último marcador confiable."""
+    latest: datetime | None = None
+    for comment in comments:
+        user = comment.get("user")
+        if not isinstance(user, dict) or user.get("login") != trusted_login:
+            continue
+        if reservation_from_text(str(comment.get("body") or "")) is None:
+            continue
+        timestamp = parse_github_time(
+            comment.get("updated_at") or comment.get("created_at")
+        )
+        if timestamp is not None:
+            latest = timestamp
+    return latest
+
+
+def human_issue_activity_timestamp(
+    comments: list[dict[str, Any]],
+) -> datetime | None:
+    """Toma comentarios humanos útiles, excluyendo comandos de coordinación."""
+    latest: datetime | None = None
+    for comment in comments:
+        user = comment.get("user")
+        login = user.get("login") if isinstance(user, dict) else None
+        if login == TRUSTED_MARKER_LOGIN:
+            continue
+        body = str(comment.get("body") or "").strip()
+        if (
+            body == "/tomar"
+            or body == "/liberar-forzado"
+            or body.startswith("/liberar ")
+            or body.startswith("/transferir ")
+        ):
+            continue
+        timestamp = parse_github_time(
+            comment.get("updated_at") or comment.get("created_at")
+        )
+        if timestamp is not None and (latest is None or timestamp > latest):
+            latest = timestamp
+    return latest
+
+
 def file_overlaps(
     current_files: set[str],
     others: dict[int, set[str]],
@@ -473,16 +519,157 @@ def active_reservation(api: GitHub, issue_number: int) -> dict[str, Any] | None:
         return None
     return reservation
 
-def open_pulls_for_branch(api: GitHub, branch: str) -> list[int]:
-    """Lista PR abiertos que usan una rama concreta como head."""
-    result: list[int] = []
+def open_pull_records_for_branch(
+    api: GitHub,
+    branch: str,
+) -> list[dict[str, Any]]:
+    """Devuelve los PR abiertos que continúan exactamente la rama reservada."""
+    result: list[dict[str, Any]] = []
     for pull in api.open_pulls():
         head = pull.get("head")
         if isinstance(head, dict) and head.get("ref") == branch:
-            number = pull.get("number")
-            if isinstance(number, int):
-                result.append(number)
+            result.append(pull)
     return result
+
+
+def open_pulls_for_branch(api: GitHub, branch: str) -> list[int]:
+    """Lista PR abiertos que usan una rama concreta como head."""
+    result: list[int] = []
+    for pull in open_pull_records_for_branch(api, branch):
+        number = pull.get("number")
+        if isinstance(number, int):
+            result.append(number)
+    return result
+
+
+def work_activity_timestamp(
+    api: GitHub,
+    issue_number: int,
+    branch: str,
+) -> datetime | None:
+    """Calcula la señal más reciente sin contar el comando /tomar actual."""
+    candidates: list[datetime] = []
+    comments = api.issue_comments(issue_number)
+
+    for timestamp in (
+        latest_reservation_timestamp(comments),
+        human_issue_activity_timestamp(comments),
+    ):
+        if timestamp is not None:
+            candidates.append(timestamp)
+
+    branch_sha = api.branch_sha(branch)
+    if branch_sha:
+        timestamp = api.commit_timestamp(branch_sha)
+        if timestamp is not None:
+            candidates.append(timestamp)
+
+    for pull in open_pull_records_for_branch(api, branch):
+        timestamp = parse_github_time(pull.get("updated_at"))
+        if timestamp is not None:
+            candidates.append(timestamp)
+
+    return max(candidates) if candidates else None
+
+
+def work_is_stale(
+    api: GitHub,
+    issue_number: int,
+    branch: str,
+    *,
+    stale_minutes: int = RESERVATION_STALE_MINUTES,
+    now: datetime | None = None,
+) -> bool:
+    """Solo permite recuperar trabajo con evidencia suficiente de inactividad."""
+    last_activity = work_activity_timestamp(api, issue_number, branch)
+    if last_activity is None:
+        return False
+    reference = now or datetime.now(timezone.utc)
+    return reference - last_activity >= timedelta(minutes=stale_minutes)
+
+
+def rewrite_pull_reservation(body: str, reservation_id: str) -> str:
+    """Actualiza la reserva del PR existente sin perder su descripción."""
+    value = body or ""
+    visible = f"Reserva: {reservation_id}"
+    hidden = f"<!-- condor-reserva-id: {reservation_id} -->"
+
+    if RESERVATION_LINE_RE.search(value):
+        value = RESERVATION_LINE_RE.sub(visible, value)
+    else:
+        value = value.rstrip() + f"\n\n{visible}"
+
+    if RESERVATION_HIDDEN_RE.search(value):
+        value = RESERVATION_HIDDEN_RE.sub(hidden, value)
+    else:
+        value = value.rstrip() + f"\n\n{hidden}"
+
+    return value + "\n"
+
+
+def recover_stale_work(
+    api: GitHub,
+    issue_number: int,
+    actor: str,
+    branch: str,
+    previous: dict[str, Any] | None,
+) -> str | None:
+    """Recupera una reserva inactiva conservando rama y PR existentes."""
+    reservation_id = new_reservation_id()
+    open_pulls = open_pull_records_for_branch(api, branch)
+    previous_owner = str(previous["owner"]) if previous else None
+    pr_text = (
+        ", ".join(
+            f"#{pull['number']}"
+            for pull in open_pulls
+            if isinstance(pull.get("number"), int)
+        )
+        or "sin PR abierto"
+    )
+
+    publish_reservation(
+        api,
+        issue_number,
+        actor,
+        reservation_id,
+        branch,
+        True,
+        "recuperacion-inactividad",
+        (
+            f"Reserva recuperada por inactividad de al menos "
+            f"{RESERVATION_STALE_MINUTES} minutos. Se conserva la rama "
+            f"{branch} y {pr_text} para continuar el trabajo existente "
+            "sin abrir una implementación paralela."
+        ),
+    )
+
+    winner = active_reservation(api, issue_number)
+    if not winner or winner["reservation_id"] != reservation_id:
+        return None
+
+    api.set_status(
+        issue_number,
+        STATUS_REVIEW if open_pulls else STATUS_RESERVED,
+    )
+    api.try_assign(issue_number, actor)
+    if previous_owner and previous_owner != actor:
+        api.try_unassign(issue_number, previous_owner)
+
+    for pull in open_pulls:
+        number = pull.get("number")
+        if not isinstance(number, int):
+            continue
+        body = str(api.pull(number).get("body") or "")
+        api.update_pull_body(
+            number,
+            rewrite_pull_reservation(body, reservation_id),
+        )
+
+    print(
+        f"Reserva recuperada: Issue #{issue_number} -> {branch} "
+        f"(@{actor}, {reservation_id}); se reutiliza {pr_text}."
+    )
+    return reservation_id
 
 
 def publish_reservation(
