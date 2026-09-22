@@ -541,6 +541,10 @@ class ObserverTests(unittest.TestCase):
         self.assertIn("`home`", comentario)
         self.assertNotIn("transición operativa", comentario)
 
+    def test_js_con_mime_legacy_de_hostinger_es_aceptado(self) -> None:
+        self.server.respuestas["/build/admin.js"] = (200, "application/x-javascript", b"window.condor=true;")
+        self.assertEqual(self.observar()["estado"], "VALIDATED_IN_PRODUCTION")
+
     def test_bundle_admin_mayor_a_256_kib_es_aceptado(self) -> None:
         self.server.respuestas["/build/admin.js"] = (
             200, "application/javascript", b"a" * (modulo.MAX_BYTES + 1),

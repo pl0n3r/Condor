@@ -339,7 +339,7 @@ def validar_asset(tipo: str, cuerpo: bytes, ruta: str) -> None:
     """Comprueba que el asset servido no sea una página fallback, vacío ni MIME erróneo."""
     esperados = (
         {"text/css"} if ruta.endswith(".css")
-        else {"text/javascript", "application/javascript"}
+        else {"text/javascript", "application/javascript", "application/x-javascript"}
     )
     if tipo not in esperados:
         raise ObservacionError("El recurso estático no tiene el tipo de contenido esperado.")
