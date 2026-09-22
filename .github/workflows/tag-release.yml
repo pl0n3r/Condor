@@ -1,0 +1,69 @@
+name: Etiquetar release (V 0.1.0)
+
+# Automatización de releases (roadmap Issue #1, bloque de Operación y
+# madurez): crea un tag git anotado vX.Y.Z apuntando al commit exacto
+# de main que introdujo esa versión humana, leyendo config/version.php.
+# Es metadata de repositorio, no una mutación de producción — no
+# despliega, no migra, no reemplaza el checklist humano de
+# observar-release.yml para declarar VALIDATED_IN_PRODUCTION.
+# Idempotente: si el tag ya existe (re-run, versión sin cambio), no
+# falla ni lo recrea.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  # 'write' habilita gh release create (crea un draft/release ligado al tag).
+
+jobs:
+  tag:
+    name: Crear tag de versión si no existe
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Leer versión humana
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(php -r "echo (require 'config/version.php')['version'];")"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Versión inválida en config/version.php: '$version'"
+            exit 1
+          fi
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Crear y publicar el tag si es nuevo
+        id: tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG ya existe; nada que hacer."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG — ${{ github.sha }}"
+          git push origin "$TAG"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar GitHub Release con notas automáticas
+        if: steps.tag.outputs.created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            --repo "${{ github.repository }}" \
+            --title "$TAG" \
+            --generate-notes
