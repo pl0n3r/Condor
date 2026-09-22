@@ -140,11 +140,14 @@ type State =
       diagnostic?: OwnerDiagnostic;
     };
 
+type PlatformOwnerSection = 'control' | 'empresas' | 'staff';
+
 type PlatformOwnerAppProps = Readonly<{
   version: string;
   logoutToken: string;
   staffToken: string;
   tenantToken: string;
+  section: PlatformOwnerSection;
 }>;
 
 export function PlatformOwnerApp({
@@ -152,6 +155,7 @@ export function PlatformOwnerApp({
   logoutToken,
   staffToken,
   tenantToken,
+  section,
 }: PlatformOwnerAppProps) {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [platformRevision, setPlatformRevision] = useState(0);
@@ -249,7 +253,17 @@ export function PlatformOwnerApp({
         {
           href: '/adminpl0n3r',
           label: 'Centro de control',
-          current: true,
+          current: section === 'control',
+        },
+        {
+          href: '/adminpl0n3r/empresas',
+          label: 'Empresas',
+          current: section === 'empresas',
+        },
+        {
+          href: '/adminpl0n3r/staff',
+          label: 'Staff',
+          current: section === 'staff',
         },
         {
           href: '/adminpl0n3r/diagnosticos',
@@ -376,7 +390,7 @@ export function PlatformOwnerApp({
             </div>
           </div>
 
-          {!selected && (
+          {!selected && section === 'control' && (
             <>
               <OverviewGrid
                 ariaLabel="Métricas globales de Condor"
@@ -408,7 +422,11 @@ export function PlatformOwnerApp({
               <FunctionalSignalsPanel
                 signals={state.data.signals_last_30_days}
               />
+            </>
+          )}
 
+          {!selected && section === 'empresas' && (
+            <>
               <PlatformTenantCreationPanel
                 csrfToken={tenantToken}
                 onCreated={() => {
@@ -507,12 +525,14 @@ export function PlatformOwnerApp({
                   </nav>
                 )}
               </section>
-
-              <PlatformStaffPanel
-                csrfToken={staffToken}
-                refreshKey={platformRevision}
-              />
             </>
+          )}
+
+          {!selected && section === 'staff' && (
+            <PlatformStaffPanel
+              csrfToken={staffToken}
+              refreshKey={platformRevision}
+            />
           )}
 
           {selected && (

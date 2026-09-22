@@ -1691,6 +1691,15 @@ Reglas:
 - los dashboards globales de plataforma pueden combinar salud del sistema, tenants, seguridad, observabilidad, operaciones, configuración interna y métricas agregadas que no corresponden a un administrador de tenant;
 - una futura capacidad para “ver exactamente como un usuario específico” se considera una función de impersonación separada y deberá diseñarse de forma explícita, auditada y revocable.
 
+#### Navegación seccionada, no acumulación en la página inicial
+
+El centro de control (`/adminpl0n3r`) es un resumen ejecutivo liviano, no el contenedor de todas las capacidades de plataforma. A medida que se desarrollen nuevas capacidades administrativas:
+
+- cada capacidad funcionalmente distinta (empresas, staff, diagnósticos, catálogo futuro, etc.) recibe su **propia ruta y entrada de menú** en `AdminShell`, en vez de agregarse como un panel más apilado en la página inicial;
+- la página inicial conserva solo métricas/resumen de alto nivel (salud del sistema, señales agregadas) y enlaces de entrada a cada sección;
+- esta regla aplica igual a `/admin` (administración de tenant) cuando su navegación empiece a crecer más allá de lo trivial;
+- mover un panel existente a su propia sección es una refactorización de navegación de bajo riesgo (reutiliza componentes y contratos ya construidos) y no requiere una decisión de producto nueva cada vez — solo seguir esta regla.
+
 #### Progreso funcional visible
 
 El desarrollo administrativo evita acumular backend útil durante largos periodos sin una representación visible para el propietario. Cuando un vertical slice alcance un contrato suficientemente estable y exista una representación segura:
