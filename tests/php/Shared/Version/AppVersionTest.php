@@ -10,49 +10,50 @@ use PHPUnit\Framework\TestCase;
 final class AppVersionTest extends TestCase
 {
     private string $projectDir;
-    private array $originalServer;
-    private array $originalEnv;
+    private string|false $previousReleaseShaProcess;
+    private bool $hadReleaseShaServer;
+    private mixed $previousReleaseShaServer;
+    private bool $hadReleaseShaEnv;
+    private mixed $previousReleaseShaEnv;
 
     protected function setUp(): void
     {
+        $this->previousReleaseShaProcess = getenv('RELEASE_SHA');
+        $this->hadReleaseShaServer = array_key_exists('RELEASE_SHA', $_SERVER);
+        $this->previousReleaseShaServer = $_SERVER['RELEASE_SHA'] ?? null;
+        $this->hadReleaseShaEnv = array_key_exists('RELEASE_SHA', $_ENV);
+        $this->previousReleaseShaEnv = $_ENV['RELEASE_SHA'] ?? null;
+
+        putenv('RELEASE_SHA');
+        unset($_SERVER['RELEASE_SHA'], $_ENV['RELEASE_SHA']);
+
         $this->projectDir = sys_get_temp_dir().'/app-version-test-'.bin2hex(random_bytes(6));
         mkdir($this->projectDir.'/config', 0777, true);
         file_put_contents(
             $this->projectDir.'/config/version.php',
             "<?php\nreturn ['version' => '9.9.9'];\n",
         );
-
-        // CI sets RELEASE_SHA as a real job-level environment variable, which
-        // PHP CLI reflects into $_SERVER/$_ENV, not just getenv(). Tests that
-        // assert the fallback path must clear all three sources, not just
-        // putenv(), or they pass locally but fail under CI.
-        $this->originalServer = $_SERVER;
-        $this->originalEnv = $_ENV;
-        unset($_SERVER['RELEASE_SHA'], $_ENV['RELEASE_SHA']);
-        putenv('RELEASE_SHA');
     }
 
     protected function tearDown(): void
     {
-        $this->removeDirectory($this->projectDir);
-        $_SERVER = $this->originalServer;
-        $_ENV = $this->originalEnv;
+        try {
+            $this->restoreReleaseShaSources();
+        } finally {
+            $this->removeDirectory($this->projectDir);
+        }
     }
 
     public function testReleaseShaPrefersEnvironmentVariable(): void
     {
         putenv('RELEASE_SHA=1111111111111111111111111111111111111111');
 
-        try {
-            $version = new AppVersion($this->projectDir);
+        $version = new AppVersion($this->projectDir);
 
-            self::assertSame(
-                '1111111111111111111111111111111111111111',
-                $version->releaseSha(),
-            );
-        } finally {
-            putenv('RELEASE_SHA');
-        }
+        self::assertSame(
+            '1111111111111111111111111111111111111111',
+            $version->releaseSha(),
+        );
     }
 
     public function testReleaseShaFallsBackToDetachedGitHead(): void
@@ -83,6 +84,27 @@ final class AppVersionTest extends TestCase
         $version = new AppVersion($this->projectDir);
 
         self::assertSame('dev', $version->releaseSha());
+    }
+
+    private function restoreReleaseShaSources(): void
+    {
+        if ($this->previousReleaseShaProcess === false) {
+            putenv('RELEASE_SHA');
+        } else {
+            putenv('RELEASE_SHA='.$this->previousReleaseShaProcess);
+        }
+
+        if ($this->hadReleaseShaServer) {
+            $_SERVER['RELEASE_SHA'] = $this->previousReleaseShaServer;
+        } else {
+            unset($_SERVER['RELEASE_SHA']);
+        }
+
+        if ($this->hadReleaseShaEnv) {
+            $_ENV['RELEASE_SHA'] = $this->previousReleaseShaEnv;
+        } else {
+            unset($_ENV['RELEASE_SHA']);
+        }
     }
 
     private function removeDirectory(string $path): void
