@@ -335,6 +335,48 @@ final class BranchAccessControllerTest extends WebTestCase
         );
     }
 
+    public function testDuplicateRoleNameInSameTenantReturnsConflict(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(
+            EntityManagerInterface::class,
+        );
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        [, $branch, $owner] = $this->tenantWithUser(
+            $entityManager,
+            Membership::ROLE_OWNER,
+        );
+
+        $client->loginUser($owner);
+        $csrf = $this->csrf($client);
+        $client->jsonRequest(
+            'POST',
+            '/api/v1/branches/'.$branch->id().'/roles',
+            ['name' => 'Gestor catálogo', 'permissions' => ['catalog.view']],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+
+        $client->jsonRequest(
+            'POST',
+            '/api/v1/branches/'.$branch->id().'/roles',
+            ['name' => 'Gestor catálogo', 'permissions' => ['catalog.view']],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+
+        self::assertResponseStatusCodeSame(409);
+        $payload = json_decode(
+            (string) $client->getResponse()->getContent(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame('conflict', $payload['error']);
+        self::assertSame(409, $payload['status']);
+        self::assertIsString($payload['request_id']);
+    }
+
     public function testMutationWithoutCsrfIsRejected(): void
     {
         $client = static::createClient();
