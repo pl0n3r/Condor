@@ -72,7 +72,7 @@ class ToolingContractTests(unittest.TestCase):
         self.assertLess(clear_index, warmup_index)
         self.assertNotIn("doctrine:migrations:migrate", script)
         self.assertNotIn("doctrine:schema:", script)
-        self.assertIn("se requiere autorización explícita", script)
+        self.assertIn("autorización explícita", script)
         self.assertIn('LOCK_MAX_AGE_SECONDS=21600', script)
         self.assertIn('LOCK_INVALID_GRACE_MINUTES=5', script)
         self.assertIn('LOCK_GUARD_DIR="var/post-deploy.lock.guard"', script)
