@@ -28,7 +28,7 @@ final class AppVersionTest extends TestCase
         unset($_SERVER['RELEASE_SHA'], $_ENV['RELEASE_SHA']);
 
         $this->projectDir = sys_get_temp_dir().'/app-version-test-'.bin2hex(random_bytes(6));
-        mkdir($this->projectDir.'/config', 0777, true);
+        mkdir($this->projectDir.'/config', 0700, true);
         file_put_contents(
             $this->projectDir.'/config/version.php',
             "<?php\nreturn ['version' => '9.9.9'];\n",
@@ -56,10 +56,22 @@ final class AppVersionTest extends TestCase
         );
     }
 
+    public function testReleaseShaIgnoresMalformedEnvironmentValue(): void
+    {
+        $sha = str_repeat('e', 40);
+        mkdir($this->projectDir.'/.git', 0700, true);
+        file_put_contents($this->projectDir.'/.git/HEAD', $sha."\n");
+        putenv('RELEASE_SHA=invalid');
+
+        $version = new AppVersion($this->projectDir);
+
+        self::assertSame($sha, $version->releaseSha());
+    }
+
     public function testReleaseShaFallsBackToDetachedGitHead(): void
     {
         $sha = str_repeat('a', 40);
-        mkdir($this->projectDir.'/.git', 0777, true);
+        mkdir($this->projectDir.'/.git', 0700, true);
         file_put_contents($this->projectDir.'/.git/HEAD', $sha."\n");
 
         $version = new AppVersion($this->projectDir);
@@ -70,7 +82,7 @@ final class AppVersionTest extends TestCase
     public function testReleaseShaFallsBackToSymbolicGitHead(): void
     {
         $sha = str_repeat('b', 40);
-        mkdir($this->projectDir.'/.git/refs/heads', 0777, true);
+        mkdir($this->projectDir.'/.git/refs/heads', 0700, true);
         file_put_contents($this->projectDir.'/.git/HEAD', "ref: refs/heads/main\n");
         file_put_contents($this->projectDir.'/.git/refs/heads/main', $sha."\n");
 
@@ -82,12 +94,39 @@ final class AppVersionTest extends TestCase
     public function testReleaseShaFallsBackToPackedGitReference(): void
     {
         $sha = str_repeat('c', 40);
-        mkdir($this->projectDir.'/.git', 0777, true);
+        mkdir($this->projectDir.'/.git', 0700, true);
         file_put_contents($this->projectDir.'/.git/HEAD', "ref: refs/heads/main\n");
         file_put_contents(
             $this->projectDir.'/.git/packed-refs',
             "# pack-refs with: peeled fully-peeled sorted\n"
             .$sha." refs/heads/main\n",
+        );
+
+        $version = new AppVersion($this->projectDir);
+
+        self::assertSame($sha, $version->releaseSha());
+    }
+
+    public function testReleaseShaResolvesRelativeGitDirWorktree(): void
+    {
+        $sha = str_repeat('d', 40);
+        mkdir($this->projectDir.'/.git-worktree', 0700, true);
+        mkdir($this->projectDir.'/.git-common/refs/heads', 0700, true);
+        file_put_contents(
+            $this->projectDir.'/.git',
+            "gitdir: .git-worktree\n",
+        );
+        file_put_contents(
+            $this->projectDir.'/.git-worktree/commondir',
+            "../.git-common\n",
+        );
+        file_put_contents(
+            $this->projectDir.'/.git-worktree/HEAD',
+            "ref: refs/heads/main\n",
+        );
+        file_put_contents(
+            $this->projectDir.'/.git-common/refs/heads/main',
+            $sha."\n",
         );
 
         $version = new AppVersion($this->projectDir);
@@ -138,7 +177,9 @@ final class AppVersionTest extends TestCase
 
             $itemPath = $path.'/'.$item;
 
-            if (is_dir($itemPath)) {
+            if (is_link($itemPath)) {
+                unlink($itemPath);
+            } elseif (is_dir($itemPath)) {
                 $this->removeDirectory($itemPath);
             } else {
                 unlink($itemPath);
