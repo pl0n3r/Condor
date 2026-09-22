@@ -62,6 +62,20 @@
             </div>
         {% endif %}
 
+        <h2>Registro de fallos fatales</h2>
+        <p class="muted">
+            Funciona incluso si Symfony no llega a arrancar (contenedor
+            desincronizado, error de configuración): no depende de Twig ni
+            de la base de datos. El enlace es de solo lectura; se revoca
+            rotando <code>APP_SECRET</code>.
+        </p>
+        <div class="foundation-grid">
+            <article>
+                <strong>Visor independiente</strong>
+                <span><code>{{ fatal_log_url }}</code></span>
+            </article>
+        </div>
+
         <p class="version-line">V {{ app_version }}</p>
     </div>
 </section>

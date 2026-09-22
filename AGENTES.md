@@ -438,7 +438,7 @@ Cuando el cambio toque esquema, roles, servicios, comandos, rutas, env/config, c
 2. **Esquema:** Doctrine Migrations conocido; deploy no implica migración.
 3. **Datos:** backfills/provisioning/singletons/roles/flags completos.
 4. **Compatibilidad:** código nuevo tolera el estado previo o falla seguro y diagnosticable.
-5. **Container/caché:** limpiar/warmup y comprobar descubrimiento cuando cambien servicios/rutas/comandos.
+5. **Container/caché:** limpiar/warmup y comprobar descubrimiento cuando cambien servicios/rutas/comandos. El despliegue por Git de Hostinger preserva `var/cache/prod` entre builds y no expone un comando de post-deploy nativo (Issue #144): `public/index.php` se autorrepara en la primera solicitud afectada (`ContainerRecovery`) y un cron de respaldo (`*/5 * * * * scripts/post-deploy.sh`) cubre el resto; no depender de un paso manual por SSH tras el deploy.
 6. **Config externa:** variables/secrets necesarios existen sin imprimir valores.
 7. **Superficies:** rutas, comandos y servicios esperados existen en runtime.
 8. **Rollback:** preservar compatibilidad; usar expand → migrate/backfill → contract cuando aplique.

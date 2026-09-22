@@ -2,25 +2,48 @@
 
 declare(strict_types=1);
 
+use App\Infrastructure\Observability\FatalLog;
+use App\Infrastructure\Runtime\ContainerRecovery;
 use App\Kernel;
 use Symfony\Component\HttpFoundation\Request;
 
-try {
-    require dirname(__DIR__).'/config/bootstrap.php';
+$projectDir = dirname(__DIR__);
+$lastError = null;
 
-    $kernel = new Kernel(
-        $_SERVER['APP_ENV'] ?? $_ENV['APP_ENV'] ?? 'prod',
-        filter_var(
-            $_SERVER['APP_DEBUG'] ?? $_ENV['APP_DEBUG'] ?? false,
-            FILTER_VALIDATE_BOOL
-        ),
-    );
+for ($attempt = 1; $attempt <= 2; ++$attempt) {
+    try {
+        require_once $projectDir.'/config/bootstrap.php';
 
-    $request = Request::createFromGlobals();
-    $response = $kernel->handle($request);
-    $response->send();
-    $kernel->terminate($request, $response);
-} catch (Throwable $error) {
+        $kernel = new Kernel(
+            $_SERVER['APP_ENV'] ?? $_ENV['APP_ENV'] ?? 'prod',
+            filter_var(
+                $_SERVER['APP_DEBUG'] ?? $_ENV['APP_DEBUG'] ?? false,
+                FILTER_VALIDATE_BOOL
+            ),
+        );
+
+        $request = Request::createFromGlobals();
+        $response = $kernel->handle($request);
+        $response->send();
+        $kernel->terminate($request, $response);
+        $lastError = null;
+        break;
+    } catch (Throwable $error) {
+        $lastError = $error;
+
+        $canRetry = $attempt === 1
+            && class_exists(ContainerRecovery::class)
+            && ContainerRecovery::looksLikeStaleContainer($error, $projectDir)
+            && ContainerRecovery::clearProdCache($projectDir);
+
+        if (!$canRetry) {
+            break;
+        }
+    }
+}
+
+if ($lastError !== null) {
+    $error = $lastError;
     $reference = substr(
         hash(
             'sha256',
@@ -37,6 +60,10 @@ try {
         basename($error->getFile()),
         $error->getLine()
     ));
+
+    if (class_exists(FatalLog::class)) {
+        FatalLog::record($projectDir, $reference, $error);
+    }
 
     if (!headers_sent()) {
         http_response_code(500);
