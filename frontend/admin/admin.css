@@ -643,3 +643,206 @@
     flex-direction: column;
   }
 }
+
+.catalog-panel {
+  margin-top: var(--space-8);
+  padding-top: var(--space-8);
+  border-top: 1px solid var(--border);
+}
+
+.catalog-panel h2,
+.catalog-panel h3 {
+  margin-top: 0;
+}
+
+.catalog-panel .section-heading > div > .muted {
+  max-width: 680px;
+}
+
+.catalog-primary-action,
+.catalog-actions .button,
+.catalog-error .button {
+  width: auto;
+}
+
+.catalog-notice,
+.catalog-state {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.catalog-notice {
+  border-color: color-mix(in srgb, var(--text) 28%, var(--border));
+}
+
+.catalog-notice-error,
+.catalog-error {
+  border-style: dashed;
+}
+
+.catalog-editor,
+.catalog-variant-editor {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.catalog-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.catalog-form-wide {
+  grid-column: 1 / -1;
+}
+
+.catalog-panel .field textarea {
+  width: 100%;
+  min-height: 110px;
+  padding: 10px 12px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.catalog-list {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+.catalog-card {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.catalog-card-heading,
+.catalog-variants-heading,
+.catalog-variant-row,
+.catalog-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.catalog-card-heading > div:first-child,
+.catalog-variants-heading > div:first-child,
+.catalog-variant-row > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.catalog-card-heading p {
+  margin: var(--space-2) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.catalog-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.catalog-variants-heading {
+  align-items: center;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.catalog-variant-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.catalog-variant-row {
+  align-items: center;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.catalog-variant-row code {
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.catalog-variant-empty {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+}
+
+.catalog-variant-editor {
+  margin-top: 0;
+}
+
+@media (max-width: 760px) {
+  .catalog-panel .section-heading,
+  .catalog-card-heading,
+  .catalog-variants-heading,
+  .catalog-variant-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .catalog-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-form-wide {
+    grid-column: auto;
+  }
+
+  .catalog-primary-action,
+  .catalog-actions,
+  .catalog-actions .button,
+  .catalog-error .button {
+    width: 100%;
+  }
+
+  .catalog-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+.platform-section-nested {
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+}
+
+.platform-catalog-variants {
+  display: grid;
+  gap: 6px;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.platform-catalog-variants span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.platform-catalog-variants code {
+  color: var(--text);
+}
