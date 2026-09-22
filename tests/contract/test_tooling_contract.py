@@ -71,7 +71,12 @@ class ToolingContractTests(unittest.TestCase):
         self.assertLess(migrate_index, clear_index)
         self.assertLess(clear_index, warmup_index)
         self.assertIn("--no-interaction --allow-no-migration", script)
-        self.assertIn("if ! mkdir \"$LOCK_DIR\" 2>/dev/null; then", script)
+        self.assertIn('LOCK_MAX_AGE_SECONDS=21600', script)
+        self.assertIn('LOCK_TOKEN="$-$(date +%s)"', script)
+        self.assertIn("if ! acquire_lock; then", script)
+        self.assertIn('mv "$LOCK_DIR" "$stale_dir"', script)
+        self.assertIn('cat "$LOCK_DIR/token"', script)
+        self.assertIn("trap cleanup_lock EXIT INT TERM", script)
         self.assertNotIn("doctrine:schema:", script)
 
     def test_throughput_cli_preserves_json_report_contract(self) -> None:
