@@ -15,6 +15,8 @@ case "$keep" in
     echo "backup-database.sh: BACKUP_KEEP debe ser un entero positivo." >&2
     exit 1
     ;;
+  *)
+    ;;
 esac
 if [ "$keep" -lt 1 ]; then
   echo "backup-database.sh: BACKUP_KEEP debe ser mayor que cero." >&2
