@@ -7,6 +7,7 @@ namespace App\Application\Onboarding;
 use App\Domain\Audit\Entity\AuditEvent;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\User;
+use App\Domain\Observability\Entity\FunctionalSignal;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
@@ -67,6 +68,10 @@ final readonly class CreateTenant
                         'branch_id' => $branch->id(),
                         'legal_entity_id' => $legalEntity->id(),
                     ],
+                ));
+                $this->entityManager->persist(new FunctionalSignal(
+                    FunctionalSignal::TENANT_CREATED,
+                    $tenant->id(),
                 ));
 
                 $this->entityManager->flush();
