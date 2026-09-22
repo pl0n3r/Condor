@@ -56,12 +56,10 @@ final class Version20260921214000 extends AbstractMigration // NOSONAR -- nombre
                 ADD primary_verified_tenant_id VARCHAR(26)
                     GENERATED ALWAYS AS (
                         IF(is_primary = 1 AND is_verified = 1, tenant_id, NULL)
-                    ) PERSISTENT
+                    ) PERSISTENT,
+                ADD UNIQUE INDEX uniq_domain_primary_verified_tenant
+                    (primary_verified_tenant_id)
             SQL);
-        $this->addSql(
-            'CREATE UNIQUE INDEX uniq_domain_primary_verified_tenant '
-            .'ON condor_tenant_domain (primary_verified_tenant_id)',
-        );
     }
 
     public function down(Schema $schema): void
