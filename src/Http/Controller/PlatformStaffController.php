@@ -11,21 +11,17 @@ use App\Domain\Identity\Entity\User;
 use App\Domain\Identity\PermissionCatalog;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
-use JsonException;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 #[Route('/adminpl0n3r/api/staff')]
-final class PlatformStaffController extends AbstractController
+final class PlatformStaffController extends PlatformOwnerApiController
 {
     public function __construct(
         private readonly PlatformStaffManager $manager,
@@ -38,7 +34,7 @@ final class PlatformStaffController extends AbstractController
     #[Route('', name: 'platform_staff_index', methods: ['GET'])]
     public function index(): JsonResponse
     {
-        $owner = $this->owner();
+        $owner = $this->platformOwner();
 
         $tenantPage = $this->tenantContext->tenantPage(
             1,
@@ -67,9 +63,9 @@ final class PlatformStaffController extends AbstractController
     )]
     public function invite(Request $request): JsonResponse
     {
-        $owner = $this->owner();
-        $this->requireCsrf($request);
-        $payload = $this->payload($request);
+        $owner = $this->platformOwner();
+        $this->requireManagementCsrf($request, 'platform_staff_management');
+        $payload = $this->jsonPayload($request);
         $grants = $this->grantDefinitions($payload['grants'] ?? null);
 
         $result = $this->domain(
@@ -96,10 +92,10 @@ final class PlatformStaffController extends AbstractController
         string $staffId,
         Request $request,
     ): JsonResponse {
-        $owner = $this->owner();
-        $this->requireCsrf($request);
+        $owner = $this->platformOwner();
+        $this->requireManagementCsrf($request, 'platform_staff_management');
         $staff = $this->staff($staffId);
-        $payload = $this->payload($request);
+        $payload = $this->jsonPayload($request);
         $grants = $this->grantDefinitions($payload['grants'] ?? null);
 
         $this->domain(
@@ -125,8 +121,8 @@ final class PlatformStaffController extends AbstractController
         string $staffId,
         Request $request,
     ): JsonResponse {
-        $owner = $this->owner();
-        $this->requireCsrf($request);
+        $owner = $this->platformOwner();
+        $this->requireManagementCsrf($request, 'platform_staff_management');
         $staff = $this->staff($staffId);
 
         $limit = $this->platformStaffInviteResendLimiter
@@ -168,8 +164,8 @@ final class PlatformStaffController extends AbstractController
         string $staffId,
         Request $request,
     ): Response {
-        $owner = $this->owner();
-        $this->requireCsrf($request);
+        $owner = $this->platformOwner();
+        $this->requireManagementCsrf($request, 'platform_staff_management');
         $staff = $this->staff($staffId);
 
         $this->domain(function () use ($owner, $staff): null {
@@ -179,20 +175,6 @@ final class PlatformStaffController extends AbstractController
         });
 
         return new Response(status: Response::HTTP_NO_CONTENT);
-    }
-
-    private function owner(): User
-    {
-        $user = $this->getUser();
-        if (
-            !$user instanceof User
-            || !$user->isActive()
-            || !$user->hasRole(User::ROLE_PLATFORM_OWNER)
-        ) {
-            throw new AccessDeniedHttpException();
-        }
-
-        return $user;
     }
 
     private function staff(string $staffId): User
@@ -211,49 +193,6 @@ final class PlatformStaffController extends AbstractController
         }
 
         return $staff;
-    }
-
-    private function requireCsrf(Request $request): void
-    {
-        $token = (string) $request->headers
-            ->get('X-CSRF-Token', '');
-
-        if (
-            !$this->isCsrfTokenValid(
-                'platform_staff_management',
-                $token,
-            )
-        ) {
-            throw new AccessDeniedHttpException(
-                'Token CSRF inválido.',
-            );
-        }
-    }
-
-    /** @return array<string, mixed> */
-    private function payload(Request $request): array
-    {
-        try {
-            $payload = json_decode(
-                (string) $request->getContent(),
-                true,
-                512,
-                JSON_THROW_ON_ERROR,
-            );
-        } catch (JsonException $exception) {
-            throw new BadRequestHttpException(
-                'JSON inválido.',
-                $exception,
-            );
-        }
-
-        if (!is_array($payload)) {
-            throw new BadRequestHttpException(
-                'El cuerpo debe ser un objeto JSON.',
-            );
-        }
-
-        return $payload;
     }
 
     /**
@@ -302,20 +241,10 @@ final class PlatformStaffController extends AbstractController
                 'email' => $result->user->email(),
                 'active' => $result->user->isActive(),
             ],
-            'invitation' => [
-                'id' => $result->invitation->id(),
-                'expires_at' => (
-                    $result->invitation
-                        ->expiresAt()
-                        ->format(DATE_ATOM)
-                ),
-                'activation_path_once' => $this->generateUrl(
-                    'app_invitation_activate',
-                    ['token' => $result->rawToken],
-                    UrlGeneratorInterface::ABSOLUTE_PATH,
-                ),
-                'delivery' => 'manual',
-            ],
+            'invitation' => $this->invitationPayload(
+                $result->invitation,
+                $result->rawToken,
+            ),
             'grants' => $this->manager
                 ->grantPayloads($result->user),
         ];
