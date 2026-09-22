@@ -104,3 +104,33 @@ export function platformStaffInvitationRevokePath(
 export function platformTenantsPath(): string {
   return '/adminpl0n3r/api/tenants';
 }
+
+export function catalogProductsPath(branchId: string): string {
+  return '/api/v1/branches/' + safeUlid(branchId) + '/catalog/products';
+}
+
+export function catalogProductPath(
+  branchId: string,
+  productId: string,
+): string {
+  return catalogProductsPath(branchId) + '/' + safeUlid(productId);
+}
+
+export function catalogVariantsPath(
+  branchId: string,
+  productId: string,
+): string {
+  return catalogProductPath(branchId, productId) + '/variants';
+}
+
+export function catalogVariantPath(
+  branchId: string,
+  productId: string,
+  variantId: string,
+): string {
+  return (
+    catalogVariantsPath(branchId, productId) +
+    '/' +
+    safeUlid(variantId)
+  );
+}
