@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Http;
 
+use App\Tests\Support\BrowserCsrfToken;
 use App\Domain\Identity\Entity\BranchRoleAssignment;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\Role;
@@ -16,12 +17,10 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
-use Symfony\Component\BrowserKit\Cookie;
-use Symfony\Component\HttpFoundation\RequestStack;
-use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
 final class StorefrontAdminControllerTest extends WebTestCase
 {
+    use BrowserCsrfToken;
     public function testOwnerCanEditIdentityAndSeeItOnPublicSlug(): void
     {
         [$client, $entityManager, $tenant, $owner] = $this->tenantBrowser();
@@ -303,47 +302,6 @@ final class StorefrontAdminControllerTest extends WebTestCase
         return $entityManager;
     }
 
-    private function csrfToken(
-        KernelBrowser $client,
-        string $tokenId,
-    ): string {
-        $request = $client->getRequest();
-        self::assertNotNull($request);
-
-        $container = static::getContainer();
-        $requestStack = $container->get(RequestStack::class);
-        $csrf = $container->get(CsrfTokenManagerInterface::class);
-        $sessionFactory = $container->get('session.factory');
-
-        self::assertInstanceOf(RequestStack::class, $requestStack);
-        self::assertInstanceOf(CsrfTokenManagerInterface::class, $csrf);
-        self::assertTrue(method_exists($sessionFactory, 'createSession'));
-
-        $session = $sessionFactory->createSession();
-        $existingCookie = $client->getCookieJar()->get(
-            $session->getName(),
-        );
-        if ($existingCookie !== null) {
-            $session->setId((string) $existingCookie->getValue());
-        }
-
-        $session->start();
-        $request->setSession($session);
-
-        $requestStack->push($request);
-        try {
-            $value = $csrf->getToken($tokenId)->getValue();
-            $session->save();
-        } finally {
-            $requestStack->pop();
-        }
-
-        $client->getCookieJar()->set(
-            new Cookie($session->getName(), $session->getId()),
-        );
-
-        return $value;
-    }
 
     /** @return array{0: Tenant, 1: User} */
     private function tenantOwner(EntityManagerInterface $entityManager): array
