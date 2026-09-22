@@ -33,7 +33,7 @@ LOCK_GUARD_DIR="var/post-deploy.lock.guard"
 LOCK_MAX_AGE_SECONDS=21600
 LOCK_INVALID_GRACE_MINUTES=5
 LOCK_GUARD_GRACE_MINUTES=1
-LOCK_TOKEN="$-$(date +%s)"
+LOCK_TOKEN="$$-$(date +%s)"
 LOCK_GUARD_OWNED=0
 
 cleanup_guard() {
@@ -66,7 +66,7 @@ crear_lock() {
 
 acquire_guard() {
     if mkdir "$LOCK_GUARD_DIR" 2>/dev/null; then
-        printf '%s\n%s\n%s\n' "$LOCK_TOKEN" "$" "$(date +%s)" > "$LOCK_GUARD_DIR/owner"
+        printf '%s\n%s\n%s\n' "$LOCK_TOKEN" "$$" "$(date +%s)" > "$LOCK_GUARD_DIR/owner"
         LOCK_GUARD_OWNED=1
         return 0
     fi
@@ -102,7 +102,7 @@ acquire_guard() {
         echo "post-deploy.sh: otro proceso adquirió el mutex primero; se omite." >&2
         return 1
     fi
-    printf '%s\n%s\n%s\n' "$LOCK_TOKEN" "$" "$(date +%s)" > "$LOCK_GUARD_DIR/owner"
+    printf '%s\n%s\n%s\n' "$LOCK_TOKEN" "$$" "$(date +%s)" > "$LOCK_GUARD_DIR/owner"
     LOCK_GUARD_OWNED=1
 }
 
@@ -121,16 +121,14 @@ recuperar_lock() {
             if [ -z "$(find "$LOCK_FILE" -mmin +"$LOCK_INVALID_GRACE_MINUTES" -print -quit 2>/dev/null)" ]; then
                 echo "post-deploy.sh: lock incompleto reciente; se omite esta corrida." >&2
                 cleanup_guard
-                cleanup_guard
-        return 1
+                return 1
             fi
             ;;
         *)
             if kill -0 "$owner_pid" 2>/dev/null; then
                 echo "post-deploy.sh: otra corrida sigue activa (pid $owner_pid); se omite." >&2
                 cleanup_guard
-                cleanup_guard
-        return 1
+                return 1
             fi
 
             now="$(date +%s)"
