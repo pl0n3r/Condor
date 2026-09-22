@@ -165,6 +165,64 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
         self.assertIn("sección pública", resultado["comprobaciones"]["storefront"]["detalle"])
 
+    def test_marcadores_inertes_dentro_de_template_no_validan_storefront(self) -> None:
+        slug = self.preparar_storefront()
+        canonical = self.base + "/" + slug
+        casos = {
+            "ambos_en_template": (
+                '<html><head><template><link rel="canonical" href="' + canonical
+                + '"></template></head><body><template>'
+                + '<section class="storefront-hero"><h1>Empresa</h1></section>'
+                + '</template><footer>V 0.1.13</footer></body></html>'
+            ),
+            "solo_hero_en_template": (
+                '<html><head><link rel="canonical" href="' + canonical
+                + '"></head><body><template>'
+                + '<section class="storefront-hero"><h1>Empresa</h1></section>'
+                + '</template><footer>V 0.1.13</footer></body></html>'
+            ),
+            "solo_canonical_en_template": (
+                '<html><head><template><link rel="canonical" href="' + canonical
+                + '"></template></head><body>'
+                + '<section class="storefront-hero"><h1>Empresa</h1></section>'
+                + '<footer>V 0.1.13</footer></body></html>'
+            ),
+            "canonical_fuera_de_head": (
+                '<html><head></head><body><link rel="canonical" href="' + canonical
+                + '"><section class="storefront-hero"><h1>Empresa</h1></section>'
+                + '<footer>V 0.1.13</footer></body></html>'
+            ),
+            "template_anidado": (
+                '<html><head><template><template><link rel="canonical" href="'
+                + canonical + '"></template></template></head><body><template>'
+                + '<section class="storefront-hero"><h1>Empresa</h1></section>'
+                + '</template><footer>V 0.1.13</footer></body></html>'
+            ),
+        }
+        for nombre, pagina in casos.items():
+            with self.subTest(nombre=nombre):
+                self.server.respuestas["/" + slug] = (
+                    200, "text/html", pagina.encode(),
+                )
+                resultado = modulo.observar(
+                    self.base, "0.1.13", SHA, intentos=1, intervalo=0,
+                    tenant_slug=slug,
+                )
+                self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+                self.assertFalse(resultado["comprobaciones"]["storefront"]["ok"])
+
+    def test_formulario_inerte_en_template_no_valida_login(self) -> None:
+        pagina = (
+            '<html><body><template><form>'
+            '<input name="_username" type="email">'
+            '<input name="_password" type="password">'
+            '</form></template><footer>V 0.1.0</footer></body></html>'
+        )
+        self.server.respuestas["/admin/login"] = (200, "text/html", pagina.encode())
+        resultado = self.observar()
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["admin_login"]["ok"])
+
     def test_slug_desconocido_200_o_redirect_no_se_acepta(self) -> None:
         slug = self.preparar_storefront()
         desconocido = "/condor-smoke-no-existe-" + SHA[:12]
