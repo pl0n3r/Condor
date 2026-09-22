@@ -77,7 +77,13 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn('LOCK_INVALID_GRACE_MINUTES=5', script)
         self.assertIn('LOCK_GUARD_DIR="var/post-deploy.lock.guard"', script)
         self.assertIn('LOCK_GUARD_GRACE_MINUTES=1', script)
-        self.assertIn('LOCK_TOKEN="$-$(date +%s)"', script)
+        self.assertIn('LOCK_TOKEN="$$-$(date +%s)"', script)
+        self.assertGreaterEqual(
+            script.count('printf \'%s\\n%s\\n%s\\n\' "$LOCK_TOKEN" "$$"'),
+            3,
+        )
+        self.assertNotIn('"$LOCK_TOKEN" "$" "$(date +%s)"', script)
+        self.assertNotIn("cleanup_guard\n                cleanup_guard", script)
         self.assertIn('mkdir "$LOCK_GUARD_DIR"', script)
         self.assertIn('kill -0 "$guard_pid"', script)
         self.assertIn('kill -0 "$owner_pid"', script)
