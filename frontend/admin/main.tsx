@@ -28,6 +28,10 @@ if (platformRoot) {
   const logoutToken = platformRoot.dataset.logoutToken ?? '';
   const staffToken = platformRoot.dataset.staffToken ?? '';
   const tenantToken = platformRoot.dataset.tenantToken ?? '';
+  const section = platformRoot.dataset.section === 'empresas'
+    || platformRoot.dataset.section === 'staff'
+    ? platformRoot.dataset.section
+    : 'control';
 
   createRoot(platformRoot).render(
     <StrictMode>
@@ -36,6 +40,7 @@ if (platformRoot) {
         logoutToken={logoutToken}
         staffToken={staffToken}
         tenantToken={tenantToken}
+        section={section}
       />
     </StrictMode>,
   );
