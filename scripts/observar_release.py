@@ -183,22 +183,58 @@ def clasificar_error_http(
     ) from error
 
 
+def tipo_aceptado_para(ruta: str) -> str:
+    """Devuelve el Accept mínimo esperado por el tipo de recurso."""
+    if ruta == "/health":
+        return "application/json"
+    if ruta.endswith(".css"):
+        return "text/css"
+    if ruta.endswith(".js"):
+        return "text/javascript, application/javascript"
+    return "text/html"
+
+
+def limite_respuesta_para(ruta: str) -> int:
+    """Separa el presupuesto de assets del de HTML/JSON."""
+    return MAX_ASSET_BYTES if ruta.endswith((".css", ".js")) else MAX_BYTES
+
+
+def elevar_error_url(error: URLError) -> None:
+    """Clasifica errores de urllib sin filtrar detalles sensibles."""
+    reason = error.reason
+    if isinstance(
+        reason,
+        (
+            TimeoutError,
+            ConnectionAbortedError,
+            ConnectionRefusedError,
+            ConnectionResetError,
+        ),
+    ):
+        raise ObservacionTransitoria(
+            "La conexión falló temporalmente durante la observación."
+        ) from error
+    if isinstance(reason, ssl.SSLError):
+        raise ObservacionError(
+            "La conexión TLS no pudo validarse de forma segura."
+        ) from error
+    if isinstance(reason, socket.gaierror):
+        raise ObservacionError(
+            "El dominio de producción no pudo resolverse de forma válida."
+        ) from error
+    raise ObservacionError(
+        "No se recibió una respuesta HTTP válida."
+    ) from error
+
+
 def obtener(
     origen: str, ruta: str, timeout: float, *, estado_esperado: int = 200,
 ) -> tuple[str, bytes]:
     """GET sin redirecciones, cookies ni credenciales, con cuerpo limitado."""
-    tipo_solicitado = "text/html"
-    if ruta == "/health":
-        tipo_solicitado = "application/json"
-    elif ruta.endswith(".css"):
-        tipo_solicitado = "text/css"
-    elif ruta.endswith(".js"):
-        tipo_solicitado = "text/javascript, application/javascript"
-
     solicitud = Request(
         origen + ruta,
         headers={
-            "Accept": tipo_solicitado,
+            "Accept": tipo_aceptado_para(ruta),
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
             "User-Agent": "Condor-Release-Observer/0.1",
@@ -211,7 +247,7 @@ def obtener(
                 raise ObservacionError(
                     f"HTTP {respuesta.status}; se esperaba {estado_esperado}."
                 )
-            limite = MAX_ASSET_BYTES if ruta.endswith((".css", ".js")) else MAX_BYTES
+            limite = limite_respuesta_para(ruta)
             contenido = respuesta.read(limite + 1)
             if len(contenido) > limite:
                 raise ObservacionError("La respuesta supera el límite permitido.")
@@ -219,31 +255,8 @@ def obtener(
     except HTTPError as error:
         return clasificar_error_http(error, estado_esperado)
     except URLError as error:
-        reason = error.reason
-        transient = isinstance(
-            reason,
-            (
-                TimeoutError,
-                ConnectionAbortedError,
-                ConnectionRefusedError,
-                ConnectionResetError,
-            ),
-        )
-        if transient:
-            raise ObservacionTransitoria(
-                "La conexión falló temporalmente durante la observación."
-            ) from error
-        if isinstance(reason, ssl.SSLError):
-            raise ObservacionError(
-                "La conexión TLS no pudo validarse de forma segura."
-            ) from error
-        if isinstance(reason, socket.gaierror):
-            raise ObservacionError(
-                "El dominio de producción no pudo resolverse de forma válida."
-            ) from error
-        raise ObservacionError(
-            "No se recibió una respuesta HTTP válida."
-        ) from error
+        elevar_error_url(error)
+        raise AssertionError("elevar_error_url siempre lanza una excepción")
     except (
         TimeoutError,
         ConnectionAbortedError,
@@ -583,7 +596,8 @@ def comentario_roadmap(resultado: dict[str, Any]) -> str:
             f"{health['detalle']}")
 
 
-def main(argv: list[str] | None = None) -> int:
+def crear_parser() -> argparse.ArgumentParser:
+    """Construye el contrato CLI sin mezclarlo con la ejecución."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True, help="Versión esperada, p. ej. 0.1.0")
     parser.add_argument("--sha", required=True, help="SHA exacto de 40 caracteres del merge")
@@ -606,31 +620,59 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Confirma que la transición requerida fue comprobada fuera del deploy de código.",
     )
-    args = parser.parse_args(argv)
+    return parser
 
-    try:
-        origen = DOMINIO_PRODUCCION
-        if not VERSION_PATTERN.fullmatch(args.version):
-            raise ObservacionError("La versión debe tener formato X.Y.Z.")
-        if not SHA_PATTERN.fullmatch(args.sha):
-            raise ObservacionError("El SHA esperado debe tener exactamente 40 caracteres hexadecimales minúsculos.")
-        if args.canonical_storefront and not args.tenant_slug:
-            raise ObservacionError("El canonical requiere --tenant-slug.")
-        if args.tenant_slug:
-            validar_tenant_slug(args.tenant_slug)
-            if args.canonical_storefront:
-                validar_canonical(args.canonical_storefront, origen, args.tenant_slug)
-        if not 1 <= args.intentos <= 10 or not 0 <= args.intervalo <= 60 or not 0.1 <= args.timeout <= 30:
-            raise ObservacionError("Intentos (1-10), intervalo (0-60) o timeout (0.1-30) fuera de rango.")
-        if not 0 <= args.espera_deploy <= 1800 or not 5 <= args.intervalo_deploy <= 120:
-            raise ObservacionError("Espera de deploy (0-1800) o intervalo de deploy (5-120) fuera de rango.")
-    except ObservacionError as error:
-        parser.error(str(error))
 
+def validar_identidad_cli(args: argparse.Namespace) -> None:
+    if not VERSION_PATTERN.fullmatch(args.version):
+        raise ObservacionError("La versión debe tener formato X.Y.Z.")
+    if not SHA_PATTERN.fullmatch(args.sha):
+        raise ObservacionError(
+            "El SHA esperado debe tener exactamente 40 caracteres hexadecimales minúsculos."
+        )
+
+
+def validar_storefront_cli(args: argparse.Namespace, origen: str) -> None:
+    if args.canonical_storefront and not args.tenant_slug:
+        raise ObservacionError("El canonical requiere --tenant-slug.")
+    if args.tenant_slug:
+        validar_tenant_slug(args.tenant_slug)
+    if args.tenant_slug and args.canonical_storefront:
+        validar_canonical(args.canonical_storefront, origen, args.tenant_slug)
+
+
+def validar_presupuestos_cli(args: argparse.Namespace) -> None:
+    if not 1 <= args.intentos <= 10:
+        raise ObservacionError("Intentos debe estar entre 1 y 10.")
+    if not 0 <= args.intervalo <= 60:
+        raise ObservacionError("Intervalo debe estar entre 0 y 60 segundos.")
+    if not 0.1 <= args.timeout <= 30:
+        raise ObservacionError("Timeout debe estar entre 0.1 y 30 segundos.")
+    if not 0 <= args.espera_deploy <= 1800:
+        raise ObservacionError("Espera de deploy debe estar entre 0 y 1800 segundos.")
+    if not 5 <= args.intervalo_deploy <= 120:
+        raise ObservacionError("Intervalo de deploy debe estar entre 5 y 120 segundos.")
+
+
+def validar_transicion_cli(args: argparse.Namespace) -> None:
     if args.transicion_verificada and not args.transicion_requerida:
-        parser.error(
+        raise ObservacionError(
             "--transicion-verificada solo es válida junto con --transicion-requerida."
         )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = crear_parser()
+    args = parser.parse_args(argv)
+    origen = DOMINIO_PRODUCCION
+
+    try:
+        validar_identidad_cli(args)
+        validar_storefront_cli(args, origen)
+        validar_presupuestos_cli(args)
+        validar_transicion_cli(args)
+    except ObservacionError as error:
+        parser.error(str(error))
 
     resultado = observar(
         origen,
