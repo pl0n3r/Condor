@@ -8,11 +8,13 @@ use App\Application\Observability\DiagnosticShareService;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Observability\Entity\DiagnosticShare;
 use App\Domain\Observability\Entity\ErrorIncident;
+use App\Infrastructure\Observability\FatalLog;
 use App\Shared\Version\AppVersion;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -20,10 +22,17 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 final class PlatformDiagnosticsController extends AbstractController
 {
+    public function __construct(
+        #[Autowire('%kernel.secret%')]
+        private readonly string $appSecret,
+    ) {
+    }
+
     #[Route('/adminpl0n3r/diagnosticos', name: 'app_platform_diagnostics', methods: ['GET'])]
     public function index(
         EntityManagerInterface $entityManager,
         AppVersion $version,
+        Request $request,
     ): Response {
         $this->denyAccessUnlessGranted(User::ROLE_PLATFORM_OWNER);
 
@@ -42,10 +51,18 @@ final class PlatformDiagnosticsController extends AbstractController
             static fn (DiagnosticShare $share): bool => $share->isUsable($now),
         ));
 
+        $fatalLogUrl = sprintf(
+            '%s://%s/platform-fatal-log.php?token=%s',
+            $request->getScheme(),
+            $request->getHttpHost(),
+            FatalLog::accessToken($this->appSecret),
+        );
+
         return $this->render('platform_owner/diagnostics.html.twig', [
             'app_version' => $version->human(),
             'incidents' => $incidents,
             'shares' => $shares,
+            'fatal_log_url' => $fatalLogUrl,
         ]);
     }
 

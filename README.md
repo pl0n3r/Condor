@@ -1,87 +1,43 @@
-# Condor App — Snapshot operativo · hotfix V 0.1.10
+# Condor App — Snapshot operativo · candidato V 0.1.12
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** convertir los errores 5xx del Super Admin en diagnósticos seguros y accionables sin activar debug ni exponer secretos.
+> **Objetivo actual:** convertir actividad real de plataforma en señales funcionales agregadas, útiles y sin PII para operación y producto.
 
 <p align="center">
   <strong>Producto:</strong> Condor App ·
-  <strong>Dominio:</strong> condorapp.com.co ·
-  <strong>Runtime producción:</strong> PHP 8.5 ·
-  <strong>Versión objetivo:</strong> V 0.1.10 ·
-  <strong>Última versión validada en producción:</strong> V 0.1.4
+  <strong>Runtime:</strong> PHP 8.5 ·
+  <strong>Base:</strong> V 0.1.11 ·
+  <strong>Candidato:</strong> V 0.1.12 ·
+  <strong>Producción comprobada:</strong> V 0.1.4
 </p>
 
-## Estado del deploy
+## Estado de entrega
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base de código | ✅ **V 0.1.9 EN MAIN** | SHA `fb21af72cdabf94539e654f110793ea3f146e3b5` |
-| Super Admin V 0.1.9 | ✅ **MERGED** | PR #118 |
-| Incidente reportado | 🔴 **500 EN /adminpl0n3r TRAS LOGIN** | reportado después de #118; causa exacta aún por observar |
-| Producción comprobada | ✅ **V 0.1.4 VALIDADA EN PRODUCCIÓN** | último smoke real documentado |
-| V 0.1.10 | 🚧 **HOTFIX EN VALIDACIÓN DE CÓDIGO** | Issue #133 |
-| Producción V 0.1.10 | ⏳ **NO VALIDADA** | requiere merge, deploy observado y smoke real |
+| Base integrada | ✅ **V 0.1.11 EN MAIN** | SHA `346ddabe46b54240326e5d6c62a956464a0ea663` |
+| Candidato actual | 🚧 **V 0.1.12 EN VALIDACIÓN** | Issue #128 / PR #143 |
+| Métricas funcionales | ✅ **IMPLEMENTADAS EN CANDIDATO** | tenant creado, login OK/fallido, autorización denegada y rol modificado |
+| Privacidad | ✅ **MINIMIZADA** | sin correo, IP, contraseña, token ni request body |
+| Producción V 0.1.12 | ⏳ **NO VALIDADA** | requiere merge, exact-main, transición y smoke real |
 
-## Qué cambia en V 0.1.10
+## Qué incorpora V 0.1.12
 
-- Los 5xx siguen generando una referencia segura para cualquier usuario.
-- Si la sesión pertenece a `ROLE_PLATFORM_OWNER`, la página 500 muestra además:
-  - status HTTP;
-  - ruta Symfony;
-  - clase de excepción;
-  - mensaje sanitizado;
-  - request ID;
-  - versión;
-  - release SHA.
-- El detalle privilegiado **no incluye** stack trace, headers, cookies, body, variables de entorno, SQL ni secretos.
-- Las respuestas JSON 5xx del Super Admin incluyen el mismo diagnóstico sanitizado solo para el propietario.
-- React muestra ese diagnóstico dentro del centro de control cuando falla `/adminpl0n3r/api/context`.
-- `/adminpl0n3r/diagnosticos` muestra mensaje sanitizado, request ID y release para incidentes recientes.
-- La página 500 privilegiada no depende de Twig, para seguir funcionando aunque el fallo involucre render/cache.
+- Señales persistentes y agregables con catálogo cerrado.
+- Registro defensivo: un fallo de telemetría no rompe el flujo de negocio.
+- `tenant_created` después de transacción exitosa en onboarding y alta desde Super Admin.
+- Login exitoso/fallido y autorización denegada mediante subscribers.
+- Cambios de roles como señal funcional además de la auditoría de negocio.
+- Agregación de 30 días disponible solo para `ROLE_PLATFORM_OWNER`.
+- Panel visual con estado vacío explícito dentro de `/adminpl0n3r`.
+- Pruebas de aislamiento, persistencia real y ausencia de PII.
 
-## Archivos principales
+## Qué sigue
 
-- `src/Infrastructure/Observability/ErrorIncidentPresenter.php`
-- `src/Infrastructure/Observability/ErrorIncidentSubscriber.php`
-- `frontend/admin/PlatformOwnerApp.tsx`
-- `frontend/admin/admin.css`
-- `templates/platform_owner/diagnostics.html.twig`
-- `tests/php/Infrastructure/Observability/ErrorIncidentPresenterTest.php`
-- metadata de versión V 0.1.10
+- Storefront administrable: #130 / PR #136, a reserializar como siguiente versión después de este candidato.
+- Catálogo Producto + Variante: #131.
+- El Roadmap canónico continúa en Issue #1.
 
-## Validación
-
-- CI, backend/MariaDB, contratos y Playwright deben quedar verdes en el head final.
-- SonarQube debe mantener Quality Gate aprobado.
-- CodeRabbit debe cerrar cualquier finding accionable del mismo head.
-- Después del merge se valida el SHA exacto de `main`.
-- El hotfix solo se considera **VALIDADO EN PRODUCCIÓN** después del deploy observado y de reproducir/verificar `/adminpl0n3r`.
-
-## Flujo de entrega
-
-```mermaid
-flowchart LR
-    A[Incidente 500] --> B[Diagnóstico seguro visible]
-    B --> C[CI + Sonar + CodeRabbit]
-    C --> D[Squash merge]
-    D --> E[Validar SHA exacto de main]
-    E --> F[Deploy observado]
-    F --> G[Reprobar /adminpl0n3r]
-    G --> H[Identificar o confirmar causa real]
-```
-
-## Seguimiento
-
-El orden de trabajo y los próximos bloques viven exclusivamente en el
-[Roadmap canónico #1](https://github.com/pl0n3r/Condor/issues/1).
-Los Issues activos conservan el alcance ejecutable de cada frente.
-
-## Fuentes de verdad
-
-- [AGENTES.md](AGENTES.md) — protocolo operativo.
-- [ESPECIFICACIONES.md](ESPECIFICACIONES.md) — decisiones durables.
-- [Roadmap #1](https://github.com/pl0n3r/Condor/issues/1) — Roadmap canónico.
-- [Issue #133](https://github.com/pl0n3r/Condor/issues/133) — hotfix de diagnóstico visible.
-- [Issue #93](https://github.com/pl0n3r/Condor/issues/93) — diseño base de observabilidad segura.
+> **Regla de estado:** CI verde o merge prueban código, no producción. Solo deploy observado y smoke real permiten declarar **VALIDADO EN PRODUCCIÓN**.

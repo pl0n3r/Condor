@@ -1813,6 +1813,79 @@ Mientras Condor opere en Hostinger shared hosting se debe confirmar la capacidad
 La asociación dominio → tenant permanece en Condor y no se codifica como una regla propietaria del hosting, de forma que una futura migración a AWS u otra infraestructura no requiera rediseñar el producto.
 
 
+### D-050 — Staff de plataforma, invitaciones y notificaciones configurables
+
+Condor distingue de forma explícita entre **propietario de plataforma**, **staff de plataforma** y **usuarios de tenant**.
+
+#### Staff de plataforma
+
+- el propietario conserva `ROLE_PLATFORM_OWNER` como autoridad global única;
+- el staff interno de Condor usa `ROLE_PLATFORM_STAFF` y no necesita membresía de tenant;
+- un miembro de staff puede recibir alcance global o sobre tenants concretos;
+- los permisos se expresan inicialmente como **tenant + módulo + acciones CRUD**;
+- los grants son explícitos, acumulativos solo cuando no introducen ambigüedad y siempre se validan server-side;
+- ningún grant de staff implica suplantación de usuarios del cliente;
+- toda operación sensible conserva actor real, tenant objetivo y contexto suficiente de auditoría;
+- los permisos de staff y los roles internos del tenant son modelos separados.
+
+#### Invitaciones y activación
+
+- cuentas nuevas se crean inactivas y se activan mediante invitación de un solo uso;
+- nunca se envían contraseñas por correo;
+- el token bruto solo existe durante la emisión/entrega; persistencia guarda exclusivamente un hash irreversible;
+- las invitaciones tienen expiración, revocación, reemisión auditada y consumo atómico;
+- activación y reenvío aplican rate limiting;
+- la persona invitada define su propia contraseña;
+- recuperación de contraseña puede reutilizar primitives técnicas, pero usa propósito y token separados.
+
+#### Correo transaccional
+
+- el envío se realiza mediante un **contrato/adaptador**; identidad, dominio y aplicación no dependen de Hostinger ni de un proveedor SMTP concreto;
+- remitente, URL base pública y credenciales pertenecen a configuración/secretos de entorno, nunca al dominio ni al código;
+- las URLs absolutas de email se construyen desde una base confiable configurada, nunca desde el header `Host` de una petición;
+- las notificaciones ordinarias pueden usar una **outbox persistente** antes de conectar un transporte real; esto permite reintentos, auditoría y cambio de proveedor sin rehacer los casos de uso;
+- una outbox genérica **nunca persiste tokens de activación, recuperación ni otros secretos en texto plano**;
+- el email sensible de invitación se entrega mediante un puerto transaccional mientras el token bruto sigue únicamente en memoria; si en el futuro se requieren reintentos durables de ese mensaje, deberá existir un sobre cifrado explícito con clave fuera de la base de datos o un mecanismo seguro regenerable, sin debilitar el hash canónico de la invitación;
+- un fallo del proveedor debe quedar diagnosticado de forma sanitizada y permitir reemisión controlada de la invitación, sin reutilizar el token anterior;
+- SPF, DKIM, DMARC, rebotes y reputación pertenecen a la transición operativa del proveedor de correo, no al núcleo de identidad.
+
+#### Notificaciones
+
+Condor modela notificaciones a partir de **eventos de aplicación** y canales intercambiables.
+
+Canales iniciales:
+
+- `in_app`;
+- `email`.
+
+Preferencias:
+
+- se resuelven por usuario + evento + canal;
+- eventos opcionales pueden habilitarse/deshabilitarse;
+- eventos obligatorios de seguridad/operación ignoran una preferencia que pretenda silenciarlos;
+- inicialmente son obligatorios como mínimo: invitación de cuenta y recuperación de contraseña;
+- añadir SMS, push, WhatsApp u otro canal futuro no modifica los casos de uso que producen el evento.
+
+La persistencia debe permitir distinguir estado pendiente, entregado y fallido/reintentable cuando el canal implique entrega asíncrona.
+
+#### Adaptabilidad
+
+Los requerimientos del primer cliente real —incluido su contexto textil/confección— no se hardcodean en el núcleo. Capacidades comunes evolucionan como módulos generales; variaciones por empresa son configuración; particularidades sectoriales se aíslan como extensión opcional.
+
+#### UX progresiva
+
+`/adminpl0n3r` debe hacer visible progresivamente:
+
+- empresas;
+- staff de plataforma;
+- estado de invitación;
+- matriz cliente → módulo → CRUD;
+- creación básica de tenant reutilizando onboarding;
+- preferencias de notificación cuando el backend correspondiente sea estable.
+
+No se muestran acciones falsas ni controles sin contrato server-side real.
+
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.

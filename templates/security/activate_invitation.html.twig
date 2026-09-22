@@ -1,0 +1,72 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Activar cuenta · Condor App{% endblock %}
+{% block head %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+
+{% block body %}
+<section class="auth-layout">
+    <div class="auth-card">
+        <span class="eyebrow">Invitación segura</span>
+        <h1>Activa tu cuenta de Condor</h1>
+
+        {% if invitation %}
+            <p class="muted">
+                Hola {{ invitation.user.displayName }}.
+                Define tu contraseña para activar
+                {{ invitation.kind == 'platform_staff'
+                    ? 'tu acceso al equipo Condor'
+                    : 'tu cuenta de empresa' }}.
+            </p>
+
+            {% if error %}
+                <div class="alert alert-error" role="alert">
+                    {{ error }}
+                </div>
+            {% endif %}
+
+            <form method="post" class="stack">
+                <label>
+                    <span>Contraseña nueva</span>
+                    <input
+                        type="password"
+                        name="password"
+                        minlength="12"
+                        maxlength="4096"
+                        autocomplete="new-password"
+                        required
+                    >
+                </label>
+
+                <label>
+                    <span>Confirma la contraseña</span>
+                    <input
+                        type="password"
+                        name="password_confirmation"
+                        minlength="12"
+                        maxlength="4096"
+                        autocomplete="new-password"
+                        required
+                    >
+                </label>
+
+                <input
+                    type="hidden"
+                    name="_csrf_token"
+                    value="{{ csrf_token(
+                        'invitation_accept_' ~ invitation.id
+                    ) }}"
+                >
+                <button class="button" type="submit">
+                    Activar cuenta
+                </button>
+            </form>
+        {% else %}
+            <div class="alert alert-error" role="alert">
+                {{ error }}
+            </div>
+        {% endif %}
+
+        <p class="version-line">V {{ app_version }}</p>
+    </div>
+</section>
+{% endblock %}
