@@ -148,6 +148,7 @@ export function AdminApp({
             <label className="branch-picker">
               <span>Sede activa</span>
               <select
+                aria-label="Sede activa"
                 value={context.data.active_branch.id}
                 onChange={(event) => {
                   setContext({ status: 'loading' });
