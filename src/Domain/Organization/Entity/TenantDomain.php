@@ -36,8 +36,13 @@ class TenantDomain
         length: 26,
         nullable: true,
         unique: true,
+        insertable: false,
+        updatable: false,
+        columnDefinition: 'VARCHAR(26) GENERATED ALWAYS AS '
+            .'(IF(is_primary = 1 AND is_verified = 1, tenant_id, NULL)) PERSISTENT',
+        generated: 'ALWAYS',
     )]
-    private ?string $primaryVerifiedTenantId;
+    private ?string $primaryVerifiedTenantId = null;
 
     #[ORM\Column(type: 'datetime_immutable')]
     private DateTimeImmutable $createdAt;
@@ -53,9 +58,6 @@ class TenantDomain
         $this->hostname = strtolower(rtrim(trim($hostname), '.'));
         $this->primary = $primary;
         $this->verified = $verified;
-        $this->primaryVerifiedTenantId = $primary && $verified
-            ? $tenant->id()
-            : null;
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
