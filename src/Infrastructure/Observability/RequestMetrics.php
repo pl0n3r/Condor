@@ -56,7 +56,22 @@ final class RequestMetrics
             return [];
         }
 
-        $contents = @file_get_contents($path);
+        $handle = @fopen($path, 'rb');
+        if (!is_resource($handle)) {
+            return [];
+        }
+
+        try {
+            if (!@flock($handle, LOCK_SH)) {
+                return [];
+            }
+
+            $contents = stream_get_contents($handle);
+        } finally {
+            @flock($handle, LOCK_UN);
+            fclose($handle);
+        }
+
         if (!is_string($contents) || $contents === '') {
             return [];
         }
@@ -149,14 +164,38 @@ final class RequestMetrics
             return;
         }
 
-        @file_put_contents($path, $line.PHP_EOL, FILE_APPEND | LOCK_EX);
-        @chmod($path, 0600);
-        self::trim($path);
+        $handle = @fopen($path, 'c+b');
+        if (!is_resource($handle)) {
+            return;
+        }
+
+        try {
+            if (!@flock($handle, LOCK_EX)) {
+                return;
+            }
+
+            if (fseek($handle, 0, SEEK_END) !== 0) {
+                return;
+            }
+
+            if (fwrite($handle, $line.PHP_EOL) === false) {
+                return;
+            }
+
+            fflush($handle);
+            @chmod($path, 0600);
+            self::trimLocked($handle);
+        } finally {
+            @flock($handle, LOCK_UN);
+            fclose($handle);
+        }
     }
 
-    private static function trim(string $path): void
+    /** @param resource $handle */
+    private static function trimLocked($handle): void
     {
-        $contents = @file_get_contents($path);
+        rewind($handle);
+        $contents = stream_get_contents($handle);
         if (!is_string($contents)) {
             return;
         }
@@ -167,11 +206,13 @@ final class RequestMetrics
         }
 
         $kept = array_slice($lines, -self::MAX_ENTRIES);
-        @file_put_contents(
-            $path,
-            implode(PHP_EOL, $kept).PHP_EOL,
-            LOCK_EX,
-        );
+        rewind($handle);
+        if (!ftruncate($handle, 0)) {
+            return;
+        }
+
+        fwrite($handle, implode(PHP_EOL, $kept).PHP_EOL);
+        fflush($handle);
     }
 
     /**
