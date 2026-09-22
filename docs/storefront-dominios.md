@@ -90,8 +90,9 @@ cuando se espera `https://www.condorapp.com.co/<slug>`; proporcionarlo si el
 dominio primario verificado usa un canonical personalizado HTTPS. El observador
 comprueba la versión visible **dentro del body**, el bloque `storefront-hero`
 con un título H1 realmente visible y el canonical exacto, y exige HTTP 404 sin redirección para un slug desconocido ligado al SHA
-de release. Los resultados se integran al manifiesto de evidencia, no solo al
-resumen de logs.
+de release. Los resultados se incorporan a la evidencia final consolidada que
+el workflow publica en el resumen de GitHub; el manifiesto solo declara los
+checks esperados.
 
 A partir de V 0.1.13, no proporcionar `tenant_slug` impide declarar
 `VALIDADO EN PRODUCCIÓN` mediante ese observador; un despliegue cuya identidad
