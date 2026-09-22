@@ -12,6 +12,14 @@ use Symfony\Component\HttpKernel\KernelEvents;
 #[AsEventListener(event: KernelEvents::RESPONSE, priority: -200)]
 final readonly class SecurityHeadersSubscriber
 {
+    private const PRIVATE_PATH_PREFIXES = [
+        '/admin',
+        '/adminpl0n3r',
+        '/api/v1',
+        '/support/diagnostics',
+        '/activar-cuenta',
+    ];
+
     public function __construct(
         #[Autowire('%kernel.environment%')]
         private string $environment,
@@ -27,6 +35,13 @@ final readonly class SecurityHeadersSubscriber
         $response = $event->getResponse();
         $headers = $response->headers;
 
+        if (self::isPrivatePath($event->getRequest()->getPathInfo())) {
+            // Nunca reutilizar información administrativa ni diagnósticos temporales.
+            $headers->set('Cache-Control', 'private, no-store');
+            $headers->remove('Surrogate-Control');
+            $headers->remove('Expires');
+        }
+
         $headers->set(
             'Content-Security-Policy',
             "default-src 'self'; "
@@ -39,7 +54,10 @@ final readonly class SecurityHeadersSubscriber
             ."script-src 'self'",
         );
         $headers->set('X-Content-Type-Options', 'nosniff');
-        $headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        // Los diagnósticos con token requieren una política todavía más estricta.
+        if ($headers->get('Referrer-Policy') !== 'no-referrer') {
+            $headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        }
         $headers->set(
             'Permissions-Policy',
             'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
@@ -48,5 +66,16 @@ final readonly class SecurityHeadersSubscriber
         if ($this->environment === 'prod' && $event->getRequest()->isSecure()) {
             $headers->set('Strict-Transport-Security', 'max-age=31536000');
         }
+    }
+
+    private static function isPrivatePath(string $path): bool
+    {
+        foreach (self::PRIVATE_PATH_PREFIXES as $prefix) {
+            if ($path === $prefix || str_starts_with($path, $prefix.'/')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
