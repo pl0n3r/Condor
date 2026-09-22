@@ -296,8 +296,53 @@ jobs:
           test -s public/build/admin.css
           git diff --exit-code -- public/build
 
-      - name: Auditoría continua de dependencias npm
-        run: npm audit --audit-level=high
+  audit-npm:
+    name: Auditoría de dependencias npm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Auditar dependencias npm
+        run: |
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "npm audit" \
+            -- npm audit --audit-level=high
+
+  audit-composer:
+    name: Auditoría de dependencias Composer
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Preparar PHP 8.5
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Auditar dependencias Composer
+        run: |
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "composer audit" \
+            -- composer audit --no-interaction
 
   backend-php:
     name: Backend PHP / MariaDB
@@ -359,9 +404,6 @@ jobs:
           composer validate --strict
           find src config migrations public -type f -name '*.php' -print0 | xargs -0 -n1 php -l
           php -l bin/console
-
-      - name: Auditoría continua de dependencias PHP
-        run: composer audit --no-interaction
 
       - name: Validar configuración Symfony
         run: |
@@ -642,6 +684,7 @@ jobs:
       - name: Demostrar que el backup se restaura y queda consultable
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/condor_backup_restored?serverVersion=mariadb-11.4.0&charset=utf8mb4
+          CONDOR_ALLOW_DESTRUCTIVE_RESTORE: '1'
         run: |
           set -euo pipefail
           dump="$(ls -1t var/backups/condor-condor_backup_source-*.sql.gz | head -1)"
@@ -650,7 +693,7 @@ jobs:
 
   validar:
     name: Validar
-    needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, frontend, backend-php, backup-restore, e2e]
+    needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, frontend, audit-npm, audit-composer, backend-php, backup-restore, e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -663,6 +706,8 @@ jobs:
           COORDINACION: ${{ needs.coordinacion.result }}
           PRUEBAS_BASE: ${{ needs.pruebas-base.result }}
           FRONTEND: ${{ needs.frontend.result }}
+          AUDIT_NPM: ${{ needs.audit-npm.result }}
+          AUDIT_COMPOSER: ${{ needs.audit-composer.result }}
           BACKEND_PHP: ${{ needs.backend-php.result }}
           BACKUP_RESTORE: ${{ needs.backup-restore.result }}
           E2E: ${{ needs.e2e.result }}
@@ -684,6 +729,9 @@ jobs:
             success|skipped) ;;
             *) echo "::error::Frontend no pasó."; exit 1 ;;
           esac
+
+          [[ "$AUDIT_NPM" == "success" ]] || { echo "::error::Auditoría npm no pasó."; exit 1; }
+          [[ "$AUDIT_COMPOSER" == "success" ]] || { echo "::error::Auditoría Composer no pasó."; exit 1; }
 
           case "$BACKEND_PHP" in
             success|skipped) ;;
@@ -717,6 +765,8 @@ jobs:
             printf -- '- Motivo: `%s`\n' "$MOTIVO"
             echo "- Pruebas base: **$PRUEBAS_BASE**"
             echo "- Frontend: **$FRONTEND**"
+            echo "- Auditoría npm: **$AUDIT_NPM**"
+            echo "- Auditoría Composer: **$AUDIT_COMPOSER**"
             echo "- Backend PHP: **$BACKEND_PHP**"
             echo "- Backup/restauración: **$BACKUP_RESTORE**"
             echo "- Playwright: **$E2E**"
