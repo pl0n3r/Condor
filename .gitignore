@@ -24,7 +24,6 @@ blob-report/
 *.swp
 *.bak
 *.backup
-__pycache__/
 
 # Sistema / editor
 .DS_Store
