@@ -452,6 +452,7 @@ jobs:
       RELEASE_SHA: ${{ github.sha }}
       PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
       E2E_EMAIL: owner-e2e@example.test
+      E2E_PLATFORM_EMAIL: owner-e2e-platform@example.test
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -481,6 +482,7 @@ jobs:
           echo "APP_SECRET=$app_secret" >> "$GITHUB_ENV"
           echo "E2E_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
           echo "CONDOR_OWNER_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
+          echo "CONDOR_PLATFORM_OWNER_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
 
       - name: Preparar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -522,6 +524,10 @@ jobs:
             --branch="Principal" \
             --email="$E2E_EMAIL" \
             --owner-name="Propietario E2E"
+          php bin/console app:platform-owner:provision \
+            --email="$E2E_PLATFORM_EMAIL" \
+            --name="Propietario Plataforma E2E" \
+            --password-env=CONDOR_PLATFORM_OWNER_PASSWORD
 
       - name: Iniciar aplicación
         run: |
