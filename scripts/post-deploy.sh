@@ -17,5 +17,27 @@ set -eu
 
 cd "$(dirname "$0")/.."
 
-php bin/console cache:clear --env=prod --no-warmup
-php bin/console cache:warmup --env=prod
+# El hosting compartido puede tener varias versiones de PHP instaladas con
+# un "php" por defecto más viejo que el runtime real del sitio (visto en
+# Hostinger: CLI por defecto en 8.2 mientras el sitio corre en 8.5). Se
+# prueban binarios conocidos de PHP 8.5+ antes de caer al "php" del PATH.
+PHP_BIN=""
+for candidate in \
+    /opt/alt/php85/usr/bin/php \
+    /opt/alt/php86/usr/bin/php \
+    php85 \
+    php
+do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        PHP_BIN="$candidate"
+        break
+    fi
+done
+
+if [ -z "$PHP_BIN" ]; then
+    echo "post-deploy.sh: no se encontró un binario de PHP utilizable." >&2
+    exit 1
+fi
+
+"$PHP_BIN" bin/console cache:clear --env=prod --no-warmup
+"$PHP_BIN" bin/console cache:warmup --env=prod
