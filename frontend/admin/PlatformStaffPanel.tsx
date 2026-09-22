@@ -285,11 +285,12 @@ export function PlatformStaffPanel({
     return data?.catalog.find((module) => module.key === key)?.label ?? key;
   }
 
-  const submitLabel = saving
-    ? 'Guardando…'
-    : editingStaffId
-      ? 'Guardar permisos'
-      : 'Crear staff e invitar';
+  let submitLabel = 'Crear staff e invitar';
+  if (saving) {
+    submitLabel = 'Guardando…';
+  } else if (editingStaffId) {
+    submitLabel = 'Guardar permisos';
+  }
 
   return (
     <section className="platform-section" aria-labelledby="platform-staff-title">
