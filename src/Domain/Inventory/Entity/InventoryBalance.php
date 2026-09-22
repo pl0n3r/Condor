@@ -14,7 +14,10 @@ use DomainException;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_inventory_balance')]
-#[ORM\UniqueConstraint(name: 'uniq_inventory_balance_tenant_source_variant', columns: ['tenant_id', 'source_id', 'variant_id'])]
+#[ORM\UniqueConstraint(
+    name: 'uniq_inventory_balance_tenant_source_variant',
+    columns: ['tenant_id', 'source_id', 'variant_id'],
+)]
 #[ORM\UniqueConstraint(name: 'uniq_inventory_balance_tenant_id', columns: ['tenant_id', 'id'])]
 class InventoryBalance
 {
