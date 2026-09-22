@@ -294,6 +294,9 @@ jobs:
           npm run build:admin
           test -s public/build/admin.js
           test -s public/build/admin.css
+
+      - name: Auditoría continua de dependencias npm
+        run: npm audit --audit-level=high
           git diff --exit-code -- public/build
 
   backend-php:
@@ -356,6 +359,9 @@ jobs:
           composer validate --strict
           find src config migrations public -type f -name '*.php' -print0 | xargs -0 -n1 php -l
           php -l bin/console
+
+      - name: Auditoría continua de dependencias PHP
+        run: composer audit --no-interaction
 
       - name: Validar configuración Symfony
         run: |
@@ -574,9 +580,70 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+  backup-restore:
+    name: Backup y restauración demostrada
+    needs: preflight
+    if: needs.preflight.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: condor_backup_source
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      APP_ENV: test
+      APP_DEBUG: 0
+      DATABASE_URL: mysql://root@127.0.0.1:3306/condor_backup_source?serverVersion=mariadb-11.4.0&charset=utf8mb4
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Preparar PHP 8.5
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Generar secretos efímeros de CI
+        run: |
+          set -euo pipefail
+          echo "APP_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Instalar dependencias y migrar el esquema fuente
+        run: |
+          set -euo pipefail
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "composer install" \
+            -- composer install --no-interaction --prefer-dist --no-progress
+          php bin/console doctrine:migrations:migrate --no-interaction
+
+      - name: Crear backup real de la base migrada
+        run: bash scripts/backup-database.sh
+
+      - name: Demostrar que el backup se restaura y queda consultable
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/condor_backup_restored?serverVersion=mariadb-11.4.0&charset=utf8mb4
+        run: |
+          set -euo pipefail
+          dump="$(ls -1t var/backups/condor-condor_backup_source-*.sql.gz | head -1)"
+          bash scripts/verify-backup-restore.sh "$dump"
+
   validar:
     name: Validar
-    needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, frontend, backend-php, e2e]
+    needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, frontend, backend-php, backup-restore, e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -590,6 +657,7 @@ jobs:
           PRUEBAS_BASE: ${{ needs.pruebas-base.result }}
           FRONTEND: ${{ needs.frontend.result }}
           BACKEND_PHP: ${{ needs.backend-php.result }}
+          BACKUP_RESTORE: ${{ needs.backup-restore.result }}
           E2E: ${{ needs.e2e.result }}
           MODO: ${{ needs.preflight.outputs.modo }}
           MOTIVO: ${{ needs.preflight.outputs.motivo }}
@@ -615,6 +683,11 @@ jobs:
             *) echo "::error::Backend PHP no pasó."; exit 1 ;;
           esac
 
+          case "$BACKUP_RESTORE" in
+            success|skipped) ;;
+            *) echo "::error::Backup/restauración no pasó."; exit 1 ;;
+          esac
+
           case "$E2E" in
             success|skipped) ;;
             *) echo "::error::Playwright no pasó."; exit 1 ;;
@@ -638,6 +711,7 @@ jobs:
             echo "- Pruebas base: **$PRUEBAS_BASE**"
             echo "- Frontend: **$FRONTEND**"
             echo "- Backend PHP: **$BACKEND_PHP**"
+            echo "- Backup/restauración: **$BACKUP_RESTORE**"
             echo "- Playwright: **$E2E**"
             echo "- Resultado agregado: **success**"
           } >> "$GITHUB_STEP_SUMMARY"
