@@ -26,7 +26,18 @@ final readonly class ErrorIncidentSubscriber
     ) {
     }
 
-    #[AsEventListener(event: KernelEvents::EXCEPTION, priority: 64)]
+    /**
+     * Prioridad -32: debe ejecutarse DESPUÉS de que Symfony convierta
+     * AccessDeniedException/AuthenticationException a su respuesta HTTP
+     * correcta (Symfony\Component\Security\Http\Firewall\ExceptionListener
+     * se registra en prioridad 1). Si este subscriber corriera antes,
+     * interceptaría la excepción de seguridad cruda —que no implementa
+     * HttpExceptionInterface— y la serviría como 500 genérico en vez del
+     * 401/403 real, bloqueando además que el listener de seguridad llegue
+     * a ejecutarse (Issue #155). Debe seguir corriendo antes del
+     * renderizador por defecto de Symfony (prioridad -128).
+     */
+    #[AsEventListener(event: KernelEvents::EXCEPTION, priority: -32)]
     public function onException(ExceptionEvent $event): void
     {
         if (!$event->isMainRequest()) {
