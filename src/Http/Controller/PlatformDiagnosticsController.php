@@ -72,7 +72,7 @@ final class PlatformDiagnosticsController extends AbstractController
     }
 
     #[Route(
-        '/adminpl0n3r/reportes/actividad.csv',
+        '/adminpl0n3r/diagnosticos/reportes/actividad.csv',
         name: 'app_platform_activity_report_csv',
         methods: ['GET'],
     )]
