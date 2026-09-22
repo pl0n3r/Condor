@@ -7,7 +7,6 @@ namespace App\Http\Controller;
 use App\Application\Identity\PlatformTenantInvitationResult;
 use App\Application\Identity\PlatformTenantManager;
 use App\Application\Onboarding\ProvisionTenantInput;
-use App\Domain\Identity\Entity\User;
 use DomainException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -100,7 +99,7 @@ final class PlatformTenantController extends PlatformOwnerApiController
                 'email' => $result->owner->email(),
                 'active' => $result->owner->isActive(),
             ],
-            'invitation' => $this->invitationPayload(
+            'invitation' => $this->activationInvitationPayload(
                 $result->invitation,
                 $result->rawToken,
             ),
