@@ -79,6 +79,22 @@ final class AppVersionTest extends TestCase
         self::assertSame($sha, $version->releaseSha());
     }
 
+    public function testReleaseShaFallsBackToPackedGitReference(): void
+    {
+        $sha = str_repeat('c', 40);
+        mkdir($this->projectDir.'/.git', 0777, true);
+        file_put_contents($this->projectDir.'/.git/HEAD', "ref: refs/heads/main\n");
+        file_put_contents(
+            $this->projectDir.'/.git/packed-refs',
+            "# pack-refs with: peeled fully-peeled sorted\n"
+            .$sha." refs/heads/main\n",
+        );
+
+        $version = new AppVersion($this->projectDir);
+
+        self::assertSame($sha, $version->releaseSha());
+    }
+
     public function testReleaseShaDefaultsToDevWithoutEnvOrGit(): void
     {
         $version = new AppVersion($this->projectDir);
