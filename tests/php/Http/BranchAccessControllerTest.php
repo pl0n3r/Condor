@@ -274,13 +274,107 @@ final class BranchAccessControllerTest extends WebTestCase
             JSON_THROW_ON_ERROR,
         );
 
+        self::assertSame('branch_scope_required', $payload['error']);
         self::assertSame(
             'No tienes una sede asignada en esta empresa.',
-            $payload['error'],
+            $payload['message'],
         );
-        self::assertSame($tenant->id(), $payload['tenant']['id']);
-        self::assertSame($tenant->name(), $payload['tenant']['name']);
+        self::assertSame(403, $payload['status']);
+        self::assertIsString($payload['request_id']);
+        self::assertSame(
+            $tenant->id(),
+            $payload['details']['tenant']['id'],
+        );
+        self::assertSame(
+            $tenant->name(),
+            $payload['details']['tenant']['name'],
+        );
         self::assertArrayNotHasKey('active_branch', $payload);
+    }
+
+    public function testRoleMutationRejectsUnexpectedFields(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(
+            EntityManagerInterface::class,
+        );
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        [$tenant, $branch, $owner] = $this->tenantWithUser(
+            $entityManager,
+            Membership::ROLE_OWNER,
+        );
+
+        $client->loginUser($owner);
+        $client->jsonRequest(
+            'POST',
+            '/api/v1/branches/'.$branch->id().'/roles',
+            [
+                'name' => 'Rol inválido',
+                'permissions' => ['catalog.view'],
+                'tenant_id' => $tenant->id(),
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $this->csrf($client)],
+        );
+
+        self::assertResponseStatusCodeSame(422);
+        $payload = json_decode(
+            (string) $client->getResponse()->getContent(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame('validation_error', $payload['error']);
+        self::assertSame(422, $payload['status']);
+        self::assertIsString($payload['request_id']);
+        self::assertNull(
+            $entityManager->getRepository(Role::class)->findOneBy([
+                'tenant' => $tenant,
+                'name' => 'Rol inválido',
+            ]),
+        );
+    }
+
+    public function testDuplicateRoleNameInSameTenantReturnsConflict(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(
+            EntityManagerInterface::class,
+        );
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        [, $branch, $owner] = $this->tenantWithUser(
+            $entityManager,
+            Membership::ROLE_OWNER,
+        );
+
+        $client->loginUser($owner);
+        $csrf = $this->csrf($client);
+        $client->jsonRequest(
+            'POST',
+            '/api/v1/branches/'.$branch->id().'/roles',
+            ['name' => 'Gestor catálogo', 'permissions' => ['catalog.view']],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+
+        $client->jsonRequest(
+            'POST',
+            '/api/v1/branches/'.$branch->id().'/roles',
+            ['name' => 'Gestor catálogo', 'permissions' => ['catalog.view']],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+
+        self::assertResponseStatusCodeSame(409);
+        $payload = json_decode(
+            (string) $client->getResponse()->getContent(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame('conflict', $payload['error']);
+        self::assertSame(409, $payload['status']);
+        self::assertIsString($payload['request_id']);
     }
 
     public function testMutationWithoutCsrfIsRejected(): void

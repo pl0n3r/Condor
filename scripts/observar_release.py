@@ -215,19 +215,19 @@ def ejecutar_con_reintentos(
     *,
     intentos: int,
     intervalo: float,
-) -> tuple[bool, str, int]:
-    """Reintenta solo fallos externos clasificados explícitamente como transitorios."""
+) -> tuple[bool, str, int, str]:
+    """Reintenta solo fallos externos y clasifica la evidencia resultante."""
     for intento in range(1, intentos + 1):
         try:
-            return True, operacion(), intento
+            return True, operacion(), intento, "ok"
         except ObservacionTransitoria as error:
             if intento == intentos:
-                return False, str(error), intento
+                return False, str(error), intento, "transitorio"
             time.sleep(intervalo)
         except ObservacionError as error:
-            return False, str(error), intento
+            return False, str(error), intento, "funcional"
 
-    return False, "La comprobación no produjo resultado.", intentos
+    return False, "La comprobación no produjo resultado.", intentos, "funcional"
 
 
 def observar(
@@ -249,7 +249,7 @@ def observar(
         validar_health(tipo, cuerpo, version, sha)
         return "Versión y SHA exactos confirmados."
 
-    ok, detalle, intento = ejecutar_con_reintentos(
+    ok, detalle, intento, clase = ejecutar_con_reintentos(
         comprobar_health,
         intentos=intentos,
         intervalo=intervalo,
@@ -258,6 +258,7 @@ def observar(
         "ok": ok,
         "detalle": detalle,
         "intento": intento,
+        "clase": clase,
     }
     if not ok:
         return {
@@ -279,7 +280,7 @@ def observar(
             validar_pagina(tipo, cuerpo, version, login_actual)
             return "HTTP 200, HTML y versión visibles."
 
-        ok, detalle, intento = ejecutar_con_reintentos(
+        ok, detalle, intento, clase = ejecutar_con_reintentos(
             comprobar_pagina,
             intentos=intentos,
             intervalo=intervalo,
@@ -288,6 +289,7 @@ def observar(
             "ok": ok,
             "detalle": detalle,
             "intento": intento,
+            "clase": clase,
         }
 
     for nombre, ruta in [
@@ -300,7 +302,7 @@ def observar(
             validar_asset(tipo, cuerpo, ruta_actual)
             return "HTTP 200 y contenido estático válido."
 
-        ok, detalle, intento = ejecutar_con_reintentos(
+        ok, detalle, intento, clase = ejecutar_con_reintentos(
             comprobar_asset,
             intentos=intentos,
             intervalo=intervalo,
@@ -309,11 +311,13 @@ def observar(
             "ok": ok,
             "detalle": detalle,
             "intento": intento,
+            "clase": clase,
         }
 
     if transicion_requerida:
         evidencias["transicion_release"] = {
             "ok": transicion_verificada,
+            "clase": "ok" if transicion_verificada else "funcional",
             "detalle": (
                 "Transición operativa verificada de forma independiente."
                 if transicion_verificada
