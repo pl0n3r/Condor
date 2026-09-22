@@ -84,6 +84,122 @@ class ObserverTests(unittest.TestCase):
         ])
         self.assertTrue(all(v["ok"] for v in resultado["comprobaciones"].values()))
 
+    def preparar_storefront(self, *, canonical: str | None = None) -> str:
+        """Simula V 0.1.13, un tenant real y el slug fallando cerrado."""
+        version = "0.1.13"
+        slug = "empresa-prueba"
+        self.server.respuestas["/health"] = (
+            200, "application/json", json.dumps({
+                "status": "ok", "version": version, "release_sha": SHA,
+            }).encode(),
+        )
+        self.server.respuestas["/"] = (
+            200, "text/html", HOME.replace(b"0.1.0", b"0.1.13"),
+        )
+        self.server.respuestas["/admin/login"] = (
+            200, "text/html", LOGIN.replace(b"0.1.0", b"0.1.13"),
+        )
+        url = canonical or self.base + "/" + slug
+        html = (
+            '<html><head><link rel="canonical" href="' + url
+            + '"></head><body><section class="hero storefront-hero">'
+            + '<h1>Empresa prueba</h1></section><footer>V 0.1.13</footer></body></html>'
+        )
+        self.server.respuestas["/" + slug] = (
+            200, "text/html", html.encode(),
+        )
+        self.server.respuestas["/condor-smoke-no-existe-" + SHA[:12]] = (
+            404, "text/html", b"No existe",
+        )
+        return slug
+
+    def test_storefront_real_y_slug_desconocido_validan_release(self) -> None:
+        slug = self.preparar_storefront()
+        resultado = modulo.observar(
+            self.base, "0.1.13", SHA, intentos=1, intervalo=0,
+            tenant_slug=slug,
+        )
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertTrue(resultado["comprobaciones"]["storefront"]["ok"])
+        self.assertTrue(resultado["comprobaciones"]["slug_desconocido"]["ok"])
+        self.assertIn("/" + slug, self.server.visitas)
+
+    def test_storefront_sin_slug_no_declara_produccion_validada(self) -> None:
+        self.preparar_storefront()
+        resultado = modulo.observar(
+            self.base, "0.1.13", SHA, intentos=1, intervalo=0,
+        )
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["storefront"]["ok"])
+        self.assertTrue(resultado["comprobaciones"]["slug_desconocido"]["ok"])
+
+    def test_canonical_equivocado_no_valida_storefront(self) -> None:
+        slug = self.preparar_storefront()
+        resultado = modulo.observar(
+            self.base, "0.1.13", SHA, intentos=1, intervalo=0,
+            tenant_slug=slug,
+            canonical_storefront="https://otra-empresa.example/",
+        )
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["storefront"]["ok"])
+        self.assertIn("canonical", resultado["comprobaciones"]["storefront"]["detalle"])
+
+    def test_canonical_personalizado_correcto_es_aceptado(self) -> None:
+        canonical = "https://empresa.example/"
+        slug = self.preparar_storefront(canonical=canonical)
+        resultado = modulo.observar(
+            self.base, "0.1.13", SHA, intentos=1, intervalo=0,
+            tenant_slug=slug, canonical_storefront=canonical,
+        )
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+
+    def test_fallback_html_sin_storefront_real_es_rechazado(self) -> None:
+        slug = self.preparar_storefront()
+        self.server.respuestas["/" + slug] = (
+            200, "text/html", HOME.replace(b"0.1.0", b"0.1.13"),
+        )
+        resultado = modulo.observar(
+            self.base, "0.1.13", SHA, intentos=1, intervalo=0,
+            tenant_slug=slug,
+        )
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertIn("sección pública", resultado["comprobaciones"]["storefront"]["detalle"])
+
+    def test_slug_desconocido_200_o_redirect_no_se_acepta(self) -> None:
+        slug = self.preparar_storefront()
+        desconocido = "/condor-smoke-no-existe-" + SHA[:12]
+        for estado in (200, 302):
+            with self.subTest(estado=estado):
+                self.server.respuestas[desconocido] = (
+                    estado, "text/html", b"<!doctype html>",
+                )
+                self.server.visitas.clear()
+                with patch.object(modulo.time, "sleep") as sleep:
+                    resultado = modulo.observar(
+                        self.base, "0.1.13", SHA, intentos=3,
+                        intervalo=0, tenant_slug=slug,
+                    )
+                self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+                self.assertFalse(resultado["comprobaciones"]["slug_desconocido"]["ok"])
+                self.assertEqual(self.server.visitas.count(desconocido), 1)
+                sleep.assert_not_called()
+
+    def test_slug_y_canonical_de_entrada_no_permiten_rutas_arbitrarias(self) -> None:
+        for slug in ("", "empresa/otra", "../admin", "admin", "EMPRESA", "a" * 121):
+            with self.subTest(slug=slug):
+                with self.assertRaises(modulo.ObservacionError):
+                    modulo.validar_tenant_slug(slug)
+        for canonical in (
+            "http://empresa.example/", "https://user:pass@empresa.example/",
+            "https://empresa.example/otra", "https://empresa.example/?token=x",
+            "https://empresa.example/#fragment", "https://www.condorapp.com.co/",
+        ):
+            with self.subTest(canonical=canonical):
+                with self.assertRaises(modulo.ObservacionError):
+                    modulo.validar_canonical(
+                        canonical, modulo.DOMINIO_PRODUCCION, "empresa-prueba",
+                    )
+
     def test_transition_required_without_verification_blocks_validation(self) -> None:
         resultado = modulo.observar(
             self.base,
