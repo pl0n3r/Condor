@@ -33,7 +33,7 @@ LOCK_FILE="var/post-deploy.lock"
 LOCK_GUARD_FILE="var/post-deploy.lock.guard"
 LOCK_MAX_AGE_SECONDS=21600
 LOCK_INVALID_GRACE_MINUTES=5
-LOCK_TOKEN="$-$(date +%s)"
+LOCK_TOKEN="$$-$(date +%s)"
 LOCK_GUARD_OWNED=0
 SCHEMA_CHECK_LOG=""
 

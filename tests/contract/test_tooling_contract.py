@@ -84,7 +84,7 @@ class ToolingContractTests(unittest.TestCase):
         self.assertNotIn('mv "$LOCK_GUARD', script)
         self.assertIn('LOCK_TOKEN="$$-$(date +%s)"', script)
         self.assertEqual(
-            script.count('printf \'%s\\n%s\\n%s\\n\' "$LOCK_TOKEN" "$"'),
+            script.count('printf \'%s\\n%s\\n%s\\n\' "$LOCK_TOKEN" "$$"'),
             1,
         )
         self.assertNotIn('"$LOCK_TOKEN" "$" "$(date +%s)"', script)
