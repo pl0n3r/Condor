@@ -327,8 +327,8 @@ Reglas:
 - para trabajo nuevo, el comando `/tomar` intenta crear de forma atómica `trabajo/issue-N`; la creación de esa rama funciona como lock distribuido;
 - solo una reserva puede existir para un Issue;
 - una reserva con actividad verificable reciente permanece protegida y no puede ser asumida por otra sesión;
-- la ventana inicial de actividad es de **30 minutos**; cuentan únicamente los commits de la rama y comentarios humanos útiles del Issue. `updated_at` del PR, actividad de bots, checks, Sonar, CodeRabbit, etiquetas y comandos de coordinación no cuentan;
-- después de al menos 30 minutos sin actividad verificable, el barrido horario marca el Issue como `estado: requiere recuperación` y `/tomar` puede recuperarlo conservando la rama canónica y únicamente el PR abierto asociado a esa rama; la recuperación genera un UUID nuevo, reemplaza la metadata `Reserva: <UUID>` del PR e invalida el UUID anterior;
+- la ventana inicial de actividad es de **45 minutos**; cuentan los commits de la rama, la actividad del PR existente y los comentarios humanos útiles del Issue, pero no los comandos de coordinación por sí solos;
+- después de al menos 45 minutos sin actividad verificable, `/tomar` puede recuperar la reserva conservando la rama canónica y únicamente el PR abierto asociado a esa rama; la recuperación genera un UUID nuevo, reemplaza la metadata `Reserva: <UUID>` del PR e invalida el UUID anterior;
 - la recuperación es fail-closed: si no existe evidencia temporal suficiente, el coordinador conserva la reserva vigente; un Issue bloqueado nunca se recupera automáticamente;
 - cada reserva recibe un UUID de sesión único;
 - `/liberar <UUID>` libera una reserva normal, `/transferir <UUID>` rota explícitamente el ID para otra sesión y `/liberar-forzado` queda restringido al dueño del repositorio;
