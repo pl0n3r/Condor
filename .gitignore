@@ -12,6 +12,10 @@ vendor/
 var/
 .phpunit.result.cache
 
+# Python
+__pycache__/
+*.pyc
+
 # Frontend / Playwright
 node_modules/
 playwright-report/

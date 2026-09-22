@@ -24,6 +24,17 @@ type SelectedTenant = TenantSummary & {
     slug: string;
     is_default: boolean;
   }>;
+  catalog: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    variants: Array<{
+      id: string;
+      sku: string;
+      name: string;
+    }>;
+  }>;
 };
 
 type PlatformContextResponse = {
@@ -580,6 +591,59 @@ export function PlatformOwnerApp({
                     ))}
                   </div>
                 )}
+
+                <section
+                  className="platform-section platform-section-nested"
+                  aria-labelledby="platform-catalog-title"
+                >
+                  <div className="section-heading compact">
+                    <div>
+                      <span className="eyebrow">Catálogo</span>
+                      <h2 id="platform-catalog-title">
+                        Productos visibles
+                      </h2>
+                    </div>
+                    <span className="status-pill">Solo lectura</span>
+                  </div>
+
+                  {selected.catalog.length === 0 ? (
+                    <div className="platform-empty">
+                      Esta empresa todavía no tiene productos activos.
+                    </div>
+                  ) : (
+                    <div className="tenant-grid">
+                      {selected.catalog.map((product) => (
+                        <article className="tenant-card" key={product.id}>
+                          <div>
+                            <span className="tenant-slug">
+                              {product.slug}
+                            </span>
+                            <h3>{product.name}</h3>
+                            {product.description && (
+                              <p className="muted">
+                                {product.description}
+                              </p>
+                            )}
+                          </div>
+                          <div className="platform-catalog-variants">
+                            <strong>
+                              {product.variants.length === 1
+                                ? '1 variante'
+                                : `${product.variants.length} variantes`}
+                            </strong>
+                            {product.variants.map((variant) => (
+                              <span key={variant.id}>
+                                <code>{variant.sku}</code>
+                                {' · '}
+                                {variant.name}
+                              </span>
+                            ))}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
 
                 <div className="platform-readonly-note" role="note">
                   Este primer contexto es deliberadamente de solo lectura.

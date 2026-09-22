@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block body %}
-<section class="hero storefront-hero">
+<section class="hero storefront-hero" data-tenant-slug="{{ storefront.slug }}">
     <span class="eyebrow">Sitio de empresa</span>
     <h1>{{ storefront.headline ?: storefront.name }}</h1>
     {% if storefront.description %}

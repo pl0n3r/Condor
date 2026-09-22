@@ -58,6 +58,10 @@ class ReleaseEvidenceIntegrationTests(unittest.TestCase):
                     "css_publico",
                     "css_admin",
                     "js_admin",
+                ) + (
+                    ("storefront", "slug_desconocido")
+                    if tuple(map(int, self.version.split("."))) >= (0, 1, 13)
+                    else ()
                 )
             },
         }

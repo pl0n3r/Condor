@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AccessManagement } from './AccessManagement';
+import { CatalogManagement } from './CatalogManagement';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
 import { contextPath } from './api';
@@ -101,6 +102,7 @@ export function AdminApp({
       navLabel="Navegación principal"
       navItems={[
         { href: '/admin', label: 'Inicio', current: true },
+        { href: '#catalog', label: 'Catálogo' },
         { href: '#roles', label: 'Roles y permisos' },
       ]}
     >
@@ -146,6 +148,7 @@ export function AdminApp({
             <label className="branch-picker">
               <span>Sede activa</span>
               <select
+                aria-label="Sede activa"
                 value={context.data.active_branch.id}
                 onChange={(event) => {
                   setContext({ status: 'loading' });
@@ -182,8 +185,15 @@ export function AdminApp({
             ]}
           />
 
+          <CatalogManagement
+            key={'catalog-' + context.data.active_branch.id}
+            branchId={context.data.active_branch.id}
+            permissions={context.data.permissions}
+            csrfToken={accessToken}
+          />
+
           <AccessManagement
-            key={context.data.active_branch.id}
+            key={'access-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}

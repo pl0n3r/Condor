@@ -117,6 +117,50 @@ Respuesta exitosa:
 
 Los IDs se resuelven siempre dentro del tenant activo. Un ID de otro tenant no debe revelar existencia ni datos del recurso.
 
+### Catálogo de productos y variantes
+
+- `GET /api/v1/branches/{branchId}/catalog/products`
+- `POST /api/v1/branches/{branchId}/catalog/products`
+- `PATCH /api/v1/branches/{branchId}/catalog/products/{productId}`
+- `DELETE /api/v1/branches/{branchId}/catalog/products/{productId}`
+- `POST /api/v1/branches/{branchId}/catalog/products/{productId}/variants`
+- `PATCH /api/v1/branches/{branchId}/catalog/products/{productId}/variants/{variantId}`
+- `DELETE /api/v1/branches/{branchId}/catalog/products/{productId}/variants/{variantId}`
+
+El listado exitoso usa:
+
+```json
+{
+  "products": [
+    {
+      "id": "01K...",
+      "name": "Camiseta negra",
+      "slug": "camiseta-negra",
+      "description": "Algodón pesado.",
+      "variants": [
+        {
+          "id": "01K...",
+          "sku": "TEE-BLACK-M",
+          "name": "Talla M"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Reglas del contrato:
+
+- producto y variante pertenecen al tenant resuelto en backend; el cliente nunca suministra `tenant_id`;
+- el alcance operativo se autoriza contra `branchId` y los permisos `catalog.view/create/update/delete`;
+- `slug` es único por tenant y `sku` se normaliza a mayúsculas y es único por tenant;
+- `DELETE` es una desactivación lógica; desactivar un producto también oculta sus variantes activas;
+- las mutaciones requieren CSRF de sesión y rechazan campos inesperados;
+- duplicados responden 409 `conflict`; IDs de otro tenant responden 404 sin revelar existencia;
+- inventario, precios y carrito no forman parte de este contrato.
+
+Cuando el propietario de plataforma selecciona explícitamente `GET /adminpl0n3r/api/context?tenant={tenantId}`, `selected_tenant.catalog` expone el mismo subconjunto activo como **solo lectura**. Esa representación no cambia identidad, no crea una sesión de tenant y no habilita mutaciones.
+
 ## 6. Paginación, filtros y orden
 
 Cuando una colección sea paginada se usa el baseline:
