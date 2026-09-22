@@ -46,6 +46,20 @@ class ChangeClassifierTests(unittest.TestCase):
         self.assertTrue(result.backend)
         self.assertTrue(result.e2e)
 
+    def test_backup_operational_scripts_run_full_backend_stack(self) -> None:
+        for path in (
+            "scripts/backup-database.sh",
+            "scripts/parse-database-url.php",
+            "scripts/verify-backup-restore.sh",
+        ):
+            with self.subTest(path=path):
+                result = classify([path], "pull_request")
+                self.assertTrue(result.categoria_backend)
+                self.assertTrue(result.validacion_completa)
+                self.assertTrue(result.backend)
+                self.assertTrue(result.pruebas_base)
+                self.assertIn("runtime", result.motivo)
+
     def test_php_test_only_is_selective_not_full_runtime(self) -> None:
         result = classify(["tests/php/Http/AdminControllerTest.php"], "pull_request")
         self.assertTrue(result.categoria_backend)
