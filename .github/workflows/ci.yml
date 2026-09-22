@@ -706,6 +706,41 @@ jobs:
       - name: Crear backup real de la base migrada
         run: bash scripts/backup-database.sh
 
+      - name: Probar guardas de retención y restore destructivo
+        run: |
+          set -euo pipefail
+          dump="$(ls -1t var/backups/condor-condor_backup_source-*.sql.gz | head -1)"
+          backups_before="$(find var/backups -maxdepth 1 -type f -name 'condor-condor_backup_source-*.sql.gz' | wc -l)"
+
+          if BACKUP_KEEP=0 bash scripts/backup-database.sh; then
+            echo "::error::BACKUP_KEEP=0 fue aceptado de forma insegura."
+            exit 1
+          fi
+
+          backups_after="$(find var/backups -maxdepth 1 -type f -name 'condor-condor_backup_source-*.sql.gz' | wc -l)"
+          [[ "$backups_after" == "$backups_before" ]] || {
+            echo "::error::Una retención inválida alteró los backups existentes."
+            exit 1
+          }
+
+          if DATABASE_URL='mysql://root@127.0.0.1:3306/condor_backup_source' \
+             CONDOR_ALLOW_DESTRUCTIVE_RESTORE=1 \
+             bash scripts/verify-backup-restore.sh "$dump"; then
+            echo "::error::El restore aceptó una base fuente no descartable."
+            exit 1
+          fi
+
+          if DATABASE_URL='mysql://root@127.0.0.1:3306/condor_backup_restored' \
+             bash scripts/verify-backup-restore.sh "$dump"; then
+            echo "::error::El restore no exigió confirmación destructiva explícita."
+            exit 1
+          fi
+
+          mariadb --host=127.0.0.1 --port=3306 --user=root \
+            --database=condor_backup_source \
+            --execute='SELECT COUNT(*) FROM doctrine_migration_versions;' \
+            >/dev/null
+
       - name: Demostrar que el backup se restaura y queda consultable
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/condor_backup_restored?serverVersion=mariadb-11.4.0&charset=utf8mb4
