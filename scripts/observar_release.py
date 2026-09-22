@@ -22,6 +22,7 @@ SHA_PATTERN = re.compile(r"[0-9a-f]{40}\Z", re.ASCII)
 VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+\Z", re.ASCII)
 TENANT_SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z", re.ASCII)
 STOREFRONT_VERSION = (0, 1, 13)
+STOREFRONT_IDENTITY_VERSION = (0, 1, 16)
 MAX_BYTES = 256 * 1024
 
 
@@ -50,6 +51,7 @@ class TextoVisible(HTMLParser):
         self.en_hero = False
         self.en_titulo_hero = False
         self.titulos_hero: list[str] = []
+        self.slugs_hero: list[str] = []
         self.textos: list[str] = []
         self.en_formulario = 0
         self.campos: set[tuple[str, str]] = set()
@@ -79,6 +81,7 @@ class TextoVisible(HTMLParser):
               and "storefront-hero" in (atributos.get("class") or "").split()):
             self.storefront_hero = True
             self.en_hero = True
+            self.slugs_hero.append(atributos.get("data-tenant-slug") or "")
         elif tag == "h1" and self.en_hero:
             self.en_titulo_hero = True
         elif tag in {"form", "input"}:
@@ -286,7 +289,7 @@ def validar_canonical(valor: str, origen: str, slug: str) -> str:
 
 
 def validar_storefront(
-    tipo: str, cuerpo: bytes, version: str, canonical: str,
+    tipo: str, cuerpo: bytes, version: str, canonical: str, slug: str,
 ) -> None:
     pagina = validar_pagina(tipo, cuerpo, version, login=False)
     if not pagina.storefront_hero:
@@ -295,6 +298,9 @@ def validar_storefront(
         raise ObservacionError("El storefront no contiene un título público visible.")
     if pagina.canonicals != [canonical]:
         raise ObservacionError("El canonical del storefront no coincide con el esperado.")
+    if (tuple(map(int, version.split("."))) >= STOREFRONT_IDENTITY_VERSION
+            and pagina.slugs_hero != [slug]):
+        raise ObservacionError("La identidad del tenant del storefront no coincide con el slug esperado.")
 
 
 def validar_asset(tipo: str, cuerpo: bytes, ruta: str) -> None:
@@ -355,8 +361,8 @@ def observar_storefront(
     else:
         def comprobar_storefront() -> str:
             tipo, cuerpo = obtener(origen, "/" + tenant_slug, timeout)
-            validar_storefront(tipo, cuerpo, version, canonical or "")
-            return "SSR, versión y canonical exactos del tenant confirmados."
+            validar_storefront(tipo, cuerpo, version, canonical or "", tenant_slug)
+            return "SSR, versión, identidad tenant y canonical exactos confirmados."
 
         ok, detalle, intento, clase = ejecutar_con_reintentos(
             comprobar_storefront, intentos=intentos, intervalo=intervalo,
