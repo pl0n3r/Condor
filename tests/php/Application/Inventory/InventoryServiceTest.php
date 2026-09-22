@@ -29,13 +29,11 @@ final class InventoryServiceTest extends KernelTestCase
         $entityManager = static::getContainer()->get(
             EntityManagerInterface::class,
         );
-        $service = static::getContainer()->get(InventoryService::class);
 
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
-        self::assertInstanceOf(InventoryService::class, $service);
 
         $this->entityManager = $entityManager;
-        $this->service = $service;
+        $this->service = new InventoryService($entityManager);
     }
 
     public function testAdjustmentAndTransferAreIdempotent(): void
