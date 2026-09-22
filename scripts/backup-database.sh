@@ -7,31 +7,53 @@
 # Uso: DATABASE_URL="mysql://user:pass@host:port/db" scripts/backup-database.sh
 # Requiere: mysqldump/mariadb-dump en PATH, DATABASE_URL exportada.
 set -eu
+umask 077
 
 if [ -z "${DATABASE_URL:-}" ]; then
   echo "backup-database.sh: falta DATABASE_URL en el entorno." >&2
   exit 1
 fi
 
-# Parseo mínimo de mysql://user:pass@host:port/db sin depender de PHP/python
-# (el cron de Hostinger puede no tener el binario de PHP correcto en PATH,
-# ver Issue #144 — el mismo problema que post-deploy.sh ya resuelve).
 url="${DATABASE_URL#mysql://}"
 url="${url%%\?*}"
 userpass="${url%%@*}"
 rest="${url#*@}"
-user="${userpass%%:*}"
-pass="${userpass#*:}"
+
+case "$userpass" in
+  *:*)
+    user="${userpass%%:*}"
+    pass="${userpass#*:}"
+    ;;
+  *)
+    user="$userpass"
+    pass=""
+    ;;
+esac
+
 hostport="${rest%%/*}"
 db="${rest#*/}"
 host="${hostport%%:*}"
 port="${hostport#*:}"
 [ "$port" = "$host" ] && port=3306
 
+case "$db" in
+  ''|*[!A-Za-z0-9_]*)
+    echo "backup-database.sh: nombre de base no válido." >&2
+    exit 1
+    ;;
+esac
+
 backup_dir="${BACKUP_DIR:-var/backups}"
 mkdir -p "$backup_dir"
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 out="$backup_dir/condor-${db}-${timestamp}.sql.gz"
+raw_tmp="$backup_dir/.condor-${db}-${timestamp}.sql.tmp"
+gzip_tmp="$out.tmp"
+
+cleanup() {
+  rm -f "$raw_tmp" "$gzip_tmp"
+}
+trap cleanup 0 HUP INT TERM
 
 dump_bin=""
 for candidate in mariadb-dump mysqldump; do
@@ -46,15 +68,19 @@ if [ -z "$dump_bin" ]; then
   exit 1
 fi
 
-"$dump_bin" \
+MYSQL_PWD="$pass" "$dump_bin" \
   --host="$host" \
   --port="$port" \
   --user="$user" \
-  ${pass:+--password="$pass"} \
   --single-transaction \
   --routines \
   --triggers \
-  "$db" | gzip > "$out"
+  "$db" > "$raw_tmp"
+
+gzip -c "$raw_tmp" > "$gzip_tmp"
+mv "$gzip_tmp" "$out"
+rm -f "$raw_tmp"
+trap - 0 HUP INT TERM
 
 echo "Backup creado: $out"
 
