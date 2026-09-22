@@ -36,7 +36,11 @@ class ObservacionTransitoria(ObservacionError):
     """Fallo externo que puede recuperarse sin cambiar el release esperado."""
 
 
-class ObservacionDeployPendiente(ObservacionError):
+class ObservacionIdentidad(ObservacionError):
+    """La versión o el SHA observados no corresponden al release esperado."""
+
+
+class ObservacionDeployPendiente(ObservacionIdentidad):
     """Producción aún sirve una versión anterior: el deploy no ha llegado."""
 
 
@@ -288,9 +292,13 @@ def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> None:
             f"Producción aún sirve V {observada}; el deploy esperado no ha llegado."
         )
     if observada != version:
-        raise ObservacionError("La versión observada no coincide con la esperada.")
+        raise ObservacionIdentidad(
+            "La versión observada no coincide con la esperada."
+        )
     if carga.get("release_sha") != sha:
-        raise ObservacionError("El SHA observado no coincide con el esperado.")
+        raise ObservacionIdentidad(
+            "El SHA observado no coincide con el esperado."
+        )
 
 
 def validar_pagina(tipo: str, cuerpo: bytes, version: str, login: bool) -> TextoVisible:
@@ -376,6 +384,8 @@ def ejecutar_con_reintentos(
             time.sleep(intervalo)
         except ObservacionDeployPendiente as error:
             return False, str(error), intento, "deploy_pendiente"
+        except ObservacionIdentidad as error:
+            return False, str(error), intento, "identidad"
         except ObservacionError as error:
             return False, str(error), intento, "funcional"
 
@@ -467,9 +477,12 @@ def observar(
             intervalo=intervalo,
         )
         # Solo una versión anterior justifica esperar; SHA o versión ajenos fallan ya.
-        if clase != "deploy_pendiente" or time.monotonic() >= limite_espera:
+        if clase != "deploy_pendiente":
             break
-        time.sleep(intervalo_deploy)
+        tiempo_restante = limite_espera - time.monotonic()
+        if tiempo_restante <= 0:
+            break
+        time.sleep(min(intervalo_deploy, tiempo_restante))
     evidencias["health"] = {
         "ok": ok,
         "detalle": detalle,
@@ -592,7 +605,10 @@ def comentario_roadmap(resultado: dict[str, Any]) -> str:
     if health.get("clase") == "deploy_pendiente":
         return (f"⏳ NO_OBSERVADO: tras la espera acotada, producción todavía no sirve {identidad}. "
                 f"{health['detalle']} Revisar el deploy de Hostinger si persiste.")
-    return (f"⛔ NO_OBSERVADO: la identidad de producción no coincide con {identidad}. "
+    if health.get("clase") == "identidad":
+        return (f"⛔ NO_OBSERVADO: la identidad de producción no coincide con {identidad}. "
+                f"{health['detalle']}")
+    return (f"⛔ NO_OBSERVADO: no fue posible confirmar {identidad} en producción. "
             f"{health['detalle']}")
 
 
