@@ -573,61 +573,92 @@ def work_activity_timestamp(
     return max(candidates) if candidates else None
 
 
+def reservation_id(reservation: dict[str, Any] | None) -> str | None:
+    """Extrae el UUID de una reserva si existe."""
+    if reservation is None:
+        return None
+    value = reservation.get("reservation_id")
+    return str(value) if value is not None else None
+
+
+def stale_recovery_candidate(
+    api: GitHub,
+    issue: dict[str, Any],
+) -> tuple[int, str, str, str | None] | None:
+    """Prepara un candidato stale sin mutar estado ni adquirir locks."""
+    number = issue.get("number")
+    if not isinstance(number, int) or STATUS_BLOCKED in label_names(issue):
+        return None
+
+    branch = f"trabajo/issue-{number}"
+    initial_reservation = active_reservation(api, number)
+    branch_sha = api.branch_sha(branch)
+    if not (initial_reservation or branch_sha):
+        return None
+    if branch_sha is None or not work_is_stale(api, number, branch):
+        return None
+
+    return number, branch, branch_sha, reservation_id(initial_reservation)
+
+
+def recovery_candidate_still_valid(
+    api: GitHub,
+    number: int,
+    branch: str,
+    initial_reservation_id: str | None,
+) -> bool:
+    """Revalida el candidato dentro del lock distribuido."""
+    issue = api.issue(number)
+    labels = label_names(issue)
+    if issue.get("state") != "open" or STATUS_BLOCKED in labels:
+        return False
+    if STATUS_RECOVERY in labels:
+        return False
+
+    current_reservation = active_reservation(api, number)
+    if reservation_id(current_reservation) != initial_reservation_id:
+        return False
+    if not (current_reservation or api.branch_sha(branch)):
+        return False
+
+    return work_is_stale(api, number, branch)
+
+
+def mark_stale_reservation(
+    api: GitHub,
+    issue: dict[str, Any],
+) -> bool:
+    """Marca un único candidato stale bajo el lock compartido con /tomar."""
+    candidate = stale_recovery_candidate(api, issue)
+    if candidate is None:
+        return False
+
+    number, branch, branch_sha, initial_reservation_id = candidate
+    lock_branch = recovery_lock_branch(number)
+    if not api.create_branch(lock_branch, branch_sha):
+        return False
+
+    try:
+        if not recovery_candidate_still_valid(
+            api,
+            number,
+            branch,
+            initial_reservation_id,
+        ):
+            return False
+        api.set_status(number, STATUS_RECOVERY)
+        return True
+    finally:
+        api.delete_branch(lock_branch)
+
+
 def mark_stale_reservations(api: GitHub) -> int:
-    """Marca reservas stale bajo el mismo lock distribuido de recuperación."""
-    marked = 0
-    for issue in api.open_issues():
-        number = issue.get("number")
-        if not isinstance(number, int) or STATUS_BLOCKED in label_names(issue):
-            continue
-
-        branch = f"trabajo/issue-{number}"
-        initial_reservation = active_reservation(api, number)
-        branch_sha = api.branch_sha(branch)
-        if not (initial_reservation or branch_sha):
-            continue
-        if not work_is_stale(api, number, branch):
-            continue
-        if branch_sha is None:
-            continue
-
-        lock_branch = recovery_lock_branch(number)
-        if not api.create_branch(lock_branch, branch_sha):
-            continue
-
-        try:
-            current_issue = api.issue(number)
-            if (
-                current_issue.get("state") != "open"
-                or STATUS_BLOCKED in label_names(current_issue)
-            ):
-                continue
-
-            current_reservation = active_reservation(api, number)
-            initial_id = (
-                str(initial_reservation["reservation_id"])
-                if initial_reservation
-                else None
-            )
-            current_id = (
-                str(current_reservation["reservation_id"])
-                if current_reservation
-                else None
-            )
-            if initial_id != current_id:
-                continue
-            if not (current_reservation or api.branch_sha(branch)):
-                continue
-            if not work_is_stale(api, number, branch):
-                continue
-            if STATUS_RECOVERY in label_names(current_issue):
-                continue
-
-            api.set_status(number, STATUS_RECOVERY)
-            marked += 1
-        finally:
-            api.delete_branch(lock_branch)
-
+    """Marca reservas stale sin liberar, borrar ni reasignar trabajo."""
+    marked = sum(
+        1
+        for issue in api.open_issues()
+        if mark_stale_reservation(api, issue)
+    )
     print(f"Reservas recuperables marcadas: {marked}")
     return marked
 
