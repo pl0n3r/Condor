@@ -341,6 +341,7 @@ export function PlatformStaffPanel({
               <label className="field">
                 <span>Cliente</span>
                 <select
+                  aria-label="Cliente"
                   value={scope}
                   onChange={(event) => setScope(event.target.value)}
                 >
@@ -356,6 +357,7 @@ export function PlatformStaffPanel({
               <label className="field">
                 <span>Módulo</span>
                 <select
+                  aria-label="Módulo"
                   value={moduleKey}
                   onChange={(event) => {
                     setModuleKey(event.target.value);
