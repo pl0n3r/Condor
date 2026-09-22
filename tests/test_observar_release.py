@@ -192,6 +192,19 @@ class ObserverTests(unittest.TestCase):
                 + '"><section class="storefront-hero"><h1>Empresa</h1></section>'
                 + '<footer>V 0.1.13</footer></body></html>'
             ),
+            "cierre_no_correspondiente_en_template": (
+                '<html><head><template></style><link rel="canonical" href="' 
+                + canonical + '"></template></head><body><template></script>'
+                + '<section class="storefront-hero"><h1>Empresa</h1></section>'
+                + '</template><footer>V 0.1.13</footer></body></html>'
+            ),
+            "cierre_no_correspondiente_con_anidamiento": (
+                '<html><head><template><template></style>'
+                + '<link rel="canonical" href="' + canonical
+                + '"></template></template></head><body><template></style>'
+                + '<section class="storefront-hero"><h1>Empresa</h1></section>'
+                + '</template><footer>V 0.1.13</footer></body></html>'
+            ),
             "template_anidado": (
                 '<html><head><template><template><link rel="canonical" href="'
                 + canonical + '"></template></template></head><body><template>'
@@ -210,6 +223,18 @@ class ObserverTests(unittest.TestCase):
                 )
                 self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
                 self.assertFalse(resultado["comprobaciones"]["storefront"]["ok"])
+
+    def test_login_ignora_campos_tras_cierre_no_correspondiente(self) -> None:
+        pagina = (
+            '<html><body><template></style><form>'
+            '<input name="_username" type="email">'
+            '<input name="_password" type="password">'
+            '</form></template><footer>V 0.1.0</footer></body></html>'
+        )
+        self.server.respuestas["/admin/login"] = (200, "text/html", pagina.encode())
+        resultado = self.observar()
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["admin_login"]["ok"])
 
     def test_formulario_inerte_en_template_no_valida_login(self) -> None:
         pagina = (
