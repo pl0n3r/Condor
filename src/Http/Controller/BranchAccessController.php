@@ -12,8 +12,10 @@ use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\Role;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Identity\PermissionCatalog;
+use App\Domain\Observability\Entity\FunctionalSignal;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\Tenant;
+use App\Infrastructure\Observability\FunctionalSignalRecorder;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
@@ -36,6 +38,7 @@ final class BranchAccessController extends AbstractController
         private readonly CurrentTenantForUser $currentTenantForUser,
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
+        private readonly FunctionalSignalRecorder $signals,
     ) {
     }
 
@@ -105,6 +108,7 @@ final class BranchAccessController extends AbstractController
             ],
         );
         $this->flushRoleChange();
+        $this->signals->record(FunctionalSignal::ROLE_MODIFIED, $tenant->id());
 
         return $this->json(
             ['role' => self::rolePayload($role)],
@@ -173,6 +177,7 @@ final class BranchAccessController extends AbstractController
             ],
         );
         $this->flushRoleChange();
+        $this->signals->record(FunctionalSignal::ROLE_MODIFIED, $tenant->id());
 
         return $this->json(['role' => self::rolePayload($role)]);
     }
@@ -205,6 +210,7 @@ final class BranchAccessController extends AbstractController
             ['branch_id' => $branch->id()],
         );
         $this->entityManager->flush();
+        $this->signals->record(FunctionalSignal::ROLE_MODIFIED, $tenant->id());
 
         return new Response(status: Response::HTTP_NO_CONTENT);
     }
