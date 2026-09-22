@@ -11,20 +11,16 @@ use App\Domain\Identity\Entity\AccountInvitation;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Tenant;
-use DateTimeImmutable;
-use DateTimeZone;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
-use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 final readonly class PlatformTenantManager
 {
-    private const INVITATION_TTL = '+48 hours';
-
     public function __construct(
         private EntityManagerInterface $entityManager,
         private ProvisionTenant $provisionTenant,
+        private PlatformInvitationSecurity $security,
     ) {
     }
 
@@ -34,7 +30,7 @@ final readonly class PlatformTenantManager
         string $ownerEmail,
         string $ownerName,
     ): PlatformTenantInvitationResult {
-        $this->assertOwnerFresh($actor);
+        $this->security->assertOwnerFresh($actor);
         $email = strtolower(trim($ownerEmail));
         $ownerName = trim($ownerName);
 
@@ -77,13 +73,13 @@ final readonly class PlatformTenantManager
                         Membership::ROLE_OWNER,
                     );
 
-                    [$rawToken, $tokenHash] = self::newToken();
+                    [$rawToken, $tokenHash, $expiresAt] = $this->security->issue();
                     $invitation = new AccountInvitation(
                         $owner,
                         $provisioning->tenant,
                         AccountInvitation::KIND_TENANT_MEMBER,
                         $tokenHash,
-                        self::now()->modify(self::INVITATION_TTL),
+                        $expiresAt,
                         $actor->id(),
                     );
 
@@ -122,37 +118,4 @@ final readonly class PlatformTenantManager
         }
     }
 
-    private function assertOwnerFresh(User $actor): void
-    {
-        $row = $this->entityManager->getConnection()->fetchAssociative(
-            'SELECT active, roles FROM condor_user '
-            .'WHERE id = :id FOR UPDATE',
-            ['id' => $actor->id()],
-        );
-        if ($row === false) {
-            throw new AccessDeniedException();
-        }
-
-        $roles = json_decode((string) $row['roles'], true);
-        if (
-            (int) $row['active'] !== 1
-            || !is_array($roles)
-            || !in_array(User::ROLE_PLATFORM_OWNER, $roles, true)
-        ) {
-            throw new AccessDeniedException();
-        }
-    }
-
-    /** @return array{0: string, 1: string} */
-    private static function newToken(): array
-    {
-        $raw = bin2hex(random_bytes(32));
-
-        return [$raw, hash('sha256', $raw)];
-    }
-
-    private static function now(): DateTimeImmutable
-    {
-        return new DateTimeImmutable('now', new DateTimeZone('UTC'));
-    }
 }
