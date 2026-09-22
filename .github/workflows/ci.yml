@@ -296,6 +296,54 @@ jobs:
           test -s public/build/admin.css
           git diff --exit-code -- public/build
 
+  audit-npm:
+    name: Auditoría de dependencias npm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Auditar dependencias npm
+        run: |
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "npm audit" \
+            -- npm audit --audit-level=high
+
+  audit-composer:
+    name: Auditoría de dependencias Composer
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Preparar PHP 8.5
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Auditar dependencias Composer
+        run: |
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "composer audit" \
+            -- composer audit --locked --no-interaction
+
   backend-php:
     name: Backend PHP / MariaDB
     needs: preflight
@@ -580,9 +628,195 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+  backup-restore:
+    name: Backup y restauración demostrada
+    needs: preflight
+    if: needs.preflight.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: condor_backup_source
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      APP_ENV: test
+      APP_DEBUG: 0
+      DATABASE_URL: mysql://root@127.0.0.1:3306/condor_backup_source?serverVersion=mariadb-11.4.0&charset=utf8mb4
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Preparar PHP 8.5
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Probar parser seguro de DATABASE_URL
+        run: |
+          set -euo pipefail
+          credentials_tmp="$(mktemp)"
+          trap 'rm -f -- "$credentials_tmp"' EXIT
+
+          raw_user="backup@user"
+          raw_password="$(openssl rand -hex 12)@#"
+          encoded_user="$(php -r 'echo rawurlencode($argv[1]);' "$raw_user")"
+          encoded_password="$(php -r 'echo rawurlencode($argv[1]);' "$raw_password")"
+          export DATABASE_URL="mysql://${encoded_user}:${encoded_password}@127.0.0.1:3307/condor_backup_source?charset=utf8mb4"
+
+          [[ "$(php scripts/parse-database-url.php user)" == "$raw_user" ]]
+          [[ "$(php scripts/parse-database-url.php password)" == "$raw_password" ]]
+          [[ "$(php scripts/parse-database-url.php host)" == "127.0.0.1" ]]
+          [[ "$(php scripts/parse-database-url.php port)" == "3307" ]]
+          [[ "$(php scripts/parse-database-url.php database)" == "condor_backup_source" ]]
+
+          export DATABASE_URL="mysql://${encoded_user}:${encoded_password}@[2001:db8::1]:3308/condor_backup_source"
+          [[ "$(php scripts/parse-database-url.php host)" == "2001:db8::1" ]]
+          [[ "$(php scripts/parse-database-url.php port)" == "3308" ]]
+
+          export DATABASE_URL="mysql://${encoded_user}:${encoded_password}@2001:db8::1/condor_backup_source"
+          if php scripts/parse-database-url.php host >/dev/null 2>&1; then
+            echo "::error::IPv6 sin corchetes fue aceptado de forma ambigua."
+            exit 1
+          fi
+
+          export DATABASE_URL="mysql://${encoded_user}:${encoded_password}@127.0.0.1:3307/condor_backup_source?charset=utf8mb4"
+          php scripts/parse-database-url.php client-config "$credentials_tmp"
+          [[ "$(stat -c '%a' "$credentials_tmp")" == "600" ]]
+          grep -F "user=\"${raw_user}\"" "$credentials_tmp" >/dev/null
+          grep -F "password=\"${raw_password}\"" "$credentials_tmp" >/dev/null
+          grep -F 'host="127.0.0.1"' "$credentials_tmp" >/dev/null
+          grep -F 'port=3307' "$credentials_tmp" >/dev/null
+
+      - name: Generar secretos efímeros de CI
+        run: |
+          set -euo pipefail
+          app_secret="$(openssl rand -hex 32)"
+          owner_password="$(openssl rand -base64 32)"
+          echo "::add-mask::$app_secret"
+          echo "::add-mask::$owner_password"
+          echo "APP_SECRET=$app_secret" >> "$GITHUB_ENV"
+          echo "CONDOR_OWNER_PASSWORD=$owner_password" >> "$GITHUB_ENV"
+
+      - name: Instalar dependencias, migrar y sembrar datos centinela
+        run: |
+          set -euo pipefail
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "composer install" \
+            -- composer install --no-interaction --prefer-dist --no-progress
+          php bin/console doctrine:migrations:migrate --no-interaction
+          php bin/console app:onboarding:create \
+            --name="Backup Sentinel" \
+            --slug="backup-sentinel" \
+            --legal-name="Backup Sentinel SAS" \
+            --branch="Principal" \
+            --email="backup-sentinel@example.test" \
+            --owner-name="Backup Sentinel Owner"
+          php bin/console doctrine:query:sql \
+            "SELECT slug FROM condor_tenant WHERE slug = 'backup-sentinel'" \
+            | grep -q 'backup-sentinel'
+          php bin/console doctrine:query:sql \
+            "SELECT email FROM condor_user WHERE email = 'backup-sentinel@example.test'" \
+            | grep -q 'backup-sentinel@example.test'
+
+      - name: Crear backup real de la base migrada
+        run: bash scripts/backup-database.sh
+
+      - name: Probar ventana mínima de 30 días
+        run: |
+          set -euo pipefail
+
+          recent_fixture="var/backups/condor-condor_backup_source-20000101T000000Z-RECENT.sql.gz"
+          old_fixture_1="var/backups/condor-condor_backup_source-20000101T000000Z-OLD1.sql.gz"
+          old_fixture_2="var/backups/condor-condor_backup_source-20000101T000000Z-OLD2.sql.gz"
+
+          printf 'fixture reciente' | gzip -c > "$recent_fixture"
+          printf 'fixture antiguo 1' | gzip -c > "$old_fixture_1"
+          printf 'fixture antiguo 2' | gzip -c > "$old_fixture_2"
+
+          touch -d '1 day ago' "$recent_fixture"
+          touch -d '31 days ago' "$old_fixture_1" "$old_fixture_2"
+
+          BACKUP_KEEP=1 bash scripts/backup-database.sh
+
+          [[ -f "$recent_fixture" ]] || {
+            echo "::error::La retención eliminó un backup protegido por la ventana de 30 días."
+            exit 1
+          }
+
+          old_remaining=0
+          for fixture in "$old_fixture_1" "$old_fixture_2"; do
+            if [[ -f "$fixture" ]]; then
+              old_remaining=$((old_remaining + 1))
+            fi
+          done
+          [[ "$old_remaining" -eq 1 ]] || {
+            echo "::error::BACKUP_KEEP=1 no limitó correctamente el histórico >30 días."
+            exit 1
+          }
+
+          rm -f -- "$recent_fixture" "$old_fixture_1" "$old_fixture_2"
+
+      - name: Probar guardas de retención y restore destructivo
+        run: |
+          set -euo pipefail
+          dump="$(ls -1t var/backups/condor-condor_backup_source-*.sql.gz | head -1)"
+          backups_before="$(find var/backups -maxdepth 1 -type f -name 'condor-condor_backup_source-*.sql.gz' | wc -l)"
+
+          if BACKUP_KEEP=0 bash scripts/backup-database.sh; then
+            echo "::error::BACKUP_KEEP=0 fue aceptado de forma insegura."
+            exit 1
+          fi
+
+          backups_after="$(find var/backups -maxdepth 1 -type f -name 'condor-condor_backup_source-*.sql.gz' | wc -l)"
+          [[ "$backups_after" == "$backups_before" ]] || {
+            echo "::error::Una retención inválida alteró los backups existentes."
+            exit 1
+          }
+
+          if DATABASE_URL='mysql://root@127.0.0.1:3306/condor_backup_source' \
+             CONDOR_ALLOW_DESTRUCTIVE_RESTORE=1 \
+             bash scripts/verify-backup-restore.sh "$dump"; then
+            echo "::error::El restore aceptó una base fuente no descartable."
+            exit 1
+          fi
+
+          if DATABASE_URL='mysql://root@127.0.0.1:3306/condor_backup_restored' \
+             bash scripts/verify-backup-restore.sh "$dump"; then
+            echo "::error::El restore no exigió confirmación destructiva explícita."
+            exit 1
+          fi
+
+          php bin/console doctrine:migrations:status --no-interaction >/dev/null
+
+      - name: Demostrar que el backup restaura esquema y datos
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/condor_backup_restored?serverVersion=mariadb-11.4.0&charset=utf8mb4
+          CONDOR_ALLOW_DESTRUCTIVE_RESTORE: '1'
+          CONDOR_RESTORE_EXPECT_TENANT_SLUG: backup-sentinel
+          CONDOR_RESTORE_EXPECT_USER_EMAIL: backup-sentinel@example.test
+        run: |
+          set -euo pipefail
+          dump="$(ls -1t var/backups/condor-condor_backup_source-*.sql.gz | head -1)"
+          bash scripts/verify-backup-restore.sh "$dump"
+
+
   validar:
     name: Validar
-    needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, frontend, backend-php, e2e]
+    needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, frontend, audit-npm, audit-composer, backend-php, backup-restore, e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -595,7 +829,10 @@ jobs:
           COORDINACION: ${{ needs.coordinacion.result }}
           PRUEBAS_BASE: ${{ needs.pruebas-base.result }}
           FRONTEND: ${{ needs.frontend.result }}
+          AUDIT_NPM: ${{ needs.audit-npm.result }}
+          AUDIT_COMPOSER: ${{ needs.audit-composer.result }}
           BACKEND_PHP: ${{ needs.backend-php.result }}
+          BACKUP_RESTORE: ${{ needs.backup-restore.result }}
           E2E: ${{ needs.e2e.result }}
           MODO: ${{ needs.preflight.outputs.modo }}
           MOTIVO: ${{ needs.preflight.outputs.motivo }}
@@ -616,9 +853,17 @@ jobs:
             *) echo "::error::Frontend no pasó."; exit 1 ;;
           esac
 
+          [[ "$AUDIT_NPM" == "success" ]] || { echo "::error::Auditoría npm no pasó."; exit 1; }
+          [[ "$AUDIT_COMPOSER" == "success" ]] || { echo "::error::Auditoría Composer no pasó."; exit 1; }
+
           case "$BACKEND_PHP" in
             success|skipped) ;;
             *) echo "::error::Backend PHP no pasó."; exit 1 ;;
+          esac
+
+          case "$BACKUP_RESTORE" in
+            success|skipped) ;;
+            *) echo "::error::Backup/restauración no pasó."; exit 1 ;;
           esac
 
           case "$E2E" in
@@ -643,7 +888,10 @@ jobs:
             printf -- '- Motivo: `%s`\n' "$MOTIVO"
             echo "- Pruebas base: **$PRUEBAS_BASE**"
             echo "- Frontend: **$FRONTEND**"
+            echo "- Auditoría npm: **$AUDIT_NPM**"
+            echo "- Auditoría Composer: **$AUDIT_COMPOSER**"
             echo "- Backend PHP: **$BACKEND_PHP**"
+            echo "- Backup/restauración: **$BACKUP_RESTORE**"
             echo "- Playwright: **$E2E**"
             echo "- Resultado agregado: **success**"
           } >> "$GITHUB_STEP_SUMMARY"

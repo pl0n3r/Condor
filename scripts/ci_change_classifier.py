@@ -55,6 +55,11 @@ PUBLIC_PREFIX = "public/"
 SCRIPTS_PREFIX = "scripts/"
 
 PHPUNIT_CONFIG = "phpunit.xml.dist"
+BACKEND_OPERATIONAL_SCRIPTS = {
+    "scripts/backup-database.sh",
+    "scripts/parse-database-url.php",
+    "scripts/verify-backup-restore.sh",
+}
 PACKAGE_JSON = "package.json"
 PACKAGE_LOCK = "package-lock.json"
 PLAYWRIGHT_CONFIG = "playwright.config.mjs"
@@ -214,6 +219,7 @@ def is_backend_runtime(path: str) -> bool:
         or path == BIN_CONSOLE
         or (path.startswith(PUBLIC_PREFIX) and path.endswith(".php"))
         or path == PHPUNIT_CONFIG
+        or path in BACKEND_OPERATIONAL_SCRIPTS
     )
 
 
