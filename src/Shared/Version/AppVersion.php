@@ -61,7 +61,7 @@ final readonly class AppVersion
         if (is_file($refPath) && is_readable($refPath)) {
             $sha = trim((string) file_get_contents($refPath));
 
-            return preg_match('/\\A[0-9a-f]{40}\\z/', $sha) === 1 ? $sha : null;
+            return preg_match('/\A[0-9a-f]{40}\z/', $sha) === 1 ? $sha : null;
         }
 
         return $this->readShaFromPackedRefs($gitDir, $ref);
@@ -89,12 +89,12 @@ final readonly class AppVersion
                 continue;
             }
 
-            $parts = preg_split('/\\s+/', trim($line), 2);
+            $parts = preg_split('/\s+/', trim($line), 2);
             if (
                 $parts !== false
                 && count($parts) === 2
                 && $parts[1] === $ref
-                && preg_match('/\\A[0-9a-f]{40}\\z/', $parts[0]) === 1
+                && preg_match('/\A[0-9a-f]{40}\z/', $parts[0]) === 1
             ) {
                 return $parts[0];
             }
