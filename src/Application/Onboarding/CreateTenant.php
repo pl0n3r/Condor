@@ -7,12 +7,14 @@ namespace App\Application\Onboarding;
 use App\Domain\Audit\Entity\AuditEvent;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\User;
+use App\Domain\Observability\Entity\FunctionalSignal;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
+use App\Infrastructure\Observability\FunctionalSignalRecorder;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
@@ -23,6 +25,7 @@ final readonly class CreateTenant
         private EntityManagerInterface $entityManager,
         private UserPasswordHasherInterface $passwordHasher,
         private ValidatorInterface $validator,
+        private FunctionalSignalRecorder $signals,
     ) {
     }
 
@@ -45,7 +48,7 @@ final readonly class CreateTenant
         }
 
         try {
-            return $this->entityManager->wrapInTransaction(function () use ($input, $slug, $email): OnboardingResult {
+            $result = $this->entityManager->wrapInTransaction(function () use ($input, $slug, $email): OnboardingResult {
                 $tenant = new Tenant($input->tenantName, $slug);
                 $legalEntity = new LegalEntity($tenant, $input->legalName, $input->nit, true);
                 $branch = new Branch($tenant, $input->branchName, 'principal', $legalEntity, true);
@@ -80,5 +83,13 @@ final readonly class CreateTenant
                 $exception,
             );
         }
+
+        $this->signals->record(
+            FunctionalSignal::TENANT_CREATED,
+            $result->tenantId,
+            ['source' => 'onboarding'],
+        );
+
+        return $result;
     }
 }
