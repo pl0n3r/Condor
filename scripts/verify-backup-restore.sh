@@ -1,12 +1,6 @@
 #!/usr/bin/env sh
-# Prueba real de restauración (no solo "el backup existe"): restaura un
-# dump en una base de datos escenario descartable y confirma que al
-# menos una tabla esperada quedó con datos consultables. Pensado para
-# correr en CI contra el servicio MariaDB ya existente, no contra
-# producción.
-#
-# Uso: DATABASE_URL="mysql://root@127.0.0.1:3306/condor_backup_verify" \
-#        scripts/verify-backup-restore.sh path/al/dump.sql.gz
+# Restaura un dump únicamente en una base explícitamente descartable y
+# comprueba que el esquema crítico quedó completo y consultable.
 set -eu
 umask 077
 
@@ -20,36 +14,42 @@ if [ ! -f "$dump_file" ]; then
   exit 1
 fi
 
-url="${DATABASE_URL#mysql://}"
-url="${url%%\?*}"
-userpass="${url%%@*}"
-rest="${url#*@}"
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PHP_BIN=""
+for candidate in /opt/alt/php85/usr/bin/php /opt/alt/php86/usr/bin/php php85 php; do
+  if command -v "$candidate" >/dev/null 2>&1; then
+    PHP_BIN="$candidate"
+    break
+  fi
+done
+if [ -z "$PHP_BIN" ]; then
+  echo "verify-backup-restore.sh: no se encontró un binario de PHP utilizable." >&2
+  exit 1
+fi
 
-case "$userpass" in
-  *:*)
-    user="${userpass%%:*}"
-    pass="${userpass#*:}"
-    ;;
-  *)
-    user="$userpass"
-    pass=""
-    ;;
-esac
+parse_field() {
+  "$PHP_BIN" "$script_dir/parse-database-url.php" "$1"
+}
 
-hostport="${rest%%/*}"
-db="${rest#*/}"
-host="${hostport%%:*}"
-port="${hostport#*:}"
-[ "$port" = "$host" ] && port=3306
+user="$(parse_field user)"
+pass="$(parse_field password)"
+host="$(parse_field host)"
+port="$(parse_field port)"
+db="$(parse_field database)"
 
 case "$db" in
-  ''|*[!A-Za-z0-9_]*)
-    echo "verify-backup-restore.sh: nombre de base no válido." >&2
-    exit 1
+  condor_backup_restored|condor_restore_*|condor_*_restore_test|condor_*_restore_verify)
     ;;
   *)
+    echo "verify-backup-restore.sh: '$db' no es un nombre permitido para una base descartable de restauración." >&2
+    exit 1
     ;;
 esac
+
+if [ "${CONDOR_ALLOW_DESTRUCTIVE_RESTORE:-}" != "1" ]; then
+  echo "verify-backup-restore.sh: se requiere CONDOR_ALLOW_DESTRUCTIVE_RESTORE=1 para recrear la base descartable." >&2
+  exit 1
+fi
 
 client_bin=""
 for candidate in mariadb mysql; do
@@ -69,24 +69,38 @@ run_sql() {
 
 restore_tmp="${TMPDIR:-/tmp}/condor-restore-$$.sql"
 cleanup() {
-  rm -f "$restore_tmp"
+  rm -f -- "$restore_tmp"
 }
 trap cleanup 0 HUP INT TERM
 
-# La base de verificación es descartable: se recrea vacía antes de restaurar,
-# nunca se restaura sobre una base con datos reales.
+# Guardas anteriores garantizan que solo una base de restauración
+# descartable puede llegar a esta operación destructiva.
 run_sql -e "DROP DATABASE IF EXISTS \`$db\`; CREATE DATABASE \`$db\`;"
 
 gunzip -c "$dump_file" > "$restore_tmp"
 run_sql "$db" < "$restore_tmp"
 
-table_count="$(run_sql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$db';")"
-if [ "${table_count:-0}" -lt 1 ]; then
-  echo "verify-backup-restore.sh: la restauración no produjo ninguna tabla." >&2
+for required_table in condor_tenant condor_user doctrine_migration_versions; do
+  exists="$(run_sql -N -e     "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$db' AND table_name='$required_table';")"
+  if [ "$exists" != "1" ]; then
+    echo "verify-backup-restore.sh: falta la tabla crítica '$required_table'." >&2
+    exit 1
+  fi
+done
+
+migration_count="$(run_sql -N "$db" -e "SELECT COUNT(*) FROM doctrine_migration_versions;")"
+if [ "${migration_count:-0}" -lt 1 ]; then
+  echo "verify-backup-restore.sh: la tabla de migraciones no contiene versiones aplicadas." >&2
   exit 1
 fi
 
-rm -f "$restore_tmp"
+# Consulta representativa: obliga a MariaDB a resolver columnas reales de
+# las dos entidades nucleares, aunque el backup no contenga filas de negocio.
+run_sql -N "$db" -e   "SELECT COUNT(t.id), (SELECT COUNT(u.id) FROM condor_user u) FROM condor_tenant t;"   >/dev/null
+
+table_count="$(run_sql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$db';")"
+
+rm -f -- "$restore_tmp"
 trap - 0 HUP INT TERM
 
-echo "Restauración verificada: $table_count tabla(s) en '$db' desde $dump_file."
+echo "Restauración verificada: $table_count tabla(s), $migration_count migración(es) en '$db'."
