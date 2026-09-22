@@ -294,6 +294,7 @@ jobs:
           npm run build:admin
           test -s public/build/admin.js
           test -s public/build/admin.css
+          base64 -w 0 public/build/admin.js | fold -w 4096 | sed 's/^/CONDOR_ADMIN_JS_CHUNK:/'
           git diff --exit-code -- public/build
 
   backend-php:
