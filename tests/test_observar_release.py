@@ -76,6 +76,12 @@ class ObserverTests(unittest.TestCase):
     def observar(self) -> dict:
         return modulo.observar(self.base, VERSION, SHA, intentos=2, intervalo=0, timeout=1)
 
+    def test_accept_de_javascript_incluye_mime_legacy_de_hostinger(self) -> None:
+        self.assertEqual(
+            modulo.tipo_aceptado_para("/build/admin.js"),
+            "text/javascript, application/javascript, application/x-javascript",
+        )
+
     def test_release_exacta_y_smoke_publico(self) -> None:
         resultado = self.observar()
         self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
