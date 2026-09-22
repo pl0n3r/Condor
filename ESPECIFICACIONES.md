@@ -1566,6 +1566,26 @@ Candidatos prioritarios a automatización a medida que exista superficie:
 
 Toda automatización debe ser idempotente cuando sea posible y operar con mínimo privilegio.
 
+#### Migraciones automáticas post-deploy en shared hosting
+
+Mientras Condor opere en Hostinger shared hosting, el cron/post-deploy puede ejecutar
+`doctrine:migrations:migrate --env=prod --no-interaction --allow-no-migration`
+antes de regenerar la caché, siempre bajo estas reglas:
+
+- una sola corrida puede aplicar migraciones a la vez; el script usa un lock explícito y una segunda corrida concurrente se omite;
+- las migraciones automáticas deben ser **forward / expand-compatible** y seguras con datos reales;
+- una migración que implique pérdida de datos, contracción irreversible, backfill riesgoso o decisión humana debe fallar cerrado o quedar fuera del flujo automático;
+- el orden operativo es **migrar esquema → limpiar caché → calentar caché**; nunca publicar un contenedor nuevo contra un esquema requerido que siga pendiente;
+- si la migración falla, el script termina con error y no continúa a `cache:clear`/warmup, para no presentar como saludable un release incompatible con su esquema;
+- no tener migraciones pendientes es un no-op válido;
+- aplicar migraciones automáticamente no equivale a `VALIDATED_IN_PRODUCTION`: el observador de release debe confirmar después versión/SHA y smoke checks;
+- esta automatización no modifica la regla D-040: **producción no ejecuta migraciones destructivas automáticamente**.
+
+Motivación operativa: V 0.1.20 demostró que Hostinger podía servir código nuevo
+mientras el esquema de storefront seguía atrasado, produciendo HTTP 500. La
+automatización evita esa deriva código/esquema sin convertir contracciones
+destructivas en una operación implícita.
+
 #### Revisión periódica de seguridad
 
 - seguridad se valida por slice, no solo en una auditoría anual;
