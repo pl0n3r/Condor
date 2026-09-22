@@ -1218,6 +1218,15 @@ def update_issue_state(api: GitHub, issue_number: int, action: str) -> None:
     if action != "closed":
         return
 
+    state_reason = issue.get("state_reason")
+    status = STATUS_CANCELLED if state_reason == "not_planned" else STATUS_COMPLETED
+    if (
+        current is None
+        and api.branch_sha(branch) is None
+        and status in label_names(issue)
+    ):
+        return
+
     for pr_number in open_pulls_for_branch(api, branch):
         api.close_pull(pr_number)
     api.delete_branch(branch)
@@ -1235,8 +1244,6 @@ def update_issue_state(api: GitHub, issue_number: int, action: str) -> None:
         )
         api.try_unassign(issue_number, str(current["owner"]))
 
-    state_reason = issue.get("state_reason")
-    status = STATUS_CANCELLED if state_reason == "not_planned" else STATUS_COMPLETED
     api.set_status(issue_number, status)
 
 
