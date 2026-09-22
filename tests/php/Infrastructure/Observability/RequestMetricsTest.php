@@ -84,6 +84,54 @@ final class RequestMetricsTest extends TestCase
         self::assertSame('route_005', $recent[499]['route']);
     }
 
+    public function testFailedRotationKeepsOriginalLogIntactAndCanRecover(): void
+    {
+        for ($i = 0; $i < 500; $i++) {
+            RequestMetrics::record(
+                $this->projectDir,
+                sprintf('before_%03d', $i),
+                200,
+                (float) $i,
+                1_048_576,
+            );
+        }
+
+        $logPath = $this->projectDir.'/var/log/request_metrics.log';
+        $before = file_get_contents($logPath);
+        self::assertIsString($before);
+
+        $blockedTempPath = $logPath.'.tmp';
+        mkdir($blockedTempPath, 0700);
+        RequestMetrics::record(
+            $this->projectDir,
+            'rotation_failed_but_append_survives',
+            200,
+            501.0,
+            1_048_576,
+        );
+
+        $afterFailedRotation = file_get_contents($logPath);
+        self::assertIsString($afterFailedRotation);
+        self::assertStringStartsWith($before, $afterFailedRotation);
+        self::assertStringContainsString(
+            'rotation_failed_but_append_survives',
+            $afterFailedRotation,
+        );
+
+        rmdir($blockedTempPath);
+        RequestMetrics::record(
+            $this->projectDir,
+            'rotation_recovers',
+            200,
+            502.0,
+            1_048_576,
+        );
+
+        $recent = RequestMetrics::recent($this->projectDir, 1000);
+        self::assertCount(500, $recent);
+        self::assertSame('rotation_recovers', $recent[0]['route']);
+    }
+
     public function testRecordNeverThrowsWhenProjectDirCannotContainLogDirectory(): void
     {
         $fileProjectDir = $this->projectDir.'/not-a-directory';
