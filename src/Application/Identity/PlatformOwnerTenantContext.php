@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Application\Identity;
 
+use App\Domain\Catalog\Entity\Product;
+use App\Domain\Catalog\Entity\ProductVariant;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Observability\Entity\FunctionalSignal;
@@ -189,6 +191,7 @@ final readonly class PlatformOwnerTenantContext
 
         return [
             ...$this->tenantSummary($tenant),
+            'catalog' => $this->catalog($tenant),
             'branches' => array_values(array_map(
                 static fn (Branch $branch): array => [
                     'id' => $branch->id(),
@@ -202,6 +205,64 @@ final readonly class PlatformOwnerTenantContext
                 )),
             )),
         ];
+    }
+
+    /**
+     * @return list<array{
+     *   id: string,
+     *   name: string,
+     *   slug: string,
+     *   description: string|null,
+     *   variants: list<array{id: string, sku: string, name: string}>
+     * }>
+     */
+    private function catalog(Tenant $tenant): array
+    {
+        $products = $this->entityManager
+            ->getRepository(Product::class)
+            ->findBy(
+                ['tenant' => $tenant, 'active' => true],
+                ['name' => 'ASC'],
+            );
+        $variants = $this->entityManager
+            ->getRepository(ProductVariant::class)
+            ->findBy(
+                ['tenant' => $tenant, 'active' => true],
+                ['name' => 'ASC'],
+            );
+
+        $variantsByProduct = [];
+        foreach ($variants as $variant) {
+            if (
+                !$variant instanceof ProductVariant
+                || !$variant->product()->isActive()
+            ) {
+                continue;
+            }
+
+            $variantsByProduct[$variant->product()->id()][] = [
+                'id' => $variant->id(),
+                'sku' => $variant->sku(),
+                'name' => $variant->name(),
+            ];
+        }
+
+        $catalog = [];
+        foreach ($products as $product) {
+            if (!$product instanceof Product) {
+                continue;
+            }
+
+            $catalog[] = [
+                'id' => $product->id(),
+                'name' => $product->name(),
+                'slug' => $product->slug(),
+                'description' => $product->description(),
+                'variants' => $variantsByProduct[$product->id()] ?? [],
+            ];
+        }
+
+        return $catalog;
     }
 
     /**

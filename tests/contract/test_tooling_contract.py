@@ -33,6 +33,31 @@ class ToolingContractTests(unittest.TestCase):
         self.assertRegex(requested, r"^\d+\.\d+\.\d+$")
         self.assertEqual(requested, locked)
 
+    def test_release_workflow_requires_canonical_semver_and_recovers_partial_release(self) -> None:
+        """El release automático rechaza ceros iniciales y completa estados parciales."""
+        workflow = (
+            ROOT / ".github/workflows/tag-release.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$",
+            workflow,
+        )
+        self.assertIn("group: condor-tag-release-main", workflow)
+        self.assertIn("queue: max", workflow)
+        self.assertIn("cancel-in-progress: false", workflow)
+        self.assertIn('git show-ref --verify --quiet "refs/tags/$TAG"', workflow)
+        self.assertIn('git cat-file -t "refs/tags/$TAG"', workflow)
+        self.assertIn("(409|422)([[:space:]]|$)", workflow)
+        self.assertIn('git/ref/tags/$TAG', workflow)
+        self.assertNotIn("jq -r", workflow)
+        self.assertIn('git/tags/$race_tag_object_sha', workflow)
+        self.assertIn('[[ "$race_target_sha" != "$TARGET_SHA" ]]', workflow)
+        self.assertIn('gh release view "$TAG"', workflow)
+        self.assertIn('gh release create "$TAG"', workflow)
+        self.assertIn('--title "Release $TAG (V ${TAG#v})"', workflow)
+        self.assertNotIn("if: steps.tag.outputs.created == 'true'", workflow)
+
     def test_throughput_cli_preserves_json_report_contract(self) -> None:
         """El CLI de throughput entrega el esquema consumido por automatizaciones."""
         payload = {

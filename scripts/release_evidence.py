@@ -33,6 +33,14 @@ PUBLIC_CHECKS = (
     "css_admin",
     "js_admin",
 )
+STOREFRONT_CHECKS = ("storefront", "slug_desconocido")
+
+
+def public_checks_for_version(version: str) -> list[str]:
+    checks = list(PUBLIC_CHECKS)
+    if tuple(map(int, version.split("."))) >= (0, 1, 13):
+        checks.extend(STOREFRONT_CHECKS)
+    return checks
 CHECK_IDS = (
     "migraciones",
     "roles",
@@ -132,7 +140,7 @@ def build_manifest(
         "categories": selection.categorias,
         "selection_mode": selection.modo,
         "selection_reason": selection.motivo,
-        "public_checks": list(PUBLIC_CHECKS),
+        "public_checks": public_checks_for_version(version),
         "transition": {
             "required": selection.transicion_release,
             "checks": [
@@ -191,19 +199,21 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
     if not isinstance(sha, str) or SHA_PATTERN.fullmatch(sha) is None:
         raise EvidenceError("El manifiesto contiene un SHA inválido.")
 
-    if manifest.get("public_checks") != list(PUBLIC_CHECKS):
+    if manifest.get("public_checks") != public_checks_for_version(version):
         raise EvidenceError("El manifiesto no contiene el contrato público esperado.")
 
     validate_transition(manifest.get("transition"))
 
 
-def public_evidence(observation: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def public_evidence(
+    observation: dict[str, Any], public_checks: list[str],
+) -> dict[str, dict[str, Any]]:
     """Normaliza el contrato de smoke y marca comprobaciones ausentes."""
     raw_checks = observation.get("comprobaciones")
     observation_checks = raw_checks if isinstance(raw_checks, dict) else {}
     public: dict[str, dict[str, Any]] = {}
 
-    for check_id in PUBLIC_CHECKS:
+    for check_id in public_checks:
         raw = observation_checks.get(check_id)
         if not isinstance(raw, dict):
             public[check_id] = {
@@ -286,7 +296,7 @@ def finalize(
         observation.get("version_esperada") == manifest["version"]
         and observation.get("sha_esperado") == manifest["sha"]
     )
-    public = public_evidence(observation)
+    public = public_evidence(observation, manifest["public_checks"])
     transition_checks, required_pending = transition_evidence(
         manifest,
         verified_set,

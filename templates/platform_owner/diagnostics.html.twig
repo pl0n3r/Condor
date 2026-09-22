@@ -62,6 +62,50 @@
             </div>
         {% endif %}
 
+        <h2>Rendimiento reciente</h2>
+        <p class="muted">
+            Duración y memoria pico de las últimas {{ request_metrics.count }}
+            requests conservadas en <code>var/log/request_metrics.log</code>.
+            El archivo agrega solicitudes de los procesos que comparten este
+            despliegue y persiste entre recargas de PHP-FPM mientras exista;
+            no sustituye una plataforma de métricas agregadas.
+        </p>
+        {% if request_metrics.count > 0 %}
+            <div class="foundation-grid">
+                <article>
+                    <strong>p50</strong>
+                    <span>{{ request_metrics.p50_ms }} ms</span>
+                </article>
+                <article>
+                    <strong>p95</strong>
+                    <span>{{ request_metrics.p95_ms }} ms</span>
+                </article>
+                <article>
+                    <strong>Tasa de error 5xx</strong>
+                    <span>{{ request_metrics.error_rate }}%</span>
+                </article>
+                <article>
+                    <strong>Memoria pico promedio</strong>
+                    <span>{{ request_metrics.avg_memory_mb }} MB</span>
+                </article>
+            </div>
+        {% else %}
+            <div class="foundation-grid">
+                <article>
+                    <strong>Sin solicitudes medidas</strong>
+                    <span>Las métricas aparecerán aquí después de registrar requests.</span>
+                </article>
+            </div>
+        {% endif %}
+
+        <h2>Reporte de actividad funcional</h2>
+        <p class="muted">
+            Serie diaria (30 días) de señales funcionales agregadas, sin PII.
+        </p>
+        <a class="button button-secondary" href="{{ path('app_platform_activity_report_csv') }}">
+            Descargar CSV
+        </a>
+
         <h2>Registro de fallos fatales</h2>
         <p class="muted">
             Funciona incluso si Symfony no llega a arrancar (contenedor

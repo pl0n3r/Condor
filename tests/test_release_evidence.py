@@ -66,6 +66,33 @@ class ReleaseEvidenceTests(unittest.TestCase):
         self.assertFalse(manifest["transition"]["required"])
         self.assertEqual(manifest["public_checks"], list(module.PUBLIC_CHECKS))
 
+    def test_storefront_release_requiere_dos_checks_en_manifiesto(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = module.build_manifest(
+                version_file=self.version_file(tmp, "0.1.13"),
+                sha=SHA,
+                changed_paths=["scripts/observar_release.py"],
+                expected_version="0.1.13",
+            )
+        self.assertEqual(
+            manifest["public_checks"][-2:],
+            ["storefront", "slug_desconocido"],
+        )
+
+        observation = self.observation()
+        observation["version_esperada"] = "0.1.13"
+        evidence = module.finalize(manifest, observation, [])
+        self.assertEqual(evidence["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(evidence["public_checks"]["storefront"]["ok"])
+        self.assertFalse(evidence["public_checks"]["slug_desconocido"]["ok"])
+
+        observation["comprobaciones"].update({
+            "storefront": {"ok": True, "clase": "ok", "detalle": "SSR probado."},
+            "slug_desconocido": {"ok": True, "clase": "ok", "detalle": "HTTP 404."},
+        })
+        evidence = module.finalize(manifest, observation, [])
+        self.assertEqual(evidence["estado"], "VALIDATED_IN_PRODUCTION")
+
     def test_manifest_rejects_requested_version_different_from_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             version_file = self.version_file(tmp, "0.1.11")

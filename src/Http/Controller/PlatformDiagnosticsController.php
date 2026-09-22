@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Observability\DiagnosticShareService;
+use App\Application\Observability\FunctionalSignalReport;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Observability\Entity\DiagnosticShare;
 use App\Domain\Observability\Entity\ErrorIncident;
 use App\Infrastructure\Observability\FatalLog;
+use App\Infrastructure\Observability\RequestMetrics;
 use App\Shared\Version\AppVersion;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -25,6 +27,8 @@ final class PlatformDiagnosticsController extends AbstractController
     public function __construct(
         #[Autowire('%kernel.secret%')]
         private readonly string $appSecret,
+        #[Autowire('%kernel.project_dir%')]
+        private readonly string $projectDir,
     ) {
     }
 
@@ -63,7 +67,28 @@ final class PlatformDiagnosticsController extends AbstractController
             'incidents' => $incidents,
             'shares' => $shares,
             'fatal_log_url' => $fatalLogUrl,
+            'request_metrics' => RequestMetrics::summary($this->projectDir),
         ]);
+    }
+
+    #[Route(
+        '/adminpl0n3r/diagnosticos/reportes/actividad.csv',
+        name: 'app_platform_activity_report_csv',
+        methods: ['GET'],
+    )]
+    public function activityReportCsv(FunctionalSignalReport $report): Response
+    {
+        $this->denyAccessUnlessGranted(User::ROLE_PLATFORM_OWNER);
+
+        $response = new Response($report->toCsv(30));
+        $response->headers->set('Content-Type', 'text/csv; charset=utf-8');
+        $response->headers->set(
+            'Content-Disposition',
+            'attachment; filename="condor-actividad-funcional-30d.csv"',
+        );
+        $response->headers->set('Cache-Control', 'private, no-store');
+
+        return $response;
     }
 
     #[Route(
