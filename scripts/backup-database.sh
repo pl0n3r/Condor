@@ -97,14 +97,23 @@ trap - 0 HUP INT TERM
 
 echo "Backup creado: $out"
 
-# Los nombres UTC + token aleatorio son lexicográficamente ordenables y
-# únicos por ejecución; no se comparten temporales entre procesos.
-LC_ALL=C find "$backup_dir" -maxdepth 1 -type f -name "condor-${db}-*.sql.gz" -print   | LC_ALL=C sort -r   | {
-      count=0
+# Retención en dos capas:
+# 1. ningún backup de los últimos 30 días se elimina por cantidad;
+# 2. BACKUP_KEEP limita únicamente el histórico anterior a esa ventana.
+# Los nombres UTC + token aleatorio mantienen orden lexicográfico estable.
+LC_ALL=C find "$backup_dir" \
+  -maxdepth 1 \
+  -type f \
+  -name "condor-${db}-*.sql.gz" \
+  -mtime +30 \
+  -print \
+  | LC_ALL=C sort -r \
+  | {
+      historical_count=0
       while IFS= read -r backup_path; do
         [ -n "$backup_path" ] || continue
-        count=$((count + 1))
-        if [ "$count" -gt "$keep" ]; then
+        historical_count=$((historical_count + 1))
+        if [ "$historical_count" -gt "$keep" ]; then
           rm -f -- "$backup_path"
         fi
       done
