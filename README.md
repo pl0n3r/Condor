@@ -17,7 +17,7 @@
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base integrada | ✅ **V 0.1.12 EN MAIN** | SHA `831e5e691bdcf35511b2adf248bf7c75ed45af6b` |
+| Base integrada | ✅ **V 0.1.12 EN MAIN** | SHA `fa8f7e156f41155a7f99f5b48c7ec60cbd2ab948` |
 | Candidato actual | 🚧 **V 0.1.13 EN VALIDACIÓN** | Issue #130 / PR #136 |
 | Storefront por tenant | ✅ **IMPLEMENTADO EN CANDIDATO** | perfil público + SSR real |
 | Dominios personalizados | ✅ **MODELO Y RESOLUCIÓN** | solo dominios verificados resuelven |
