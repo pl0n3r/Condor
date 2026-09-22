@@ -1,0 +1,150 @@
+name: Observar deploy automático (V 0.1.0)
+
+# Cierra la brecha entre "merge a main" y "alguien recordó correr el
+# smoke manual": tras cada push a main, observa producción en modo
+# solo lectura (sin escribir ni autenticar) y reporta el estado real
+# (NO_OBSERVADO / DEPLOY_OBSERVED / VALIDATED_IN_PRODUCTION) contra
+# la versión+SHA esperados.
+#
+# Cuando la release requiere una transición operativa (migraciones,
+# roles, comandos, configuración o caché, según ci_change_classifier)
+# nunca se declara VALIDATED_IN_PRODUCTION de forma automática: ese
+# estado sigue exigiendo el checklist humano del workflow_dispatch
+# manual en observar-release.yml (D-043). Cuando no la requiere, este
+# job puede alcanzar VALIDATED_IN_PRODUCTION igual que lo haría un
+# humano corriendo el mismo smoke de solo lectura.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  observar-deploy:
+    name: Observar producción tras push a main
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Leer versión humana esperada
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(grep -oP "'version'\s*=>\s*'\K[^']+" config/version.php)"
+          if [[ -z "$version" ]]; then
+            echo "::error::No fue posible leer config/version.php"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Detectar si la release exige transición operativa
+        id: transicion
+        run: |
+          set -euo pipefail
+          git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" > /tmp/cambios-release.txt
+
+          requiere="$(
+            python3 scripts/ci_change_classifier.py \
+              --event push \
+              --format json \
+              < /tmp/cambios-release.txt \
+            | python3 -c 'import json, sys; print(str(json.load(sys.stdin)["transicion_release"]).lower())'
+          )"
+          echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
+
+      - name: Observar producción en modo solo lectura
+        id: smoke
+        env:
+          VERSION_ESPERADA: ${{ steps.version.outputs.version }}
+          SHA_ESPERADO: ${{ github.sha }}
+          STOREFRONT_SLUG: ${{ vars.STOREFRONT_SLUG }}
+          STOREFRONT_CANONICAL: ${{ vars.STOREFRONT_CANONICAL }}
+          TRANSICION_REQUERIDA: ${{ steps.transicion.outputs.requerida }}
+        run: |
+          set -euo pipefail
+          args=(
+            --version "$VERSION_ESPERADA"
+            --sha "$SHA_ESPERADO"
+            --intentos 10
+            --intervalo 30
+            --timeout 5
+          )
+          [[ -n "$STOREFRONT_SLUG" ]] &&
+            args+=(--tenant-slug "$STOREFRONT_SLUG")
+          [[ -n "$STOREFRONT_CANONICAL" ]] &&
+            args+=(--canonical-storefront "$STOREFRONT_CANONICAL")
+
+          # Nunca se pasa --transicion-verificada aquí: esta corrida es
+          # automática, sin confirmación humana. Si la release requiere
+          # transición operativa, el estado queda topado en
+          # DEPLOY_OBSERVED como máximo, nunca VALIDATED_IN_PRODUCTION.
+          if [[ "$TRANSICION_REQUERIDA" == "true" ]]; then
+            args+=(--transicion-requerida)
+          fi
+
+          set +e
+          python3 scripts/observar_release.py "${args[@]}" > /tmp/release-observation.json
+          estado_cli=$?
+          set -e
+
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+
+          with open("/tmp/release-observation.json", encoding="utf-8") as evidencia:
+              resultado = json.load(evidencia)
+
+          lineas = [
+              "### Observación de deploy (automática, sin mutar producción)",
+              "",
+              f"- Estado: **{resultado['estado']}**",
+              f"- Versión esperada: `{resultado['version_esperada']}`",
+              f"- SHA esperado: `{resultado['sha_esperado']}`",
+              "",
+              "| Comprobación | Resultado | Detalle |",
+              "| --- | --- | --- |",
+          ]
+          for nombre, item in resultado["comprobaciones"].items():
+              icono = "OK" if item["ok"] else "FALLO"
+              lineas.append(f"| `{nombre}` | {icono} | {item['detalle']} |")
+
+          print("\n".join(lineas))
+          PY
+
+          estado="$(python3 -c 'import json; print(json.load(open("/tmp/release-observation.json"))["estado"])')"
+          echo "estado=$estado" >> "$GITHUB_OUTPUT"
+          echo "estado_cli=$estado_cli" >> "$GITHUB_OUTPUT"
+
+          if (( estado_cli > 1 )); then
+            echo "::error::El observador no pudo producir evidencia válida (uso incorrecto de argumentos)."
+            exit "$estado_cli"
+          fi
+
+      - name: Registrar estado observado en el roadmap
+        if: ${{ always() && steps.smoke.outputs.estado != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_ESPERADA: ${{ steps.version.outputs.version }}
+          SHA_ESPERADO: ${{ github.sha }}
+          ESTADO: ${{ steps.smoke.outputs.estado }}
+        run: |
+          set -euo pipefail
+          case "$ESTADO" in
+            VALIDATED_IN_PRODUCTION)
+              cuerpo="✅ VALIDATED_IN_PRODUCTION automático: producción sirve V ${VERSION_ESPERADA} (${SHA_ESPERADO}) y los smoke checks de solo lectura pasaron. Confirmado por observar-deploy-automatico tras push a main."
+              ;;
+            DEPLOY_OBSERVED)
+              cuerpo="🚧 DEPLOY_OBSERVED automático: producción ya sirve V ${VERSION_ESPERADA} (${SHA_ESPERADO}), pero esta release requiere transición operativa (migraciones/roles/comandos/configuración/caché) que aún no fue confirmada por un humano. Usar el workflow_dispatch manual de observar-release.yml con el checklist correspondiente para declarar VALIDATED_IN_PRODUCTION."
+              ;;
+            *)
+              cuerpo="⛔ NO_OBSERVADO tras reintentos automáticos: producción todavía no sirve V ${VERSION_ESPERADA} (${SHA_ESPERADO}). Puede ser normal si el deploy de Hostinger aún no corrió; revisar manualmente si persiste."
+              ;;
+          esac
+          gh issue comment 1 --repo "${{ github.repository }}" --body "$cuerpo"

@@ -11,6 +11,14 @@ on:
         description: 'SHA completo del merge desplegado en Hostinger'
         required: true
         type: string
+      tenant_slug:
+        description: 'Slug público real de un tenant a comprobar (obligatorio para validar V 0.1.13+)'
+        required: false
+        type: string
+      canonical_storefront:
+        description: 'Canonical HTTPS esperado; omitir para usar el slug Condor'
+        required: false
+        type: string
       migraciones_verificadas:
         description: 'Confirmé migraciones requeridas por esta release'
         required: false
@@ -92,15 +100,21 @@ jobs:
         env:
           VERSION_ESPERADA: ${{ inputs.version }}
           SHA_ESPERADO: ${{ inputs.sha }}
+          STOREFRONT_SLUG: ${{ inputs.tenant_slug }}
+          STOREFRONT_CANONICAL: ${{ inputs.canonical_storefront }}
         run: |
           set -euo pipefail
+          args=(
+            --version "$VERSION_ESPERADA"
+            --sha "$SHA_ESPERADO"
+            --intentos 5
+            --intervalo 4
+            --timeout 5
+          )
+          [[ -n "$STOREFRONT_SLUG" ]] && args+=(--tenant-slug "$STOREFRONT_SLUG")
+          [[ -n "$STOREFRONT_CANONICAL" ]] && args+=(--canonical-storefront "$STOREFRONT_CANONICAL")
           set +e
-          python3 scripts/observar_release.py \
-            --version "$VERSION_ESPERADA" \
-            --sha "$SHA_ESPERADO" \
-            --intentos 5 \
-            --intervalo 4 \
-            --timeout 5 \
+          python3 scripts/observar_release.py "${args[@]}" \
             > /tmp/release-observation.json
           estado_observador=$?
           set -e
