@@ -513,6 +513,33 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(resultado["comprobaciones"]["health"]["intento"], 1)
         sleep.assert_not_called()
 
+    def test_version_anterior_con_sha_invalido_falla_identidad_sin_espera(self) -> None:
+        self.server.respuestas["/health"] = (
+            200,
+            "application/json",
+            json.dumps({
+                "status": "ok",
+                "version": "0.0.9",
+                "release_sha": "sha-invalido",
+                "schema_up_to_date": True,
+            }).encode(),
+        )
+        with patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(
+                self.base,
+                VERSION,
+                SHA,
+                intentos=1,
+                espera_deploy=600,
+            )
+        self.assertEqual(resultado["estado"], "NO_OBSERVADO")
+        self.assertEqual(
+            resultado["comprobaciones"]["health"]["clase"],
+            "identidad",
+        )
+        self.assertEqual(self.server.visitas, ["/health"])
+        sleep.assert_not_called()
+
     def test_version_distinta_no_observa_deploy(self) -> None:
         resultado = modulo.observar(self.base, "0.1.1", SHA, intentos=1)
         self.assertEqual(resultado["estado"], "NO_OBSERVADO")
