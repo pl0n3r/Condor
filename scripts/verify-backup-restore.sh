@@ -47,6 +47,8 @@ case "$db" in
     echo "verify-backup-restore.sh: nombre de base no válido." >&2
     exit 1
     ;;
+  *)
+    ;;
 esac
 
 client_bin=""
