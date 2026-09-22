@@ -13,6 +13,7 @@ from scripts.coordinar_trabajo import (
     GitHubError,
     STATUS_AVAILABLE,
     STATUS_BLOCKED,
+    STATUS_CANCELLED,
     STATUS_COMPLETED,
     STATUS_RECOVERY,
     STATUS_RESERVED,
