@@ -46,7 +46,7 @@ fi
 # de 6 h sin permitir que una corrida vieja borre el lock de una nueva.
 LOCK_DIR="var/post-deploy.lock"
 LOCK_MAX_AGE_SECONDS=21600
-LOCK_TOKEN="$-$(date +%s)"
+LOCK_TOKEN="$$-$(date +%s)"
 
 cleanup_lock() {
     if [ -f "$LOCK_DIR/token" ] &&
