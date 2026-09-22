@@ -30,15 +30,19 @@ final readonly class StorefrontPresentation
             ->getRepository(StorefrontProfile::class)
             ->findOneBy(['tenant' => $tenant]);
 
-        $primary = $this->entityManager
+        $primaries = $this->entityManager
             ->getRepository(TenantDomain::class)
-            ->findOneBy([
+            ->findBy([
                 'tenant' => $tenant,
                 'primary' => true,
                 'verified' => true,
-            ], ['hostname' => 'ASC']);
+            ], limit: 2);
+        $primary = count($primaries) === 1
+            && $primaries[0] instanceof TenantDomain
+                ? $primaries[0]
+                : null;
 
-        // Only a registered and verified primary domain can replace the platform canonical.
+        // Fail closed to the Condor URL if legacy data violates the unique-primary invariant.
         $canonical = $primary instanceof TenantDomain
             ? 'https://'.$primary->hostname().'/'
             : 'https://www.condorapp.com.co/'.$tenant->slug();

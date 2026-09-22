@@ -12,8 +12,10 @@ use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\StorefrontProfile;
 use App\Domain\Organization\Entity\Tenant;
 use App\Domain\Organization\Entity\TenantDomain;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
 final class StorefrontAdminControllerTest extends WebTestCase
 {
@@ -61,6 +63,43 @@ final class StorefrontAdminControllerTest extends WebTestCase
         );
     }
 
+    public function testOwnerPostRejectsMissingOrInvalidCsrfWithoutChangingProfile(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(
+            EntityManagerInterface::class,
+        );
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        [$tenant, $owner] = $this->tenantOwner($entityManager);
+        $profile = new StorefrontProfile(
+            $tenant,
+            'Titular original',
+            'Descripción original.',
+        );
+        $entityManager->persist($profile);
+        $entityManager->flush();
+
+        $client->loginUser($owner);
+
+        foreach (['', 'token-invalido'] as $token) {
+            $client->request('POST', '/admin/storefront', [
+                '_token' => $token,
+                'headline' => 'Titular alterado',
+                'description' => 'No debe persistirse.',
+            ]);
+            self::assertResponseStatusCodeSame(403);
+        }
+
+        $stored = static::getContainer()
+            ->get(EntityManagerInterface::class)
+            ->getRepository(StorefrontProfile::class)
+            ->findOneBy(['tenant' => $tenant]);
+        self::assertInstanceOf(StorefrontProfile::class, $stored);
+        self::assertSame('Titular original', $stored->headline());
+        self::assertSame('Descripción original.', $stored->description());
+    }
+
     public function testVerifiedPrimaryDomainServesSameTenantAndCanonical(): void
     {
         $client = static::createClient();
@@ -92,6 +131,33 @@ final class StorefrontAdminControllerTest extends WebTestCase
         self::assertSelectorExists(
             'link[rel="canonical"][href="https://'.$host.'/"]',
         );
+    }
+
+    public function testTenantCannotPersistTwoVerifiedPrimaryDomains(): void
+    {
+        $entityManager = static::getContainer()->get(
+            EntityManagerInterface::class,
+        );
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        [$tenant] = $this->tenantOwner($entityManager);
+        $entityManager->persist(new TenantDomain(
+            $tenant,
+            'primario-a-'.strtolower(bin2hex(random_bytes(4))).'.example.test',
+            true,
+            true,
+        ));
+        $entityManager->flush();
+
+        $entityManager->persist(new TenantDomain(
+            $tenant,
+            'primario-b-'.strtolower(bin2hex(random_bytes(4))).'.example.test',
+            true,
+            true,
+        ));
+
+        $this->expectException(UniqueConstraintViolationException::class);
+        $entityManager->flush();
     }
 
     public function testUnverifiedCustomHostFailsClosed(): void
@@ -198,13 +264,23 @@ final class StorefrontAdminControllerTest extends WebTestCase
         $client->request('GET', '/admin/storefront');
         self::assertResponseStatusCodeSame(403);
 
-        $role = new Role($tenant, 'Consulta del sitio', ['site.view']);
+        $role = new Role(
+            $tenant,
+            'Gestión de sitio por sede',
+            ['site.view', 'site.update'],
+        );
         $entityManager->persist($role);
         $entityManager->persist(new BranchRoleAssignment(
             $membership,
             $branch,
             $role,
         ));
+        $profile = new StorefrontProfile(
+            $tenant,
+            'Identidad protegida',
+            'El perfil global no hereda permisos de una sede.',
+        );
+        $entityManager->persist($profile);
         $entityManager->flush();
 
         $client->request('GET', '/admin/storefront');
@@ -215,6 +291,24 @@ final class StorefrontAdminControllerTest extends WebTestCase
             '.storefront-admin-card',
             'permiso permite consultar',
         );
+
+        $csrf = static::getContainer()->get(CsrfTokenManagerInterface::class);
+        self::assertInstanceOf(CsrfTokenManagerInterface::class, $csrf);
+        $token = $csrf->getToken('storefront_profile')->getValue();
+
+        $client->request('POST', '/admin/storefront', [
+            '_token' => $token,
+            'headline' => 'Intento delegado',
+            'description' => 'No debe persistirse.',
+        ]);
+
+        self::assertResponseStatusCodeSame(403);
+        $stored = static::getContainer()
+            ->get(EntityManagerInterface::class)
+            ->getRepository(StorefrontProfile::class)
+            ->findOneBy(['tenant' => $tenant]);
+        self::assertInstanceOf(StorefrontProfile::class, $stored);
+        self::assertSame('Identidad protegida', $stored->headline());
     }
 
     /** @return array{0: Tenant, 1: User} */

@@ -59,3 +59,19 @@ Ante una activación incorrecta:
 5. documentar causa y evidencia antes de reintentar.
 
 La conexión del dominio y la migración de datos/esquema son transiciones separadas del despliegue de código.
+
+
+## Autorización e invariante del dominio primario
+
+El perfil público es un recurso global del tenant. Los permisos `site.view` y
+`site.update` actuales están acotados por sede, por lo que un usuario delegado
+puede consultar el estado del storefront pero **no** modificar la identidad
+global. Mientras no exista un permiso explícitamente tenant-wide, la edición se
+reserva al propietario del tenant.
+
+La base de datos mantiene como máximo un dominio que sea simultáneamente
+`primary` y `verified` por tenant. El índice único se apoya en una clave
+nullable derivada al crear `TenantDomain`: los dominios que no son primarios
+verificados mantienen esa clave en `NULL`, mientras el primario verificado usa
+el ID del tenant. Una migración aborta si encuentra datos históricos ambiguos
+antes de instalar la restricción.

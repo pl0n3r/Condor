@@ -45,18 +45,20 @@ final class StorefrontAdminController extends AbstractController
             throw new AccessDeniedHttpException('No tienes acceso a esta empresa.', $exception);
         }
 
-        $canView = $membership->roleKey() === Membership::ROLE_OWNER;
-        $canEdit = $canView;
+        $isOwner = $membership->roleKey() === Membership::ROLE_OWNER;
+        $canView = $isOwner;
+        $canEdit = $isOwner;
 
-        if (!$canView) {
+        if (!$isOwner) {
             $branches = $entityManager->getRepository(Branch::class)->findBy(['tenant' => $tenant]);
             foreach ($branches as $branch) {
                 if (!$branch instanceof Branch) {
                     continue;
                 }
                 $permissions = $authorization->permissions($user, $tenant, $branch);
-                $canView = $canView || in_array('site.view', $permissions, true);
-                $canEdit = $canEdit || in_array('site.update', $permissions, true);
+                $canView = $canView
+                    || in_array('site.view', $permissions, true)
+                    || in_array('site.update', $permissions, true);
             }
         }
 

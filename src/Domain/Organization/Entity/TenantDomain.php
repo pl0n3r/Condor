@@ -30,6 +30,15 @@ class TenantDomain
     #[ORM\Column(name: 'is_verified', type: 'boolean')]
     private bool $verified;
 
+    #[ORM\Column(
+        name: 'primary_verified_tenant_id',
+        type: 'string',
+        length: 26,
+        nullable: true,
+        unique: true,
+    )]
+    private ?string $primaryVerifiedTenantId;
+
     #[ORM\Column(type: 'datetime_immutable')]
     private DateTimeImmutable $createdAt;
 
@@ -44,6 +53,9 @@ class TenantDomain
         $this->hostname = strtolower(rtrim(trim($hostname), '.'));
         $this->primary = $primary;
         $this->verified = $verified;
+        $this->primaryVerifiedTenantId = $primary && $verified
+            ? $tenant->id()
+            : null;
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
