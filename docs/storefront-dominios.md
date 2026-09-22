@@ -97,6 +97,13 @@ A partir de V 0.1.13, no proporcionar `tenant_slug` impide declarar
 `VALIDADO EN PRODUCCIÓN` mediante ese observador; un despliegue cuya identidad
 se observe correctamente permanece `DEPLOY_OBSERVED` hasta que el smoke del
 storefront pase. Las versiones antiguas siguen usando su contrato histórico.
+Desde V 0.1.16, el SSR además expone el slug público (no secreto) del tenant
+en `data-tenant-slug` de su sección principal, y el smoke lo contrasta con el
+slug solicitado. Así se detecta contenido cruzado de otro tenant incluso si la
+capa HTTP devuelve el canonical esperado. Las releases anteriores (V 0.1.13–0.1.15)
+conservan la validación histórica de versión, sección y canonical sin exigir
+ese nuevo atributo.
+
 Los checks no activan dominios, no demuestran por sí solos que DNS/TLS del
 canonical personalizado funcionen y no sustituyen la comprobación independiente
 de la migración y la transición productiva.
