@@ -378,6 +378,27 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
         self.assertTrue(resultado["comprobaciones"]["storefront"]["ok"])
 
+    def test_canonical_en_body_no_suple_head_sin_cierre_explicito(self) -> None:
+        slug = self.preparar_storefront()
+        canonical = self.base + "/" + slug
+        html = (
+            '<html><head><title>Condor</title><body>'
+            + '<link rel="canonical" href="' + canonical + '">'
+            + '<section class="storefront-hero"><h1>Empresa prueba</h1></section>'
+            + '<footer>V 0.1.13</footer></body></html>'
+        )
+        self.server.respuestas["/" + slug] = (200, "text/html", html.encode())
+        resultado = modulo.observar(
+            self.base, "0.1.13", SHA, intentos=1, intervalo=0,
+            tenant_slug=slug,
+        )
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["storefront"]["ok"])
+        self.assertIn(
+            "canonical",
+            resultado["comprobaciones"]["storefront"]["detalle"],
+        )
+
     def test_slug_desconocido_200_o_redirect_no_se_acepta(self) -> None:
         slug = self.preparar_storefront()
         desconocido = "/condor-smoke-no-existe-" + SHA[:12]
