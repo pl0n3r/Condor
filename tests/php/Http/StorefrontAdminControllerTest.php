@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Http;
 
 use App\Tests\Support\BrowserCsrfToken;
+use App\Shared\Id\UlidFactory;
 use App\Domain\Identity\Entity\BranchRoleAssignment;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\Role;
@@ -21,6 +22,7 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 final class StorefrontAdminControllerTest extends WebTestCase
 {
     use BrowserCsrfToken;
+
     public function testOwnerCanEditIdentityAndSeeItOnPublicSlug(): void
     {
         [$client, $entityManager, $tenant, $owner] = $this->tenantBrowser();
@@ -129,6 +131,74 @@ final class StorefrontAdminControllerTest extends WebTestCase
 
         $this->expectException(UniqueConstraintViolationException::class);
         $entityManager->flush();
+    }
+
+    public function testLegacyWriterCannotBypassPrimaryDomainUniqueness(): void
+    {
+        $entityManager = $this->entityManager();
+        [$tenant] = $this->tenantOwner($entityManager);
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+
+        $entityManager->persist(new TenantDomain(
+            $tenant,
+            'primary-'.$suffix.'.example.test',
+            true,
+            true,
+        ));
+        $entityManager->flush();
+
+        // Simula una instancia previa a V 0.1.13 que no conoce la columna generada.
+        $connection = $entityManager->getConnection();
+        $computed = $connection->fetchOne(
+            'SELECT primary_verified_tenant_id FROM condor_tenant_domain '
+            .'WHERE hostname = ?',
+            ['primary-'.$suffix.'.example.test'],
+        );
+        self::assertSame($tenant->id(), $computed);
+
+        $this->expectException(UniqueConstraintViolationException::class);
+        $connection->insert('condor_tenant_domain', [
+            'id' => UlidFactory::new(),
+            'tenant_id' => $tenant->id(),
+            'hostname' => 'legacy-primary-'.$suffix.'.example.test',
+            'is_primary' => 1,
+            'is_verified' => 1,
+            'created_at' => gmdate('Y-m-d H:i:s'),
+        ]);
+    }
+
+    public function testLegacyWriterCannotPromoteSecondVerifiedDomain(): void
+    {
+        $entityManager = $this->entityManager();
+        [$tenant] = $this->tenantOwner($entityManager);
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+
+        $entityManager->persist(new TenantDomain(
+            $tenant,
+            'primary-'.$suffix.'.example.test',
+            true,
+            true,
+        ));
+        $entityManager->persist(new TenantDomain(
+            $tenant,
+            'secondary-'.$suffix.'.example.test',
+            false,
+            true,
+        ));
+        $entityManager->flush();
+
+        $connection = $entityManager->getConnection();
+        self::assertNull($connection->fetchOne(
+            'SELECT primary_verified_tenant_id FROM condor_tenant_domain '
+            .'WHERE hostname = ?',
+            ['secondary-'.$suffix.'.example.test'],
+        ) ?: null);
+
+        $this->expectException(UniqueConstraintViolationException::class);
+        $connection->executeStatement(
+            'UPDATE condor_tenant_domain SET is_primary = 1 WHERE hostname = ?',
+            ['secondary-'.$suffix.'.example.test'],
+        );
     }
 
     public function testUnverifiedCustomHostFailsClosed(): void
@@ -301,7 +371,6 @@ final class StorefrontAdminControllerTest extends WebTestCase
 
         return $entityManager;
     }
-
 
     /** @return array{0: Tenant, 1: User} */
     private function tenantOwner(EntityManagerInterface $entityManager): array
