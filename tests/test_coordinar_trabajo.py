@@ -818,6 +818,32 @@ class CoordinacionTests(unittest.TestCase):
         self.assertNotIn("trabajo/issue-12", api.branches)
         self.assertEqual(api.status_history[-1], STATUS_COMPLETED)
 
+    def test_issue_close_is_idempotent_after_merged_pr_cleanup(self) -> None:
+        """Un cierre ya reconciliado no repite mutaciones de GitHub."""
+        api = FakeGitHub()
+        api.issue_data["state"] = "closed"
+        api.issue_data["state_reason"] = "completed"
+        api.issue_data["labels"] = [{"name": STATUS_COMPLETED}]
+        api.branches.pop("trabajo/issue-12", None)
+
+        update_issue_state(api, 12, "closed")
+
+        self.assertEqual(api.status_history, [])
+        self.assertEqual(api.comments, [])
+
+    def test_cancelled_issue_close_is_idempotent_after_cleanup(self) -> None:
+        """El estado terminal cancelado también tolera eventos duplicados."""
+        api = FakeGitHub()
+        api.issue_data["state"] = "closed"
+        api.issue_data["state_reason"] = "not_planned"
+        api.issue_data["labels"] = [{"name": STATUS_CANCELLED}]
+        api.branches.pop("trabajo/issue-12", None)
+
+        update_issue_state(api, 12, "closed")
+
+        self.assertEqual(api.status_history, [])
+        self.assertEqual(api.comments, [])
+
     def test_validate_pull_requires_main(self) -> None:
         """Rechaza un PR cuyo destino no sea main."""
         api = FakeGitHub()
