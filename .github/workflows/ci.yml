@@ -294,10 +294,10 @@ jobs:
           npm run build:admin
           test -s public/build/admin.js
           test -s public/build/admin.css
+          git diff --exit-code -- public/build
 
       - name: Auditoría continua de dependencias npm
         run: npm audit --audit-level=high
-          git diff --exit-code -- public/build
 
   backend-php:
     name: Backend PHP / MariaDB
@@ -458,6 +458,7 @@ jobs:
       RELEASE_SHA: ${{ github.sha }}
       PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
       E2E_EMAIL: owner-e2e@example.test
+      E2E_PLATFORM_EMAIL: owner-e2e-platform@example.test
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -487,6 +488,7 @@ jobs:
           echo "APP_SECRET=$app_secret" >> "$GITHUB_ENV"
           echo "E2E_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
           echo "CONDOR_OWNER_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
+          echo "CONDOR_PLATFORM_OWNER_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
 
       - name: Preparar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -528,6 +530,10 @@ jobs:
             --branch="Principal" \
             --email="$E2E_EMAIL" \
             --owner-name="Propietario E2E"
+          php bin/console app:platform-owner:provision \
+            --email="$E2E_PLATFORM_EMAIL" \
+            --name="Propietario Plataforma E2E" \
+            --password-env=CONDOR_PLATFORM_OWNER_PASSWORD
 
       - name: Iniciar aplicación
         run: |
@@ -640,6 +646,7 @@ jobs:
           set -euo pipefail
           dump="$(ls -1t var/backups/condor-condor_backup_source-*.sql.gz | head -1)"
           bash scripts/verify-backup-restore.sh "$dump"
+
 
   validar:
     name: Validar
