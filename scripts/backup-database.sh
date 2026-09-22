@@ -1,11 +1,5 @@
 #!/usr/bin/env sh
-# Backups/restauración demostrada (roadmap Issue #1). Produce un dump
-# comprimido y con timestamp, sin tocar nada de la base de datos real
-# (solo lectura vía mysqldump). Pensado para correr por cron en el
-# mismo hosting que ya ejecuta scripts/post-deploy.sh (Issue #144).
-#
-# Uso: DATABASE_URL="mysql://user:pass@host:port/db" scripts/backup-database.sh
-# Requiere: mysqldump/mariadb-dump en PATH, DATABASE_URL exportada.
+# Backup real de MariaDB/MySQL compatible con shared hosting.
 set -eu
 umask 077
 
@@ -14,36 +8,28 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
-url="${DATABASE_URL#mysql://}"
-url="${url%%\?*}"
-userpass="${url%%@*}"
-rest="${url#*@}"
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PHP_BIN=""
+for candidate in /opt/alt/php85/usr/bin/php /opt/alt/php86/usr/bin/php php85 php; do
+  if command -v "$candidate" >/dev/null 2>&1; then
+    PHP_BIN="$candidate"
+    break
+  fi
+done
+if [ -z "$PHP_BIN" ]; then
+  echo "backup-database.sh: no se encontró un binario de PHP utilizable." >&2
+  exit 1
+fi
 
-case "$userpass" in
-  *:*)
-    user="${userpass%%:*}"
-    pass="${userpass#*:}"
-    ;;
-  *)
-    user="$userpass"
-    pass=""
-    ;;
-esac
+parse_field() {
+  "$PHP_BIN" "$script_dir/parse-database-url.php" "$1"
+}
 
-hostport="${rest%%/*}"
-db="${rest#*/}"
-host="${hostport%%:*}"
-port="${hostport#*:}"
-[ "$port" = "$host" ] && port=3306
-
-case "$db" in
-  ''|*[!A-Za-z0-9_]*)
-    echo "backup-database.sh: nombre de base no válido." >&2
-    exit 1
-    ;;
-  *)
-    ;;
-esac
+user="$(parse_field user)"
+pass="$(parse_field password)"
+host="$(parse_field host)"
+port="$(parse_field port)"
+db="$(parse_field database)"
 
 backup_dir="${BACKUP_DIR:-var/backups}"
 mkdir -p "$backup_dir"
@@ -53,7 +39,7 @@ raw_tmp="$backup_dir/.condor-${db}-${timestamp}.sql.tmp"
 gzip_tmp="$out.tmp"
 
 cleanup() {
-  rm -f "$raw_tmp" "$gzip_tmp"
+  rm -f -- "$raw_tmp" "$gzip_tmp"
 }
 trap cleanup 0 HUP INT TERM
 
@@ -64,18 +50,18 @@ for candidate in mariadb-dump mysqldump; do
     break
   fi
 done
-
 if [ -z "$dump_bin" ]; then
   echo "backup-database.sh: no se encontró mariadb-dump ni mysqldump en PATH." >&2
   exit 1
 fi
 
+set --   --host="$host"   --port="$port"   --user="$user"   --single-transaction   --routines   --triggers
+
 case "$(basename "$dump_bin")" in
   mysqldump)
-    compatibility_arg="--column-statistics=0"
+    set -- --column-statistics=0 "$@"
     ;;
   mariadb-dump)
-    compatibility_arg=""
     ;;
   *)
     echo "backup-database.sh: binario de dump no soportado: $dump_bin" >&2
@@ -83,24 +69,36 @@ case "$(basename "$dump_bin")" in
     ;;
 esac
 
-MYSQL_PWD="$pass" "$dump_bin" \
-  $compatibility_arg \
-  --host="$host" \
-  --port="$port" \
-  --user="$user" \
-  --single-transaction \
-  --routines \
-  --triggers \
-  "$db" > "$raw_tmp"
+MYSQL_PWD="$pass" "$dump_bin" "$@" "$db" > "$raw_tmp"
 
 gzip -c "$raw_tmp" > "$gzip_tmp"
-mv "$gzip_tmp" "$out"
-rm -f "$raw_tmp"
+mv -- "$gzip_tmp" "$out"
+rm -f -- "$raw_tmp"
 trap - 0 HUP INT TERM
 
 echo "Backup creado: $out"
 
-# Retención: conserva solo los últimos N backups (default 14) para no
-# agotar disco en shared hosting.
-keep="${BACKUP_KEEP:-14}"
-ls -1t "$backup_dir"/condor-"${db}"-*.sql.gz 2>/dev/null | tail -n +$((keep + 1)) | xargs -r rm -f
+# Retención por cantidad. El valor explícito sigue siendo configurable,
+# pero el baseline seguro aumenta de 14 a 30 backups diarios.
+keep="${BACKUP_KEEP:-30}"
+case "$keep" in
+  ''|*[!0-9]*)
+    echo "backup-database.sh: BACKUP_KEEP debe ser un entero positivo." >&2
+    exit 1
+    ;;
+esac
+if [ "$keep" -lt 1 ]; then
+  echo "backup-database.sh: BACKUP_KEEP debe ser mayor que cero." >&2
+  exit 1
+fi
+
+LC_ALL=C find "$backup_dir" -maxdepth 1 -type f -name "condor-${db}-*.sql.gz" -print   | LC_ALL=C sort -r   | {
+      count=0
+      while IFS= read -r backup; do
+        [ -n "$backup" ] || continue
+        count=$((count + 1))
+        if [ "$count" -gt "$keep" ]; then
+          rm -f -- "$backup"
+        fi
+      done
+    }
