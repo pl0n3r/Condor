@@ -9,7 +9,6 @@ use App\Application\Identity\CurrentTenantForUser;
 use App\Application\Storefront\StorefrontPresentation;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\User;
-use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\StorefrontProfile;
 use App\Domain\Organization\Entity\Tenant;
 use App\Shared\Version\AppVersion;
@@ -45,22 +44,12 @@ final class StorefrontAdminController extends AbstractController
             throw new AccessDeniedHttpException('No tienes acceso a esta empresa.', $exception);
         }
 
-        $isOwner = $membership->roleKey() === Membership::ROLE_OWNER;
-        $canView = $isOwner;
-        $canEdit = $isOwner;
-
-        if (!$isOwner) {
-            $branches = $entityManager->getRepository(Branch::class)->findBy(['tenant' => $tenant]);
-            foreach ($branches as $branch) {
-                if (!$branch instanceof Branch) {
-                    continue;
-                }
-                $permissions = $authorization->permissions($user, $tenant, $branch);
-                $canView = $canView
-                    || in_array('site.view', $permissions, true)
-                    || in_array('site.update', $permissions, true);
-            }
-        }
+        $canEdit = $membership->roleKey() === Membership::ROLE_OWNER;
+        $canView = $canEdit || $authorization->hasAnyPermission(
+            $user,
+            $tenant,
+            ['site.view', 'site.update'],
+        );
 
         if (!$canView && !$canEdit) {
             throw new AccessDeniedHttpException('No tienes permiso para consultar este sitio.');

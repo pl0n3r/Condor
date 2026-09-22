@@ -31,34 +31,26 @@ final readonly class BranchAuthorization
             return PermissionCatalog::all();
         }
 
-        $permissions = [];
-        $assignments = $this->entityManager
-            ->getRepository(BranchRoleAssignment::class)
-            ->findBy([
-                'tenant' => $tenant,
-                'membership' => $membership,
-                'branch' => $branch,
-            ]);
+        return $this->assignedPermissions($membership, $tenant, $branch);
+    }
 
-        foreach ($assignments as $assignment) {
-            if (!$assignment instanceof BranchRoleAssignment) {
-                continue;
-            }
-
-            $role = $assignment->role();
-            if (!$role->isActive()) {
-                continue;
-            }
-
-            foreach ($role->permissions() as $permission) {
-                $permissions[$permission] = true;
-            }
+    /**
+     * @param list<string> $permissions
+     */
+    public function hasAnyPermission(
+        User $user,
+        Tenant $tenant,
+        array $permissions,
+    ): bool {
+        $requested = PermissionCatalog::normalize($permissions);
+        $membership = $this->membership($user, $tenant);
+        if ($membership->roleKey() === Membership::ROLE_OWNER) {
+            return true;
         }
 
-        $result = array_keys($permissions);
-        sort($result, SORT_STRING);
+        $effective = $this->assignedPermissions($membership, $tenant);
 
-        return array_values($result);
+        return array_intersect($requested, $effective) !== [];
     }
 
     public function canAccessBranch(
@@ -113,6 +105,46 @@ final readonly class BranchAuthorization
         }
 
         return $membership;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function assignedPermissions(
+        Membership $membership,
+        Tenant $tenant,
+        ?Branch $branch = null,
+    ): array {
+        $criteria = [
+            'tenant' => $tenant,
+            'membership' => $membership,
+        ];
+        if ($branch instanceof Branch) {
+            $criteria['branch'] = $branch;
+        }
+
+        $permissions = [];
+        $assignments = $this->entityManager
+            ->getRepository(BranchRoleAssignment::class)
+            ->findBy($criteria);
+
+        foreach ($assignments as $assignment) {
+            if (
+                !$assignment instanceof BranchRoleAssignment
+                || !$assignment->role()->isActive()
+            ) {
+                continue;
+            }
+
+            foreach ($assignment->role()->permissions() as $permission) {
+                $permissions[$permission] = true;
+            }
+        }
+
+        $result = array_keys($permissions);
+        sort($result, SORT_STRING);
+
+        return array_values($result);
     }
 
     public function membership(User $user, Tenant $tenant): Membership

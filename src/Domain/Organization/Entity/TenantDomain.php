@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Organization\Entity;
 
+use App\Shared\Id\UlidFactory;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
@@ -12,7 +13,9 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: 'condor_tenant_domain')]
 class TenantDomain
 {
-    use HasUlidIdentity;
+    #[ORM\Id]
+    #[ORM\Column(type: 'string', length: 26)]
+    private string $id;
 
     #[ORM\ManyToOne(targetEntity: Tenant::class)]
     #[ORM\JoinColumn(name: 'tenant_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
@@ -45,7 +48,7 @@ class TenantDomain
         bool $primary = false,
         bool $verified = false,
     ) {
-        $this->initializeUlidIdentity();
+        $this->id = UlidFactory::new();
         $this->tenant = $tenant;
         $this->hostname = strtolower(rtrim(trim($hostname), '.'));
         $this->primary = $primary;

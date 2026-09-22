@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Organization\Entity;
 
+use App\Shared\Id\UlidFactory;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
@@ -14,7 +15,9 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\UniqueConstraint(name: 'uniq_legal_tenant_id', columns: ['tenant_id', 'id'])]
 class LegalEntity
 {
-    use HasUlidIdentity;
+    #[ORM\Id]
+    #[ORM\Column(type: 'string', length: 26)]
+    private string $id;
 
     #[ORM\ManyToOne(targetEntity: Tenant::class)]
     #[ORM\JoinColumn(name: 'tenant_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
@@ -34,12 +37,17 @@ class LegalEntity
 
     public function __construct(Tenant $tenant, string $legalName, ?string $nit, bool $primary = false)
     {
-        $this->initializeUlidIdentity();
+        $this->id = UlidFactory::new();
         $this->tenant = $tenant;
         $this->legalName = trim($legalName);
         $this->nit = $nit !== null && trim($nit) !== '' ? trim($nit) : null;
         $this->primary = $primary;
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    }
+
+    public function id(): string
+    {
+        return $this->id;
     }
 
     public function tenant(): Tenant
