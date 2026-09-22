@@ -44,7 +44,7 @@ class TextoVisible(HTMLParser):
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.oculto = 0
+        self.ocultos: list[str] = []
         self.en_head = False
         self.textos: list[str] = []
         self.en_formulario = 0
@@ -54,9 +54,9 @@ class TextoVisible(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag in {"script", "style", "template"}:
-            self.oculto += 1
+            self.ocultos.append(tag)
             return
-        if self.oculto:
+        if self.ocultos:
             return
 
         atributos = dict(attrs)
@@ -74,14 +74,15 @@ class TextoVisible(HTMLParser):
 
     def handle_endtag(self, tag: str) -> None:
         if tag in {"script", "style", "template"}:
-            self.oculto = max(0, self.oculto - 1)
-        elif not self.oculto and tag == "head":
+            if self.ocultos and self.ocultos[-1] == tag:
+                self.ocultos.pop()
+        elif not self.ocultos and tag == "head":
             self.en_head = False
-        elif not self.oculto and tag == "form":
+        elif not self.ocultos and tag == "form":
             self.en_formulario = max(0, self.en_formulario - 1)
 
     def handle_data(self, data: str) -> None:
-        if not self.oculto:
+        if not self.ocultos:
             self.textos.append(data)
 
 
