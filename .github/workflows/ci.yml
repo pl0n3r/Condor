@@ -703,10 +703,13 @@ jobs:
         run: |
           set -euo pipefail
           app_secret="$(openssl rand -hex 32)"
+          owner_password="$(openssl rand -base64 32)"
           echo "::add-mask::$app_secret"
+          echo "::add-mask::$owner_password"
           echo "APP_SECRET=$app_secret" >> "$GITHUB_ENV"
+          echo "CONDOR_OWNER_PASSWORD=$owner_password" >> "$GITHUB_ENV"
 
-      - name: Instalar dependencias y migrar el esquema fuente
+      - name: Instalar dependencias, migrar y sembrar datos centinela
         run: |
           set -euo pipefail
           python3 scripts/ci_retry.py \
@@ -715,6 +718,19 @@ jobs:
             --label "composer install" \
             -- composer install --no-interaction --prefer-dist --no-progress
           php bin/console doctrine:migrations:migrate --no-interaction
+          php bin/console app:onboarding:create \
+            --name="Backup Sentinel" \
+            --slug="backup-sentinel" \
+            --legal-name="Backup Sentinel SAS" \
+            --branch="Principal" \
+            --email="backup-sentinel@example.test" \
+            --owner-name="Backup Sentinel Owner"
+          php bin/console doctrine:query:sql \
+            "SELECT slug FROM condor_tenant WHERE slug = 'backup-sentinel'" \
+            | grep -q 'backup-sentinel'
+          php bin/console doctrine:query:sql \
+            "SELECT email FROM condor_user WHERE email = 'backup-sentinel@example.test'" \
+            | grep -q 'backup-sentinel@example.test'
 
       - name: Crear backup real de la base migrada
         run: bash scripts/backup-database.sh
@@ -786,10 +802,12 @@ jobs:
 
           php bin/console doctrine:migrations:status --no-interaction >/dev/null
 
-      - name: Demostrar que el backup se restaura y queda consultable
+      - name: Demostrar que el backup restaura esquema y datos
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/condor_backup_restored?serverVersion=mariadb-11.4.0&charset=utf8mb4
           CONDOR_ALLOW_DESTRUCTIVE_RESTORE: '1'
+          CONDOR_RESTORE_EXPECT_TENANT_SLUG: backup-sentinel
+          CONDOR_RESTORE_EXPECT_USER_EMAIL: backup-sentinel@example.test
         run: |
           set -euo pipefail
           dump="$(ls -1t var/backups/condor-condor_backup_source-*.sql.gz | head -1)"
