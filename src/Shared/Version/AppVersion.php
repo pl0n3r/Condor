@@ -22,10 +22,16 @@ final readonly class AppVersion
 
     public function releaseSha(): string
     {
-        $sha = $_SERVER['RELEASE_SHA'] ?? $_ENV['RELEASE_SHA'] ?? getenv('RELEASE_SHA');
-
-        if (is_string($sha) && $this->isValidSha($sha)) {
-            return $sha;
+        foreach (
+            [
+                $_SERVER['RELEASE_SHA'] ?? null,
+                $_ENV['RELEASE_SHA'] ?? null,
+                getenv('RELEASE_SHA'),
+            ] as $sha
+        ) {
+            if (is_string($sha) && $this->isValidSha($sha)) {
+                return $sha;
+            }
         }
 
         $fromGit = $this->readShaFromGitHead();
