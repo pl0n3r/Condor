@@ -10,8 +10,9 @@
 # de Condor (ErrorIncidentSubscriber) llega a interceptarlo: el visitante
 # ve la página genérica del hosting en vez del diagnóstico seguro.
 #
-# Este script deja el contenedor de producción sincronizado con el código
-# recién desplegado en cada deploy, sin tocar datos ni esquema.
+# Este script sincroniza el runtime con el código desplegado: aplica únicamente
+# migraciones forward compatibles con producción y luego recompila caché.
+# Las migraciones destructivas siguen prohibidas por D-040/D-044.
 
 set -eu
 
