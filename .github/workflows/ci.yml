@@ -736,10 +736,7 @@ jobs:
             exit 1
           fi
 
-          mariadb --host=127.0.0.1 --port=3306 --user=root \
-            --database=condor_backup_source \
-            --execute='SELECT COUNT(*) FROM doctrine_migration_versions;' \
-            >/dev/null
+          php bin/console doctrine:migrations:status --no-interaction >/dev/null
 
       - name: Demostrar que el backup se restaura y queda consultable
         env:
