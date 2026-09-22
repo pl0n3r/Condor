@@ -11,6 +11,7 @@
 <div
     id="condor-platform-root"
     data-version="{{ app_version }}"
+    data-section="{{ section }}"
     data-logout-token="{{ csrf_token('logout') }}"
     data-staff-token="{{ csrf_token('platform_staff_management') }}"
     data-tenant-token="{{ csrf_token('platform_tenant_management') }}"
@@ -22,7 +23,9 @@
                 <span>V {{ app_version }}</span>
             </div>
             <nav aria-label="Navegación de plataforma">
-                <a href="{{ path('app_platform_owner') }}" aria-current="page">Centro de control</a>
+                <a href="{{ path('app_platform_owner') }}"{% if section == 'control' %} aria-current="page"{% endif %}>Centro de control</a>
+                <a href="{{ path('app_platform_owner_tenants') }}"{% if section == 'empresas' %} aria-current="page"{% endif %}>Empresas</a>
+                <a href="{{ path('app_platform_owner_staff') }}"{% if section == 'staff' %} aria-current="page"{% endif %}>Staff</a>
                 <a href="{{ path('app_platform_diagnostics') }}">Diagnósticos</a>
             </nav>
             <form method="post" action="{{ path('app_logout') }}">

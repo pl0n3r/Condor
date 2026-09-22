@@ -94,6 +94,47 @@ final class PlatformOwnerControllerTest extends WebTestCase
         self::assertSelectorTextContains('.eyebrow', 'Propietario de plataforma');
     }
 
+    public function testOwnerCanAccessTenantsAndStaffSections(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        $user = new User(
+            'owner-'.bin2hex(random_bytes(4)).'@example.test',
+            'Propietario',
+            [User::ROLE_PLATFORM_OWNER],
+        );
+        $entityManager->persist($user);
+        $entityManager->flush();
+
+        $client->loginUser($user);
+
+        $crawler = $client->request('GET', '/adminpl0n3r/empresas');
+        self::assertResponseIsSuccessful();
+        self::assertSame(
+            'empresas',
+            $crawler->filter('#condor-platform-root')->attr('data-section'),
+        );
+        self::assertSame(
+            'page',
+            $crawler->filter('a[href="/adminpl0n3r/empresas"]')
+                ->attr('aria-current'),
+        );
+
+        $crawler = $client->request('GET', '/adminpl0n3r/staff');
+        self::assertResponseIsSuccessful();
+        self::assertSame(
+            'staff',
+            $crawler->filter('#condor-platform-root')->attr('data-section'),
+        );
+        self::assertSame(
+            'page',
+            $crawler->filter('a[href="/adminpl0n3r/staff"]')
+                ->attr('aria-current'),
+        );
+    }
+
     public function testOwnerContextApiReturnsRealGlobalMetricsAndTenants(): void
     {
         $client = static::createClient();
