@@ -74,6 +74,7 @@ class TextoVisible(HTMLParser):
         if tag == "head":
             self.en_head = True
         elif tag == "body":
+            self.en_head = False
             self.en_body = True
         elif (tag == "link" and self.en_head
               and "canonical" in (atributos.get("rel") or "").split()):
