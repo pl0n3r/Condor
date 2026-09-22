@@ -145,6 +145,16 @@ final readonly class InventoryService
                     return $existing;
                 }
 
+                $transfer = new InventoryTransfer(
+                    $tenant,
+                    $variant,
+                    $sourceFrom,
+                    $sourceTo,
+                    $quantity,
+                    $actorUserId,
+                    $key,
+                );
+
                 $fromBalance = $this->balanceForUpdate(
                     $entityManager,
                     $tenant,
@@ -161,15 +171,6 @@ final readonly class InventoryService
                 $fromBalance->apply(-$quantity);
                 $toBalance->apply($quantity);
 
-                $transfer = new InventoryTransfer(
-                    $tenant,
-                    $variant,
-                    $sourceFrom,
-                    $sourceTo,
-                    $quantity,
-                    $actorUserId,
-                    $key,
-                );
                 $entityManager->persist($transfer);
 
                 $entityManager->persist(new InventoryMovement(
