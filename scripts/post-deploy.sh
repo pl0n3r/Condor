@@ -68,6 +68,8 @@ acquire_lock() {
             echo "post-deploy.sh: lock existente sin timestamp válido; se omite." >&2
             return 1
             ;;
+        *)
+            ;;
     esac
 
     now="$(date +%s)"
