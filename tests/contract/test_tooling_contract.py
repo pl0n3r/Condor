@@ -92,6 +92,12 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn("trap 'cleanup_guard; cleanup_lock' EXIT", script)
         self.assertIn("trap 'exit 130' INT", script)
         self.assertIn("trap 'exit 143' TERM", script)
+        self.assertIn('SCHEMA_CHECK_LOG="$(mktemp', script)
+        self.assertIn("schema_check_status=$?", script)
+        self.assertIn("comprobación de esquema falló", script)
+        self.assertIn("migraciones pendientes o historial de migraciones no reconciliado", script)
+        self.assertIn("fallo de base de datos o conectividad", script)
+        self.assertNotIn("up-to-date --env=prod --no-interaction >/dev/null 2>&1", script)
 
     def test_health_exposes_schema_state_for_remote_release_validation(self) -> None:
         """El smoke remoto recibe solo un booleano de esquema, sin internals."""
