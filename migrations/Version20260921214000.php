@@ -49,15 +49,15 @@ final class Version20260921214000 extends AbstractMigration // NOSONAR -- nombre
               COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
             SQL);
 
-        $this->addSql(
-            'ALTER TABLE condor_tenant_domain '
-            .'ADD primary_verified_tenant_id VARCHAR(26) DEFAULT NULL',
-        );
-        $this->addSql(
-            'UPDATE condor_tenant_domain '
-            .'SET primary_verified_tenant_id = tenant_id '
-            .'WHERE is_primary = 1 AND is_verified = 1',
-        );
+        // Valor calculado por la BD: incluso los escritores anteriores al despliegue
+        // quedan sujetos al índice único durante una transición con código mixto.
+        $this->addSql(<<<'SQL'
+            ALTER TABLE condor_tenant_domain
+                ADD primary_verified_tenant_id VARCHAR(26)
+                    GENERATED ALWAYS AS (
+                        IF(is_primary = 1 AND is_verified = 1, tenant_id, NULL)
+                    ) PERSISTENT
+            SQL);
         $this->addSql(
             'CREATE UNIQUE INDEX uniq_domain_primary_verified_tenant '
             .'ON condor_tenant_domain (primary_verified_tenant_id)',
