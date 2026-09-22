@@ -241,7 +241,7 @@ final class PlatformStaffController extends PlatformOwnerApiController
                 'email' => $result->user->email(),
                 'active' => $result->user->isActive(),
             ],
-            'invitation' => $this->invitationPayload(
+            'invitation' => $this->activationInvitationPayload(
                 $result->invitation,
                 $result->rawToken,
             ),
