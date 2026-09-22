@@ -31,10 +31,14 @@ final class ProductTest extends TestCase
         self::assertSame('Camiseta negra', $product->name());
         self::assertSame('camiseta-negra', $product->slug());
         self::assertSame('Algodón pesado.', $product->description());
+        self::assertFalse($product->allowsBackorder());
         self::assertSame('TEE-BLACK-M', $variant->sku());
         self::assertSame('Talla M', $variant->name());
         self::assertSame($tenant->id(), $variant->tenant()->id());
         self::assertSame($product->id(), $variant->product()->id());
+
+        $product->setBackorderAllowed(true);
+        self::assertTrue($product->allowsBackorder());
     }
 
     public function testVariantRejectsProductFromAnotherTenant(): void
