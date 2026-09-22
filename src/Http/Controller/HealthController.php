@@ -20,11 +20,9 @@ final class HealthController
         DependencyFactory $migrations,
     ): JsonResponse {
         try {
-            $schemaUpToDate = 0 === count(
-                $migrations
-                    ->getMigrationStatusCalculator()
-                    ->getNewMigrations(),
-            );
+            $status = $migrations->getMigrationStatusCalculator();
+            $schemaUpToDate = 0 === count($status->getNewMigrations())
+                && 0 === count($status->getExecutedUnavailableMigrations());
         } catch (Throwable) {
             // Fail closed without leaking DB/schema internals through /health.
             $schemaUpToDate = false;

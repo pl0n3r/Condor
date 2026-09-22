@@ -100,11 +100,9 @@ acquire_guard() {
 }
 
 recuperar_lock() {
-    if ! acquire_guard; then
-        cleanup_guard
-        return 1
-    fi
-
+    # acquire_lock() ya mantiene el flock estable. Si llegamos aquí con el
+    # guard adquirido, ninguna corrida que respete este protocolo sigue activa;
+    # LOCK_FILE es solo metadata recuperable de una corrida terminada.
     owner_token="$(sed -n '1p' "$LOCK_FILE" 2>/dev/null || true)"
     owner_pid="$(sed -n '2p' "$LOCK_FILE" 2>/dev/null || true)"
     created_at="$(sed -n '3p' "$LOCK_FILE" 2>/dev/null || true)"
@@ -113,52 +111,55 @@ recuperar_lock() {
         *[!0-9:]*|:*|*:)
             if [ -z "$(find "$LOCK_FILE" -mmin +"$LOCK_INVALID_GRACE_MINUTES" -print -quit 2>/dev/null)" ]; then
                 echo "post-deploy.sh: lock incompleto reciente; se omite esta corrida." >&2
-                cleanup_guard
                 return 1
             fi
+            echo "post-deploy.sh: lock incompleto huérfano; se recupera bajo mutex." >&2
             ;;
         *)
-            if kill -0 "$owner_pid" 2>/dev/null; then
-                echo "post-deploy.sh: otra corrida sigue activa (pid $owner_pid); se omite." >&2
-                cleanup_guard
-                return 1
-            fi
-
             now="$(date +%s)"
             age=$((now - created_at))
             if [ "$age" -le "$LOCK_MAX_AGE_SECONDS" ]; then
-                echo "post-deploy.sh: lock huérfano detectado; se recupera de forma segura." >&2
+                echo "post-deploy.sh: lock huérfano detectado; se recupera bajo mutex." >&2
             else
-                echo "post-deploy.sh: lock huérfano y vencido; se recupera." >&2
+                echo "post-deploy.sh: lock huérfano y vencido; se recupera bajo mutex." >&2
             fi
             ;;
     esac
 
+    current_token="$(sed -n '1p' "$LOCK_FILE" 2>/dev/null || true)"
+    if [ "$current_token" != "$owner_token" ]; then
+        echo "post-deploy.sh: el lock cambió mientras se inspeccionaba; se omite." >&2
+        return 1
+    fi
+
     stale="$LOCK_FILE.stale.$LOCK_TOKEN"
     if ! mv "$LOCK_FILE" "$stale" 2>/dev/null; then
         echo "post-deploy.sh: el lock cambió concurrentemente; se omite." >&2
-        cleanup_guard
         return 1
     fi
     rm -f -- "$stale"
 
     if ! crear_lock; then
-        echo "post-deploy.sh: otro proceso adquirió el lock primero; se omite." >&2
-        cleanup_guard
+        echo "post-deploy.sh: no fue posible publicar el lock bajo el mutex adquirido." >&2
         return 1
     fi
-
-    cleanup_guard
 }
 
 acquire_lock() {
+    # El flock es el mutex real y se conserva hasta EXIT. LOCK_FILE aporta
+    # metadata diagnóstica, pero nunca decide por sí solo si el dueño está vivo.
+    if ! acquire_guard; then
+        return 1
+    fi
+
     if crear_lock; then
         return 0
     fi
+
     recuperar_lock
 }
 
-trap 'cleanup_schema_check_log; cleanup_guard; cleanup_lock' EXIT
+trap 'cleanup_schema_check_log; cleanup_lock; cleanup_guard' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
@@ -170,7 +171,7 @@ fi
 # Un esquema pendiente requiere autorización explícita y una operación separada.
 SCHEMA_CHECK_LOG="$(mktemp "${TMPDIR:-/tmp}/condor-schema-check-XXXXXX.log")"
 schema_check_status=0
-if "$PHP_BIN" bin/console doctrine:migrations:up-to-date --env=prod --no-interaction >"$SCHEMA_CHECK_LOG" 2>&1; then
+if "$PHP_BIN" bin/console doctrine:migrations:up-to-date --env=prod --no-interaction --fail-on-unregistered >"$SCHEMA_CHECK_LOG" 2>&1; then
     cleanup_schema_check_log
 else
     schema_check_status=$?

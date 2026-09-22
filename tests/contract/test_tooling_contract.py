@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
-import time
 import unittest
 from pathlib import Path
 
@@ -89,10 +88,15 @@ class ToolingContractTests(unittest.TestCase):
         )
         self.assertNotIn('"$LOCK_TOKEN" "$" "$(date +%s)"', script)
         self.assertNotIn("cleanup_guard\n                cleanup_guard", script)
-        self.assertIn('kill -0 "$owner_pid"', script)
+        self.assertNotIn('kill -0 "$owner_pid"', script)
+        self.assertIn('--fail-on-unregistered', script)
+        self.assertIn(
+            "trap 'cleanup_schema_check_log; cleanup_lock; cleanup_guard' EXIT",
+            script,
+        )
         self.assertIn('find "$LOCK_FILE" -mmin +', script)
         self.assertIn("set -C", script)
-        self.assertIn("trap 'cleanup_schema_check_log; cleanup_guard; cleanup_lock' EXIT", script)
+
         self.assertIn("trap 'exit 130' INT", script)
         self.assertIn("trap 'exit 143' TERM", script)
         self.assertIn("umask 077", script)
@@ -109,12 +113,14 @@ class ToolingContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             guard = str(Path(tmp) / "post-deploy.lock.guard")
             first = subprocess.Popen(
-                ["flock", "-n", guard, "sleep", "1"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                ["flock", "-n", guard, "sh", "-c", "printf ready; sleep 1"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
             )
             try:
-                time.sleep(0.1)
+                self.assertIsNotNone(first.stdout)
+                self.assertEqual(first.stdout.read(5), "ready")
                 second = subprocess.run(
                     ["flock", "-n", guard, "true"],
                     check=False,
@@ -145,6 +151,7 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn("'schema_up_to_date' => $schemaUpToDate", controller)
         self.assertIn("getMigrationStatusCalculator()", controller)
         self.assertIn("getNewMigrations()", controller)
+        self.assertIn("getExecutedUnavailableMigrations()", controller)
         self.assertIn('evidencias["schema"]', observer)
         self.assertIn('carga.get("schema_up_to_date") is True', observer)
 
