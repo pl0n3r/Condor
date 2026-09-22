@@ -8,6 +8,8 @@ use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Catalog\Entity\Product;
 use App\Domain\Catalog\Entity\ProductVariant;
+use App\Domain\Identity\Entity\User;
+use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
