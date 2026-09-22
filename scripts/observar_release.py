@@ -102,20 +102,33 @@ class TextoVisible(HTMLParser):
 
     def handle_endtag(self, tag: str) -> None:
         if tag in {"script", "style", "template", "title"}:
-            if self.ocultos and self.ocultos[-1] == tag:
-                self.ocultos.pop()
-        elif not self.ocultos and tag == "head":
+            self._cerrar_oculto(tag)
+            return
+        if self.ocultos:
+            return
+
+        self._cerrar_etiqueta_activa(tag)
+
+    def _cerrar_oculto(self, tag: str) -> None:
+        if self.ocultos and self.ocultos[-1] == tag:
+            self.ocultos.pop()
+
+    def _cerrar_etiqueta_activa(self, tag: str) -> None:
+        if tag == "head":
             self.en_head = False
-        elif not self.ocultos and tag == "body":
+        elif tag == "body":
             self.en_body = False
-        elif not self.ocultos and tag == "h1":
+        elif tag == "h1":
             self.en_titulo_hero = False
-        elif not self.ocultos and tag == "section":
-            if self.secciones_hero:
-                self.secciones_hero.pop()
-            self.en_hero = any(self.secciones_hero)
-        elif not self.ocultos and tag == "form":
+        elif tag == "section":
+            self._cerrar_seccion()
+        elif tag == "form":
             self.en_formulario = max(0, self.en_formulario - 1)
+
+    def _cerrar_seccion(self) -> None:
+        if self.secciones_hero:
+            self.secciones_hero.pop()
+        self.en_hero = any(self.secciones_hero)
 
     def handle_data(self, data: str) -> None:
         if self.en_body and not self.ocultos:
