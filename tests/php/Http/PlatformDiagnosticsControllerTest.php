@@ -92,6 +92,65 @@ final class PlatformDiagnosticsControllerTest extends WebTestCase
         self::assertArrayNotHasKey('request_body', $payload['diagnostic']);
     }
 
+    public function testOwnerCanDownloadFunctionalActivityCsvFromContractRoute(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        $owner = new User(
+            'report-owner-'.bin2hex(random_bytes(4)).'@example.test',
+            'Propietario reporte',
+            [User::ROLE_PLATFORM_OWNER],
+        );
+        $entityManager->persist($owner);
+        $entityManager->flush();
+
+        $client->loginUser($owner);
+        $client->request(
+            'GET',
+            '/adminpl0n3r/diagnosticos/reportes/actividad.csv',
+        );
+
+        self::assertResponseIsSuccessful();
+        self::assertStringStartsWith(
+            'text/csv',
+            (string) $client->getResponse()->headers->get('Content-Type'),
+        );
+        self::assertStringContainsString(
+            'condor-actividad-funcional-30d.csv',
+            (string) $client->getResponse()->headers->get(
+                'Content-Disposition',
+            ),
+        );
+        self::assertStringStartsWith(
+            'fecha,',
+            (string) $client->getResponse()->getContent(),
+        );
+    }
+
+    public function testNormalAdministratorCannotDownloadFunctionalActivityCsv(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        $user = new User(
+            'report-admin-'.bin2hex(random_bytes(4)).'@example.test',
+            'Administrador reporte',
+        );
+        $entityManager->persist($user);
+        $entityManager->flush();
+
+        $client->loginUser($user);
+        $client->request(
+            'GET',
+            '/adminpl0n3r/diagnosticos/reportes/actividad.csv',
+        );
+
+        self::assertResponseStatusCodeSame(403);
+    }
+
     public function testNormalAdministratorCannotOpenOwnerDiagnostics(): void
     {
         $client = static::createClient();
