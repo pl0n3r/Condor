@@ -79,3 +79,24 @@ durante un despliegue parcial. Doctrine la trata como read-only y nunca intenta
 escribirla. La migración aborta si encuentra datos históricos ambiguos antes
 de instalar la restricción; no corrige datos reales ni ejecuta el cambio en
 producción automáticamente.
+
+## Observación de release con storefront real
+
+El workflow manual `.github/workflows/observar-release.yml` acepta los inputs
+`tenant_slug` y `canonical_storefront` para comprobar **sin sesión ni
+mutaciones** el storefront SSR de un tenant conocido. El slug debe corresponder
+a una empresa de prueba autorizada para exposición pública. Omitir el canonical
+cuando se espera `https://www.condorapp.com.co/<slug>`; proporcionarlo si el
+dominio primario verificado usa un canonical personalizado HTTPS. El observador
+comprueba la versión visible, el bloque `storefront-hero` y el canonical
+exacto, y exige HTTP 404 sin redirección para un slug desconocido ligado al SHA
+de release. Los resultados se integran al manifiesto de evidencia, no solo al
+resumen de logs.
+
+A partir de V 0.1.13, no proporcionar `tenant_slug` impide declarar
+`VALIDADO EN PRODUCCIÓN` mediante ese observador; un despliegue cuya identidad
+se observe correctamente permanece `DEPLOY_OBSERVED` hasta que el smoke del
+storefront pase. Las versiones antiguas siguen usando su contrato histórico.
+Los checks no activan dominios, no demuestran por sí solos que DNS/TLS del
+canonical personalizado funcionen y no sustituyen la comprobación independiente
+de la migración y la transición productiva.
