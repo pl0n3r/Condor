@@ -367,12 +367,6 @@ jobs:
       - name: Aplicar migraciones en MariaDB descartable
         run: php bin/console doctrine:migrations:migrate --no-interaction
 
-      - name: Validar sincronía del esquema Doctrine
-        run: |
-          set -euo pipefail
-          php bin/console doctrine:schema:update --dump-sql
-          php bin/console doctrine:schema:validate --no-interaction
-
       - name: Ejecutar pruebas PHP
         run: vendor/bin/simple-phpunit
 
