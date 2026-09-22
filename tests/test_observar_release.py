@@ -84,9 +84,11 @@ class ObserverTests(unittest.TestCase):
         ])
         self.assertTrue(all(v["ok"] for v in resultado["comprobaciones"].values()))
 
-    def preparar_storefront(self, *, canonical: str | None = None) -> str:
-        """Simula V 0.1.13, un tenant real y el slug fallando cerrado."""
-        version = "0.1.13"
+    def preparar_storefront(
+        self, *, canonical: str | None = None, version: str = "0.1.13",
+        incluir_identidad: bool = True,
+    ) -> str:
+        """Simula una release de storefront y su aislamiento público."""
         slug = "empresa-prueba"
         self.server.respuestas["/health"] = (
             200, "application/json", json.dumps({
@@ -94,16 +96,20 @@ class ObserverTests(unittest.TestCase):
             }).encode(),
         )
         self.server.respuestas["/"] = (
-            200, "text/html", HOME.replace(b"0.1.0", b"0.1.13"),
+            200, "text/html", HOME.replace(b"0.1.0", version.encode()),
         )
         self.server.respuestas["/admin/login"] = (
-            200, "text/html", LOGIN.replace(b"0.1.0", b"0.1.13"),
+            200, "text/html", LOGIN.replace(b"0.1.0", version.encode()),
         )
         url = canonical or self.base + "/" + slug
+        atributo_identidad = (
+            ' data-tenant-slug="' + slug + '"' if incluir_identidad else ""
+        )
         html = (
             '<html><head><link rel="canonical" href="' + url
-            + '"></head><body><section class="hero storefront-hero">'
-            + '<h1>Empresa prueba</h1></section><footer>V 0.1.13</footer></body></html>'
+            + '"></head><body><section class="hero storefront-hero"'
+            + atributo_identidad + '><h1>Empresa prueba</h1></section>'
+            + '<footer>V ' + version + '</footer></body></html>'
         )
         self.server.respuestas["/" + slug] = (
             200, "text/html", html.encode(),
@@ -150,6 +156,50 @@ class ObserverTests(unittest.TestCase):
         resultado = modulo.observar(
             self.base, "0.1.13", SHA, intentos=1, intervalo=0,
             tenant_slug=slug, canonical_storefront=canonical,
+        )
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+
+    def test_identidad_real_del_tenant_es_obligatoria_desde_v_0_1_16(self) -> None:
+        slug = self.preparar_storefront(version="0.1.16")
+        resultado = modulo.observar(
+            self.base, "0.1.16", SHA, intentos=1, intervalo=0,
+            tenant_slug=slug,
+        )
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertTrue(resultado["comprobaciones"]["storefront"]["ok"])
+
+        tipo, _, plantilla = self.server.respuestas["/" + slug]
+        self.assertEqual(tipo, 200)
+        for html in (
+            plantilla.replace(b'data-tenant-slug="empresa-prueba"', b''),
+            plantilla.replace(
+                b'data-tenant-slug="empresa-prueba"',
+                b'data-tenant-slug="otro-tenant"',
+            ),
+            plantilla.replace(
+                b'<h1>Empresa prueba</h1>',
+                b'<h1>Empresa prueba</h1></section>'
+                b'<section class="storefront-hero" data-tenant-slug="otro-tenant">',
+            ),
+        ):
+            with self.subTest(html=html):
+                self.server.respuestas["/" + slug] = (200, "text/html", html)
+                observado = modulo.observar(
+                    self.base, "0.1.16", SHA, intentos=1, intervalo=0,
+                    tenant_slug=slug,
+                )
+                self.assertEqual(observado["estado"], "DEPLOY_OBSERVED")
+                self.assertFalse(observado["comprobaciones"]["storefront"]["ok"])
+                self.assertIn(
+                    "identidad del tenant",
+                    observado["comprobaciones"]["storefront"]["detalle"],
+                )
+
+    def test_compatibilidad_storefront_v_0_1_13_sin_marcador_identidad(self) -> None:
+        slug = self.preparar_storefront(incluir_identidad=False)
+        resultado = modulo.observar(
+            self.base, "0.1.13", SHA, intentos=1, intervalo=0,
+            tenant_slug=slug,
         )
         self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
 
