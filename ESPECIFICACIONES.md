@@ -1350,7 +1350,8 @@ Mientras Hostinger shared hosting sea el runtime:
 - el document root público debe apuntar únicamente a la superficie pública de Symfony/`public/` cuando el hosting lo permita;
 - secretos y configuración de producción permanecen fuera del repositorio;
 - assets Vite llegan ya compilados a la release desplegable;
-- la aplicación debe arrancar sin ejecutar migraciones destructivas automáticamente.
+- la aplicación debe arrancar sin ejecutar migraciones destructivas automáticamente;
+- el despliegue por Git de Hostinger preserva `var/cache/prod` entre builds (coincide con `.gitignore`) en vez de regenerarlo; todo deploy que pueda cambiar servicios/contenedor de Symfony debe ejecutar `scripts/post-deploy.sh` (`cache:clear` + `cache:warmup` en `prod`) como comando post-deploy configurado en hPanel, o el contenedor compilado queda desincronizado con el código y produce un 500 fatal que ni el diagnóstico sanitizado de #93/#133 alcanza a interceptar (Issue #144).
 
 #### Build reproducible
 
