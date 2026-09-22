@@ -1897,6 +1897,19 @@ Los requerimientos del primer cliente real —incluido su contexto textil/confec
 
 No se muestran acciones falsas ni controles sin contrato server-side real.
 
+### D-051 — Integraciones mediante adaptadores
+
+Toda integración con un proveedor externo (correo transaccional, pagos, webhooks salientes, etc.) se modela como:
+
+- una interfaz en `Application/` que expresa el contrato de negocio, sin detalles del proveedor;
+- una o más implementaciones concretas en `Infrastructure/`, cada una detrás de la misma interfaz;
+- un adaptador `Null*`/`Log*` seguro como binding por defecto — nunca falla al resolverse, nunca hace una llamada de red real, y deja evidencia en logs de que la integración real no está configurada;
+- el binding concreto se decide por configuración (DI), nunca condicionando lógica de negocio con `if` sobre qué proveedor está activo.
+
+Precedente: `App\Application\Notification\TransactionalEmailGateway` + `App\Infrastructure\Notification\NullTransactionalEmailGateway` como binding por defecto. Un proveedor real (Mailer, API de un ESP) implementa la misma interfaz y sustituye el binding sin tocar el código que la consume.
+
+Regla de PII: ningún adaptador registra en logs datos personales (destinatarios, nombres, tokens) — solo identificadores no sensibles (tipo de plantilla, tipo de evento).
+
 
 ## 7. Criterio de actualización
 
