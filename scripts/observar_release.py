@@ -24,6 +24,8 @@ TENANT_SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z", re.ASCII)
 STOREFRONT_VERSION = (0, 1, 13)
 STOREFRONT_IDENTITY_VERSION = (0, 1, 16)
 MAX_BYTES = 256 * 1024
+# El bundle admin crece con cada slice; su tope de lectura es independiente.
+MAX_ASSET_BYTES = 4 * 1024 * 1024
 
 
 class ObservacionError(Exception):
@@ -32,6 +34,10 @@ class ObservacionError(Exception):
 
 class ObservacionTransitoria(ObservacionError):
     """Fallo externo que puede recuperarse sin cambiar el release esperado."""
+
+
+class ObservacionDeployPendiente(ObservacionError):
+    """Producción aún sirve una versión anterior: el deploy no ha llegado."""
 
 
 class NoRedirigir(HTTPRedirectHandler):
@@ -205,8 +211,9 @@ def obtener(
                 raise ObservacionError(
                     f"HTTP {respuesta.status}; se esperaba {estado_esperado}."
                 )
-            contenido = respuesta.read(MAX_BYTES + 1)
-            if len(contenido) > MAX_BYTES:
+            limite = MAX_ASSET_BYTES if ruta.endswith((".css", ".js")) else MAX_BYTES
+            contenido = respuesta.read(limite + 1)
+            if len(contenido) > limite:
                 raise ObservacionError("La respuesta supera el límite permitido.")
             return respuesta.headers.get_content_type(), contenido
     except HTTPError as error:
@@ -261,7 +268,13 @@ def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> None:
         raise ObservacionError("/health devolvió JSON inválido.") from error
     if not isinstance(carga, dict) or carga.get("status") != "ok":
         raise ObservacionError("/health no informa estado ok.")
-    if carga.get("version") != version:
+    observada = carga.get("version")
+    if (isinstance(observada, str) and VERSION_PATTERN.fullmatch(observada)
+            and tuple(map(int, observada.split("."))) < tuple(map(int, version.split(".")))):
+        raise ObservacionDeployPendiente(
+            f"Producción aún sirve V {observada}; el deploy esperado no ha llegado."
+        )
+    if observada != version:
         raise ObservacionError("La versión observada no coincide con la esperada.")
     if carga.get("release_sha") != sha:
         raise ObservacionError("El SHA observado no coincide con el esperado.")
@@ -348,6 +361,8 @@ def ejecutar_con_reintentos(
             if intento == intentos:
                 return False, str(error), intento, "transitorio"
             time.sleep(intervalo)
+        except ObservacionDeployPendiente as error:
+            return False, str(error), intento, "deploy_pendiente"
         except ObservacionError as error:
             return False, str(error), intento, "funcional"
 
@@ -417,6 +432,8 @@ def observar(
     transicion_verificada: bool = False,
     tenant_slug: str | None = None,
     canonical_storefront: str | None = None,
+    espera_deploy: float = 0,
+    intervalo_deploy: float = 30,
 ) -> dict[str, Any]:
     """Solo la identidad exacta permite pasar de NO_OBSERVADO a DEPLOY_OBSERVED."""
     evidencias: dict[str, dict[str, Any]] = {}
@@ -429,11 +446,17 @@ def observar(
         validar_health(tipo, cuerpo, version, sha)
         return "Versión y SHA exactos confirmados."
 
-    ok, detalle, intento, clase = ejecutar_con_reintentos(
-        comprobar_health,
-        intentos=intentos,
-        intervalo=intervalo,
-    )
+    limite_espera = time.monotonic() + espera_deploy
+    while True:
+        ok, detalle, intento, clase = ejecutar_con_reintentos(
+            comprobar_health,
+            intentos=intentos,
+            intervalo=intervalo,
+        )
+        # Solo una versión anterior justifica esperar; SHA o versión ajenos fallan ya.
+        if clase != "deploy_pendiente" or time.monotonic() >= limite_espera:
+            break
+        time.sleep(intervalo_deploy)
     evidencias["health"] = {
         "ok": ok,
         "detalle": detalle,
@@ -539,6 +562,27 @@ def resumen(resultado: dict[str, Any]) -> str:
     return "\n".join(lineas) + "\n"
 
 
+def comentario_roadmap(resultado: dict[str, Any]) -> str:
+    """Comentario honesto para #1: nombra la causa real en vez de suponerla."""
+    identidad = f"V {resultado['version_esperada']} ({resultado['sha_esperado']})"
+    fallos = [
+        f"`{nombre}`: {item['detalle']}"
+        for nombre, item in resultado["comprobaciones"].items() if not item["ok"]
+    ]
+    if resultado["estado"] == "VALIDATED_IN_PRODUCTION":
+        return (f"✅ VALIDATED_IN_PRODUCTION automático: producción sirve {identidad} "
+                "y los smoke checks de solo lectura pasaron.")
+    if resultado["estado"] == "DEPLOY_OBSERVED":
+        return (f"🚧 DEPLOY_OBSERVED automático: producción sirve {identidad}, "
+                "pero no se declara validada. Pendiente:\n- " + "\n- ".join(fallos))
+    health = resultado["comprobaciones"]["health"]
+    if health.get("clase") == "deploy_pendiente":
+        return (f"⏳ NO_OBSERVADO: tras la espera acotada, producción todavía no sirve {identidad}. "
+                f"{health['detalle']} Revisar el deploy de Hostinger si persiste.")
+    return (f"⛔ NO_OBSERVADO: la identidad de producción no coincide con {identidad}. "
+            f"{health['detalle']}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True, help="Versión esperada, p. ej. 0.1.0")
@@ -546,6 +590,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--intentos", type=int, default=3)
     parser.add_argument("--intervalo", type=float, default=2)
     parser.add_argument("--timeout", type=float, default=5)
+    parser.add_argument("--espera-deploy", type=float, default=0,
+                        help="Segundos máximos esperando que llegue el deploy (0-1800)")
+    parser.add_argument("--intervalo-deploy", type=float, default=30)
     parser.add_argument("--markdown", action="store_true", help="Salida para el Job Summary")
     parser.add_argument("--tenant-slug", help="Slug real conocido para smoke público del storefront")
     parser.add_argument("--canonical-storefront", help="Canonical HTTPS esperado para ese tenant")
@@ -575,6 +622,8 @@ def main(argv: list[str] | None = None) -> int:
                 validar_canonical(args.canonical_storefront, origen, args.tenant_slug)
         if not 1 <= args.intentos <= 10 or not 0 <= args.intervalo <= 60 or not 0.1 <= args.timeout <= 30:
             raise ObservacionError("Intentos (1-10), intervalo (0-60) o timeout (0.1-30) fuera de rango.")
+        if not 0 <= args.espera_deploy <= 1800 or not 5 <= args.intervalo_deploy <= 120:
+            raise ObservacionError("Espera de deploy (0-1800) o intervalo de deploy (5-120) fuera de rango.")
     except ObservacionError as error:
         parser.error(str(error))
 
@@ -594,6 +643,8 @@ def main(argv: list[str] | None = None) -> int:
         transicion_verificada=args.transicion_verificada,
         tenant_slug=args.tenant_slug,
         canonical_storefront=args.canonical_storefront,
+        espera_deploy=args.espera_deploy,
+        intervalo_deploy=args.intervalo_deploy,
     )
     reporte = json.dumps(resultado, ensure_ascii=False, indent=2) + "\n"
     print(resumen(resultado) if args.markdown else reporte, end="")

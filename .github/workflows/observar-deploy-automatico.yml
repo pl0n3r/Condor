@@ -26,7 +26,7 @@ jobs:
   observar-deploy:
     name: Observar producción tras push a main
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -73,9 +73,11 @@ jobs:
           args=(
             --version "$VERSION_ESPERADA"
             --sha "$SHA_ESPERADO"
-            --intentos 10
-            --intervalo 30
+            --intentos 3
+            --intervalo 10
             --timeout 5
+            --espera-deploy 1200
+            --intervalo-deploy 30
           )
           [[ -n "$STOREFRONT_SLUG" ]] &&
             args+=(--tenant-slug "$STOREFRONT_SLUG")
@@ -136,15 +138,5 @@ jobs:
           ESTADO: ${{ steps.smoke.outputs.estado }}
         run: |
           set -euo pipefail
-          case "$ESTADO" in
-            VALIDATED_IN_PRODUCTION)
-              cuerpo="✅ VALIDATED_IN_PRODUCTION automático: producción sirve V ${VERSION_ESPERADA} (${SHA_ESPERADO}) y los smoke checks de solo lectura pasaron. Confirmado por observar-deploy-automatico tras push a main."
-              ;;
-            DEPLOY_OBSERVED)
-              cuerpo="🚧 DEPLOY_OBSERVED automático: producción ya sirve V ${VERSION_ESPERADA} (${SHA_ESPERADO}), pero esta release requiere transición operativa (migraciones/roles/comandos/configuración/caché) que aún no fue confirmada por un humano. Usar el workflow_dispatch manual de observar-release.yml con el checklist correspondiente para declarar VALIDATED_IN_PRODUCTION."
-              ;;
-            *)
-              cuerpo="⛔ NO_OBSERVADO tras reintentos automáticos: producción todavía no sirve V ${VERSION_ESPERADA} (${SHA_ESPERADO}). Puede ser normal si el deploy de Hostinger aún no corrió; revisar manualmente si persiste."
-              ;;
-          esac
+          cuerpo="$(python3 -c 'import json, sys; sys.path.insert(0, "scripts"); from observar_release import comentario_roadmap; print(comentario_roadmap(json.load(open("/tmp/release-observation.json"))))')"
           gh issue comment 1 --repo "${{ github.repository }}" --body "$cuerpo"

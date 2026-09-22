@@ -487,7 +487,7 @@ class ObserverTests(unittest.TestCase):
 
     def test_asset_demasiado_grande_no_valida_produccion(self) -> None:
         self.server.respuestas["/build/admin.js"] = (
-            200, "application/javascript", b"a" * (modulo.MAX_BYTES + 1),
+            200, "application/javascript", b"a" * (modulo.MAX_ASSET_BYTES + 1),
         )
         self.assertEqual(self.observar()["estado"], "DEPLOY_OBSERVED")
 
@@ -508,7 +508,44 @@ class ObserverTests(unittest.TestCase):
     def test_version_distinta_no_observa_deploy(self) -> None:
         resultado = modulo.observar(self.base, "0.1.1", SHA, intentos=1)
         self.assertEqual(resultado["estado"], "NO_OBSERVADO")
+        self.assertEqual(resultado["comprobaciones"]["health"]["clase"], "deploy_pendiente")
+
+    def test_version_mayor_es_fallo_funcional_sin_espera(self) -> None:
+        with patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(self.base, "0.0.9", SHA, intentos=1, espera_deploy=600)
         self.assertEqual(resultado["comprobaciones"]["health"]["clase"], "funcional")
+        sleep.assert_not_called()
+
+    def test_espera_deploy_hasta_que_llega_la_version(self) -> None:
+        viejo = (200, "application/json", json.dumps({
+            "status": "ok", "version": "0.0.9", "release_sha": "c" * 40}).encode())
+        pendientes = [viejo, viejo, self.server.respuestas["/health"]]
+        self.server.respuestas["/health"] = lambda: pendientes[0] if len(pendientes) == 1 else pendientes.pop(0)
+        with patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(self.base, VERSION, SHA, intentos=1, intervalo=0,
+                                        timeout=1, espera_deploy=600, intervalo_deploy=30)
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_espera_deploy_agotada_no_observa(self) -> None:
+        with patch.object(modulo.time, "monotonic", side_effect=[0, 10, 700]), \
+                patch.object(modulo.time, "sleep"):
+            resultado = modulo.observar(self.base, "0.1.1", SHA, intentos=1,
+                                        espera_deploy=600, intervalo_deploy=30)
+        self.assertEqual(resultado["estado"], "NO_OBSERVADO")
+        self.assertIn("⏳", modulo.comentario_roadmap(resultado))
+
+    def test_comentario_deploy_observado_nombra_fallos_reales(self) -> None:
+        self.server.respuestas["/"] = (200, "text/html", b"<html>Hola</html>")
+        comentario = modulo.comentario_roadmap(self.observar())
+        self.assertIn("`home`", comentario)
+        self.assertNotIn("transición operativa", comentario)
+
+    def test_bundle_admin_mayor_a_256_kib_es_aceptado(self) -> None:
+        self.server.respuestas["/build/admin.js"] = (
+            200, "application/javascript", b"a" * (modulo.MAX_BYTES + 1),
+        )
+        self.assertEqual(self.observar()["estado"], "VALIDATED_IN_PRODUCTION")
 
     def test_health_5xx_y_json_invalido_no_observan_deploy(self) -> None:
         for codigo, cuerpo in [(503, b"fallo"), (200, b"{mal json")]:
