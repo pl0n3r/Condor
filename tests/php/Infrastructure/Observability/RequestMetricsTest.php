@@ -14,7 +14,7 @@ final class RequestMetricsTest extends TestCase
     protected function setUp(): void
     {
         $this->projectDir = sys_get_temp_dir().'/request-metrics-test-'.bin2hex(random_bytes(6));
-        mkdir($this->projectDir, 0777, true);
+        mkdir($this->projectDir, 0700, true);
     }
 
     protected function tearDown(): void
@@ -65,11 +65,15 @@ final class RequestMetricsTest extends TestCase
         self::assertSame('route_a', $recent[1]['route']);
     }
 
-    public function testRecordNeverThrowsWhenProjectDirIsUnwritable(): void
+    public function testRecordNeverThrowsWhenProjectDirCannotContainLogDirectory(): void
     {
-        RequestMetrics::record('/nonexistent/path/that/does/not/exist', 'route', 200, 5.0, 1_048_576);
+        $fileProjectDir = $this->projectDir.'/not-a-directory';
+        file_put_contents($fileProjectDir, 'fixture');
 
-        $this->addToAssertionCount(1);
+        RequestMetrics::record($fileProjectDir, 'route', 200, 5.0, 1_048_576);
+
+        self::assertFileDoesNotExist($fileProjectDir.'/var/log/request_metrics.log');
+        self::assertSame('fixture', file_get_contents($fileProjectDir));
     }
 
     private function removeDirectory(string $path): void
