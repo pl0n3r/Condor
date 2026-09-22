@@ -6,6 +6,8 @@ namespace App\Shared\Version;
 
 final readonly class AppVersion
 {
+    private const SHA_PATTERN = '/\A[0-9a-f]{40}\z/';
+
     public function __construct(private string $projectDir)
     {
     }
@@ -22,7 +24,7 @@ final readonly class AppVersion
     {
         $sha = $_SERVER['RELEASE_SHA'] ?? $_ENV['RELEASE_SHA'] ?? getenv('RELEASE_SHA');
 
-        if (is_string($sha) && $sha !== '') {
+        if (is_string($sha) && $this->isValidSha($sha)) {
             return $sha;
         }
 
@@ -32,22 +34,23 @@ final readonly class AppVersion
     }
 
     /**
-     * Lee el SHA de HEAD directamente de .git en disco (sin shell_exec),
-     * para desplegar-por-git-pull sin depender de una variable de entorno
-     * configurada manualmente en el hosting.
+     * Lee el SHA de HEAD directamente de Git en disco (sin shell_exec),
+     * incluyendo repositorios normales y worktrees con .git tipo gitdir:.
      */
     private function readShaFromGitHead(): ?string
     {
-        $gitDir = $this->projectDir.'/.git';
-        $headPath = $gitDir.'/HEAD';
+        $gitDir = $this->resolveGitDir();
+        if ($gitDir === null) {
+            return null;
+        }
 
+        $headPath = $gitDir.'/HEAD';
         if (!is_file($headPath) || !is_readable($headPath)) {
             return null;
         }
 
         $head = trim((string) file_get_contents($headPath));
-
-        if (preg_match('/\A[0-9a-f]{40}\z/', $head) === 1) {
+        if ($this->isValidSha($head)) {
             return $head;
         }
 
@@ -55,16 +58,96 @@ final readonly class AppVersion
             return null;
         }
 
-        $ref = substr($head, 5);
-        $refPath = $gitDir.'/'.$ref;
-
-        if (is_file($refPath) && is_readable($refPath)) {
-            $sha = trim((string) file_get_contents($refPath));
-
-            return preg_match('/\A[0-9a-f]{40}\z/', $sha) === 1 ? $sha : null;
+        $ref = trim(substr($head, 5));
+        if ($ref === '') {
+            return null;
         }
 
-        return $this->readShaFromPackedRefs($gitDir, $ref);
+        $commonDir = $this->resolveCommonGitDir($gitDir);
+
+        foreach (array_unique([$gitDir, $commonDir]) as $refRoot) {
+            $sha = $this->readShaFromRefFile($refRoot, $ref);
+            if ($sha !== null) {
+                return $sha;
+            }
+        }
+
+        foreach (array_unique([$commonDir, $gitDir]) as $packedRoot) {
+            $sha = $this->readShaFromPackedRefs($packedRoot, $ref);
+            if ($sha !== null) {
+                return $sha;
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveGitDir(): ?string
+    {
+        $dotGit = $this->projectDir.'/.git';
+
+        if (is_dir($dotGit) && is_readable($dotGit)) {
+            return $dotGit;
+        }
+
+        if (!is_file($dotGit) || !is_readable($dotGit)) {
+            return null;
+        }
+
+        $directive = trim((string) file_get_contents($dotGit));
+        if (!str_starts_with($directive, 'gitdir: ')) {
+            return null;
+        }
+
+        return $this->resolveDirectoryPath(
+            dirname($dotGit),
+            trim(substr($directive, 8)),
+        );
+    }
+
+    private function resolveCommonGitDir(string $gitDir): string
+    {
+        $commonDirPath = $gitDir.'/commondir';
+
+        if (!is_file($commonDirPath) || !is_readable($commonDirPath)) {
+            return $gitDir;
+        }
+
+        $resolved = $this->resolveDirectoryPath(
+            $gitDir,
+            trim((string) file_get_contents($commonDirPath)),
+        );
+
+        return $resolved ?? $gitDir;
+    }
+
+    private function resolveDirectoryPath(string $baseDir, string $path): ?string
+    {
+        if ($path === '') {
+            return null;
+        }
+
+        $candidate = str_starts_with($path, '/')
+            ? $path
+            : $baseDir.'/'.$path;
+        $resolved = realpath($candidate);
+
+        return is_string($resolved) && is_dir($resolved) && is_readable($resolved)
+            ? $resolved
+            : null;
+    }
+
+    private function readShaFromRefFile(string $gitDir, string $ref): ?string
+    {
+        $refPath = $gitDir.'/'.$ref;
+
+        if (!is_file($refPath) || !is_readable($refPath)) {
+            return null;
+        }
+
+        $sha = trim((string) file_get_contents($refPath));
+
+        return $this->isValidSha($sha) ? $sha : null;
     }
 
     private function readShaFromPackedRefs(string $gitDir, string $ref): ?string
@@ -94,12 +177,17 @@ final readonly class AppVersion
                 $parts !== false
                 && count($parts) === 2
                 && $parts[1] === $ref
-                && preg_match('/\A[0-9a-f]{40}\z/', $parts[0]) === 1
+                && $this->isValidSha($parts[0])
             ) {
                 return $parts[0];
             }
         }
 
         return null;
+    }
+
+    private function isValidSha(string $sha): bool
+    {
+        return preg_match(self::SHA_PATTERN, $sha) === 1;
     }
 }
