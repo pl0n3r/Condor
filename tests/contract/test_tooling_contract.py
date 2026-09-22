@@ -43,6 +43,9 @@ class ToolingContractTests(unittest.TestCase):
             r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$",
             workflow,
         )
+        self.assertIn("group: condor-tag-release-main", workflow)
+        self.assertIn("queue: max", workflow)
+        self.assertIn("cancel-in-progress: false", workflow)
         self.assertIn('git show-ref --verify --quiet "refs/tags/$TAG"', workflow)
         self.assertIn('git cat-file -t "refs/tags/$TAG"', workflow)
         self.assertIn("(409|422)([[:space:]]|$)", workflow)
