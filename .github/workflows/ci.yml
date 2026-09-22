@@ -719,6 +719,41 @@ jobs:
       - name: Crear backup real de la base migrada
         run: bash scripts/backup-database.sh
 
+      - name: Probar ventana mínima de 30 días
+        run: |
+          set -euo pipefail
+
+          recent_fixture="var/backups/condor-condor_backup_source-20000101T000000Z-RECENT.sql.gz"
+          old_fixture_1="var/backups/condor-condor_backup_source-20000101T000000Z-OLD1.sql.gz"
+          old_fixture_2="var/backups/condor-condor_backup_source-20000101T000000Z-OLD2.sql.gz"
+
+          printf 'fixture reciente' | gzip -c > "$recent_fixture"
+          printf 'fixture antiguo 1' | gzip -c > "$old_fixture_1"
+          printf 'fixture antiguo 2' | gzip -c > "$old_fixture_2"
+
+          touch -d '1 day ago' "$recent_fixture"
+          touch -d '31 days ago' "$old_fixture_1" "$old_fixture_2"
+
+          BACKUP_KEEP=1 bash scripts/backup-database.sh
+
+          [[ -f "$recent_fixture" ]] || {
+            echo "::error::La retención eliminó un backup protegido por la ventana de 30 días."
+            exit 1
+          }
+
+          old_remaining=0
+          for fixture in "$old_fixture_1" "$old_fixture_2"; do
+            if [[ -f "$fixture" ]]; then
+              old_remaining=$((old_remaining + 1))
+            fi
+          done
+          [[ "$old_remaining" -eq 1 ]] || {
+            echo "::error::BACKUP_KEEP=1 no limitó correctamente el histórico >30 días."
+            exit 1
+          }
+
+          rm -f -- "$recent_fixture" "$old_fixture_1" "$old_fixture_2"
+
       - name: Probar guardas de retención y restore destructivo
         run: |
           set -euo pipefail
