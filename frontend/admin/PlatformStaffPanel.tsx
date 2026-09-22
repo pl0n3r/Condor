@@ -111,7 +111,7 @@ export function PlatformStaffPanel({
     setActions((current) => (
       current.includes(action)
         ? current.filter((candidate) => candidate !== action)
-        : [...current, action].sort()
+        : [...current, action].sort((left, right) => left.localeCompare(right))
     ));
   }
 
@@ -125,7 +125,7 @@ export function PlatformStaffPanel({
     const next: GrantDefinition = {
       tenant_id: tenantId,
       module: moduleKey,
-      actions: [...actions].sort(),
+      actions: [...actions].sort((left, right) => left.localeCompare(right)),
     };
 
     setDraftGrants((current) => {
@@ -285,6 +285,12 @@ export function PlatformStaffPanel({
     return data?.catalog.find((module) => module.key === key)?.label ?? key;
   }
 
+  const submitLabel = saving
+    ? 'Guardando…'
+    : editingStaffId
+      ? 'Guardar permisos'
+      : 'Crear staff e invitar';
+
   return (
     <section className="platform-section" aria-labelledby="platform-staff-title">
       <div className="section-heading compact">
@@ -429,11 +435,7 @@ export function PlatformStaffPanel({
 
             <div className="platform-form-actions">
               <button className="button" type="submit" disabled={saving}>
-                {saving
-                  ? 'Guardando…'
-                  : editingStaffId
-                    ? 'Guardar permisos'
-                    : 'Crear staff e invitar'}
+                {submitLabel}
               </button>
               {editingStaffId && (
                 <button
