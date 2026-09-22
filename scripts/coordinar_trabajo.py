@@ -705,7 +705,7 @@ def recover_stale_work(
     branch: str,
     previous: dict[str, Any] | None,
 ) -> str | None:
-    """Recupera una reserva inactiva conservando rama y PR existentes."""
+    """Recupera trabajo existente conservando rama y PR."""
     reservation_id = new_reservation_id()
     open_pulls = open_pull_records_for_branch(api, branch)
     previous_owner = str(previous["owner"]) if previous else None
@@ -717,6 +717,23 @@ def recover_stale_work(
         )
         or "sin PR abierto"
     )
+    orphaned = previous is None
+    recovery_reason = (
+        "recuperacion-huerfana"
+        if orphaned
+        else "recuperacion-inactividad"
+    )
+    recovery_message = (
+        (
+            "Reserva recuperada porque la rama canónica existe sin una "
+            "reserva activa. "
+        )
+        if orphaned
+        else (
+            f"Reserva recuperada por inactividad de al menos "
+            f"{RESERVATION_STALE_MINUTES} minutos. "
+        )
+    )
 
     publish_reservation(
         api,
@@ -725,12 +742,11 @@ def recover_stale_work(
         reservation_id,
         branch,
         True,
-        "recuperacion-inactividad",
+        recovery_reason,
         (
-            f"Reserva recuperada por inactividad de al menos "
-            f"{RESERVATION_STALE_MINUTES} minutos. Se conserva la rama "
-            f"{branch} y {pr_text} para continuar el trabajo existente "
-            "sin abrir una implementación paralela."
+            f"{recovery_message}Se conserva la rama {branch} y {pr_text} "
+            "para continuar el trabajo existente sin abrir una "
+            "implementación paralela."
         ),
     )
 
@@ -850,8 +866,12 @@ def recover_existing_work_if_stale(
     branch: str,
     current: dict[str, Any] | None,
 ) -> str | None:
-    """Recupera trabajo stale dentro de una sección crítica distribuida."""
-    if not work_is_stale(api, issue_number, branch):
+    """Recupera trabajo stale o huérfano bajo un lock distribuido."""
+    if current is not None and not work_is_stale(
+        api,
+        issue_number,
+        branch,
+    ):
         return None
     if not ensure_recovery_branch(api, branch):
         return None
@@ -865,9 +885,13 @@ def recover_existing_work_if_stale(
         return None
 
     try:
-        if not work_is_stale(api, issue_number, branch):
-            return None
         latest = active_reservation(api, issue_number)
+        if latest is not None and not work_is_stale(
+            api,
+            issue_number,
+            branch,
+        ):
+            return None
         return recover_stale_work(
             api,
             issue_number,
