@@ -13,6 +13,7 @@ use InvalidArgumentException;
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_functional_signal')]
 #[ORM\Index(name: 'idx_functional_signal_type_created', columns: ['type', 'created_at'])]
+#[ORM\Index(name: 'idx_functional_signal_created_type', columns: ['created_at', 'type'])]
 #[ORM\Index(name: 'idx_functional_signal_tenant', columns: ['tenant_id'])]
 class FunctionalSignal
 {
