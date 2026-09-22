@@ -30,11 +30,14 @@ final readonly class RequestMetricsSubscriber
             ? (microtime(true) - (float) $startedAt) * 1000
             : 0.0;
 
+        $routeName = $request->attributes->get('_route');
+        $route = is_string($routeName) && $routeName !== ''
+            ? $routeName
+            : '(sin_ruta)';
+
         RequestMetrics::record(
             $this->projectDir,
-            is_string($request->attributes->get('_route'))
-                ? $request->attributes->get('_route')
-                : '(sin_ruta)',
+            $route,
             $event->getResponse()->getStatusCode(),
             $durationMs,
             memory_get_peak_usage(true),
