@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Domain\Organization\Entity;
 
-use App\Shared\Id\UlidFactory;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
@@ -16,9 +15,7 @@ use DomainException;
 #[ORM\UniqueConstraint(name: 'uniq_branch_tenant_id', columns: ['tenant_id', 'id'])]
 class Branch
 {
-    #[ORM\Id]
-    #[ORM\Column(type: 'string', length: 26)]
-    private string $id;
+    use HasUlidIdentity;
 
     #[ORM\ManyToOne(targetEntity: Tenant::class)]
     #[ORM\JoinColumn(name: 'tenant_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
@@ -56,18 +53,13 @@ class Branch
             throw new DomainException('La entidad legal debe pertenecer al mismo tenant de la sede.');
         }
 
-        $this->id = UlidFactory::new();
+        $this->initializeUlidIdentity();
         $this->tenant = $tenant;
         $this->name = trim($name);
         $this->slug = strtolower(trim($slug));
         $this->legalEntity = $legalEntity;
         $this->default = $default;
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
-    }
-
-    public function id(): string
-    {
-        return $this->id;
     }
 
     public function tenant(): Tenant
