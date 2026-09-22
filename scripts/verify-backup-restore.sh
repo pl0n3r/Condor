@@ -44,6 +44,13 @@ if [ "${CONDOR_ALLOW_DESTRUCTIVE_RESTORE:-}" != "1" ]; then
 fi
 
 credentials_tmp="$(mktemp "${TMPDIR:-/tmp}/condor-mysql-XXXXXX.cnf")"
+restore_tmp=""
+cleanup() {
+  [ -z "$restore_tmp" ] || rm -f -- "$restore_tmp"
+  rm -f -- "$credentials_tmp"
+}
+trap cleanup 0 HUP INT TERM
+
 "$PHP_BIN" "$script_dir/parse-database-url.php" client-config "$credentials_tmp"
 unset DATABASE_URL
 
@@ -65,10 +72,6 @@ run_sql() {
 }
 
 restore_tmp="$(mktemp "${TMPDIR:-/tmp}/condor-restore-XXXXXX.sql")"
-cleanup() {
-  rm -f -- "$restore_tmp" "$credentials_tmp"
-}
-trap cleanup 0 HUP INT TERM
 
 # Guardas anteriores garantizan que solo una base de restauración
 # descartable puede llegar a esta operación destructiva.
