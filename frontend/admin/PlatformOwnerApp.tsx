@@ -33,13 +33,6 @@ type PlatformContextResponse = {
     branch_count: number;
     active_membership_count: number;
   };
-  signals_last_30_days: {
-    tenant_created: number;
-    login_success: number;
-    login_failure: number;
-    authorization_denied: number;
-    role_modified: number;
-  };
   tenants: TenantSummary[];
   tenant_pagination: {
     page: number;
@@ -376,60 +369,6 @@ export function PlatformOwnerApp({
                   },
                 ]}
               />
-
-              <section className="platform-section" aria-labelledby="functional-signals-title">
-                <div className="section-heading compact">
-                  <div>
-                    <span className="eyebrow">Observabilidad</span>
-                    <h2 id="functional-signals-title">
-                      Actividad funcional (últimos 30 días)
-                    </h2>
-                  </div>
-                </div>
-
-                {Object.values(state.data.signals_last_30_days).every(
-                  (count) => count === 0,
-                ) ? (
-                  <div className="platform-empty">
-                    Aún no hay actividad funcional registrada en los
-                    últimos 30 días.
-                  </div>
-                ) : (
-                  <OverviewGrid
-                    ariaLabel="Señales funcionales agregadas"
-                    variant="control"
-                    items={[
-                      {
-                        label: 'Empresas creadas',
-                        value: state.data.signals_last_30_days.tenant_created,
-                        detail: 'onboarding completado',
-                      },
-                      {
-                        label: 'Logins exitosos',
-                        value: state.data.signals_last_30_days.login_success,
-                        detail: 'sesiones iniciadas',
-                      },
-                      {
-                        label: 'Logins fallidos',
-                        value: state.data.signals_last_30_days.login_failure,
-                        detail: 'intentos rechazados',
-                      },
-                      {
-                        label: 'Autorización denegada',
-                        value: (
-                          state.data.signals_last_30_days.authorization_denied
-                        ),
-                        detail: 'accesos sin permiso',
-                      },
-                      {
-                        label: 'Roles modificados',
-                        value: state.data.signals_last_30_days.role_modified,
-                        detail: 'creación, edición o baja',
-                      },
-                    ]}
-                  />
-                )}
-              </section>
 
               <section className="platform-section" aria-labelledby="tenant-list-title">
                 <div className="section-heading compact">
