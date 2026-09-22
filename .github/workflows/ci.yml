@@ -681,6 +681,17 @@ jobs:
           [[ "$(php scripts/parse-database-url.php port)" == "3307" ]]
           [[ "$(php scripts/parse-database-url.php database)" == "condor_backup_source" ]]
 
+          export DATABASE_URL="mysql://${encoded_user}:${encoded_password}@[2001:db8::1]:3308/condor_backup_source"
+          [[ "$(php scripts/parse-database-url.php host)" == "2001:db8::1" ]]
+          [[ "$(php scripts/parse-database-url.php port)" == "3308" ]]
+
+          export DATABASE_URL="mysql://${encoded_user}:${encoded_password}@2001:db8::1/condor_backup_source"
+          if php scripts/parse-database-url.php host >/dev/null 2>&1; then
+            echo "::error::IPv6 sin corchetes fue aceptado de forma ambigua."
+            exit 1
+          fi
+
+          export DATABASE_URL="mysql://${encoded_user}:${encoded_password}@127.0.0.1:3307/condor_backup_source?charset=utf8mb4"
           php scripts/parse-database-url.php client-config "$credentials_tmp"
           [[ "$(stat -c '%a' "$credentials_tmp")" == "600" ]]
           grep -F "user=\"${raw_user}\"" "$credentials_tmp" >/dev/null
