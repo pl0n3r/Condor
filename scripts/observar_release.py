@@ -46,6 +46,10 @@ class TextoVisible(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.ocultos: list[str] = []
         self.en_head = False
+        self.en_body = False
+        self.en_hero = False
+        self.en_titulo_hero = False
+        self.titulos_hero: list[str] = []
         self.textos: list[str] = []
         self.en_formulario = 0
         self.campos: set[tuple[str, str]] = set()
@@ -53,7 +57,7 @@ class TextoVisible(HTMLParser):
         self.storefront_hero = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag in {"script", "style", "template"}:
+        if tag in {"script", "style", "template", "title"}:
             self.ocultos.append(tag)
             return
         if self.ocultos:
@@ -62,28 +66,42 @@ class TextoVisible(HTMLParser):
         atributos = dict(attrs)
         if tag == "head":
             self.en_head = True
+        elif tag == "body":
+            self.en_body = True
         elif (tag == "link" and self.en_head
               and "canonical" in (atributos.get("rel") or "").split()):
             self.canonicals.append(atributos.get("href") or "")
-        elif tag == "section" and "storefront-hero" in (atributos.get("class") or "").split():
+        elif (tag == "section" and self.en_body
+              and "storefront-hero" in (atributos.get("class") or "").split()):
             self.storefront_hero = True
-        elif tag == "form":
+            self.en_hero = True
+        elif tag == "h1" and self.en_hero:
+            self.en_titulo_hero = True
+        elif tag == "form" and self.en_body:
             self.en_formulario += 1
-        elif tag == "input" and self.en_formulario:
+        elif tag == "input" and self.en_body and self.en_formulario:
             self.campos.add((atributos.get("name") or "", atributos.get("type") or "text"))
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in {"script", "style", "template"}:
+        if tag in {"script", "style", "template", "title"}:
             if self.ocultos and self.ocultos[-1] == tag:
                 self.ocultos.pop()
         elif not self.ocultos and tag == "head":
             self.en_head = False
+        elif not self.ocultos and tag == "body":
+            self.en_body = False
+        elif not self.ocultos and tag == "h1":
+            self.en_titulo_hero = False
+        elif not self.ocultos and tag == "section":
+            self.en_hero = False
         elif not self.ocultos and tag == "form":
             self.en_formulario = max(0, self.en_formulario - 1)
 
     def handle_data(self, data: str) -> None:
-        if not self.ocultos:
+        if self.en_body and not self.ocultos:
             self.textos.append(data)
+            if self.en_titulo_hero:
+                self.titulos_hero.append(data)
 
 
 def validar_base_url(valor: str, permitir_http_local: bool = False) -> str:
@@ -261,6 +279,8 @@ def validar_storefront(
     pagina = validar_pagina(tipo, cuerpo, version, login=False)
     if not pagina.storefront_hero:
         raise ObservacionError("El storefront no contiene la sección pública esperada.")
+    if not "".join(pagina.titulos_hero).strip():
+        raise ObservacionError("El storefront no contiene un título público visible.")
     if pagina.canonicals != [canonical]:
         raise ObservacionError("El canonical del storefront no coincide con el esperado.")
 
