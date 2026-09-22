@@ -43,6 +43,27 @@ if [ "${CONDOR_ALLOW_DESTRUCTIVE_RESTORE:-}" != "1" ]; then
   exit 1
 fi
 
+expected_tenant_slug="${CONDOR_RESTORE_EXPECT_TENANT_SLUG:-}"
+expected_user_email="${CONDOR_RESTORE_EXPECT_USER_EMAIL:-}"
+
+case "$expected_tenant_slug" in
+  ''|*[!A-Za-z0-9_-]*)
+    echo "verify-backup-restore.sh: CONDOR_RESTORE_EXPECT_TENANT_SLUG es obligatorio y debe ser seguro para verificación." >&2
+    exit 1
+    ;;
+  *)
+    ;;
+esac
+
+case "$expected_user_email" in
+  ''|*[!A-Za-z0-9@._+-]*)
+    echo "verify-backup-restore.sh: CONDOR_RESTORE_EXPECT_USER_EMAIL es obligatorio y debe ser seguro para verificación." >&2
+    exit 1
+    ;;
+  *)
+    ;;
+esac
+
 credentials_tmp="$(mktemp "${TMPDIR:-/tmp}/condor-mysql-XXXXXX.cnf")"
 restore_tmp=""
 cleanup() {
@@ -94,7 +115,17 @@ if [ "${migration_count:-0}" -lt 1 ]; then
   exit 1
 fi
 
-run_sql -N "$db" -e   "SELECT COUNT(t.id), (SELECT COUNT(u.id) FROM condor_user u) FROM condor_tenant t;"   >/dev/null
+tenant_sentinel_count="$(run_sql -N "$db" -e   "SELECT COUNT(*) FROM condor_tenant WHERE slug='$expected_tenant_slug';")"
+if [ "$tenant_sentinel_count" != "1" ]; then
+  echo "verify-backup-restore.sh: el tenant centinela '$expected_tenant_slug' no fue restaurado exactamente una vez." >&2
+  exit 1
+fi
+
+user_sentinel_count="$(run_sql -N "$db" -e   "SELECT COUNT(*) FROM condor_user WHERE email='$expected_user_email';")"
+if [ "$user_sentinel_count" != "1" ]; then
+  echo "verify-backup-restore.sh: el usuario centinela '$expected_user_email' no fue restaurado exactamente una vez." >&2
+  exit 1
+fi
 
 table_count="$(run_sql -N -e   "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$db';")"
 
