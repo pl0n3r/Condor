@@ -31,6 +31,48 @@ final class PermissionCatalog
     ];
 
     /** @return list<string> */
+    public static function moduleKeys(): array
+    {
+        return array_keys(self::MODULES);
+    }
+
+    /** @return list<string> */
+    public static function actionKeys(): array
+    {
+        return array_keys(self::ACTIONS);
+    }
+
+    public static function normalizeModule(string $module): string
+    {
+        $module = trim($module);
+        if (!in_array($module, self::moduleKeys(), true)) {
+            throw new DomainException('El módulo solicitado no existe en el catálogo de permisos.');
+        }
+
+        return $module;
+    }
+
+    /** @param array<mixed> $actions @return list<string> */
+    public static function normalizeActions(array $actions): array
+    {
+        $known = array_flip(self::actionKeys());
+        $normalized = [];
+
+        foreach ($actions as $action) {
+            if (!is_string($action) || !isset($known[$action])) {
+                throw new DomainException('La acción solicitada no existe en el catálogo de permisos.');
+            }
+
+            $normalized[$action] = true;
+        }
+
+        $result = array_keys($normalized);
+        sort($result, SORT_STRING);
+
+        return array_values($result);
+    }
+
+    /** @return list<string> */
     public static function all(): array
     {
         $permissions = [];
