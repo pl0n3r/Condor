@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -75,8 +77,11 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn("autorización explícita", script)
         self.assertIn('LOCK_MAX_AGE_SECONDS=21600', script)
         self.assertIn('LOCK_INVALID_GRACE_MINUTES=5', script)
-        self.assertIn('LOCK_GUARD_DIR="var/post-deploy.lock.guard"', script)
-        self.assertIn('LOCK_GUARD_GRACE_MINUTES=1', script)
+        self.assertIn('LOCK_GUARD_FILE="var/post-deploy.lock.guard"', script)
+        self.assertIn('FLOCK_BIN=""', script)
+        self.assertIn('exec 9>"$LOCK_GUARD_FILE"', script)
+        self.assertIn('"$FLOCK_BIN" -n 9', script)
+        self.assertNotIn('mv "$LOCK_GUARD', script)
         self.assertIn('LOCK_TOKEN="$$-$(date +%s)"', script)
         self.assertGreaterEqual(
             script.count('printf \'%s\\n%s\\n%s\\n\' "$LOCK_TOKEN" "$$"'),
@@ -84,8 +89,7 @@ class ToolingContractTests(unittest.TestCase):
         )
         self.assertNotIn('"$LOCK_TOKEN" "$" "$(date +%s)"', script)
         self.assertNotIn("cleanup_guard\n                cleanup_guard", script)
-        self.assertIn('mkdir "$LOCK_GUARD_DIR"', script)
-        self.assertIn('kill -0 "$guard_pid"', script)
+        self.assertIn('kill -0 "$owner_pid"', script)
         self.assertIn('kill -0 "$owner_pid"', script)
         self.assertIn('find "$LOCK_FILE" -mmin +', script)
         self.assertIn("set -C", script)
@@ -100,6 +104,35 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn("migraciones pendientes o historial de migraciones no reconciliado", script)
         self.assertIn("fallo de base de datos o conectividad", script)
         self.assertNotIn("up-to-date --env=prod --no-interaction >/dev/null 2>&1", script)
+
+    def test_post_deploy_recovery_mutex_is_stable_under_concurrency(self) -> None:
+        """El mutex estable impide que un segundo recuperador sustituya al primero."""
+        with tempfile.TemporaryDirectory() as tmp:
+            guard = str(Path(tmp) / "post-deploy.lock.guard")
+            first = subprocess.Popen(
+                ["flock", "-n", guard, "sleep", "1"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            try:
+                time.sleep(0.1)
+                second = subprocess.run(
+                    ["flock", "-n", guard, "true"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertNotEqual(second.returncode, 0)
+            finally:
+                first.wait(timeout=3)
+
+            third = subprocess.run(
+                ["flock", "-n", guard, "true"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(third.returncode, 0, third.stderr)
 
     def test_health_exposes_schema_state_for_remote_release_validation(self) -> None:
         """El smoke remoto recibe solo un booleano de esquema, sin internals."""
