@@ -3,27 +3,47 @@
 declare(strict_types=1);
 
 use App\Infrastructure\Observability\FatalLog;
+use App\Infrastructure\Runtime\ContainerRecovery;
 use App\Kernel;
 use Symfony\Component\HttpFoundation\Request;
 
 $projectDir = dirname(__DIR__);
+$lastError = null;
 
-try {
-    require $projectDir.'/config/bootstrap.php';
+for ($attempt = 1; $attempt <= 2; ++$attempt) {
+    try {
+        require_once $projectDir.'/config/bootstrap.php';
 
-    $kernel = new Kernel(
-        $_SERVER['APP_ENV'] ?? $_ENV['APP_ENV'] ?? 'prod',
-        filter_var(
-            $_SERVER['APP_DEBUG'] ?? $_ENV['APP_DEBUG'] ?? false,
-            FILTER_VALIDATE_BOOL
-        ),
-    );
+        $kernel = new Kernel(
+            $_SERVER['APP_ENV'] ?? $_ENV['APP_ENV'] ?? 'prod',
+            filter_var(
+                $_SERVER['APP_DEBUG'] ?? $_ENV['APP_DEBUG'] ?? false,
+                FILTER_VALIDATE_BOOL
+            ),
+        );
 
-    $request = Request::createFromGlobals();
-    $response = $kernel->handle($request);
-    $response->send();
-    $kernel->terminate($request, $response);
-} catch (Throwable $error) {
+        $request = Request::createFromGlobals();
+        $response = $kernel->handle($request);
+        $response->send();
+        $kernel->terminate($request, $response);
+        $lastError = null;
+        break;
+    } catch (Throwable $error) {
+        $lastError = $error;
+
+        $canRetry = $attempt === 1
+            && class_exists(ContainerRecovery::class)
+            && ContainerRecovery::looksLikeStaleContainer($error, $projectDir)
+            && ContainerRecovery::clearProdCache($projectDir);
+
+        if (!$canRetry) {
+            break;
+        }
+    }
+}
+
+if ($lastError !== null) {
+    $error = $lastError;
     $reference = substr(
         hash(
             'sha256',
