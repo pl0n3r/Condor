@@ -49,6 +49,7 @@ final class Version20260922054000 extends AbstractMigration // NOSONAR -- nombre
                 updated_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 INDEX IDX_VARIANT_TENANT (tenant_id),
                 INDEX IDX_VARIANT_PRODUCT (product_id),
+                INDEX IDX_VARIANT_TENANT_PRODUCT (tenant_id, product_id),
                 UNIQUE INDEX uniq_variant_tenant_sku (tenant_id, sku),
                 UNIQUE INDEX uniq_variant_tenant_id (tenant_id, id),
                 PRIMARY KEY(id),
