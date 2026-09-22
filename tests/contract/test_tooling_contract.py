@@ -75,13 +75,32 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn("se requiere autorización explícita", script)
         self.assertIn('LOCK_MAX_AGE_SECONDS=21600', script)
         self.assertIn('LOCK_INVALID_GRACE_MINUTES=5', script)
-        self.assertIn('LOCK_TOKEN="$$-$(date +%s)"', script)
+        self.assertIn('LOCK_GUARD_DIR="var/post-deploy.lock.guard"', script)
+        self.assertIn('LOCK_GUARD_GRACE_MINUTES=1', script)
+        self.assertIn('LOCK_TOKEN="$-$(date +%s)"', script)
+        self.assertIn('mkdir "$LOCK_GUARD_DIR"', script)
+        self.assertIn('kill -0 "$guard_pid"', script)
         self.assertIn('kill -0 "$owner_pid"', script)
         self.assertIn('find "$LOCK_FILE" -mmin +', script)
         self.assertIn("set -C", script)
-        self.assertIn("trap cleanup_lock EXIT", script)
+        self.assertIn("trap 'cleanup_guard; cleanup_lock' EXIT", script)
         self.assertIn("trap 'exit 130' INT", script)
         self.assertIn("trap 'exit 143' TERM", script)
+
+    def test_health_exposes_schema_state_for_remote_release_validation(self) -> None:
+        """El smoke remoto recibe solo un booleano de esquema, sin internals."""
+        controller = (
+            ROOT / "src/Http/Controller/HealthController.php"
+        ).read_text(encoding="utf-8")
+        observer = (
+            ROOT / "scripts/observar_release.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("'schema_up_to_date' => $schemaUpToDate", controller)
+        self.assertIn("getMigrationStatusCalculator()", controller)
+        self.assertIn("getNewMigrations()", controller)
+        self.assertIn('evidencias["schema"]', observer)
+        self.assertIn('carga.get("schema_up_to_date") is True', observer)
 
     def test_post_deploy_never_executes_production_migrations_automatically(self) -> None:
         """La política operativa exige autorización humana fuera del cron."""

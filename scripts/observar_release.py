@@ -276,7 +276,7 @@ def obtener(
         ) from error
 
 
-def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> None:
+def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> bool:
     if tipo != "application/json":
         raise ObservacionError("/health no respondió con JSON.")
     try:
@@ -299,6 +299,7 @@ def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> None:
         raise ObservacionIdentidad(
             "El SHA observado no coincide con el esperado."
         )
+    return carga.get("schema_up_to_date") is True
 
 
 def validar_pagina(tipo: str, cuerpo: bytes, version: str, login: bool) -> TextoVisible:
@@ -464,9 +465,12 @@ def observar(
         origen, tenant_slug, canonical_storefront,
     )
 
+    schema_up_to_date = False
+
     def comprobar_health() -> str:
+        nonlocal schema_up_to_date
         tipo, cuerpo = obtener(origen, "/health", timeout)
-        validar_health(tipo, cuerpo, version, sha)
+        schema_up_to_date = validar_health(tipo, cuerpo, version, sha)
         return "Versión y SHA exactos confirmados."
 
     limite_espera = time.monotonic() + espera_deploy
@@ -496,6 +500,16 @@ def observar(
             "sha_esperado": sha,
             "comprobaciones": evidencias,
         }
+
+    evidencias["schema"] = {
+        "ok": schema_up_to_date,
+        "clase": "ok" if schema_up_to_date else "funcional",
+        "detalle": (
+            "El esquema de producción coincide con las migraciones del release."
+            if schema_up_to_date
+            else "El health no confirma que el esquema de producción esté al día."
+        ),
+    }
 
     for nombre, ruta, es_login in [
         ("home", "/", False),

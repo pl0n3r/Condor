@@ -56,6 +56,7 @@ class ObserverTests(unittest.TestCase):
         self.server.respuestas = {
             "/health": (200, "application/json; charset=utf-8", json.dumps({
                 "status": "ok", "version": VERSION, "release_sha": SHA,
+                "schema_up_to_date": True,
             }).encode()),
             "/": (200, "text/html", HOME),
             "/admin/login": (200, "text/html", LOGIN),
@@ -93,6 +94,7 @@ class ObserverTests(unittest.TestCase):
         self.server.respuestas["/health"] = (
             200, "application/json", json.dumps({
                 "status": "ok", "version": version, "release_sha": SHA,
+                "schema_up_to_date": True,
             }).encode(),
         )
         self.server.respuestas["/"] = (
@@ -576,6 +578,41 @@ class ObserverTests(unittest.TestCase):
                 comentario = modulo.comentario_roadmap(resultado)
                 self.assertIn("no fue posible confirmar", comentario)
                 self.assertNotIn("identidad de producción no coincide", comentario)
+
+    def test_schema_pendiente_con_identidad_exacta_solo_observa_deploy(self) -> None:
+        self.server.respuestas["/health"] = (
+            200,
+            "application/json",
+            json.dumps({
+                "status": "ok",
+                "version": VERSION,
+                "release_sha": SHA,
+                "schema_up_to_date": False,
+            }).encode(),
+        )
+
+        resultado = self.observar()
+
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertTrue(resultado["comprobaciones"]["health"]["ok"])
+        self.assertFalse(resultado["comprobaciones"]["schema"]["ok"])
+        self.assertIn("esquema", resultado["comprobaciones"]["schema"]["detalle"])
+
+    def test_health_legacy_sin_estado_de_esquema_falla_cerrado(self) -> None:
+        self.server.respuestas["/health"] = (
+            200,
+            "application/json",
+            json.dumps({
+                "status": "ok",
+                "version": VERSION,
+                "release_sha": SHA,
+            }).encode(),
+        )
+
+        resultado = self.observar()
+
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["schema"]["ok"])
 
     def test_health_no_json_no_observa_deploy(self) -> None:
         self.server.respuestas["/health"] = (200, "text/html", HOME)

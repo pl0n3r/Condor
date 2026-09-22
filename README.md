@@ -31,6 +31,7 @@
 - se acepta el MIME legacy `application/x-javascript` servido por Hostinger;
 - comentarios del Roadmap describen la causa real de observación, sin asumir deploy pendiente cuando no corresponde;
 - `scripts/post-deploy.sh` detecta esquema pendiente y falla cerrado antes de limpiar/calentar caché;
+- `/health` expone solo `schema_up_to_date` y el observador lo exige para declarar `VALIDATED_IN_PRODUCTION`;
 - el post-deploy usa lock con token/PID de propietario, periodo de gracia para locks incompletos y recuperación segura de locks huérfanos;
 - D-044 formaliza comprobar esquema → limpiar caché → calentar caché cuando el esquema ya está al día;
 - toda migración productiva —destructiva o no— requiere autorización humana explícita y una operación separada;

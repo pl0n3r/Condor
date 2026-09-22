@@ -1583,7 +1583,8 @@ Contrato operativo:
 - las migraciones autorizadas deben seguir siendo forward / expand-compatible; SQL destructivo, contracciones irreversibles, backfills riesgosos o cambios sin rollback permanecen fuera de cualquier automatización;
 - cuando el esquema ya está al día, el orden permitido es **comprobar esquema → limpiar caché → calentar caché**;
 - detectar esquema pendiente bloquea `VALIDATED_IN_PRODUCTION`; la identidad de release, el esquema migrado y el estado operativo reconciliado se registran como evidencias separadas;
-- el observador de release nunca debe inferir que una migración fue aplicada solo porque versión/SHA coincidan.
+- el observador de release nunca debe inferir que una migración fue aplicada solo porque versión/SHA coincidan;
+- `/health` publica únicamente `schema_up_to_date: true|false` como señal no sensible del estado de migraciones; el observador exige `true` para `VALIDATED_IN_PRODUCTION`, sin exponer nombres de migración, SQL ni metadatos internos.
 
 Motivación operativa: V 0.1.20 demostró que Hostinger podía servir código nuevo
 mientras el esquema del storefront seguía atrasado, produciendo HTTP 500. El
