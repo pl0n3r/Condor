@@ -81,9 +81,17 @@ class TextoVisible(HTMLParser):
             self.en_hero = True
         elif tag == "h1" and self.en_hero:
             self.en_titulo_hero = True
-        elif tag == "form" and self.en_body:
+        elif tag in {"form", "input"}:
+            self._registrar_formulario(tag, atributos)
+
+    def _registrar_formulario(
+        self, tag: str, atributos: dict[str, str | None],
+    ) -> None:
+        if not self.en_body:
+            return
+        if tag == "form":
             self.en_formulario += 1
-        elif tag == "input" and self.en_body and self.en_formulario:
+        elif self.en_formulario:
             self.campos.add((atributos.get("name") or "", atributos.get("type") or "text"))
 
     def handle_endtag(self, tag: str) -> None:
