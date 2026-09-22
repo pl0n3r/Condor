@@ -25,10 +25,7 @@ final class StorefrontAdminControllerTest extends WebTestCase
     public function testOwnerCanEditIdentityAndSeeItOnPublicSlug(): void
     {
         $client = static::createClient();
-        $entityManager = static::getContainer()->get(
-            EntityManagerInterface::class,
-        );
-        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $entityManager = $this->entityManager();
 
         [$tenant, $owner] = $this->tenantOwner($entityManager);
 
@@ -69,10 +66,7 @@ final class StorefrontAdminControllerTest extends WebTestCase
     public function testOwnerPostRejectsMissingOrInvalidCsrfWithoutChangingProfile(): void
     {
         $client = static::createClient();
-        $entityManager = static::getContainer()->get(
-            EntityManagerInterface::class,
-        );
-        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $entityManager = $this->entityManager();
 
         [$tenant, $owner] = $this->tenantOwner($entityManager);
         $profile = new StorefrontProfile(
@@ -94,8 +88,7 @@ final class StorefrontAdminControllerTest extends WebTestCase
             self::assertResponseStatusCodeSame(403);
         }
 
-        $stored = static::getContainer()
-            ->get(EntityManagerInterface::class)
+        $stored = $this->entityManager()
             ->getRepository(StorefrontProfile::class)
             ->findOneBy(['tenant' => $tenant]);
         self::assertInstanceOf(StorefrontProfile::class, $stored);
@@ -106,10 +99,7 @@ final class StorefrontAdminControllerTest extends WebTestCase
     public function testVerifiedPrimaryDomainServesSameTenantAndCanonical(): void
     {
         $client = static::createClient();
-        $entityManager = static::getContainer()->get(
-            EntityManagerInterface::class,
-        );
-        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $entityManager = $this->entityManager();
 
         [$tenant] = $this->tenantOwner($entityManager);
         $host = 'tienda-'.strtolower(bin2hex(random_bytes(4))).'.example.test';
@@ -138,10 +128,7 @@ final class StorefrontAdminControllerTest extends WebTestCase
 
     public function testTenantCannotPersistTwoVerifiedPrimaryDomains(): void
     {
-        $entityManager = static::getContainer()->get(
-            EntityManagerInterface::class,
-        );
-        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $entityManager = $this->entityManager();
 
         [$tenant] = $this->tenantOwner($entityManager);
         $entityManager->persist(new TenantDomain(
@@ -166,10 +153,7 @@ final class StorefrontAdminControllerTest extends WebTestCase
     public function testUnverifiedCustomHostFailsClosed(): void
     {
         $client = static::createClient();
-        $entityManager = static::getContainer()->get(
-            EntityManagerInterface::class,
-        );
-        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $entityManager = $this->entityManager();
 
         [$tenant] = $this->tenantOwner($entityManager);
         $host = 'pendiente-'.strtolower(bin2hex(random_bytes(4))).'.example.test';
@@ -203,10 +187,7 @@ final class StorefrontAdminControllerTest extends WebTestCase
     public function testVerifiedDomainDoesNotLeakAnotherTenantProfile(): void
     {
         $client = static::createClient();
-        $entityManager = static::getContainer()->get(
-            EntityManagerInterface::class,
-        );
-        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $entityManager = $this->entityManager();
 
         [$tenant] = $this->tenantOwner($entityManager);
         [$otherTenant] = $this->tenantOwner($entityManager);
@@ -243,10 +224,7 @@ final class StorefrontAdminControllerTest extends WebTestCase
     public function testDelegatedUserNeedsSitePermissionAndViewOnlyStaysReadOnly(): void
     {
         $client = static::createClient();
-        $entityManager = static::getContainer()->get(
-            EntityManagerInterface::class,
-        );
-        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $entityManager = $this->entityManager();
 
         [$tenant] = $this->tenantOwner($entityManager);
         $branch = $entityManager->getRepository(Branch::class)->findOneBy([
@@ -310,6 +288,16 @@ final class StorefrontAdminControllerTest extends WebTestCase
             ->findOneBy(['tenant' => $tenant]);
         self::assertInstanceOf(StorefrontProfile::class, $stored);
         self::assertSame('Identidad protegida', $stored->headline());
+    }
+
+    private function entityManager(): EntityManagerInterface
+    {
+        $entityManager = static::getContainer()->get(
+            EntityManagerInterface::class,
+        );
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        return $entityManager;
     }
 
     private function csrfToken(
