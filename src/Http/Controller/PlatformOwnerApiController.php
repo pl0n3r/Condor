@@ -64,7 +64,7 @@ abstract class PlatformOwnerApiController extends AbstractController
     }
 
     /** @return array{id: string, expires_at: string, activation_path_once: string, delivery: string} */
-    protected function invitationPayload(
+    protected function activationInvitationPayload(
         AccountInvitation $invitation,
         string $rawToken,
     ): array {
