@@ -70,8 +70,12 @@ global. Mientras no exista un permiso explícitamente tenant-wide, la edición s
 reserva al propietario del tenant.
 
 La base de datos mantiene como máximo un dominio que sea simultáneamente
-`primary` y `verified` por tenant. El índice único se apoya en una clave
-nullable derivada al crear `TenantDomain`: los dominios que no son primarios
-verificados mantienen esa clave en `NULL`, mientras el primario verificado usa
-el ID del tenant. Una migración aborta si encuentra datos históricos ambiguos
-antes de instalar la restricción.
+`primary` y `verified` por tenant. La columna indexada
+`primary_verified_tenant_id` es **generada por MariaDB**, no calculada por PHP:
+solo contiene el ID del tenant cuando ambas banderas son verdaderas, y es
+`NULL` en los demás casos. Así, una instancia vieja de Condor que inserte o
+actualice dominios sin conocer esa columna sigue sometida a la misma unicidad
+durante un despliegue parcial. Doctrine la trata como read-only y nunca intenta
+escribirla. La migración aborta si encuentra datos históricos ambiguos antes
+de instalar la restricción; no corrige datos reales ni ejecuta el cambio en
+producción automáticamente.
