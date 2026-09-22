@@ -491,13 +491,43 @@ class CoordinacionTests(unittest.TestCase):
         self.assertIsNotNone(reservation)
         self.assertEqual(reservation["reservation_id"], SESSION_A)
 
-    def test_second_reservation_cannot_win_same_branch(self) -> None:
-        """Una rama existente impide una segunda reserva."""
+    def test_orphan_branch_is_recovered_immediately(self) -> None:
+        """Una rama sin reserva activa se recupera sin esperar el lease."""
         api = FakeGitHub()
         api.branches["trabajo/issue-12"] = "abc123"
-        result = reserve_work(api, 12, "pl0n3r", "OWNER")
-        self.assertIsNone(result)
-        self.assertEqual(api.status_history, [])
+        api.pulls[15] = {
+            "number": 15,
+            "state": "open",
+            "draft": False,
+            "body": "Closes #12",
+            "head": {"ref": "trabajo/issue-12"},
+            "base": {"ref": "main"},
+        }
+
+        session = reserve_work(api, 12, "pl0n3r", "OWNER")
+
+        self.assertIsNotNone(session)
+        self.assertEqual(api.pulls[15]["state"], "open")
+        self.assertEqual(api.status_history[-1], STATUS_REVIEW)
+        self.assertEqual(
+            reservation_from_pr_body(api.pulls[15]["body"]),
+            session,
+        )
+        reservation = active_reservation(api, 12)
+        self.assertIsNotNone(reservation)
+        assert reservation is not None
+        self.assertEqual(reservation["reason"], "recuperacion-huerfana")
+        self.assertNotIn("coordinacion/lock-issue-12", api.branches)
+
+    def test_concurrent_orphan_recovery_respects_existing_lock(self) -> None:
+        """Dos recuperadores no pueden reclamar a la vez una rama huérfana."""
+        api = FakeGitHub()
+        api.branches["trabajo/issue-12"] = "abc123"
+        api.branches["coordinacion/lock-issue-12"] = "abc123"
+
+        session = reserve_work(api, 12, "pl0n3r", "OWNER")
+
+        self.assertIsNone(session)
         self.assertIsNone(active_reservation(api, 12))
 
     def test_fresh_reservation_cannot_be_recovered(self) -> None:
