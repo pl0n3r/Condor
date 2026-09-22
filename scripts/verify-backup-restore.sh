@@ -27,15 +27,7 @@ if [ -z "$PHP_BIN" ]; then
   exit 1
 fi
 
-parse_field() {
-  "$PHP_BIN" "$script_dir/parse-database-url.php" "$1"
-}
-
-user="$(parse_field user)"
-pass="$(parse_field password)"
-host="$(parse_field host)"
-port="$(parse_field port)"
-db="$(parse_field database)"
+db="$("$PHP_BIN" "$script_dir/parse-database-url.php" database)"
 
 case "$db" in
   condor_backup_restored|condor_restore_*|condor_*_restore_test|condor_*_restore_verify)
@@ -51,6 +43,10 @@ if [ "${CONDOR_ALLOW_DESTRUCTIVE_RESTORE:-}" != "1" ]; then
   exit 1
 fi
 
+credentials_tmp="$(mktemp "${TMPDIR:-/tmp}/condor-mysql-XXXXXX.cnf")"
+"$PHP_BIN" "$script_dir/parse-database-url.php" client-config "$credentials_tmp"
+unset DATABASE_URL
+
 client_bin=""
 for candidate in mariadb mysql; do
   if command -v "$candidate" >/dev/null 2>&1; then
@@ -60,16 +56,17 @@ for candidate in mariadb mysql; do
 done
 if [ -z "$client_bin" ]; then
   echo "verify-backup-restore.sh: no se encontró mariadb ni mysql en PATH." >&2
+  rm -f -- "$credentials_tmp"
   exit 1
 fi
 
 run_sql() {
-  MYSQL_PWD="$pass" "$client_bin" --host="$host" --port="$port" --user="$user" "$@"
+  "$client_bin" --defaults-extra-file="$credentials_tmp" "$@"
 }
 
-restore_tmp="${TMPDIR:-/tmp}/condor-restore-$$.sql"
+restore_tmp="$(mktemp "${TMPDIR:-/tmp}/condor-restore-XXXXXX.sql")"
 cleanup() {
-  rm -f -- "$restore_tmp"
+  rm -f -- "$restore_tmp" "$credentials_tmp"
 }
 trap cleanup 0 HUP INT TERM
 
@@ -94,13 +91,11 @@ if [ "${migration_count:-0}" -lt 1 ]; then
   exit 1
 fi
 
-# Consulta representativa: obliga a MariaDB a resolver columnas reales de
-# las dos entidades nucleares, aunque el backup no contenga filas de negocio.
 run_sql -N "$db" -e   "SELECT COUNT(t.id), (SELECT COUNT(u.id) FROM condor_user u) FROM condor_tenant t;"   >/dev/null
 
-table_count="$(run_sql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$db';")"
+table_count="$(run_sql -N -e   "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$db';")"
 
-rm -f -- "$restore_tmp"
+rm -f -- "$restore_tmp" "$credentials_tmp"
 trap - 0 HUP INT TERM
 
 echo "Restauración verificada: $table_count tabla(s), $migration_count migración(es) en '$db'."
