@@ -12,13 +12,31 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class PlatformOwnerController extends AbstractController
 {
-    #[Route('/adminpl0n3r', name: 'app_platform_owner', methods: ['GET'])]
-    public function __invoke(AppVersion $version): Response
+    #[Route(
+        '/adminpl0n3r',
+        name: 'app_platform_owner',
+        defaults: ['section' => 'control'],
+        methods: ['GET'],
+    )]
+    #[Route(
+        '/adminpl0n3r/empresas',
+        name: 'app_platform_owner_tenants',
+        defaults: ['section' => 'empresas'],
+        methods: ['GET'],
+    )]
+    #[Route(
+        '/adminpl0n3r/staff',
+        name: 'app_platform_owner_staff',
+        defaults: ['section' => 'staff'],
+        methods: ['GET'],
+    )]
+    public function __invoke(AppVersion $version, string $section): Response
     {
         $this->denyAccessUnlessGranted(User::ROLE_PLATFORM_OWNER);
 
         return $this->render('platform_owner/index.html.twig', [
             'app_version' => $version->human(),
+            'section' => $section,
         ]);
     }
 }
