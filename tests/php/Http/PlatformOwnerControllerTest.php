@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Http;
 
+use App\Domain\Catalog\Entity\Product;
+use App\Domain\Catalog\Entity\ProductVariant;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Branch;
@@ -274,8 +276,20 @@ final class PlatformOwnerControllerTest extends WebTestCase
         );
         $tenant = new Tenant('Empresa Seleccionada '.$suffix, 'empresa-seleccionada-'.$suffix);
         $branch = new Branch($tenant, 'Sede Norte', 'sede-norte', default: true);
+        $product = new Product(
+            $tenant,
+            'Producto visible',
+            'producto-visible',
+            'Solo lectura desde plataforma.',
+        );
+        $variant = new ProductVariant(
+            $tenant,
+            $product,
+            'PLATFORM-1',
+            'Variante visible',
+        );
 
-        foreach ([$owner, $tenant, $branch] as $entity) {
+        foreach ([$owner, $tenant, $branch, $product, $variant] as $entity) {
             $entityManager->persist($entity);
         }
         $entityManager->flush();
@@ -295,6 +309,14 @@ final class PlatformOwnerControllerTest extends WebTestCase
         self::assertSame($tenant->id(), $payload['selected_tenant']['id']);
         self::assertSame('Sede Norte', $payload['selected_tenant']['branches'][0]['name']);
         self::assertTrue($payload['selected_tenant']['branches'][0]['is_default']);
+        self::assertSame(
+            'Producto visible',
+            $payload['selected_tenant']['catalog'][0]['name'],
+        );
+        self::assertSame(
+            'PLATFORM-1',
+            $payload['selected_tenant']['catalog'][0]['variants'][0]['sku'],
+        );
     }
 
     public function testOwnerContextKeepsExplicitEmptyBranchState(): void
