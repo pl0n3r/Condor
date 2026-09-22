@@ -1566,25 +1566,30 @@ Candidatos prioritarios a automatización a medida que exista superficie:
 
 Toda automatización debe ser idempotente cuando sea posible y operar con mínimo privilegio.
 
-#### Migraciones automáticas post-deploy en shared hosting
+#### Detección de deriva de esquema post-deploy en shared hosting
 
-Mientras Condor opere en Hostinger shared hosting, el cron/post-deploy puede ejecutar
-`doctrine:migrations:migrate --env=prod --no-interaction --allow-no-migration`
-antes de regenerar la caché, siempre bajo estas reglas:
+Mientras Condor opere en Hostinger shared hosting, el cron/post-deploy **no ejecuta
+migraciones productivas automáticamente**. Su responsabilidad es detectar si el
+esquema está atrasado y fallar cerrado antes de regenerar la caché.
 
-- una sola corrida puede aplicar migraciones a la vez; el script usa un lock explícito y una segunda corrida concurrente se omite;
-- las migraciones automáticas deben ser **forward / expand-compatible** y seguras con datos reales;
-- una migración que implique pérdida de datos, contracción irreversible, backfill riesgoso o decisión humana debe fallar cerrado o quedar fuera del flujo automático;
-- el orden operativo es **migrar esquema → limpiar caché → calentar caché**; nunca publicar un contenedor nuevo contra un esquema requerido que siga pendiente;
-- si la migración falla, el script termina con error y no continúa a `cache:clear`/warmup, para no presentar como saludable un release incompatible con su esquema;
-- no tener migraciones pendientes es un no-op válido;
-- aplicar migraciones automáticamente no equivale a `VALIDATED_IN_PRODUCTION`: el observador de release debe confirmar después versión/SHA y smoke checks;
-- esta automatización no modifica la regla D-040: **producción no ejecuta migraciones destructivas automáticamente**.
+Contrato operativo:
+
+- una sola corrida de post-deploy opera a la vez; el script usa un lock explícito y una segunda corrida concurrente se omite;
+- un lock con propietario vivo nunca se recupera por antigüedad;
+- un lock huérfano puede recuperarse de forma segura y un lock incompleto reciente obtiene un periodo de gracia antes de considerarse recuperable;
+- el cron ejecuta `doctrine:migrations:up-to-date --env=prod --no-interaction` como comprobación read-only;
+- si existen migraciones pendientes, termina con error accionable y **no** ejecuta `cache:clear` ni `cache:warmup`;
+- una migración productiva requiere autorización humana explícita conforme a `AGENTES.md` §10 y se ejecuta como operación separada, nunca implícita desde cron, deploy o smoke;
+- las migraciones autorizadas deben seguir siendo forward / expand-compatible; SQL destructivo, contracciones irreversibles, backfills riesgosos o cambios sin rollback permanecen fuera de cualquier automatización;
+- cuando el esquema ya está al día, el orden permitido es **comprobar esquema → limpiar caché → calentar caché**;
+- detectar esquema pendiente bloquea `VALIDATED_IN_PRODUCTION`; la identidad de release, el esquema migrado y el estado operativo reconciliado se registran como evidencias separadas;
+- el observador de release nunca debe inferir que una migración fue aplicada solo porque versión/SHA coincidan.
 
 Motivación operativa: V 0.1.20 demostró que Hostinger podía servir código nuevo
-mientras el esquema de storefront seguía atrasado, produciendo HTTP 500. La
-automatización evita esa deriva código/esquema sin convertir contracciones
-destructivas en una operación implícita.
+mientras el esquema del storefront seguía atrasado, produciendo HTTP 500. El
+post-deploy debe hacer visible esa deriva sin convertir una mutación productiva
+en una operación automática. La corrección del esquema requiere autorización y
+ejecución separadas, seguida por el mismo smoke real que detectó el incidente.
 
 #### Revisión periódica de seguridad
 
