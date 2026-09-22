@@ -1,41 +1,48 @@
-# Condor App — Snapshot operativo · candidato V 0.1.14
+# Condor App — Snapshot operativo · candidato V 0.1.15
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** endurecer la privacidad de las respuestas administrativas y APIs sin degradar el caching legítimo de superficies públicas.
+> **Objetivo actual:** entregar el primer catálogo tenant-owned de productos y variantes, administrable por sede y visible en modo solo lectura desde el contexto explícito de plataforma.
 
 <p align="center">
   <strong>Producto:</strong> Condor App ·
   <strong>Runtime:</strong> PHP 8.5 ·
-  <strong>Base:</strong> V 0.1.13 ·
-  <strong>Candidato:</strong> V 0.1.14 ·
-  <strong>Producción comprobada:</strong> V 0.1.4
+  <strong>Base:</strong> main `3e9bbf9` · config V 0.1.14 ·
+  <strong>Candidato:</strong> V 0.1.15 ·
+  <strong>Producción observada:</strong> V 0.1.14 · SHA aún no verificable
 </p>
 
 ## Estado de entrega
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base integrada | ✅ **V 0.1.13 EN MAIN** | SHA `00d3c8fde5b5d2c71c51975ddfb9a994f20292ec` |
-| Candidato actual | 🚧 **V 0.1.14 EN VALIDACIÓN** | Issue #150 / PR #151 · [consultar SHA exacto del HEAD](https://github.com/pl0n3r/Condor/commits/trabajo/issue-150) |
-| Respuestas privadas | ✅ **NO-STORE FORZADO** | Admin, APIs, diagnósticos y activación |
-| Superficies públicas | ✅ **SIN CAMBIO DE POLÍTICA** | storefront, `/health` y prefijos similares no se capturan |
-| Producción V 0.1.14 | ⏳ **NO VALIDADA** | merge, transición y smoke real siguen separados |
+| Base integrada | ✅ **MAIN SINCRONIZADO** | SHA `3e9bbf9f369c2cfd9f5add33d0b8fb56d376f7b5`; incluye V 0.1.14 + hotfix #156 + navegación #158 |
+| Candidato actual | 🚧 **V 0.1.15 EN VALIDACIÓN** | Issue #131 / PR #152 |
+| Dominio y persistencia | ✅ **IMPLEMENTADOS** | Product + ProductVariant tenant-owned, ULID y migración MariaDB |
+| REST branch-scoped | ✅ **IMPLEMENTADO** | permisos `catalog.*`, CSRF, auditoría, 404 cross-tenant y 409 duplicados |
+| Admin React | ✅ **IMPLEMENTADO** | CRUD de productos/variantes, responsive y estados reales |
+| Super Admin | ✅ **SOLO LECTURA** | catálogo del tenant seleccionado sin impersonación |
+| Producción observada | 🚧 **V 0.1.14, SHA NO VERIFICABLE AÚN** | #161 detectó `release_sha=dev`; V 0.1.16 corrige esa evidencia |
+| Producción V 0.1.15 | ⏳ **NO VALIDADA** | no se ha desplegado ni migrado producción |
 
-## Qué incorpora V 0.1.14
+## Qué incorpora V 0.1.15
 
-- Regresión explícita para `Cache-Control: private, no-store` en rutas administrativas y APIs sensibles.
-- Verificación de eliminación de `Surrogate-Control` y `Expires` contradictorios.
-- Cobertura de respuestas 200, 403 y 500 para evitar fugas por caché compartida.
-- Preservación de `Referrer-Policy: no-referrer` cuando un controlador ya exige una política más estricta.
-- Verificación de que storefronts públicos, `/health` y prefijos similares mantienen su política pública.
-- Sin migraciones, cambios de roles ni mutaciones de datos.
+- Productos y variantes con aislamiento tenant-first y FKs que impiden cruces entre empresas.
+- Slug único por tenant y SKU normalizado/único por tenant.
+- CRUD REST autorizado por sede con `catalog.view/create/update/delete`.
+- Mutaciones protegidas por CSRF, payload estricto, auditoría y soft-delete.
+- Interfaz de catálogo dentro del Admin con carga, vacío, error, permisos y responsive.
+- Vista explícita de catálogo en el centro de plataforma, deliberadamente solo lectura.
+- Contrato REST documentado y regresiones PHP/E2E.
+- Cobertura E2E real del propietario de plataforma: cuenta efímera provisionada en CI, navegación Empresas/Staff y selectores accesibles (#159).
+- Sin inventario, precios, carrito ni checkout: esos dominios siguen desacoplados para slices posteriores.
 
 ## Qué sigue
 
-- Catálogo Producto + Variante: Issue #131 / PR #152, candidato V 0.1.15.
-- Activación del primer dominio real solo mediante transición operativa autorizada y verificable.
+- Cerrar Quality Gate, CodeRabbit y CI del SHA exacto final de V 0.1.15.
+- Integrar solo cuando el candidato esté verde y sin findings válidos.
+- Mantener deploy/migración de producción como transición separada y explícitamente autorizada.
 - El Roadmap canónico continúa en Issue #1.
 
 > **Regla de estado:** CI verde o merge prueban código, no producción. Solo deploy observado y smoke real permiten declarar **VALIDADO EN PRODUCCIÓN**.
