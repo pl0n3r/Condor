@@ -30,20 +30,31 @@ if [ -z "$PHP_BIN" ]; then
 fi
 
 LOCK_FILE="var/post-deploy.lock"
-LOCK_GUARD_DIR="var/post-deploy.lock.guard"
+LOCK_GUARD_FILE="var/post-deploy.lock.guard"
 LOCK_MAX_AGE_SECONDS=21600
 LOCK_INVALID_GRACE_MINUTES=5
-LOCK_GUARD_GRACE_MINUTES=1
-LOCK_TOKEN="$$-$(date +%s)"
+LOCK_TOKEN="$-$(date +%s)"
 LOCK_GUARD_OWNED=0
 SCHEMA_CHECK_LOG=""
 
+FLOCK_BIN=""
+for candidate in /usr/bin/flock flock
+do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        FLOCK_BIN="$candidate"
+        break
+    fi
+done
+
+if [ -z "$FLOCK_BIN" ]; then
+    echo "post-deploy.sh: no se encontró flock; no es seguro recuperar locks concurrentemente." >&2
+    exit 1
+fi
+
 cleanup_guard() {
-    if [ "$LOCK_GUARD_OWNED" -eq 1 ] &&
-        [ -d "$LOCK_GUARD_DIR" ] &&
-        [ "$(sed -n '1p' "$LOCK_GUARD_DIR/owner" 2>/dev/null || true)" = "$LOCK_TOKEN" ]; then
-        rm -f -- "$LOCK_GUARD_DIR/owner"
-        rmdir "$LOCK_GUARD_DIR" 2>/dev/null || true
+    if [ "$LOCK_GUARD_OWNED" -eq 1 ]; then
+        "$FLOCK_BIN" -u 9 2>/dev/null || true
+        exec 9>&-
     fi
     LOCK_GUARD_OWNED=0
 }
@@ -74,45 +85,18 @@ crear_lock() {
 }
 
 acquire_guard() {
-    if mkdir "$LOCK_GUARD_DIR" 2>/dev/null; then
-        printf '%s\n%s\n%s\n' "$LOCK_TOKEN" "$$" "$(date +%s)" > "$LOCK_GUARD_DIR/owner"
-        LOCK_GUARD_OWNED=1
-        return 0
-    fi
-
-    guard_pid="$(sed -n '2p' "$LOCK_GUARD_DIR/owner" 2>/dev/null || true)"
-    case "$guard_pid" in
-        ''|*[!0-9]*)
-            if [ -z "$(find "$LOCK_GUARD_DIR" -mmin +"$LOCK_GUARD_GRACE_MINUTES" -print -quit 2>/dev/null)" ]; then
-                echo "post-deploy.sh: mutex de recuperación incompleto reciente; se omite." >&2
-                return 1
-            fi
-            ;;
-        *)
-            if kill -0 "$guard_pid" 2>/dev/null; then
-                echo "post-deploy.sh: otra recuperación de lock sigue activa (pid $guard_pid); se omite." >&2
-                return 1
-            fi
-            ;;
-    esac
-
-    stale_guard="$LOCK_GUARD_DIR.stale.$LOCK_TOKEN"
-    if ! mv "$LOCK_GUARD_DIR" "$stale_guard" 2>/dev/null; then
-        echo "post-deploy.sh: el mutex de recuperación cambió concurrentemente; se omite." >&2
+    # Mutex estable: este archivo nunca se renombra ni elimina. De este modo,
+    # dos recuperadores no pueden inspeccionar un guard viejo y después mover
+    # accidentalmente el guard nuevo creado por el otro proceso.
+    exec 9>"$LOCK_GUARD_FILE"
+    if ! "$FLOCK_BIN" -n 9; then
+        echo "post-deploy.sh: otra recuperación de lock sigue activa; se omite." >&2
+        exec 9>&-
         return 1
     fi
-    rm -f -- "$stale_guard/owner"
-    rmdir "$stale_guard" 2>/dev/null || {
-        echo "post-deploy.sh: mutex huérfano contiene datos inesperados; se omite." >&2
-        return 1
-    }
 
-    if ! mkdir "$LOCK_GUARD_DIR" 2>/dev/null; then
-        echo "post-deploy.sh: otro proceso adquirió el mutex primero; se omite." >&2
-        return 1
-    fi
-    printf '%s\n%s\n%s\n' "$LOCK_TOKEN" "$$" "$(date +%s)" > "$LOCK_GUARD_DIR/owner"
     LOCK_GUARD_OWNED=1
+    return 0
 }
 
 recuperar_lock() {
