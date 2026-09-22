@@ -49,8 +49,9 @@ test.describe('Slice 3 — catálogo de productos y variantes', () => {
     await card.getByRole('button', { name: 'Crear variante' }).click();
 
     await expect(page.getByText('Variante creada.')).toBeVisible();
-    await expect(card.getByText(sku)).toBeVisible();
-    await expect(card.getByText('Variante E2E')).toBeVisible();
+    const variantList = card.locator('.catalog-variant-list');
+    await expect(variantList.getByText(sku)).toBeVisible();
+    await expect(variantList.getByText('Variante E2E')).toBeVisible();
 
     await page.reload();
 
@@ -58,7 +59,8 @@ test.describe('Slice 3 — catálogo de productos y variantes', () => {
       has: page.getByRole('heading', { name: productName }),
     });
     await expect(card).toBeVisible();
-    await expect(card.getByText(sku)).toBeVisible();
-    await expect(card.getByText('Variante E2E')).toBeVisible();
+    const reloadedVariantList = card.locator('.catalog-variant-list');
+    await expect(reloadedVariantList.getByText(sku)).toBeVisible();
+    await expect(reloadedVariantList.getByText('Variante E2E')).toBeVisible();
   });
 });
