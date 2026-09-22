@@ -84,7 +84,7 @@ final class RequestMetricsTest extends TestCase
         self::assertSame('route_005', $recent[499]['route']);
     }
 
-    public function testFailedRotationKeepsOriginalLogIntactAndCanRecover(): void
+    public function testFailedPublicationKeepsBoundedOriginalAndCanRecover(): void
     {
         for ($i = 0; $i < 500; $i++) {
             RequestMetrics::record(
@@ -104,24 +104,19 @@ final class RequestMetricsTest extends TestCase
         mkdir($blockedTempPath, 0700);
         RequestMetrics::record(
             $this->projectDir,
-            'rotation_failed_but_append_survives',
+            'discarded_when_publish_fails',
             200,
             501.0,
             1_048_576,
         );
 
-        $afterFailedRotation = file_get_contents($logPath);
-        self::assertIsString($afterFailedRotation);
-        self::assertStringStartsWith($before, $afterFailedRotation);
-        self::assertStringContainsString(
-            'rotation_failed_but_append_survives',
-            $afterFailedRotation,
-        );
+        self::assertSame($before, file_get_contents($logPath));
+        self::assertCount(500, RequestMetrics::recent($this->projectDir, 1000));
 
         rmdir($blockedTempPath);
         RequestMetrics::record(
             $this->projectDir,
-            'rotation_recovers',
+            'publication_recovers',
             200,
             502.0,
             1_048_576,
@@ -129,7 +124,35 @@ final class RequestMetricsTest extends TestCase
 
         $recent = RequestMetrics::recent($this->projectDir, 1000);
         self::assertCount(500, $recent);
-        self::assertSame('rotation_recovers', $recent[0]['route']);
+        self::assertSame('publication_recovers', $recent[0]['route']);
+        self::assertSame('before_001', $recent[499]['route']);
+    }
+
+    public function testInvalidJsonLineDoesNotConsumeRecentLimit(): void
+    {
+        RequestMetrics::record(
+            $this->projectDir,
+            'valid_oldest',
+            200,
+            10.0,
+            1_048_576,
+        );
+        RequestMetrics::record(
+            $this->projectDir,
+            'valid_newest',
+            200,
+            20.0,
+            1_048_576,
+        );
+
+        $logPath = $this->projectDir.'/var/log/request_metrics.log';
+        file_put_contents($logPath, "{invalid-json}\n", FILE_APPEND);
+
+        $recent = RequestMetrics::recent($this->projectDir, 2);
+
+        self::assertCount(2, $recent);
+        self::assertSame('valid_newest', $recent[0]['route']);
+        self::assertSame('valid_oldest', $recent[1]['route']);
     }
 
     public function testRecordNeverThrowsWhenProjectDirCannotContainLogDirectory(): void
