@@ -41,6 +41,8 @@ case "$db" in
     echo "backup-database.sh: nombre de base no válido." >&2
     exit 1
     ;;
+  *)
+    ;;
 esac
 
 backup_dir="${BACKUP_DIR:-var/backups}"
@@ -68,7 +70,21 @@ if [ -z "$dump_bin" ]; then
   exit 1
 fi
 
+case "$(basename "$dump_bin")" in
+  mysqldump)
+    compatibility_arg="--column-statistics=0"
+    ;;
+  mariadb-dump)
+    compatibility_arg=""
+    ;;
+  *)
+    echo "backup-database.sh: binario de dump no soportado: $dump_bin" >&2
+    exit 1
+    ;;
+esac
+
 MYSQL_PWD="$pass" "$dump_bin" \
+  $compatibility_arg \
   --host="$host" \
   --port="$port" \
   --user="$user" \
