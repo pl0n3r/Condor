@@ -58,6 +58,22 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn('--title "Release $TAG (V ${TAG#v})"', workflow)
         self.assertNotIn("if: steps.tag.outputs.created == 'true'", workflow)
 
+    def test_post_deploy_migrates_before_cache_under_lock(self) -> None:
+        """El cron sincroniza esquema antes de publicar la caché del release."""
+        script = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
+
+        lock_index = script.index('LOCK_DIR="var/post-deploy.lock"')
+        migrate_index = script.index("doctrine:migrations:migrate")
+        clear_index = script.index("cache:clear")
+        warmup_index = script.index("cache:warmup")
+
+        self.assertLess(lock_index, migrate_index)
+        self.assertLess(migrate_index, clear_index)
+        self.assertLess(clear_index, warmup_index)
+        self.assertIn("--no-interaction --allow-no-migration", script)
+        self.assertIn("if ! mkdir \"$LOCK_DIR\" 2>/dev/null; then", script)
+        self.assertNotIn("doctrine:schema:", script)
+
     def test_throughput_cli_preserves_json_report_contract(self) -> None:
         """El CLI de throughput entrega el esquema consumido por automatizaciones."""
         payload = {
