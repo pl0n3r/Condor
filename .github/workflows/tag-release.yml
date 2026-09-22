@@ -1,27 +1,25 @@
 name: Etiquetar release (V 0.1.0)
 
-# Automatización de releases (roadmap Issue #1, bloque de Operación y
-# madurez): crea un tag git anotado vX.Y.Z apuntando al commit exacto
-# de main que introdujo esa versión humana, leyendo config/version.php.
-# Es metadata de repositorio, no una mutación de producción — no
-# despliega, no migra, no reemplaza el checklist humano de
-# observar-release.yml para declarar VALIDATED_IN_PRODUCTION.
-# Idempotente: si el tag ya existe (re-run, versión sin cambio), no
-# falla ni lo recrea.
-
+# Crea metadata de release sin tocar producción. El tag representa la
+# primera llegada de una versión humana a main; corridas posteriores con
+# la misma versión son idempotentes. Si una corrida anterior creó el tag
+# pero falló antes del GitHub Release, la siguiente completa ese estado.
 on:
   push:
     branches: [main]
 
 permissions:
   contents: write
-  # 'write' habilita gh release create (crea un draft/release ligado al tag).
+
+concurrency:
+  group: condor-tag-release-main
+  cancel-in-progress: false
 
 jobs:
   tag:
-    name: Crear tag de versión si no existe
+    name: Asegurar tag y GitHub Release
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -40,34 +38,50 @@ jobs:
           fi
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
 
-      - name: Crear y publicar el tag si es nuevo
+      - name: Asegurar tag anotado
         id: tag
         env:
-          TAG: ${{ steps.version.outputs.tag }}
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          TARGET_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG ya existe; nada que hacer."
+
+          if git show-ref --verify --quiet "refs/tags/$TAG"; then
+            existing_sha="$(git rev-parse "refs/tags/$TAG^{commit}")"
+            echo "Tag $TAG ya existe en $existing_sha; no se modifica."
+            echo "created=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "Release $TAG — ${{ github.sha }}"
-          # Sin persist-credentials en el checkout: se autentica el push del
-          # tag explícitamente con el token efímero del job, no con un
-          # credential helper persistido en disco.
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" "$TAG"
+
+          tag_object_sha="$(
+            gh api               --method POST               "repos/$REPOSITORY/git/tags"               -f tag="$TAG"               -f message="Release $TAG — $TARGET_SHA"               -f object="$TARGET_SHA"               -f type=commit               --jq '.sha'
+          )"
+
+          if [[ -z "$tag_object_sha" ]]; then
+            echo "::error::GitHub no devolvió el SHA del objeto tag."
+            exit 1
+          fi
+
+          gh api             --method POST             "repos/$REPOSITORY/git/refs"             -f ref="refs/tags/$TAG"             -f sha="$tag_object_sha"             >/dev/null
+
+          echo "Tag $TAG creado para $TARGET_SHA."
           echo "created=true" >> "$GITHUB_OUTPUT"
 
-      - name: Publicar GitHub Release con notas automáticas
-        if: steps.tag.outputs.created == 'true'
+      - name: Asegurar GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          gh release create "$TAG" \
-            --repo "${{ github.repository }}" \
-            --title "$TAG" \
-            --generate-notes
+
+          if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            echo "GitHub Release $TAG ya existe; estado completo."
+            exit 0
+          fi
+
+          gh release create "$TAG"             --repo "$REPOSITORY"             --verify-tag             --title "$TAG"             --generate-notes
+
+          echo "GitHub Release $TAG publicado."
