@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Domain\Organization\Entity;
 
-use App\Shared\Id\UlidFactory;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
@@ -14,9 +13,7 @@ use DomainException;
 #[ORM\Table(name: 'condor_storefront_profile')]
 class StorefrontProfile
 {
-    #[ORM\Id]
-    #[ORM\Column(type: 'string', length: 26)]
-    private string $id;
+    use HasUlidIdentity;
 
     #[ORM\OneToOne(targetEntity: Tenant::class)]
     #[ORM\JoinColumn(name: 'tenant_id', referencedColumnName: 'id', nullable: false, onDelete: 'RESTRICT')]
@@ -33,7 +30,7 @@ class StorefrontProfile
 
     public function __construct(Tenant $tenant, string $headline, string $description)
     {
-        $this->id = UlidFactory::new();
+        $this->initializeUlidIdentity();
         $this->tenant = $tenant;
         $this->update($headline, $description);
     }
