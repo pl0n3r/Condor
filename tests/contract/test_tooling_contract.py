@@ -46,6 +46,7 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn('git show-ref --verify --quiet "refs/tags/$TAG"', workflow)
         self.assertIn('gh release view "$TAG"', workflow)
         self.assertIn('gh release create "$TAG"', workflow)
+        self.assertIn('--title "Release $TAG (V ${TAG#v})"', workflow)
         self.assertNotIn("if: steps.tag.outputs.created == 'true'", workflow)
 
     def test_throughput_cli_preserves_json_report_contract(self) -> None:
