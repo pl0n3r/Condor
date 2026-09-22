@@ -2,11 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Infrastructure\Observability\FatalLog;
 use App\Kernel;
 use Symfony\Component\HttpFoundation\Request;
 
+$projectDir = dirname(__DIR__);
+
 try {
-    require dirname(__DIR__).'/config/bootstrap.php';
+    require $projectDir.'/config/bootstrap.php';
 
     $kernel = new Kernel(
         $_SERVER['APP_ENV'] ?? $_ENV['APP_ENV'] ?? 'prod',
@@ -37,6 +40,10 @@ try {
         basename($error->getFile()),
         $error->getLine()
     ));
+
+    if (class_exists(FatalLog::class)) {
+        FatalLog::record($projectDir, $reference, $error);
+    }
 
     if (!headers_sent()) {
         http_response_code(500);

@@ -7,6 +7,7 @@ namespace App\Tests\Http;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Observability\Entity\DiagnosticShare;
 use App\Domain\Observability\Entity\ErrorIncident;
+use App\Infrastructure\Observability\FatalLog;
 use DateInterval;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -176,5 +177,32 @@ final class PlatformDiagnosticsControllerTest extends WebTestCase
                 (string) $client->getResponse()->headers->get('Cache-Control'),
             );
         }
+    }
+
+    public function testDiagnosticsPageExposesTheStandaloneFatalLogLink(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $appSecret = static::getContainer()->getParameter('kernel.secret');
+        self::assertIsString($appSecret);
+
+        $owner = new User(
+            'diagnostic-fatal-log-'.bin2hex(random_bytes(4)).'@example.test',
+            'Propietario Log Fatal',
+            [User::ROLE_PLATFORM_OWNER],
+        );
+        $entityManager->persist($owner);
+        $entityManager->flush();
+
+        $client->loginUser($owner);
+        $crawler = $client->request('GET', '/adminpl0n3r/diagnosticos');
+        self::assertResponseIsSuccessful();
+
+        $expectedToken = FatalLog::accessToken($appSecret);
+        $text = $crawler->filter('.workspace')->text();
+
+        self::assertStringContainsString('platform-fatal-log.php', $text);
+        self::assertStringContainsString($expectedToken, $text);
     }
 }
