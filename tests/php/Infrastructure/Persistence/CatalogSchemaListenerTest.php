@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace App\Tests\Infrastructure\Persistence;
 
+use Doctrine\DBAL\Schema\Name\UnqualifiedName;
+use Doctrine\DBAL\Schema\Table;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 final class CatalogSchemaListenerTest extends KernelTestCase
 {
-    public function testGeneratedSchemaContainsTenantProductForeignKey(): void
+    public function testGeneratedAndMigratedSchemaContainTenantProductConstraint(): void
     {
         self::bootKernel();
 
@@ -19,11 +21,25 @@ final class CatalogSchemaListenerTest extends KernelTestCase
         );
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
 
-        $schema = (new SchemaTool($entityManager))->getSchemaFromMetadata(
+        $generatedSchema = (new SchemaTool($entityManager))->getSchemaFromMetadata(
             $entityManager->getMetadataFactory()->getAllMetadata(),
         );
-        $variantTable = $schema->getTable('condor_product_variant');
+        $this->assertTenantProductConstraint(
+            $generatedSchema->getTable('condor_product_variant'),
+        );
 
+        $migratedTable = $entityManager
+            ->getConnection()
+            ->createSchemaManager()
+            ->introspectTable('condor_product_variant');
+        $this->assertTenantProductConstraint($migratedTable);
+    }
+
+    private function assertTenantProductConstraint(Table $variantTable): void
+    {
+        self::assertTrue(
+            $variantTable->hasIndex('IDX_VARIANT_TENANT_PRODUCT'),
+        );
         self::assertTrue(
             $variantTable->hasForeignKey('FK_VARIANT_PRODUCT_TENANT'),
         );
@@ -35,7 +51,7 @@ final class CatalogSchemaListenerTest extends KernelTestCase
         self::assertSame(
             ['tenant_id', 'product_id'],
             array_map(
-                static fn ($name): string => $name->toString(),
+                static fn (UnqualifiedName $name): string => $name->toString(),
                 $foreignKey->getReferencingColumnNames(),
             ),
         );
@@ -46,7 +62,7 @@ final class CatalogSchemaListenerTest extends KernelTestCase
         self::assertSame(
             ['tenant_id', 'id'],
             array_map(
-                static fn ($name): string => $name->toString(),
+                static fn (UnqualifiedName $name): string => $name->toString(),
                 $foreignKey->getReferencedColumnNames(),
             ),
         );
