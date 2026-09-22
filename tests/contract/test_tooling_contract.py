@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import unittest
 from pathlib import Path
@@ -79,6 +80,32 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn('cat "$LOCK_DIR/token"', script)
         self.assertIn("trap cleanup_lock EXIT INT TERM", script)
         self.assertNotIn("doctrine:schema:", script)
+
+    def test_automatic_migration_up_methods_reject_destructive_sql(self) -> None:
+        """El post-deploy automático solo puede ejecutar migraciones expand/forward."""
+        destructive = re.compile(
+            r"\\b(?:DROP\\s+(?:TABLE|COLUMN|INDEX|DATABASE)|"
+            r"TRUNCATE(?:\\s+TABLE)?|DELETE\\s+FROM|"
+            r"ALTER\\s+TABLE[\\s\\S]{0,240}?\\bDROP\\b)",
+            re.IGNORECASE,
+        )
+
+        migrations = sorted((ROOT / "migrations").glob("Version*.php"))
+        self.assertTrue(migrations, "No se encontraron migraciones para auditar.")
+
+        for migration in migrations:
+            source = migration.read_text(encoding="utf-8")
+            up_start = source.find("public function up")
+            down_start = source.find("public function down", up_start)
+            self.assertGreaterEqual(up_start, 0, migration.name)
+            self.assertGreater(down_start, up_start, migration.name)
+
+            up_source = source[up_start:down_start]
+            self.assertIsNone(
+                destructive.search(up_source),
+                f"{migration.name} contiene SQL destructivo en up(); "
+                "debe quedar fuera del post-deploy automático.",
+            )
 
     def test_throughput_cli_preserves_json_report_contract(self) -> None:
         """El CLI de throughput entrega el esquema consumido por automatizaciones."""
