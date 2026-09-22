@@ -73,10 +73,10 @@ jobs:
           if ref_response="$(gh api --include --silent --method POST "repos/$REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$tag_object_sha" 2>&1)"; then
             echo "Tag $TAG creado para $TARGET_SHA."
             echo "created=true" >> "$GITHUB_OUTPUT"
-          elif grep -Eq '^HTTP/[0-9.]+[[:space:]]+409([[:space:]]|$)' <<<"$ref_response"; then
-            race_ref="$(gh api "repos/$REPOSITORY/git/ref/tags/$TAG")"
-            race_object_type="$(jq -r '.object.type' <<<"$race_ref")"
-            race_tag_object_sha="$(jq -r '.object.sha' <<<"$race_ref")"
+          elif grep -Eq '^HTTP/[0-9.]+[[:space:]]+(409|422)([[:space:]]|$)' <<<"$ref_response"; then
+            read -r race_object_type race_tag_object_sha < <(
+              gh api "repos/$REPOSITORY/git/ref/tags/$TAG" --jq '[.object.type, .object.sha] | @tsv'
+            )
 
             if [[ "$race_object_type" != "tag" ]]; then
               echo "::error::La carrera creó $TAG como tag ligero, no anotado."
