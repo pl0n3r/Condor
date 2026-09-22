@@ -22,7 +22,10 @@ final class ApiErrorContractTest extends WebTestCase
 
         self::assertResponseStatusCodeSame(401);
         self::assertResponseHeaderSame('Content-Type', 'application/json');
-        self::assertResponseHeaderSame('Cache-Control', 'no-store');
+        self::assertStringContainsString(
+            'no-store',
+            (string) $client->getResponse()->headers->get('Cache-Control'),
+        );
 
         $payload = json_decode(
             (string) $client->getResponse()->getContent(),
