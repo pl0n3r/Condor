@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
-import { PlatformStaffPanel } from './PlatformStaffPanel';
-import { PlatformTenantCreationPanel } from './PlatformTenantCreationPanel';
 import { platformOwnerContextPath } from './api';
 
 type TenantSummary = {
@@ -127,30 +125,19 @@ type State =
 type PlatformOwnerAppProps = Readonly<{
   version: string;
   logoutToken: string;
-  staffToken: string;
-  tenantToken: string;
 }>;
 
 export function PlatformOwnerApp({
   version,
   logoutToken,
-  staffToken,
-  tenantToken,
 }: PlatformOwnerAppProps) {
   const [state, setState] = useState<State>({ status: 'loading' });
-  const [platformRevision, setPlatformRevision] = useState(0);
   const requestSequence = useRef(0);
   const globalPage = useRef(1);
 
-  async function loadContext(
-    tenantId?: string,
-    page = 1,
-    showLoading = true,
-  ) {
+  async function loadContext(tenantId?: string, page = 1) {
     const requestId = ++requestSequence.current;
-    if (showLoading) {
-      setState({ status: 'loading' });
-    }
+    setState({ status: 'loading' });
 
     try {
       const response = await fetch(platformOwnerContextPath(tenantId, page), {
@@ -383,14 +370,6 @@ export function PlatformOwnerApp({
                 ]}
               />
 
-              <PlatformTenantCreationPanel
-                csrfToken={tenantToken}
-                onCreated={() => {
-                  setPlatformRevision((current) => current + 1);
-                  void loadContext(undefined, 1, false);
-                }}
-              />
-
               <section className="platform-section" aria-labelledby="tenant-list-title">
                 <div className="section-heading compact">
                   <div>
@@ -481,11 +460,6 @@ export function PlatformOwnerApp({
                   </nav>
                 )}
               </section>
-
-              <PlatformStaffPanel
-                csrfToken={staffToken}
-                refreshKey={platformRevision}
-              />
             </>
           )}
 
