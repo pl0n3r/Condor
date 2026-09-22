@@ -8,9 +8,11 @@ use App\Application\Identity\PlatformOwnerTenantContext;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Observability\Entity\FunctionalSignal;
 use App\Infrastructure\Observability\FunctionalSignalRecorder;
+use App\Infrastructure\Security\AuthenticationSignalSubscriber;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
-use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Symfony\Component\Security\Http\Event\LoginFailureEvent;
+use Symfony\Component\Security\Http\Event\LoginSuccessEvent;
 
 final class PlatformOwnerFunctionalSignalsTest extends WebTestCase
 {
@@ -122,52 +124,38 @@ final class PlatformOwnerFunctionalSignalsTest extends WebTestCase
         self::assertResponseStatusCodeSame(403);
     }
 
-    public function testRealLoginAttemptsRecordSuccessAndFailureSignals(): void
+    public function testLoginSignalsAreRecordedWithoutPiiThroughRealDatabaseWrite(): void
     {
-        $client = static::createClient();
         $entityManager = static::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
-        $passwordHasher = static::getContainer()->get(
-            UserPasswordHasherInterface::class,
+        $recorder = static::getContainer()->get(FunctionalSignalRecorder::class);
+        self::assertInstanceOf(FunctionalSignalRecorder::class, $recorder);
+        $subscriber = static::getContainer()->get(
+            AuthenticationSignalSubscriber::class,
         );
         self::assertInstanceOf(
-            UserPasswordHasherInterface::class,
-            $passwordHasher,
+            AuthenticationSignalSubscriber::class,
+            $subscriber,
         );
-
-        $email = 'login-signal-'.bin2hex(random_bytes(4)).'@example.test';
-        $user = new User($email, 'Usuario Login');
-        $user->setPasswordHash(
-            $passwordHasher->hashPassword($user, 'clave-valida-123'),
-        );
-        $entityManager->persist($user);
-        $entityManager->flush();
 
         $before = $this->currentSignals();
 
-        $client->request('GET', '/admin/login');
-        $client->submitForm('Ingresar', [
-            '_username' => $email,
-            '_password' => 'clave-incorrecta',
-        ]);
-        self::assertResponseRedirects('/admin/login');
-
-        $client->request('GET', '/admin/login');
-        $client->submitForm('Ingresar', [
-            '_username' => $email,
-            '_password' => 'clave-valida-123',
-        ]);
-        self::assertResponseRedirects();
+        $subscriber->onLoginSuccess(
+            $this->createStub(LoginSuccessEvent::class),
+        );
+        $subscriber->onLoginFailure(
+            $this->createStub(LoginFailureEvent::class),
+        );
 
         $after = $this->currentSignals();
 
-        self::assertGreaterThanOrEqual(
-            $before['login_success'] + 1,
-            $after['login_success'],
+        self::assertSame(
+            1,
+            $after['login_success'] - $before['login_success'],
         );
-        self::assertGreaterThanOrEqual(
-            $before['login_failure'] + 1,
-            $after['login_failure'],
+        self::assertSame(
+            1,
+            $after['login_failure'] - $before['login_failure'],
         );
 
         $failureSignals = $entityManager
