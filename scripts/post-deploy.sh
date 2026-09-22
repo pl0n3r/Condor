@@ -175,8 +175,23 @@ fi
 
 # D-044 / AGENTES.md §10: detectar deriva es automático; migrar producción no.
 # Un esquema pendiente requiere autorización explícita y una operación separada.
-if ! "$PHP_BIN" bin/console doctrine:migrations:up-to-date --env=prod --no-interaction >/dev/null 2>&1; then
-    echo "post-deploy.sh: hay migraciones pendientes; se requiere autorización explícita antes de migrar producción. Caché no modificada." >&2
+SCHEMA_CHECK_LOG="$(mktemp "${TMPDIR:-/tmp}/condor-schema-check-XXXXXX.log")"
+schema_check_status=0
+if "$PHP_BIN" bin/console doctrine:migrations:up-to-date --env=prod --no-interaction >"$SCHEMA_CHECK_LOG" 2>&1; then
+    rm -f -- "$SCHEMA_CHECK_LOG"
+else
+    schema_check_status=$?
+
+    if grep -Eiq 'migration|not[[:space:]_-]*up[[:space:]_-]*to[[:space:]_-]*date|new[[:space:]_-]*migration' "$SCHEMA_CHECK_LOG"; then
+        schema_diagnostic="Doctrine reporta migraciones pendientes o historial de migraciones no reconciliado."
+    elif grep -Eiq 'sqlstate|connection|database|driver|server[[:space:]_-]*has[[:space:]_-]*gone[[:space:]_-]*away|timed?[[:space:]_-]*out' "$SCHEMA_CHECK_LOG"; then
+        schema_diagnostic="Doctrine no pudo comprobar el esquema por un fallo de base de datos o conectividad."
+    else
+        schema_diagnostic="Doctrine no pudo comprobar el esquema; el fallo no pudo clasificarse de forma segura."
+    fi
+
+    rm -f -- "$SCHEMA_CHECK_LOG"
+    echo "post-deploy.sh: comprobación de esquema falló (código $schema_check_status). $schema_diagnostic Caché no modificada." >&2
     exit 2
 fi
 
