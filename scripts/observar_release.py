@@ -63,7 +63,11 @@ class TextoVisible(HTMLParser):
         if self.ocultos:
             return
 
-        atributos = dict(attrs)
+        self._registrar_etiqueta_activa(tag, dict(attrs))
+
+    def _registrar_etiqueta_activa(
+        self, tag: str, atributos: dict[str, str | None],
+    ) -> None:
         if tag == "head":
             self.en_head = True
         elif tag == "body":
