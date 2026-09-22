@@ -76,8 +76,13 @@ final class RequestMetrics
 
         $lines = array_filter(explode(PHP_EOL, trim($contents)));
         $entries = [];
+        $limit = max(0, $limit);
 
-        foreach (array_slice(array_reverse($lines), 0, max(0, $limit)) as $line) {
+        foreach (array_reverse($lines) as $line) {
+            if (count($entries) >= $limit) {
+                break;
+            }
+
             $decoded = self::decodeLine($line);
             if ($decoded !== null) {
                 $entries[] = $decoded;
@@ -177,21 +182,21 @@ final class RequestMetrics
                 return;
             }
 
-            $log = @fopen($path, 'ab');
-            if (!is_resource($log)) {
+            $existing = is_file($path) ? @file_get_contents($path) : '';
+            if (!is_string($existing)) {
                 return;
             }
 
-            try {
-                if (!self::writeAll($log, $line.PHP_EOL) || !fflush($log)) {
-                    return;
-                }
-                @chmod($path, 0600);
-            } finally {
-                fclose($log);
-            }
+            $lines = $existing === ''
+                ? []
+                : array_values(
+                    array_filter(explode(PHP_EOL, trim($existing))),
+                );
+            $lines[] = $line;
+            $retained = array_slice($lines, -self::MAX_ENTRIES);
+            $payload = implode(PHP_EOL, $retained).PHP_EOL;
 
-            self::rotateLocked($path);
+            self::publishLocked($path, $payload);
         } finally {
             @flock($lock, LOCK_UN);
             fclose($lock);
@@ -199,29 +204,15 @@ final class RequestMetrics
     }
 
     /**
-     * Rota mediante archivo temporal + rename mientras el lock lateral
-     * permanece tomado. Si cualquier paso falla, el log original queda intacto.
+     * Publica el estado ya acotado con reemplazo atómico. Si cualquier paso
+     * falla, el log anterior permanece intacto y la métrica nueva se descarta.
      */
-    private static function rotateLocked(string $path): void
+    private static function publishLocked(string $path, string $payload): bool
     {
-        $contents = @file_get_contents($path);
-        if (!is_string($contents)) {
-            return;
-        }
-
-        $lines = array_filter(explode(PHP_EOL, trim($contents)));
-        if (count($lines) <= self::MAX_ENTRIES) {
-            return;
-        }
-
-        $payload = implode(
-            PHP_EOL,
-            array_slice($lines, -self::MAX_ENTRIES),
-        ).PHP_EOL;
         $tempPath = $path.'.tmp';
         $temp = @fopen($tempPath, 'wb');
         if (!is_resource($temp)) {
-            return;
+            return false;
         }
 
         $ready = false;
@@ -236,13 +227,20 @@ final class RequestMetrics
 
         if (!$ready) {
             self::removeTempFile($tempPath);
-            return;
+
+            return false;
         }
 
         @chmod($tempPath, 0600);
         if (!@rename($tempPath, $path)) {
             self::removeTempFile($tempPath);
+
+            return false;
         }
+
+        @chmod($path, 0600);
+
+        return true;
     }
 
     /** @param resource $handle */
