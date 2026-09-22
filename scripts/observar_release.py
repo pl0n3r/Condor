@@ -96,6 +96,25 @@ def validar_base_url(valor: str, permitir_http_local: bool = False) -> str:
     raise ObservacionError("Se requiere HTTPS; HTTP solo se permite en loopback explícito.")
 
 
+def clasificar_error_http(
+    error: HTTPError, estado_esperado: int,
+) -> tuple[str, bytes]:
+    """Permite el 404 esperado sin ocultar fallos del servidor ni redirecciones."""
+    if error.code == estado_esperado == 404:
+        return error.headers.get_content_type(), b""
+    if error.code in {408, 425, 429} or 500 <= error.code < 600:
+        raise ObservacionTransitoria(
+            f"HTTP {error.code}; fallo transitorio al observar producción."
+        ) from error
+    if 300 <= error.code < 400:
+        raise ObservacionError(
+            f"Redirección HTTP {error.code} no permitida."
+        ) from error
+    raise ObservacionError(
+        f"HTTP {error.code}; se esperaba {estado_esperado}."
+    ) from error
+
+
 def obtener(
     origen: str, ruta: str, timeout: float, *, estado_esperado: int = 200,
 ) -> tuple[str, bytes]:
@@ -129,19 +148,7 @@ def obtener(
                 raise ObservacionError("La respuesta supera el límite permitido.")
             return respuesta.headers.get_content_type(), contenido
     except HTTPError as error:
-        if error.code == estado_esperado == 404:
-            return error.headers.get_content_type(), b""
-        if error.code in {408, 425, 429} or 500 <= error.code < 600:
-            raise ObservacionTransitoria(
-                f"HTTP {error.code}; fallo transitorio al observar producción."
-            ) from error
-        if 300 <= error.code < 400:
-            raise ObservacionError(
-                f"Redirección HTTP {error.code} no permitida."
-            ) from error
-        raise ObservacionError(
-            f"HTTP {error.code}; se esperaba {estado_esperado}."
-        ) from error
+        return clasificar_error_http(error, estado_esperado)
     except URLError as error:
         reason = error.reason
         transient = isinstance(
@@ -280,6 +287,57 @@ def ejecutar_con_reintentos(
     return False, "La comprobación no produjo resultado.", intentos, "funcional"
 
 
+def preparar_canonical(
+    origen: str, tenant_slug: str | None, canonical: str | None,
+) -> str | None:
+    if canonical is not None and tenant_slug is None:
+        raise ObservacionError("El canonical requiere un slug de storefront.")
+    if tenant_slug is None:
+        return None
+    validar_tenant_slug(tenant_slug)
+    if canonical is not None:
+        return validar_canonical(canonical, origen, tenant_slug)
+    return origen + "/" + tenant_slug
+
+
+def observar_storefront(
+    origen: str, version: str, sha: str, *, tenant_slug: str | None,
+    canonical: str | None, intentos: int, intervalo: float, timeout: float,
+) -> dict[str, dict[str, Any]]:
+    evidencias: dict[str, dict[str, Any]] = {}
+    if tenant_slug is None:
+        evidencias["storefront"] = {
+            "ok": False, "clase": "funcional",
+            "detalle": "No se proporcionó un tenant para comprobar el storefront.",
+        }
+    else:
+        def comprobar_storefront() -> str:
+            tipo, cuerpo = obtener(origen, "/" + tenant_slug, timeout)
+            validar_storefront(tipo, cuerpo, version, canonical or "")
+            return "SSR, versión y canonical exactos del tenant confirmados."
+
+        ok, detalle, intento, clase = ejecutar_con_reintentos(
+            comprobar_storefront, intentos=intentos, intervalo=intervalo,
+        )
+        evidencias["storefront"] = {
+            "ok": ok, "detalle": detalle, "intento": intento, "clase": clase,
+        }
+
+    desconocido = "/condor-smoke-no-existe-" + sha[:12]
+
+    def comprobar_slug_desconocido() -> str:
+        obtener(origen, desconocido, timeout, estado_esperado=404)
+        return "Slug inexistente rechazado con HTTP 404, sin redirección."
+
+    ok, detalle, intento, clase = ejecutar_con_reintentos(
+        comprobar_slug_desconocido, intentos=intentos, intervalo=intervalo,
+    )
+    evidencias["slug_desconocido"] = {
+        "ok": ok, "detalle": detalle, "intento": intento, "clase": clase,
+    }
+    return evidencias
+
+
 def observar(
     origen: str,
     version: str,
@@ -295,15 +353,9 @@ def observar(
 ) -> dict[str, Any]:
     """Solo la identidad exacta permite pasar de NO_OBSERVADO a DEPLOY_OBSERVED."""
     evidencias: dict[str, dict[str, Any]] = {}
-    if canonical_storefront is not None and tenant_slug is None:
-        raise ObservacionError("El canonical requiere un slug de storefront.")
-    if tenant_slug is not None:
-        validar_tenant_slug(tenant_slug)
-        canonical_storefront = validar_canonical(
-            canonical_storefront or origen + "/" + tenant_slug,
-            origen,
-            tenant_slug,
-        ) if canonical_storefront is not None else origen + "/" + tenant_slug
+    canonical_storefront = preparar_canonical(
+        origen, tenant_slug, canonical_storefront,
+    )
 
     def comprobar_health() -> str:
         tipo, cuerpo = obtener(origen, "/health", timeout)
@@ -376,35 +428,11 @@ def observar(
         }
 
     if tuple(map(int, version.split("."))) >= STOREFRONT_VERSION:
-        if tenant_slug is None:
-            evidencias["storefront"] = {
-                "ok": False, "clase": "funcional",
-                "detalle": "No se proporcionó un tenant para comprobar el storefront.",
-            }
-        else:
-            def comprobar_storefront() -> str:
-                tipo, cuerpo = obtener(origen, "/" + tenant_slug, timeout)
-                validar_storefront(tipo, cuerpo, version, canonical_storefront or "")
-                return "SSR, versión y canonical exactos del tenant confirmados."
-
-            ok, detalle, intento, clase = ejecutar_con_reintentos(
-                comprobar_storefront, intentos=intentos, intervalo=intervalo,
-            )
-            evidencias["storefront"] = {
-                "ok": ok, "detalle": detalle, "intento": intento, "clase": clase,
-            }
-
-        desconocido = "/condor-smoke-no-existe-" + sha[:12]
-        def comprobar_slug_desconocido() -> str:
-            obtener(origen, desconocido, timeout, estado_esperado=404)
-            return "Slug inexistente rechazado con HTTP 404, sin redirección."
-
-        ok, detalle, intento, clase = ejecutar_con_reintentos(
-            comprobar_slug_desconocido, intentos=intentos, intervalo=intervalo,
-        )
-        evidencias["slug_desconocido"] = {
-            "ok": ok, "detalle": detalle, "intento": intento, "clase": clase,
-        }
+        evidencias.update(observar_storefront(
+            origen, version, sha, tenant_slug=tenant_slug,
+            canonical=canonical_storefront, intentos=intentos,
+            intervalo=intervalo, timeout=timeout,
+        ))
 
     if transicion_requerida:
         evidencias["transicion_release"] = {
