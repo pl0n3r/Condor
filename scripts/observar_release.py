@@ -45,6 +45,7 @@ class TextoVisible(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.oculto = 0
+        self.en_head = False
         self.textos: list[str] = []
         self.en_formulario = 0
         self.campos: set[tuple[str, str]] = set()
@@ -52,23 +53,31 @@ class TextoVisible(HTMLParser):
         self.storefront_hero = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        atributos = dict(attrs)
-        if tag == "link" and "canonical" in (atributos.get("rel") or "").split():
-            self.canonicals.append(atributos.get("href") or "")
-        if tag == "section" and "storefront-hero" in (atributos.get("class") or "").split():
-            self.storefront_hero = True
         if tag in {"script", "style", "template"}:
             self.oculto += 1
+            return
+        if self.oculto:
+            return
+
+        atributos = dict(attrs)
+        if tag == "head":
+            self.en_head = True
+        elif (tag == "link" and self.en_head
+              and "canonical" in (atributos.get("rel") or "").split()):
+            self.canonicals.append(atributos.get("href") or "")
+        elif tag == "section" and "storefront-hero" in (atributos.get("class") or "").split():
+            self.storefront_hero = True
         elif tag == "form":
             self.en_formulario += 1
         elif tag == "input" and self.en_formulario:
-            atributos = dict(attrs)
             self.campos.add((atributos.get("name") or "", atributos.get("type") or "text"))
 
     def handle_endtag(self, tag: str) -> None:
         if tag in {"script", "style", "template"}:
             self.oculto = max(0, self.oculto - 1)
-        elif tag == "form":
+        elif not self.oculto and tag == "head":
+            self.en_head = False
+        elif not self.oculto and tag == "form":
             self.en_formulario = max(0, self.en_formulario - 1)
 
     def handle_data(self, data: str) -> None:
