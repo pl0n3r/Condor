@@ -13,6 +13,7 @@ use Doctrine\ORM\Tools\ToolEvents;
 final class CatalogSchemaListener
 {
     private const TENANT_PRODUCT_FOREIGN_KEY = 'FK_VARIANT_PRODUCT_TENANT';
+    private const TENANT_PRODUCT_INDEX = 'IDX_VARIANT_TENANT_PRODUCT';
 
     public function postGenerateSchemaTable(
         GenerateSchemaTableEventArgs $event,
@@ -22,6 +23,13 @@ final class CatalogSchemaListener
         }
 
         $table = $event->getClassTable();
+        if (!$table->hasIndex(self::TENANT_PRODUCT_INDEX)) {
+            $table->addIndex(
+                ['tenant_id', 'product_id'],
+                self::TENANT_PRODUCT_INDEX,
+            );
+        }
+
         if ($table->hasForeignKey(self::TENANT_PRODUCT_FOREIGN_KEY)) {
             return;
         }
