@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tests\Http;
 
+use App\Domain\Identity\Entity\BranchRoleAssignment;
 use App\Domain\Identity\Entity\Membership;
+use App\Domain\Identity\Entity\Role;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\StorefrontProfile;
@@ -114,6 +116,105 @@ final class StorefrontAdminControllerTest extends WebTestCase
         $client->request('GET', '/', server: ['HTTP_HOST' => $host]);
 
         self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testUnknownCustomHostFailsClosed(): void
+    {
+        $client = static::createClient();
+
+        $client->request(
+            'GET',
+            '/',
+            server: ['HTTP_HOST' => 'desconocido-'.strtolower(bin2hex(random_bytes(4))).'.example.test'],
+        );
+
+        self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testVerifiedDomainDoesNotLeakAnotherTenantProfile(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(
+            EntityManagerInterface::class,
+        );
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        [$tenant] = $this->tenantOwner($entityManager);
+        [$otherTenant] = $this->tenantOwner($entityManager);
+        $host = 'aislado-'.strtolower(bin2hex(random_bytes(4))).'.example.test';
+
+        $entityManager->persist(new StorefrontProfile(
+            $tenant,
+            'Empresa visible',
+            'Contenido exclusivo del tenant resuelto.',
+        ));
+        $entityManager->persist(new StorefrontProfile(
+            $otherTenant,
+            'MARCADOR-OTRO-TENANT',
+            'Este contenido nunca debe salir por el dominio ajeno.',
+        ));
+        $entityManager->persist(new TenantDomain(
+            $tenant,
+            $host,
+            true,
+            true,
+        ));
+        $entityManager->flush();
+
+        $client->request('GET', '/', server: ['HTTP_HOST' => $host]);
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('h1', 'Empresa visible');
+        self::assertStringNotContainsString(
+            'MARCADOR-OTRO-TENANT',
+            (string) $client->getResponse()->getContent(),
+        );
+    }
+
+    public function testDelegatedUserNeedsSitePermissionAndViewOnlyStaysReadOnly(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(
+            EntityManagerInterface::class,
+        );
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        [$tenant] = $this->tenantOwner($entityManager);
+        $branch = $entityManager->getRepository(Branch::class)->findOneBy([
+            'tenant' => $tenant,
+        ]);
+        self::assertInstanceOf(Branch::class, $branch);
+
+        $user = new User(
+            'storefront-'.strtolower(bin2hex(random_bytes(4))).'@example.test',
+            'Gestor del sitio',
+        );
+        $membership = new Membership($tenant, $user, 'ADMIN');
+        $entityManager->persist($user);
+        $entityManager->persist($membership);
+        $entityManager->flush();
+
+        $client->loginUser($user);
+        $client->request('GET', '/admin/storefront');
+        self::assertResponseStatusCodeSame(403);
+
+        $role = new Role($tenant, 'Consulta del sitio', ['site.view']);
+        $entityManager->persist($role);
+        $entityManager->persist(new BranchRoleAssignment(
+            $membership,
+            $branch,
+            $role,
+        ));
+        $entityManager->flush();
+
+        $client->request('GET', '/admin/storefront');
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorNotExists('form.storefront-admin-form');
+        self::assertSelectorTextContains(
+            '.storefront-admin-card',
+            'permiso permite consultar',
+        );
     }
 
     /** @return array{0: Tenant, 1: User} */
