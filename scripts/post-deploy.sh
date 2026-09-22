@@ -41,13 +41,61 @@ if [ -z "$PHP_BIN" ]; then
 fi
 
 # El cron de Hostinger ejecuta este script cada 5 minutos: se evita que dos
-# corridas se solapen sobre el mismo esquema o la misma caché.
+# corridas se solapen sobre el mismo esquema o la misma caché. El lock usa
+# un token de propietario y puede recuperar un directorio huérfano después
+# de 6 h sin permitir que una corrida vieja borre el lock de una nueva.
 LOCK_DIR="var/post-deploy.lock"
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-    echo "post-deploy.sh: otra corrida sigue en curso; se omite." >&2
+LOCK_MAX_AGE_SECONDS=21600
+LOCK_TOKEN="$-$(date +%s)"
+
+cleanup_lock() {
+    if [ -f "$LOCK_DIR/token" ] &&
+        [ "$(cat "$LOCK_DIR/token" 2>/dev/null || true)" = "$LOCK_TOKEN" ]; then
+        rm -rf "$LOCK_DIR"
+    fi
+}
+
+acquire_lock() {
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+        printf '%s\n' "$LOCK_TOKEN" > "$LOCK_DIR/token"
+        printf '%s\n' "$(date +%s)" > "$LOCK_DIR/created_at"
+        return 0
+    fi
+
+    created_at="$(cat "$LOCK_DIR/created_at" 2>/dev/null || true)"
+    case "$created_at" in
+        ''|*[!0-9]*)
+            echo "post-deploy.sh: lock existente sin timestamp válido; se omite." >&2
+            return 1
+            ;;
+    esac
+
+    now="$(date +%s)"
+    age=$((now - created_at))
+    if [ "$age" -le "$LOCK_MAX_AGE_SECONDS" ]; then
+        echo "post-deploy.sh: otra corrida sigue en curso; se omite." >&2
+        return 1
+    fi
+
+    stale_dir="$LOCK_DIR.stale.$LOCK_TOKEN"
+    if ! mv "$LOCK_DIR" "$stale_dir" 2>/dev/null; then
+        echo "post-deploy.sh: el lock cambió concurrentemente; se omite." >&2
+        return 1
+    fi
+    rm -rf "$stale_dir"
+
+    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+        echo "post-deploy.sh: otro proceso recuperó el lock primero; se omite." >&2
+        return 1
+    fi
+    printf '%s\n' "$LOCK_TOKEN" > "$LOCK_DIR/token"
+    printf '%s\n' "$now" > "$LOCK_DIR/created_at"
+}
+
+if ! acquire_lock; then
     exit 0
 fi
-trap 'rmdir "$LOCK_DIR"' EXIT INT TERM
+trap cleanup_lock EXIT INT TERM
 
 # D-044: sin este paso el código nuevo llega sin su esquema (storefront
 # V 0.1.13 respondía 500 en producción). Las migraciones de Condor son
