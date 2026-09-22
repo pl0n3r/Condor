@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+/**
+ * Termina el parser con un mensaje sanitizado y un código de error.
+ */
 function fail(string $message): never
 {
     fwrite(STDERR, "parse-database-url.php: {$message}\n");
@@ -112,6 +115,9 @@ function parseDatabaseUrl(string $url): array
     ];
 }
 
+/**
+ * Escapa un valor para un option-file de cliente MySQL/MariaDB.
+ */
 function optionValue(string $value): string
 {
     return '"'.str_replace(
