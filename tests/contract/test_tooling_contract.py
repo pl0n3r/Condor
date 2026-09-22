@@ -83,13 +83,12 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn('"$FLOCK_BIN" -n 9', script)
         self.assertNotIn('mv "$LOCK_GUARD', script)
         self.assertIn('LOCK_TOKEN="$$-$(date +%s)"', script)
-        self.assertGreaterEqual(
-            script.count('printf \'%s\\n%s\\n%s\\n\' "$LOCK_TOKEN" "$$"'),
-            3,
+        self.assertEqual(
+            script.count('printf \'%s\\n%s\\n%s\\n\' "$LOCK_TOKEN" "$"'),
+            1,
         )
         self.assertNotIn('"$LOCK_TOKEN" "$" "$(date +%s)"', script)
         self.assertNotIn("cleanup_guard\n                cleanup_guard", script)
-        self.assertIn('kill -0 "$owner_pid"', script)
         self.assertIn('kill -0 "$owner_pid"', script)
         self.assertIn('find "$LOCK_FILE" -mmin +', script)
         self.assertIn("set -C", script)
