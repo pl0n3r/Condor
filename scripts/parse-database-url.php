@@ -75,6 +75,10 @@ function parseDatabaseUrl(string $url): array
             $port = (int) $portText;
         }
     } else {
+        if (substr_count($hostPort, ':') > 1) {
+            fail('host IPv6 debe usar corchetes.');
+        }
+
         $lastColon = strrpos($hostPort, ':');
         if ($lastColon !== false) {
             $host = substr($hostPort, 0, $lastColon);
