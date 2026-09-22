@@ -10,18 +10,15 @@ use App\Domain\Identity\Entity\PlatformStaffGrant;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Identity\PermissionCatalog;
 use App\Domain\Organization\Entity\Tenant;
-use DateTimeImmutable;
-use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
-use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 final readonly class PlatformStaffManager
 {
-    private const INVITATION_TTL = '+48 hours';
-
-    public function __construct(private EntityManagerInterface $entityManager)
-    {
+    public function __construct(
+        private EntityManagerInterface $entityManager,
+        private PlatformInvitationSecurity $security,
+    ) {
     }
 
     /**
@@ -39,7 +36,7 @@ final readonly class PlatformStaffManager
     ): PlatformStaffInvitationResult {
         return $this->entityManager->wrapInTransaction(
             function () use ($actor, $email, $displayName, $definitions): PlatformStaffInvitationResult {
-                $this->assertOwnerFresh($actor);
+                $this->security->assertOwnerFresh($actor);
                 $email = strtolower(trim($email));
                 $displayName = trim($displayName);
 
@@ -72,14 +69,13 @@ final readonly class PlatformStaffManager
                     $this->entityManager->persist($grant);
                 }
 
-                [$rawToken, $tokenHash] = self::newToken();
-                $now = self::now();
+                [$rawToken, $tokenHash, $expiresAt] = $this->security->issue();
                 $invitation = new AccountInvitation(
                     $staff,
                     null,
                     AccountInvitation::KIND_PLATFORM_STAFF,
                     $tokenHash,
-                    $now->modify(self::INVITATION_TTL),
+                    $expiresAt,
                     $actor->id(),
                 );
                 $this->entityManager->persist($invitation);
@@ -117,7 +113,7 @@ final readonly class PlatformStaffManager
     ): array {
         return $this->entityManager->wrapInTransaction(
             function () use ($actor, $staff, $definitions): array {
-                $this->assertOwnerFresh($actor);
+                $this->security->assertOwnerFresh($actor);
                 $this->assertStaffFresh($staff);
 
                 $repository = $this->entityManager
@@ -154,7 +150,7 @@ final readonly class PlatformStaffManager
     ): PlatformStaffInvitationResult {
         return $this->entityManager->wrapInTransaction(
             function () use ($actor, $staff): PlatformStaffInvitationResult {
-                $this->assertOwnerFresh($actor);
+                $this->security->assertOwnerFresh($actor);
                 $this->assertStaffFresh($staff);
                 if ($staff->isActive()) {
                     throw new DomainException(
@@ -164,11 +160,8 @@ final readonly class PlatformStaffManager
 
                 $invitation = $this->invitationFor($staff);
                 $this->lockInvitation($invitation);
-                [$rawToken, $tokenHash] = self::newToken();
-                $invitation->reissue(
-                    $tokenHash,
-                    self::now()->modify(self::INVITATION_TTL),
-                );
+                [$rawToken, $tokenHash, $expiresAt] = $this->security->issue();
+                $invitation->reissue($tokenHash, $expiresAt);
                 $this->entityManager->persist(new PlatformAuditEvent(
                     $actor->id(),
                     null,
@@ -192,10 +185,10 @@ final readonly class PlatformStaffManager
     {
         $this->entityManager->wrapInTransaction(
             function () use ($actor, $staff): void {
-                $this->assertOwnerFresh($actor);
+                $this->security->assertOwnerFresh($actor);
                 $this->assertStaffFresh($staff);
                 $invitation = $this->invitationFor($staff);
-                $invitation->revoke(self::now());
+                $invitation->revoke($this->security->now());
                 $this->entityManager->persist(new PlatformAuditEvent(
                     $actor->id(),
                     null,
@@ -212,7 +205,7 @@ final readonly class PlatformStaffManager
     /** @return list<array<string, mixed>> */
     public function overview(User $actor): array
     {
-        $this->assertOwner($actor);
+        $this->security->assertOwner($actor);
 
         $invitations = $this->entityManager
             ->getRepository(AccountInvitation::class)
@@ -234,7 +227,7 @@ final readonly class PlatformStaffManager
                 'active' => $staff->isActive(),
                 'invitation' => [
                     'id' => $invitation->id(),
-                    'state' => self::invitationState($invitation),
+                    'state' => $this->invitationState($invitation),
                     'expires_at' => $invitation->expiresAt()->format(DATE_ATOM),
                 ],
                 'grants' => $this->grantPayloads($staff),
@@ -377,37 +370,6 @@ final readonly class PlatformStaffManager
         $this->entityManager->refresh($invitation);
     }
 
-    private function assertOwnerFresh(User $actor): void
-    {
-        $row = $this->entityManager->getConnection()->fetchAssociative(
-            'SELECT active, roles FROM condor_user '
-            .'WHERE id = :id FOR UPDATE',
-            ['id' => $actor->id()],
-        );
-        if ($row === false) {
-            throw new AccessDeniedException();
-        }
-
-        $roles = json_decode((string) $row['roles'], true);
-        if (
-            (int) $row['active'] !== 1
-            || !is_array($roles)
-            || !in_array(User::ROLE_PLATFORM_OWNER, $roles, true)
-        ) {
-            throw new AccessDeniedException();
-        }
-    }
-
-    private function assertOwner(User $actor): void
-    {
-        if (
-            !$actor->isActive()
-            || !$actor->hasRole(User::ROLE_PLATFORM_OWNER)
-        ) {
-            throw new AccessDeniedException();
-        }
-    }
-
     private function assertStaffFresh(User $staff): void
     {
         $row = $this->entityManager->getConnection()->fetchAssociative(
@@ -438,20 +400,7 @@ final readonly class PlatformStaffManager
         }
     }
 
-    /** @return array{0: string, 1: string} */
-    private static function newToken(): array
-    {
-        $raw = bin2hex(random_bytes(32));
-
-        return [$raw, hash('sha256', $raw)];
-    }
-
-    private static function now(): DateTimeImmutable
-    {
-        return new DateTimeImmutable('now', new DateTimeZone('UTC'));
-    }
-
-    private static function invitationState(
+    private function invitationState(
         AccountInvitation $invitation,
     ): string {
         if ($invitation->user()->isActive()) {
@@ -463,7 +412,7 @@ final readonly class PlatformStaffManager
         if ($invitation->revokedAt() !== null) {
             return 'revoked';
         }
-        if ($invitation->expiresAt() <= self::now()) {
+        if ($invitation->expiresAt() <= $this->security->now()) {
             return 'expired';
         }
 
