@@ -65,6 +65,25 @@ final class RequestMetricsTest extends TestCase
         self::assertSame('route_a', $recent[1]['route']);
     }
 
+    public function testRetentionKeepsOnlyLatestFiveHundredEntries(): void
+    {
+        for ($i = 0; $i < 505; $i++) {
+            RequestMetrics::record(
+                $this->projectDir,
+                sprintf('route_%03d', $i),
+                200,
+                (float) $i,
+                1_048_576,
+            );
+        }
+
+        $recent = RequestMetrics::recent($this->projectDir, 1000);
+
+        self::assertCount(500, $recent);
+        self::assertSame('route_504', $recent[0]['route']);
+        self::assertSame('route_005', $recent[499]['route']);
+    }
+
     public function testRecordNeverThrowsWhenProjectDirCannotContainLogDirectory(): void
     {
         $fileProjectDir = $this->projectDir.'/not-a-directory';
