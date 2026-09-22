@@ -664,23 +664,27 @@ jobs:
           coverage: none
 
       - name: Probar parser seguro de DATABASE_URL
-        env:
-          DATABASE_URL: mysql://backup%40user:p%40ss%23word@127.0.0.1:3307/condor_backup_source?charset=utf8mb4
         run: |
           set -euo pipefail
           credentials_tmp="$(mktemp)"
           trap 'rm -f -- "$credentials_tmp"' EXIT
 
-          [[ "$(php scripts/parse-database-url.php user)" == "backup@user" ]]
-          [[ "$(php scripts/parse-database-url.php password)" == "p@ss#word" ]]
+          raw_user="backup@user"
+          raw_password="$(openssl rand -hex 12)@#"
+          encoded_user="$(php -r 'echo rawurlencode($argv[1]);' "$raw_user")"
+          encoded_password="$(php -r 'echo rawurlencode($argv[1]);' "$raw_password")"
+          export DATABASE_URL="mysql://${encoded_user}:${encoded_password}@127.0.0.1:3307/condor_backup_source?charset=utf8mb4"
+
+          [[ "$(php scripts/parse-database-url.php user)" == "$raw_user" ]]
+          [[ "$(php scripts/parse-database-url.php password)" == "$raw_password" ]]
           [[ "$(php scripts/parse-database-url.php host)" == "127.0.0.1" ]]
           [[ "$(php scripts/parse-database-url.php port)" == "3307" ]]
           [[ "$(php scripts/parse-database-url.php database)" == "condor_backup_source" ]]
 
           php scripts/parse-database-url.php client-config "$credentials_tmp"
           [[ "$(stat -c '%a' "$credentials_tmp")" == "600" ]]
-          grep -F 'user="backup@user"' "$credentials_tmp" >/dev/null
-          grep -F 'password="p@ss#word"' "$credentials_tmp" >/dev/null
+          grep -F "user=\"${raw_user}\"" "$credentials_tmp" >/dev/null
+          grep -F "password=\"${raw_password}\"" "$credentials_tmp" >/dev/null
           grep -F 'host="127.0.0.1"' "$credentials_tmp" >/dev/null
           grep -F 'port=3307' "$credentials_tmp" >/dev/null
 
