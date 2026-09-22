@@ -194,7 +194,7 @@ def tipo_aceptado_para(ruta: str) -> str:
     if ruta.endswith(".css"):
         return "text/css"
     if ruta.endswith(".js"):
-        return "text/javascript, application/javascript"
+        return "text/javascript, application/javascript, application/x-javascript"
     return "text/html"
 
 
