@@ -28,4 +28,59 @@ final class HealthControllerTest extends WebTestCase
         self::assertArrayNotHasKey('pending_migrations', $payload);
         self::assertArrayNotHasKey('database_url', $payload);
     }
+
+    public function testHealthReportsFalseWhenAConfiguredMigrationIsPending(): void
+    {
+        $projectDir = dirname(__DIR__, 3);
+        $migrationPath = $projectDir.'/migrations/Version20991231235959.php';
+        $migration = <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+namespace DoctrineMigrations;
+
+use Doctrine\DBAL\Schema\Schema;
+use Doctrine\Migrations\AbstractMigration;
+
+final class Version20991231235959 extends AbstractMigration
+{
+    public function getDescription(): string
+    {
+        return 'Migración efímera para probar /health.';
+    }
+
+    public function up(Schema $schema): void
+    {
+    }
+
+    public function down(Schema $schema): void
+    {
+    }
+}
+PHP;
+
+        self::assertFalse(file_exists($migrationPath));
+        file_put_contents($migrationPath, $migration);
+
+        try {
+            $client = static::createClient();
+            $client->request('GET', '/health');
+
+            self::assertResponseIsSuccessful();
+            $payload = json_decode(
+                (string) $client->getResponse()->getContent(),
+                true,
+                512,
+                JSON_THROW_ON_ERROR,
+            );
+
+            self::assertIsArray($payload);
+            self::assertFalse($payload['schema_up_to_date'] ?? true);
+            self::assertArrayNotHasKey('pending_migrations', $payload);
+        } finally {
+            @unlink($migrationPath);
+        }
+    }
+
 }
