@@ -444,6 +444,50 @@ def observar_storefront(
     return evidencias
 
 
+def observar_health(
+    origen: str,
+    version: str,
+    sha: str,
+    *,
+    intentos: int,
+    intervalo: float,
+    timeout: float,
+    espera_deploy: float,
+    intervalo_deploy: float,
+) -> tuple[dict[str, Any], bool]:
+    """Espera solo despliegues atrasados y devuelve evidencia de identidad/esquema."""
+    schema_up_to_date = False
+
+    def comprobar_health() -> str:
+        nonlocal schema_up_to_date
+        tipo, cuerpo = obtener(origen, "/health", timeout)
+        schema_up_to_date = validar_health(tipo, cuerpo, version, sha)
+        return "Versión y SHA exactos confirmados."
+
+    limite_espera = time.monotonic() + espera_deploy
+    while True:
+        ok, detalle, intento, clase = ejecutar_con_reintentos(
+            comprobar_health,
+            intentos=intentos,
+            intervalo=intervalo,
+        )
+        if clase != "deploy_pendiente":
+            break
+
+        tiempo_restante = limite_espera - time.monotonic()
+        if tiempo_restante <= 0:
+            break
+
+        time.sleep(min(intervalo_deploy, tiempo_restante))
+
+    return {
+        "ok": ok,
+        "detalle": detalle,
+        "intento": intento,
+        "clase": clase,
+    }, schema_up_to_date
+
+
 def observar(
     origen: str,
     version: str,
@@ -465,35 +509,18 @@ def observar(
         origen, tenant_slug, canonical_storefront,
     )
 
-    schema_up_to_date = False
-
-    def comprobar_health() -> str:
-        nonlocal schema_up_to_date
-        tipo, cuerpo = obtener(origen, "/health", timeout)
-        schema_up_to_date = validar_health(tipo, cuerpo, version, sha)
-        return "Versión y SHA exactos confirmados."
-
-    limite_espera = time.monotonic() + espera_deploy
-    while True:
-        ok, detalle, intento, clase = ejecutar_con_reintentos(
-            comprobar_health,
-            intentos=intentos,
-            intervalo=intervalo,
-        )
-        # Solo una versión anterior justifica esperar; SHA o versión ajenos fallan ya.
-        if clase != "deploy_pendiente":
-            break
-        tiempo_restante = limite_espera - time.monotonic()
-        if tiempo_restante <= 0:
-            break
-        time.sleep(min(intervalo_deploy, tiempo_restante))
-    evidencias["health"] = {
-        "ok": ok,
-        "detalle": detalle,
-        "intento": intento,
-        "clase": clase,
-    }
-    if not ok:
+    health, schema_up_to_date = observar_health(
+        origen,
+        version,
+        sha,
+        intentos=intentos,
+        intervalo=intervalo,
+        timeout=timeout,
+        espera_deploy=espera_deploy,
+        intervalo_deploy=intervalo_deploy,
+    )
+    evidencias["health"] = health
+    if not health["ok"]:
         return {
             "estado": "NO_OBSERVADO",
             "version_esperada": version,
