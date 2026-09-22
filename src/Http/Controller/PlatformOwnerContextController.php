@@ -54,6 +54,7 @@ final class PlatformOwnerContextController extends AbstractController
                 'role' => 'platform_owner',
             ],
             'metrics' => $context->metrics(),
+            'signals_last_30_days' => $context->functionalSignals(),
             'tenants' => $tenantPage['items'],
             'tenant_pagination' => [
                 'page' => $tenantPage['page'],

@@ -6,8 +6,11 @@ namespace App\Application\Identity;
 
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\User;
+use App\Domain\Observability\Entity\FunctionalSignal;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\Tenant;
+use DateTimeImmutable;
+use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -44,6 +47,50 @@ final readonly class PlatformOwnerTenantContext
                 ->getRepository(Membership::class)
                 ->count(['active' => true]),
         ];
+    }
+
+    /**
+     * Señales funcionales agregadas de los últimos 30 días. Siempre
+     * devuelve las claves conocidas en cero cuando aún no hay actividad,
+     * para que el propietario vea un estado vacío explícito en vez de
+     * un dato ausente o un placeholder.
+     *
+     * @return array<string, int>
+     */
+    public function functionalSignals(): array
+    {
+        $since = (new DateTimeImmutable('now', new DateTimeZone('UTC')))
+            ->modify('-30 days');
+
+        $counts = array_fill_keys([
+            FunctionalSignal::TENANT_CREATED,
+            FunctionalSignal::LOGIN_SUCCESS,
+            FunctionalSignal::LOGIN_FAILURE,
+            FunctionalSignal::AUTHORIZATION_DENIED,
+            FunctionalSignal::ROLE_MODIFIED,
+        ], 0);
+
+        $rows = $this->entityManager
+            ->createQueryBuilder()
+            ->select('signal.type AS type')
+            ->addSelect('COUNT(signal.id) AS aggregate_count')
+            ->from(FunctionalSignal::class, 'signal')
+            ->where('signal.createdAt >= :since')
+            ->setParameter('since', $since)
+            ->groupBy('signal.type')
+            ->getQuery()
+            ->getArrayResult();
+
+        foreach ($rows as $row) {
+            $type = $row['type'] ?? null;
+            if (!is_string($type) || !array_key_exists($type, $counts)) {
+                continue;
+            }
+
+            $counts[$type] = (int) ($row['aggregate_count'] ?? 0);
+        }
+
+        return $counts;
     }
 
     /**

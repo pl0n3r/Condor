@@ -16,6 +16,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     public const ROLE_PLATFORM_OWNER = 'ROLE_PLATFORM_OWNER';
+    public const ROLE_PLATFORM_STAFF = 'ROLE_PLATFORM_STAFF';
     public const ROLE_LEGACY_SUPER_ADMIN = 'ROLE_SUPER_ADMIN';
 
     #[ORM\Id]
@@ -74,6 +75,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function deactivate(): void
     {
         $this->active = false;
+    }
+
+    public function activate(): void
+    {
+        $this->active = true;
     }
 
     public function getUserIdentifier(): string

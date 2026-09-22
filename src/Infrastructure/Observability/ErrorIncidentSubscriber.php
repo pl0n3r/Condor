@@ -4,17 +4,24 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Observability;
 
+use App\Domain\Identity\Entity\User;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
+use Throwable;
 
 final readonly class ErrorIncidentSubscriber
 {
     public function __construct(
         private ErrorIncidentRecorder $recorder,
+        private ErrorIncidentPresenter $presenter,
+        private TokenStorageInterface $tokenStorage,
+        private AuthorizationCheckerInterface $authorizationChecker,
         private string $environment,
     ) {
     }
@@ -42,6 +49,7 @@ final readonly class ErrorIncidentSubscriber
         }
 
         $request = $event->getRequest();
+        $privileged = $this->isPlatformOwner();
         $headers = [
             'Cache-Control' => 'no-store',
             'X-Robots-Tag' => 'noindex, nofollow',
@@ -53,33 +61,37 @@ final readonly class ErrorIncidentSubscriber
             $request->getRequestFormat() === 'json'
             || $request->getPreferredFormat() === 'json'
         ) {
-            $event->setResponse(new JsonResponse([
-                'error' => 'internal_error',
-                'message' => 'No pudimos completar esta solicitud.',
-                'error_id' => $incident->id(),
-            ], $status, $headers));
+            $event->setResponse(new JsonResponse(
+                $this->presenter->json($incident, $privileged),
+                $status,
+                $headers,
+            ));
 
             return;
         }
 
-        $reference = htmlspecialchars(
-            $incident->id(),
-            ENT_QUOTES | ENT_SUBSTITUTE,
-            'UTF-8',
-        );
-        $body = '<!doctype html><html lang="es-CO"><head><meta charset="utf-8">'
-            .'<meta name="viewport" content="width=device-width,initial-scale=1">'
-            .'<meta name="robots" content="noindex,nofollow">'
-            .'<title>Condor App — error interno</title></head><body>'
-            .'<main><h1>No pudimos completar esta solicitud.</h1>'
-            .'<p>El error quedó registrado de forma segura.</p>'
-            .'<p>Referencia: <code>'.$reference.'</code></p>'
-            .'</main></body></html>';
+        $event->setResponse(new Response(
+            $this->presenter->html($incident, $privileged),
+            $status,
+            [
+                ...$headers,
+                'Content-Type' => 'text/html; charset=UTF-8',
+            ],
+        ));
+    }
 
-        $response = new Response($body, $status, [
-            ...$headers,
-            'Content-Type' => 'text/html; charset=UTF-8',
-        ]);
-        $event->setResponse($response);
+    private function isPlatformOwner(): bool
+    {
+        try {
+            $user = $this->tokenStorage->getToken()?->getUser();
+
+            return $user instanceof User
+                && $user->isActive()
+                && $this->authorizationChecker->isGranted(
+                    User::ROLE_PLATFORM_OWNER,
+                );
+        } catch (Throwable) {
+            return false;
+        }
     }
 }

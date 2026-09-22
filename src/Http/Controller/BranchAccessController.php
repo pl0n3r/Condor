@@ -12,8 +12,10 @@ use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\Role;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Identity\PermissionCatalog;
+use App\Domain\Observability\Entity\FunctionalSignal;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\Tenant;
+use App\Infrastructure\Observability\FunctionalSignalRecorder;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
@@ -36,6 +38,7 @@ final class BranchAccessController extends AbstractController
         private readonly CurrentTenantForUser $currentTenantForUser,
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
+        private readonly FunctionalSignalRecorder $signals,
     ) {
     }
 
@@ -69,7 +72,13 @@ final class BranchAccessController extends AbstractController
             $branchId,
             'roles.create',
         );
-        $payload = $this->payload($request);
+        $payload = $this->payload($request, ['name', 'permissions']);
+        $name = $payload['name'] ?? null;
+        if (!is_string($name)) {
+            throw new UnprocessableEntityHttpException(
+                'El nombre del rol debe ser texto.',
+            );
+        }
         $permissions = $this->permissionsFromPayload(
             $payload['permissions'] ?? [],
         );
@@ -82,7 +91,7 @@ final class BranchAccessController extends AbstractController
         $role = $this->domain(
             static fn (): Role => new Role(
                 $tenant,
-                (string) ($payload['name'] ?? ''),
+                $name,
                 $permissions,
             ),
         );
@@ -99,6 +108,7 @@ final class BranchAccessController extends AbstractController
             ],
         );
         $this->flushRoleChange();
+        $this->signals->record(FunctionalSignal::ROLE_MODIFIED, $tenant->id());
 
         return $this->json(
             ['role' => self::rolePayload($role)],
@@ -129,7 +139,13 @@ final class BranchAccessController extends AbstractController
             $role->permissions(),
         );
 
-        $payload = $this->payload($request);
+        $payload = $this->payload($request, ['name', 'permissions']);
+        $name = $payload['name'] ?? $role->name();
+        if (!is_string($name)) {
+            throw new UnprocessableEntityHttpException(
+                'El nombre del rol debe ser texto.',
+            );
+        }
         $permissions = $this->permissionsFromPayload(
             $payload['permissions'] ?? $role->permissions(),
         );
@@ -140,9 +156,9 @@ final class BranchAccessController extends AbstractController
         );
 
         $this->domain(
-            static function () use ($role, $payload, $permissions): null {
+            static function () use ($role, $name, $permissions): null {
                 $role->update(
-                    (string) ($payload['name'] ?? $role->name()),
+                    $name,
                     $permissions,
                 );
 
@@ -161,6 +177,7 @@ final class BranchAccessController extends AbstractController
             ],
         );
         $this->flushRoleChange();
+        $this->signals->record(FunctionalSignal::ROLE_MODIFIED, $tenant->id());
 
         return $this->json(['role' => self::rolePayload($role)]);
     }
@@ -193,6 +210,7 @@ final class BranchAccessController extends AbstractController
             ['branch_id' => $branch->id()],
         );
         $this->entityManager->flush();
+        $this->signals->record(FunctionalSignal::ROLE_MODIFIED, $tenant->id());
 
         return new Response(status: Response::HTTP_NO_CONTENT);
     }
@@ -425,13 +443,16 @@ final class BranchAccessController extends AbstractController
         }
     }
 
-    /** @return array<string, mixed> */
-    private function payload(Request $request): array
+    /**
+     * @param list<string> $allowedFields
+     * @return array<string, mixed>
+     */
+    private function payload(Request $request, array $allowedFields): array
     {
         try {
             $payload = json_decode(
                 (string) $request->getContent(),
-                true,
+                false,
                 512,
                 JSON_THROW_ON_ERROR,
             );
@@ -439,13 +460,24 @@ final class BranchAccessController extends AbstractController
             throw new BadRequestHttpException('JSON inválido.', $exception);
         }
 
-        if (!is_array($payload)) {
+        if (!is_object($payload)) {
             throw new BadRequestHttpException(
                 'El cuerpo debe ser un objeto JSON.',
             );
         }
 
-        return $payload;
+        $data = get_object_vars($payload);
+        $unexpected = array_values(array_diff(
+            array_keys($data),
+            $allowedFields,
+        ));
+        if ($unexpected !== []) {
+            throw new UnprocessableEntityHttpException(
+                'El cuerpo contiene campos no permitidos.',
+            );
+        }
+
+        return $data;
     }
 
     /** @return list<string> */

@@ -26,12 +26,16 @@ if (adminRoot) {
 if (platformRoot) {
   const version = platformRoot.dataset.version ?? '0.1.0';
   const logoutToken = platformRoot.dataset.logoutToken ?? '';
+  const staffToken = platformRoot.dataset.staffToken ?? '';
+  const tenantToken = platformRoot.dataset.tenantToken ?? '';
 
   createRoot(platformRoot).render(
     <StrictMode>
       <PlatformOwnerApp
         version={version}
         logoutToken={logoutToken}
+        staffToken={staffToken}
+        tenantToken={tenantToken}
       />
     </StrictMode>,
   );

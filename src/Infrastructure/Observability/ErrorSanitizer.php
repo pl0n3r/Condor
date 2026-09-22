@@ -28,6 +28,9 @@ final readonly class ErrorSanitizer
 
         $message = preg_replace(
             [
+                '/\\bAuthorization\\s*:\\s*Basic\\s+[A-Za-z0-9+\\/=._~-]+/i',
+                '/("(?:password|passwd|pwd|token|secret|authorization|cookie|'.
+                'api[_-]?key|database_url|dsn)"\\s*:\\s*)"(?:(?:\\\\.)|[^"\\\\])*"/i',
                 '/\\bBearer\\s+[A-Za-z0-9._~+\\/-]+=*/i',
                 '/\\b(password|passwd|pwd|token|secret|authorization|cookie|'.
                 'api[_-]?key|database_url|dsn)\\b\\s*[:=]\\s*[^\\s,;]+/i',
@@ -36,6 +39,8 @@ final readonly class ErrorSanitizer
                 '/(https?:\\/\\/[^\\s?]+)\\?[^\\s]*/i',
             ],
             [
+                'Authorization=[REDACTED]',
+                '$1"[REDACTED]"',
                 'Bearer [REDACTED]',
                 '$1=[REDACTED]',
                 '$1://[REDACTED]@',

@@ -1,6 +1,9 @@
 name: Coordinación multiagente (V 0.1.0)
 
 on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
   pull_request:
     types: [opened, ready_for_review, converted_to_draft, closed]
   issues:
@@ -145,3 +148,23 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/coordinar_trabajo.py issue-event             --repo "$REPOSITORIO"             --issue "$ISSUE"             --action "$ACCION"
+
+  marcar-reservas-inactivas:
+    name: Marcar reservas recuperables
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Descargar coordinador canónico
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Marcar reservas sin progreso verificable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORIO: ${{ github.repository }}
+        run: python3 scripts/coordinar_trabajo.py marcar-inactivas --repo "$REPOSITORIO"

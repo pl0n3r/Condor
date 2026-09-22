@@ -31,7 +31,10 @@
                 <article>
                     <strong>{{ incident.id }}</strong>
                     <span>{{ incident.occurredAt|date('Y-m-d H:i:s', 'UTC') }} UTC · HTTP {{ incident.status }} · {{ incident.routeName ?? '(sin ruta)' }}</span>
-                    <span>{{ incident.exceptionClass }}</span>
+                    <span><strong>Excepción:</strong> {{ incident.exceptionClass }}</span>
+                    <span><strong>Mensaje sanitizado:</strong> {{ incident.message }}</span>
+                    <span><strong>Request ID:</strong> {{ incident.requestId }}</span>
+                    <span><strong>Release:</strong> V {{ incident.version }} · {{ incident.releaseSha }}</span>
                     <span>Fingerprint: {{ incident.fingerprint|slice(0, 16) }}…</span>
                     <form method="post" action="{{ path('app_platform_diagnostic_share_create', {id: incident.id}) }}">
                         <input type="hidden" name="_token" value="{{ csrf_token('diagnostic_share_' ~ incident.id) }}">
