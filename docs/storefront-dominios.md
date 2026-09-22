@@ -88,8 +88,8 @@ mutaciones** el storefront SSR de un tenant conocido. El slug debe corresponder
 a una empresa de prueba autorizada para exposición pública. Omitir el canonical
 cuando se espera `https://www.condorapp.com.co/<slug>`; proporcionarlo si el
 dominio primario verificado usa un canonical personalizado HTTPS. El observador
-comprueba la versión visible, el bloque `storefront-hero` y el canonical
-exacto, y exige HTTP 404 sin redirección para un slug desconocido ligado al SHA
+comprueba la versión visible **dentro del body**, el bloque `storefront-hero`
+con un título H1 realmente visible y el canonical exacto, y exige HTTP 404 sin redirección para un slug desconocido ligado al SHA
 de release. Los resultados se integran al manifiesto de evidencia, no solo al
 resumen de logs.
 
