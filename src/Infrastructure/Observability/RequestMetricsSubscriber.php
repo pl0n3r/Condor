@@ -32,7 +32,9 @@ final readonly class RequestMetricsSubscriber
 
         RequestMetrics::record(
             $this->projectDir,
-            $request->attributes->get('_route') ?? $request->getPathInfo(),
+            is_string($request->attributes->get('_route'))
+                ? $request->attributes->get('_route')
+                : '(sin_ruta)',
             $event->getResponse()->getStatusCode(),
             $durationMs,
             memory_get_peak_usage(true),
