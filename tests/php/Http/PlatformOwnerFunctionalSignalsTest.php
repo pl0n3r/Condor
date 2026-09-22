@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Tests\Http;
 
 use App\Application\Identity\PlatformOwnerTenantContext;
+use App\Application\Identity\PlatformTenantManager;
+use App\Application\Onboarding\CreateTenant;
+use App\Application\Onboarding\CreateTenantInput;
+use App\Application\Onboarding\ProvisionTenantInput;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Observability\Entity\FunctionalSignal;
 use App\Infrastructure\Observability\FunctionalSignalRecorder;
@@ -193,6 +197,84 @@ final class PlatformOwnerFunctionalSignalsTest extends WebTestCase
             $before['authorization_denied'] + 1,
             $after['authorization_denied'],
         );
+    }
+
+    public function testTenantCreationSignalsCoverBothRealCreationFlows(): void
+    {
+        static::createClient();
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $createTenant = static::getContainer()->get(CreateTenant::class);
+        self::assertInstanceOf(CreateTenant::class, $createTenant);
+        $platformTenants = static::getContainer()->get(PlatformTenantManager::class);
+        self::assertInstanceOf(PlatformTenantManager::class, $platformTenants);
+
+        $before = $this->currentSignals();
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+
+        $onboarding = $createTenant->execute(new CreateTenantInput(
+            'Empresa onboarding '.$suffix,
+            'empresa-onboarding-'.$suffix,
+            'Empresa onboarding '.$suffix.' SAS',
+            null,
+            'Principal',
+            'owner-'.$suffix.'@example.test',
+            'Owner onboarding',
+            'CorrectHorseBattery1!',
+        ));
+
+        $actor = new User(
+            'platform-'.$suffix.'@example.test',
+            'Propietario plataforma',
+            [User::ROLE_PLATFORM_OWNER],
+        );
+        $entityManager->persist($actor);
+        $entityManager->flush();
+
+        $platform = $platformTenants->createAndInviteOwner(
+            $actor,
+            new ProvisionTenantInput(
+                'Empresa plataforma '.$suffix,
+                'empresa-plataforma-'.$suffix,
+                'Empresa plataforma '.$suffix.' SAS',
+                null,
+                'Principal',
+            ),
+            'invited-'.$suffix.'@example.test',
+            'Admin invitado',
+        );
+
+        $after = $this->currentSignals();
+
+        self::assertSame(
+            2,
+            $after['tenant_created'] - $before['tenant_created'],
+        );
+
+        $signals = $entityManager
+            ->getRepository(FunctionalSignal::class)
+            ->findBy(
+                ['type' => FunctionalSignal::TENANT_CREATED],
+                ['createdAt' => 'DESC'],
+                2,
+            );
+
+        self::assertCount(2, $signals);
+        $tenantIds = array_map(
+            static fn (FunctionalSignal $signal): ?string => $signal->tenantId(),
+            $signals,
+        );
+        self::assertContains($onboarding->tenantId, $tenantIds);
+        self::assertContains($platform->provisioning->tenant->id(), $tenantIds);
+
+        $sources = array_map(
+            static fn (FunctionalSignal $signal): mixed => (
+                $signal->context()['source'] ?? null
+            ),
+            $signals,
+        );
+        self::assertContains('onboarding', $sources);
+        self::assertContains('platform_owner', $sources);
     }
 
     /**
