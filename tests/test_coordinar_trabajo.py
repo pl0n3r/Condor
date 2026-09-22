@@ -14,6 +14,7 @@ from scripts.coordinar_trabajo import (
     STATUS_AVAILABLE,
     STATUS_BLOCKED,
     STATUS_COMPLETED,
+    STATUS_RECOVERY,
     STATUS_RESERVED,
     STATUS_REVIEW,
     active_reservation,
@@ -22,6 +23,7 @@ from scripts.coordinar_trabajo import (
     file_overlaps,
     issue_from_branch,
     latest_reservation,
+    mark_stale_reservations,
     parse_comment_command,
     release_work,
     reservation_from_pr_body,
@@ -56,6 +58,7 @@ class FakeGitHub:
             "state_reason": None,
             "labels": [{"name": STATUS_AVAILABLE}],
         }
+        self.open_issue_data: list[dict] = [self.issue_data]
         self.comments: list[dict] = []
         self.pulls: dict[int, dict] = {}
         self.pull_files_map: dict[int, set[str]] = {}
@@ -129,6 +132,14 @@ class FakeGitHub:
             pull
             for pull in self.pulls.values()
             if pull.get("state", "open") == "open"
+        ]
+
+    def open_issues(self) -> list[dict]:
+        """Devuelve los Issues abiertos configurados por cada prueba."""
+        return [
+            issue
+            for issue in self.open_issue_data
+            if issue.get("state", "open") == "open"
         ]
 
     def pull_files(self, number: int) -> set[str]:
@@ -563,6 +574,101 @@ class CoordinacionTests(unittest.TestCase):
                 now=datetime(2020, 1, 1, 0, 31, tzinfo=timezone.utc),
             )
         )
+
+    def test_bot_reservation_marker_does_not_refresh_work_lease(self) -> None:
+        """El marcador del bot no cuenta como trabajo humano reciente."""
+        api = FakeGitHub()
+        add_active_reservation(api)
+        api.commit_times["abc123"] = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+        activity = work_activity_timestamp(api, 12, "trabajo/issue-12")
+
+        self.assertEqual(activity, datetime(2020, 1, 1, tzinfo=timezone.utc))
+
+    def test_sweep_marks_eligible_stale_reservation(self) -> None:
+        """El barrido marca una reserva stale y libera su lock efímero."""
+        api = FakeGitHub()
+        add_active_reservation(api)
+        api.commit_times["abc123"] = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+        marked = mark_stale_reservations(api)
+
+        self.assertEqual(marked, 1)
+        self.assertEqual(api.status_history[-1], STATUS_RECOVERY)
+        self.assertNotIn("coordinacion/lock-issue-12", api.branches)
+
+    def test_sweep_skips_blocked_and_recent_reservations(self) -> None:
+        """Bloqueadas y reservas con commits recientes permanecen intactas."""
+        blocked = FakeGitHub()
+        add_active_reservation(blocked)
+        blocked.issue_data["labels"].append({"name": STATUS_BLOCKED})
+        blocked.commit_times["abc123"] = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+        self.assertEqual(mark_stale_reservations(blocked), 0)
+        self.assertNotEqual(blocked.status_history[-1], STATUS_RECOVERY)
+
+        recent = FakeGitHub()
+        add_active_reservation(recent)
+        recent.commit_times["abc123"] = datetime.now(timezone.utc)
+
+        self.assertEqual(mark_stale_reservations(recent), 0)
+        self.assertNotEqual(recent.status_history[-1], STATUS_RECOVERY)
+
+    def test_sweep_does_not_overwrite_concurrent_recovery(self) -> None:
+        """El sweep revalida la sesión después de adquirir el lock."""
+        api = FakeGitHub()
+        add_active_reservation(api, owner="agente-anterior")
+        api.commit_times["abc123"] = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        original_create_branch = api.create_branch
+
+        def create_branch(branch: str, sha: str) -> bool:
+            created = original_create_branch(branch, sha)
+            if created and branch == "coordinacion/lock-issue-12":
+                now = datetime.now(timezone.utc).isoformat()
+                api.comments.append(
+                    {
+                        "user": {"login": BOT},
+                        "body": reservation_marker(
+                            "otro-agente",
+                            SESSION_B,
+                            "trabajo/issue-12",
+                            True,
+                            "recuperacion-inactividad",
+                        ),
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
+            return created
+
+        api.create_branch = create_branch  # type: ignore[method-assign]
+
+        marked = mark_stale_reservations(api)
+
+        self.assertEqual(marked, 0)
+        self.assertNotEqual(api.status_history[-1], STATUS_RECOVERY)
+        reservation = active_reservation(api, 12)
+        self.assertIsNotNone(reservation)
+        assert reservation is not None
+        self.assertEqual(reservation["reservation_id"], SESSION_B)
+        self.assertNotIn("coordinacion/lock-issue-12", api.branches)
+
+    def test_new_work_waits_while_recovery_is_pending(self) -> None:
+        """Un Issue disponible no salta por encima de recuperación pendiente."""
+        api = FakeGitHub()
+        api.open_issue_data.append(
+            {
+                "number": 13,
+                "state": "open",
+                "labels": [{"name": STATUS_RECOVERY}],
+            }
+        )
+
+        session = reserve_work(api, 12, "pl0n3r", "OWNER")
+
+        self.assertIsNone(session)
+        self.assertNotIn("trabajo/issue-12", api.branches)
+        self.assertEqual(api.status_history, [])
 
     def test_concurrent_stale_recovery_cannot_enter_existing_lock(self) -> None:
         """Un segundo recuperador no entra mientras exista el lock efímero."""
