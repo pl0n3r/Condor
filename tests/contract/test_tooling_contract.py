@@ -84,9 +84,9 @@ class ToolingContractTests(unittest.TestCase):
     def test_automatic_migration_up_methods_reject_destructive_sql(self) -> None:
         """El post-deploy automático solo puede ejecutar migraciones expand/forward."""
         destructive = re.compile(
-            r"\\b(?:DROP\\s+(?:TABLE|COLUMN|INDEX|DATABASE)|"
-            r"TRUNCATE(?:\\s+TABLE)?|DELETE\\s+FROM|"
-            r"ALTER\\s+TABLE[\\s\\S]{0,240}?\\bDROP\\b)",
+            r"\b(?:DROP\s+(?:TABLE|COLUMN|INDEX|DATABASE)|"
+            r"TRUNCATE(?:\s+TABLE)?|DELETE\s+FROM|"
+            r"ALTER\s+TABLE[\s\S]{0,240}?\bDROP\b)",
             re.IGNORECASE,
         )
 
