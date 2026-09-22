@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 import unittest
 from pathlib import Path
@@ -59,53 +58,43 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn('--title "Release $TAG (V ${TAG#v})"', workflow)
         self.assertNotIn("if: steps.tag.outputs.created == 'true'", workflow)
 
-    def test_post_deploy_migrates_before_cache_under_lock(self) -> None:
-        """El cron sincroniza esquema antes de publicar la caché del release."""
+    def test_post_deploy_blocks_pending_schema_before_cache_under_lock(self) -> None:
+        """El cron detecta esquema pendiente y nunca migra producción automáticamente."""
         script = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
 
-        lock_index = script.index('LOCK_DIR="var/post-deploy.lock"')
-        migrate_index = script.index("doctrine:migrations:migrate")
+        lock_index = script.index('LOCK_FILE="var/post-deploy.lock"')
+        check_index = script.index("doctrine:migrations:up-to-date")
         clear_index = script.index("cache:clear")
         warmup_index = script.index("cache:warmup")
 
-        self.assertLess(lock_index, migrate_index)
-        self.assertLess(migrate_index, clear_index)
+        self.assertLess(lock_index, check_index)
+        self.assertLess(check_index, clear_index)
         self.assertLess(clear_index, warmup_index)
-        self.assertIn("--no-interaction --allow-no-migration", script)
-        self.assertIn('LOCK_MAX_AGE_SECONDS=21600', script)
-        self.assertIn('LOCK_TOKEN="$$-$(date +%s)"', script)
-        self.assertNotIn('LOCK_TOKEN="$-$(date +%s)"', script)
-        self.assertIn("if ! acquire_lock; then", script)
-        self.assertIn('mv "$LOCK_DIR" "$stale_dir"', script)
-        self.assertIn('cat "$LOCK_DIR/token"', script)
-        self.assertIn("trap cleanup_lock EXIT INT TERM", script)
+        self.assertNotIn("doctrine:migrations:migrate", script)
         self.assertNotIn("doctrine:schema:", script)
+        self.assertIn("se requiere autorización explícita", script)
+        self.assertIn('LOCK_MAX_AGE_SECONDS=21600', script)
+        self.assertIn('LOCK_INVALID_GRACE_MINUTES=5', script)
+        self.assertIn('LOCK_TOKEN="$$-$(date +%s)"', script)
+        self.assertIn('kill -0 "$owner_pid"', script)
+        self.assertIn('find "$LOCK_FILE" -mmin +', script)
+        self.assertIn("set -C", script)
+        self.assertIn("trap cleanup_lock EXIT", script)
+        self.assertIn("trap 'exit 130' INT", script)
+        self.assertIn("trap 'exit 143' TERM", script)
 
-    def test_automatic_migration_up_methods_reject_destructive_sql(self) -> None:
-        """El post-deploy automático solo puede ejecutar migraciones expand/forward."""
-        destructive = re.compile(
-            r"\b(?:DROP\s+(?:TABLE|COLUMN|INDEX|DATABASE)|"
-            r"TRUNCATE(?:\s+TABLE)?|DELETE\s+FROM|"
-            r"ALTER\s+TABLE[\s\S]{0,240}?\bDROP\b)",
-            re.IGNORECASE,
+    def test_post_deploy_never_executes_production_migrations_automatically(self) -> None:
+        """La política operativa exige autorización humana fuera del cron."""
+        script = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
+
+        forbidden = (
+            "doctrine:migrations:migrate",
+            "doctrine:migrations:execute",
+            "doctrine:schema:update",
+            "doctrine:schema:drop",
         )
-
-        migrations = sorted((ROOT / "migrations").glob("Version*.php"))
-        self.assertTrue(migrations, "No se encontraron migraciones para auditar.")
-
-        for migration in migrations:
-            source = migration.read_text(encoding="utf-8")
-            up_start = source.find("public function up")
-            down_start = source.find("public function down", up_start)
-            self.assertGreaterEqual(up_start, 0, migration.name)
-            self.assertGreater(down_start, up_start, migration.name)
-
-            up_source = source[up_start:down_start]
-            self.assertIsNone(
-                destructive.search(up_source),
-                f"{migration.name} contiene SQL destructivo en up(); "
-                "debe quedar fuera del post-deploy automático.",
-            )
+        for command in forbidden:
+            self.assertNotIn(command, script)
 
     def test_throughput_cli_preserves_json_report_contract(self) -> None:
         """El CLI de throughput entrega el esquema consumido por automatizaciones."""
