@@ -44,6 +44,11 @@ class ToolingContractTests(unittest.TestCase):
             workflow,
         )
         self.assertIn('git show-ref --verify --quiet "refs/tags/$TAG"', workflow)
+        self.assertIn('git cat-file -t "refs/tags/$TAG"', workflow)
+        self.assertIn("409([[:space:]]|$)", workflow)
+        self.assertIn('git/ref/tags/$TAG', workflow)
+        self.assertIn('git/tags/$race_tag_object_sha', workflow)
+        self.assertIn('[[ "$race_target_sha" != "$TARGET_SHA" ]]', workflow)
         self.assertIn('gh release view "$TAG"', workflow)
         self.assertIn('gh release create "$TAG"', workflow)
         self.assertIn('--title "Release $TAG (V ${TAG#v})"', workflow)
