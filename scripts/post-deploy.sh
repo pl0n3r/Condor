@@ -7,6 +7,7 @@
 # regenera la caché bajo exclusión mutua. Si hay migraciones pendientes,
 # falla cerrado antes de tocar caché y deja una señal accionable.
 set -eu
+umask 077
 
 cd "$(dirname "$0")/.."
 
@@ -35,6 +36,7 @@ LOCK_INVALID_GRACE_MINUTES=5
 LOCK_GUARD_GRACE_MINUTES=1
 LOCK_TOKEN="$$-$(date +%s)"
 LOCK_GUARD_OWNED=0
+SCHEMA_CHECK_LOG=""
 
 cleanup_guard() {
     if [ "$LOCK_GUARD_OWNED" -eq 1 ] &&
@@ -50,6 +52,13 @@ cleanup_lock() {
     if [ -f "$LOCK_FILE" ] &&
         [ "$(sed -n '1p' "$LOCK_FILE" 2>/dev/null || true)" = "$LOCK_TOKEN" ]; then
         rm -f -- "$LOCK_FILE"
+    fi
+}
+
+cleanup_schema_check_log() {
+    if [ -n "$SCHEMA_CHECK_LOG" ]; then
+        rm -f -- "$SCHEMA_CHECK_LOG"
+        SCHEMA_CHECK_LOG=""
     fi
 }
 
@@ -165,7 +174,7 @@ acquire_lock() {
     recuperar_lock
 }
 
-trap 'cleanup_guard; cleanup_lock' EXIT
+trap 'cleanup_schema_check_log; cleanup_guard; cleanup_lock' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
@@ -178,19 +187,19 @@ fi
 SCHEMA_CHECK_LOG="$(mktemp "${TMPDIR:-/tmp}/condor-schema-check-XXXXXX.log")"
 schema_check_status=0
 if "$PHP_BIN" bin/console doctrine:migrations:up-to-date --env=prod --no-interaction >"$SCHEMA_CHECK_LOG" 2>&1; then
-    rm -f -- "$SCHEMA_CHECK_LOG"
+    cleanup_schema_check_log
 else
     schema_check_status=$?
 
-    if grep -Eiq 'migration|not[[:space:]_-]*up[[:space:]_-]*to[[:space:]_-]*date|new[[:space:]_-]*migration' "$SCHEMA_CHECK_LOG"; then
-        schema_diagnostic="Doctrine reporta migraciones pendientes o historial de migraciones no reconciliado."
-    elif grep -Eiq 'sqlstate|connection|database|driver|server[[:space:]_-]*has[[:space:]_-]*gone[[:space:]_-]*away|timed?[[:space:]_-]*out' "$SCHEMA_CHECK_LOG"; then
+    if grep -Eiq 'sqlstate|connection|database|driver|server[[:space:]_-]*has[[:space:]_-]*gone[[:space:]_-]*away|timed?[[:space:]_-]*out' "$SCHEMA_CHECK_LOG"; then
         schema_diagnostic="Doctrine no pudo comprobar el esquema por un fallo de base de datos o conectividad."
+    elif grep -Eiq 'not[[:space:]_-]*up[[:space:]_-]*to[[:space:]_-]*date|new[[:space:]_-]*migration|pending[[:space:]_-]*migration|previously[[:space:]_-]*executed[[:space:]_-]*migration' "$SCHEMA_CHECK_LOG"; then
+        schema_diagnostic="Doctrine reporta migraciones pendientes o historial de migraciones no reconciliado."
     else
         schema_diagnostic="Doctrine no pudo comprobar el esquema; el fallo no pudo clasificarse de forma segura."
     fi
 
-    rm -f -- "$SCHEMA_CHECK_LOG"
+    cleanup_schema_check_log
     echo "post-deploy.sh: comprobación de esquema falló (código $schema_check_status). $schema_diagnostic Caché no modificada." >&2
     exit 2
 fi
