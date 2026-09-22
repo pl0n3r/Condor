@@ -691,7 +691,9 @@ jobs:
       - name: Generar secretos efímeros de CI
         run: |
           set -euo pipefail
-          echo "APP_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          app_secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$app_secret"
+          echo "APP_SECRET=$app_secret" >> "$GITHUB_ENV"
 
       - name: Instalar dependencias y migrar el esquema fuente
         run: |
