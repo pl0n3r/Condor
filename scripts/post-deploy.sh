@@ -39,5 +39,20 @@ if [ -z "$PHP_BIN" ]; then
     exit 1
 fi
 
+# El cron de Hostinger ejecuta este script cada 5 minutos: se evita que dos
+# corridas se solapen sobre el mismo esquema o la misma caché.
+LOCK_DIR="var/post-deploy.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    echo "post-deploy.sh: otra corrida sigue en curso; se omite." >&2
+    exit 0
+fi
+trap 'rmdir "$LOCK_DIR"' EXIT INT TERM
+
+# D-044: sin este paso el código nuevo llega sin su esquema (storefront
+# V 0.1.13 respondía 500 en producción). Las migraciones de Condor son
+# expand-compatible y las riesgosas abortan solas ante datos reales; sin
+# migraciones pendientes es un no-op.
+"$PHP_BIN" bin/console doctrine:migrations:migrate --env=prod --no-interaction --allow-no-migration
+
 "$PHP_BIN" bin/console cache:clear --env=prod --no-warmup
 "$PHP_BIN" bin/console cache:warmup --env=prod
