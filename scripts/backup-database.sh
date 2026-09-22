@@ -41,6 +41,15 @@ backup_dir="${BACKUP_DIR:-var/backups}"
 mkdir -p "$backup_dir"
 
 credentials_tmp="$(mktemp "${TMPDIR:-/tmp}/condor-mysql-XXXXXX.cnf")"
+raw_tmp=""
+gzip_tmp=""
+cleanup() {
+  [ -z "$raw_tmp" ] || rm -f -- "$raw_tmp"
+  [ -z "$gzip_tmp" ] || rm -f -- "$gzip_tmp"
+  rm -f -- "$credentials_tmp"
+}
+trap cleanup 0 HUP INT TERM
+
 "$PHP_BIN" "$script_dir/parse-database-url.php" client-config "$credentials_tmp"
 unset DATABASE_URL
 
@@ -50,11 +59,6 @@ gzip_tmp="$(mktemp "$backup_dir/.condor-${db}-${timestamp}-XXXXXX.sql.gz")"
 token="${gzip_tmp##*-}"
 token="${token%.sql.gz}"
 out="$backup_dir/condor-${db}-${timestamp}-${token}.sql.gz"
-
-cleanup() {
-  rm -f -- "$raw_tmp" "$gzip_tmp" "$credentials_tmp"
-}
-trap cleanup 0 HUP INT TERM
 
 dump_bin=""
 for candidate in mariadb-dump mysqldump; do
@@ -68,11 +72,13 @@ if [ -z "$dump_bin" ]; then
   exit 1
 fi
 
-set --   --single-transaction   --routines   --triggers
+set -- --single-transaction --quick --skip-lock-tables --triggers
 
 case "$(basename "$dump_bin")" in
   mysqldump)
-    set -- --column-statistics=0 "$@"
+    if "$dump_bin" --help 2>&1 | grep -q -- '--column-statistics'; then
+      set -- --column-statistics=0 "$@"
+    fi
     ;;
   mariadb-dump)
     ;;
