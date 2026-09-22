@@ -560,13 +560,9 @@ def work_activity_timestamp(
     """Calcula la señal más reciente sin contar el comando /tomar actual."""
     candidates: list[datetime] = []
     comments = api.issue_comments(issue_number)
-
-    for timestamp in (
-        latest_reservation_timestamp(comments),
-        human_issue_activity_timestamp(comments),
-    ):
-        if timestamp is not None:
-            candidates.append(timestamp)
+    human_activity = human_issue_activity_timestamp(comments)
+    if human_activity is not None:
+        candidates.append(human_activity)
 
     branch_sha = api.branch_sha(branch)
     if branch_sha:
@@ -578,19 +574,60 @@ def work_activity_timestamp(
 
 
 def mark_stale_reservations(api: GitHub) -> int:
-    """Hace visibles las reservas recuperables, sin liberar ni tomar trabajo."""
+    """Marca reservas stale bajo el mismo lock distribuido de recuperación."""
     marked = 0
     for issue in api.open_issues():
         number = issue.get("number")
         if not isinstance(number, int) or STATUS_BLOCKED in label_names(issue):
             continue
+
         branch = f"trabajo/issue-{number}"
-        if not (active_reservation(api, number) or api.branch_sha(branch)):
+        initial_reservation = active_reservation(api, number)
+        branch_sha = api.branch_sha(branch)
+        if not (initial_reservation or branch_sha):
             continue
         if not work_is_stale(api, number, branch):
             continue
-        api.set_status(number, STATUS_RECOVERY)
-        marked += 1
+        if branch_sha is None:
+            continue
+
+        lock_branch = recovery_lock_branch(number)
+        if not api.create_branch(lock_branch, branch_sha):
+            continue
+
+        try:
+            current_issue = api.issue(number)
+            if (
+                current_issue.get("state") != "open"
+                or STATUS_BLOCKED in label_names(current_issue)
+            ):
+                continue
+
+            current_reservation = active_reservation(api, number)
+            initial_id = (
+                str(initial_reservation["reservation_id"])
+                if initial_reservation
+                else None
+            )
+            current_id = (
+                str(current_reservation["reservation_id"])
+                if current_reservation
+                else None
+            )
+            if initial_id != current_id:
+                continue
+            if not (current_reservation or api.branch_sha(branch)):
+                continue
+            if not work_is_stale(api, number, branch):
+                continue
+            if STATUS_RECOVERY in label_names(current_issue):
+                continue
+
+            api.set_status(number, STATUS_RECOVERY)
+            marked += 1
+        finally:
+            api.delete_branch(lock_branch)
+
     print(f"Reservas recuperables marcadas: {marked}")
     return marked
 
@@ -811,6 +848,21 @@ def recover_existing_work_if_stale(
         api.delete_branch(lock_branch)
 
 
+def recovery_issue_numbers(api: GitHub) -> list[int]:
+    """Lista Issues abiertos que deben recuperarse antes de abrir trabajo nuevo."""
+    numbers: list[int] = []
+    for issue in api.open_issues():
+        number = issue.get("number")
+        if (
+            isinstance(number, int)
+            and issue.get("state") == "open"
+            and STATUS_BLOCKED not in label_names(issue)
+            and STATUS_RECOVERY in label_names(issue)
+        ):
+            numbers.append(number)
+    return sorted(numbers)
+
+
 def reserve_work(
     api: GitHub,
     issue_number: int,
@@ -845,6 +897,15 @@ def reserve_work(
         )
 
     if STATUS_AVAILABLE not in labels:
+        return None
+
+    pending_recovery = recovery_issue_numbers(api)
+    if pending_recovery:
+        rendered = ", ".join(f"#{number}" for number in pending_recovery)
+        print(
+            "Trabajo nuevo pospuesto: primero debe recuperarse "
+            f"{rendered}."
+        )
         return None
 
     return reserve_available_work(
