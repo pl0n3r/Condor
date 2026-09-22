@@ -1,87 +1,73 @@
-# Condor App — Snapshot operativo · hotfix V 0.1.10
+# Condor App — Snapshot operativo · candidato V 0.1.11
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** convertir los errores 5xx del Super Admin en diagnósticos seguros y accionables sin activar debug ni exponer secretos.
+> **Objetivo actual:** habilitar operación delegada de Condor sin entregar privilegios globales: staff de plataforma, permisos por empresa/módulo/CRUD, creación de clientes e invitaciones seguras.
 
 <p align="center">
   <strong>Producto:</strong> Condor App ·
   <strong>Dominio:</strong> condorapp.com.co ·
-  <strong>Runtime producción:</strong> PHP 8.5 ·
-  <strong>Versión objetivo:</strong> V 0.1.10 ·
-  <strong>Última versión validada en producción:</strong> V 0.1.4
+  <strong>Runtime:</strong> PHP 8.5 ·
+  <strong>Candidato:</strong> V 0.1.11 ·
+  <strong>Producción comprobada:</strong> V 0.1.4
 </p>
 
-## Estado del deploy
+## Estado de entrega
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base de código | ✅ **V 0.1.9 EN MAIN** | SHA `fb21af72cdabf94539e654f110793ea3f146e3b5` |
-| Super Admin V 0.1.9 | ✅ **MERGED** | PR #118 |
-| Incidente reportado | 🔴 **500 EN /adminpl0n3r TRAS LOGIN** | reportado después de #118; causa exacta aún por observar |
+| Base integrada | ✅ **V 0.1.10 EN MAIN** | SHA `3d08b63306e094f73710f7fe17454da5d91351e1` |
+| Candidato actual | 🚧 **V 0.1.11 EN VALIDACIÓN** | Issue #116 / PR #122 |
 | Producción comprobada | ✅ **V 0.1.4 VALIDADA EN PRODUCCIÓN** | último smoke real documentado |
-| V 0.1.10 | 🚧 **HOTFIX EN VALIDACIÓN DE CÓDIGO** | Issue #133 |
-| Producción V 0.1.10 | ⏳ **NO VALIDADA** | requiere merge, deploy observado y smoke real |
+| Staff de plataforma | ✅ **IMPLEMENTADO EN CANDIDATO** | permisos explícitos por tenant + módulo + CRUD |
+| Invitaciones | ✅ **IMPLEMENTADAS EN CANDIDATO** | token hasheado, expiración, revocación, reemisión y consumo único |
+| Creación de clientes | ✅ **IMPLEMENTADA EN CANDIDATO** | reutiliza el onboarding canónico |
+| Notificaciones | ✅ **BASE IMPLEMENTADA** | `in_app` + `email`, preferencias y eventos obligatorios |
+| Producción V 0.1.11 | ⏳ **NO VALIDADA** | requiere merge, exact-main, transición, deploy observado y smoke real |
 
-## Qué cambia en V 0.1.10
+## Qué incorpora V 0.1.11
 
-- Los 5xx siguen generando una referencia segura para cualquier usuario.
-- Si la sesión pertenece a `ROLE_PLATFORM_OWNER`, la página 500 muestra además:
-  - status HTTP;
-  - ruta Symfony;
-  - clase de excepción;
-  - mensaje sanitizado;
-  - request ID;
-  - versión;
-  - release SHA.
-- El detalle privilegiado **no incluye** stack trace, headers, cookies, body, variables de entorno, SQL ni secretos.
-- Las respuestas JSON 5xx del Super Admin incluyen el mismo diagnóstico sanitizado solo para el propietario.
-- React muestra ese diagnóstico dentro del centro de control cuando falla `/adminpl0n3r/api/context`.
-- `/adminpl0n3r/diagnosticos` muestra mensaje sanitizado, request ID y release para incidentes recientes.
-- La página 500 privilegiada no depende de Twig, para seguir funcionando aunque el fallo involucre render/cache.
-
-## Archivos principales
-
-- `src/Infrastructure/Observability/ErrorIncidentPresenter.php`
-- `src/Infrastructure/Observability/ErrorIncidentSubscriber.php`
-- `frontend/admin/PlatformOwnerApp.tsx`
-- `frontend/admin/admin.css`
-- `templates/platform_owner/diagnostics.html.twig`
-- `tests/php/Infrastructure/Observability/ErrorIncidentPresenterTest.php`
-- metadata de versión V 0.1.10
-
-## Validación
-
-- CI, backend/MariaDB, contratos y Playwright deben quedar verdes en el head final.
-- SonarQube debe mantener Quality Gate aprobado.
-- CodeRabbit debe cerrar cualquier finding accionable del mismo head.
-- Después del merge se valida el SHA exacto de `main`.
-- El hotfix solo se considera **VALIDADO EN PRODUCCIÓN** después del deploy observado y de reproducir/verificar `/adminpl0n3r`.
+- `ROLE_PLATFORM_STAFF` separado del propietario global y de las membresías de clientes.
+- Alcance explícito por empresa, módulo y acciones CRUD, validado server-side.
+- Matriz visual de permisos y estado de invitaciones en `/adminpl0n3r`.
+- Creación de empresas desde Super Admin reutilizando el servicio de onboarding.
+- Invitaciones de un solo uso: el token bruto no se persiste y la persona define su contraseña.
+- Reenvío/revocación con rate limiting y auditoría.
+- Contrato de correo transaccional desacoplado del proveedor.
+- Notificaciones `in_app` y `email` con preferencias por usuario/evento/canal.
+- Eventos de seguridad obligatorios que no pueden silenciarse con preferencias ordinarias.
+- Pruebas negativas de autorización, alcance entre tenants y escalamiento.
 
 ## Flujo de entrega
 
 ```mermaid
 flowchart LR
-    A[Incidente 500] --> B[Diagnóstico seguro visible]
-    B --> C[CI + Sonar + CodeRabbit]
+    A[PR #122 · V 0.1.11] --> B[CI + MariaDB + Playwright]
+    B --> C[SonarQube + CodeRabbit]
     C --> D[Squash merge]
-    D --> E[Validar SHA exacto de main]
-    E --> F[Deploy observado]
-    F --> G[Reprobar /adminpl0n3r]
-    G --> H[Identificar o confirmar causa real]
+    D --> E[SHA exacto de main]
+    E --> F[Transición operativa]
+    F --> G[Deploy observado]
+    G --> H[Smoke real]
 ```
 
-## Seguimiento
+## Qué sigue
 
-El orden de trabajo y los próximos bloques viven exclusivamente en el
-[Roadmap canónico #1](https://github.com/pl0n3r/Condor/issues/1).
-Los Issues activos conservan el alcance ejecutable de cada frente.
+| Horizonte | Bloque |
+| --- | --- |
+| **AHORA** | estabilizar y fusionar #116 / PR #122 como V 0.1.11 |
+| **EN PARALELO** | storefront administrable #130 / PR #136 y contratos REST #127 / PR #137 |
+| **SIGUE** | ordenar el candidato V 0.1.12 sobre el nuevo `main` |
+| **DESPUÉS** | Catálogo Producto + Variante — Slice 3 / Issue #131 |
 
 ## Fuentes de verdad
 
 - [AGENTES.md](AGENTES.md) — protocolo operativo.
 - [ESPECIFICACIONES.md](ESPECIFICACIONES.md) — decisiones durables.
-- [Roadmap #1](https://github.com/pl0n3r/Condor/issues/1) — Roadmap canónico.
-- [Issue #133](https://github.com/pl0n3r/Condor/issues/133) — hotfix de diagnóstico visible.
-- [Issue #93](https://github.com/pl0n3r/Condor/issues/93) — diseño base de observabilidad segura.
+- [Roadmap #1](https://github.com/pl0n3r/Condor/issues/1) — único Roadmap canónico.
+- [Issue #116](https://github.com/pl0n3r/Condor/issues/116) / [PR #122](https://github.com/pl0n3r/Condor/pull/122) — candidato V 0.1.11.
+- [Issue #130](https://github.com/pl0n3r/Condor/issues/130) / [PR #136](https://github.com/pl0n3r/Condor/pull/136) — storefront administrable.
+- [Issue #127](https://github.com/pl0n3r/Condor/issues/127) / [PR #137](https://github.com/pl0n3r/Condor/pull/137) — contratos REST.
+
+> **Regla de estado:** CI verde o un merge prueban código, no producción. Solo evidencia del despliegue y smoke real permite declarar **VALIDADO EN PRODUCCIÓN**.

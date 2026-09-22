@@ -65,3 +65,42 @@ export function platformOwnerContextPath(
 
   return '/adminpl0n3r/api/context' + (query ? '?' + query : '');
 }
+
+
+export function platformStaffPath(): string {
+  return '/adminpl0n3r/api/staff';
+}
+
+export function platformStaffInvitationPath(): string {
+  return platformStaffPath() + '/invitations';
+}
+
+export function platformStaffGrantsPath(staffId: string): string {
+  return platformStaffPath() + '/' + safeUlid(staffId) + '/grants';
+}
+
+export function platformStaffInvitationResendPath(
+  staffId: string,
+): string {
+  return (
+    platformStaffPath() +
+    '/' +
+    safeUlid(staffId) +
+    '/invitations/resend'
+  );
+}
+
+export function platformStaffInvitationRevokePath(
+  staffId: string,
+): string {
+  return (
+    platformStaffPath() +
+    '/' +
+    safeUlid(staffId) +
+    '/invitations'
+  );
+}
+
+export function platformTenantsPath(): string {
+  return '/adminpl0n3r/api/tenants';
+}
