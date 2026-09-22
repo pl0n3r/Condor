@@ -10,6 +10,8 @@ use PHPUnit\Framework\TestCase;
 final class AppVersionTest extends TestCase
 {
     private string $projectDir;
+    private array $originalServer;
+    private array $originalEnv;
 
     protected function setUp(): void
     {
@@ -19,11 +21,22 @@ final class AppVersionTest extends TestCase
             $this->projectDir.'/config/version.php',
             "<?php\nreturn ['version' => '9.9.9'];\n",
         );
+
+        // CI sets RELEASE_SHA as a real job-level environment variable, which
+        // PHP CLI reflects into $_SERVER/$_ENV, not just getenv(). Tests that
+        // assert the fallback path must clear all three sources, not just
+        // putenv(), or they pass locally but fail under CI.
+        $this->originalServer = $_SERVER;
+        $this->originalEnv = $_ENV;
+        unset($_SERVER['RELEASE_SHA'], $_ENV['RELEASE_SHA']);
+        putenv('RELEASE_SHA');
     }
 
     protected function tearDown(): void
     {
         $this->removeDirectory($this->projectDir);
+        $_SERVER = $this->originalServer;
+        $_ENV = $this->originalEnv;
     }
 
     public function testReleaseShaPrefersEnvironmentVariable(): void
