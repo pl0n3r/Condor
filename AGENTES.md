@@ -80,8 +80,8 @@ GitHub es el árbitro de la cola de trabajo.
 4. si una reserva existente tiene actividad verificable de los últimos 30 minutos, respetarla y elegir otro trabajo;
 5. si lleva al menos 30 minutos sin actividad verificable, ejecutar /tomar sobre ese mismo Issue para recuperarlo antes de abrir trabajo nuevo;
 6. ejecutar /tomar normalmente sobre un Issue disponible solo cuando no exista trabajo previo recuperable;
-6. esperar una reserva válida y conservar el UUID publicado por el bot;
-7. trabajar únicamente en la rama canónica trabajo/issue-N y reutilizar el PR existente cuando la recuperación lo indique.
+7. esperar una reserva válida y conservar el UUID publicado por el bot;
+8. trabajar únicamente en la rama canónica trabajo/issue-N y reutilizar el PR existente cuando la recuperación lo indique.
 
 La reserva válida crea o recupera el lock de trabajo sin duplicar la implementación. Abrir un Issue/PR nuevo para sustituir silenciosamente otro frente abandonado es el último recurso, no el flujo normal.
 
