@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
+import {
+  FunctionalSignalsPanel,
+  type FunctionalSignalCounts,
+} from './FunctionalSignalsPanel';
 import { PlatformStaffPanel } from './PlatformStaffPanel';
 import { PlatformTenantCreationPanel } from './PlatformTenantCreationPanel';
 import { platformOwnerContextPath } from './api';
@@ -35,6 +39,7 @@ type PlatformContextResponse = {
     branch_count: number;
     active_membership_count: number;
   };
+  signals_last_30_days: FunctionalSignalCounts;
   tenants: TenantSummary[];
   tenant_pagination: {
     page: number;
@@ -387,6 +392,10 @@ export function PlatformOwnerApp({
                     detail: 'accesos vigentes',
                   },
                 ]}
+              />
+
+              <FunctionalSignalsPanel
+                signals={state.data.signals_last_30_days}
               />
 
               <PlatformTenantCreationPanel
