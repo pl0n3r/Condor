@@ -360,6 +360,24 @@ class ObserverTests(unittest.TestCase):
         )
         self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
 
+    def test_section_anidada_no_cierra_el_contexto_del_storefront_hero(self) -> None:
+        slug = self.preparar_storefront()
+        canonical = self.base + "/" + slug
+        html = (
+            '<html><head><link rel="canonical" href="' + canonical
+            + '"></head><body><section class="storefront-hero">'
+            + '<section><p>Contenido auxiliar</p></section>'
+            + '<h1>Empresa prueba</h1></section>'
+            + '<footer>V 0.1.13</footer></body></html>'
+        )
+        self.server.respuestas["/" + slug] = (200, "text/html", html.encode())
+        resultado = modulo.observar(
+            self.base, "0.1.13", SHA, intentos=1, intervalo=0,
+            tenant_slug=slug,
+        )
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertTrue(resultado["comprobaciones"]["storefront"]["ok"])
+
     def test_slug_desconocido_200_o_redirect_no_se_acepta(self) -> None:
         slug = self.preparar_storefront()
         desconocido = "/condor-smoke-no-existe-" + SHA[:12]
