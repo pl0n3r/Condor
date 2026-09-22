@@ -9,9 +9,7 @@ use JsonException;
 /**
  * Registro append-only de métricas de request (duración, memoria pico,
  * status HTTP), sin dependencias de Doctrine ni de un servicio de
- * métricas externo — compatible con Hostinger shared hosting (sin
- * daemons ni workers persistentes). Mismo patrón que FatalLog: cada
- * escritura es defensiva y nunca debe interrumpir el request real.
+ * métricas externo — compatible con Hostinger shared hosting.
  */
 final class RequestMetrics
 {
@@ -36,7 +34,7 @@ final class RequestMetrics
 
             self::append($projectDir, $entry);
         } catch (\Throwable) {
-            // El registro de métricas nunca debe generar un fallo nuevo.
+            // La observabilidad nunca debe generar un fallo nuevo.
         }
     }
 
@@ -56,20 +54,20 @@ final class RequestMetrics
             return [];
         }
 
-        $handle = @fopen($path, 'rb');
-        if (!is_resource($handle)) {
+        $lock = self::openLock($projectDir);
+        if (!is_resource($lock)) {
             return [];
         }
 
         try {
-            if (!@flock($handle, LOCK_SH)) {
+            if (!@flock($lock, LOCK_SH)) {
                 return [];
             }
 
-            $contents = stream_get_contents($handle);
+            $contents = @file_get_contents($path);
         } finally {
-            @flock($handle, LOCK_UN);
-            fclose($handle);
+            @flock($lock, LOCK_UN);
+            fclose($lock);
         }
 
         if (!is_string($contents) || $contents === '') {
@@ -90,10 +88,6 @@ final class RequestMetrics
     }
 
     /**
-     * Resumen agregado (p50/p95 de duración, tasa de error 5xx) sobre las
-     * entradas más recientes — suficiente para un panel de diagnóstico sin
-     * necesitar una base de métricas externa.
-     *
      * @return array{
      *   count: int,
      *   p50_ms: float,
@@ -108,10 +102,19 @@ final class RequestMetrics
         $count = count($entries);
 
         if ($count === 0) {
-            return ['count' => 0, 'p50_ms' => 0.0, 'p95_ms' => 0.0, 'error_rate' => 0.0, 'avg_memory_mb' => 0.0];
+            return [
+                'count' => 0,
+                'p50_ms' => 0.0,
+                'p95_ms' => 0.0,
+                'error_rate' => 0.0,
+                'avg_memory_mb' => 0.0,
+            ];
         }
 
-        $durations = array_map(static fn(array $entry): float => $entry['duration_ms'], $entries);
+        $durations = array_map(
+            static fn(array $entry): float => $entry['duration_ms'],
+            $entries,
+        );
         sort($durations);
 
         $errors = 0;
@@ -164,38 +167,44 @@ final class RequestMetrics
             return;
         }
 
-        $handle = @fopen($path, 'c+b');
-        if (!is_resource($handle)) {
+        $lock = self::openLock($projectDir);
+        if (!is_resource($lock)) {
             return;
         }
 
         try {
-            if (!@flock($handle, LOCK_EX)) {
+            if (!@flock($lock, LOCK_EX)) {
                 return;
             }
 
-            if (fseek($handle, 0, SEEK_END) !== 0) {
+            $log = @fopen($path, 'ab');
+            if (!is_resource($log)) {
                 return;
             }
 
-            if (fwrite($handle, $line.PHP_EOL) === false) {
-                return;
+            try {
+                if (!self::writeAll($log, $line.PHP_EOL) || !fflush($log)) {
+                    return;
+                }
+                @chmod($path, 0600);
+            } finally {
+                fclose($log);
             }
 
-            fflush($handle);
-            @chmod($path, 0600);
-            self::trimLocked($handle);
+            self::rotateLocked($path);
         } finally {
-            @flock($handle, LOCK_UN);
-            fclose($handle);
+            @flock($lock, LOCK_UN);
+            fclose($lock);
         }
     }
 
-    /** @param resource $handle */
-    private static function trimLocked($handle): void
+    /**
+     * Rota mediante archivo temporal + rename mientras el lock lateral
+     * permanece tomado. Si cualquier paso falla, el log original queda intacto.
+     */
+    private static function rotateLocked(string $path): void
     {
-        rewind($handle);
-        $contents = stream_get_contents($handle);
+        $contents = @file_get_contents($path);
         if (!is_string($contents)) {
             return;
         }
@@ -205,14 +214,70 @@ final class RequestMetrics
             return;
         }
 
-        $kept = array_slice($lines, -self::MAX_ENTRIES);
-        rewind($handle);
-        if (!ftruncate($handle, 0)) {
+        $payload = implode(
+            PHP_EOL,
+            array_slice($lines, -self::MAX_ENTRIES),
+        ).PHP_EOL;
+        $tempPath = $path.'.tmp';
+        $temp = @fopen($tempPath, 'wb');
+        if (!is_resource($temp)) {
             return;
         }
 
-        fwrite($handle, implode(PHP_EOL, $kept).PHP_EOL);
-        fflush($handle);
+        $ready = false;
+        try {
+            $ready = self::writeAll($temp, $payload) && fflush($temp);
+            if ($ready && function_exists('fsync')) {
+                $ready = fsync($temp);
+            }
+        } finally {
+            fclose($temp);
+        }
+
+        if (!$ready) {
+            self::removeTempFile($tempPath);
+            return;
+        }
+
+        @chmod($tempPath, 0600);
+        if (!@rename($tempPath, $path)) {
+            self::removeTempFile($tempPath);
+        }
+    }
+
+    /** @param resource $handle */
+    private static function writeAll($handle, string $payload): bool
+    {
+        $length = strlen($payload);
+        $offset = 0;
+
+        while ($offset < $length) {
+            $written = fwrite($handle, substr($payload, $offset));
+            if ($written === false || $written === 0) {
+                return false;
+            }
+            $offset += $written;
+        }
+
+        return true;
+    }
+
+    /** @return resource|false */
+    private static function openLock(string $projectDir)
+    {
+        $lock = @fopen(self::lockPath($projectDir), 'c+b');
+        if (is_resource($lock)) {
+            @chmod(self::lockPath($projectDir), 0600);
+        }
+
+        return $lock;
+    }
+
+    private static function removeTempFile(string $path): void
+    {
+        if (is_file($path) || is_link($path)) {
+            @unlink($path);
+        }
     }
 
     /**
@@ -266,5 +331,10 @@ final class RequestMetrics
         return rtrim($projectDir, DIRECTORY_SEPARATOR)
             .DIRECTORY_SEPARATOR
             .self::RELATIVE_PATH;
+    }
+
+    private static function lockPath(string $projectDir): string
+    {
+        return self::path($projectDir).'.lock';
     }
 }
