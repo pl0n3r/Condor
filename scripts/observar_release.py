@@ -49,6 +49,7 @@ class TextoVisible(HTMLParser):
         self.en_head = False
         self.en_body = False
         self.en_hero = False
+        self.secciones_hero: list[bool] = []
         self.en_titulo_hero = False
         self.titulos_hero: list[str] = []
         self.slugs_hero: list[str] = []
@@ -77,11 +78,13 @@ class TextoVisible(HTMLParser):
         elif (tag == "link" and self.en_head
               and "canonical" in (atributos.get("rel") or "").split()):
             self.canonicals.append(atributos.get("href") or "")
-        elif (tag == "section" and self.en_body
-              and "storefront-hero" in (atributos.get("class") or "").split()):
-            self.storefront_hero = True
-            self.en_hero = True
-            self.slugs_hero.append(atributos.get("data-tenant-slug") or "")
+        elif tag == "section" and self.en_body:
+            es_hero = "storefront-hero" in (atributos.get("class") or "").split()
+            self.secciones_hero.append(es_hero)
+            if es_hero:
+                self.storefront_hero = True
+                self.en_hero = True
+                self.slugs_hero.append(atributos.get("data-tenant-slug") or "")
         elif tag == "h1" and self.en_hero:
             self.en_titulo_hero = True
         elif tag in {"form", "input"}:
@@ -108,7 +111,9 @@ class TextoVisible(HTMLParser):
         elif not self.ocultos and tag == "h1":
             self.en_titulo_hero = False
         elif not self.ocultos and tag == "section":
-            self.en_hero = False
+            if self.secciones_hero:
+                self.secciones_hero.pop()
+            self.en_hero = any(self.secciones_hero)
         elif not self.ocultos and tag == "form":
             self.en_formulario = max(0, self.en_formulario - 1)
 
