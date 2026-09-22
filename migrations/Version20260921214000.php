@@ -11,11 +11,28 @@ final class Version20260921214000 extends AbstractMigration // NOSONAR -- nombre
 {
     public function getDescription(): string
     {
-        return 'Identidad pública editable por tenant para el primer storefront real.';
+        return 'Añade identidad pública por tenant y blinda el dominio primario verificado.';
     }
 
     public function up(Schema $schema): void
     {
+        $duplicates = (int) $this->connection->fetchOne(<<<'SQL'
+            SELECT COUNT(*)
+            FROM (
+                SELECT tenant_id
+                FROM condor_tenant_domain
+                WHERE is_primary = 1 AND is_verified = 1
+                GROUP BY tenant_id
+                HAVING COUNT(*) > 1
+            ) duplicate_primary
+            SQL);
+
+        $this->abortIf(
+            $duplicates > 0,
+            'Existen tenants con más de un dominio primario verificado. '
+            .'La transición requiere reconciliar esos datos antes de continuar.',
+        );
+
         $this->addSql(<<<'SQL'
             CREATE TABLE condor_storefront_profile (
                 id VARCHAR(26) NOT NULL,
@@ -31,6 +48,20 @@ final class Version20260921214000 extends AbstractMigration // NOSONAR -- nombre
             ) DEFAULT CHARACTER SET utf8mb4
               COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
             SQL);
+
+        $this->addSql(
+            'ALTER TABLE condor_tenant_domain '
+            .'ADD primary_verified_tenant_id VARCHAR(26) DEFAULT NULL',
+        );
+        $this->addSql(
+            'UPDATE condor_tenant_domain '
+            .'SET primary_verified_tenant_id = tenant_id '
+            .'WHERE is_primary = 1 AND is_verified = 1',
+        );
+        $this->addSql(
+            'CREATE UNIQUE INDEX uniq_domain_primary_verified_tenant '
+            .'ON condor_tenant_domain (primary_verified_tenant_id)',
+        );
     }
 
     public function down(Schema $schema): void
@@ -42,6 +73,15 @@ final class Version20260921214000 extends AbstractMigration // NOSONAR -- nombre
             $existing > 0,
             'Rollback bloqueado: existen perfiles públicos de empresas. '
             .'Requiere transición de datos explícitamente autorizada.',
+        );
+
+        $this->addSql(
+            'DROP INDEX uniq_domain_primary_verified_tenant '
+            .'ON condor_tenant_domain',
+        );
+        $this->addSql(
+            'ALTER TABLE condor_tenant_domain '
+            .'DROP primary_verified_tenant_id',
         );
         $this->addSql('DROP TABLE condor_storefront_profile');
     }
