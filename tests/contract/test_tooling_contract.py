@@ -73,6 +73,7 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn("--no-interaction --allow-no-migration", script)
         self.assertIn('LOCK_MAX_AGE_SECONDS=21600', script)
         self.assertIn('LOCK_TOKEN="$-$(date +%s)"', script)
+        self.assertNotIn('LOCK_TOKEN="$-$(date +%s)"', script)
         self.assertIn("if ! acquire_lock; then", script)
         self.assertIn('mv "$LOCK_DIR" "$stale_dir"', script)
         self.assertIn('cat "$LOCK_DIR/token"', script)
