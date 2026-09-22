@@ -48,7 +48,8 @@ final readonly class CreateTenant
         }
 
         try {
-            $result = $this->entityManager->wrapInTransaction(function () use ($input, $slug, $email): OnboardingResult {
+            $result = $this->entityManager->wrapInTransaction(
+                function () use ($input, $slug, $email): OnboardingResult {
                 $tenant = new Tenant($input->tenantName, $slug);
                 $legalEntity = new LegalEntity($tenant, $input->legalName, $input->nit, true);
                 $branch = new Branch($tenant, $input->branchName, 'principal', $legalEntity, true);
@@ -74,8 +75,14 @@ final readonly class CreateTenant
 
                 $this->entityManager->flush();
 
-                return new OnboardingResult($tenant->id(), $tenant->slug(), $branch->id(), $owner->id());
-            });
+                    return new OnboardingResult(
+                        $tenant->id(),
+                        $tenant->slug(),
+                        $branch->id(),
+                        $owner->id(),
+                    );
+                },
+            );
         } catch (UniqueConstraintViolationException $exception) {
             throw new DomainException(
                 'Los datos de la empresa ya están registrados (identificador o correo).',
