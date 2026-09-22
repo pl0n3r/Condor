@@ -342,7 +342,7 @@ jobs:
             --attempts 3 \
             --base-delay 3 \
             --label "composer audit" \
-            -- composer audit --no-interaction
+            -- composer audit --locked --no-interaction
 
   backend-php:
     name: Backend PHP / MariaDB
