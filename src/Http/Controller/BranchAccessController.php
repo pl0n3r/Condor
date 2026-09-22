@@ -6,7 +6,6 @@ namespace App\Http\Controller;
 
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
-use App\Domain\Audit\Entity\AuditEvent;
 use App\Domain\Identity\Entity\BranchRoleAssignment;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\Role;
@@ -18,22 +17,20 @@ use App\Domain\Organization\Entity\Tenant;
 use App\Infrastructure\Observability\FunctionalSignalRecorder;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
-use DomainException;
-use JsonException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Routing\Attribute\Route;
-use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 final class BranchAccessController extends AbstractController
 {
+    use BranchApiSupport;
+
     public function __construct(
         private readonly CurrentTenantForUser $currentTenantForUser,
         private readonly BranchAuthorization $authorization,
@@ -364,43 +361,7 @@ final class BranchAccessController extends AbstractController
         string $branchId,
         string $permission,
     ): array {
-        [$user, $tenant, $branch] = $this->scope($branchId);
-        $membership = $this->authorization->require(
-            $user,
-            $tenant,
-            $branch,
-            $permission,
-        );
-
-        return [$user, $tenant, $branch, $membership];
-    }
-
-    /** @return array{0: User, 1: Tenant, 2: Branch} */
-    private function scope(string $branchId): array
-    {
-        $user = $this->getUser();
-        if (!$user instanceof User) {
-            throw new AccessDeniedHttpException();
-        }
-
-        try {
-            $tenant = $this->currentTenantForUser->resolve($user);
-        } catch (AccessDeniedException $exception) {
-            throw new AccessDeniedHttpException(
-                $exception->getMessage(),
-                $exception,
-            );
-        }
-
-        $branch = $this->entityManager->getRepository(Branch::class)->findOneBy([
-            'id' => $branchId,
-            'tenant' => $tenant,
-        ]);
-        if (!$branch instanceof Branch) {
-            throw new NotFoundHttpException('Sede no encontrada.');
-        }
-
-        return [$user, $tenant, $branch];
+        return $this->authorizedBranchScope($branchId, $permission);
     }
 
     private function role(string $roleId, Tenant $tenant): Role
@@ -435,51 +396,6 @@ final class BranchAccessController extends AbstractController
         return $membership;
     }
 
-    private function requireCsrf(Request $request): void
-    {
-        $token = (string) $request->headers->get('X-CSRF-Token', '');
-        if (!$this->isCsrfTokenValid('branch_access', $token)) {
-            throw new AccessDeniedHttpException('Token CSRF inválido.');
-        }
-    }
-
-    /**
-     * @param list<string> $allowedFields
-     * @return array<string, mixed>
-     */
-    private function payload(Request $request, array $allowedFields): array
-    {
-        try {
-            $payload = json_decode(
-                (string) $request->getContent(),
-                false,
-                512,
-                JSON_THROW_ON_ERROR,
-            );
-        } catch (JsonException $exception) {
-            throw new BadRequestHttpException('JSON inválido.', $exception);
-        }
-
-        if (!is_object($payload)) {
-            throw new BadRequestHttpException(
-                'El cuerpo debe ser un objeto JSON.',
-            );
-        }
-
-        $data = get_object_vars($payload);
-        $unexpected = array_values(array_diff(
-            array_keys($data),
-            $allowedFields,
-        ));
-        if ($unexpected !== []) {
-            throw new UnprocessableEntityHttpException(
-                'El cuerpo contiene campos no permitidos.',
-            );
-        }
-
-        return $data;
-    }
-
     /** @return list<string> */
     private function permissionsFromPayload(mixed $permissions): array
     {
@@ -492,23 +408,6 @@ final class BranchAccessController extends AbstractController
         return $this->domain(
             static fn (): array => PermissionCatalog::normalize($permissions),
         );
-    }
-
-    /**
-     * @template T
-     * @param callable(): T $operation
-     * @return T
-     */
-    private function domain(callable $operation): mixed
-    {
-        try {
-            return $operation();
-        } catch (DomainException $exception) {
-            throw new UnprocessableEntityHttpException(
-                $exception->getMessage(),
-                $exception,
-            );
-        }
     }
 
     private function flushRoleChange(): void
@@ -589,24 +488,6 @@ final class BranchAccessController extends AbstractController
             'membership_id' => $membership->id(),
             'role_id' => $role->id(),
         ];
-    }
-
-    private function audit(
-        Tenant $tenant,
-        User $actor,
-        string $action,
-        string $entityType,
-        string $entityId,
-        array $context,
-    ): void {
-        $this->entityManager->persist(new AuditEvent(
-            $tenant,
-            $actor->id(),
-            $action,
-            $entityType,
-            $entityId,
-            $context,
-        ));
     }
 
     /** @return array{id: string, name: string, permissions: list<string>} */
