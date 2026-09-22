@@ -10,10 +10,12 @@ use App\Domain\Audit\Entity\PlatformAuditEvent;
 use App\Domain\Identity\Entity\AccountInvitation;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\User;
+use App\Domain\Observability\Entity\FunctionalSignal;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
+use App\Infrastructure\Observability\FunctionalSignalRecorder;
 
 final readonly class PlatformTenantManager
 {
@@ -21,6 +23,7 @@ final readonly class PlatformTenantManager
         private EntityManagerInterface $entityManager,
         private ProvisionTenant $provisionTenant,
         private PlatformInvitationSecurity $security,
+        private FunctionalSignalRecorder $signals,
     ) {
     }
 
@@ -55,7 +58,7 @@ final readonly class PlatformTenantManager
         }
 
         try {
-            return $this->entityManager->wrapInTransaction(
+            $result = $this->entityManager->wrapInTransaction(
                 function () use (
                     $actor,
                     $tenantInput,
@@ -116,6 +119,13 @@ final readonly class PlatformTenantManager
                 $exception,
             );
         }
-    }
 
+        $this->signals->record(
+            FunctionalSignal::TENANT_CREATED,
+            $result->provisioning->tenant->id(),
+            ['source' => 'platform_owner'],
+        );
+
+        return $result;
+    }
 }
