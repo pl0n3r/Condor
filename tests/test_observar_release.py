@@ -248,6 +248,68 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
         self.assertFalse(resultado["comprobaciones"]["admin_login"]["ok"])
 
+    def test_version_exclusivamente_en_title_no_es_visible(self) -> None:
+        self.server.respuestas["/"] = (
+            200, "text/html",
+            b"<html><head><title>Condor V 0.1.0</title></head>"
+            b"<body><h1>Inicio</h1></body></html>",
+        )
+        resultado = self.observar()
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["home"]["ok"])
+
+    def test_storefront_exige_titulo_h1_visible_dentro_del_hero(self) -> None:
+        slug = self.preparar_storefront()
+        canonical = self.base + "/" + slug
+        ejemplos = (
+            '<html><head><link rel="canonical" href="' + canonical
+            + '"></head><body><section class="storefront-hero"></section>'
+            + '<footer>V 0.1.13</footer></body></html>',
+            '<html><head><link rel="canonical" href="' + canonical
+            + '"></head><body><h1>Empresa fuera del hero</h1>'
+            + '<section class="storefront-hero"></section>'
+            + '<footer>V 0.1.13</footer></body></html>',
+            '<html><head><link rel="canonical" href="' + canonical
+            + '"></head><body><section class="storefront-hero">'
+            + '<h1>   </h1></section>'
+            + '<footer>V 0.1.13</footer></body></html>',
+            '<html><head><link rel="canonical" href="' + canonical
+            + '"></head><body><section class="storefront-hero">'
+            + '<h1><template>Empresa inerte</template></h1></section>'
+            + '<footer>V 0.1.13</footer></body></html>',
+        )
+        for ejemplo in ejemplos:
+            with self.subTest(ejemplo=ejemplo):
+                self.server.respuestas["/" + slug] = (
+                    200, "text/html", ejemplo.encode(),
+                )
+                resultado = modulo.observar(
+                    self.base, "0.1.13", SHA, intentos=1, intervalo=0,
+                    tenant_slug=slug,
+                )
+                self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+                self.assertFalse(resultado["comprobaciones"]["storefront"]["ok"])
+                self.assertIn(
+                    "título público visible",
+                    resultado["comprobaciones"]["storefront"]["detalle"],
+                )
+
+    def test_titulo_storefront_con_texto_en_elementos_anidados_es_visible(self) -> None:
+        slug = self.preparar_storefront()
+        canonical = self.base + "/" + slug
+        html = (
+            '<html><head><link rel="canonical" href="' + canonical
+            + '"></head><body><section class="storefront-hero">'
+            + '<h1>Empresa <span>prueba</span></h1></section>'
+            + '<footer>V 0.1.13</footer></body></html>'
+        )
+        self.server.respuestas["/" + slug] = (200, "text/html", html.encode())
+        resultado = modulo.observar(
+            self.base, "0.1.13", SHA, intentos=1, intervalo=0,
+            tenant_slug=slug,
+        )
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+
     def test_slug_desconocido_200_o_redirect_no_se_acepta(self) -> None:
         slug = self.preparar_storefront()
         desconocido = "/condor-smoke-no-existe-" + SHA[:12]
