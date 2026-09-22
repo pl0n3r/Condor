@@ -1,0 +1,78 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Administrar sitio · {{ storefront.name }} · Condor App{% endblock %}
+
+{% block head %}
+<meta name="robots" content="noindex,nofollow">
+{% endblock %}
+
+{% block body %}
+<div class="storefront-admin">
+    <header class="storefront-admin-nav">
+        <a class="wordmark" href="{{ path('app_admin') }}">Condor App</a>
+        <a href="{{ path('app_admin') }}">Volver al administrador</a>
+    </header>
+
+    <div class="storefront-admin-heading">
+        <span class="eyebrow">Sitio y e-commerce · Empresa activa</span>
+        <h1>Identidad pública</h1>
+        <p>Configura la presentación real de <strong>{{ storefront.name }}</strong>.
+           Esta página no verifica ni modifica DNS o TLS.</p>
+    </div>
+
+    {% if saved %}
+        <output class="storefront-admin-notice">Los cambios del sitio fueron guardados.</output>
+    {% endif %}
+    {% for error in errors %}
+        <p class="alert alert-error" role="alert">{{ error }}</p>
+    {% endfor %}
+
+    <div class="storefront-admin-grid">
+        <section class="storefront-admin-card" aria-labelledby="profile-heading">
+            <span class="eyebrow">Contenido público</span>
+            <h2 id="profile-heading">Perfil del negocio</h2>
+            {% if can_edit %}
+                <form method="post" action="{{ path('app_storefront_admin') }}" class="storefront-admin-form">
+                    <input type="hidden" name="_token" value="{{ csrf_token('storefront_profile') }}">
+                    <label for="storefront-headline">Titular</label>
+                    <input id="storefront-headline" name="headline" maxlength="120"
+                           value="{{ storefront.headline }}" placeholder="Titular opcional">
+                    <label for="storefront-description">Descripción</label>
+                    <textarea id="storefront-description" name="description"
+                              maxlength="500" rows="6"
+                              placeholder="Describe tu empresa">{{ storefront.description }}</textarea>
+                    <button class="button" type="submit">Guardar identidad pública</button>
+                </form>
+            {% else %}
+                <p>Tu permiso permite consultar esta identidad, pero no modificarla.</p>
+                {% if storefront.headline %}<h3>{{ storefront.headline }}</h3>{% endif %}
+                {% if storefront.description %}<p>{{ storefront.description }}</p>{% endif %}
+            {% endif %}
+        </section>
+
+        <section class="storefront-admin-card" aria-labelledby="domains-heading">
+            <span class="eyebrow">Conexión y visibilidad</span>
+            <h2 id="domains-heading">Dominios registrados</h2>
+            <p>El estado muestra registros internos de Condor. La comprobación real de
+               DNS, HTTPS y Hostinger es una operación separada.</p>
+            <dl class="storefront-domain-list">
+                <div>
+                    <dt>Dirección de Condor</dt>
+                    <dd><a href="{{ storefront.canonical }}">{{ storefront.canonical }}</a></dd>
+                </div>
+                {% for domain in domains %}
+                    <div>
+                        <dt>{{ domain.host }}</dt>
+                        <dd>{{ domain.status }}{% if domain.primary %} · Primario registrado{% endif %}</dd>
+                    </div>
+                {% else %}
+                    <div>
+                        <dt>Sin dominio personalizado registrado</dt>
+                        <dd>El sitio funciona mediante su slug bajo Condor.</dd>
+                    </div>
+                {% endfor %}
+            </dl>
+        </section>
+    </div>
+</div>
+{% endblock %}

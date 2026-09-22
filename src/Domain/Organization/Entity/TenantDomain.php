@@ -30,6 +30,20 @@ class TenantDomain
     #[ORM\Column(name: 'is_verified', type: 'boolean')]
     private bool $verified;
 
+    #[ORM\Column(
+        name: 'primary_verified_tenant_id',
+        type: 'string',
+        length: 26,
+        nullable: true,
+        unique: true,
+        insertable: false,
+        updatable: false,
+        columnDefinition: 'VARCHAR(26) GENERATED ALWAYS AS '
+            .'(IF(is_primary = 1 AND is_verified = 1, tenant_id, NULL)) PERSISTENT',
+        generated: 'ALWAYS',
+    )]
+    private ?string $primaryVerifiedTenantId = null;
+
     #[ORM\Column(type: 'datetime_immutable')]
     private DateTimeImmutable $createdAt;
 
@@ -55,6 +69,11 @@ class TenantDomain
     public function hostname(): string
     {
         return $this->hostname;
+    }
+
+    public function isPrimary(): bool
+    {
+        return $this->primary;
     }
 
     public function isVerified(): bool

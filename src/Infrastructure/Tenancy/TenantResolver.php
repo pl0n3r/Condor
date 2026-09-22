@@ -22,11 +22,16 @@ final readonly class TenantResolver
     {
     }
 
+    public static function isPlatformHost(string $host): bool
+    {
+        return in_array(strtolower(rtrim($host, '.')), self::PLATFORM_HOSTS, true);
+    }
+
     public function resolve(Request $request): ?Tenant
     {
         $host = strtolower(rtrim($request->getHost(), '.'));
 
-        if (in_array($host, self::PLATFORM_HOSTS, true)) {
+        if (self::isPlatformHost($host)) {
             $slug = $request->attributes->get('tenant_slug');
             if (!is_string($slug) || $slug === '') {
                 return null;

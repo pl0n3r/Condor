@@ -1,11 +1,22 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}{{ tenant_name }} · Condor App{% endblock %}
+{% block title %}{{ storefront.name }} · Condor App{% endblock %}
+
+{% block head %}
+<link rel="canonical" href="{{ storefront.canonical }}">
+{% if storefront.description %}
+<meta name="description" content="{{ storefront.description }}">
+{% endif %}
+{% endblock %}
 
 {% block body %}
-<section class="hero">
+<section class="hero storefront-hero">
     <span class="eyebrow">Sitio de empresa</span>
-    <h1>{{ tenant_name }}</h1>
-    <p>Este espacio ya está siendo resuelto por Condor mediante su tenant y dominio.</p>
+    <h1>{{ storefront.headline ?: storefront.name }}</h1>
+    {% if storefront.description %}
+        <p>{{ storefront.description }}</p>
+    {% else %}
+        <p>{{ storefront.name }} ya tiene una presencia pública real administrada desde Condor.</p>
+    {% endif %}
 </section>
 {% endblock %}

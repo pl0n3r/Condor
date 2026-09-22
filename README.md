@@ -1,15 +1,15 @@
-# Condor App — Snapshot operativo · candidato V 0.1.12
+# Condor App — Snapshot operativo · candidato V 0.1.13
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** convertir actividad real de plataforma en señales funcionales agregadas, útiles y sin PII para operación y producto.
+> **Objetivo actual:** convertir la base multi-tenant en un storefront público administrable, seguro y preparado para dominios personalizados reales.
 
 <p align="center">
   <strong>Producto:</strong> Condor App ·
   <strong>Runtime:</strong> PHP 8.5 ·
-  <strong>Base:</strong> V 0.1.11 ·
-  <strong>Candidato:</strong> V 0.1.12 ·
+  <strong>Base:</strong> V 0.1.12 ·
+  <strong>Candidato:</strong> V 0.1.13 ·
   <strong>Producción comprobada:</strong> V 0.1.4
 </p>
 
@@ -17,27 +17,28 @@
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base integrada | ✅ **V 0.1.11 EN MAIN** | SHA `346ddabe46b54240326e5d6c62a956464a0ea663` |
-| Candidato actual | 🚧 **V 0.1.12 EN VALIDACIÓN** | Issue #128 / PR #143 |
-| Métricas funcionales | ✅ **IMPLEMENTADAS EN CANDIDATO** | tenant creado, login OK/fallido, autorización denegada y rol modificado |
-| Privacidad | ✅ **MINIMIZADA** | sin correo, IP, contraseña, token ni request body |
-| Producción V 0.1.12 | ⏳ **NO VALIDADA** | requiere merge, exact-main, transición y smoke real |
+| Base integrada | ✅ **V 0.1.12 EN MAIN** | SHA `fa8f7e156f41155a7f99f5b48c7ec60cbd2ab948` |
+| Candidato actual | 🚧 **V 0.1.13 EN VALIDACIÓN** | Issue #130 / PR #136 · [consultar SHA exacto del HEAD](https://github.com/pl0n3r/Condor/commits/trabajo/issue-130) |
+| Storefront por tenant | ✅ **IMPLEMENTADO EN CANDIDATO** | perfil público + SSR real |
+| Dominios personalizados | ✅ **MODELO Y RESOLUCIÓN** | solo dominios verificados resuelven |
+| Producción V 0.1.13 | ⏳ **NO VALIDADA** | DNS/TLS/Hostinger requieren evidencia operativa separada |
 
-## Qué incorpora V 0.1.12
+## Qué incorpora V 0.1.13
 
-- Señales persistentes y agregables con catálogo cerrado.
-- Registro defensivo: un fallo de telemetría no rompe el flujo de negocio.
-- `tenant_created` después de transacción exitosa en onboarding y alta desde Super Admin.
-- Login exitoso/fallido y autorización denegada mediante subscribers.
-- Cambios de roles como señal funcional además de la auditoría de negocio.
-- Agregación de 30 días disponible solo para `ROLE_PLATFORM_OWNER`.
-- Panel visual con estado vacío explícito dentro de `/adminpl0n3r`.
-- Pruebas de aislamiento, persistencia real y ausencia de PII.
+- Identidad pública mínima editable por tenant.
+- Storefront Twig/SSR con datos reales y fallback seguro.
+- Resolución por slug Condor o dominio personalizado verificado.
+- Host desconocido y dominio no verificado fallan cerrado.
+- Canonical basado en el dominio primario efectivo.
+- Administración protegida por `site.view` / `site.update` y CSRF.
+- Aislamiento cross-tenant probado, incluido usuario delegado read-only.
+- Estado interno de dominio visible sin simular DNS/TLS reales.
+- Guía operativa para activación, smoke y recuperación en Hostinger.
 
 ## Qué sigue
 
-- Storefront administrable: #130 / PR #136, a reserializar como siguiente versión después de este candidato.
-- Catálogo Producto + Variante: #131.
+- Activar el primer dominio real únicamente mediante transición operativa autorizada y verificable.
+- Catálogo Producto + Variante: Issue #131.
 - El Roadmap canónico continúa en Issue #1.
 
-> **Regla de estado:** CI verde o merge prueban código, no producción. Solo deploy observado y smoke real permiten declarar **VALIDADO EN PRODUCCIÓN**.
+> **Regla de estado:** “verificado” en Condor no significa “activo en producción”. DNS, TLS, deploy observado y smoke real son evidencias separadas.
