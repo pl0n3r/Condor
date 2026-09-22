@@ -286,6 +286,11 @@ def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> bool:
     if not isinstance(carga, dict) or carga.get("status") != "ok":
         raise ObservacionError("/health no informa estado ok.")
     observada = carga.get("version")
+    observada_sha = carga.get("release_sha")
+    if not isinstance(observada_sha, str) or SHA_PATTERN.fullmatch(observada_sha) is None:
+        raise ObservacionIdentidad(
+            "El SHA observado no tiene un formato válido."
+        )
     if (isinstance(observada, str) and VERSION_PATTERN.fullmatch(observada)
             and tuple(map(int, observada.split("."))) < tuple(map(int, version.split(".")))):
         raise ObservacionDeployPendiente(
@@ -295,7 +300,7 @@ def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> bool:
         raise ObservacionIdentidad(
             "La versión observada no coincide con la esperada."
         )
-    if carga.get("release_sha") != sha:
+    if observada_sha != sha:
         raise ObservacionIdentidad(
             "El SHA observado no coincide con el esperado."
         )
