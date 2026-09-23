@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -101,6 +102,12 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn("trap 'exit 143' TERM", script)
         self.assertIn("umask 077", script)
         self.assertIn('SCHEMA_CHECK_LOG="$(mktemp', script)
+        self.assertIn('CONDOR_SCHEMA_CHECK_TIMEOUT_SECONDS:-60', script)
+        self.assertIn('SCHEMA_CHECK_TIMEOUT_MARKER', script)
+        self.assertIn('SCHEMA_CHECK_WATCHDOG_PID', script)
+        self.assertIn('LOCK_SKIP_STATUS=10', script)
+        self.assertIn('LOCK_ERROR_STATUS=11', script)
+        self.assertIn('exit 3', script)
         self.assertIn("cleanup_schema_check_log()", script)
         self.assertIn("schema_check_status=$?", script)
         self.assertIn("comprobación de esquema falló", script)
@@ -111,6 +118,102 @@ class ToolingContractTests(unittest.TestCase):
         )
         self.assertIn("fallo de base de datos o conectividad", script)
         self.assertNotIn("up-to-date --env=prod --no-interaction >/dev/null 2>&1", script)
+
+    def test_post_deploy_lock_creation_failure_is_not_success(self) -> None:
+        """Un fallo real al publicar/adquirir el guard termina distinto de cero."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            script = scripts / "post-deploy.sh"
+            script.write_text(
+                (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            # ENOTDIR determinista al intentar abrir var/post-deploy.lock.guard.
+            (root / "var").write_text("not-a-directory", encoding="utf-8")
+
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            for name in ("php85", "php"):
+                binary = fake_bin / name
+                binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                binary.chmod(0o755)
+
+            env = dict(os.environ)
+            env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+            result = subprocess.run(
+                ["sh", str(script)],
+                cwd=root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn(
+                "no fue posible adquirir el lock de forma segura",
+                result.stderr,
+            )
+
+    def test_post_deploy_schema_check_timeout_never_touches_cache(self) -> None:
+        """Doctrine colgado vence el límite de pared antes de cualquier caché."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            (root / "var").mkdir()
+            script = scripts / "post-deploy.sh"
+            script.write_text(
+                (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            calls = root / "php-calls.log"
+            fake_php = """#!/bin/sh
+printf '%s\\n' "$*" >> "$FAKE_PHP_LOG"
+case "$*" in
+  *doctrine:migrations:up-to-date*)
+    while :; do :; done
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+"""
+            for name in ("php85", "php"):
+                binary = fake_bin / name
+                binary.write_text(fake_php, encoding="utf-8")
+                binary.chmod(0o755)
+
+            env = dict(os.environ)
+            env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+            env["FAKE_PHP_LOG"] = str(calls)
+            env["CONDOR_SCHEMA_CHECK_TIMEOUT_SECONDS"] = "1"
+            result = subprocess.run(
+                ["sh", str(script)],
+                cwd=root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=6,
+            )
+
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn(
+                "comprobación de esquema excedió 1s",
+                result.stderr,
+            )
+            invoked = calls.read_text(encoding="utf-8")
+            self.assertIn("doctrine:migrations:up-to-date", invoked)
+            self.assertNotIn("cache:clear", invoked)
+            self.assertNotIn("cache:warmup", invoked)
 
     def test_post_deploy_recovery_mutex_is_stable_under_concurrency(self) -> None:
         """El mutex estable impide que un segundo recuperador sustituya al primero."""
