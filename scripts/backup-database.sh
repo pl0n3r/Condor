@@ -43,12 +43,33 @@ mkdir -p "$backup_dir"
 credentials_tmp="$(mktemp "${TMPDIR:-/tmp}/condor-mysql-XXXXXX.cnf")"
 raw_tmp=""
 gzip_tmp=""
+dump_pid=""
 cleanup() {
+  if [ -n "$dump_pid" ] && kill -0 "$dump_pid" 2>/dev/null; then
+    kill -TERM "$dump_pid" 2>/dev/null || true
+    elapsed=0
+    while kill -0 "$dump_pid" 2>/dev/null && [ "$elapsed" -lt 5 ]; do
+      sleep 1
+      elapsed=$((elapsed + 1))
+    done
+    kill -KILL "$dump_pid" 2>/dev/null || true
+    wait "$dump_pid" 2>/dev/null || true
+  fi
+  dump_pid=""
   [ -z "$raw_tmp" ] || rm -f -- "$raw_tmp"
   [ -z "$gzip_tmp" ] || rm -f -- "$gzip_tmp"
   rm -f -- "$credentials_tmp"
 }
-trap cleanup 0 HUP INT TERM
+handle_signal() {
+  signal_status="$1"
+  cleanup
+  trap - 0 HUP INT TERM
+  exit "$signal_status"
+}
+trap cleanup 0
+trap 'handle_signal 129' HUP
+trap 'handle_signal 130' INT
+trap 'handle_signal 143' TERM
 
 "$PHP_BIN" "$script_dir/parse-database-url.php" client-config "$credentials_tmp"
 unset DATABASE_URL
@@ -88,7 +109,19 @@ case "$(basename "$dump_bin")" in
     ;;
 esac
 
-"$dump_bin" --defaults-extra-file="$credentials_tmp" "$@" "$db" > "$raw_tmp"
+dump_status=0
+"$dump_bin" --defaults-extra-file="$credentials_tmp" "$@" "$db" > "$raw_tmp" &
+dump_pid=$!
+if wait "$dump_pid"; then
+  dump_status=0
+else
+  dump_status=$?
+fi
+dump_pid=""
+if [ "$dump_status" -ne 0 ]; then
+  echo "backup-database.sh: el dump falló (código $dump_status)." >&2
+  exit "$dump_status"
+fi
 
 gzip -c "$raw_tmp" > "$gzip_tmp"
 mv -- "$gzip_tmp" "$out"

@@ -72,6 +72,20 @@ if [ "$MIGRATION_TIMEOUT_SECONDS" -gt 900 ]; then
     exit 1
 fi
 
+BACKUP_TIMEOUT_SECONDS="${CONDOR_BACKUP_TIMEOUT_SECONDS:-180}"
+case "$BACKUP_TIMEOUT_SECONDS" in
+    ''|*[!0-9]*|0)
+        echo "post-deploy.sh: CONDOR_BACKUP_TIMEOUT_SECONDS debe ser un entero entre 1 y 900." >&2
+        exit 1
+        ;;
+    *)
+        ;;
+esac
+if [ "$BACKUP_TIMEOUT_SECONDS" -gt 900 ]; then
+    echo "post-deploy.sh: CONDOR_BACKUP_TIMEOUT_SECONDS no puede superar 900." >&2
+    exit 1
+fi
+
 SCHEMA_CHECK_TIMEOUT_SECONDS="${CONDOR_SCHEMA_CHECK_TIMEOUT_SECONDS:-60}"
 case "$SCHEMA_CHECK_TIMEOUT_SECONDS" in
     ''|*[!0-9]*|0)
@@ -96,6 +110,10 @@ MIGRATION_SQL_FILE=""
 MIGRATION_TIMEOUT_MARKER=""
 MIGRATION_PID=""
 MIGRATION_WATCHDOG_PID=""
+BACKUP_LOG=""
+BACKUP_TIMEOUT_MARKER=""
+BACKUP_PID=""
+BACKUP_WATCHDOG_PID=""
 
 FLOCK_BIN=""
 for candidate in /usr/bin/flock flock
@@ -185,6 +203,33 @@ cleanup_migration_log() {
     if [ -n "$MIGRATION_LOG" ]; then
         rm -f -- "$MIGRATION_LOG"
         MIGRATION_LOG=""
+    fi
+}
+
+cleanup_backup_process() {
+    if [ -n "$BACKUP_PID" ] && kill -0 "$BACKUP_PID" 2>/dev/null; then
+        kill -TERM "$BACKUP_PID" 2>/dev/null || true
+        sleep 1
+        kill -KILL "$BACKUP_PID" 2>/dev/null || true
+    fi
+    BACKUP_PID=""
+}
+
+cleanup_backup_watchdog() {
+    if [ -n "$BACKUP_WATCHDOG_PID" ]; then
+        kill -TERM "$BACKUP_WATCHDOG_PID" 2>/dev/null || true
+        BACKUP_WATCHDOG_PID=""
+    fi
+}
+
+cleanup_backup_log() {
+    if [ -n "$BACKUP_TIMEOUT_MARKER" ]; then
+        rm -f -- "$BACKUP_TIMEOUT_MARKER"
+        BACKUP_TIMEOUT_MARKER=""
+    fi
+    if [ -n "$BACKUP_LOG" ]; then
+        rm -f -- "$BACKUP_LOG"
+        BACKUP_LOG=""
     fi
 }
 
@@ -338,21 +383,20 @@ validate_construction_migrations() {
 
     guard_status=0
     sed '/^[[:space:]]*--/d; /^[[:space:]]*$/d' "$MIGRATION_SQL_FILE" | awk '
-        BEGIN { RS = ";" }
+        BEGIN { RS = ";"; count = 0 }
         {
             statement = $0
             gsub(/^[[:space:]]+|[[:space:]]+$/, "", statement)
             if (statement == "") next
+            count++
             normalized = toupper(statement)
 
-            if (normalized ~ /(^|[[:space:]])(DROP|TRUNCATE)([[:space:]]|$)/ ||
-                normalized ~ /(^|[[:space:]])DELETE[[:space:]]+FROM([[:space:]]|$)/ ||
-                normalized ~ /(^|[[:space:]])UPDATE[[:space:]]/ ||
-                normalized ~ /(^|[[:space:]])RENAME[[:space:]]/ ||
+            if (normalized ~ /(^|[^A-Z0-9_])(DROP|TRUNCATE|RENAME|MODIFY|CHANGE)([^A-Z0-9_]|$)/ ||
+                normalized ~ /^DELETE[[:space:]]+FROM([[:space:]]|$)/ ||
+                normalized ~ /^UPDATE[[:space:]]/ ||
                 normalized ~ /CREATE[[:space:]]+OR[[:space:]]+REPLACE/ ||
                 normalized ~ /REPLACE[[:space:]]+INTO/ ||
-                normalized ~ /FOREIGN_KEY_CHECKS[[:space:]]*=[[:space:]]*0/ ||
-                normalized ~ /^ALTER[[:space:]]+TABLE[[:space:]].*[[:space:]](MODIFY|CHANGE)[[:space:]]/) {
+                normalized ~ /FOREIGN_KEY_CHECKS[[:space:]]*=[[:space:]]*0/) {
                 exit 2
             }
 
@@ -366,12 +410,17 @@ validate_construction_migrations() {
 
             exit 3
         }
+        END {
+            if (count == 0) exit 4
+        }
     ' || guard_status=$?
 
     if [ "$guard_status" -ne 0 ]; then
         cleanup_migration_log
         if [ "$guard_status" -eq 2 ]; then
             echo "post-deploy.sh: migración destructiva/contract detectada; requiere autorización explícita. Caché no modificada." >&2
+        elif [ "$guard_status" -eq 4 ]; then
+            echo "post-deploy.sh: Doctrine no produjo SQL validable para las migraciones pendientes; se falla cerrado." >&2
         else
             echo "post-deploy.sh: SQL de migración fuera del allowlist forward/expand-compatible; se falla cerrado." >&2
         fi
@@ -407,19 +456,60 @@ run_pre_migration_backup() {
         return 2
     fi
 
+    cleanup_backup_process
+    cleanup_backup_watchdog
+    cleanup_backup_log
+    BACKUP_LOG="$(mktemp "${TMPDIR:-/tmp}/condor-pre-migration-backup-XXXXXX.log")"
+    BACKUP_TIMEOUT_MARKER="${BACKUP_LOG}.timeout"
+
+    DATABASE_URL="$database_url" sh scripts/backup-database.sh >"$BACKUP_LOG" 2>&1 &
+    BACKUP_PID=$!
+    unset database_url
+
+    (
+        elapsed=0
+        while [ "$elapsed" -lt "$BACKUP_TIMEOUT_SECONDS" ]; do
+            sleep 1
+            if ! kill -0 "$BACKUP_PID" 2>/dev/null; then
+                exit 0
+            fi
+            elapsed=$((elapsed + 1))
+        done
+
+        if kill -0 "$BACKUP_PID" 2>/dev/null; then
+            : >"$BACKUP_TIMEOUT_MARKER"
+            kill -TERM "$BACKUP_PID" 2>/dev/null || true
+            sleep 2
+            kill -KILL "$BACKUP_PID" 2>/dev/null || true
+        fi
+    ) &
+    BACKUP_WATCHDOG_PID=$!
+
     backup_status=0
-    if DATABASE_URL="$database_url" sh scripts/backup-database.sh; then
+    if wait "$BACKUP_PID"; then
         backup_status=0
     else
         backup_status=$?
     fi
-    unset database_url
+    BACKUP_PID=""
+    wait "$BACKUP_WATCHDOG_PID" 2>/dev/null || true
+    BACKUP_WATCHDOG_PID=""
+
+    if [ -f "$BACKUP_TIMEOUT_MARKER" ]; then
+        print_log_tail "$BACKUP_LOG"
+        cleanup_backup_log
+        echo "post-deploy.sh: backup previo a migración excedió ${BACKUP_TIMEOUT_SECONDS}s; migración y caché no modificadas." >&2
+        return 2
+    fi
 
     if [ "$backup_status" -ne 0 ]; then
+        print_log_tail "$BACKUP_LOG"
+        cleanup_backup_log
         echo "post-deploy.sh: backup previo a migración falló (código $backup_status); migración y caché no modificadas." >&2
         return 2
     fi
 
+    cleanup_backup_log
     return 0
 }
 
@@ -600,7 +690,7 @@ acquire_lock() {
     recuperar_lock
 }
 
-trap 'cleanup_schema_check_process; cleanup_schema_check_watchdog; cleanup_schema_check_log; cleanup_migration_process; cleanup_migration_watchdog; cleanup_migration_log; cleanup_lock; cleanup_guard' EXIT
+trap 'cleanup_schema_check_process; cleanup_schema_check_watchdog; cleanup_schema_check_log; cleanup_migration_process; cleanup_migration_watchdog; cleanup_migration_log; cleanup_backup_process; cleanup_backup_watchdog; cleanup_backup_log; cleanup_lock; cleanup_guard' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
