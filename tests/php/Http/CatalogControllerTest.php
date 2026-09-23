@@ -44,6 +44,17 @@ final class CatalogControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(201);
         $productPayload = $this->json($client);
         $productId = $productPayload['product']['id'];
+        self::assertFalse($productPayload['product']['allow_backorder']);
+
+        $client->jsonRequest(
+            'PATCH',
+            '/api/v1/branches/'.$branch->id()
+                .'/catalog/products/'.$productId,
+            ['allow_backorder' => true],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseIsSuccessful();
+        self::assertTrue($this->json($client)['product']['allow_backorder']);
 
         $client->jsonRequest(
             'POST',
@@ -80,6 +91,8 @@ final class CatalogControllerTest extends WebTestCase
         self::assertInstanceOf(Product::class, $storedProduct);
         self::assertSame($tenant->id(), $storedProduct->tenant()->id());
         self::assertSame('Camiseta negra', $catalog['products'][0]['name']);
+        self::assertTrue($catalog['products'][0]['allow_backorder']);
+        self::assertTrue($storedProduct->allowsBackorder());
         self::assertSame(
             'Talla M / Regular',
             $catalog['products'][0]['variants'][0]['name'],

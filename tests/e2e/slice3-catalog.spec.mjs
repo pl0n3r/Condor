@@ -24,21 +24,22 @@ test.describe('Slice 3 — catálogo de productos y variantes', () => {
     await page.getByRole('button', { name: 'Ingresar' }).click();
 
     await expect(page).toHaveURL(/\/admin$/);
+    const catalog = page.locator('#catalog');
     await expect(
-      page.getByRole('heading', { name: 'Catálogo' })
+      catalog.getByRole('heading', { name: 'Catálogo' })
     ).toBeVisible();
 
-    await page.getByRole('button', { name: 'Nuevo producto' }).click();
-    await page.getByLabel('Nombre', { exact: true }).fill(productName);
-    await page.getByLabel('Slug').fill(slug);
-    await page.getByLabel('Descripción').fill(
+    await catalog.getByRole('button', { name: 'Nuevo producto' }).click();
+    await catalog.getByLabel('Nombre', { exact: true }).fill(productName);
+    await catalog.getByLabel('Slug').fill(slug);
+    await catalog.getByLabel('Descripción').fill(
       'Producto creado por la regresión E2E del Slice 3.'
     );
-    await page.getByRole('button', { name: 'Crear producto' }).click();
+    await catalog.getByRole('button', { name: 'Crear producto' }).click();
 
-    await expect(page.getByText('Producto creado.')).toBeVisible();
+    await expect(catalog.getByText('Producto creado.')).toBeVisible();
 
-    let card = page.locator('.catalog-card').filter({
+    let card = catalog.locator('.catalog-card').filter({
       has: page.getByRole('heading', { name: productName }),
     });
     await expect(card).toBeVisible();
@@ -48,14 +49,14 @@ test.describe('Slice 3 — catálogo de productos y variantes', () => {
     await card.getByLabel('Nombre de variante').fill('Variante E2E');
     await card.getByRole('button', { name: 'Crear variante' }).click();
 
-    await expect(page.getByText('Variante creada.')).toBeVisible();
+    await expect(catalog.getByText('Variante creada.')).toBeVisible();
     const variantList = card.locator('.catalog-variant-list');
     await expect(variantList.getByText(sku)).toBeVisible();
     await expect(variantList.getByText('Variante E2E')).toBeVisible();
 
     await page.reload();
 
-    card = page.locator('.catalog-card').filter({
+    card = page.locator('#catalog').locator('.catalog-card').filter({
       has: page.getByRole('heading', { name: productName }),
     });
     await expect(card).toBeVisible();

@@ -98,8 +98,11 @@ final class CatalogController extends AbstractController
         );
         $payload = $this->payload(
             $request,
-            ['name', 'slug', 'description'],
+            ['name', 'slug', 'description', 'allow_backorder'],
         );
+        $allowBackorder = array_key_exists('allow_backorder', $payload)
+            ? $this->requiredBool($payload, 'allow_backorder')
+            : false;
 
         $product = $this->domain(
             fn (): Product => new Product(
@@ -107,6 +110,7 @@ final class CatalogController extends AbstractController
                 $this->requiredString($payload, 'name'),
                 $this->requiredString($payload, 'slug'),
                 $this->nullableString($payload, 'description'),
+                $allowBackorder,
             ),
         );
         $this->entityManager->persist($product);
@@ -146,7 +150,7 @@ final class CatalogController extends AbstractController
         $product = $this->product($productId, $tenant);
         $payload = $this->payload(
             $request,
-            ['name', 'slug', 'description'],
+            ['name', 'slug', 'description', 'allow_backorder'],
         );
         if ($payload === []) {
             throw new UnprocessableEntityHttpException(
@@ -163,6 +167,9 @@ final class CatalogController extends AbstractController
         $description = array_key_exists('description', $payload)
             ? $this->nullableString($payload, 'description')
             : $product->description();
+        $allowBackorder = array_key_exists('allow_backorder', $payload)
+            ? $this->requiredBool($payload, 'allow_backorder')
+            : $product->allowsBackorder();
 
         $this->domain(
             static fn (): null => self::updateProductEntity(
@@ -170,6 +177,7 @@ final class CatalogController extends AbstractController
                 $name,
                 $slug,
                 $description,
+                $allowBackorder,
             ),
         );
         $this->audit(
@@ -446,6 +454,22 @@ final class CatalogController extends AbstractController
     }
 
     /** @param array<string, mixed> $payload */
+    /** @param array<string, mixed> $payload */
+    private function requiredBool(array $payload, string $field): bool
+    {
+        $value = $payload[$field] ?? null;
+        if (!is_bool($value)) {
+            throw new UnprocessableEntityHttpException(
+                sprintf(
+                    'El campo %s es obligatorio y debe ser booleano.',
+                    $field,
+                ),
+            );
+        }
+
+        return $value;
+    }
+
     private function nullableString(
         array $payload,
         string $field,
@@ -511,6 +535,7 @@ final class CatalogController extends AbstractController
             'name' => $product->name(),
             'slug' => $product->slug(),
             'description' => $product->description(),
+            'allow_backorder' => $product->allowsBackorder(),
             'variants' => $variants,
         ];
     }
@@ -530,8 +555,10 @@ final class CatalogController extends AbstractController
         string $name,
         string $slug,
         ?string $description,
+        bool $allowBackorder,
     ): null {
         $product->update($name, $slug, $description);
+        $product->setBackorderAllowed($allowBackorder);
 
         return null;
     }

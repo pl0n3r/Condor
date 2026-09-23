@@ -17,6 +17,7 @@ type Product = {
   name: string;
   slug: string;
   description: string | null;
+  allow_backorder: boolean;
   variants: Variant[];
 };
 
@@ -31,6 +32,7 @@ type ProductDraft = {
   name: string;
   slug: string;
   description: string;
+  allowBackorder: boolean;
 };
 
 type VariantDraft = {
@@ -55,6 +57,7 @@ const emptyProductDraft: ProductDraft = {
   name: '',
   slug: '',
   description: '',
+  allowBackorder: false,
 };
 
 export function CatalogManagement({
@@ -144,6 +147,7 @@ export function CatalogManagement({
           name: productDraft.name,
           slug: productDraft.slug,
           description: productDraft.description.trim() || null,
+          allow_backorder: productDraft.allowBackorder,
         }),
       });
 
@@ -361,8 +365,8 @@ export function CatalogManagement({
           <span className="eyebrow">Productos</span>
           <h2 id="catalog-title">Catálogo</h2>
           <p className="muted">
-            Define productos y variantes. Inventario y precios se
-            administrarán en slices separados.
+            Define productos, variantes y su política de backorder.
+            Las existencias se gestionan en la sección Inventario.
           </p>
         </div>
         {canCreate && !productEditorOpen && (
@@ -458,6 +462,20 @@ export function CatalogManagement({
                 }))}
               />
             </label>
+            <label className="field catalog-form-wide">
+              <span>Disponibilidad</span>
+              <span>
+                <input
+                  type="checkbox"
+                  checked={productDraft.allowBackorder}
+                  onChange={(event) => setProductDraft((current) => ({
+                    ...current,
+                    allowBackorder: event.target.checked,
+                  }))}
+                />
+                {' '}Permitir backorder cuando no haya stock disponible
+              </span>
+            </label>
           </div>
 
           <button className="button" type="submit" disabled={busy}>
@@ -517,6 +535,9 @@ export function CatalogManagement({
                   {product.description && (
                     <p className="muted">{product.description}</p>
                   )}
+                  <p className="muted">
+                    Backorder: {product.allow_backorder ? 'permitido' : 'desactivado'}
+                  </p>
                 </div>
                 <div className="catalog-actions">
                   {canUpdate && (
@@ -530,6 +551,7 @@ export function CatalogManagement({
                           name: product.name,
                           slug: product.slug,
                           description: product.description ?? '',
+                          allowBackorder: product.allow_backorder,
                         });
                         setProductEditorOpen(true);
                         setVariantDraft(null);

@@ -1,68 +1,78 @@
-# Condor App — Snapshot operativo · candidato V 0.1.21
+# Condor App — Snapshot operativo · candidato V 0.1.22
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** cerrar la deriva código/esquema observada tras V 0.1.20 y hacer que la observación automática espere de forma acotada el deploy real de Hostinger antes de reportar un falso NO_OBSERVADO.
+> **Objetivo actual:** cerrar Slice 4 — Inventario con stock por variante + fuente, movimientos auditables y transferencias atómicas, preservando aislamiento por tenant, entidad legal y sede.
 
 <p align="center">
-  <strong>Base:</strong> V 0.1.20 · main `1f8b2262` ·
-  <strong>Candidato:</strong> V 0.1.21 ·
-  <strong>Producción comprobada:</strong> V 0.1.20 · `1f8b22625f28de64c591c8083098c093e796e673` · DEPLOY_OBSERVED · 2026-09-22 19:22 UTC
+  <strong>Base integrada:</strong> V 0.1.21 · main actual `38c06714` ·
+  <strong>Candidato:</strong> V 0.1.22 ·
+  <strong>Rama:</strong> `trabajo/issue-171`
 </p>
 
 ## Estado del deploy
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base integrada | ✅ **V 0.1.20 / EXACT-MAIN** | SHA `1f8b22625f28de64c591c8083098c093e796e673` |
-| Producción base | 🚧 **DEPLOY_OBSERVED** | V 0.1.20 · SHA `1f8b22625f28de64c591c8083098c093e796e673` · observación manual 2026-09-22 19:22 UTC · Roadmap #1 comentario `5782612742` |
-| Storefront base | ❌ **DERIVA DE ESQUEMA DETECTADA** | `/marcela-arias-tienda` devolvió 500 con migraciones pendientes |
-| Candidato actual | 🚧 **V 0.1.21 EN VALIDACIÓN** | Issue #173 / PR #174 |
-| CI de rama | ✅ **VERDE ANTES DEL HEAD FINAL** | debe repetirse tras cualquier corrección |
-| SonarQube | ✅ **0 ISSUES ANTES DEL HEAD FINAL** | debe repetirse tras cualquier corrección |
-| Producción V 0.1.21 | ⏳ **NO APLICA AÚN** | solo se observa después del merge/deploy |
+| Base integrada | ✅ **V 0.1.21 / MAIN ACTUAL** | SHA `38c06714358656a83948e969239f687f7ad40de9` · #176 es documental sobre la release V 0.1.21; tag/Release `v0.1.21` siguen apuntando al commit de release `b743ce32534a9a6619b1ee0328cc809b53efe88d` |
+| Producción V 0.1.21 | ⛔ **NO OBSERVADA / ESTADO SEPARADO** | el observador de `b743ce32534a9a6619b1ee0328cc809b53efe88d` terminó con HTTP 500; la última identidad confirmada manualmente sigue siendo V 0.1.20. Una eventual reconciliación de esquema requiere autorización humana explícita |
+| Inventario sincronizado | ✅ **BASE ACTUAL SINCRONIZADA** | merge técnico `a41e07f46bc44b71139470db86d39030165d13a9` incorpora `main` `38c06714358656a83948e969239f687f7ad40de9` · `behind_by=0` |
+| Candidato actual | 🚧 **V 0.1.22 EN VALIDACIÓN EXACT-HEAD** | Issue #171 / PR #172 |
+| CI/Sonar del head final | ⏳ **EXACT-HEAD OBLIGATORIO** | todos los gates deben terminar sobre el último commit del candidato después de cualquier corrección documental o funcional |
+| CodeRabbit | ⏳ **EXACT-HEAD OBLIGATORIO** | la revisión final debe corresponder al mismo HEAD que CI y Sonar antes de sacar el PR de draft |
 
-## Qué incorpora V 0.1.21
+## Qué incorpora V 0.1.22
 
-- observador automático trata cualquier versión anterior con formato válido y SHA bien formado como `deploy_pendiente` y espera hasta 20 minutos, sin asumir que ese SHA pertenezca a una release conocida;
-- versiones futuras, SHA malformados y un SHA distinto para la misma versión fallan inmediatamente;
-- assets JS/CSS tienen presupuesto separado de 4 MiB;
-- se acepta el MIME legacy `application/x-javascript` servido por Hostinger;
-- comentarios del Roadmap describen la causa real de observación, sin asumir deploy pendiente cuando no corresponde;
-- `scripts/post-deploy.sh` detecta esquema pendiente y falla cerrado antes de limpiar/calentar caché;
-- `/health` devuelve la identidad pública de release (`status`, `version`, `release_sha`) y `schema_up_to_date`, sin exponer detalles internos de migraciones; el observador exige el booleano de esquema para declarar `VALIDATED_IN_PRODUCTION`;
-- el post-deploy usa lock con token/PID de propietario, periodo de gracia para locks incompletos y recuperación segura de locks huérfanos;
-- D-044 formaliza comprobar esquema → limpiar caché → calentar caché cuando el esquema ya está al día;
-- toda migración productiva —destructiva o no— requiere autorización humana explícita y una operación separada;
-- regresiones unitarias y contract tests fijan espera de deploy, MIME/assets y orden/locking del post-deploy.
+- fuentes de inventario por sede o lógicas, con titularidad explícita por `LegalEntity`;
+- stock actual por `ProductVariant + InventorySource`;
+- movimientos inmutables/auditables para ajustes y transferencias;
+- transferencias atómicas con locking pesimista, idempotencia y rechazo de cruces entre entidades legales;
+- backorder configurable por producto y desactivado por defecto;
+- API administrativa branch-scoped con CSRF y permisos `inventory.*`;
+- aislamiento server-side por tenant, entidad legal y sede;
+- ciclo de vida seguro de fuentes, incluida desactivación serializada frente a mutaciones concurrentes;
+- UI administrativa responsive para fuentes, saldos, ajustes, transferencias e historial;
+- estados loading, empty, error y permission-denied reales;
+- pruebas de dominio, HTTP, MariaDB y Playwright del flujo crítico;
+- bundle administrativo reproducible generado con Vite.
 
-## Archivos del deploy
+## Invariantes del slice
 
-- `.github/workflows/observar-deploy-automatico.yml`
-- `scripts/observar_release.py`
-- `scripts/post-deploy.sh`
-- `tests/test_observar_release.py`
-- `tests/contract/test_tooling_contract.py`
-- `ESPECIFICACIONES.md`
-- `config/version.php`
-- `package.json`
-- `package-lock.json`
-- `README.md`
+- una fuente de sede pertenece a la misma entidad legal que su sede;
+- una fuente lógica declara entidad legal efectiva;
+- una transferencia simple solo ocurre entre fuentes de la misma entidad legal;
+- una operación repetida con la misma clave idempotente no duplica efectos;
+- una mutación nueva sobre fuente inactiva se rechaza incluso bajo carrera concurrente;
+- no existe fallback automático de stock entre sedes;
+- producción nunca se migra automáticamente desde CI, deploy, smoke ni observador.
+
+## Archivos principales
+
+- `src/Application/Inventory/InventoryService.php`
+- `src/Domain/Inventory/Entity/*`
+- `src/Http/Controller/InventoryController.php`
+- `frontend/admin/InventoryManagement.tsx`
+- `frontend/admin/AdminApp.tsx`
+- `migrations/Version20260922184500.php`
+- `tests/php/Application/Inventory/InventoryServiceTest.php`
+- `tests/php/Http/InventoryControllerTest.php`
+- `tests/e2e/slice4-inventory.spec.mjs`
+- `public/build/admin.js`
 
 ## Validación requerida
 
-- CI, SonarQube y CodeRabbit deben estar **terminales sobre el SHA final exacto**, sin gates fallidos ni hallazgos válidos pendientes;
+- CI, SonarQube y CodeRabbit terminales sobre el SHA final exacto, sin gates fallidos ni findings válidos pendientes;
+- PR fuera de draft únicamente después de fijar el snapshot V 0.1.22 y obtener evidencia exact-head;
 - squash merge y exact-main;
-- tag anotado + GitHub Release `v0.1.21`;
-- observador post-merge debe esperar el deploy real en vez de emitir NO_OBSERVADO prematuro;
-- verificar que el cron post-deploy detecta migraciones pendientes y no altera caché;
-- ejecutar la migración productiva únicamente mediante una operación separada después de autorización explícita;
-- repetir el smoke del storefront representativo y solo entonces evaluar `VALIDATED_IN_PRODUCTION`.
+- tag anotado + GitHub Release `v0.1.22`;
+- observación post-merge de la nueva release como estado separado de la validación productiva;
+- cualquier migración productiva necesaria requiere autorización humana explícita y una operación separada.
 
 ## Estado inmediato
 
-- **V 0.1.21:** candidato en validación exact-head; merge, deploy y validación productiva permanecen como estados separados.
+- **V 0.1.22:** candidato serial activo en validación exact-head.
+- **Producción:** la última identidad confirmada manualmente sigue siendo V 0.1.20; V 0.1.21 quedó `NO_OBSERVADO` por HTTP 500. Ninguna migración o reconciliación productiva queda autorizada por este candidato.
 - La planificación posterior vive exclusivamente en el Roadmap canónico #1.
 
 ## Referencias
@@ -71,4 +81,4 @@
 - [ESPECIFICACIONES.md](./ESPECIFICACIONES.md)
 - Roadmap canónico: Issue #1
 
-> **Regla de estado:** detectar deriva de esquema es automático; mutar producción no. Una migración requiere autorización explícita y evidencia separada antes de poder declarar VALIDATED_IN_PRODUCTION.
+> **Regla de estado:** código integrado, deploy observado, esquema reconciliado y producción validada son evidencias distintas. Una migración productiva exige autorización explícita.
