@@ -294,11 +294,9 @@ def obtener_estado_protegido(origen: str, ruta: str, timeout: float) -> int:
     )
     try:
         with build_opener(NoRedirigir).open(solicitud, timeout=timeout) as respuesta:
-            if respuesta.status != 200:
-                raise ObservacionError(
-                    f"HTTP {respuesta.status}; respuesta inesperada en superficie protegida."
-                )
-            return respuesta.status
+            raise ObservacionError(
+                f"HTTP {respuesta.status}; respuesta pública inesperada en superficie protegida."
+            )
     except HTTPError as error:
         if error.code in {302, 303, 307, 308, 401, 403}:
             return error.code
