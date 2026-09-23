@@ -97,6 +97,11 @@ class InventoryTransfer
                 'La cantidad de la transferencia debe ser mayor que cero.',
             );
         }
+        if ($quantity > 2147483647) {
+            throw new DomainException(
+                'La cantidad de la transferencia excede el rango permitido.',
+            );
+        }
 
         $idempotencyKey = trim($idempotencyKey);
         if ($idempotencyKey === '' || mb_strlen($idempotencyKey, 'UTF-8') > 120) {

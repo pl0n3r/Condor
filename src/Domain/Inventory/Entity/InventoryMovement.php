@@ -98,6 +98,16 @@ class InventoryMovement
         if ($delta === 0) {
             throw new DomainException('El movimiento de inventario no puede ser cero.');
         }
+        if (
+            $delta > 2147483647
+            || $delta < -2147483648
+            || $balanceAfter > 2147483647
+            || $balanceAfter < -2147483648
+        ) {
+            throw new DomainException(
+                'El movimiento excede el rango permitido por inventario.',
+            );
+        }
 
         if ($idempotencyKey !== null) {
             $idempotencyKey = trim($idempotencyKey);

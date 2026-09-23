@@ -56,6 +56,18 @@ final class InventoryDomainTest extends TestCase
         self::assertSame(1, $balance->version());
     }
 
+    public function testBalanceRejectsInitialQuantityOutsideDatabaseRange(): void
+    {
+        [$tenant, $source, $variant] = $this->fixture();
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(
+            'El saldo inicial excede el rango permitido por inventario.',
+        );
+
+        new InventoryBalance($tenant, $source, $variant, 2147483648);
+    }
+
     public function testTransferRejectsSameSourceAndZeroQuantity(): void
     {
         [$tenant, $source, $variant] = $this->fixture();
@@ -95,6 +107,53 @@ final class InventoryDomainTest extends TestCase
         );
     }
 
+
+    public function testTransferRejectsQuantityOutsideDatabaseRange(): void
+    {
+        [$tenant, $source, $variant] = $this->fixture();
+        $destination = new InventorySource(
+            $tenant,
+            $source->legalEntity(),
+            'Bodega límite',
+            'bodega-limite',
+            InventorySource::TYPE_LOGICAL,
+        );
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(
+            'La cantidad de la transferencia excede el rango permitido.',
+        );
+
+        new InventoryTransfer(
+            $tenant,
+            $variant,
+            $source,
+            $destination,
+            2147483648,
+            null,
+            'transfer-overflow',
+        );
+    }
+
+    public function testMovementRejectsValuesOutsideDatabaseRange(): void
+    {
+        [$tenant, $source, $variant] = $this->fixture();
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(
+            'El movimiento excede el rango permitido por inventario.',
+        );
+
+        new InventoryMovement(
+            $tenant,
+            $source,
+            $variant,
+            InventoryMovement::TYPE_ADJUSTMENT_IN,
+            2147483648,
+            2147483648,
+            null,
+        );
+    }
 
     public function testTransferRejectsDifferentLegalEntities(): void
     {

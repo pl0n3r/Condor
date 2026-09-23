@@ -61,6 +61,10 @@ class InventoryBalance
         int $quantity = 0,
     ) {
         self::assertTenant($tenant, $source, $variant);
+        self::assertDatabaseInteger(
+            $quantity,
+            'El saldo inicial excede el rango permitido por inventario.',
+        );
         if ($quantity < 0 && !$variant->product()->allowsBackorder()) {
             throw new DomainException(
                 'El saldo inicial no puede ser negativo sin backorder habilitado.',
@@ -118,18 +122,16 @@ class InventoryBalance
             throw new DomainException('El movimiento de inventario no puede ser cero.');
         }
 
-        if ($delta > 2147483647 || $delta < -2147483648) {
-            throw new DomainException(
-                'La cantidad excede el rango permitido por inventario.',
-            );
-        }
+        self::assertDatabaseInteger(
+            $delta,
+            'La cantidad excede el rango permitido por inventario.',
+        );
 
         $next = $this->quantity + $delta;
-        if ($next > 2147483647 || $next < -2147483648) {
-            throw new DomainException(
-                'El saldo excede el rango permitido por inventario.',
-            );
-        }
+        self::assertDatabaseInteger(
+            $next,
+            'El saldo excede el rango permitido por inventario.',
+        );
         if ($next < 0 && !$this->variant->product()->allowsBackorder()) {
             throw new DomainException(
                 'Stock insuficiente: el producto no permite backorder.',
@@ -139,6 +141,15 @@ class InventoryBalance
         $this->quantity = $next;
         $this->version++;
         $this->updatedAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    }
+
+    private static function assertDatabaseInteger(
+        int $value,
+        string $message,
+    ): void {
+        if ($value > 2147483647 || $value < -2147483648) {
+            throw new DomainException($message);
+        }
     }
 
     private static function assertTenant(
