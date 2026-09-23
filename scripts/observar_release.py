@@ -627,23 +627,28 @@ def observar(
             "clase": clase,
         }
 
-    def comprobar_centro_control() -> str:
-        codigo = obtener_estado_protegido(origen, "/adminpl0n3r", timeout)
-        return (
-            f"HTTP {codigo}; entrada protegida del centro de control responde sin 5xx."
-        )
+    for nombre, ruta, superficie in [
+        ("centro_control", "/adminpl0n3r", "entrada del centro de control"),
+        ("centro_control_api", "/adminpl0n3r/api/context", "API de contexto del centro de control"),
+    ]:
+        def comprobar_superficie_protegida(
+            ruta_actual: str = ruta,
+            superficie_actual: str = superficie,
+        ) -> str:
+            codigo = obtener_estado_protegido(origen, ruta_actual, timeout)
+            return f"HTTP {codigo}; {superficie_actual} responde sin 5xx."
 
-    ok, detalle, intento, clase = ejecutar_con_reintentos(
-        comprobar_centro_control,
-        intentos=intentos,
-        intervalo=intervalo,
-    )
-    evidencias["centro_control"] = {
-        "ok": ok,
-        "detalle": detalle,
-        "intento": intento,
-        "clase": clase,
-    }
+        ok, detalle, intento, clase = ejecutar_con_reintentos(
+            comprobar_superficie_protegida,
+            intentos=intentos,
+            intervalo=intervalo,
+        )
+        evidencias[nombre] = {
+            "ok": ok,
+            "detalle": detalle,
+            "intento": intento,
+            "clase": clase,
+        }
 
     for nombre, ruta in [
         ("css_publico", "/app.css"),
