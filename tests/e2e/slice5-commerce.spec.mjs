@@ -55,7 +55,9 @@ test.describe('Slice 5 — clientes y precios', () => {
     await commerce.getByLabel('Slug de categoría').fill(categorySlug);
     await commerce.getByRole('button', { name: 'Crear categoría' }).click();
     await expect(commerce.getByText('Categoría creada.')).toBeVisible();
-    await expect(commerce.getByText(categoryName)).toBeVisible();
+    await expect(
+      commerce.getByRole('strong', { name: categoryName })
+    ).toBeVisible();
 
     await commerce.getByLabel('Nombre del cliente').fill(customerName);
     await commerce.getByLabel('Correo del cliente').fill(customerEmail);

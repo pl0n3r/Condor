@@ -96,12 +96,11 @@ final class CommerceControllerTest extends WebTestCase
                 .'&customer='.$customerId,
         );
         self::assertResponseStatusCodeSame(422);
-        self::assertStringContainsString(
-            'no tiene precio',
-            mb_strtolower(
-                (string) ($this->json($client)['message'] ?? ''),
-                'UTF-8',
-            ),
+        $validation = $this->json($client);
+        self::assertSame('validation_error', $validation['error']);
+        self::assertSame(
+            'Los datos enviados no son válidos.',
+            $validation['message'],
         );
 
         $client->jsonRequest(
