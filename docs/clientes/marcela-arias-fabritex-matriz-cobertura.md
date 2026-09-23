@@ -320,7 +320,7 @@ La plantilla acelera la implantación, pero todos esos elementos continúan sien
 
 | RF | Cobertura | Traducción correcta a Condor |
 | --- | --- | --- |
-| RF-094 | **ADAPTADOR** | Definir contrato `AttendanceDeviceAdapter`/importación; cada marca/protocolo de huellero es plugin/adaptador. |
+| RF-094 | **ADAPTADOR** | Definir contrato `AttendanceDeviceAdapter`/importación; cada marca/protocolo de huellero es plugin/adaptador. Por defecto Condor ingiere solo eventos mínimos de asistencia y no almacena plantillas/imágenes biométricas. |
 | RF-095 | **NUEVO** | Módulo Time & Attendance con marcaciones crudas inmutables y jornadas derivadas. |
 | RF-096 | **NUEVO** | Reglas configurables de horarios, tolerancias, tardanzas, ausencias y excepciones. |
 | RF-097 | **NUEVO / ANALÍTICA** | Reportes por empleado/periodo derivados de marcaciones y reglas vigentes. |
