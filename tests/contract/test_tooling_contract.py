@@ -67,8 +67,8 @@ class ToolingContractTests(unittest.TestCase):
 
         lock_index = script.index('LOCK_FILE="var/post-deploy.lock"')
         main_check_index = script.index(
-            '"$PHP_BIN" bin/console doctrine:migrations:up-to-date',
-            script.index("schema_check_status=0"),
+            "if run_schema_check; then",
+            script.index("# D-053 / AGENTES.md §10"),
         )
         migrate_call_index = script.index(
             "if run_construction_migrations; then",
@@ -198,7 +198,7 @@ class ToolingContractTests(unittest.TestCase):
         )
         self.assertEqual(pending.returncode, 2, pending.stderr)
         self.assertIn(
-            "esquema pendiente en construction; ejecutando migraciones versionadas",
+            "esquema pendiente en construction; validando migraciones versionadas",
             pending.stderr,
         )
         self.assertIn("doctrine:migrations:migrate", pending_calls)
@@ -419,6 +419,14 @@ case "$*" in
   *doctrine:migrations:up-to-date*)
     printf '%s\\n' "$FAKE_SCHEMA_OUTPUT" >&2
     exit "$FAKE_SCHEMA_STATUS"
+    ;;
+  *doctrine:migrations:migrate*"--dry-run"*)
+    for arg in "$@"; do
+      case "$arg" in
+        --write-sql=*) printf '%s\\n' 'CREATE TABLE safe_table (id INT);' > "${arg#--write-sql=}" ;;
+      esac
+    done
+    exit 0
     ;;
   *)
     exit 0
