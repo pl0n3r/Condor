@@ -9,6 +9,8 @@ use App\Domain\Catalog\Entity\ProductVariant;
 use App\Domain\Commerce\Entity\CommercialCategory;
 use App\Domain\Commerce\Entity\Customer;
 use App\Domain\Commerce\Entity\PriceList;
+use App\Domain\Commerce\Entity\PriceRule;
+use App\Domain\Commerce\Entity\VariantPrice;
 use App\Domain\Identity\Entity\BranchRoleAssignment;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\Role;
@@ -596,6 +598,100 @@ final class CommerceControllerTest extends WebTestCase
                 1000,
             ],
         );
+    }
+
+    public function testDeletingTenantCascadesCommercialGraph(): void
+    {
+        $em = $this->entityManager();
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+        $tenant = new Tenant(
+            'Empresa cascade '.$suffix,
+            'empresa-cascade-'.$suffix,
+        );
+        $category = new CommercialCategory(
+            $tenant,
+            'Mayorista cascade',
+            'mayorista-cascade-'.$suffix,
+        );
+        $list = new PriceList(
+            $tenant,
+            'Lista cascade',
+            'lista-cascade-'.$suffix,
+        );
+        $category->assignPreferredPriceList($list);
+        $customer = new Customer(
+            $tenant,
+            'Cliente cascade',
+            commercialCategory: $category,
+        );
+        $product = new Product(
+            $tenant,
+            'Producto cascade',
+            'producto-cascade-'.$suffix,
+        );
+        $variant = new ProductVariant(
+            $tenant,
+            $product,
+            'CASCADE-'.strtoupper($suffix),
+            'Única',
+        );
+        $variantPrice = new VariantPrice(
+            $tenant,
+            $list,
+            $variant,
+            100000,
+        );
+        $rule = new PriceRule(
+            $tenant,
+            $list,
+            'Regla cascade',
+            1,
+            PriceRule::TYPE_FIXED,
+            1000,
+            $category,
+        );
+
+        foreach ([
+            $tenant,
+            $category,
+            $list,
+            $customer,
+            $product,
+            $variant,
+            $variantPrice,
+            $rule,
+        ] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
+
+        $tenantId = $tenant->id();
+        $em->clear();
+
+        self::assertSame(
+            1,
+            $em->getConnection()->executeStatement(
+                'DELETE FROM condor_tenant WHERE id = ?',
+                [$tenantId],
+            ),
+        );
+
+        foreach ([
+            'condor_customer',
+            'condor_commercial_category',
+            'condor_price_rule',
+            'condor_variant_price',
+            'condor_price_list',
+        ] as $table) {
+            self::assertSame(
+                0,
+                (int) $em->getConnection()->fetchOne(
+                    'SELECT COUNT(*) FROM '.$table.' WHERE tenant_id = ?',
+                    [$tenantId],
+                ),
+                $table.' debe borrarse por cascada junto con el tenant.',
+            );
+        }
     }
 
     private function entityManager(): EntityManagerInterface

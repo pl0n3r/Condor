@@ -76,11 +76,15 @@ test.describe('Slice 5 — clientes y precios', () => {
     await commerce.getByRole('button', { name: 'Crear lista' }).click();
     await expect(commerce.getByText('Lista creada.')).toBeVisible();
 
-    await commerce.getByLabel('Lista preferida de ' + categoryName)
-      .selectOption({ label: listName });
+    const preferredList = commerce.getByLabel(
+      'Lista preferida de ' + categoryName
+    );
+    await preferredList.focus();
+    await preferredList.selectOption({ label: listName });
     await expect(
       commerce.getByText('Lista preferida actualizada.')
     ).toBeVisible();
+    await expect(preferredList).toBeFocused();
 
     const priceForm = commerce.locator('form.catalog-card').filter({
       has: page.getByRole('heading', { name: 'Precio por variante' }),

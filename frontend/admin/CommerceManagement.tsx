@@ -138,7 +138,9 @@ export function CommerceManagement({
       return;
     }
 
-    setState({ status: 'loading' });
+    setState((current) => (
+      current.status === 'ready' ? current : { status: 'loading' }
+    ));
     try {
       const customerRequest = canViewCustomers
         ? fetch(customersPath(branchId), {
@@ -512,7 +514,7 @@ export function CommerceManagement({
                         <select
                           aria-label={'Lista preferida de ' + category.name}
                           value={category.preferred_price_list_id ?? ''}
-                          disabled={!canUpdatePricing || busy}
+                          disabled={!canUpdatePricing}
                           onChange={(event) => void assignPreferredList(
                             category,
                             event.target.value,

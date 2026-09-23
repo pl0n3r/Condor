@@ -50,6 +50,11 @@ final class RuntimeEnvironmentTest extends TestCase
         parent::tearDown();
     }
 
+    public function testBootstrapUsesUtcTimezone(): void
+    {
+        self::assertSame('UTC', date_default_timezone_get());
+    }
+
     public function testGeneratesAndReusesPersistentRuntimeSecret(): void
     {
         RuntimeEnvironment::prepare($this->projectDir);

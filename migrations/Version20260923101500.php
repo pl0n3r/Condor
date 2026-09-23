@@ -60,11 +60,11 @@ final class Version20260923101500 extends AbstractMigration // NOSONAR -- nombre
                 CONSTRAINT FK_CUSTOMER_CATEGORY
                     FOREIGN KEY (commercial_category_id)
                     REFERENCES condor_commercial_category (id)
-                    ON DELETE RESTRICT,
+                    ON DELETE CASCADE,
                 CONSTRAINT FK_CUSTOMER_CATEGORY_SCOPE
                     FOREIGN KEY (tenant_id, commercial_category_id)
                     REFERENCES condor_commercial_category (tenant_id, id)
-                    ON DELETE RESTRICT
+                    ON DELETE CASCADE
             ) DEFAULT CHARACTER SET utf8mb4
               COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
             SQL);
@@ -94,10 +94,10 @@ final class Version20260923101500 extends AbstractMigration // NOSONAR -- nombre
             'ALTER TABLE condor_commercial_category '
             .'ADD CONSTRAINT FK_COMM_CATEGORY_PRICE_LIST '
             .'FOREIGN KEY (preferred_price_list_id) REFERENCES condor_price_list (id) '
-            .'ON DELETE RESTRICT, '
+            .'ON DELETE CASCADE, '
             .'ADD CONSTRAINT FK_COMM_CATEGORY_PRICE_LIST_SCOPE '
             .'FOREIGN KEY (tenant_id, preferred_price_list_id) '
-            .'REFERENCES condor_price_list (tenant_id, id) ON DELETE RESTRICT',
+            .'REFERENCES condor_price_list (tenant_id, id) ON DELETE CASCADE',
         );
 
         $this->addSql(<<<'SQL'
@@ -170,11 +170,11 @@ final class Version20260923101500 extends AbstractMigration // NOSONAR -- nombre
                 CONSTRAINT FK_PRICE_RULE_CATEGORY
                     FOREIGN KEY (commercial_category_id)
                     REFERENCES condor_commercial_category (id)
-                    ON DELETE RESTRICT,
+                    ON DELETE CASCADE,
                 CONSTRAINT FK_PRICE_RULE_CATEGORY_SCOPE
                     FOREIGN KEY (tenant_id, commercial_category_id)
                     REFERENCES condor_commercial_category (tenant_id, id)
-                    ON DELETE RESTRICT,
+                    ON DELETE CASCADE,
                 CONSTRAINT CHK_PRICE_RULE_DISCOUNT
                     CHECK (discount_value >= 0),
                 CONSTRAINT CHK_PRICE_RULE_TYPE

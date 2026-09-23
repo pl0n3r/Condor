@@ -21,7 +21,7 @@ class Customer extends CommercialItem
         name: 'commercial_category_id',
         referencedColumnName: 'id',
         nullable: true,
-        onDelete: 'RESTRICT',
+        onDelete: 'CASCADE',
     )]
     private ?CommercialCategory $commercialCategory;
 

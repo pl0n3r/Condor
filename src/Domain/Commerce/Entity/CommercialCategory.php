@@ -27,7 +27,7 @@ class CommercialCategory extends NamedCommercialItem
         name: 'preferred_price_list_id',
         referencedColumnName: 'id',
         nullable: true,
-        onDelete: 'RESTRICT',
+        onDelete: 'CASCADE',
     )]
     private ?PriceList $preferredPriceList = null;
 
