@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Inventory\Entity;
 
 use App\Domain\Catalog\Entity\ProductVariant;
+use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use App\Shared\Id\UlidFactory;
 use DateTimeImmutable;
@@ -15,6 +16,7 @@ use DomainException;
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_inventory_transfer')]
 #[ORM\UniqueConstraint(name: 'uniq_inventory_transfer_tenant_id', columns: ['tenant_id', 'id'])]
+#[ORM\UniqueConstraint(name: 'uniq_inventory_transfer_tenant_legal_id', columns: ['tenant_id', 'legal_entity_id', 'id'])]
 #[ORM\UniqueConstraint(name: 'uniq_inventory_transfer_tenant_key', columns: ['tenant_id', 'idempotency_key'])]
 class InventoryTransfer
 {
@@ -27,6 +29,10 @@ class InventoryTransfer
     #[ORM\ManyToOne(targetEntity: Tenant::class)]
     #[ORM\JoinColumn(name: 'tenant_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private Tenant $tenant;
+
+    #[ORM\ManyToOne(targetEntity: LegalEntity::class)]
+    #[ORM\JoinColumn(name: 'legal_entity_id', referencedColumnName: 'id', nullable: false, onDelete: 'RESTRICT')]
+    private LegalEntity $legalEntity;
 
     #[ORM\ManyToOne(targetEntity: ProductVariant::class)]
     #[ORM\JoinColumn(name: 'variant_id', referencedColumnName: 'id', nullable: false, onDelete: 'RESTRICT')]
@@ -73,6 +79,11 @@ class InventoryTransfer
                 'La transferencia, variante y fuentes deben pertenecer al mismo tenant.',
             );
         }
+        if ($sourceFrom->legalEntity()->id() !== $sourceTo->legalEntity()->id()) {
+            throw new DomainException(
+                'Una transferencia interna no puede cruzar entidades legales.',
+            );
+        }
         if ($sourceFrom->id() === $sourceTo->id()) {
             throw new DomainException(
                 'La fuente de origen y destino deben ser diferentes.',
@@ -93,6 +104,7 @@ class InventoryTransfer
 
         $this->id = UlidFactory::new();
         $this->tenant = $tenant;
+        $this->legalEntity = $sourceFrom->legalEntity();
         $this->variant = $variant;
         $this->sourceFrom = $sourceFrom;
         $this->sourceTo = $sourceTo;
@@ -110,6 +122,11 @@ class InventoryTransfer
     public function tenant(): Tenant
     {
         return $this->tenant;
+    }
+
+    public function legalEntity(): LegalEntity
+    {
+        return $this->legalEntity;
     }
 
     public function variant(): ProductVariant
