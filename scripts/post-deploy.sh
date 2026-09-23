@@ -125,10 +125,16 @@ acquire_guard() {
     # Mutex estable: este archivo nunca se renombra ni elimina. De este modo,
     # dos recuperadores no pueden inspeccionar un guard viejo y después mover
     # accidentalmente el guard nuevo creado por el otro proceso.
-    if ! exec 9>"$LOCK_GUARD_FILE"; then
-        echo "post-deploy.sh: no fue posible abrir el archivo guard del lock." >&2
+    lock_dir="$(dirname "$LOCK_GUARD_FILE")"
+    if ! mkdir -p -- "$lock_dir" 2>/dev/null; then
+        echo "post-deploy.sh: no fue posible preparar el directorio del lock." >&2
         return "$LOCK_ERROR_STATUS"
     fi
+    if ! touch "$LOCK_GUARD_FILE" 2>/dev/null; then
+        echo "post-deploy.sh: no fue posible preparar el archivo guard del lock." >&2
+        return "$LOCK_ERROR_STATUS"
+    fi
+    exec 9>>"$LOCK_GUARD_FILE"
 
     if "$FLOCK_BIN" -n 9; then
         LOCK_GUARD_OWNED=1
