@@ -592,6 +592,53 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
         self.assertEqual(sleep.call_count, 2)
 
+    def test_espera_deploy_tolera_5xx_inicial_hasta_recuperacion(self) -> None:
+        respuestas = [
+            (503, "application/json", b'{"status":"unavailable"}'),
+            self.server.respuestas["/health"],
+        ]
+        self.server.respuestas["/health"] = lambda: respuestas.pop(0)
+
+        with patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(
+                self.base,
+                VERSION,
+                SHA,
+                intentos=1,
+                intervalo=0,
+                timeout=1,
+                espera_deploy=600,
+                intervalo_deploy=30,
+            )
+
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertEqual(resultado["comprobaciones"]["health"]["clase"], "ok")
+        sleep.assert_called_once_with(30)
+
+    def test_espera_deploy_agota_5xx_inicial_persistente(self) -> None:
+        self.server.respuestas["/health"] = (
+            503,
+            "application/json",
+            b'{"status":"unavailable"}',
+        )
+
+        with patch.object(modulo.time, "monotonic", side_effect=[0, 10, 700]), \
+                patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(
+                self.base,
+                VERSION,
+                SHA,
+                intentos=1,
+                intervalo=0,
+                timeout=1,
+                espera_deploy=600,
+                intervalo_deploy=30,
+            )
+
+        self.assertEqual(resultado["estado"], "NO_OBSERVADO")
+        self.assertEqual(resultado["comprobaciones"]["health"]["clase"], "transitorio")
+        sleep.assert_called_once_with(30)
+
     def test_espera_deploy_tolera_transitorio_despues_de_version_anterior(self) -> None:
         viejo = (
             200,
