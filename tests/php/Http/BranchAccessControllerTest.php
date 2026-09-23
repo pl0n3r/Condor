@@ -9,6 +9,7 @@ use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\Role;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Branch;
+use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -248,6 +249,146 @@ final class BranchAccessControllerTest extends WebTestCase
             '/api/v1/context?branch='.$hidden->id(),
         );
         self::assertResponseStatusCodeSame(403);
+    }
+
+    public function testOwnerContextExposesAuthorizedLegalEntities(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(
+            EntityManagerInterface::class,
+        );
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        [$tenant, , $owner] = $this->tenantWithUser(
+            $entityManager,
+            Membership::ROLE_OWNER,
+        );
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+        $legalA = new LegalEntity(
+            $tenant,
+            'Comercial '.$suffix.' SAS',
+            null,
+            true,
+        );
+        $legalB = new LegalEntity(
+            $tenant,
+            'Industrial '.$suffix.' SAS',
+            null,
+        );
+        $branchA = new Branch(
+            $tenant,
+            'Tienda',
+            'tienda-'.$suffix,
+            $legalA,
+        );
+        $branchB = new Branch(
+            $tenant,
+            'Fábrica',
+            'fabrica-'.$suffix,
+            $legalB,
+        );
+        foreach ([$legalA, $legalB, $branchA, $branchB] as $entity) {
+            $entityManager->persist($entity);
+        }
+        $entityManager->flush();
+
+        $client->loginUser($owner);
+        $client->request(
+            'GET',
+            '/api/v1/context?branch='.$branchB->id(),
+        );
+
+        self::assertResponseIsSuccessful();
+        $payload = json_decode(
+            (string) $client->getResponse()->getContent(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+
+        self::assertSame($legalB->id(), $payload['active_legal_entity']['id']);
+        self::assertSame(
+            $legalB->id(),
+            $payload['active_branch']['legal_entity']['id'],
+        );
+        self::assertSame(
+            [$legalA->id(), $legalB->id()],
+            array_column($payload['legal_entities'], 'id'),
+        );
+    }
+
+    public function testDelegatedContextDoesNotLeakHiddenLegalEntity(): void
+    {
+        $client = static::createClient();
+        $entityManager = static::getContainer()->get(
+            EntityManagerInterface::class,
+        );
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        [$tenant, , $user, $membership] = $this->tenantWithUser(
+            $entityManager,
+            'ADMIN',
+            true,
+        );
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+        $visibleLegal = new LegalEntity(
+            $tenant,
+            'Visible '.$suffix.' SAS',
+            null,
+            true,
+        );
+        $hiddenLegal = new LegalEntity(
+            $tenant,
+            'Reservada '.$suffix.' SAS',
+            null,
+        );
+        $visibleBranch = new Branch(
+            $tenant,
+            'Visible',
+            'visible-'.$suffix,
+            $visibleLegal,
+        );
+        $hiddenBranch = new Branch(
+            $tenant,
+            'Reservada',
+            'reservada-'.$suffix,
+            $hiddenLegal,
+        );
+        $role = new Role($tenant, 'Consulta '.$suffix, ['catalog.view']);
+
+        foreach (
+            [$visibleLegal, $hiddenLegal, $visibleBranch, $hiddenBranch, $role]
+            as $entity
+        ) {
+            $entityManager->persist($entity);
+        }
+        $entityManager->persist(
+            new BranchRoleAssignment($membership, $visibleBranch, $role),
+        );
+        $entityManager->flush();
+
+        $client->loginUser($user);
+        $client->request(
+            'GET',
+            '/api/v1/context?branch='.$visibleBranch->id(),
+        );
+
+        self::assertResponseIsSuccessful();
+        $content = (string) $client->getResponse()->getContent();
+        $payload = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertCount(1, $payload['legal_entities']);
+        self::assertSame(
+            $visibleLegal->id(),
+            $payload['legal_entities'][0]['id'],
+        );
+        self::assertSame(
+            $visibleLegal->id(),
+            $payload['active_legal_entity']['id'],
+        );
+        self::assertStringNotContainsString($hiddenLegal->id(), $content);
+        self::assertStringNotContainsString($hiddenLegal->legalName(), $content);
+        self::assertStringNotContainsString($hiddenBranch->id(), $content);
     }
 
     public function testContextKeepsTenantWhenNoBranchIsAccessible(): void
