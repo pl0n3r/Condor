@@ -413,6 +413,12 @@ esac
                 (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
+            backup = scripts / "backup-database.sh"
+            backup.write_text(
+                "#!/bin/sh\nset -eu\n[ -n \"${DATABASE_URL:-}\" ] || exit 19\nexit 0\n",
+                encoding="utf-8",
+            )
+            backup.chmod(0o755)
 
             if lock_metadata is not None:
                 lock_file = var / "post-deploy.lock"
@@ -453,6 +459,7 @@ esac
             env["FAKE_PHP_LOG"] = str(calls)
             env["FAKE_SCHEMA_OUTPUT"] = schema_output
             env["FAKE_SCHEMA_STATUS"] = str(schema_status)
+            env["DATABASE_URL"] = "mysql://contract.example/condor"
             result = subprocess.run(
                 ["sh", str(script)],
                 cwd=root,
