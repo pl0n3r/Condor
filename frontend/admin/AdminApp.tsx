@@ -12,11 +12,17 @@ type AdminAppProps = Readonly<{
   accessToken: string;
 }>;
 
+type LegalEntityContext = {
+  id: string;
+  name: string;
+};
+
 type Branch = {
   id: string;
   name: string;
   slug: string;
   is_default: boolean;
+  legal_entity: LegalEntityContext | null;
 };
 
 type TenantContextResponse = {
@@ -25,6 +31,8 @@ type TenantContextResponse = {
     name: string;
     slug: string;
   };
+  legal_entities: LegalEntityContext[];
+  active_legal_entity: LegalEntityContext | null;
   branches: Branch[];
   active_branch: Branch;
   permissions: string[];
@@ -95,6 +103,17 @@ export function AdminApp({
     void loadContext();
   }, []);
 
+  const readyContext = context.status === 'ready'
+    ? context.data
+    : null;
+  const visibleBranches = readyContext === null
+    || readyContext.legal_entities.length <= 1
+    ? readyContext?.branches ?? []
+    : readyContext.branches.filter((branch) => (
+        branch.legal_entity?.id
+        === readyContext.active_legal_entity?.id
+      ));
+
   return (
     <AdminShell
       version={version}
@@ -147,24 +166,66 @@ export function AdminApp({
               </p>
             </div>
 
-            <label className="branch-picker">
-              <span>Sede activa</span>
-              <select
-                aria-label="Sede activa"
-                value={context.data.active_branch.id}
-                onChange={(event) => {
-                  setContext({ status: 'loading' });
-                  void loadContext(event.target.value);
-                }}
-              >
-                {context.data.branches.map((branch) => (
-                  <option value={branch.id} key={branch.id}>
-                    {branch.name}
-                    {branch.is_default ? ' · principal' : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="role-actions">
+              {context.data.legal_entities.length > 1 && (
+                <label className="branch-picker">
+                  <span>Razón social</span>
+                  <select
+                    aria-label="Razón social activa"
+                    value={
+                      context.data.active_legal_entity?.id
+                      ?? '__legacy__'
+                    }
+                    onChange={(event) => {
+                      const branch = context.data.branches.find(
+                        (candidate) => (
+                          candidate.legal_entity?.id
+                          === event.target.value
+                        ),
+                      );
+                      if (!branch) {
+                        return;
+                      }
+                      setContext({ status: 'loading' });
+                      void loadContext(branch.id);
+                    }}
+                  >
+                    {context.data.active_legal_entity === null && (
+                      <option value="__legacy__" disabled>
+                        Sin razón social asignada
+                      </option>
+                    )}
+                    {context.data.legal_entities.map((legalEntity) => (
+                      <option
+                        value={legalEntity.id}
+                        key={legalEntity.id}
+                      >
+                        {legalEntity.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <label className="branch-picker">
+                <span>Sede activa</span>
+                <select
+                  aria-label="Sede activa"
+                  value={context.data.active_branch.id}
+                  onChange={(event) => {
+                    setContext({ status: 'loading' });
+                    void loadContext(event.target.value);
+                  }}
+                >
+                  {visibleBranches.map((branch) => (
+                    <option value={branch.id} key={branch.id}>
+                      {branch.name}
+                      {branch.is_default ? ' · principal' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
 
           <OverviewGrid
