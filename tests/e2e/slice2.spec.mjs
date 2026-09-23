@@ -59,4 +59,126 @@ test.describe('Slice 2 — roles y permisos por sede', () => {
       'catalog.view',
     ]);
   });
+
+  test('cambia razón social y acota las sedes visibles', async ({ page }) => {
+    const branchA = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+    const branchB = '01ARZ3NDEKTSV4RRFFQ69G5FAW';
+    const legalA = '01ARZ3NDEKTSV4RRFFQ69G5FAX';
+    const legalB = '01ARZ3NDEKTSV4RRFFQ69G5FAY';
+
+    await page.route('**/api/v1/context**', async (route) => {
+      const url = new URL(route.request().url());
+      const activeId = url.searchParams.get('branch') === branchB
+        ? branchB
+        : branchA;
+      const activeLegalId = activeId === branchB ? legalB : legalA;
+      const branches = [
+        {
+          id: branchA,
+          name: 'Tienda',
+          slug: 'tienda',
+          is_default: true,
+          legal_entity: { id: legalA, name: 'Comercial SAS' },
+        },
+        {
+          id: branchB,
+          name: 'Fábrica',
+          slug: 'fabrica',
+          is_default: false,
+          legal_entity: { id: legalB, name: 'Industrial SAS' },
+        },
+      ];
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          tenant: {
+            id: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+            name: 'Empresa E2E',
+            slug: 'empresa-e2e',
+          },
+          legal_entities: [
+            { id: legalA, name: 'Comercial SAS' },
+            { id: legalB, name: 'Industrial SAS' },
+          ],
+          active_legal_entity: activeLegalId === legalA
+            ? { id: legalA, name: 'Comercial SAS' }
+            : { id: legalB, name: 'Industrial SAS' },
+          branches,
+          active_branch: branches.find(({ id }) => id === activeId),
+          permissions: [],
+          version: 'V 0.1.22',
+        }),
+      });
+    });
+
+    await page.goto('/admin/login');
+    await page.getByLabel('Correo').fill(email);
+    await page.getByLabel('Contraseña').fill(password);
+    await page.getByRole('button', { name: 'Ingresar' }).click();
+
+    await expect(page).toHaveURL(/\/admin$/);
+    await expect(page.getByLabel('Razón social activa')).toBeVisible();
+    await expect(page.getByLabel('Sede activa')).toHaveValue(branchA);
+    await expect(
+      page.getByLabel('Sede activa').getByRole('option'),
+    ).toHaveCount(1);
+
+    await page.getByLabel('Razón social activa').selectOption(legalB);
+
+    await expect(page.getByLabel('Sede activa')).toHaveValue(branchB);
+    await expect(
+      page.getByLabel('Sede activa').getByRole('option'),
+    ).toHaveCount(1);
+    await expect(
+      page.getByLabel('Sede activa').getByRole('option'),
+    ).toHaveText('Fábrica');
+  });
+
+  test('oculta selector jurídico cuando solo hay una razón social', async ({ page }) => {
+    const branchId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+    const legalId = '01ARZ3NDEKTSV4RRFFQ69G5FAX';
+
+    await page.route('**/api/v1/context**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          tenant: {
+            id: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+            name: 'Empresa E2E',
+            slug: 'empresa-e2e',
+          },
+          legal_entities: [{ id: legalId, name: 'Comercial SAS' }],
+          active_legal_entity: { id: legalId, name: 'Comercial SAS' },
+          branches: [{
+            id: branchId,
+            name: 'Tienda',
+            slug: 'tienda',
+            is_default: true,
+            legal_entity: { id: legalId, name: 'Comercial SAS' },
+          }],
+          active_branch: {
+            id: branchId,
+            name: 'Tienda',
+            slug: 'tienda',
+            is_default: true,
+            legal_entity: { id: legalId, name: 'Comercial SAS' },
+          },
+          permissions: [],
+          version: 'V 0.1.22',
+        }),
+      });
+    });
+
+    await page.goto('/admin/login');
+    await page.getByLabel('Correo').fill(email);
+    await page.getByLabel('Contraseña').fill(password);
+    await page.getByRole('button', { name: 'Ingresar' }).click();
+
+    await expect(page).toHaveURL(/\/admin$/);
+    await expect(page.getByLabel('Razón social activa')).toHaveCount(0);
+    await expect(page.getByLabel('Sede activa')).toHaveValue(branchId);
+  });
 });
