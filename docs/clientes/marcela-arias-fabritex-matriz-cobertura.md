@@ -45,7 +45,7 @@ Los nombres **Marcela Arias**, **Fabritex**, **TikTok**, el modelo específico d
 
 El cliente confirma varias decisiones que Condor ya había tomado antes de conocer estos RF:
 
-- **Tenant no equivale a razón social.** `LegalEntity` ya existe en `main`; una cuenta Condor puede contener varias entidades legales.
+- **Tenant no equivale a razón social.** `LegalEntity` ya existe en `main`, pero la existencia de esa entidad no prueba el aislamiento operativo requerido por RF-001…RF-004. La topología concreta del primer cliente (un tenant con partición jurídica o dos tenants relacionados) queda pendiente de confirmación; ambas alternativas deben respetar las invariantes tenant-owned.
 - **Producto y variante son conceptos separados.** El catálogo ya modela `Product` y `ProductVariant`.
 - **Sede y fuente de inventario son conceptos diferentes.** La especificación ya lo define y el slice de inventario #171/#172 lo está materializando.
 - **Usuario no equivale a empleado ni a cliente.** Identidad, membresías, roles y asignaciones por sede ya están separados del dominio comercial.
@@ -152,10 +152,10 @@ La plantilla acelera la implantación, pero todos esos elementos continúan sien
 
 | RF | Cobertura | Traducción correcta a Condor |
 | --- | --- | --- |
-| RF-001 | **PARCIAL / MAIN** | `Tenant` + `LegalEntity` ya existen. Generalizar como múltiples entidades legales dentro de un tenant, nunca como dos tenants hardcodeados. |
-| RF-002 | **DEFINIDO** | Introducir alcance por `legal_entity_id` solo en los dominios donde jurídicamente/operativamente corresponda. Inventario, ventas, costos y reportes deben declarar explícitamente su scope. |
-| RF-003 | **NUEVO** | Modelar operaciones **intercompany/intra-tenant**: abastecimiento, transferencia o producción para otra entidad legal, con origen/destino y trazabilidad; no una regla Fabritex→Marcela. |
-| RF-004 | **PARCIAL / MAIN** | Reusar el patrón de contexto ya existente para tenant/sede y extenderlo a entidad legal cuando el módulo lo requiera. Selector visible solo para tenants multi-entidad. |
+| RF-001 | **PARCIAL / MAIN** | `Tenant` + `LegalEntity` existen. Contrastar con el cliente si necesita un tenant multi-entidad con aislamiento explícito por `legal_entity_id` o dos tenants relacionados. No elegir la topología únicamente por existir `LegalEntity`, ni hardcodear empresas. |
+| RF-002 | **DEFINIDO** | Demostrar aislamiento de inventario, ventas, costos, reportes y acceso de usuarios para cada razón social, tanto en API/consultas como en autorización y pruebas. Si se elige tenant multi-entidad, definir claves y alcance por `legal_entity_id` en todos los dominios afectados; si se eligen tenants separados, definir permisos y vínculos cross-tenant explícitos sin saltarse el aislamiento. |
+| RF-003 | **NUEVO** | Modelar operación interempresa entre entidades legales con titularidad de origen/destino, documentos, precio/valoración y trazabilidad acordes al caso. Una transferencia física entre fuentes de stock no equivale a una transacción jurídica/comercial; la topología tenant única o múltiple se decide antes de diseñar API y persistencia. |
+| RF-004 | **PARCIAL / MAIN** | Reusar identidad/contexto existente; selector de entidad legal dentro de un tenant o selector seguro entre tenants según topología validada. El cambio no amplía permisos por sí mismo y conserva aislamiento en cada API y reporte. |
 
 ## 5.2 Inventario de producto terminado — RF-005 a RF-014
 
@@ -378,7 +378,7 @@ La plantilla acelera la implantación, pero todos esos elementos continúan sien
 
 | RF | Cobertura | Traducción correcta a Condor |
 | --- | --- | --- |
-| RF-122 | **MAIN** | V 0.1.20 incorpora backup periódico/verificable y política de retención segura. |
+| RF-122 | **PARCIAL / MAIN** | V 0.1.20 entrega script de backup con retención configurable y ensayo automatizado de restauración sobre MariaDB descartable; no acredita cron, periodicidad ni copias externas activos en producción. Para cumplir el RF, configurar y observar un calendario autorizado, destino protegido, alertas y pruebas periódicas de recuperación. |
 | RF-123 | **MAIN / PRINCIPIO** | Autenticación, autorización server-side, CSRF, aislamiento tenant, headers y manejo seguro de secretos son baseline. |
 | RF-124 | **MAIN** | Restore ensayable/guardado forma parte de la estrategia de backup; recuperación debe demostrarse, no solo “tener backup”. |
 | RF-125 | **MAIN + PARCIAL** | Aislamiento tenant ya es invariante; el scope por entidad legal se aplica donde corresponda y requiere extensión consistente de permisos/consultas. |
