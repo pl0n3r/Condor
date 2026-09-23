@@ -388,10 +388,10 @@ resolve_database_url() {
         return 0
     fi
 
-    "$PHP_BIN" -r '
+    APP_ENV=prod "$PHP_BIN" -r '
         require "vendor/autoload.php";
         $dotenv = new Symfony\\Component\\Dotenv\\Dotenv();
-        $dotenv->bootEnv(".env");
+        $dotenv->bootEnv(".env", "prod");
         $value = $_SERVER["DATABASE_URL"] ?? $_ENV["DATABASE_URL"] ?? getenv("DATABASE_URL");
         if (is_string($value) && $value !== "") {
             echo $value;

@@ -93,13 +93,6 @@ class ToolingContractTests(unittest.TestCase):
             'if [ "$PRODUCTION_STAGE" = "construction" ] && [ "$AUTO_MIGRATE" = "1" ]; then',
             script,
         )
-        self.assertIn("run_pre_migration_backup", script)
-        self.assertIn("scripts/backup-database.sh", script)
-        self.assertIn("Symfony\\\\Component\\\\Dotenv\\\\Dotenv", script)
-        self.assertIn("--dry-run", script)
-        self.assertIn("--write-sql=", script)
-        self.assertIn("SQL de migración fuera del allowlist", script)
-        self.assertIn("migración destructiva/contract detectada", script)
         self.assertNotIn("doctrine:migrations:execute", script)
         self.assertNotIn("doctrine:schema:update", script)
         self.assertNotIn("doctrine:schema:drop", script)

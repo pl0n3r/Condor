@@ -208,6 +208,25 @@ class PostDeployStageTest(unittest.TestCase):
         self.assertNotIn("cache:warmup", calls)
 
 
+    def test_construction_blocks_sql_outside_allowlist(self):
+        """SQL desconocido falla cerrado antes de backup, migrate y caché."""
+        result, calls, root = self.run_script(
+            "construction",
+            migration_sql="GRANT ALL ON *.* TO 'x'@'%';",
+        )
+
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertIn("SQL de migración fuera del allowlist", result.stderr)
+        self.assertFalse((root / "migrated").exists())
+        self.assertNotIn("backup", calls)
+        actual = [
+            line for line in calls.splitlines()
+            if "doctrine:migrations:migrate" in line and "--dry-run" not in line
+        ]
+        self.assertEqual([], actual)
+        self.assertNotIn("cache:clear", calls)
+        self.assertNotIn("cache:warmup", calls)
+
     def test_construction_blocks_destructive_versioned_migration(self):
         """El dry-run destructivo se bloquea antes de ejecutar migrate real."""
         result, calls, root = self.run_script(
