@@ -236,6 +236,83 @@ final class InventoryServiceTest extends KernelTestCase
         );
     }
 
+    public function testAdjustmentRefreshesBackorderPolicyBeforeApplying(): void
+    {
+        [$tenant, $source, , $variant] = $this->fixture();
+        $product = $variant->product();
+        $product->setBackorderAllowed(true);
+        $this->entityManager->flush();
+
+        $this->service->adjust(
+            $tenant,
+            $source,
+            $variant,
+            -1,
+            null,
+            'backorder-seed-'.bin2hex(random_bytes(6)),
+        );
+        self::assertTrue($product->allowsBackorder());
+
+        $this->entityManager->getConnection()->executeStatement(
+            'UPDATE condor_product SET allow_backorder = 0 WHERE id = ?',
+            [$product->id()],
+        );
+        self::assertTrue($product->allowsBackorder());
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(
+            'Stock insuficiente: el producto no permite backorder.',
+        );
+
+        $this->service->adjust(
+            $tenant,
+            $source,
+            $variant,
+            -1,
+            null,
+            'backorder-stale-adjust-'.bin2hex(random_bytes(6)),
+        );
+    }
+
+    public function testTransferRefreshesBackorderPolicyBeforeApplying(): void
+    {
+        [$tenant, $sourceA, $sourceB, $variant] = $this->fixture();
+        $product = $variant->product();
+        $product->setBackorderAllowed(true);
+        $this->entityManager->flush();
+
+        $this->service->adjust(
+            $tenant,
+            $sourceA,
+            $variant,
+            1,
+            null,
+            'backorder-transfer-seed-'.bin2hex(random_bytes(6)),
+        );
+        self::assertTrue($product->allowsBackorder());
+
+        $this->entityManager->getConnection()->executeStatement(
+            'UPDATE condor_product SET allow_backorder = 0 WHERE id = ?',
+            [$product->id()],
+        );
+        self::assertTrue($product->allowsBackorder());
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(
+            'Stock insuficiente: el producto no permite backorder.',
+        );
+
+        $this->service->transfer(
+            $tenant,
+            $variant,
+            $sourceA,
+            $sourceB,
+            2,
+            null,
+            'backorder-stale-transfer-'.bin2hex(random_bytes(6)),
+        );
+    }
+
     public function testAdjustmentRejectsValuesOutsideDatabaseIntegerRange(): void
     {
         [$tenant, $source, , $variant] = $this->fixture();

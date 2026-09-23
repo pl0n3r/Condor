@@ -273,6 +273,10 @@ final readonly class InventoryService
     ): void {
         $entityManager->refresh($source, LockMode::PESSIMISTIC_WRITE);
         $entityManager->refresh($variant, LockMode::PESSIMISTIC_WRITE);
+        $entityManager->refresh(
+            $variant->product(),
+            LockMode::PESSIMISTIC_READ,
+        );
     }
 
     /**
@@ -293,6 +297,10 @@ final readonly class InventoryService
             $entityManager->refresh($source, LockMode::PESSIMISTIC_WRITE);
         }
         $entityManager->refresh($variant, LockMode::PESSIMISTIC_WRITE);
+        $entityManager->refresh(
+            $variant->product(),
+            LockMode::PESSIMISTIC_READ,
+        );
     }
 
     private static function assertOwnedScope(
