@@ -14,6 +14,8 @@ use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
+use App\Shared\Id\UlidFactory;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -285,6 +287,42 @@ final class InventoryControllerTest extends WebTestCase
         );
 
         self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testDatabaseRejectsBranchSourceWithMismatchedLegalEntity(): void
+    {
+        $entityManager = $this->entityManager();
+        [$tenant, $legalEntity] = $this->tenantWithOwner($entityManager);
+
+        $otherLegalEntity = new LegalEntity(
+            $tenant,
+            'Entidad alterna '.bin2hex(random_bytes(3)),
+            null,
+        );
+        $otherBranch = new Branch(
+            $tenant,
+            'Sede alterna',
+            'sede-alterna-'.bin2hex(random_bytes(3)),
+            $otherLegalEntity,
+        );
+        $entityManager->persist($otherLegalEntity);
+        $entityManager->persist($otherBranch);
+        $entityManager->flush();
+
+        $this->expectException(ForeignKeyConstraintViolationException::class);
+
+        $entityManager->getConnection()->executeStatement(
+            'INSERT INTO condor_inventory_source '
+            .'(id, tenant_id, legal_entity_id, branch_id, name, slug, type, active, created_at, updated_at) '
+            ."VALUES (?, ?, ?, ?, 'Cruce inválido', ?, 'branch', 1, UTC_TIMESTAMP(), UTC_TIMESTAMP())",
+            [
+                UlidFactory::new(),
+                $tenant->id(),
+                $legalEntity->id(),
+                $otherBranch->id(),
+                'cruce-'.bin2hex(random_bytes(4)),
+            ],
+        );
     }
 
     public function testBranchWithoutLegalEntityCannotOperateInventory(): void
