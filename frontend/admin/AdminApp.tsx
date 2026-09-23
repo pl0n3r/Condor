@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AccessManagement } from './AccessManagement';
 import { CatalogManagement } from './CatalogManagement';
+import { InventoryManagement } from './InventoryManagement';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
 import { contextPath } from './api';
@@ -103,6 +104,7 @@ export function AdminApp({
       navItems={[
         { href: '/admin', label: 'Inicio', current: true },
         { href: '#catalog', label: 'Catálogo' },
+        { href: '#inventory', label: 'Inventario' },
         { href: '#roles', label: 'Roles y permisos' },
       ]}
     >
@@ -187,6 +189,13 @@ export function AdminApp({
 
           <CatalogManagement
             key={'catalog-' + context.data.active_branch.id}
+            branchId={context.data.active_branch.id}
+            permissions={context.data.permissions}
+            csrfToken={accessToken}
+          />
+
+          <InventoryManagement
+            key={'inventory-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}
