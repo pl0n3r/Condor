@@ -104,6 +104,9 @@ final class CustomerController extends AbstractController
                 'active' => false,
             ]);
         $reactivated = $inactive instanceof CommercialCategory;
+        $previousPreferredPriceListId = $reactivated
+            ? $inactive->preferredPriceList()?->id()
+            : null;
 
         $category = $this->domain(function () use (
             $inactive,
@@ -112,6 +115,13 @@ final class CustomerController extends AbstractController
             $slug,
         ): CommercialCategory {
             if ($inactive instanceof CommercialCategory) {
+                $preferredPriceList = $inactive->preferredPriceList();
+                if (
+                    $preferredPriceList !== null
+                    && !$preferredPriceList->isActive()
+                ) {
+                    $inactive->assignPreferredPriceList(null);
+                }
                 $inactive->update($name, $slug);
                 $inactive->activate();
 
@@ -129,7 +139,12 @@ final class CustomerController extends AbstractController
                 : 'commercial_category.created',
             CommercialCategory::class,
             $category->id(),
-            ['branch_id' => $branch->id()],
+            [
+                'branch_id' => $branch->id(),
+                'previous_preferred_price_list_id' => $previousPreferredPriceListId,
+                'preferred_price_list_id' => $category
+                    ->preferredPriceList()?->id(),
+            ],
         );
         $this->commercialFlushUnique(
             'Ya existe una categoría comercial con ese slug.',

@@ -541,6 +541,111 @@ final class CommerceControllerTest extends WebTestCase
         self::assertSame(2, $reactivationAuditCount);
     }
 
+    public function testCategoryReactivationClearsInactivePreferredPriceList(): void
+    {
+        $client = static::createClient();
+        $em = $this->entityManager();
+        [$tenant, $branch, $owner] = $this->fixture($em);
+        $client->loginUser($owner);
+        $csrf = $this->csrf($client);
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+
+        $listUrl = '/api/v1/branches/'.$branch->id().'/pricing/lists';
+        $client->jsonRequest(
+            'POST',
+            $listUrl,
+            [
+                'name' => 'Lista temporal '.$suffix,
+                'slug' => 'lista-temporal-'.$suffix,
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $listId = $this->json($client)['price_list']['id'];
+
+        $categoryUrl = '/api/v1/branches/'.$branch->id()
+            .'/customers/categories';
+        $categorySlug = 'categoria-temporal-'.$suffix;
+        $client->jsonRequest(
+            'POST',
+            $categoryUrl,
+            [
+                'name' => 'Categoría temporal '.$suffix,
+                'slug' => $categorySlug,
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $categoryId = $this->json($client)['category']['id'];
+
+        $client->jsonRequest(
+            'PATCH',
+            '/api/v1/branches/'.$branch->id()
+                .'/pricing/categories/'.$categoryId,
+            ['preferred_price_list_id' => $listId],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseIsSuccessful();
+
+        $client->request(
+            'DELETE',
+            $categoryUrl.'/'.$categoryId,
+            server: ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(204);
+
+        $client->request(
+            'DELETE',
+            $listUrl.'/'.$listId,
+            server: ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(204);
+
+        $client->jsonRequest(
+            'POST',
+            $categoryUrl,
+            [
+                'name' => 'Categoría restaurada '.$suffix,
+                'slug' => $categorySlug,
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(200);
+        $restored = $this->json($client)['category'];
+        self::assertSame($categoryId, $restored['id']);
+        self::assertNull($restored['preferred_price_list_id']);
+
+        $storedPreferredList = $em->getConnection()->fetchOne(
+            'SELECT preferred_price_list_id '
+            .'FROM condor_commercial_category WHERE id = ?',
+            [$categoryId],
+        );
+        self::assertFalse($storedPreferredList);
+
+        $auditContext = $em->getConnection()->fetchOne(
+            'SELECT context FROM condor_audit_event '
+            .'WHERE tenant_id = ? AND action = ? AND entity_id = ? '
+            .'ORDER BY created_at DESC LIMIT 1',
+            [
+                $tenant->id(),
+                'commercial_category.reactivated',
+                $categoryId,
+            ],
+        );
+        self::assertIsString($auditContext);
+        $audit = json_decode(
+            $auditContext,
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame(
+            $listId,
+            $audit['previous_preferred_price_list_id'] ?? null,
+        );
+        self::assertNull($audit['preferred_price_list_id'] ?? null);
+    }
+
     public function testDelegatedViewerCannotMutateCustomersOrPricing(): void
     {
         $client = static::createClient();
