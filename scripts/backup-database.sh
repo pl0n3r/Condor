@@ -91,6 +91,14 @@ fi
 
 set -- --single-transaction --quick --skip-lock-tables --triggers
 
+# Usuarios de aplicación en hosting compartido no deben tener privilegios
+# globales como PROCESS. MySQL 8 puede exigirlo al inspeccionar tablespaces
+# salvo que el dump use --no-tablespaces. Activarlo solo si el cliente lo
+# soporta mantiene compatibilidad con MariaDB/MySQL sin relajar credenciales.
+if "$dump_bin" --help 2>&1 | grep -q -- '--no-tablespaces'; then
+  set -- --no-tablespaces "$@"
+fi
+
 case "$(basename "$dump_bin")" in
   mysqldump)
     if "$dump_bin" --help 2>&1 | grep -q -- '--column-statistics'; then

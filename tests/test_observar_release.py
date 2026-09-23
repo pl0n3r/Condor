@@ -1018,5 +1018,33 @@ class ObserverTests(unittest.TestCase):
         self.assertNotIn("password", salida)
 
 
+    def test_codigo_salida_distingue_transicion_de_fallo_funcional(self) -> None:
+        base = {
+            "estado": "DEPLOY_OBSERVED",
+            "comprobaciones": {
+                "health": {"ok": True},
+                "schema": {"ok": True},
+                "home": {"ok": True},
+                "transicion_release": {"ok": False},
+            },
+        }
+        self.assertEqual(modulo.codigo_salida_observacion(base), 1)
+
+        con_schema_roto = json.loads(json.dumps(base))
+        con_schema_roto["comprobaciones"]["schema"]["ok"] = False
+        self.assertEqual(modulo.codigo_salida_observacion(con_schema_roto), 2)
+
+        no_observado = {
+            "estado": "NO_OBSERVADO",
+            "comprobaciones": {"health": {"ok": False}},
+        }
+        self.assertEqual(modulo.codigo_salida_observacion(no_observado), 2)
+
+        validado = {
+            "estado": "VALIDATED_IN_PRODUCTION",
+            "comprobaciones": {"health": {"ok": True}},
+        }
+        self.assertEqual(modulo.codigo_salida_observacion(validado), 0)
+
 if __name__ == "__main__":
     unittest.main()
