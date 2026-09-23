@@ -1,7 +1,7 @@
 # Titularidad jurídica y operaciones interempresa en Condor
 
 **Decisión canónica:** D-052 en [`ESPECIFICACIONES.md`](../ESPECIFICACIONES.md). **Trabajo relacionado:** [Issue #177](https://github.com/pl0n3r/Condor/issues/177).  
-**Estado:** contrato de arquitectura; este documento no declara funciones ni migraciones desplegadas.  
+**Estado:** contrato de arquitectura; PR #178 permanece draft hasta que #177 cumpla sus criterios ejecutables. Este documento no declara funciones ni migraciones desplegadas.  
 **Fuente de implementación:** `main` y los tests del SHA fusionado.  
 **Dependencias:** V 0.1.21 y requisitos del primer cliente ya integrados en `main`; [Inventario #171 / PR #172](https://github.com/pl0n3r/Condor/pull/172) aplica la primera frontera ejecutable. Esa aplicación solo se considera integrada cuando #172 haya sido fusionado y validado sobre `main`; mientras permanezca en draft/candidato, este documento describe el contrato y su evidencia esperada, no una capacidad desplegada. Este documento no acredita por sí solo deploy ni migración productiva.
 
