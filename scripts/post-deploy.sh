@@ -139,9 +139,10 @@ acquire_guard() {
     if "$FLOCK_BIN" -n 9; then
         LOCK_GUARD_OWNED=1
         return 0
+    else
+        guard_status=$?
     fi
 
-    guard_status=$?
     exec 9>&-
     if [ "$guard_status" -eq 1 ]; then
         echo "post-deploy.sh: otra recuperación de lock sigue activa; se omite." >&2
