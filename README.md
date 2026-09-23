@@ -25,8 +25,8 @@
 
 ## Qué incorpora V 0.1.21
 
-- observador automático distingue una versión anterior legítima como `deploy_pendiente` y espera hasta 20 minutos;
-- versiones futuras, SHA incompatibles o identidades ajenas fallan inmediatamente;
+- observador automático trata cualquier versión anterior con formato válido y SHA bien formado como `deploy_pendiente` y espera hasta 20 minutos, sin asumir que ese SHA pertenezca a una release conocida;
+- versiones futuras, SHA malformados y un SHA distinto para la misma versión fallan inmediatamente;
 - assets JS/CSS tienen presupuesto separado de 4 MiB;
 - se acepta el MIME legacy `application/x-javascript` servido por Hostinger;
 - comentarios del Roadmap describen la causa real de observación, sin asumir deploy pendiente cuando no corresponde;
