@@ -15,7 +15,16 @@ use DomainException;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_inventory_movement')]
-#[ORM\Index(name: 'idx_inventory_movement_scope_time', columns: ['tenant_id', 'legal_entity_id', 'source_id', 'variant_id', 'created_at'])]
+#[ORM\Index(
+    name: 'idx_inventory_movement_scope_time',
+    columns: [
+        'tenant_id',
+        'legal_entity_id',
+        'source_id',
+        'variant_id',
+        'created_at',
+    ],
+)]
 #[ORM\Index(name: 'idx_inventory_movement_transfer', columns: ['transfer_id'])]
 #[ORM\UniqueConstraint(name: 'uniq_inventory_movement_tenant_key', columns: ['tenant_id', 'idempotency_key'])]
 class InventoryMovement
