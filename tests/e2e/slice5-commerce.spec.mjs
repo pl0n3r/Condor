@@ -60,7 +60,7 @@ test.describe('Slice 5 — clientes y precios', () => {
     ).toBeVisible();
 
     const customerForm = commerce.locator('form.catalog-editor').filter({
-      has: commerce.getByLabel('Nombre del cliente'),
+      hasText: 'Nombre del cliente',
     });
     await customerForm.getByLabel('Nombre del cliente').fill(customerName);
     await customerForm.getByLabel('Correo del cliente').fill(customerEmail);
