@@ -99,6 +99,102 @@ final class InventoryControllerTest extends WebTestCase
         self::assertCount(2, $storedSources);
     }
 
+    public function testOwnerCanUpdateAndDeactivateEmptySource(): void
+    {
+        $client = static::createClient();
+        $entityManager = $this->entityManager();
+        [, , $branch, $owner] = $this->tenantWithOwner($entityManager);
+
+        $client->loginUser($owner);
+        $csrf = $this->csrf($client);
+        $base = '/api/v1/branches/'.$branch->id().'/inventory';
+
+        $client->jsonRequest(
+            'POST',
+            $base.'/sources',
+            ['name' => 'Temporal', 'slug' => 'temporal', 'type' => 'logical'],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $sourceId = $this->json($client)['source']['id'];
+
+        $client->jsonRequest(
+            'PATCH',
+            $base.'/sources/'.$sourceId,
+            ['name' => 'Renombrada', 'slug' => 'renombrada'],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseIsSuccessful();
+        $updated = $this->json($client)['source'];
+        self::assertSame('Renombrada', $updated['name']);
+        self::assertSame('renombrada', $updated['slug']);
+
+        $client->request(
+            'DELETE',
+            $base.'/sources/'.$sourceId,
+            [],
+            [],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(204);
+
+        $source = $entityManager
+            ->getRepository(InventorySource::class)
+            ->find($sourceId);
+        self::assertInstanceOf(InventorySource::class, $source);
+        self::assertFalse($source->isActive());
+    }
+
+    public function testSourceWithStockCannotBeDeactivated(): void
+    {
+        $client = static::createClient();
+        $entityManager = $this->entityManager();
+        [, , $branch, $owner, $variant] =
+            $this->tenantWithOwner($entityManager);
+
+        $client->loginUser($owner);
+        $csrf = $this->csrf($client);
+        $base = '/api/v1/branches/'.$branch->id().'/inventory';
+
+        $client->jsonRequest(
+            'POST',
+            $base.'/sources',
+            ['name' => 'Con stock', 'slug' => 'con-stock', 'type' => 'logical'],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $sourceId = $this->json($client)['source']['id'];
+
+        $client->jsonRequest(
+            'POST',
+            $base.'/adjustments',
+            [
+                'source_id' => $sourceId,
+                'variant_id' => $variant->id(),
+                'delta' => 1,
+                'reason' => 'Stock protegido',
+                'idempotency_key' => 'protect-'.bin2hex(random_bytes(5)),
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+
+        $client->request(
+            'DELETE',
+            $base.'/sources/'.$sourceId,
+            [],
+            [],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(409);
+
+        $source = $entityManager
+            ->getRepository(InventorySource::class)
+            ->find($sourceId);
+        self::assertInstanceOf(InventorySource::class, $source);
+        self::assertTrue($source->isActive());
+    }
+
     public function testDelegatedViewerCannotAdjustInventory(): void
     {
         $client = static::createClient();
