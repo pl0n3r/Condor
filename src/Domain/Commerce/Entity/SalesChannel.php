@@ -20,6 +20,10 @@ use DomainException;
     name: 'uniq_sales_channel_tenant_id',
     columns: ['tenant_id', 'id'],
 )]
+#[ORM\UniqueConstraint(
+    name: 'uniq_sales_channel_tenant_type',
+    columns: ['tenant_id', 'type'],
+)]
 class SalesChannel extends CommercialItem
 {
     public const TYPE_ECOMMERCE = 'ecommerce';

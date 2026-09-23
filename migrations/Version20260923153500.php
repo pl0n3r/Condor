@@ -35,6 +35,7 @@ final class Version20260923153500 extends AbstractMigration // NOSONAR -- nombre
                 INDEX IDX_SALES_CHANNEL_PRICE_LIST (price_list_id),
                 UNIQUE INDEX uniq_sales_channel_tenant_slug (tenant_id, slug),
                 UNIQUE INDEX uniq_sales_channel_tenant_id (tenant_id, id),
+                UNIQUE INDEX uniq_sales_channel_tenant_type (tenant_id, type),
                 PRIMARY KEY(id),
                 CONSTRAINT FK_SALES_CHANNEL_TENANT
                     FOREIGN KEY (tenant_id) REFERENCES condor_tenant (id)
