@@ -70,6 +70,56 @@ final class SalesChannelTest extends TestCase
         );
     }
 
+    public function testInvalidUpdateDoesNotPartiallyChangeCommercialScope(): void
+    {
+        [$tenant, $source, $priceList] = $this->scope();
+        $channel = new SalesChannel(
+            $tenant,
+            'Web original',
+            'web-original',
+            $source,
+            $priceList,
+        );
+
+        $otherLegalEntity = new LegalEntity(
+            $tenant,
+            'Otra razón social',
+            null,
+            false,
+        );
+        $otherSource = new InventorySource(
+            $tenant,
+            $otherLegalEntity,
+            'Otra bodega',
+            'otra-bodega',
+            InventorySource::TYPE_LOGICAL,
+        );
+        $otherPriceList = new PriceList(
+            $tenant,
+            'Otra lista',
+            'otra-lista',
+        );
+
+        try {
+            $channel->update(
+                'Web nueva',
+                'slug invalido',
+                $otherSource,
+                $otherPriceList,
+            );
+            self::fail('La identidad inválida debía rechazarse.');
+        } catch (DomainException) {
+            self::assertSame('Web original', $channel->name());
+            self::assertSame('web-original', $channel->slug());
+            self::assertSame(
+                $source->legalEntity()->id(),
+                $channel->legalEntity()->id(),
+            );
+            self::assertSame($source->id(), $channel->inventorySource()->id());
+            self::assertSame($priceList->id(), $channel->priceList()->id());
+        }
+    }
+
     public function testChannelFailsClosedWhenEffectiveReferencesAreInactive(): void
     {
         [$tenant, $source, $priceList] = $this->scope();

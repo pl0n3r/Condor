@@ -112,10 +112,10 @@ class SalesChannel extends NamedCommercialItem
     ): void {
         self::assertReferences($this->tenant(), $inventorySource, $priceList);
 
+        $this->updateIdentity($name, $slug, self::LABEL);
         $this->legalEntity = $inventorySource->legalEntity();
         $this->inventorySource = $inventorySource;
         $this->priceList = $priceList;
-        $this->updateIdentity($name, $slug, self::LABEL);
     }
 
     private static function assertReferences(
