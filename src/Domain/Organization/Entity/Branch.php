@@ -75,6 +75,11 @@ class Branch
         return $this->tenant;
     }
 
+    public function legalEntity(): ?LegalEntity
+    {
+        return $this->legalEntity;
+    }
+
     public function name(): string
     {
         return $this->name;
