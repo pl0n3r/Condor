@@ -45,7 +45,7 @@ Los nombres **Marcela Arias**, **Fabritex**, **TikTok**, el modelo específico d
 
 El cliente confirma varias decisiones que Condor ya había tomado antes de conocer estos RF:
 
-- **Tenant no equivale a razón social.** `LegalEntity` ya existe en `main`, pero la existencia de esa entidad no prueba el aislamiento operativo requerido por RF-001…RF-004. La topología concreta del primer cliente (un tenant con partición jurídica o dos tenants relacionados) queda pendiente de confirmación; ambas alternativas deben respetar las invariantes tenant-owned.
+- **Tenant no equivale a razón social.** `LegalEntity` ya existe en `main`. La decisión de arquitectura #177 establece tenant como grupo/cuenta y entidad legal como titular jurídico: un tenant puede tener varias razones sociales, sin que existir `LegalEntity` pruebe ya aislamiento operativo. Se debe confirmar con el cliente la asignación de empresas, usuarios, sedes y permisos; el soporte operativo cross-entity sigue pendiente.
 - **Producto y variante son conceptos separados.** El catálogo ya modela `Product` y `ProductVariant`.
 - **Sede y fuente de inventario son conceptos diferentes.** La especificación ya lo define y el slice de inventario #171/#172 lo está materializando.
 - **Usuario no equivale a empleado ni a cliente.** Identidad, membresías, roles y asignaciones por sede ya están separados del dominio comercial.
@@ -152,10 +152,10 @@ La plantilla acelera la implantación, pero todos esos elementos continúan sien
 
 | RF | Cobertura | Traducción correcta a Condor |
 | --- | --- | --- |
-| RF-001 | **PARCIAL / MAIN** | `Tenant` + `LegalEntity` existen. Contrastar con el cliente si necesita un tenant multi-entidad con aislamiento explícito por `legal_entity_id` o dos tenants relacionados. No elegir la topología únicamente por existir `LegalEntity`, ni hardcodear empresas. |
-| RF-002 | **DEFINIDO** | Demostrar aislamiento de inventario, ventas, costos, reportes y acceso de usuarios para cada razón social, tanto en API/consultas como en autorización y pruebas. Si se elige tenant multi-entidad, definir claves y alcance por `legal_entity_id` en todos los dominios afectados; si se eligen tenants separados, definir permisos y vínculos cross-tenant explícitos sin saltarse el aislamiento. |
-| RF-003 | **NUEVO** | Modelar operación interempresa entre entidades legales con titularidad de origen/destino, documentos, precio/valoración y trazabilidad acordes al caso. Una transferencia física entre fuentes de stock no equivale a una transacción jurídica/comercial; la topología tenant única o múltiple se decide antes de diseñar API y persistencia. |
-| RF-004 | **PARCIAL / MAIN** | Reusar identidad/contexto existente; selector de entidad legal dentro de un tenant o selector seguro entre tenants según topología validada. El cambio no amplía permisos por sí mismo y conserva aislamiento en cada API y reporte. |
+| RF-001 | **PARCIAL / MAIN** | `Tenant` + `LegalEntity` existen. #177 fija la arquitectura reusable: varias razones sociales del mismo grupo dentro de un tenant, con titularidad y permisos por entidad legal; verificar con el cliente su estructura concreta sin hardcodear sociedades. Tener `LegalEntity` no demuestra separación funcional terminada. |
+| RF-002 | **DEFINIDO (#177)** | Exigir `legal_entity_id` efectivo para inventario, ventas, costos y reportes con titularidad jurídica; demostrar aislamiento de consultas, escrituras, exportaciones y permisos por entidad dentro de un tenant. Tenant, sede y fuente no sustituyen a la entidad legal. |
+| RF-003 | **NUEVO (#177)** | Modelar operación intercompany entre entidades legales con origen/destino, titularidad, documentos, precio/valoración y trazabilidad acordes al caso. Una transferencia física entre fuentes solo es interna si ambas tienen la misma entidad legal; la operación interempresa requiere un flujo distinto y explícito. |
+| RF-004 | **PARCIAL / MAIN** | Reusar identidad y contexto del tenant; selector de entidad legal solo si hay varias, oculto para single-entity. Cambiar el contexto no confiere permisos ni modifica el aislamiento en API, reportes o exportaciones. La UI y autorización cross-entity aún deben implementarse y probarse. |
 
 ## 5.2 Inventario de producto terminado — RF-005 a RF-014
 
@@ -343,7 +343,7 @@ La plantilla acelera la implantación, pero todos esos elementos continúan sien
 | --- | --- | --- |
 | RF-105 | **MAIN** | Existen entidades de auditoría de tenant y plataforma. Cada dominio nuevo debe emitir eventos útiles, no logs narrativos. |
 | RF-106 | **PARCIAL / MAIN** | Estándar mínimo: actor, acción/evento, timestamp, recurso/contexto y cambio relevante con minimización de PII. |
-| RF-107 | **MAIN / PRINCIPIO** | Evento sensible inmutable; correcciones se representan como eventos posteriores, no borrando historia. |
+| RF-107 | **PARCIAL / MAIN + PRINCIPIO** | `AuditEvent` no expone mutadores, pero su FK de tenant y la migración usan `ON DELETE CASCADE`: borrar un tenant borra esos eventos. Antes de afirmar retención/inmutabilidad completa, definir y aplicar protección del historial frente al borrado de cuenta (por ejemplo cierre lógico, archivo sujeto a retención y política de eliminación autorizada); correcciones de negocio se representan como eventos posteriores. |
 | RF-108 | **PARCIAL** | Falta una vista/read model de auditoría transversal para inventario, producción, costos, pedidos, etc.; se construye sobre el mismo ledger de auditoría. |
 
 ## 5.19 Panel gerencial — RF-109 a RF-114
@@ -378,9 +378,9 @@ La plantilla acelera la implantación, pero todos esos elementos continúan sien
 
 | RF | Cobertura | Traducción correcta a Condor |
 | --- | --- | --- |
-| RF-122 | **PARCIAL / MAIN** | V 0.1.20 entrega script de backup con retención configurable y ensayo automatizado de restauración sobre MariaDB descartable; no acredita cron, periodicidad ni copias externas activos en producción. Para cumplir el RF, configurar y observar un calendario autorizado, destino protegido, alertas y pruebas periódicas de recuperación. |
+| RF-122 | **PARCIAL / MAIN** | V 0.1.20 entrega script con retención configurable y ensayo CI sobre MariaDB descartable, pero no prueba ejecución productiva periódica. Baseline D-040: respaldo **diario** de MariaDB; media/archivos incluidos o replicación equivalente; al menos **30 días** de puntos de recuperación cuando el hosting lo permita; copia fuera del mismo punto de fallo con datos reales, cifrado según soporte y acceso mínimo. Exigir evidencia read-only de cron autorizado, último respaldo, integridad, destino y alertas, sin publicar datos. |
 | RF-123 | **MAIN / PRINCIPIO** | Autenticación, autorización server-side, CSRF, aislamiento tenant, headers y manejo seguro de secretos son baseline. |
-| RF-124 | **PARCIAL / MAIN** | La restauración está ensayada contra MariaDB descartable en CI, pero aún falta demostrar recuperación efectiva de un respaldo productivo autorizado, con RPO/RTO acordados y control de acceso al destino. Nunca ensayar restauración destructiva en producción por defecto. |
+| RF-124 | **PARCIAL / MAIN** | El restore en CI demuestra mecanismo, no recuperación real. Baseline D-040: **RPO ≤24 h**, **RTO ≤8 h**, ensayos de restauración **trimestrales** en entorno aislado con datos reales autorizados una vez existan, y después de cambios relevantes; comprobar DB, archivos y configuración, registrar duración/resultado, nunca destruir producción. Acreditar por separado recuperación de respaldo productivo y límites efectivamente observados. |
 | RF-125 | **MAIN + PARCIAL** | Aislamiento tenant ya es invariante; el scope por entidad legal se aplica donde corresponda y requiere extensión consistente de permisos/consultas. |
 
 ## 5.23 Experiencia de usuario — RF-126 a RF-129
@@ -414,10 +414,10 @@ Los 129 RF no equivalen a 129 features independientes. Se condensan en capacidad
 | People/HR | 089–093 | **Módulo opcional** |
 | Time & Attendance | 094–098 | **Módulo opcional + adaptadores biométricos** |
 | Identity/Permissions | 099–104 | **Núcleo**, ampliamente implementado |
-| Audit | 105–108 | **Núcleo**, base ya implementada |
+| Audit | 105–108 | **Núcleo parcial**: entidades disponibles; preservar historial ante borrado de tenant y completar vistas de auditoría |
 | Analytics/Dashboard | 109–114, 118–121 | **Capacidad transversal** sobre read models |
 | Alerts/Notifications | 115–117 | **Motor transversal**, Notification como base |
-| Backup/Security | 122–125 | **Plataforma**, ampliamente implementado |
+| Backup/Security | 122–125 | **Plataforma parcial**: script/ensayo CI integrados; periodicidad, copia externa y recuperación productiva pendientes |
 | UX/Search/Responsive | 126–129 | **Principios + capacidades transversales** |
 
 Esto evita la lectura equivocada de “hay que construir 129 cosas”. En realidad el cliente revela aproximadamente **18 capacidades**, varias ya definidas o iniciadas.
@@ -432,12 +432,12 @@ Esta matriz contrasta necesidades con arquitectura; **no sustituye la confirmaci
 
 | Contrato pendiente | Decisión que se debe registrar | Evidencia exigida |
 | --- | --- | --- |
-| RF-001 / RF-004, topología | ¿Un tenant con múltiples entidades legales y permisos particionados, o tenants separados con accesos entre cuentas explícitos? ¿Quién ve qué datos cuando cambia el contexto? | Matriz de usuarios × razón social × sede y pruebas HTTP de acceso permitido/denegado; ningún permiso surge automáticamente por usar un selector. |
+| RF-001 / RF-004, asignación concreta | #177 resuelve **arquitectura**, no datos de onboarding: registrar pertenencia de cada razón social al grupo, usuarios, sedes, fuentes, roles y selector (oculto con entidad única). | Matriz de usuarios × razón social × sede y pruebas HTTP de acceso permitido/denegado; ningún permiso surge automáticamente por cambiar contexto. |
 | RF-002, propiedad de datos | Identificar dueño jurídico de existencias, producto/variante, venta, costo y reporte; diferenciar el alcance tenant/sede del alcance entidad legal. | Relaciones y consultas explícitas; lectura/escritura cross-entity denegada; reportes y exportaciones filtrados por autorización. |
 | RF-003, operación interempresa | Precisar si se trata de servicio de fabricación, compra/venta entre sociedades, traslado físico por cuenta ajena u otra operación. | Contrato origen/destino con titularidad, precio/valuación, documento, evento auditable y flujo de reversión. El movimiento físico de stock no se reutiliza como asiento comercial. |
-| RF-122 / RF-124, continuidad | Definir periodicidad, retención, destino protegido, responsables, restauración ensayable y RPO/RTO aceptables. | Configuración de cron/observación real y artefactos de backup verificables **sin publicar datos**; evidencia separada de un ensayo de recuperación autorizado. |
+| RF-122 / RF-124, continuidad | Implementar baseline D-040: DB diaria, archivos/media cubiertos, 30 días si hosting lo permite, copia externa con datos reales, RPO ≤24 h, RTO ≤8 h y ensayo trimestral aislado; registrar responsables/destino/acceso. | Pruebas de cron y estado de respaldos productivos **sin publicar datos**; bitácora de ensayo de restauración real autorizado, métricas de recuperación y alertas, distinta de la prueba CI. |
 
-El alcance de #171/#172 conserva por ahora la invariante **tenant + fuente + variante** prevista en su Issue. No atribuirle separación por razón social ni operación interempresa mientras esos contratos no estén resueltos, implementados y probados. Una decisión de topología puede requerir un slice transversal previo o un ajuste explícito del alcance, nunca una suposición silenciosa.
+El draft #171/#172 ya protege **tenant + fuente + variante**, pero #177 exige además entidad legal efectiva por fuente y prohibir transferencias simples entre razones sociales antes del merge. No atribuirle todavía separación jurídica, autorización cross-entity ni intercompany mientras el modelo, API y pruebas no lo demuestren; la adaptación de la rama debe ser explícita y serial.
 
 ## R1 — Alcance explícito en vez de duplicación
 
@@ -532,25 +532,21 @@ Con cada nuevo cliente, la arquitectura debería requerir **menos excepciones**,
 
 ---
 
-# 9. Orden de producto sugerido a partir del contraste
+# 9. Dependencias entre capacidades
 
-Sin alterar la serialización técnica vigente del repositorio, el contraste sugiere esta secuencia funcional:
+Esta matriz identifica **dependencias funcionales**, no la secuencia de implementación, el sprint ni una promesa de releases. La prioridad, asignación y el orden de ejecución pertenecen exclusivamente al [Roadmap canónico, Issue #1](https://github.com/pl0n3r/Condor/issues/1).
 
-1. cerrar Inventory genérico;
-2. Customer + categorías + Pricing;
-3. Orders/Sales + Channels + efectos transaccionales de stock;
-4. catálogo público/storefront conectado al flujo real de compra;
-5. Media;
-6. Reporting/Analytics transversal;
-7. Procurement + materiales + UoM;
-8. Manufacturing + BOM + calidad/merma;
-9. Costing;
-10. Quotes/B2B;
-11. Alerts;
-12. People/HR;
-13. Attendance + adaptador de huellero.
+| Capacidad | Requiere para funcionar correctamente |
+| --- | --- |
+| Inventory multi-entidad | Titularidad jurídica y controles de #177, fuente, variante, movimientos e idempotencia; la transferencia interna no crea una operación intercompany. |
+| Orders/Sales y canales | Customer, Pricing y stock transaccional con alcance por entidad legal. |
+| Storefront y checkout | Catálogo/variantes, canales, disponibilidad efectiva y Orders; ambas marcas pueden tener experiencias públicas diferenciadas sobre motor compartido. |
+| Procurement y Manufacturing | Materiales/unidades, Inventory trazable y contratos de transacciones entre entidades cuando aplique. |
+| Costing y Analytics | Eventos/instantáneas históricos de producción, inventario y ventas; filtros por entidad y permisos sensibles. |
+| Alerts y búsquedas | Fuentes de eventos y datos confiables, autorización y reglas configurables. |
+| People/HR y Attendance | Identidad separada de empleado, permisos de datos personales e integraciones de dispositivo adaptables. |
 
-El orden exacto de releases debe seguir el Roadmap canónico #1, dependencias reales y prioridades comerciales. Este documento no crea un Roadmap paralelo.
+La dependencia no fija una prioridad comercial. Cada slice se abre y serializa desde el Roadmap #1 y su Issue, evitando una segunda cola de ejecución.
 
 ---
 
