@@ -1937,6 +1937,29 @@ Precedente: `App\Application\Notification\TransactionalEmailGateway` + `App\Infr
 
 Regla de PII: ningún adaptador registra en logs datos personales (destinatarios, nombres, tokens) — solo identificadores no sensibles (tipo de plantilla, tipo de evento).
 
+
+### D-052 — Titularidad jurídica por entidad legal e intercompany explícito
+
+Condor distingue de forma estructural la cuenta operativa de la titularidad jurídica.
+
+Reglas:
+
+- **Tenant** representa la cuenta/grupo operativo contratado en Condor; **LegalEntity** representa la razón social o titular jurídico/fiscal dentro de ese tenant;
+- un tenant puede contener varias entidades legales sin duplicar el núcleo funcional ni crear tenants separados por defecto;
+- todo dominio cuya operación tenga propietario jurídico —incluidos inventario, ventas/pedidos, compras, costos, fabricación y reportes derivados— debe declarar o resolver un `legal_entity_id` efectivo perteneciente al tenant;
+- una sede, canal o fuente de inventario no sustituyen la titularidad jurídica;
+- seleccionar una entidad legal en la interfaz nunca amplía permisos: la autorización server-side conserva tenant + entidad legal + sede/fuente + permiso efectivo;
+- lecturas, dashboards, exportaciones y mutaciones deben filtrar la frontera jurídica además del tenant cuando el dominio lo requiera;
+- para inventario, cada `InventorySource` pertenece a una entidad legal; una fuente de sede debe coincidir con la entidad de su `Branch`, una fuente lógica declara entidad explícita y los saldos/movimientos preservan esa titularidad;
+- una transferencia ordinaria de inventario solo opera entre fuentes de la **misma entidad legal**;
+- un cambio de titularidad entre entidades legales se modela mediante un caso de uso **intercompany** separado, con origen, destino, motivo/contrato, trazabilidad y efectos de inventario explícitos; no existe un bypass `crossEntity` en la transferencia interna;
+- la base de datos actúa como segunda barrera mediante claves/FKs compuestas que impidan asociaciones cross-tenant o cross-entity incoherentes;
+- sedes heredadas sin entidad legal no se asignan silenciosamente a la entidad primaria: las operaciones nuevas que exijan titular deben fallar de forma diagnosticable hasta una reconciliación autorizada;
+- para tenants de una sola entidad legal, la interfaz usa el contexto primario sin complejidad visible innecesaria; si existen varias, el contexto debe ser explícito y mostrar solo entidades autorizadas.
+
+La primera aplicación ejecutable de esta decisión es Slice 4 — Inventario (#171/#172). Los dominios comerciales posteriores deben reutilizar la misma frontera, no crear modelos paralelos por cliente o sector.
+
+
 ## 7. Criterio de actualización
 
 Una decisión debe incorporarse aquí cuando afecte de manera durable cómo se diseña, implementa, prueba, opera o evoluciona Condor.
