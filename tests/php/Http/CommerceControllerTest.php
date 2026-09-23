@@ -89,6 +89,21 @@ final class CommerceControllerTest extends WebTestCase
         );
         self::assertResponseIsSuccessful();
 
+        $client->request(
+            'GET',
+            '/api/v1/branches/'.$branch->id()
+                .'/pricing/effective?variant='.$variant->id()
+                .'&customer='.$customerId,
+        );
+        self::assertResponseStatusCodeSame(422);
+        self::assertStringContainsString(
+            'no tiene precio',
+            mb_strtolower(
+                (string) ($this->json($client)['message'] ?? ''),
+                'UTF-8',
+            ),
+        );
+
         $client->jsonRequest(
             'PUT',
             '/api/v1/branches/'.$branch->id()
