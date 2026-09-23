@@ -123,7 +123,7 @@ Nunca crear:
 
 - un módulo “Inventario Marcela Arias” y otro “Inventario Fabritex”;
 - una tabla por cliente;
-- una página web separada por razón social;
+- una aplicación/motor web duplicado por razón social. RF-055 y RF-060 sí requieren **dos experiencias públicas diferenciadas**, configurables por marca, canal y dominio sobre un motor común; no prohibir esas dos páginas;
 - permisos codificados por nombre de cargo;
 - una integración de huellero mezclada con el dominio de asistencia;
 - lógica de producción limitada a prendas, telas o tallas.
@@ -241,7 +241,7 @@ La plantilla acelera la implantación, pero todos esos elementos continúan sien
 
 | RF | Cobertura | Traducción correcta a Condor |
 | --- | --- | --- |
-| RF-055 | **PARCIAL / MAIN** | Storefront tenant-owned y dominio personalizado ya existen; falta e-commerce completo. |
+| RF-055 | **PARCIAL / MAIN** | Storefront tenant-owned y dominio personalizado ya existen; falta e-commerce completo. La página de esta marca debe conservar identidad visual y catálogo propios según la topología jurídica acordada, sin duplicar la plataforma. |
 | RF-056 | **DEFINIDO** | Storefront consume el mismo catálogo/inventario; nunca sincronización por copia de bases de datos. |
 | RF-057 | **DEFINIDO** | Checkout crea pedido y aplica la política transaccional de inventario. |
 | RF-058 | **DEFINIDO** | Disponibilidad usa fuente efectiva + backorder configurable; servidor es autoridad final. |
@@ -251,7 +251,7 @@ La plantilla acelera la implantación, pero todos esos elementos continúan sien
 
 | RF | Cobertura | Traducción correcta a Condor |
 | --- | --- | --- |
-| RF-060 | **PARCIAL / MAIN** | Reusar Storefront con perfil/tema/capacidades B2B por entidad/canal; no crear una segunda plataforma web. |
+| RF-060 | **PARCIAL / MAIN** | Exponer una segunda página comercial B2B diferenciada en contenido, dominio y acceso, reutilizando Storefront mediante configuración por marca/canal y entidad legal o tenant según la topología validada; no desplegar un motor web duplicado. |
 | RF-061 | **PARCIAL** | Catálogo + servicios + CMS/bloques configurables. Productos y servicios comparten contratos comerciales donde sea razonable. |
 | RF-062 | **DEFINIDO** | Solicitud web se modela como lead, cotización o pedido según tipo, siempre dentro de Condor. |
 | RF-063 | **NUEVO** | Módulo/capacidad reusable **Quotes/Cotizaciones**, convertible a pedido y apto para B2B/institucional. |
