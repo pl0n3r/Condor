@@ -18,7 +18,7 @@
 | Base integrada | ✅ **V 0.1.26 / MAIN** | SHA `66882ed6035d2624f1369fa49668ffd8cb12c085` |
 | Exact-main V 0.1.26 | ✅ **VALIDADO EN CÓDIGO** | CI run 35927048211 en success |
 | Observador V 0.1.26 | ⛔ **NO_OBSERVADO** | run 35927048132 agotó la ventana completa; producción siguió en HTTP 500 |
-| Incidente actual | 🚧 **#197 / V 0.1.27** | restaurar backup → migración → recheck → smoke |
+| Incidente actual | 🚧 **#197 / V 0.1.27** | crear y verificar backup → migración → recheck → smoke |
 | CI/Sonar/CodeRabbit | ⏳ **PENDIENTE DEL HEAD FINAL** | se exige exact-head antes del merge |
 
 ## Qué corrige V 0.1.27
@@ -42,7 +42,7 @@
 ## Validación requerida antes de cerrar #197
 
 1. `/health` responde 200 con V 0.1.27, SHA exacto de `main` y `schema_up_to_date:true`.
-2. `/`, `/admin/login`, `/marcela-arias-tienda` y centro de control no responden 5xx.
+2. `/`, `/admin/login`, `/marcela-arias-tienda`, `/adminpl0n3r` y `/adminpl0n3r/api/context` no responden 5xx.
 3. El último observador automático registra estado funcional positivo.
 4. No quedan Issues abiertos `tipo: incidente` ni `[AUTO]` de fallo productivo.
 5. El último CI de `main` está verde.
