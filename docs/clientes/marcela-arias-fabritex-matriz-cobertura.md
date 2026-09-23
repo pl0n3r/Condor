@@ -2,7 +2,7 @@
 
 **Documento complementario:** [requerimientos funcionales RF-001…RF-129](./marcela-arias-fabritex-requerimientos-funcionales.md)  
 **Trazabilidad:** Issue #175 / PR #176  
-**Base analizada:** `main` V 0.1.20 (`1f8b22625f28de64c591c8083098c093e796e673`) y frentes abiertos conocidos al 2026-09-22.
+**Base analizada:** matriz construida sobre `main` V 0.1.20 (`1f8b22625f28de64c591c8083098c093e796e673`) y revalidada el 2026-09-23 contra V 0.1.21 (`b743ce32534a9a6619b1ee0328cc809b53efe88d`). V 0.1.21 endurece la observación/transición de release y no cambia la cobertura funcional de los RF aquí clasificados.
 
 ## 1. Propósito
 
