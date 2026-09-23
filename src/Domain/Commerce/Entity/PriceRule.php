@@ -87,6 +87,12 @@ class PriceRule extends CommercialItem
             );
         }
 
+        if ($priority < -2147483648 || $priority > 2147483647) {
+            throw new DomainException(
+                'La prioridad de la regla excede el rango permitido.',
+            );
+        }
+
         $discountType = strtolower(trim($discountType));
         if (
             !in_array(

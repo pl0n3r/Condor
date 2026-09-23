@@ -161,6 +161,26 @@ final class CommercialDomainTest extends TestCase
         self::assertSame($active->id(), $result->ruleId);
     }
 
+    public function testPriceRuleRejectsPriorityOutsideDatabaseIntegerRange(): void
+    {
+        $tenant = new Tenant('Empresa', 'empresa-'.bin2hex(random_bytes(4)));
+        $list = new PriceList($tenant, 'Detal', 'detal');
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(
+            'La prioridad de la regla excede el rango permitido.',
+        );
+
+        new PriceRule(
+            $tenant,
+            $list,
+            'Fuera de rango',
+            2147483648,
+            PriceRule::TYPE_FIXED,
+            1000,
+        );
+    }
+
     public function testInvalidCommercialSlugsAndCurrencyAreRejected(): void
     {
         $tenant = new Tenant('Empresa', 'empresa-'.bin2hex(random_bytes(4)));
