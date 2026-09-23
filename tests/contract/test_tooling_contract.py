@@ -105,6 +105,10 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn("schema_check_status=$?", script)
         self.assertIn("comprobación de esquema falló", script)
         self.assertIn("migraciones pendientes o historial de migraciones no reconciliado", script)
+        self.assertIn(
+            "out[[:space:]_-]*of[[:space:]_-]*date",
+            script,
+        )
         self.assertIn("fallo de base de datos o conectividad", script)
         self.assertNotIn("up-to-date --env=prod --no-interaction >/dev/null 2>&1", script)
 
