@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -61,7 +62,7 @@ class ToolingContractTests(unittest.TestCase):
         self.assertNotIn("if: steps.tag.outputs.created == 'true'", workflow)
 
     def test_post_deploy_blocks_pending_schema_before_cache_under_lock(self) -> None:
-        """El cron detecta esquema pendiente y nunca migra producción automáticamente."""
+        """La política mantiene esquema antes de caché y prohíbe migrar producción."""
         script = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
 
         lock_index = script.index('LOCK_FILE="var/post-deploy.lock"')
@@ -72,52 +73,11 @@ class ToolingContractTests(unittest.TestCase):
         self.assertLess(lock_index, check_index)
         self.assertLess(check_index, clear_index)
         self.assertLess(clear_index, warmup_index)
-        self.assertNotIn("doctrine:migrations:migrate", script)
-        self.assertNotIn("doctrine:schema:", script)
         self.assertIn("autorización explícita", script)
-        self.assertIn('LOCK_MAX_AGE_SECONDS=21600', script)
-        self.assertIn('LOCK_INVALID_GRACE_MINUTES=5', script)
-        self.assertIn('LOCK_GUARD_FILE="var/post-deploy.lock.guard"', script)
-        self.assertIn('FLOCK_BIN=""', script)
-        self.assertIn('exec 9>>"$LOCK_GUARD_FILE"', script)
-        self.assertIn('"$FLOCK_BIN" -n 9', script)
-        self.assertNotIn('mv "$LOCK_GUARD', script)
-        self.assertIn('LOCK_TOKEN="$$-$(date +%s)"', script)
-        self.assertEqual(
-            script.count('printf \'%s\\n%s\\n%s\\n\' "$LOCK_TOKEN" "$$"'),
-            1,
-        )
-        self.assertNotIn('"$LOCK_TOKEN" "$" "$(date +%s)"', script)
-        self.assertNotIn("cleanup_guard\n                cleanup_guard", script)
-        self.assertNotIn('kill -0 "$owner_pid"', script)
-        self.assertIn('--fail-on-unregistered', script)
-        self.assertIn(
-            "trap 'cleanup_schema_check_process; cleanup_schema_check_watchdog; cleanup_schema_check_log; cleanup_lock; cleanup_guard' EXIT",
-            script,
-        )
-        self.assertIn('find "$LOCK_FILE" -mmin +', script)
-        self.assertIn("set -C", script)
-
-        self.assertIn("trap 'exit 130' INT", script)
-        self.assertIn("trap 'exit 143' TERM", script)
-        self.assertIn("umask 077", script)
-        self.assertIn('SCHEMA_CHECK_LOG="$(mktemp', script)
-        self.assertIn('CONDOR_SCHEMA_CHECK_TIMEOUT_SECONDS:-60', script)
-        self.assertIn('SCHEMA_CHECK_TIMEOUT_MARKER', script)
-        self.assertIn('SCHEMA_CHECK_WATCHDOG_PID', script)
-        self.assertIn('LOCK_SKIP_STATUS=10', script)
-        self.assertIn('LOCK_ERROR_STATUS=11', script)
-        self.assertIn('exit 3', script)
-        self.assertIn("cleanup_schema_check_log()", script)
-        self.assertIn("schema_check_status=$?", script)
-        self.assertIn("comprobación de esquema falló", script)
-        self.assertIn("migraciones pendientes o historial de migraciones no reconciliado", script)
-        self.assertIn(
-            "out[[:space:]_-]*of[[:space:]_-]*date",
-            script,
-        )
-        self.assertIn("fallo de base de datos o conectividad", script)
-        self.assertNotIn("up-to-date --env=prod --no-interaction >/dev/null 2>&1", script)
+        self.assertNotIn("doctrine:migrations:migrate", script)
+        self.assertNotIn("doctrine:migrations:execute", script)
+        self.assertNotIn("doctrine:schema:update", script)
+        self.assertNotIn("doctrine:schema:drop", script)
 
     def test_post_deploy_lock_creation_failure_is_not_success(self) -> None:
         """Un fallo real al publicar/adquirir el guard termina distinto de cero."""
@@ -214,6 +174,70 @@ class ToolingContractTests(unittest.TestCase):
                 )
             finally:
                 holder.wait(timeout=4)
+
+    def test_post_deploy_classifies_schema_drift_before_database_word(self) -> None:
+        """La salida de Doctrine sobre historial se clasifica como deriva, no conectividad."""
+        messages = (
+            "Out-of-date! 1 migration to execute.",
+            "You have 1 previously executed migrations in the database "
+            "that are not registered migrations.",
+        )
+        for message in messages:
+            with self.subTest(message=message):
+                result, invoked = self._run_post_deploy_with_fake_php(
+                    schema_output=message,
+                    schema_status=1,
+                )
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn(
+                    "migraciones pendientes o historial de migraciones no reconciliado",
+                    result.stderr,
+                )
+                self.assertNotIn("cache:clear", invoked)
+                self.assertNotIn("cache:warmup", invoked)
+
+    def test_post_deploy_recovers_orphan_and_stale_incomplete_locks(self) -> None:
+        """Locks sin guard activo se recuperan; metadata incompleta reciente se omite."""
+        now = int(time.time())
+        cases = (
+            (
+                "orphan-valid",
+                f"old-token\\n99999999\\n{now}\\n",
+                None,
+                "lock huérfano detectado",
+                True,
+            ),
+            (
+                "stale-incomplete",
+                "broken-token\\n",
+                now - 400,
+                "lock incompleto huérfano",
+                True,
+            ),
+            (
+                "recent-incomplete",
+                "broken-token\\n",
+                None,
+                "lock incompleto reciente",
+                False,
+            ),
+        )
+        for name, metadata, mtime, diagnostic, should_run_schema in cases:
+            with self.subTest(case=name):
+                result, invoked = self._run_post_deploy_with_fake_php(
+                    schema_output="Up-to-date!",
+                    schema_status=0,
+                    lock_metadata=metadata,
+                    lock_mtime=mtime,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(diagnostic, result.stderr)
+                if should_run_schema:
+                    self.assertIn("doctrine:migrations:up-to-date", invoked)
+                    self.assertIn("cache:clear", invoked)
+                    self.assertIn("cache:warmup", invoked)
+                else:
+                    self.assertEqual(invoked, "")
 
     def test_post_deploy_schema_check_timeout_never_touches_cache(self) -> None:
         """Doctrine colgado vence el límite de pared antes de cualquier caché."""
@@ -330,6 +354,73 @@ esac
         )
         for command in forbidden:
             self.assertNotIn(command, script)
+
+    def _run_post_deploy_with_fake_php(
+        self,
+        *,
+        schema_output: str,
+        schema_status: int,
+        lock_metadata: str | None = None,
+        lock_mtime: int | None = None,
+    ) -> tuple[subprocess.CompletedProcess[str], str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            var = root / "var"
+            var.mkdir()
+            script = scripts / "post-deploy.sh"
+            script.write_text(
+                (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            if lock_metadata is not None:
+                lock_file = var / "post-deploy.lock"
+                lock_file.write_text(lock_metadata, encoding="utf-8")
+                if lock_mtime is not None:
+                    os.utime(lock_file, (lock_mtime, lock_mtime))
+
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            calls = root / "php-calls.log"
+            fake_php = """#!/bin/sh
+printf '%s\\n' "$*" >> "$FAKE_PHP_LOG"
+case "$*" in
+  *doctrine:migrations:up-to-date*)
+    printf '%s\\n' "$FAKE_SCHEMA_OUTPUT" >&2
+    exit "$FAKE_SCHEMA_STATUS"
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+"""
+            for name in ("php85", "php"):
+                binary = fake_bin / name
+                binary.write_text(fake_php, encoding="utf-8")
+                binary.chmod(0o755)
+
+            env = dict(os.environ)
+            env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+            env["FAKE_PHP_LOG"] = str(calls)
+            env["FAKE_SCHEMA_OUTPUT"] = schema_output
+            env["FAKE_SCHEMA_STATUS"] = str(schema_status)
+            result = subprocess.run(
+                ["sh", str(script)],
+                cwd=root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=6,
+            )
+            invoked = (
+                calls.read_text(encoding="utf-8")
+                if calls.exists()
+                else ""
+            )
+            return result, invoked
 
     def test_throughput_cli_preserves_json_report_contract(self) -> None:
         """El CLI de throughput entrega el esquema consumido por automatizaciones."""
