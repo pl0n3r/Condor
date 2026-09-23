@@ -52,15 +52,11 @@ final class StorefrontAdminController extends AbstractController
         }
 
         $owner = $authorization->isOwner($membership);
-        $canEdit = $owner || $authorization->hasAnyPermission(
+        $canEdit = $owner;
+        $canView = $owner || $authorization->hasAnyPermission(
             $user,
             $tenant,
-            ['site.update'],
-        );
-        $canView = $canEdit || $authorization->hasAnyPermission(
-            $user,
-            $tenant,
-            ['site.view'],
+            ['site.view', 'site.update'],
         );
 
         if (!$canView) {

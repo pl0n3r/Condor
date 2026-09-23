@@ -35,7 +35,7 @@
                     <div class="storefront-variant" data-sku="{{ variant.sku }}">
                         <strong>{{ variant.name }}</strong>
                         <span>
-                            COP {{ (variant.price.effective_amount_minor / 100)|number_format(0, ',', '.') }}
+                            COP {{ (variant.price.effective_amount_minor / 100)|number_format(2, ',', '.') }}
                         </span>
                         <span>
                             {{ variant.availability == 'available' ? 'Disponible' : 'Agotado' }}

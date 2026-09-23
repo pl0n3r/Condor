@@ -11,7 +11,6 @@ use App\Domain\Commerce\Entity\SalesChannel;
 use App\Domain\Inventory\Entity\InventoryBalance;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
-use DomainException;
 
 final readonly class PublicCatalogPresentation
 {
@@ -71,15 +70,15 @@ final readonly class PublicCatalogPresentation
             static fn (mixed $product): bool => $product instanceof Product,
         ));
 
-        $payload = [];
-        foreach ($products as $product) {
-            $variants = array_values(array_filter(
+        $variants = $products === []
+            ? []
+            : array_values(array_filter(
                 $this->entityManager
                     ->getRepository(ProductVariant::class)
                     ->findBy(
                         [
                             'tenant' => $tenant,
-                            'product' => $product,
+                            'product' => $products,
                             'active' => true,
                         ],
                         ['name' => 'ASC'],
@@ -89,50 +88,68 @@ final readonly class PublicCatalogPresentation
                 ),
             ));
 
-            $variantPayload = [];
-            foreach ($variants as $variant) {
-                try {
-                    $price = $this->pricing->resolve(
-                        $tenant,
-                        $variant,
-                        $channel->priceList(),
-                    );
-                } catch (DomainException) {
-                    continue;
-                }
+        $prices = $this->pricing->resolveBatch(
+            $tenant,
+            $variants,
+            $channel->priceList(),
+        );
 
-                $balance = $this->entityManager
+        $balances = $variants === []
+            ? []
+            : array_values(array_filter(
+                $this->entityManager
                     ->getRepository(InventoryBalance::class)
-                    ->findOneBy([
+                    ->findBy([
                         'tenant' => $tenant,
                         'legalEntity' => $channel->legalEntity(),
                         'source' => $channel->inventorySource(),
-                        'variant' => $variant,
-                    ]);
-                $quantity = $balance instanceof InventoryBalance
-                    ? $balance->quantity()
-                    : 0;
-                $backorder = $product->allowsBackorder();
-                $available = $quantity > 0 || $backorder;
+                        'variant' => $variants,
+                    ]),
+                static fn (mixed $balance): bool => (
+                    $balance instanceof InventoryBalance
+                ),
+            ));
+        $balancesByVariant = [];
+        foreach ($balances as $balance) {
+            $balancesByVariant[$balance->variant()->id()] = $balance;
+        }
 
-                $variantPayload[] = [
-                    'id' => $variant->id(),
-                    'sku' => $variant->sku(),
-                    'name' => $variant->name(),
-                    'price' => [
-                        'base_amount_minor' => $price->baseAmountMinor,
-                        'effective_amount_minor' => $price->effectiveAmountMinor,
-                        'currency' => $price->currency,
-                        'price_list_id' => $price->priceListId,
-                        'rule_id' => $price->ruleId,
-                    ],
-                    'availability' => $available
-                        ? 'available'
-                        : 'out_of_stock',
-                    'backorder' => $backorder,
-                ];
+        $variantsByProduct = [];
+        foreach ($variants as $variant) {
+            $price = $prices[$variant->id()] ?? null;
+            if ($price === null) {
+                continue;
             }
 
+            $balance = $balancesByVariant[$variant->id()] ?? null;
+            $quantity = $balance instanceof InventoryBalance
+                ? $balance->quantity()
+                : 0;
+            $product = $variant->product();
+            $backorder = $product->allowsBackorder();
+            $available = $quantity > 0 || $backorder;
+
+            $variantsByProduct[$product->id()][] = [
+                'id' => $variant->id(),
+                'sku' => $variant->sku(),
+                'name' => $variant->name(),
+                'price' => [
+                    'base_amount_minor' => $price->baseAmountMinor,
+                    'effective_amount_minor' => $price->effectiveAmountMinor,
+                    'currency' => $price->currency,
+                    'price_list_id' => $price->priceListId,
+                    'rule_id' => $price->ruleId,
+                ],
+                'availability' => $available
+                    ? 'available'
+                    : 'out_of_stock',
+                'backorder' => $backorder,
+            ];
+        }
+
+        $payload = [];
+        foreach ($products as $product) {
+            $variantPayload = $variantsByProduct[$product->id()] ?? [];
             if ($variantPayload === []) {
                 continue;
             }

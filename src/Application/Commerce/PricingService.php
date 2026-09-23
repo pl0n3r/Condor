@@ -13,6 +13,7 @@ use App\Domain\Commerce\Entity\PriceRule;
 use App\Domain\Commerce\Entity\VariantPrice;
 use App\Domain\Organization\Entity\Tenant;
 use DateTimeImmutable;
+use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
 
@@ -31,7 +32,41 @@ final readonly class PricingService
         ?Customer $customer = null,
         ?DateTimeImmutable $at = null,
     ): EffectivePrice {
-        $this->assertVariant($tenant, $variant);
+        $resolved = $this->resolveBatch(
+            $tenant,
+            [$variant],
+            $requestedList,
+            $customer,
+            $at,
+        )[$variant->id()] ?? null;
+
+        if (!$resolved instanceof EffectivePrice) {
+            throw new DomainException(
+                'La variante no tiene precio en la lista seleccionada.',
+            );
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * @param list<ProductVariant> $variants
+     * @return array<string, EffectivePrice>
+     */
+    public function resolveBatch(
+        Tenant $tenant,
+        array $variants,
+        ?PriceList $requestedList = null,
+        ?Customer $customer = null,
+        ?DateTimeImmutable $at = null,
+    ): array {
+        if ($variants === []) {
+            return [];
+        }
+
+        foreach ($variants as $variant) {
+            $this->assertVariant($tenant, $variant);
+        }
 
         if (
             $customer !== null
@@ -59,17 +94,21 @@ final readonly class PricingService
             );
         }
 
-        $price = $this->entityManager
-            ->getRepository(VariantPrice::class)
-            ->findOneBy([
+        $prices = array_values(array_filter(
+            $this->entityManager->getRepository(VariantPrice::class)->findBy([
                 'tenant' => $tenant,
                 'priceList' => $priceList,
-                'variant' => $variant,
-            ]);
-        if (!$price instanceof VariantPrice) {
-            throw new DomainException(
-                'La variante no tiene precio en la lista seleccionada.',
-            );
+                'variant' => $variants,
+            ]),
+            static fn (mixed $price): bool => $price instanceof VariantPrice,
+        ));
+        if ($prices === []) {
+            return [];
+        }
+
+        $pricesByVariant = [];
+        foreach ($prices as $price) {
+            $pricesByVariant[$price->variant()->id()] = $price;
         }
 
         $rules = array_values(array_filter(
@@ -81,12 +120,23 @@ final readonly class PricingService
             static fn (mixed $rule): bool => $rule instanceof PriceRule,
         ));
 
-        return $this->resolver->resolve(
-            $price,
-            $category,
-            $rules,
-            $at,
-        );
+        $at ??= new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $resolved = [];
+        foreach ($variants as $variant) {
+            $price = $pricesByVariant[$variant->id()] ?? null;
+            if (!$price instanceof VariantPrice) {
+                continue;
+            }
+
+            $resolved[$variant->id()] = $this->resolver->resolve(
+                $price,
+                $category,
+                $rules,
+                $at,
+            );
+        }
+
+        return $resolved;
     }
 
     private function assertVariant(

@@ -336,7 +336,7 @@ final class StorefrontAdminControllerTest extends WebTestCase
         self::assertSame('Identidad protegida', $stored->headline());
     }
 
-    public function testDelegatedUpdatePermissionCanEditStorefront(): void
+    public function testDelegatedUpdatePermissionCannotEditTenantWideStorefront(): void
     {
         [$client, $entityManager, $tenant] = $this->tenantBrowser();
         $branch = $entityManager->getRepository(Branch::class)->findOneBy([
@@ -347,10 +347,10 @@ final class StorefrontAdminControllerTest extends WebTestCase
         $suffix = strtolower(bin2hex(random_bytes(4)));
         $user = new User(
             'site-update-'.$suffix.'@example.test',
-            'Editor del sitio',
+            'Editor de sede',
         );
         $membership = new Membership($tenant, $user, 'ADMIN');
-        $role = new Role($tenant, 'Editor sitio', ['site.update']);
+        $role = new Role($tenant, 'Editor sitio por sede', ['site.update']);
         foreach ([$user, $membership, $role] as $record) {
             $entityManager->persist($record);
         }
@@ -359,31 +359,37 @@ final class StorefrontAdminControllerTest extends WebTestCase
             $branch,
             $role,
         ));
+        $profile = new StorefrontProfile(
+            $tenant,
+            'Identidad global protegida',
+            'La identidad global requiere propietario del tenant.',
+        );
+        $entityManager->persist($profile);
         $entityManager->flush();
 
         $client->loginUser($user);
-        $crawler = $client->request('GET', '/admin/storefront');
+        $client->request('GET', '/admin/storefront');
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorExists('form.storefront-admin-form');
-        $token = $crawler
-            ->filter('form.storefront-admin-form input[name="_token"]')
-            ->first()
-            ->attr('value');
-        self::assertIsString($token);
+        self::assertSelectorNotExists('form.storefront-admin-form');
+        self::assertSelectorTextContains(
+            '.storefront-admin-card',
+            'permiso permite consultar',
+        );
 
+        $token = $this->csrfToken($client, 'storefront_profile');
         $client->request('POST', '/admin/storefront', [
             '_token' => $token,
             '_action' => 'profile',
-            'headline' => 'Editado por permiso',
-            'description' => 'Cambio autorizado por site.update.',
+            'headline' => 'Intento con site.update',
+            'description' => 'No debe persistirse.',
         ]);
 
-        self::assertResponseRedirects('/admin/storefront?saved=profile');
+        self::assertResponseStatusCodeSame(403);
         $stored = $entityManager->getRepository(StorefrontProfile::class)
             ->findOneBy(['tenant' => $tenant]);
         self::assertInstanceOf(StorefrontProfile::class, $stored);
-        self::assertSame('Editado por permiso', $stored->headline());
+        self::assertSame('Identidad global protegida', $stored->headline());
     }
 
     public function testOwnerConfiguresAuditedChannelAndPublishesCatalog(): void

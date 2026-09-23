@@ -113,12 +113,19 @@ test.describe('Slice 6 — e-commerce público', () => {
     await expect(channelForm).toBeVisible();
     await channelForm.getByLabel('Nombre del canal').fill(channelName);
     await channelForm.getByLabel('Identificador').fill(channelSlug);
-    await channelForm
-      .getByLabel('Fuente de inventario')
-      .selectOption(source.id);
-    await channelForm
-      .getByLabel('Lista de precios')
-      .selectOption(list.id);
+    for (const [label, name, value] of [
+      ['Fuente de inventario', 'inventory_source_id', source.id],
+      ['Lista de precios', 'price_list_id', list.id],
+    ]) {
+      const select = channelForm.locator(`select[name="${name}"]`);
+      if (await select.count()) {
+        await channelForm.getByLabel(label).selectOption(value);
+      } else {
+        await expect(
+          channelForm.locator(`input[type="hidden"][name="${name}"]`)
+        ).toHaveValue(value);
+      }
+    }
     await channelForm.getByLabel('Canal activo').check();
     await channelForm.getByRole('button').click();
 
