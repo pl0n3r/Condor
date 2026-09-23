@@ -89,7 +89,11 @@ if [ -z "$dump_bin" ]; then
   exit 1
 fi
 
-set -- --single-transaction --quick --skip-lock-tables --triggers
+# Condor no define triggers de base de datos. En shared hosting, pedirlos en el
+# dump puede exigir privilegios adicionales que la cuenta de aplicación no
+# necesita. El respaldo de D-054 conserva esquema+datos administrados por Condor
+# y evita metadata/objetos fuera de ese contrato.
+set -- --single-transaction --quick --skip-lock-tables --skip-triggers
 
 # Usuarios de aplicación en hosting compartido no deben tener privilegios
 # globales como PROCESS. MySQL 8 puede exigirlo al inspeccionar tablespaces

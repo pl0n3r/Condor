@@ -29,6 +29,59 @@ if [ -z "$PHP_BIN" ]; then
     exit 1
 fi
 
+POST_DEPLOY_STATUS_FILE="var/runtime/post-deploy-status.json"
+POST_DEPLOY_PHASE="bootstrap"
+POST_DEPLOY_VERSION="$("$PHP_BIN" -r '$config = require "config/version.php"; echo is_array($config) ? ($config["version"] ?? "unknown") : "unknown";' 2>/dev/null || true)"
+case "$POST_DEPLOY_VERSION" in
+    [0-9]*.[0-9]*.[0-9]*)
+        ;;
+    *)
+        POST_DEPLOY_VERSION="unknown"
+        ;;
+esac
+
+write_post_deploy_status() {
+    phase="$1"
+    result="$2"
+    code="$3"
+    status_dir="$(dirname "$POST_DEPLOY_STATUS_FILE")"
+    mkdir -p -- "$status_dir" 2>/dev/null || return 0
+    status_tmp="$(mktemp "$status_dir/.post-deploy-status-XXXXXX" 2>/dev/null || true)"
+    [ -n "$status_tmp" ] || return 0
+    updated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '{"version":"%s","phase":"%s","result":"%s","code":%s,"updated_at":"%s"}\n' \
+        "$POST_DEPLOY_VERSION" "$phase" "$result" "$code" "$updated_at" >"$status_tmp" || {
+            rm -f -- "$status_tmp"
+            return 0
+        }
+    chmod 0600 "$status_tmp" 2>/dev/null || true
+    mv -f -- "$status_tmp" "$POST_DEPLOY_STATUS_FILE" 2>/dev/null || {
+        rm -f -- "$status_tmp"
+        return 0
+    }
+}
+
+set_post_deploy_phase() {
+    POST_DEPLOY_PHASE="$1"
+    write_post_deploy_status "$POST_DEPLOY_PHASE" "running" 0
+}
+
+finalize_post_deploy_status() {
+    exit_status="$1"
+    if [ "$exit_status" -eq 0 ]; then
+        if [ "$POST_DEPLOY_PHASE" = "complete" ]; then
+            result="success"
+        else
+            result="skipped"
+        fi
+    else
+        result="failure"
+    fi
+    write_post_deploy_status "$POST_DEPLOY_PHASE" "$result" "$exit_status"
+}
+
+set_post_deploy_phase "bootstrap"
+
 LOCK_FILE="var/post-deploy.lock"
 LOCK_GUARD_FILE="var/post-deploy.lock.guard"
 LOCK_MAX_AGE_SECONDS=21600
@@ -353,6 +406,7 @@ run_migration_command() {
 }
 
 validate_construction_migrations() {
+    set_post_deploy_phase "dry-run"
     validation_status=0
     if run_migration_command dry-run; then
         validation_status=0
@@ -449,6 +503,7 @@ resolve_database_url() {
 }
 
 run_pre_migration_backup() {
+    set_post_deploy_phase "backup"
     database_url="$(resolve_database_url 2>/dev/null || true)"
     if [ -z "$database_url" ]; then
         unset database_url
@@ -534,6 +589,7 @@ run_construction_migrations() {
         return "$backup_result"
     fi
 
+    set_post_deploy_phase "migrate"
     migration_status=0
     if run_migration_command apply; then
         migration_status=0
@@ -556,6 +612,7 @@ run_construction_migrations() {
     fi
     cleanup_migration_log
 
+    set_post_deploy_phase "recheck"
     recheck_status=0
     if run_schema_check; then
         recheck_status=0
@@ -690,10 +747,11 @@ acquire_lock() {
     recuperar_lock
 }
 
-trap 'cleanup_schema_check_process; cleanup_schema_check_watchdog; cleanup_schema_check_log; cleanup_migration_process; cleanup_migration_watchdog; cleanup_migration_log; cleanup_backup_process; cleanup_backup_watchdog; cleanup_backup_log; cleanup_lock; cleanup_guard' EXIT
+trap 'exit_status=$?; finalize_post_deploy_status "$exit_status"; cleanup_schema_check_process; cleanup_schema_check_watchdog; cleanup_schema_check_log; cleanup_migration_process; cleanup_migration_watchdog; cleanup_migration_log; cleanup_backup_process; cleanup_backup_watchdog; cleanup_backup_log; cleanup_lock; cleanup_guard; exit "$exit_status"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+set_post_deploy_phase "lock"
 lock_status=0
 if acquire_lock; then
     :
@@ -708,6 +766,7 @@ fi
 
 # D-053/D-054 / AGENTES.md §10: construction puede converger migraciones
 # aditivas con backup previo; live y el opt-out detectan deriva y fallan cerrado.
+set_post_deploy_phase "schema-check"
 schema_check_status=0
 if run_schema_check; then
     schema_check_status=0
@@ -757,5 +816,7 @@ else
     echo "post-deploy.sh: Doctrine no pudo comprobar el esquema; fallo no clasificable. Caché no modificada." >&2
     exit 2
 fi
+set_post_deploy_phase "cache"
 "$PHP_BIN" bin/console cache:clear --env=prod --no-warmup
 "$PHP_BIN" bin/console cache:warmup --env=prod
+set_post_deploy_phase "complete"
