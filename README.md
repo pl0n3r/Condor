@@ -6,7 +6,7 @@
 > **Objetivo actual:** cerrar Slice 4 — Inventario con stock por variante + fuente, movimientos auditables y transferencias atómicas, preservando aislamiento por tenant, entidad legal y sede.
 
 <p align="center">
-  <strong>Base integrada:</strong> V 0.1.21 · main `b743ce32` ·
+  <strong>Base integrada:</strong> V 0.1.21 · main actual `38c06714` ·
   <strong>Candidato:</strong> V 0.1.22 ·
   <strong>Rama:</strong> `trabajo/issue-171`
 </p>
@@ -15,12 +15,12 @@
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base integrada | ✅ **V 0.1.21 / EXACT-MAIN** | SHA `b743ce32534a9a6619b1ee0328cc809b53efe88d` · tag/Release `v0.1.21` publicados · CI post-merge verde |
-| Producción V 0.1.21 | 🚧 **OBSERVACIÓN EN CURSO / ESTADO SEPARADO** | Issue #173; una eventual reconciliación de esquema requiere autorización humana explícita |
-| Inventario sincronizado | ✅ **BASE V 0.1.21 VALIDADA** | merge técnico `9c69108c94d7cbcbd7f0a6ab53649ece5992428f` · `behind_by=0` · CI verde · Sonar 0 issues |
+| Base integrada | ✅ **V 0.1.21 / MAIN ACTUAL** | SHA `38c06714358656a83948e969239f687f7ad40de9` · #176 es documental sobre la release V 0.1.21; tag/Release `v0.1.21` siguen apuntando al commit de release `b743ce32534a9a6619b1ee0328cc809b53efe88d` |
+| Producción V 0.1.21 | ⛔ **NO OBSERVADA / ESTADO SEPARADO** | el observador de `b743ce32534a9a6619b1ee0328cc809b53efe88d` terminó con HTTP 500; la última identidad confirmada manualmente sigue siendo V 0.1.20. Una eventual reconciliación de esquema requiere autorización humana explícita |
+| Inventario sincronizado | ✅ **BASE ACTUAL SINCRONIZADA** | merge técnico `a41e07f46bc44b71139470db86d39030165d13a9` incorpora `main` `38c06714358656a83948e969239f687f7ad40de9` · `behind_by=0` |
 | Candidato actual | 🚧 **V 0.1.22 EN VALIDACIÓN EXACT-HEAD** | Issue #171 / PR #172 |
-| CI/Sonar del head final | ⏳ **DEBE REPETIRSE TRAS ESTE BUMP** | los gates previos validaron la base sincronizada, no este SHA de release |
-| CodeRabbit | ⏳ **PENDIENTE SOBRE HEAD FINAL** | se solicita después de fijar snapshot/versionado |
+| CI/Sonar del head final | ⏳ **EXACT-HEAD OBLIGATORIO** | todos los gates deben terminar sobre el último commit del candidato después de cualquier corrección documental o funcional |
+| CodeRabbit | ⏳ **EXACT-HEAD OBLIGATORIO** | la revisión final debe corresponder al mismo HEAD que CI y Sonar antes de sacar el PR de draft |
 
 ## Qué incorpora V 0.1.22
 
@@ -72,7 +72,7 @@
 ## Estado inmediato
 
 - **V 0.1.22:** candidato serial activo en validación exact-head.
-- **V 0.1.21 en producción:** su observación/reconciliación sigue documentada en #173 y no autoriza mutaciones productivas.
+- **Producción:** la última identidad confirmada manualmente sigue siendo V 0.1.20; V 0.1.21 quedó `NO_OBSERVADO` por HTTP 500. Ninguna migración o reconciliación productiva queda autorizada por este candidato.
 - La planificación posterior vive exclusivamente en el Roadmap canónico #1.
 
 ## Referencias
