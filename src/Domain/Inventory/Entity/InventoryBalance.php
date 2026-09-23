@@ -132,7 +132,11 @@ class InventoryBalance
             $next,
             'El saldo excede el rango permitido por inventario.',
         );
-        if ($next < 0 && !$this->variant->product()->allowsBackorder()) {
+        if (
+            $delta < 0
+            && $next < 0
+            && !$this->variant->product()->allowsBackorder()
+        ) {
             throw new DomainException(
                 'Stock insuficiente: el producto no permite backorder.',
             );

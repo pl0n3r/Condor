@@ -10,6 +10,7 @@ use App\Domain\Identity\Entity\BranchRoleAssignment;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\Role;
 use App\Domain\Identity\Entity\User;
+use App\Domain\Inventory\Entity\InventoryBalance;
 use App\Domain\Inventory\Entity\InventoryMovement;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Organization\Entity\Branch;
@@ -351,6 +352,166 @@ final class InventoryControllerTest extends WebTestCase
         );
 
         self::assertResponseStatusCodeSame(403);
+    }
+
+    public function testDelegatedEditorCannotOperateOtherBranchOrLogicalSources(): void
+    {
+        $client = static::createClient();
+        $entityManager = $this->entityManager();
+        [$tenant, $legalEntity, $branchA, , $variant] =
+            $this->tenantWithOwner($entityManager);
+
+        $branchB = new Branch(
+            $tenant,
+            'Secundaria',
+            'secundaria-'.bin2hex(random_bytes(3)),
+            $legalEntity,
+        );
+        $sourceA = new InventorySource(
+            $tenant,
+            $legalEntity,
+            'Fuente A',
+            'fuente-a-'.bin2hex(random_bytes(3)),
+            InventorySource::TYPE_BRANCH,
+            $branchA,
+        );
+        $sourceB = new InventorySource(
+            $tenant,
+            $legalEntity,
+            'Fuente B',
+            'fuente-b-'.bin2hex(random_bytes(3)),
+            InventorySource::TYPE_BRANCH,
+            $branchB,
+        );
+        $logicalSource = new InventorySource(
+            $tenant,
+            $legalEntity,
+            'Canal lógico',
+            'canal-logico-'.bin2hex(random_bytes(3)),
+            InventorySource::TYPE_LOGICAL,
+        );
+        $balanceA = new InventoryBalance(
+            $tenant,
+            $sourceA,
+            $variant,
+            7,
+        );
+
+        $user = new User(
+            'inventory-editor-'.bin2hex(random_bytes(4)).'@example.test',
+            'Editor sede A',
+        );
+        $membership = new Membership($tenant, $user, 'ADMIN');
+        $role = new Role(
+            $tenant,
+            'Inventario sede A',
+            ['inventory.view', 'inventory.update'],
+        );
+        $assignment = new BranchRoleAssignment(
+            $membership,
+            $branchA,
+            $role,
+        );
+
+        foreach (
+            [
+                $branchB,
+                $sourceA,
+                $sourceB,
+                $logicalSource,
+                $balanceA,
+                $user,
+                $membership,
+                $role,
+                $assignment,
+            ] as $entity
+        ) {
+            $entityManager->persist($entity);
+        }
+        $entityManager->flush();
+
+        $client->loginUser($user);
+        $csrf = $this->csrf($client);
+        $base = '/api/v1/branches/'.$branchA->id().'/inventory';
+
+        $client->jsonRequest(
+            'POST',
+            $base.'/adjustments',
+            [
+                'source_id' => $sourceB->id(),
+                'variant_id' => $variant->id(),
+                'delta' => 1,
+                'reason' => 'Intento fuera de sede',
+                'idempotency_key' => 'branch-denied-'.bin2hex(random_bytes(5)),
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(403);
+
+        $client->jsonRequest(
+            'POST',
+            $base.'/transfers',
+            [
+                'source_from_id' => $sourceA->id(),
+                'source_to_id' => $sourceB->id(),
+                'variant_id' => $variant->id(),
+                'quantity' => 1,
+                'idempotency_key' => 'branch-transfer-'.bin2hex(random_bytes(5)),
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(403);
+
+        $client->jsonRequest(
+            'POST',
+            $base.'/transfers',
+            [
+                'source_from_id' => $sourceA->id(),
+                'source_to_id' => $logicalSource->id(),
+                'variant_id' => $variant->id(),
+                'quantity' => 1,
+                'idempotency_key' => 'logical-transfer-'.bin2hex(random_bytes(5)),
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(403);
+
+        $client->jsonRequest(
+            'PATCH',
+            $base.'/sources/'.$sourceB->id(),
+            ['name' => 'Fuente B alterada', 'slug' => $sourceB->slug()],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(403);
+
+        $connection = $entityManager->getConnection();
+        self::assertSame(
+            7,
+            (int) $connection->fetchOne(
+                'SELECT quantity FROM condor_inventory_balance '
+                .'WHERE tenant_id = ? AND source_id = ? AND variant_id = ?',
+                [$tenant->id(), $sourceA->id(), $variant->id()],
+            ),
+        );
+        self::assertSame(
+            0,
+            (int) $connection->fetchOne(
+                'SELECT COUNT(*) FROM condor_inventory_balance '
+                .'WHERE tenant_id = ? AND source_id IN (?, ?)',
+                [
+                    $tenant->id(),
+                    $sourceB->id(),
+                    $logicalSource->id(),
+                ],
+            ),
+        );
+        self::assertSame(
+            'Fuente B',
+            (string) $connection->fetchOne(
+                'SELECT name FROM condor_inventory_source WHERE id = ?',
+                [$sourceB->id()],
+            ),
+        );
     }
 
     public function testCrossEntitySourceIsNotResolvedFromActiveBranch(): void

@@ -56,6 +56,32 @@ final class InventoryDomainTest extends TestCase
         self::assertSame(1, $balance->version());
     }
 
+    public function testInboundReplenishmentCanReduceNegativeBalanceAfterBackorderIsDisabled(): void
+    {
+        [$tenant, $source, $variant] = $this->fixture();
+        $variant->product()->setBackorderAllowed(true);
+        $balance = new InventoryBalance($tenant, $source, $variant);
+
+        $balance->apply(-5);
+        $variant->product()->setBackorderAllowed(false);
+        $balance->apply(3);
+
+        self::assertSame(-2, $balance->quantity());
+        self::assertSame(2, $balance->version());
+
+        try {
+            $balance->apply(-1);
+            self::fail('Una salida adicional debía respetar el backorder desactivado.');
+        } catch (DomainException $exception) {
+            self::assertStringContainsString(
+                'Stock insuficiente',
+                $exception->getMessage(),
+            );
+            self::assertSame(-2, $balance->quantity());
+            self::assertSame(2, $balance->version());
+        }
+    }
+
     public function testBalanceRejectsInitialQuantityOutsideDatabaseRange(): void
     {
         [$tenant, $source, $variant] = $this->fixture();
