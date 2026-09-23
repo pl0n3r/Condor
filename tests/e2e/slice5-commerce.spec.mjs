@@ -59,11 +59,13 @@ test.describe('Slice 5 — clientes y precios', () => {
       commerce.locator('strong').filter({ hasText: categoryName })
     ).toBeVisible();
 
-    await commerce.getByLabel('Nombre del cliente').fill(customerName);
-    await commerce.getByLabel('Correo del cliente').fill(customerEmail);
-    await commerce.getByLabel('Categoría', { exact: true })
-      .selectOption({ label: categoryName });
-    await commerce.getByRole('button', { name: 'Crear cliente' }).click();
+    const customerForm = commerce.locator('form.catalog-editor').filter({
+      has: commerce.getByLabel('Nombre del cliente'),
+    });
+    await customerForm.getByLabel('Nombre del cliente').fill(customerName);
+    await customerForm.getByLabel('Correo del cliente').fill(customerEmail);
+    await customerForm.locator('select').selectOption({ label: categoryName });
+    await customerForm.getByRole('button', { name: 'Crear cliente' }).click();
     await expect(commerce.getByText('Cliente creado.')).toBeVisible();
     await expect(
       commerce.locator('strong').filter({ hasText: customerName })
