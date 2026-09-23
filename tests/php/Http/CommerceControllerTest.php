@@ -433,6 +433,114 @@ final class CommerceControllerTest extends WebTestCase
         self::assertSame(6, $auditCount);
     }
 
+    public function testDeactivatedNamedCommercialRecordsCanBeReactivated(): void
+    {
+        $client = static::createClient();
+        $em = $this->entityManager();
+        [$tenant, $branch, $owner] = $this->fixture($em);
+        $client->loginUser($owner);
+        $csrf = $this->csrf($client);
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+
+        $categoryUrl = '/api/v1/branches/'.$branch->id()
+            .'/customers/categories';
+        $categorySlug = 'reactivable-'.$suffix;
+        $client->jsonRequest(
+            'POST',
+            $categoryUrl,
+            ['name' => 'Categoría original', 'slug' => $categorySlug],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $categoryId = $this->json($client)['category']['id'];
+
+        $client->request(
+            'DELETE',
+            $categoryUrl.'/'.$categoryId,
+            server: ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(204);
+
+        $client->jsonRequest(
+            'POST',
+            $categoryUrl,
+            ['name' => 'Categoría restaurada', 'slug' => $categorySlug],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame($categoryId, $this->json($client)['category']['id']);
+
+        $listUrl = '/api/v1/branches/'.$branch->id().'/pricing/lists';
+        $listSlug = 'reactivable-'.$suffix;
+        $client->jsonRequest(
+            'POST',
+            $listUrl,
+            ['name' => 'Lista original', 'slug' => $listSlug],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $listId = $this->json($client)['price_list']['id'];
+
+        $client->jsonRequest(
+            'POST',
+            '/api/v1/branches/'.$branch->id().'/pricing/rules',
+            [
+                'price_list_id' => $listId,
+                'category_id' => null,
+                'name' => 'Regla restaurable',
+                'priority' => 10,
+                'discount_type' => 'fixed',
+                'discount_value' => 1000,
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $ruleId = $this->json($client)['rule']['id'];
+
+        $client->request(
+            'DELETE',
+            $listUrl.'/'.$listId,
+            server: ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(204);
+
+        $client->request(
+            'GET',
+            '/api/v1/branches/'.$branch->id().'/pricing',
+        );
+        self::assertResponseIsSuccessful();
+        $hiddenRuleIds = array_column($this->json($client)['rules'], 'id');
+        self::assertNotContains($ruleId, $hiddenRuleIds);
+
+        $client->jsonRequest(
+            'POST',
+            $listUrl,
+            ['name' => 'Lista restaurada', 'slug' => $listSlug],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame($listId, $this->json($client)['price_list']['id']);
+
+        $client->request(
+            'GET',
+            '/api/v1/branches/'.$branch->id().'/pricing',
+        );
+        self::assertResponseIsSuccessful();
+        $restoredRuleIds = array_column($this->json($client)['rules'], 'id');
+        self::assertContains($ruleId, $restoredRuleIds);
+
+        $reactivationAuditCount = (int) $em->getConnection()->fetchOne(
+            'SELECT COUNT(*) FROM condor_audit_event '
+            .'WHERE tenant_id = ? AND action IN (?, ?)',
+            [
+                $tenant->id(),
+                'commercial_category.reactivated',
+                'price_list.reactivated',
+            ],
+        );
+        self::assertSame(2, $reactivationAuditCount);
+    }
+
     public function testDelegatedViewerCannotMutateCustomersOrPricing(): void
     {
         $client = static::createClient();

@@ -32,4 +32,14 @@ abstract class CommercialItem extends CommercialRecord
         $this->active = false;
         $this->touch();
     }
+
+    final public function activate(): void
+    {
+        if ($this->active) {
+            return;
+        }
+
+        $this->active = true;
+        $this->touch();
+    }
 }

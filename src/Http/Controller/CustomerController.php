@@ -94,19 +94,39 @@ final class CustomerController extends AbstractController
             'customers.create',
         );
         $payload = $this->payload($request, ['name', 'slug']);
+        $name = $this->commercialRequiredString($payload, 'name');
+        $slug = $this->commercialRequiredString($payload, 'slug');
+        $inactive = $this->entityManager
+            ->getRepository(CommercialCategory::class)
+            ->findOneBy([
+                'tenant' => $tenant,
+                'slug' => strtolower(trim($slug)),
+                'active' => false,
+            ]);
+        $reactivated = $inactive instanceof CommercialCategory;
 
-        $category = $this->domain(
-            fn (): CommercialCategory => new CommercialCategory(
-                $tenant,
-                $this->commercialRequiredString($payload, 'name'),
-                $this->commercialRequiredString($payload, 'slug'),
-            ),
-        );
+        $category = $this->domain(function () use (
+            $inactive,
+            $tenant,
+            $name,
+            $slug,
+        ): CommercialCategory {
+            if ($inactive instanceof CommercialCategory) {
+                $inactive->update($name, $slug);
+                $inactive->activate();
+
+                return $inactive;
+            }
+
+            return new CommercialCategory($tenant, $name, $slug);
+        });
         $this->entityManager->persist($category);
         $this->audit(
             $tenant,
             $user,
-            'commercial_category.created',
+            $reactivated
+                ? 'commercial_category.reactivated'
+                : 'commercial_category.created',
             CommercialCategory::class,
             $category->id(),
             ['branch_id' => $branch->id()],
@@ -117,7 +137,7 @@ final class CustomerController extends AbstractController
 
         return $this->json(
             ['category' => self::categoryPayload($category)],
-            Response::HTTP_CREATED,
+            $reactivated ? Response::HTTP_OK : Response::HTTP_CREATED,
         );
     }
 

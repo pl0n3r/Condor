@@ -78,22 +78,49 @@ final class PricingController extends AbstractController
             $request,
             ['name', 'slug', 'currency'],
         );
+        $name = $this->commercialRequiredString($payload, 'name');
+        $slug = $this->commercialRequiredString($payload, 'slug');
+        $currency = array_key_exists('currency', $payload)
+            ? $this->commercialRequiredString($payload, 'currency')
+            : 'COP';
+        $inactive = $this->entityManager
+            ->getRepository(PriceList::class)
+            ->findOneBy([
+                'tenant' => $tenant,
+                'slug' => strtolower(trim($slug)),
+                'active' => false,
+            ]);
+        $reactivated = $inactive instanceof PriceList;
 
-        $list = $this->domain(
-            fn (): PriceList => new PriceList(
-                $tenant,
-                $this->commercialRequiredString($payload, 'name'),
-                $this->commercialRequiredString($payload, 'slug'),
-                array_key_exists('currency', $payload)
-                    ? $this->commercialRequiredString($payload, 'currency')
-                    : 'COP',
-            ),
-        );
+        $list = $this->domain(function () use (
+            $inactive,
+            $tenant,
+            $name,
+            $slug,
+            $currency,
+        ): PriceList {
+            if ($inactive instanceof PriceList) {
+                $probe = new PriceList($tenant, $name, $slug, $currency);
+                if ($probe->currency() !== $inactive->currency()) {
+                    throw new \DomainException(
+                        'No puedes cambiar la moneda al reactivar una lista.',
+                    );
+                }
+                $inactive->update($name, $slug);
+                $inactive->activate();
+
+                return $inactive;
+            }
+
+            return new PriceList($tenant, $name, $slug, $currency);
+        });
         $this->entityManager->persist($list);
         $this->audit(
             $tenant,
             $user,
-            'price_list.created',
+            $reactivated
+                ? 'price_list.reactivated'
+                : 'price_list.created',
             PriceList::class,
             $list->id(),
             ['branch_id' => $branch->id()],
@@ -104,7 +131,7 @@ final class PricingController extends AbstractController
 
         return $this->json(
             ['price_list' => self::priceListPayload($list)],
-            Response::HTTP_CREATED,
+            $reactivated ? Response::HTTP_OK : Response::HTTP_CREATED,
         );
     }
 
@@ -597,7 +624,14 @@ final class PricingController extends AbstractController
             static fn (PriceRule $rule): array => self::rulePayload($rule),
             array_filter(
                 $rules,
-                static fn (mixed $value): bool => $value instanceof PriceRule,
+                static fn (mixed $value): bool => (
+                    $value instanceof PriceRule
+                    && $value->priceList()->isActive()
+                    && (
+                        $value->commercialCategory() === null
+                        || $value->commercialCategory()?->isActive()
+                    )
+                ),
             ),
         ));
     }
