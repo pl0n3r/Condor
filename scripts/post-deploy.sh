@@ -178,7 +178,7 @@ else
 
     if grep -Eiq 'sqlstate|connection|database|driver|server[[:space:]_-]*has[[:space:]_-]*gone[[:space:]_-]*away|timed?[[:space:]_-]*out' "$SCHEMA_CHECK_LOG"; then
         schema_diagnostic="Doctrine no pudo comprobar el esquema por un fallo de base de datos o conectividad."
-    elif grep -Eiq 'not[[:space:]_-]*up[[:space:]_-]*to[[:space:]_-]*date|new[[:space:]_-]*migration|pending[[:space:]_-]*migration|previously[[:space:]_-]*executed[[:space:]_-]*migration' "$SCHEMA_CHECK_LOG"; then
+    elif grep -Eiq 'not[[:space:]_-]*up[[:space:]_-]*to[[:space:]_-]*date|out[[:space:]_-]*of[[:space:]_-]*date|new[[:space:]_-]*migration|pending[[:space:]_-]*migration|previously[[:space:]_-]*executed[[:space:]_-]*migration' "$SCHEMA_CHECK_LOG"; then
         schema_diagnostic="Doctrine reporta migraciones pendientes o historial de migraciones no reconciliado."
     else
         schema_diagnostic="Doctrine no pudo comprobar el esquema; el fallo no pudo clasificarse de forma segura."
