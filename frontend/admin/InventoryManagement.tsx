@@ -193,7 +193,7 @@ export function InventoryManagement({
       return;
     }
 
-    await runMutation(
+    const succeeded = await runMutation(
       inventorySourcePath(branchId),
       {
         name: sourceName,
@@ -202,8 +202,10 @@ export function InventoryManagement({
       },
       'Fuente creada.',
     );
-    setSourceName('');
-    setSourceSlug('');
+    if (succeeded) {
+      setSourceName('');
+      setSourceSlug('');
+    }
   }
 
   async function adjust(event: FormEvent<HTMLFormElement>) {

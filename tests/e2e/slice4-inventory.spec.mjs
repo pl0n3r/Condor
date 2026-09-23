@@ -158,21 +158,22 @@ test.describe('Slice 4 — inventario', () => {
 
     await expect(originBalance.getByText('6 und.')).toBeVisible();
     await expect(destinationBalance.getByText('4 und.')).toBeVisible();
-    await expect(inventory.getByText('Carga E2E')).toBeVisible();
+    const movementRows = inventory.locator('.catalog-variant-row');
     await expect(
-      inventory.locator('.catalog-variant-row').filter({
-        hasText: 'Ajuste de entrada',
-      })
+      movementRows
+        .filter({ hasText: sourceA })
+        .filter({ hasText: 'Ajuste de entrada' })
+        .filter({ hasText: 'Carga E2E' })
     ).toBeVisible();
     await expect(
-      inventory.locator('.catalog-variant-row').filter({
-        hasText: 'Transferencia de salida',
-      })
+      movementRows
+        .filter({ hasText: sourceA })
+        .filter({ hasText: 'Transferencia de salida' })
     ).toBeVisible();
     await expect(
-      inventory.locator('.catalog-variant-row').filter({
-        hasText: 'Transferencia de entrada',
-      })
+      movementRows
+        .filter({ hasText: sourceB })
+        .filter({ hasText: 'Transferencia de entrada' })
     ).toBeVisible();
 
     await page.reload();

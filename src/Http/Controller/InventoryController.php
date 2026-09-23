@@ -158,7 +158,16 @@ final class InventoryController extends AbstractController
         );
         $legalEntity = $this->legalEntity($branch);
         $payload = $this->payload($request, ['name', 'slug', 'type']);
-        $type = $this->requiredString($payload, 'type');
+        $type = strtolower(trim($this->requiredString($payload, 'type')));
+        if (!in_array(
+            $type,
+            [InventorySource::TYPE_BRANCH, InventorySource::TYPE_LOGICAL],
+            true,
+        )) {
+            throw new UnprocessableEntityHttpException(
+                'El tipo de fuente de inventario no es válido.',
+            );
+        }
 
         if (
             $type === InventorySource::TYPE_LOGICAL

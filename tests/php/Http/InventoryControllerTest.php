@@ -401,6 +401,149 @@ final class InventoryControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(404);
     }
 
+    public function testSourceTypeIsNormalizedBeforeAuthorization(): void
+    {
+        $client = static::createClient();
+        $entityManager = $this->entityManager();
+        [$tenant, , $branch, $owner] = $this->tenantWithOwner($entityManager);
+
+        $user = new User(
+            'inventory-creator-'.bin2hex(random_bytes(4)).'@example.test',
+            'Creator',
+        );
+        $membership = new Membership($tenant, $user, 'ADMIN');
+        $role = new Role($tenant, 'Inventario crear', ['inventory.create']);
+        $assignment = new BranchRoleAssignment($membership, $branch, $role);
+        foreach ([$user, $membership, $role, $assignment] as $entity) {
+            $entityManager->persist($entity);
+        }
+        $entityManager->flush();
+
+        $client->loginUser($user);
+        $client->jsonRequest(
+            'POST',
+            '/api/v1/branches/'.$branch->id().'/inventory/sources',
+            ['name' => 'Lógica', 'slug' => 'logica', 'type' => ' Logical '],
+            ['HTTP_X_CSRF_TOKEN' => $this->csrf($client)],
+        );
+        self::assertResponseStatusCodeSame(403);
+
+        $client->loginUser($owner);
+        $client->jsonRequest(
+            'POST',
+            '/api/v1/branches/'.$branch->id().'/inventory/sources',
+            ['name' => 'Inválida', 'slug' => 'invalida', 'type' => 'warehouse'],
+            ['HTTP_X_CSRF_TOKEN' => $this->csrf($client)],
+        );
+        self::assertResponseStatusCodeSame(422);
+    }
+
+    public function testInventoryRejectsCrossTenantIdentifiers(): void
+    {
+        $client = static::createClient();
+        $entityManager = $this->entityManager();
+        [$tenantA, $legalA, $branchA, $ownerA, $variantA] =
+            $this->tenantWithOwner($entityManager);
+        [$tenantB, $legalB, $branchB, , $variantB] =
+            $this->tenantWithOwner($entityManager);
+
+        $localA = new InventorySource(
+            $tenantA,
+            $legalA,
+            'Local A',
+            'local-a-'.bin2hex(random_bytes(3)),
+            InventorySource::TYPE_LOGICAL,
+        );
+        $localB = new InventorySource(
+            $tenantA,
+            $legalA,
+            'Local B',
+            'local-b-'.bin2hex(random_bytes(3)),
+            InventorySource::TYPE_LOGICAL,
+        );
+        $foreignA = new InventorySource(
+            $tenantB,
+            $legalB,
+            'Ajena A',
+            'ajena-a-'.bin2hex(random_bytes(3)),
+            InventorySource::TYPE_LOGICAL,
+        );
+        $foreignB = new InventorySource(
+            $tenantB,
+            $legalB,
+            'Ajena B',
+            'ajena-b-'.bin2hex(random_bytes(3)),
+            InventorySource::TYPE_LOGICAL,
+        );
+        foreach ([$localA, $localB, $foreignA, $foreignB] as $entity) {
+            $entityManager->persist($entity);
+        }
+        $entityManager->flush();
+
+        $client->loginUser($ownerA);
+        $csrf = $this->csrf($client);
+        $base = '/api/v1/branches/'.$branchA->id().'/inventory';
+
+        $client->request('GET', '/api/v1/branches/'.$branchB->id().'/inventory');
+        self::assertResponseStatusCodeSame(404);
+
+        foreach (
+            [
+                [
+                    'source_id' => $foreignA->id(),
+                    'variant_id' => $variantA->id(),
+                ],
+                [
+                    'source_id' => $localA->id(),
+                    'variant_id' => $variantB->id(),
+                ],
+            ] as $foreignAdjustment
+        ) {
+            $client->jsonRequest(
+                'POST',
+                $base.'/adjustments',
+                $foreignAdjustment + [
+                    'delta' => 1,
+                    'reason' => 'Cruce tenant',
+                    'idempotency_key' => 'cross-adjust-'.bin2hex(random_bytes(5)),
+                ],
+                ['HTTP_X_CSRF_TOKEN' => $csrf],
+            );
+            self::assertResponseStatusCodeSame(404);
+        }
+
+        foreach (
+            [
+                [
+                    'source_from_id' => $foreignA->id(),
+                    'source_to_id' => $localB->id(),
+                    'variant_id' => $variantA->id(),
+                ],
+                [
+                    'source_from_id' => $localA->id(),
+                    'source_to_id' => $foreignB->id(),
+                    'variant_id' => $variantA->id(),
+                ],
+                [
+                    'source_from_id' => $localA->id(),
+                    'source_to_id' => $localB->id(),
+                    'variant_id' => $variantB->id(),
+                ],
+            ] as $foreignTransfer
+        ) {
+            $client->jsonRequest(
+                'POST',
+                $base.'/transfers',
+                $foreignTransfer + [
+                    'quantity' => 1,
+                    'idempotency_key' => 'cross-transfer-'.bin2hex(random_bytes(5)),
+                ],
+                ['HTTP_X_CSRF_TOKEN' => $csrf],
+            );
+            self::assertResponseStatusCodeSame(404);
+        }
+    }
+
     public function testDatabaseRejectsBranchSourceWithMismatchedLegalEntity(): void
     {
         $entityManager = $this->entityManager();
