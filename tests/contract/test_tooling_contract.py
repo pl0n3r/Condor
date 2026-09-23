@@ -66,14 +66,20 @@ class ToolingContractTests(unittest.TestCase):
         script = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
 
         lock_index = script.index('LOCK_FILE="var/post-deploy.lock"')
-        check_index = script.index("doctrine:migrations:up-to-date")
-        migrate_index = script.index("doctrine:migrations:migrate")
-        clear_index = script.index("cache:clear")
-        warmup_index = script.index("cache:warmup")
+        main_check_index = script.index(
+            '"$PHP_BIN" bin/console doctrine:migrations:up-to-date',
+            script.index("schema_check_status=0"),
+        )
+        migrate_call_index = script.index(
+            "if run_construction_migrations; then",
+            main_check_index,
+        )
+        clear_index = script.index("cache:clear", migrate_call_index)
+        warmup_index = script.index("cache:warmup", clear_index)
 
-        self.assertLess(lock_index, check_index)
-        self.assertLess(check_index, migrate_index)
-        self.assertLess(migrate_index, clear_index)
+        self.assertLess(lock_index, main_check_index)
+        self.assertLess(main_check_index, migrate_call_index)
+        self.assertLess(migrate_call_index, clear_index)
         self.assertLess(clear_index, warmup_index)
         self.assertIn(
             'PRODUCTION_STAGE="${CONDOR_PRODUCTION_STAGE:-construction}"',
