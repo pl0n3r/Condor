@@ -9,6 +9,8 @@ use App\Domain\Catalog\Entity\ProductVariant;
 use App\Domain\Commerce\Entity\CommercialCategory;
 use App\Domain\Commerce\Entity\Customer;
 use App\Domain\Commerce\Entity\PriceList;
+use App\Domain\Commerce\EffectivePriceResolver;
+use App\Domain\Commerce\Entity\PriceRule;
 use App\Domain\Commerce\Entity\VariantPrice;
 use App\Domain\Organization\Entity\Tenant;
 use DomainException;
@@ -77,6 +79,86 @@ final class CommercialDomainTest extends TestCase
 
         $this->expectException(DomainException::class);
         new VariantPrice($tenant, $list, $variant, 1000);
+    }
+
+    public function testEffectivePriceUsesSingleDeterministicWinningRule(): void
+    {
+        $tenant = new Tenant('Empresa', 'empresa-'.bin2hex(random_bytes(4)));
+        $product = new Product($tenant, 'Producto', 'producto');
+        $variant = new ProductVariant($tenant, $product, 'SKU-3', 'Variante');
+        $list = new PriceList($tenant, 'Detal', 'detal');
+        $category = new CommercialCategory($tenant, 'Mayorista', 'mayorista');
+        $category->assignPreferredPriceList($list);
+        $price = new VariantPrice($tenant, $list, $variant, 100000);
+
+        $global = new PriceRule(
+            $tenant,
+            $list,
+            'Global',
+            10,
+            PriceRule::TYPE_PERCENTAGE,
+            1000,
+        );
+        $specific = new PriceRule(
+            $tenant,
+            $list,
+            'Mayorista',
+            20,
+            PriceRule::TYPE_FIXED,
+            15000,
+            $category,
+        );
+
+        $result = (new EffectivePriceResolver())->resolve(
+            $price,
+            $category,
+            [$global, $specific],
+        );
+
+        self::assertSame(100000, $result->baseAmountMinor);
+        self::assertSame(85000, $result->effectiveAmountMinor);
+        self::assertSame($specific->id(), $result->ruleId);
+        self::assertSame($list->id(), $result->priceListId);
+    }
+
+    public function testPriceRuleHonorsValidityAndNeverStacksDiscounts(): void
+    {
+        $tenant = new Tenant('Empresa', 'empresa-'.bin2hex(random_bytes(4)));
+        $product = new Product($tenant, 'Producto', 'producto');
+        $variant = new ProductVariant($tenant, $product, 'SKU-4', 'Variante');
+        $list = new PriceList($tenant, 'Detal', 'detal');
+        $price = new VariantPrice($tenant, $list, $variant, 100000);
+        $at = new \DateTimeImmutable('2026-09-23T10:00:00+00:00');
+
+        $expired = new PriceRule(
+            $tenant,
+            $list,
+            'Expirada',
+            999,
+            PriceRule::TYPE_FIXED,
+            90000,
+            null,
+            null,
+            new \DateTimeImmutable('2026-09-22T23:59:59+00:00'),
+        );
+        $active = new PriceRule(
+            $tenant,
+            $list,
+            'Activa',
+            10,
+            PriceRule::TYPE_PERCENTAGE,
+            2500,
+        );
+
+        $result = (new EffectivePriceResolver())->resolve(
+            $price,
+            null,
+            [$expired, $active],
+            $at,
+        );
+
+        self::assertSame(75000, $result->effectiveAmountMinor);
+        self::assertSame($active->id(), $result->ruleId);
     }
 
     public function testInvalidCommercialSlugsAndCurrencyAreRejected(): void

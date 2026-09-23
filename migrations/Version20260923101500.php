@@ -20,12 +20,14 @@ final class Version20260923101500 extends AbstractMigration // NOSONAR -- nombre
             CREATE TABLE condor_commercial_category (
                 id VARCHAR(26) NOT NULL,
                 tenant_id VARCHAR(26) NOT NULL,
+                preferred_price_list_id VARCHAR(26) DEFAULT NULL,
                 name VARCHAR(160) NOT NULL,
                 slug VARCHAR(120) NOT NULL,
                 active TINYINT(1) NOT NULL,
                 created_at DATETIME NOT NULL,
                 updated_at DATETIME NOT NULL,
                 INDEX IDX_COMM_CATEGORY_TENANT (tenant_id),
+                INDEX IDX_COMM_CATEGORY_PRICE_LIST (preferred_price_list_id),
                 UNIQUE INDEX uniq_commercial_category_tenant_slug (tenant_id, slug),
                 UNIQUE INDEX uniq_commercial_category_tenant_id (tenant_id, id),
                 PRIMARY KEY(id),
@@ -88,6 +90,16 @@ final class Version20260923101500 extends AbstractMigration // NOSONAR -- nombre
               COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
             SQL);
 
+        $this->addSql(
+            'ALTER TABLE condor_commercial_category '
+            .'ADD CONSTRAINT FK_COMM_CATEGORY_PRICE_LIST '
+            .'FOREIGN KEY (preferred_price_list_id) REFERENCES condor_price_list (id) '
+            .'ON DELETE RESTRICT, '
+            .'ADD CONSTRAINT FK_COMM_CATEGORY_PRICE_LIST_SCOPE '
+            .'FOREIGN KEY (tenant_id, preferred_price_list_id) '
+            .'REFERENCES condor_price_list (tenant_id, id) ON DELETE RESTRICT',
+        );
+
         $this->addSql(<<<'SQL'
             CREATE TABLE condor_variant_price (
                 id VARCHAR(26) NOT NULL,
@@ -124,6 +136,45 @@ final class Version20260923101500 extends AbstractMigration // NOSONAR -- nombre
             ) DEFAULT CHARACTER SET utf8mb4
               COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
             SQL);
+
+        $this->addSql(<<<'SQL'
+            CREATE TABLE condor_price_rule (
+                id VARCHAR(26) NOT NULL,
+                tenant_id VARCHAR(26) NOT NULL,
+                price_list_id VARCHAR(26) NOT NULL,
+                commercial_category_id VARCHAR(26) DEFAULT NULL,
+                name VARCHAR(160) NOT NULL,
+                priority INT NOT NULL,
+                discount_type VARCHAR(20) NOT NULL,
+                discount_value BIGINT NOT NULL,
+                valid_from DATETIME DEFAULT NULL,
+                valid_until DATETIME DEFAULT NULL,
+                active TINYINT(1) NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                INDEX IDX_PRICE_RULE_TENANT (tenant_id),
+                INDEX IDX_PRICE_RULE_LIST (price_list_id),
+                INDEX IDX_PRICE_RULE_CATEGORY (commercial_category_id),
+                INDEX IDX_PRICE_RULE_LOOKUP (tenant_id, price_list_id, active, priority),
+                PRIMARY KEY(id),
+                CONSTRAINT FK_PRICE_RULE_TENANT
+                    FOREIGN KEY (tenant_id) REFERENCES condor_tenant (id)
+                    ON DELETE CASCADE,
+                CONSTRAINT FK_PRICE_RULE_LIST_SCOPE
+                    FOREIGN KEY (tenant_id, price_list_id)
+                    REFERENCES condor_price_list (tenant_id, id)
+                    ON DELETE CASCADE,
+                CONSTRAINT FK_PRICE_RULE_CATEGORY_SCOPE
+                    FOREIGN KEY (tenant_id, commercial_category_id)
+                    REFERENCES condor_commercial_category (tenant_id, id)
+                    ON DELETE RESTRICT,
+                CONSTRAINT CHK_PRICE_RULE_DISCOUNT
+                    CHECK (discount_value >= 0),
+                CONSTRAINT CHK_PRICE_RULE_TYPE
+                    CHECK (discount_type IN ('percentage', 'fixed'))
+            ) DEFAULT CHARACTER SET utf8mb4
+              COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
+            SQL);
     }
 
     public function down(Schema $schema): void
@@ -132,13 +183,20 @@ final class Version20260923101500 extends AbstractMigration // NOSONAR -- nombre
         $categoryCount = (int) $this->connection->fetchOne('SELECT COUNT(*) FROM condor_commercial_category');
         $priceListCount = (int) $this->connection->fetchOne('SELECT COUNT(*) FROM condor_price_list');
         $variantPriceCount = (int) $this->connection->fetchOne('SELECT COUNT(*) FROM condor_variant_price');
+        $priceRuleCount = (int) $this->connection->fetchOne('SELECT COUNT(*) FROM condor_price_rule');
 
         $this->abortIf(
-            $customerCount > 0 || $categoryCount > 0 || $priceListCount > 0 || $variantPriceCount > 0,
+            $customerCount > 0 || $categoryCount > 0 || $priceListCount > 0 || $variantPriceCount > 0 || $priceRuleCount > 0,
             'Rollback bloqueado: existen clientes o configuración comercial real.',
         );
 
+        $this->addSql('DROP TABLE condor_price_rule');
         $this->addSql('DROP TABLE condor_variant_price');
+        $this->addSql(
+            'ALTER TABLE condor_commercial_category '
+            .'DROP FOREIGN KEY FK_COMM_CATEGORY_PRICE_LIST_SCOPE, '
+            .'DROP FOREIGN KEY FK_COMM_CATEGORY_PRICE_LIST',
+        );
         $this->addSql('DROP TABLE condor_customer');
         $this->addSql('DROP TABLE condor_price_list');
         $this->addSql('DROP TABLE condor_commercial_category');
