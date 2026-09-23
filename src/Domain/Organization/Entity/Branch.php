@@ -14,6 +14,10 @@ use DomainException;
 #[ORM\Table(name: 'condor_branch')]
 #[ORM\UniqueConstraint(name: 'uniq_branch_tenant_slug', columns: ['tenant_id', 'slug'])]
 #[ORM\UniqueConstraint(name: 'uniq_branch_tenant_id', columns: ['tenant_id', 'id'])]
+#[ORM\UniqueConstraint(
+    name: 'uniq_branch_tenant_legal_id',
+    columns: ['tenant_id', 'legal_entity_id', 'id'],
+)]
 class Branch
 {
     #[ORM\Id]
