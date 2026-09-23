@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -57,6 +60,367 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn('gh release create "$TAG"', workflow)
         self.assertIn('--title "Release $TAG (V ${TAG#v})"', workflow)
         self.assertNotIn("if: steps.tag.outputs.created == 'true'", workflow)
+
+    def test_post_deploy_blocks_pending_schema_before_cache_under_lock(self) -> None:
+        """La política mantiene esquema antes de caché y prohíbe migrar producción."""
+        script = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
+
+        lock_index = script.index('LOCK_FILE="var/post-deploy.lock"')
+        check_index = script.index("doctrine:migrations:up-to-date")
+        clear_index = script.index("cache:clear")
+        warmup_index = script.index("cache:warmup")
+
+        self.assertLess(lock_index, check_index)
+        self.assertLess(check_index, clear_index)
+        self.assertLess(clear_index, warmup_index)
+        self.assertIn("autorización explícita", script)
+        self.assertNotIn("doctrine:migrations:migrate", script)
+        self.assertNotIn("doctrine:migrations:execute", script)
+        self.assertNotIn("doctrine:schema:update", script)
+        self.assertNotIn("doctrine:schema:drop", script)
+
+    def test_post_deploy_lock_creation_failure_is_not_success(self) -> None:
+        """Un fallo real al publicar/adquirir el guard termina distinto de cero."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            script = scripts / "post-deploy.sh"
+            script.write_text(
+                (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            # ENOTDIR determinista al intentar abrir var/post-deploy.lock.guard.
+            (root / "var").write_text("not-a-directory", encoding="utf-8")
+
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            for name in ("php85", "php"):
+                binary = fake_bin / name
+                binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                binary.chmod(0o755)
+
+            env = dict(os.environ)
+            env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+            result = subprocess.run(
+                ["sh", str(script)],
+                cwd=root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn(
+                "no fue posible preparar el directorio del lock",
+                result.stderr,
+            )
+            self.assertIn(
+                "no fue posible adquirir el lock de forma segura",
+                result.stderr,
+            )
+
+    def test_post_deploy_concurrent_guard_is_safe_skip(self) -> None:
+        """Un guard ocupado representa concurrencia legítima y termina con éxito."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            var = root / "var"
+            var.mkdir()
+            script = scripts / "post-deploy.sh"
+            script.write_text(
+                (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            for name in ("php85", "php"):
+                binary = fake_bin / name
+                binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                binary.chmod(0o755)
+
+            guard = str(var / "post-deploy.lock.guard")
+            holder = subprocess.Popen(
+                ["flock", "-n", guard, "sh", "-c", "printf ready; sleep 2"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                self.assertIsNotNone(holder.stdout)
+                self.assertEqual(holder.stdout.read(5), "ready")
+
+                env = dict(os.environ)
+                env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+                result = subprocess.run(
+                    ["sh", str(script)],
+                    cwd=root,
+                    env=env,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(
+                    "otra recuperación de lock sigue activa; se omite",
+                    result.stderr,
+                )
+            finally:
+                holder.wait(timeout=4)
+
+    def test_post_deploy_classifies_schema_drift_before_database_word(self) -> None:
+        """La salida de Doctrine sobre historial se clasifica como deriva, no conectividad."""
+        messages = (
+            "Out-of-date! 1 migration to execute.",
+            "You have 1 previously executed migrations in the database "
+            "that are not registered migrations.",
+        )
+        for message in messages:
+            with self.subTest(message=message):
+                result, invoked = self._run_post_deploy_with_fake_php(
+                    schema_output=message,
+                    schema_status=1,
+                )
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn(
+                    "migraciones pendientes o historial de migraciones no reconciliado",
+                    result.stderr,
+                )
+                self.assertNotIn("cache:clear", invoked)
+                self.assertNotIn("cache:warmup", invoked)
+
+    def test_post_deploy_recovers_orphan_and_stale_incomplete_locks(self) -> None:
+        """Locks sin guard activo se recuperan; metadata incompleta reciente se omite."""
+        now = int(time.time())
+        cases = (
+            (
+                "orphan-valid",
+                f"old-token\n99999999\n{now}\n",
+                None,
+                "lock huérfano detectado",
+                True,
+            ),
+            (
+                "stale-incomplete",
+                "broken-token\n",
+                now - 400,
+                "lock incompleto huérfano",
+                True,
+            ),
+            (
+                "recent-incomplete",
+                "broken-token\n",
+                None,
+                "lock incompleto reciente",
+                False,
+            ),
+        )
+        for name, metadata, mtime, diagnostic, should_run_schema in cases:
+            with self.subTest(case=name):
+                result, invoked = self._run_post_deploy_with_fake_php(
+                    schema_output="Up-to-date!",
+                    schema_status=0,
+                    lock_metadata=metadata,
+                    lock_mtime=mtime,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(diagnostic, result.stderr)
+                if should_run_schema:
+                    self.assertIn("doctrine:migrations:up-to-date", invoked)
+                    self.assertIn("cache:clear", invoked)
+                    self.assertIn("cache:warmup", invoked)
+                else:
+                    self.assertEqual(invoked, "")
+
+    def test_post_deploy_schema_check_timeout_never_touches_cache(self) -> None:
+        """Doctrine colgado vence el límite de pared antes de cualquier caché."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            (root / "var").mkdir()
+            script = scripts / "post-deploy.sh"
+            script.write_text(
+                (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            calls = root / "php-calls.log"
+            fake_php = """#!/bin/sh
+printf '%s\\n' "$*" >> "$FAKE_PHP_LOG"
+case "$*" in
+  *doctrine:migrations:up-to-date*)
+    while :; do :; done
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+"""
+            for name in ("php85", "php"):
+                binary = fake_bin / name
+                binary.write_text(fake_php, encoding="utf-8")
+                binary.chmod(0o755)
+
+            env = dict(os.environ)
+            env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+            env["FAKE_PHP_LOG"] = str(calls)
+            env["CONDOR_SCHEMA_CHECK_TIMEOUT_SECONDS"] = "1"
+            result = subprocess.run(
+                ["sh", str(script)],
+                cwd=root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=6,
+            )
+
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn(
+                "comprobación de esquema excedió 1s",
+                result.stderr,
+            )
+            invoked = calls.read_text(encoding="utf-8")
+            self.assertIn("doctrine:migrations:up-to-date", invoked)
+            self.assertNotIn("cache:clear", invoked)
+            self.assertNotIn("cache:warmup", invoked)
+
+    def test_post_deploy_recovery_mutex_is_stable_under_concurrency(self) -> None:
+        """El mutex estable impide que un segundo recuperador sustituya al primero."""
+        with tempfile.TemporaryDirectory() as tmp:
+            guard = str(Path(tmp) / "post-deploy.lock.guard")
+            first = subprocess.Popen(
+                ["flock", "-n", guard, "sh", "-c", "printf ready; sleep 1"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                self.assertIsNotNone(first.stdout)
+                self.assertEqual(first.stdout.read(5), "ready")
+                second = subprocess.run(
+                    ["flock", "-n", guard, "true"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertNotEqual(second.returncode, 0)
+            finally:
+                first.wait(timeout=3)
+
+            third = subprocess.run(
+                ["flock", "-n", guard, "true"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(third.returncode, 0, third.stderr)
+
+    def test_health_exposes_schema_state_for_remote_release_validation(self) -> None:
+        """El smoke remoto recibe solo un booleano de esquema, sin internals."""
+        controller = (
+            ROOT / "src/Http/Controller/HealthController.php"
+        ).read_text(encoding="utf-8")
+        observer = (
+            ROOT / "scripts/observar_release.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("'schema_up_to_date' => $schemaUpToDate", controller)
+        self.assertIn("getMigrationStatusCalculator()", controller)
+        self.assertIn("getNewMigrations()", controller)
+        self.assertIn("getExecutedUnavailableMigrations()", controller)
+        self.assertIn('evidencias["schema"]', observer)
+        self.assertIn('carga.get("schema_up_to_date") is True', observer)
+
+    def test_post_deploy_never_executes_production_migrations_automatically(self) -> None:
+        """La política operativa exige autorización humana fuera del cron."""
+        script = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
+
+        forbidden = (
+            "doctrine:migrations:migrate",
+            "doctrine:migrations:execute",
+            "doctrine:schema:update",
+            "doctrine:schema:drop",
+        )
+        for command in forbidden:
+            self.assertNotIn(command, script)
+
+    def _run_post_deploy_with_fake_php(
+        self,
+        *,
+        schema_output: str,
+        schema_status: int,
+        lock_metadata: str | None = None,
+        lock_mtime: int | None = None,
+    ) -> tuple[subprocess.CompletedProcess[str], str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            var = root / "var"
+            var.mkdir()
+            script = scripts / "post-deploy.sh"
+            script.write_text(
+                (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            if lock_metadata is not None:
+                lock_file = var / "post-deploy.lock"
+                lock_file.write_text(lock_metadata, encoding="utf-8")
+                if lock_mtime is not None:
+                    os.utime(lock_file, (lock_mtime, lock_mtime))
+
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            calls = root / "php-calls.log"
+            fake_php = """#!/bin/sh
+printf '%s\\n' "$*" >> "$FAKE_PHP_LOG"
+case "$*" in
+  *doctrine:migrations:up-to-date*)
+    printf '%s\\n' "$FAKE_SCHEMA_OUTPUT" >&2
+    exit "$FAKE_SCHEMA_STATUS"
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+"""
+            for name in ("php85", "php"):
+                binary = fake_bin / name
+                binary.write_text(fake_php, encoding="utf-8")
+                binary.chmod(0o755)
+
+            env = dict(os.environ)
+            env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+            env["FAKE_PHP_LOG"] = str(calls)
+            env["FAKE_SCHEMA_OUTPUT"] = schema_output
+            env["FAKE_SCHEMA_STATUS"] = str(schema_status)
+            result = subprocess.run(
+                ["sh", str(script)],
+                cwd=root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=6,
+            )
+            invoked = (
+                calls.read_text(encoding="utf-8")
+                if calls.exists()
+                else ""
+            )
+            return result, invoked
 
     def test_throughput_cli_preserves_json_report_contract(self) -> None:
         """El CLI de throughput entrega el esquema consumido por automatizaciones."""
