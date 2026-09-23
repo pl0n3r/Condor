@@ -14,6 +14,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -53,7 +54,22 @@ final class TenantPublicController extends AbstractController
         return $this->render('tenant/index.html.twig', [
             'app_version' => $version->human(),
             'storefront' => $storefront->publicIdentity($tenant),
-            'catalog' => $catalog->catalog($tenant),
+            'catalog' => $catalog->catalog(
+                $tenant,
+                self::catalogPage($request),
+            ),
         ]);
+    }
+
+    private static function catalogPage(Request $request): int
+    {
+        $page = $request->query->getInt('page', 1);
+        if ($page < 1 || $page > PublicCatalogPresentation::MAX_PAGE) {
+            throw new BadRequestHttpException(
+                'La página solicitada no es válida.',
+            );
+        }
+
+        return $page;
     }
 }

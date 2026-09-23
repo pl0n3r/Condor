@@ -28,7 +28,7 @@
 - una fuente de inventario efectiva y una lista de precios explícita por canal, sin fallback silencioso;
 - titularidad jurídica derivada de la fuente y protegida por constraints MariaDB compuestos tenant/entidad/fuente;
 - lista de precios acotada por tenant mediante constraint compuesto;
-- administración del canal integrada al storefront existente, con permisos server-side `site.view` / `site.update`, CSRF y auditoría;
+- administración del canal integrada al storefront existente: edición exclusiva del propietario del tenant, consulta con `site.view` / `site.update`, CSRF y auditoría;
 - catálogo público SSR/Twig sobre Producto/Variante existentes, sin duplicar catálogo;
 - precio público delegado a `PricingService` V 0.1.24, con una única salida efectiva determinista;
 - disponibilidad calculada exclusivamente desde la fuente configurada; otra sede/fuente nunca actúa como fallback;

@@ -11,9 +11,13 @@ use App\Domain\Commerce\Entity\SalesChannel;
 use App\Domain\Inventory\Entity\InventoryBalance;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
+use InvalidArgumentException;
 
 final readonly class PublicCatalogPresentation
 {
+    public const PAGE_SIZE = 24;
+    public const MAX_PAGE = 1000;
+
     public function __construct(
         private EntityManagerInterface $entityManager,
         private PricingService $pricing,
@@ -42,11 +46,27 @@ final readonly class PublicCatalogPresentation
      *       availability:string,
      *       backorder:bool
      *     }>
-     *   }>
+     *   }>,
+     *   pagination: array{
+     *     page:int,
+     *     page_size:int,
+     *     has_previous:bool,
+     *     has_next:bool
+     *   }
      * }
      */
-    public function catalog(Tenant $tenant): array
+    public function catalog(Tenant $tenant, int $page = 1): array
     {
+        if ($page < 1 || $page > self::MAX_PAGE) {
+            throw new InvalidArgumentException(
+                'La página del catálogo está fuera del rango permitido.',
+            );
+        }
+
+        if (!$this->salesChannelSchemaReady()) {
+            return $this->emptyCatalog($page);
+        }
+
         $channel = $this->entityManager
             ->getRepository(SalesChannel::class)
             ->findOneBy([
@@ -59,16 +79,23 @@ final readonly class PublicCatalogPresentation
             !$channel instanceof SalesChannel
             || !$channel->isPublishable()
         ) {
-            return ['channel' => null, 'products' => []];
+            return $this->emptyCatalog($page);
         }
 
+        $offset = ($page - 1) * self::PAGE_SIZE;
         $products = array_values(array_filter(
             $this->entityManager->getRepository(Product::class)->findBy(
                 ['tenant' => $tenant, 'active' => true],
-                ['name' => 'ASC'],
+                ['name' => 'ASC', 'id' => 'ASC'],
+                self::PAGE_SIZE + 1,
+                $offset,
             ),
             static fn (mixed $product): bool => $product instanceof Product,
         ));
+        $hasNext = count($products) > self::PAGE_SIZE;
+        if ($hasNext) {
+            array_pop($products);
+        }
 
         $variants = $products === []
             ? []
@@ -81,7 +108,7 @@ final readonly class PublicCatalogPresentation
                             'product' => $products,
                             'active' => true,
                         ],
-                        ['name' => 'ASC'],
+                        ['name' => 'ASC', 'id' => 'ASC'],
                     ),
                 static fn (mixed $variant): bool => (
                     $variant instanceof ProductVariant
@@ -171,6 +198,52 @@ final readonly class PublicCatalogPresentation
                 'type' => $channel->type(),
             ],
             'products' => $payload,
+            'pagination' => [
+                'page' => $page,
+                'page_size' => self::PAGE_SIZE,
+                'has_previous' => $page > 1,
+                'has_next' => $hasNext,
+            ],
+        ];
+    }
+
+    private function salesChannelSchemaReady(): bool
+    {
+        return false !== $this->entityManager->getConnection()->fetchOne(
+            <<<'SQL'
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                  AND table_name = ?
+                LIMIT 1
+                SQL,
+            ['condor_sales_channel'],
+        );
+    }
+
+    /**
+     * @return array{
+     *   channel:null,
+     *   products:list<never>,
+     *   pagination:array{
+     *     page:int,
+     *     page_size:int,
+     *     has_previous:bool,
+     *     has_next:bool
+     *   }
+     * }
+     */
+    private function emptyCatalog(int $page): array
+    {
+        return [
+            'channel' => null,
+            'products' => [],
+            'pagination' => [
+                'page' => $page,
+                'page_size' => self::PAGE_SIZE,
+                'has_previous' => $page > 1,
+                'has_next' => false,
+            ],
         ];
     }
 }

@@ -16,6 +16,7 @@ use App\Domain\Inventory\Entity\InventoryBalance;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -110,6 +111,82 @@ final class PublicCatalogPresentationTest extends KernelTestCase
         $channel->deactivate();
         $this->entityManager->flush();
         self::assertNull($this->presentation->catalog($tenant)['channel']);
+    }
+
+    public function testCatalogFailsClosedBeforeSalesChannelMigrationIsReady(): void
+    {
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $connection = $this->createMock(Connection::class);
+        $entityManager->method('getConnection')->willReturn($connection);
+        $connection->expects(self::once())
+            ->method('fetchOne')
+            ->with(
+                self::stringContains('information_schema.tables'),
+                ['condor_sales_channel'],
+            )
+            ->willReturn(false);
+
+        $presentation = new PublicCatalogPresentation(
+            $entityManager,
+            new PricingService(
+                $entityManager,
+                new EffectivePriceResolver(),
+            ),
+        );
+        $tenant = new Tenant('Sin esquema', 'sin-esquema');
+
+        $catalog = $presentation->catalog($tenant);
+
+        self::assertNull($catalog['channel']);
+        self::assertSame([], $catalog['products']);
+        self::assertSame(1, $catalog['pagination']['page']);
+        self::assertFalse($catalog['pagination']['has_next']);
+    }
+
+    public function testCatalogPaginatesProductsAndKeepsPagesDisjoint(): void
+    {
+        [$tenant, , , $list] = $this->fixture();
+
+        for ($index = 1; $index <= 25; ++$index) {
+            $suffix = str_pad((string) $index, 2, '0', STR_PAD_LEFT);
+            $product = new Product(
+                $tenant,
+                'Producto '.$suffix,
+                'producto-'.$suffix.'-'.strtolower(bin2hex(random_bytes(3))),
+                'Producto paginado',
+            );
+            $variant = new ProductVariant(
+                $tenant,
+                $product,
+                'PAGE-'.$suffix.'-'.strtoupper(bin2hex(random_bytes(2))),
+                'Única',
+            );
+            $price = new VariantPrice(
+                $tenant,
+                $list,
+                $variant,
+                100000 + $index,
+            );
+
+            $this->entityManager->persist($product);
+            $this->entityManager->persist($variant);
+            $this->entityManager->persist($price);
+        }
+        $this->entityManager->flush();
+
+        $first = $this->presentation->catalog($tenant, 1);
+        $second = $this->presentation->catalog($tenant, 2);
+
+        self::assertCount(PublicCatalogPresentation::PAGE_SIZE, $first['products']);
+        self::assertCount(2, $second['products']);
+        self::assertFalse($first['pagination']['has_previous']);
+        self::assertTrue($first['pagination']['has_next']);
+        self::assertTrue($second['pagination']['has_previous']);
+        self::assertFalse($second['pagination']['has_next']);
+
+        $firstIds = array_column($first['products'], 'id');
+        $secondIds = array_column($second['products'], 'id');
+        self::assertSame([], array_values(array_intersect($firstIds, $secondIds)));
     }
 
     public function testVariantWithoutConfiguredListPriceIsNotPublished(): void

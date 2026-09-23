@@ -48,6 +48,18 @@
     {% else %}
         <p class="muted">El catálogo todavía no tiene productos publicables.</p>
     {% endfor %}
+
+    {% if catalog.pagination.has_previous or catalog.pagination.has_next %}
+        <nav class="storefront-pagination" aria-label="Paginación del catálogo">
+            {% if catalog.pagination.has_previous %}
+                <a href="?page={{ catalog.pagination.page - 1 }}">Anterior</a>
+            {% endif %}
+            <span>Página {{ catalog.pagination.page }}</span>
+            {% if catalog.pagination.has_next %}
+                <a href="?page={{ catalog.pagination.page + 1 }}">Siguiente</a>
+            {% endif %}
+        </nav>
+    {% endif %}
 </section>
 {% endif %}
 {% endblock %}
