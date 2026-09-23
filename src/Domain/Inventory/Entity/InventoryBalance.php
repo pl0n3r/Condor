@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Inventory\Entity;
 
 use App\Domain\Catalog\Entity\ProductVariant;
+use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use App\Shared\Id\UlidFactory;
 use DateTimeImmutable;
@@ -15,8 +16,8 @@ use DomainException;
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_inventory_balance')]
 #[ORM\UniqueConstraint(
-    name: 'uniq_inventory_balance_tenant_source_variant',
-    columns: ['tenant_id', 'source_id', 'variant_id'],
+    name: 'uniq_inventory_balance_scope_variant',
+    columns: ['tenant_id', 'legal_entity_id', 'source_id', 'variant_id'],
 )]
 #[ORM\UniqueConstraint(name: 'uniq_inventory_balance_tenant_id', columns: ['tenant_id', 'id'])]
 class InventoryBalance
@@ -28,6 +29,10 @@ class InventoryBalance
     #[ORM\ManyToOne(targetEntity: Tenant::class)]
     #[ORM\JoinColumn(name: 'tenant_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private Tenant $tenant;
+
+    #[ORM\ManyToOne(targetEntity: LegalEntity::class)]
+    #[ORM\JoinColumn(name: 'legal_entity_id', referencedColumnName: 'id', nullable: false, onDelete: 'RESTRICT')]
+    private LegalEntity $legalEntity;
 
     #[ORM\ManyToOne(targetEntity: InventorySource::class)]
     #[ORM\JoinColumn(name: 'source_id', referencedColumnName: 'id', nullable: false, onDelete: 'RESTRICT')]
@@ -64,6 +69,7 @@ class InventoryBalance
 
         $this->id = UlidFactory::new();
         $this->tenant = $tenant;
+        $this->legalEntity = $source->legalEntity();
         $this->source = $source;
         $this->variant = $variant;
         $this->quantity = $quantity;
@@ -79,6 +85,11 @@ class InventoryBalance
     public function tenant(): Tenant
     {
         return $this->tenant;
+    }
+
+    public function legalEntity(): LegalEntity
+    {
+        return $this->legalEntity;
     }
 
     public function source(): InventorySource
