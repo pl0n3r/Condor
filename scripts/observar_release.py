@@ -474,13 +474,19 @@ def observar_health(
         return "Versión y SHA exactos confirmados."
 
     limite_espera = time.monotonic() + espera_deploy
+    deploy_pendiente_observado = False
     while True:
         ok, detalle, intento, clase = ejecutar_con_reintentos(
             comprobar_health,
             intentos=intentos,
             intervalo=intervalo,
         )
-        if clase != "deploy_pendiente":
+        if clase == "deploy_pendiente":
+            deploy_pendiente_observado = True
+        elif not (
+            deploy_pendiente_observado
+            and clase == "transitorio"
+        ):
             break
 
         tiempo_restante = limite_espera - time.monotonic()
