@@ -61,6 +61,7 @@ class ObserverTests(unittest.TestCase):
             "/": (200, "text/html", HOME),
             "/admin/login": (200, "text/html", LOGIN),
             "/adminpl0n3r": (302, "text/html", b""),
+            "/adminpl0n3r/api/context": (302, "application/json", b""),
             "/app.css": (200, "text/css", b"body{margin:0}"),
             "/build/admin.css": (200, "text/css", b".admin{display:grid}"),
             "/build/admin.js": (200, "application/javascript; charset=utf-8", b"window.condor=true;"),
@@ -88,7 +89,7 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
         self.assertEqual(self.server.visitas, [
             "/health", "/", "/admin/login", "/adminpl0n3r",
-            "/app.css", "/build/admin.css", "/build/admin.js",
+            "/adminpl0n3r/api/context", "/app.css", "/build/admin.css", "/build/admin.js",
         ])
         self.assertTrue(all(v["ok"] for v in resultado["comprobaciones"].values()))
 
@@ -119,6 +120,56 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
         self.assertFalse(resultado["comprobaciones"]["centro_control"]["ok"])
         self.assertIn("HTTP 500", resultado["comprobaciones"]["centro_control"]["detalle"])
+
+    def test_centro_control_api_5xx_impide_validar_produccion(self) -> None:
+        self.server.respuestas["/adminpl0n3r/api/context"] = (
+            500,
+            "application/json",
+            b'{"error":"fallo"}',
+        )
+
+        resultado = modulo.observar(
+            self.base,
+            VERSION,
+            SHA,
+            intentos=1,
+            intervalo=0,
+            timeout=1,
+        )
+
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["centro_control_api"]["ok"])
+        self.assertIn(
+            "HTTP 500",
+            resultado["comprobaciones"]["centro_control_api"]["detalle"],
+        )
+
+    def test_centro_control_200_anonimo_es_fallo_funcional(self) -> None:
+        self.server.respuestas["/adminpl0n3r"] = (
+            200,
+            "text/html",
+            b"<html>publico</html>",
+        )
+
+        resultado = modulo.observar(
+            self.base,
+            VERSION,
+            SHA,
+            intentos=1,
+            intervalo=0,
+            timeout=1,
+        )
+
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["centro_control"]["ok"])
+        self.assertEqual(
+            resultado["comprobaciones"]["centro_control"]["clase"],
+            "funcional",
+        )
+        self.assertIn(
+            "HTTP 200",
+            resultado["comprobaciones"]["centro_control"]["detalle"],
+        )
 
     def preparar_storefront(
         self, *, canonical: str | None = None, version: str = "0.1.13",
