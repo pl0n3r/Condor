@@ -132,15 +132,21 @@ final class InventoryControllerTest extends WebTestCase
         self::assertSame(
             1,
             (int) $entityManager->getConnection()->fetchOne(
-                'SELECT COUNT(*) FROM condor_audit_event WHERE action = ? AND entity_type = ?',
-                ['inventory.adjusted', InventoryMovement::class],
+                'SELECT COUNT(*) FROM condor_audit_event '
+                .'WHERE tenant_id = ? AND action = ? AND entity_type = ?',
+                [$tenant->id(), 'inventory.adjusted', InventoryMovement::class],
             ),
         );
         self::assertSame(
             1,
             (int) $entityManager->getConnection()->fetchOne(
-                'SELECT COUNT(*) FROM condor_audit_event WHERE action = ? AND entity_type = ?',
-                ['inventory.transferred', \App\Domain\Inventory\Entity\InventoryTransfer::class],
+                'SELECT COUNT(*) FROM condor_audit_event '
+                .'WHERE tenant_id = ? AND action = ? AND entity_type = ?',
+                [
+                    $tenant->id(),
+                    'inventory.transferred',
+                    \App\Domain\Inventory\Entity\InventoryTransfer::class,
+                ],
             ),
         );
     }

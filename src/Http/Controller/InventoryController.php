@@ -175,6 +175,7 @@ final class InventoryController extends AbstractController
                 ->getRepository(InventorySource::class)
                 ->findOneBy([
                     'tenant' => $tenant,
+                    'legalEntity' => $legalEntity,
                     'branch' => $branch,
                     'active' => false,
                 ])
@@ -397,8 +398,18 @@ final class InventoryController extends AbstractController
 
         $created = false;
         try {
-            $movement = $this->domain(
-                fn (): InventoryMovement => $this->inventory->adjust(
+            $movement = $this->domain(function () use (
+                &$created,
+                $tenant,
+                $source,
+                $variant,
+                $payload,
+                $user,
+                $reason,
+                $branch,
+                $legalEntity,
+            ): InventoryMovement {
+                return $this->inventory->adjust(
                     $tenant,
                     $source,
                     $variant,
@@ -435,8 +446,8 @@ final class InventoryController extends AbstractController
                             ],
                         );
                     },
-                ),
-            );
+                );
+            });
         } catch (UniqueConstraintViolationException $exception) {
             throw new ConflictHttpException(
                 'La clave de idempotencia ya fue usada por otra operación concurrente.',
@@ -507,8 +518,18 @@ final class InventoryController extends AbstractController
 
         $created = false;
         try {
-            $transfer = $this->domain(
-                fn (): InventoryTransfer => $this->inventory->transfer(
+            $transfer = $this->domain(function () use (
+                &$created,
+                $tenant,
+                $variant,
+                $sourceFrom,
+                $sourceTo,
+                $payload,
+                $user,
+                $branch,
+                $legalEntity,
+            ): InventoryTransfer {
+                return $this->inventory->transfer(
                     $tenant,
                     $variant,
                     $sourceFrom,
@@ -543,8 +564,8 @@ final class InventoryController extends AbstractController
                             ],
                         );
                     },
-                ),
-            );
+                );
+            });
         } catch (UniqueConstraintViolationException $exception) {
             throw new ConflictHttpException(
                 'La clave de idempotencia ya fue usada por otra operación concurrente.',
