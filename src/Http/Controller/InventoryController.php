@@ -6,6 +6,7 @@ namespace App\Http\Controller;
 
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
+use App\Application\Inventory\InventoryConflictException;
 use App\Application\Inventory\InventoryService;
 use App\Domain\Catalog\Entity\ProductVariant;
 use App\Domain\Identity\Entity\Membership;
@@ -448,9 +449,9 @@ final class InventoryController extends AbstractController
                     },
                 );
             });
-        } catch (UniqueConstraintViolationException $exception) {
+        } catch (InventoryConflictException $exception) {
             throw new ConflictHttpException(
-                'La clave de idempotencia ya fue usada por otra operación concurrente.',
+                $exception->getMessage(),
                 $exception,
             );
         }
@@ -566,9 +567,9 @@ final class InventoryController extends AbstractController
                     },
                 );
             });
-        } catch (UniqueConstraintViolationException $exception) {
+        } catch (InventoryConflictException $exception) {
             throw new ConflictHttpException(
-                'La clave de idempotencia ya fue usada por otra operación concurrente.',
+                $exception->getMessage(),
                 $exception,
             );
         }

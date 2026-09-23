@@ -10,6 +10,7 @@ use App\Domain\Inventory\Entity\InventoryMovement;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Inventory\Entity\InventoryTransfer;
 use App\Domain\Organization\Entity\Tenant;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
@@ -36,8 +37,9 @@ final readonly class InventoryService
     ): InventoryMovement {
         $key = self::normalizeIdempotencyKey($idempotencyKey);
 
-        return $this->entityManager->wrapInTransaction(
-            function (EntityManagerInterface $entityManager) use (
+        try {
+            return $this->entityManager->wrapInTransaction(
+                function (EntityManagerInterface $entityManager) use (
                 $tenant,
                 $source,
                 $variant,
@@ -101,8 +103,15 @@ final readonly class InventoryService
                 }
 
                 return $movement;
-            },
-        );
+                },
+            );
+        } catch (UniqueConstraintViolationException $exception) {
+            throw new InventoryConflictException(
+                'La operación de inventario entró en conflicto con otra solicitud concurrente.',
+                0,
+                $exception,
+            );
+        }
     }
 
     public function transfer(
@@ -117,8 +126,9 @@ final readonly class InventoryService
     ): InventoryTransfer {
         $key = self::normalizeIdempotencyKey($idempotencyKey);
 
-        return $this->entityManager->wrapInTransaction(
-            function (EntityManagerInterface $entityManager) use (
+        try {
+            return $this->entityManager->wrapInTransaction(
+                function (EntityManagerInterface $entityManager) use (
                 $tenant,
                 $variant,
                 $sourceFrom,
@@ -215,8 +225,15 @@ final readonly class InventoryService
                 }
 
                 return $transfer;
-            },
-        );
+                },
+            );
+        } catch (UniqueConstraintViolationException $exception) {
+            throw new InventoryConflictException(
+                'La operación de inventario entró en conflicto con otra solicitud concurrente.',
+                0,
+                $exception,
+            );
+        }
     }
 
     private function balanceForUpdate(
