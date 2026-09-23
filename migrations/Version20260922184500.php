@@ -20,6 +20,11 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
             'ALTER TABLE condor_product '
             .'ADD allow_backorder TINYINT(1) NOT NULL DEFAULT 0',
         );
+        $this->addSql(
+            'ALTER TABLE condor_branch '
+            .'ADD UNIQUE INDEX uniq_branch_tenant_legal_id '
+            .'(tenant_id, legal_entity_id, id)',
+        );
 
         $this->addSql(<<<'SQL'
             CREATE TABLE condor_inventory_source (
@@ -57,6 +62,10 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
                 CONSTRAINT FK_INV_SOURCE_BRANCH_TENANT
                     FOREIGN KEY (tenant_id, branch_id)
                     REFERENCES condor_branch (tenant_id, id)
+                    ON DELETE RESTRICT,
+                CONSTRAINT FK_INV_SOURCE_BRANCH_SCOPE
+                    FOREIGN KEY (tenant_id, legal_entity_id, branch_id)
+                    REFERENCES condor_branch (tenant_id, legal_entity_id, id)
                     ON DELETE RESTRICT
             ) DEFAULT CHARACTER SET utf8mb4
               COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
@@ -261,6 +270,9 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
         $this->addSql('DROP TABLE condor_inventory_transfer');
         $this->addSql('DROP TABLE condor_inventory_balance');
         $this->addSql('DROP TABLE condor_inventory_source');
+        $this->addSql(
+            'ALTER TABLE condor_branch DROP INDEX uniq_branch_tenant_legal_id',
+        );
         $this->addSql('ALTER TABLE condor_product DROP allow_backorder');
     }
 }
