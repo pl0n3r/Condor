@@ -52,7 +52,7 @@
 
 ## Validación requerida
 
-- CI completo, SonarQube y CodeRabbit sobre el SHA final estable;
+- CI, SonarQube y CodeRabbit deben estar **terminales sobre el SHA final exacto**, sin gates fallidos ni hallazgos válidos pendientes;
 - squash merge y exact-main;
 - tag anotado + GitHub Release `v0.1.21`;
 - observador post-merge debe esperar el deploy real en vez de emitir NO_OBSERVADO prematuro;
