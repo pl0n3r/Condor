@@ -81,25 +81,41 @@
                         <input id="channel-slug" name="slug" maxlength="120"
                                value="{{ channel ? channel.slug : 'tienda-web' }}" required>
 
-                        <label for="channel-source">Fuente de inventario</label>
-                        <select id="channel-source" name="inventory_source_id" required>
-                            {% for source in channel_sources %}
-                                <option value="{{ source.id }}"
-                                    {% if channel and channel.inventory_source_id == source.id %}selected{% endif %}>
-                                    {{ source.name }} · {{ source.legal_entity }}
-                                </option>
-                            {% endfor %}
-                        </select>
+                        {% if channel_sources|length == 1 %}
+                            <input type="hidden" name="inventory_source_id" value="{{ channel_sources[0].id }}">
+                            <p class="muted" data-single-channel-source>
+                                Fuente de inventario: <strong>{{ channel_sources[0].name }}</strong>
+                                · {{ channel_sources[0].legal_entity }}
+                            </p>
+                        {% else %}
+                            <label for="channel-source">Fuente de inventario</label>
+                            <select id="channel-source" name="inventory_source_id" required>
+                                {% for source in channel_sources %}
+                                    <option value="{{ source.id }}"
+                                        {% if channel and channel.inventory_source_id == source.id %}selected{% endif %}>
+                                        {{ source.name }} · {{ source.legal_entity }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        {% endif %}
 
-                        <label for="channel-price-list">Lista de precios</label>
-                        <select id="channel-price-list" name="price_list_id" required>
-                            {% for list in price_lists %}
-                                <option value="{{ list.id }}"
-                                    {% if channel and channel.price_list_id == list.id %}selected{% endif %}>
-                                    {{ list.name }} · {{ list.currency }}
-                                </option>
-                            {% endfor %}
-                        </select>
+                        {% if price_lists|length == 1 %}
+                            <input type="hidden" name="price_list_id" value="{{ price_lists[0].id }}">
+                            <p class="muted" data-single-price-list>
+                                Lista de precios: <strong>{{ price_lists[0].name }}</strong>
+                                · {{ price_lists[0].currency }}
+                            </p>
+                        {% else %}
+                            <label for="channel-price-list">Lista de precios</label>
+                            <select id="channel-price-list" name="price_list_id" required>
+                                {% for list in price_lists %}
+                                    <option value="{{ list.id }}"
+                                        {% if channel and channel.price_list_id == list.id %}selected{% endif %}>
+                                        {{ list.name }} · {{ list.currency }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        {% endif %}
 
                         <label>
                             <input type="checkbox" name="active" value="1"
