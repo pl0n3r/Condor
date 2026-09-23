@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   inventoryAdjustmentPath,
   inventoryPath,
@@ -66,6 +66,14 @@ type State =
   | { status: 'error'; message: string };
 
 type Notice = { kind: 'success' | 'error'; text: string };
+type IdempotencyState = { signature: string; key: string };
+
+const MOVEMENT_TYPE_LABELS: Readonly<Record<string, string>> = {
+  adjustment_in: 'Ajuste de entrada',
+  adjustment_out: 'Ajuste de salida',
+  transfer_in: 'Transferencia de entrada',
+  transfer_out: 'Transferencia de salida',
+};
 
 export function InventoryManagement({
   branchId,
@@ -80,6 +88,14 @@ export function InventoryManagement({
   const [state, setState] = useState<State>({ status: 'loading' });
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
+  const adjustmentIdempotency = useRef<IdempotencyState>({
+    signature: '',
+    key: '',
+  });
+  const transferIdempotency = useRef<IdempotencyState>({
+    signature: '',
+    key: '',
+  });
 
   const [sourceName, setSourceName] = useState('');
   const [sourceSlug, setSourceSlug] = useState('');
@@ -145,6 +161,8 @@ export function InventoryManagement({
     setTransferFrom('');
     setTransferTo('');
     setTransferVariant('');
+    adjustmentIdempotency.current = { signature: '', key: '' };
+    transferIdempotency.current = { signature: '', key: '' };
 
     if (canView) {
       void loadInventory();
@@ -194,18 +212,31 @@ export function InventoryManagement({
       return;
     }
 
-    await runMutation(
+    const payload = {
+      source_id: adjustSource,
+      variant_id: adjustVariant,
+      delta: Number(adjustDelta),
+      reason: adjustReason,
+    };
+    const signature = JSON.stringify(payload);
+    adjustmentIdempotency.current = stableIdempotency(
+      adjustmentIdempotency.current,
+      'adjust',
+      signature,
+    );
+
+    const succeeded = await runMutation(
       inventoryAdjustmentPath(branchId),
       {
-        source_id: adjustSource,
-        variant_id: adjustVariant,
-        delta: Number(adjustDelta),
-        reason: adjustReason,
-        idempotency_key: idempotencyKey('adjust'),
+        ...payload,
+        idempotency_key: adjustmentIdempotency.current.key,
       },
       'Ajuste aplicado.',
     );
-    setAdjustReason('');
+    if (succeeded) {
+      adjustmentIdempotency.current = { signature: '', key: '' };
+      setAdjustReason('');
+    }
   }
 
   async function transfer(event: FormEvent<HTMLFormElement>) {
@@ -214,24 +245,37 @@ export function InventoryManagement({
       return;
     }
 
-    await runMutation(
+    const payload = {
+      source_from_id: transferFrom,
+      source_to_id: transferTo,
+      variant_id: transferVariant,
+      quantity: Number(transferQuantity),
+    };
+    const signature = JSON.stringify(payload);
+    transferIdempotency.current = stableIdempotency(
+      transferIdempotency.current,
+      'transfer',
+      signature,
+    );
+
+    const succeeded = await runMutation(
       inventoryTransferPath(branchId),
       {
-        source_from_id: transferFrom,
-        source_to_id: transferTo,
-        variant_id: transferVariant,
-        quantity: Number(transferQuantity),
-        idempotency_key: idempotencyKey('transfer'),
+        ...payload,
+        idempotency_key: transferIdempotency.current.key,
       },
       'Transferencia aplicada.',
     );
+    if (succeeded) {
+      transferIdempotency.current = { signature: '', key: '' };
+    }
   }
 
   async function runMutation(
     url: string,
     payload: Record<string, unknown>,
     success: string,
-  ) {
+  ): Promise<boolean> {
     setBusy(true);
     setNotice(null);
     try {
@@ -254,6 +298,8 @@ export function InventoryManagement({
 
       setNotice({ kind: 'success', text: success });
       await loadInventory();
+
+      return true;
     } catch (error) {
       setNotice({
         kind: 'error',
@@ -261,6 +307,8 @@ export function InventoryManagement({
           ? error.message
           : 'No fue posible completar la operación.',
       });
+
+      return false;
     } finally {
       setBusy(false);
     }
@@ -540,11 +588,11 @@ export function InventoryManagement({
                             {movement.delta}
                           </strong>
                           <p className="muted">
-                            {source?.name ?? 'Fuente'} · {movement.type}
+                            {source?.name ?? 'Fuente'} · {movementTypeLabel(movement.type)}
                             {typeof reason === 'string' ? ' · ' + reason : ''}
                           </p>
                         </div>
-                        <span>{new Date(movement.created_at).toLocaleString()}</span>
+                        <span>{new Date(movement.created_at).toLocaleString('es-CO')}</span>
                       </div>
                     );
                   })}
@@ -556,6 +604,25 @@ export function InventoryManagement({
       )}
     </section>
   );
+}
+
+function stableIdempotency(
+  current: IdempotencyState,
+  prefix: string,
+  signature: string,
+): IdempotencyState {
+  if (current.signature === signature && current.key !== '') {
+    return current;
+  }
+
+  return {
+    signature,
+    key: idempotencyKey(prefix),
+  };
+}
+
+function movementTypeLabel(type: string): string {
+  return MOVEMENT_TYPE_LABELS[type] ?? 'Movimiento de inventario';
 }
 
 function idempotencyKey(prefix: string): string {
