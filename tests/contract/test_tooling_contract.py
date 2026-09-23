@@ -374,13 +374,79 @@ esac
         self.assertIn('evidencias["schema"]', observer)
         self.assertIn('carga.get("schema_up_to_date") is True', observer)
 
-    def test_backup_disables_tablespace_metadata_when_client_supports_it(self) -> None:
-        """El backup no exige PROCESS global en clientes MySQL/MariaDB compatibles."""
-        script = (ROOT / "scripts/backup-database.sh").read_text(encoding="utf-8")
+    def test_backup_disables_tablespace_metadata_only_when_supported(self) -> None:
+        """El dump recibe --no-tablespaces solo si el cliente lo anuncia."""
 
-        self.assertIn("'--no-tablespaces'", script)
-        self.assertIn('"$dump_bin" --help', script)
-        self.assertIn('set -- --no-tablespaces "$@"', script)
+        def run_backup(supports_no_tablespaces: bool) -> list[str]:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                scripts = root / "scripts"
+                scripts.mkdir()
+                (scripts / "backup-database.sh").write_text(
+                    (ROOT / "scripts/backup-database.sh").read_text(encoding="utf-8"),
+                    encoding="utf-8",
+                )
+                (scripts / "parse-database-url.php").write_text(
+                    (ROOT / "scripts/parse-database-url.php").read_text(encoding="utf-8"),
+                    encoding="utf-8",
+                )
+
+                fake_bin = root / "fake-bin"
+                fake_bin.mkdir()
+                dump_args = root / "dump-args.log"
+                dump = fake_bin / "mariadb-dump"
+                dump.write_text(
+                    textwrap.dedent(
+                        """\\
+                        #!/bin/sh
+                        set -eu
+                        if [ "${1:-}" = "--help" ]; then
+                          if [ "${FAKE_SUPPORTS_NO_TABLESPACES:-0}" = "1" ]; then
+                            printf '%s\\n' '  --no-tablespaces'
+                          fi
+                          exit 0
+                        fi
+                        printf '%s\\n' "$@" > "$FAKE_DUMP_ARGS"
+                        printf '%s\\n' 'CREATE TABLE backup_probe (id INT);'
+                        """
+                    ),
+                    encoding="utf-8",
+                )
+                dump.chmod(0o755)
+
+                env = dict(os.environ)
+                env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+                env["DATABASE_URL"] = "mysql://backup_user:backup_pass@127.0.0.1:3306/condor"
+                env["BACKUP_DIR"] = str(root / "backups")
+                env["FAKE_DUMP_ARGS"] = str(dump_args)
+                env["FAKE_SUPPORTS_NO_TABLESPACES"] = (
+                    "1" if supports_no_tablespaces else "0"
+                )
+
+                result = subprocess.run(
+                    ["sh", str(scripts / "backup-database.sh")],
+                    cwd=root,
+                    env=env,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+
+                self.assertEqual(0, result.returncode, result.stderr)
+                return dump_args.read_text(encoding="utf-8").splitlines()
+
+        supported = run_backup(True)
+        unsupported = run_backup(False)
+
+        self.assertIn("--no-tablespaces", supported)
+        self.assertNotIn("--no-tablespaces", unsupported)
+        for args in (supported, unsupported):
+            self.assertIn("--single-transaction", args)
+            self.assertIn("--quick", args)
+            self.assertIn("--skip-lock-tables", args)
+            self.assertIn("--triggers", args)
+            self.assertEqual("condor", args[-1])
 
     def test_post_deploy_never_executes_destructive_schema_mutations_automatically(self) -> None:
         """Solo migrate versionado puede automatizarse; operaciones destructivas no."""
