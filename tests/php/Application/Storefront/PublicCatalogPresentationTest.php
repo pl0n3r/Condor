@@ -189,6 +189,40 @@ final class PublicCatalogPresentationTest extends KernelTestCase
         self::assertSame([], array_values(array_intersect($firstIds, $secondIds)));
     }
 
+    public function testPaginationSkipsUnpricedProductsBeforeApplyingOffset(): void
+    {
+        [$tenant, , , , $pricedVariant] = $this->fixture();
+
+        for ($index = 1; $index <= PublicCatalogPresentation::PAGE_SIZE + 1; ++$index) {
+            $suffix = str_pad((string) $index, 2, '0', STR_PAD_LEFT);
+            $product = new Product(
+                $tenant,
+                'A sin precio '.$suffix,
+                'sin-precio-'.$suffix.'-'.strtolower(bin2hex(random_bytes(3))),
+                'Producto activo sin precio web',
+            );
+            $variant = new ProductVariant(
+                $tenant,
+                $product,
+                'NOPRICE-'.$suffix.'-'.strtoupper(bin2hex(random_bytes(2))),
+                'Única',
+            );
+
+            $this->entityManager->persist($product);
+            $this->entityManager->persist($variant);
+        }
+        $this->entityManager->flush();
+
+        $catalog = $this->presentation->catalog($tenant, 1);
+
+        self::assertCount(1, $catalog['products']);
+        self::assertSame(
+            $pricedVariant->product()->id(),
+            $catalog['products'][0]['id'],
+        );
+        self::assertFalse($catalog['pagination']['has_next']);
+    }
+
     public function testVariantWithoutConfiguredListPriceIsNotPublished(): void
     {
         [$tenant, , , , $variant] = $this->fixture();

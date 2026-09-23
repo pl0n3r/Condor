@@ -8,6 +8,7 @@ use App\Application\Commerce\PricingService;
 use App\Domain\Catalog\Entity\Product;
 use App\Domain\Catalog\Entity\ProductVariant;
 use App\Domain\Commerce\Entity\SalesChannel;
+use App\Domain\Commerce\Entity\VariantPrice;
 use App\Domain\Inventory\Entity\InventoryBalance;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
@@ -83,13 +84,36 @@ final readonly class PublicCatalogPresentation
         }
 
         $offset = ($page - 1) * self::PAGE_SIZE;
+        $publishablePrice = $this->entityManager->createQueryBuilder()
+            ->select('1')
+            ->from(VariantPrice::class, 'publishable_price')
+            ->innerJoin('publishable_price.variant', 'publishable_variant')
+            ->where('publishable_price.tenant = :tenant')
+            ->andWhere('publishable_price.priceList = :price_list')
+            ->andWhere('publishable_variant.tenant = :tenant')
+            ->andWhere('publishable_variant.product = product')
+            ->andWhere('publishable_variant.active = true');
+
         $products = array_values(array_filter(
-            $this->entityManager->getRepository(Product::class)->findBy(
-                ['tenant' => $tenant, 'active' => true],
-                ['name' => 'ASC', 'id' => 'ASC'],
-                self::PAGE_SIZE + 1,
-                $offset,
-            ),
+            $this->entityManager->createQueryBuilder()
+                ->select('product')
+                ->from(Product::class, 'product')
+                ->where('product.tenant = :tenant')
+                ->andWhere('product.active = true')
+                ->andWhere(
+                    $this->entityManager
+                        ->createQueryBuilder()
+                        ->expr()
+                        ->exists($publishablePrice->getDQL()),
+                )
+                ->setParameter('tenant', $tenant)
+                ->setParameter('price_list', $channel->priceList())
+                ->orderBy('product.name', 'ASC')
+                ->addOrderBy('product.id', 'ASC')
+                ->setFirstResult($offset)
+                ->setMaxResults(self::PAGE_SIZE + 1)
+                ->getQuery()
+                ->getResult(),
             static fn (mixed $product): bool => $product instanceof Product,
         ));
         $hasNext = count($products) > self::PAGE_SIZE;
