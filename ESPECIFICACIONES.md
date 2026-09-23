@@ -1566,6 +1566,32 @@ Candidatos prioritarios a automatización a medida que exista superficie:
 
 Toda automatización debe ser idempotente cuando sea posible y operar con mínimo privilegio.
 
+#### Detección de deriva de esquema post-deploy en shared hosting
+
+Mientras Condor opere en Hostinger shared hosting, el cron/post-deploy **no ejecuta
+migraciones productivas automáticamente**. Su responsabilidad es detectar si el
+esquema está atrasado y fallar cerrado antes de regenerar la caché.
+
+Contrato operativo:
+
+- una sola corrida de post-deploy opera a la vez; el script usa un lock explícito y una segunda corrida concurrente se omite, pero un error real al abrir, adquirir o publicar el lock falla con estado no-cero y diagnóstico accionable;
+- un lock con propietario vivo nunca se recupera por antigüedad;
+- un lock huérfano puede recuperarse de forma segura y un lock incompleto reciente obtiene un periodo de gracia antes de considerarse recuperable;
+- el cron ejecuta `doctrine:migrations:up-to-date --env=prod --no-interaction --fail-on-unregistered` como comprobación read-only, con límite de pared acotado (60 s por defecto, configurable solo dentro de un rango seguro); detecta tanto migraciones nuevas pendientes como migraciones ejecutadas ausentes del catálogo actual;
+- si existen migraciones pendientes, ejecutadas ya no registradas, un fallo de conectividad o un timeout del chequeo, termina con error accionable y **no** ejecuta `cache:clear` ni `cache:warmup`;
+- una migración productiva requiere autorización humana explícita conforme a `AGENTES.md` §10 y se ejecuta como operación separada, nunca implícita desde cron, deploy o smoke;
+- las migraciones autorizadas deben seguir siendo forward / expand-compatible; SQL destructivo, contracciones irreversibles, backfills riesgosos o cambios sin rollback permanecen fuera de cualquier automatización;
+- cuando el esquema ya está al día, el orden permitido es **comprobar esquema → limpiar caché → calentar caché**;
+- detectar esquema pendiente bloquea `VALIDATED_IN_PRODUCTION`; la identidad de release, el esquema migrado y el estado operativo reconciliado se registran como evidencias separadas;
+- el observador de release nunca debe inferir que una migración fue aplicada solo porque versión/SHA coincidan;
+- `/health` conserva la identidad pública (`status`, `version`, `release_sha`) y publica `schema_up_to_date: true|false` como única señal no sensible sobre migraciones; el observador exige `true` para `VALIDATED_IN_PRODUCTION`, sin exponer nombres de migración, SQL ni metadatos internos.
+
+Motivación operativa: V 0.1.20 demostró que Hostinger podía servir código nuevo
+mientras el esquema del storefront seguía atrasado, produciendo HTTP 500. El
+post-deploy debe hacer visible esa deriva sin convertir una mutación productiva
+en una operación automática. La corrección del esquema requiere autorización y
+ejecución separadas, seguida por el mismo smoke real que detectó el incidente.
+
 #### Revisión periódica de seguridad
 
 - seguridad se valida por slice, no solo en una auditoría anual;

@@ -56,6 +56,7 @@ class ObserverTests(unittest.TestCase):
         self.server.respuestas = {
             "/health": (200, "application/json; charset=utf-8", json.dumps({
                 "status": "ok", "version": VERSION, "release_sha": SHA,
+                "schema_up_to_date": True,
             }).encode()),
             "/": (200, "text/html", HOME),
             "/admin/login": (200, "text/html", LOGIN),
@@ -75,6 +76,12 @@ class ObserverTests(unittest.TestCase):
     def observar(self) -> dict:
         return modulo.observar(self.base, VERSION, SHA, intentos=2, intervalo=0, timeout=1)
 
+    def test_accept_de_javascript_incluye_mime_legacy_de_hostinger(self) -> None:
+        self.assertEqual(
+            modulo.tipo_aceptado_para("/build/admin.js"),
+            "text/javascript, application/javascript, application/x-javascript",
+        )
+
     def test_release_exacta_y_smoke_publico(self) -> None:
         resultado = self.observar()
         self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
@@ -93,6 +100,7 @@ class ObserverTests(unittest.TestCase):
         self.server.respuestas["/health"] = (
             200, "application/json", json.dumps({
                 "status": "ok", "version": version, "release_sha": SHA,
+                "schema_up_to_date": True,
             }).encode(),
         )
         self.server.respuestas["/"] = (
@@ -487,7 +495,7 @@ class ObserverTests(unittest.TestCase):
 
     def test_asset_demasiado_grande_no_valida_produccion(self) -> None:
         self.server.respuestas["/build/admin.js"] = (
-            200, "application/javascript", b"a" * (modulo.MAX_BYTES + 1),
+            200, "application/javascript", b"a" * (modulo.MAX_ASSET_BYTES + 1),
         )
         self.assertEqual(self.observar()["estado"], "DEPLOY_OBSERVED")
 
@@ -505,16 +513,168 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(resultado["comprobaciones"]["health"]["intento"], 1)
         sleep.assert_not_called()
 
+    def test_version_anterior_con_sha_invalido_falla_identidad_sin_espera(self) -> None:
+        self.server.respuestas["/health"] = (
+            200,
+            "application/json",
+            json.dumps({
+                "status": "ok",
+                "version": "0.0.9",
+                "release_sha": "sha-invalido",
+                "schema_up_to_date": True,
+            }).encode(),
+        )
+        with patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(
+                self.base,
+                VERSION,
+                SHA,
+                intentos=1,
+                espera_deploy=600,
+            )
+        self.assertEqual(resultado["estado"], "NO_OBSERVADO")
+        self.assertEqual(
+            resultado["comprobaciones"]["health"]["clase"],
+            "identidad",
+        )
+        self.assertEqual(self.server.visitas, ["/health"])
+        sleep.assert_not_called()
+
     def test_version_distinta_no_observa_deploy(self) -> None:
         resultado = modulo.observar(self.base, "0.1.1", SHA, intentos=1)
         self.assertEqual(resultado["estado"], "NO_OBSERVADO")
-        self.assertEqual(resultado["comprobaciones"]["health"]["clase"], "funcional")
+        self.assertEqual(resultado["comprobaciones"]["health"]["clase"], "deploy_pendiente")
 
-    def test_health_5xx_y_json_invalido_no_observan_deploy(self) -> None:
+    def test_version_mayor_es_fallo_de_identidad_sin_espera(self) -> None:
+        with patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(self.base, "0.0.9", SHA, intentos=1, espera_deploy=600)
+        self.assertEqual(resultado["comprobaciones"]["health"]["clase"], "identidad")
+        self.assertIn("identidad de producción", modulo.comentario_roadmap(resultado))
+        sleep.assert_not_called()
+
+    def test_espera_deploy_hasta_que_llega_la_version(self) -> None:
+        viejo = (200, "application/json", json.dumps({
+            "status": "ok", "version": "0.0.9", "release_sha": "c" * 40}).encode())
+        pendientes = [viejo, viejo, self.server.respuestas["/health"]]
+        self.server.respuestas["/health"] = lambda: pendientes[0] if len(pendientes) == 1 else pendientes.pop(0)
+        with patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(self.base, VERSION, SHA, intentos=1, intervalo=0,
+                                        timeout=1, espera_deploy=600, intervalo_deploy=30)
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_espera_deploy_tolera_transitorio_despues_de_version_anterior(self) -> None:
+        viejo = (
+            200,
+            "application/json",
+            json.dumps({
+                "status": "ok",
+                "version": "0.0.9",
+                "release_sha": "c" * 40,
+            }).encode(),
+        )
+        transitorio = (503, "application/json", b'{"status":"unavailable"}')
+        respuestas = [viejo, transitorio, self.server.respuestas["/health"]]
+        self.server.respuestas["/health"] = lambda: respuestas.pop(0)
+
+        with patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(
+                self.base,
+                VERSION,
+                SHA,
+                intentos=1,
+                intervalo=0,
+                timeout=1,
+                espera_deploy=600,
+                intervalo_deploy=30,
+            )
+
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_espera_deploy_agotada_no_observa(self) -> None:
+        with patch.object(modulo.time, "monotonic", side_effect=[0, 10, 700]), \
+                patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(self.base, "0.1.1", SHA, intentos=1,
+                                        espera_deploy=600, intervalo_deploy=30)
+        self.assertEqual(resultado["estado"], "NO_OBSERVADO")
+        self.assertIn("⏳", modulo.comentario_roadmap(resultado))
+        sleep.assert_called_once_with(30)
+
+    def test_espera_deploy_no_supera_el_presupuesto_restante(self) -> None:
+        with patch.object(modulo.time, "monotonic", side_effect=[0, 599, 601]), \
+                patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(
+                self.base,
+                "0.1.1",
+                SHA,
+                intentos=1,
+                espera_deploy=600,
+                intervalo_deploy=120,
+            )
+        self.assertEqual(resultado["estado"], "NO_OBSERVADO")
+        sleep.assert_called_once_with(1)
+
+    def test_comentario_deploy_observado_nombra_fallos_reales(self) -> None:
+        self.server.respuestas["/"] = (200, "text/html", b"<html>Hola</html>")
+        comentario = modulo.comentario_roadmap(self.observar())
+        self.assertIn("`home`", comentario)
+        self.assertNotIn("transición operativa", comentario)
+
+    def test_js_con_mime_legacy_de_hostinger_es_aceptado(self) -> None:
+        self.server.respuestas["/build/admin.js"] = (200, "application/x-javascript", b"window.condor=true;")
+        self.assertEqual(self.observar()["estado"], "VALIDATED_IN_PRODUCTION")
+
+    def test_bundle_admin_mayor_a_256_kib_es_aceptado(self) -> None:
+        self.server.respuestas["/build/admin.js"] = (
+            200, "application/javascript", b"a" * (modulo.MAX_BYTES + 1),
+        )
+        self.assertEqual(self.observar()["estado"], "VALIDATED_IN_PRODUCTION")
+
+    def test_health_5xx_y_json_invalido_no_se_reportan_como_identidad(self) -> None:
         for codigo, cuerpo in [(503, b"fallo"), (200, b"{mal json")]:
             with self.subTest(codigo=codigo, cuerpo=cuerpo):
                 self.server.respuestas["/health"] = (codigo, "application/json", cuerpo)
-                self.assertEqual(self.observar()["estado"], "NO_OBSERVADO")
+                resultado = self.observar()
+                self.assertEqual(resultado["estado"], "NO_OBSERVADO")
+                comentario = modulo.comentario_roadmap(resultado)
+                self.assertIn("no fue posible confirmar", comentario)
+                self.assertNotIn("identidad de producción no coincide", comentario)
+
+    def test_schema_pendiente_con_identidad_exacta_solo_observa_deploy(self) -> None:
+        self.server.respuestas["/health"] = (
+            200,
+            "application/json",
+            json.dumps({
+                "status": "ok",
+                "version": VERSION,
+                "release_sha": SHA,
+                "schema_up_to_date": False,
+            }).encode(),
+        )
+
+        resultado = self.observar()
+
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertTrue(resultado["comprobaciones"]["health"]["ok"])
+        self.assertFalse(resultado["comprobaciones"]["schema"]["ok"])
+        self.assertIn("esquema", resultado["comprobaciones"]["schema"]["detalle"])
+
+    def test_health_legacy_sin_estado_de_esquema_falla_cerrado(self) -> None:
+        self.server.respuestas["/health"] = (
+            200,
+            "application/json",
+            json.dumps({
+                "status": "ok",
+                "version": VERSION,
+                "release_sha": SHA,
+            }).encode(),
+        )
+
+        resultado = self.observar()
+
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["schema"]["ok"])
 
     def test_health_no_json_no_observa_deploy(self) -> None:
         self.server.respuestas["/health"] = (200, "text/html", HOME)
@@ -658,6 +818,56 @@ class ObserverTests(unittest.TestCase):
                     caught.exception,
                     modulo.ObservacionTransitoria,
                 )
+
+    def test_dns_eai_again_si_es_transitorio_y_se_recupera_con_reintento(self) -> None:
+        fallo_temporal = modulo.URLError(
+            modulo.socket.gaierror(
+                modulo.socket.EAI_AGAIN,
+                "Temporary failure in name resolution",
+            )
+        )
+        with patch.object(modulo, "build_opener") as opener:
+            opener.return_value.open.side_effect = fallo_temporal
+            with self.assertRaises(modulo.ObservacionTransitoria) as caught:
+                modulo.obtener("https://example.invalid", "/health", 1)
+        self.assertNotIn("example.invalid", str(caught.exception))
+
+        llamadas = 0
+
+        def consultar() -> str:
+            nonlocal llamadas
+            llamadas += 1
+            if llamadas == 1:
+                modulo.elevar_error_url(fallo_temporal)
+            return "respuesta correcta"
+
+        with patch.object(modulo.time, "sleep") as sleep:
+            result = modulo.ejecutar_con_reintentos(
+                consultar, intentos=2, intervalo=0.25,
+            )
+
+        self.assertEqual(result, (True, "respuesta correcta", 2, "ok"))
+        self.assertEqual(llamadas, 2)
+        sleep.assert_called_once_with(0.25)
+
+    def test_dns_eai_again_agotado_no_se_reintenta_indefinidamente(self) -> None:
+        fallo_temporal = modulo.URLError(
+            modulo.socket.gaierror(modulo.socket.EAI_AGAIN, "temporary")
+        )
+
+        def consultar() -> str:
+            modulo.elevar_error_url(fallo_temporal)
+            self.fail("No debe retornar cuando falla DNS temporal.")
+
+        with patch.object(modulo.time, "sleep") as sleep:
+            result = modulo.ejecutar_con_reintentos(
+                consultar, intentos=2, intervalo=0,
+            )
+
+        self.assertFalse(result[0])
+        self.assertEqual(result[2:], (2, "transitorio"))
+        self.assertNotIn("temporary", result[1])
+        sleep.assert_called_once_with(0)
 
     def test_timeout_de_urllib_si_es_transitorio(self) -> None:
         with patch.object(modulo, "build_opener") as opener:
