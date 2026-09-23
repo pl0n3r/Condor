@@ -223,6 +223,10 @@ def elevar_error_url(error: URLError) -> None:
             "La conexión TLS no pudo validarse de forma segura."
         ) from error
     if isinstance(reason, socket.gaierror):
+        if reason.errno == socket.EAI_AGAIN:
+            raise ObservacionTransitoria(
+                "La resolución DNS falló temporalmente durante la observación."
+            ) from error
         raise ObservacionError(
             "El dominio de producción no pudo resolverse de forma válida."
         ) from error
