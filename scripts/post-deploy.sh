@@ -326,7 +326,8 @@ validate_construction_migrations() {
         return 2
     fi
 
-    if ! sed '/^[[:space:]]*--/d; /^[[:space:]]*$/d' "$MIGRATION_SQL_FILE" | awk '
+    guard_status=0
+    sed '/^[[:space:]]*--/d; /^[[:space:]]*$/d' "$MIGRATION_SQL_FILE" | awk '
         BEGIN { RS = ";" }
         {
             statement = $0
@@ -355,9 +356,9 @@ validate_construction_migrations() {
 
             exit 3
         }
-    '
-    then
-        guard_status=$?
+    ' || guard_status=$?
+
+    if [ "$guard_status" -ne 0 ]; then
         cleanup_migration_log
         if [ "$guard_status" -eq 2 ]; then
             echo "post-deploy.sh: migración destructiva/contract detectada; requiere autorización explícita. Caché no modificada." >&2
@@ -372,8 +373,14 @@ validate_construction_migrations() {
 }
 
 run_construction_migrations() {
-    if ! validate_construction_migrations; then
-        return $?
+    validation_result=0
+    if validate_construction_migrations; then
+        validation_result=0
+    else
+        validation_result=$?
+    fi
+    if [ "$validation_result" -ne 0 ]; then
+        return "$validation_result"
     fi
 
     migration_status=0
