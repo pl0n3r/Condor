@@ -160,10 +160,17 @@ final class Version20260923101500 extends AbstractMigration // NOSONAR -- nombre
                 CONSTRAINT FK_PRICE_RULE_TENANT
                     FOREIGN KEY (tenant_id) REFERENCES condor_tenant (id)
                     ON DELETE CASCADE,
+                CONSTRAINT FK_PRICE_RULE_LIST
+                    FOREIGN KEY (price_list_id) REFERENCES condor_price_list (id)
+                    ON DELETE CASCADE,
                 CONSTRAINT FK_PRICE_RULE_LIST_SCOPE
                     FOREIGN KEY (tenant_id, price_list_id)
                     REFERENCES condor_price_list (tenant_id, id)
                     ON DELETE CASCADE,
+                CONSTRAINT FK_PRICE_RULE_CATEGORY
+                    FOREIGN KEY (commercial_category_id)
+                    REFERENCES condor_commercial_category (id)
+                    ON DELETE RESTRICT,
                 CONSTRAINT FK_PRICE_RULE_CATEGORY_SCOPE
                     FOREIGN KEY (tenant_id, commercial_category_id)
                     REFERENCES condor_commercial_category (tenant_id, id)
