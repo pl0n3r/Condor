@@ -12,6 +12,7 @@ use App\Domain\Inventory\Entity\InventoryMovement;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Inventory\Entity\InventoryTransfer;
 use App\Domain\Organization\Entity\Branch;
+use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
@@ -224,20 +225,28 @@ final class InventoryServiceTest extends KernelTestCase
     {
         $suffix = strtolower(bin2hex(random_bytes(5)));
         $tenant = new Tenant('Empresa '.$suffix, 'empresa-'.$suffix);
+        $legalEntity = new LegalEntity(
+            $tenant,
+            'Empresa '.$suffix.' SAS',
+            null,
+            true,
+        );
         $branchA = new Branch(
             $tenant,
             'Principal',
             'principal-'.$suffix,
-            null,
+            $legalEntity,
             true,
         );
         $branchB = new Branch(
             $tenant,
             'Secundaria',
             'secundaria-'.$suffix,
+            $legalEntity,
         );
         $sourceA = new InventorySource(
             $tenant,
+            $legalEntity,
             'Principal',
             'principal-'.$suffix,
             InventorySource::TYPE_BRANCH,
@@ -245,6 +254,7 @@ final class InventoryServiceTest extends KernelTestCase
         );
         $sourceB = new InventorySource(
             $tenant,
+            $legalEntity,
             'Secundaria',
             'secundaria-'.$suffix,
             InventorySource::TYPE_BRANCH,
@@ -265,6 +275,7 @@ final class InventoryServiceTest extends KernelTestCase
         foreach (
             [
                 $tenant,
+                $legalEntity,
                 $branchA,
                 $branchB,
                 $sourceA,
