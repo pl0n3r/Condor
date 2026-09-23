@@ -19,4 +19,47 @@
         <p>{{ storefront.name }} ya tiene una presencia pública real administrada desde Condor.</p>
     {% endif %}
 </section>
+
+{% if catalog.channel %}
+<section class="storefront-catalog" aria-labelledby="catalog-heading">
+    <span class="eyebrow">Catálogo</span>
+    <h2 id="catalog-heading">{{ catalog.channel.name }}</h2>
+
+    {% for product in catalog.products %}
+        <article class="storefront-product" data-product-slug="{{ product.slug }}">
+            <h3>{{ product.name }}</h3>
+            {% if product.description %}<p>{{ product.description }}</p>{% endif %}
+
+            <div class="storefront-variants">
+                {% for variant in product.variants %}
+                    <div class="storefront-variant" data-sku="{{ variant.sku }}">
+                        <strong>{{ variant.name }}</strong>
+                        <span>
+                            COP {{ (variant.price.effective_amount_minor / 100)|number_format(2, ',', '.') }}
+                        </span>
+                        <span>
+                            {{ variant.availability == 'available' ? 'Disponible' : 'Agotado' }}
+                            {% if variant.backorder %} · bajo pedido{% endif %}
+                        </span>
+                    </div>
+                {% endfor %}
+            </div>
+        </article>
+    {% else %}
+        <p class="muted">El catálogo todavía no tiene productos publicables.</p>
+    {% endfor %}
+
+    {% if catalog.pagination.has_previous or catalog.pagination.has_next %}
+        <nav class="storefront-pagination" aria-label="Paginación del catálogo">
+            {% if catalog.pagination.has_previous %}
+                <a href="?page={{ catalog.pagination.page - 1 }}">Anterior</a>
+            {% endif %}
+            <span>Página {{ catalog.pagination.page }}</span>
+            {% if catalog.pagination.has_next %}
+                <a href="?page={{ catalog.pagination.page + 1 }}">Siguiente</a>
+            {% endif %}
+        </nav>
+    {% endif %}
+</section>
+{% endif %}
 {% endblock %}
