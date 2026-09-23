@@ -8,6 +8,7 @@ import json
 import os
 import re
 import sys
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -85,6 +86,54 @@ class GitHubError(RuntimeError):
         return f"GitHub API {self.status}: {self.message}"
 
 
+def github_error_message(raw: str) -> str:
+    """Extrae un mensaje estable de una respuesta de error JSON."""
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    if isinstance(payload, dict):
+        return str(payload.get("message", raw))
+    return raw
+
+
+def github_rate_limit_delay(
+    error: HTTPError,
+    message: str,
+    attempt: int,
+) -> float | None:
+    """Calcula espera solo cuando GitHub indica rate limit real."""
+    headers = error.headers or {}
+    retry_after = str(headers.get("Retry-After", "")).strip()
+    remaining = str(headers.get("X-RateLimit-Remaining", "")).strip()
+    reset_at = str(headers.get("X-RateLimit-Reset", "")).strip()
+    normalized = message.lower()
+
+    rate_limited = (
+        error.code == 429
+        or retry_after != ""
+        or (error.code == 403 and remaining == "0")
+        or "secondary rate limit" in normalized
+        or "rate limit exceeded" in normalized
+    )
+    if not rate_limited:
+        return None
+
+    delay = float(2 ** attempt)
+    if retry_after:
+        try:
+            delay = max(delay, float(retry_after))
+        except ValueError:
+            pass
+    elif reset_at:
+        try:
+            delay = max(delay, float(reset_at) - time.time())
+        except ValueError:
+            pass
+
+    return max(0.0, min(delay, 120.0))
+
+
 class GitHub:
     """Cliente REST mínimo para las operaciones de coordinación requeridas."""
 
@@ -113,20 +162,27 @@ class GitHub:
         }
         if body is not None:
             headers["Content-Type"] = "application/json"
-        request = Request(url, data=body, headers=headers, method=method)
-        try:
-            with urlopen(request, timeout=30) as response:
-                raw = response.read()
-                return None if not raw else json.loads(raw.decode("utf-8"))
-        except HTTPError as exc:
-            raw = exc.read().decode("utf-8", errors="replace")
-            if exc.code in allow:
-                return None
+        attempts = 3
+        for attempt in range(attempts):
+            request = Request(url, data=body, headers=headers, method=method)
             try:
-                message = json.loads(raw).get("message", raw)
-            except json.JSONDecodeError:
-                message = raw
-            raise GitHubError(exc.code, str(message)) from exc
+                with urlopen(request, timeout=30) as response:
+                    raw = response.read()
+                    return None if not raw else json.loads(raw.decode("utf-8"))
+            except HTTPError as exc:
+                raw = exc.read().decode("utf-8", errors="replace")
+                if exc.code in allow:
+                    return None
+
+                message = github_error_message(raw)
+                delay = github_rate_limit_delay(exc, message, attempt)
+                if delay is not None and attempt < attempts - 1:
+                    time.sleep(delay)
+                    continue
+
+                raise GitHubError(exc.code, message) from exc
+
+        raise CoordinationError("GitHub agotó los reintentos permitidos.")
 
     def paginate(self, path: str) -> list[dict[str, Any]]:
         """Recorre una colección paginada de GitHub y devuelve todos sus elementos."""

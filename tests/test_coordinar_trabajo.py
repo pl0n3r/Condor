@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+import io
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
+from urllib.error import HTTPError
 
 from scripts.coordinar_trabajo import (
     CoordinationError,
@@ -196,6 +199,67 @@ def add_active_reservation(
 
 
 
+class GitHubBackoffTests(unittest.TestCase):
+    """Cubre backoff ante límites primarios/secundarios de GitHub."""
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        @staticmethod
+        def read() -> bytes:
+            return b'{"ok": true}'
+
+    def test_rate_limit_retries_after_server_delay(self) -> None:
+        api = GitHub("pl0n3r/Condor", "token-prueba")
+        limited = HTTPError(
+            "https://api.github.test",
+            429,
+            "Too Many Requests",
+            {"Retry-After": "1"},
+            io.BytesIO(b'{"message":"secondary rate limit"}'),
+        )
+
+        with (
+            patch(
+                "scripts.coordinar_trabajo.urlopen",
+                side_effect=[limited, self._Response()],
+            ) as mocked,
+            patch("scripts.coordinar_trabajo.time.sleep") as sleep,
+        ):
+            payload = api.request("GET", "/repos/pl0n3r/Condor/issues/1")
+
+        self.assertEqual(payload, {"ok": True})
+        self.assertEqual(mocked.call_count, 2)
+        sleep.assert_called_once_with(1.0)
+
+    def test_permission_403_is_not_retried(self) -> None:
+        api = GitHub("pl0n3r/Condor", "token-prueba")
+        denied = HTTPError(
+            "https://api.github.test",
+            403,
+            "Forbidden",
+            {},
+            io.BytesIO(b'{"message":"Resource not accessible by integration"}'),
+        )
+
+        with (
+            patch(
+                "scripts.coordinar_trabajo.urlopen",
+                side_effect=denied,
+            ) as mocked,
+            patch("scripts.coordinar_trabajo.time.sleep") as sleep,
+        ):
+            with self.assertRaises(GitHubError):
+                api.request("GET", "/repos/pl0n3r/Condor/issues/1")
+
+        self.assertEqual(mocked.call_count, 1)
+        sleep.assert_not_called()
+
+
 class LimpiezaRamaTests(unittest.TestCase):
     """Cubre idempotencia y fail-closed al limpiar referencias Git."""
 
@@ -273,7 +337,8 @@ class WorkflowCoordinacionTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         event_block = self.yaml_block(workflow, "issue_comment:", 2)
-        self.assertIn("types: [created, edited]", event_block)
+        self.assertIn("types: [created]", event_block)
+        self.assertNotIn("edited", event_block)
 
         job_block = self.yaml_block(workflow, "comando-comentario:", 2)
         self.assertIn("github.event.issue.pull_request == null", job_block)

@@ -1,8 +1,9 @@
 name: Relay de hallazgos Sonar (V 0.1.0)
 
+# SonarCloud ya publica el Quality Gate y su comentario nativo en cada PR.
+# Este relay queda como herramienta manual de diagnóstico para evitar que
+# cada check_run del repositorio cree una corrida adicional.
 on:
-  check_run:
-    types: [completed]
   workflow_dispatch:
     inputs:
       check_run_id:
@@ -19,8 +20,8 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: sonar-relay-${{ github.repository }}
-  cancel-in-progress: false
+  group: sonar-relay-${{ github.repository }}-${{ inputs.pr_number }}
+  cancel-in-progress: true
 
 jobs:
   publicar:

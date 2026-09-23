@@ -48,6 +48,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: observar-release-${{ inputs.sha }}
+  cancel-in-progress: true
+
 jobs:
   observar:
     name: Validar release y smoke público

@@ -1,17 +1,17 @@
 name: Telemetría throughput CI (V 0.1.0)
 
 on:
-  workflow_run:
-    workflows: ["CI Condor (V 0.1.0)"]
-    types: [completed]
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
 
 permissions:
   actions: read
   contents: read
 
 concurrency:
-  group: telemetria-ci-${{ github.event.workflow_run.id }}
-  cancel-in-progress: false
+  group: telemetria-ci-${{ github.repository }}
+  cancel-in-progress: true
 
 jobs:
   reportar:
@@ -19,32 +19,65 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Recolectar tiempos y detectar regresión
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Recolectar CI reciente y detectar regresión
+        id: report
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORIO: ${{ github.repository }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
-          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
-          TRUSTED_REF: ${{ github.event.repository.default_branch }}
-          SOURCE_EVENT: ${{ github.event.workflow_run.event }}
-          SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          SOURCE_STARTED_AT: ${{ github.event.workflow_run.run_started_at }}
-          SOURCE_UPDATED_AT: ${{ github.event.workflow_run.updated_at }}
+          GH_EVENT_NAME: ${{ github.event_name }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts
 
-          gh api             "repos/$REPOSITORIO/contents/scripts/ci_throughput_report.py?ref=$TRUSTED_REF"             --jq '.content'             | base64 --decode > /tmp/ci_throughput_report.py
+          gh api "repos/$REPOSITORIO/actions/workflows/ci.yml/runs?status=completed&per_page=30" \
+            > artifacts/recent-runs.json
 
-          gh api --paginate             "repos/$REPOSITORIO/actions/runs/$RUN_ID/jobs?per_page=100"             --slurp > artifacts/job-pages.json
+          if [[ "$GH_EVENT_NAME" == "schedule" ]]; then
+            cutoff="$(date -u -d '75 minutes ago' +%s)"
+            latest="$(
+              jq -c --argjson cutoff "$cutoff" '
+                [.workflow_runs[]
+                  | select(.event == "pull_request" or .event == "push")
+                  | select((.updated_at | fromdateiso8601) >= $cutoff)][0] // empty
+              ' artifacts/recent-runs.json
+            )"
+          else
+            latest="$(
+              jq -c '
+                [.workflow_runs[]
+                  | select(.event == "pull_request" or .event == "push")][0] // empty
+              ' artifacts/recent-runs.json
+            )"
+          fi
 
-          gh api             "repos/$REPOSITORIO/actions/runs?per_page=30"             > artifacts/recent-runs.json
+          if [[ -z "$latest" ]]; then
+            echo "No hay una corrida CI nueva en la ventana; no se genera telemetría duplicada."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          run_id="$(jq -r '.id' <<<"$latest")"
+          source_sha="$(jq -r '.head_sha' <<<"$latest")"
+          source_event="$(jq -r '.event' <<<"$latest")"
+          source_conclusion="$(jq -r '.conclusion' <<<"$latest")"
+          source_started_at="$(jq -r '.run_started_at' <<<"$latest")"
+          source_updated_at="$(jq -r '.updated_at' <<<"$latest")"
+
+          gh api --paginate \
+            "repos/$REPOSITORIO/actions/runs/$run_id/jobs?per_page=100" \
+            --slurp > artifacts/job-pages.json
 
           : > artifacts/history-jobs.ndjson
           jq -r \
-            --argjson current "$RUN_ID" \
-            --arg event "$SOURCE_EVENT" \
+            --argjson current "$run_id" \
+            --arg event "$source_event" \
             '[.workflow_runs[]
               | select(.id != $current)
               | select(.name == "CI Condor (V 0.1.0)")
@@ -53,13 +86,32 @@ jobs:
               | .id][0:12][]' \
             artifacts/recent-runs.json \
             | while read -r history_id; do
-                gh api --paginate                   "repos/$REPOSITORIO/actions/runs/$history_id/jobs?per_page=100"                   --slurp                   | jq -c --argjson run_id "$history_id"                     '{run_id: $run_id, pages: .}'                     >> artifacts/history-jobs.ndjson
+                gh api --paginate \
+                  "repos/$REPOSITORIO/actions/runs/$history_id/jobs?per_page=100" \
+                  --slurp \
+                  | jq -c --argjson run_id "$history_id" \
+                    '{run_id: $run_id, pages: .}' \
+                    >> artifacts/history-jobs.ndjson
               done
           jq -s '.' artifacts/history-jobs.ndjson > artifacts/history-jobs.json
 
-          jq -n             --slurpfile jobs artifacts/job-pages.json             --slurpfile history artifacts/recent-runs.json             --slurpfile history_jobs artifacts/history-jobs.json             '{jobs: $jobs[0], history: $history[0], history_jobs: $history_jobs[0]}'             | python3 /tmp/ci_throughput_report.py report                 --run-id "$RUN_ID"                 --source-sha "$SOURCE_SHA"                 --event "$SOURCE_EVENT"                 --conclusion "$SOURCE_CONCLUSION"                 --started-at "$SOURCE_STARTED_AT"                 --updated-at "$SOURCE_UPDATED_AT"             > artifacts/ci-throughput.json
+          jq -n \
+            --slurpfile jobs artifacts/job-pages.json \
+            --slurpfile history artifacts/recent-runs.json \
+            --slurpfile history_jobs artifacts/history-jobs.json \
+            '{jobs: $jobs[0], history: $history[0], history_jobs: $history_jobs[0]}' \
+            | python3 scripts/ci_throughput_report.py report \
+                --run-id "$run_id" \
+                --source-sha "$source_sha" \
+                --event "$source_event" \
+                --conclusion "$source_conclusion" \
+                --started-at "$source_started_at" \
+                --updated-at "$source_updated_at" \
+            > artifacts/ci-throughput.json
 
-          python3 /tmp/ci_throughput_report.py summary             < artifacts/ci-throughput.json             > artifacts/ci-throughput-summary.md
+          python3 scripts/ci_throughput_report.py summary \
+            < artifacts/ci-throughput.json \
+            > artifacts/ci-throughput-summary.md
 
           cat artifacts/ci-throughput-summary.md >> "$GITHUB_STEP_SUMMARY"
 
@@ -68,10 +120,14 @@ jobs:
             echo "::warning::Se detectó una regresión significativa del throughput del CI. Revisa el Job Summary y el artifact."
           fi
 
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
       - name: Subir evidencia de throughput
+        if: steps.report.outputs.found == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: ci-throughput-${{ github.event.workflow_run.id }}
+          name: ci-throughput-${{ steps.report.outputs.run_id }}
           path: |
             artifacts/ci-throughput.json
             artifacts/ci-throughput-summary.md

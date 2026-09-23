@@ -8,8 +8,11 @@ on:
     types: [opened, ready_for_review, converted_to_draft, closed]
   issues:
     types: [labeled, closed, reopened]
+  # GitHub Actions no permite filtrar issue_comment por contenido en `on`.
+  # El job-level `if` evita runners/API para comentarios normales; limitar
+  # a `created` evita además una segunda corrida por cada edición.
   issue_comment:
-    types: [created, edited]
+    types: [created]
 
 permissions:
   contents: read
