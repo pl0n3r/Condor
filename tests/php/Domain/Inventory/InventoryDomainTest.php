@@ -11,6 +11,7 @@ use App\Domain\Inventory\Entity\InventoryMovement;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Inventory\Entity\InventoryTransfer;
 use App\Domain\Organization\Entity\Branch;
+use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use DomainException;
 use PHPUnit\Framework\TestCase;
@@ -21,11 +22,14 @@ final class InventoryDomainTest extends TestCase
     {
         $tenant = new Tenant('Uno', 'uno-'.bin2hex(random_bytes(4)));
         $other = new Tenant('Dos', 'dos-'.bin2hex(random_bytes(4)));
-        $branch = new Branch($other, 'Ajena', 'ajena');
+        $legalEntity = new LegalEntity($tenant, 'Uno SAS', null, true);
+        $otherLegalEntity = new LegalEntity($other, 'Dos SAS', null, true);
+        $branch = new Branch($other, 'Ajena', 'ajena', $otherLegalEntity);
 
         $this->expectException(DomainException::class);
         new InventorySource(
             $tenant,
+            $legalEntity,
             'Principal',
             'principal',
             InventorySource::TYPE_BRANCH,
@@ -73,6 +77,7 @@ final class InventoryDomainTest extends TestCase
 
         $destination = new InventorySource(
             $tenant,
+            $source->legalEntity(),
             'Bodega',
             'bodega',
             InventorySource::TYPE_LOGICAL,
@@ -87,6 +92,46 @@ final class InventoryDomainTest extends TestCase
             0,
             null,
             'transfer-2',
+        );
+    }
+
+
+    public function testTransferRejectsDifferentLegalEntities(): void
+    {
+        [$tenant, $source, $variant] = $this->fixture();
+        $otherLegalEntity = new LegalEntity(
+            $tenant,
+            'Otra razón social',
+            null,
+        );
+        $otherBranch = new Branch(
+            $tenant,
+            'Otra sede',
+            'otra-sede-'.bin2hex(random_bytes(3)),
+            $otherLegalEntity,
+        );
+        $otherSource = new InventorySource(
+            $tenant,
+            $otherLegalEntity,
+            'Otra fuente',
+            'otra-fuente-'.bin2hex(random_bytes(3)),
+            InventorySource::TYPE_BRANCH,
+            $otherBranch,
+        );
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(
+            'Una transferencia interna no puede cruzar entidades legales.',
+        );
+
+        new InventoryTransfer(
+            $tenant,
+            $variant,
+            $source,
+            $otherSource,
+            1,
+            null,
+            'cross-entity-transfer',
         );
     }
 
@@ -111,9 +156,11 @@ final class InventoryDomainTest extends TestCase
     {
         $suffix = bin2hex(random_bytes(4));
         $tenant = new Tenant('Empresa', 'empresa-'.$suffix);
-        $branch = new Branch($tenant, 'Principal', 'principal');
+        $legalEntity = new LegalEntity($tenant, 'Empresa SAS', null, true);
+        $branch = new Branch($tenant, 'Principal', 'principal', $legalEntity);
         $source = new InventorySource(
             $tenant,
+            $legalEntity,
             'Principal',
             'principal',
             InventorySource::TYPE_BRANCH,
