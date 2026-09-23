@@ -280,6 +280,53 @@ def obtener(
         ) from error
 
 
+def obtener_estado_protegido(origen: str, ruta: str, timeout: float) -> int:
+    """Comprueba una superficie protegida sin autenticar ni seguir redirecciones."""
+    solicitud = Request(
+        origen + ruta,
+        headers={
+            "Accept": "text/html",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "User-Agent": "Condor-Release-Observer/0.1",
+        },
+        method="GET",
+    )
+    try:
+        with build_opener(NoRedirigir).open(solicitud, timeout=timeout) as respuesta:
+            if respuesta.status != 200:
+                raise ObservacionError(
+                    f"HTTP {respuesta.status}; respuesta inesperada en superficie protegida."
+                )
+            return respuesta.status
+    except HTTPError as error:
+        if error.code in {302, 303, 307, 308, 401, 403}:
+            return error.code
+        if error.code in {408, 425, 429} or 500 <= error.code < 600:
+            raise ObservacionTransitoria(
+                f"HTTP {error.code}; fallo transitorio al observar superficie protegida."
+            ) from error
+        raise ObservacionError(
+            f"HTTP {error.code}; respuesta inesperada en superficie protegida."
+        ) from error
+    except URLError as error:
+        elevar_error_url(error)
+        raise AssertionError("elevar_error_url siempre lanza una excepción")
+    except (
+        TimeoutError,
+        ConnectionAbortedError,
+        ConnectionRefusedError,
+        ConnectionResetError,
+    ) as error:
+        raise ObservacionTransitoria(
+            "La conexión falló temporalmente durante la observación."
+        ) from error
+    except OSError as error:
+        raise ObservacionError(
+            "La solicitud HTTP falló de forma no reintentable."
+        ) from error
+
+
 def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> bool:
     if tipo != "application/json":
         raise ObservacionError("/health no respondió con JSON.")
@@ -578,6 +625,24 @@ def observar(
             "intento": intento,
             "clase": clase,
         }
+
+    def comprobar_centro_control() -> str:
+        codigo = obtener_estado_protegido(origen, "/adminpl0n3r", timeout)
+        return (
+            f"HTTP {codigo}; entrada protegida del centro de control responde sin 5xx."
+        )
+
+    ok, detalle, intento, clase = ejecutar_con_reintentos(
+        comprobar_centro_control,
+        intentos=intentos,
+        intervalo=intervalo,
+    )
+    evidencias["centro_control"] = {
+        "ok": ok,
+        "detalle": detalle,
+        "intento": intento,
+        "clase": clase,
+    }
 
     for nombre, ruta in [
         ("css_publico", "/app.css"),
