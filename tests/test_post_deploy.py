@@ -52,6 +52,10 @@ class PostDeployStageTest(unittest.TestCase):
                 set -eu
                 root="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
                 if [ "${1:-}" = "-r" ]; then
+                  case "${2:-}" in
+                    *'new Symfony\Component\Dotenv\Dotenv();'*) ;;
+                    *) echo "resolver dotenv inválido" >&2; exit 29 ;;
+                  esac
                   printf '%s' "${FAKE_DATABASE_URL:-mysql://dotenv.example/condor}"
                   exit 0
                 fi
