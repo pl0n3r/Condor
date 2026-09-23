@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AccessManagement } from './AccessManagement';
 import { CatalogManagement } from './CatalogManagement';
 import { InventoryManagement } from './InventoryManagement';
+import { CommerceManagement } from './CommerceManagement';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
 import { contextPath } from './api';
@@ -134,6 +135,7 @@ export function AdminApp({
         { href: '/admin', label: 'Inicio', current: true },
         { href: '#catalog', label: 'Catálogo' },
         { href: '#inventory', label: 'Inventario' },
+        { href: '#commerce', label: 'Comercial' },
         { href: '#roles', label: 'Roles y permisos' },
       ]}
     >
@@ -267,6 +269,13 @@ export function AdminApp({
 
           <InventoryManagement
             key={'inventory-' + context.data.active_branch.id}
+            branchId={context.data.active_branch.id}
+            permissions={context.data.permissions}
+            csrfToken={accessToken}
+          />
+
+          <CommerceManagement
+            key={'commerce-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}

@@ -151,3 +151,83 @@ export function inventoryAdjustmentPath(branchId: string): string {
 export function inventoryTransferPath(branchId: string): string {
   return inventoryPath(branchId) + '/transfers';
 }
+
+
+export function customersPath(branchId: string): string {
+  return '/api/v1/branches/' + safeUlid(branchId) + '/customers';
+}
+
+export function customerPath(
+  branchId: string,
+  customerId: string,
+): string {
+  return customersPath(branchId) + '/' + safeUlid(customerId);
+}
+
+export function commercialCategoriesPath(branchId: string): string {
+  return customersPath(branchId) + '/categories';
+}
+
+export function commercialCategoryPath(
+  branchId: string,
+  categoryId: string,
+): string {
+  return commercialCategoriesPath(branchId) + '/' + safeUlid(categoryId);
+}
+
+export function pricingPath(branchId: string): string {
+  return '/api/v1/branches/' + safeUlid(branchId) + '/pricing';
+}
+
+export function priceListsPath(branchId: string): string {
+  return pricingPath(branchId) + '/lists';
+}
+
+export function priceListPath(
+  branchId: string,
+  listId: string,
+): string {
+  return priceListsPath(branchId) + '/' + safeUlid(listId);
+}
+
+export function variantPricePath(
+  branchId: string,
+  listId: string,
+  variantId: string,
+): string {
+  return (
+    priceListPath(branchId, listId) +
+    '/variants/' +
+    safeUlid(variantId)
+  );
+}
+
+export function categoryPriceListPath(
+  branchId: string,
+  categoryId: string,
+): string {
+  return (
+    pricingPath(branchId) +
+    '/categories/' +
+    safeUlid(categoryId)
+  );
+}
+
+export function effectivePricePath(
+  branchId: string,
+  variantId: string,
+  customerId?: string,
+  priceListId?: string,
+): string {
+  const params = new URLSearchParams({
+    variant: safeUlid(variantId),
+  });
+  if (customerId) {
+    params.set('customer', safeUlid(customerId));
+  }
+  if (priceListId) {
+    params.set('price_list', safeUlid(priceListId));
+  }
+
+  return pricingPath(branchId) + '/effective?' + params.toString();
+}
