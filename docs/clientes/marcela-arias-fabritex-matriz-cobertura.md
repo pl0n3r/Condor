@@ -380,7 +380,7 @@ La plantilla acelera la implantación, pero todos esos elementos continúan sien
 | --- | --- | --- |
 | RF-122 | **PARCIAL / MAIN** | V 0.1.20 entrega script de backup con retención configurable y ensayo automatizado de restauración sobre MariaDB descartable; no acredita cron, periodicidad ni copias externas activos en producción. Para cumplir el RF, configurar y observar un calendario autorizado, destino protegido, alertas y pruebas periódicas de recuperación. |
 | RF-123 | **MAIN / PRINCIPIO** | Autenticación, autorización server-side, CSRF, aislamiento tenant, headers y manejo seguro de secretos son baseline. |
-| RF-124 | **MAIN** | Restore ensayable/guardado forma parte de la estrategia de backup; recuperación debe demostrarse, no solo “tener backup”. |
+| RF-124 | **PARCIAL / MAIN** | La restauración está ensayada contra MariaDB descartable en CI, pero aún falta demostrar recuperación efectiva de un respaldo productivo autorizado, con RPO/RTO acordados y control de acceso al destino. Nunca ensayar restauración destructiva en producción por defecto. |
 | RF-125 | **MAIN + PARCIAL** | Aislamiento tenant ya es invariante; el scope por entidad legal se aplica donde corresponda y requiere extensión consistente de permisos/consultas. |
 
 ## 5.23 Experiencia de usuario — RF-126 a RF-129
@@ -425,6 +425,19 @@ Esto evita la lectura equivocada de “hay que construir 129 cosas”. En realid
 ---
 
 # 7. Reglas de diseño que quedan validadas
+
+## Decisiones del primer cliente pendientes de validación
+
+Esta matriz contrasta necesidades con arquitectura; **no sustituye la confirmación del cliente ni acredita capacidades productivas que todavía no están operando**. Antes de usar los RF como alcance de un slice se deben dejar respuestas verificables en el Issue del slice correspondiente:
+
+| Contrato pendiente | Decisión que se debe registrar | Evidencia exigida |
+| --- | --- | --- |
+| RF-001 / RF-004, topología | ¿Un tenant con múltiples entidades legales y permisos particionados, o tenants separados con accesos entre cuentas explícitos? ¿Quién ve qué datos cuando cambia el contexto? | Matriz de usuarios × razón social × sede y pruebas HTTP de acceso permitido/denegado; ningún permiso surge automáticamente por usar un selector. |
+| RF-002, propiedad de datos | Identificar dueño jurídico de existencias, producto/variante, venta, costo y reporte; diferenciar el alcance tenant/sede del alcance entidad legal. | Relaciones y consultas explícitas; lectura/escritura cross-entity denegada; reportes y exportaciones filtrados por autorización. |
+| RF-003, operación interempresa | Precisar si se trata de servicio de fabricación, compra/venta entre sociedades, traslado físico por cuenta ajena u otra operación. | Contrato origen/destino con titularidad, precio/valuación, documento, evento auditable y flujo de reversión. El movimiento físico de stock no se reutiliza como asiento comercial. |
+| RF-122 / RF-124, continuidad | Definir periodicidad, retención, destino protegido, responsables, restauración ensayable y RPO/RTO aceptables. | Configuración de cron/observación real y artefactos de backup verificables **sin publicar datos**; evidencia separada de un ensayo de recuperación autorizado. |
+
+El alcance de #171/#172 conserva por ahora la invariante **tenant + fuente + variante** prevista en su Issue. No atribuirle separación por razón social ni operación interempresa mientras esos contratos no estén resueltos, implementados y probados. Una decisión de topología puede requerir un slice transversal previo o un ajuste explícito del alcance, nunca una suposición silenciosa.
 
 ## R1 — Alcance explícito en vez de duplicación
 
