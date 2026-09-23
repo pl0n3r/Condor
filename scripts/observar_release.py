@@ -488,6 +488,8 @@ def observar_health(
             break
 
         time.sleep(min(intervalo_deploy, tiempo_restante))
+        if time.monotonic() >= limite_espera:
+            break
 
     return {
         "ok": ok,
