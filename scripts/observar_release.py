@@ -530,10 +530,11 @@ def observar_health(
         )
         if clase == "deploy_pendiente":
             deploy_pendiente_observado = True
-        elif not (
-            deploy_pendiente_observado
-            and clase == "transitorio"
+        elif clase == "transitorio" and (
+            deploy_pendiente_observado or espera_deploy > 0
         ):
+            pass
+        else:
             break
 
         tiempo_restante = limite_espera - time.monotonic()
