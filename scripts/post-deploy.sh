@@ -53,6 +53,7 @@ if [ "$SCHEMA_CHECK_TIMEOUT_SECONDS" -gt 300 ]; then
 fi
 SCHEMA_CHECK_LOG=""
 SCHEMA_CHECK_TIMEOUT_MARKER=""
+SCHEMA_CHECK_DONE_MARKER=""
 SCHEMA_CHECK_PID=""
 SCHEMA_CHECK_WATCHDOG_PID=""
 
@@ -97,12 +98,15 @@ cleanup_schema_check_process() {
 cleanup_schema_check_watchdog() {
     if [ -n "$SCHEMA_CHECK_WATCHDOG_PID" ]; then
         kill -TERM "$SCHEMA_CHECK_WATCHDOG_PID" 2>/dev/null || true
-        wait "$SCHEMA_CHECK_WATCHDOG_PID" 2>/dev/null || true
         SCHEMA_CHECK_WATCHDOG_PID=""
     fi
 }
 
 cleanup_schema_check_log() {
+    if [ -n "$SCHEMA_CHECK_DONE_MARKER" ]; then
+        rm -f -- "$SCHEMA_CHECK_DONE_MARKER"
+        SCHEMA_CHECK_DONE_MARKER=""
+    fi
     if [ -n "$SCHEMA_CHECK_TIMEOUT_MARKER" ]; then
         rm -f -- "$SCHEMA_CHECK_TIMEOUT_MARKER"
         SCHEMA_CHECK_TIMEOUT_MARKER=""
@@ -243,13 +247,22 @@ fi
 # Un esquema pendiente requiere autorización explícita y una operación separada.
 SCHEMA_CHECK_LOG="$(mktemp "${TMPDIR:-/tmp}/condor-schema-check-XXXXXX.log")"
 SCHEMA_CHECK_TIMEOUT_MARKER="${SCHEMA_CHECK_LOG}.timeout"
+SCHEMA_CHECK_DONE_MARKER="${SCHEMA_CHECK_LOG}.done"
 schema_check_status=0
 
 "$PHP_BIN" bin/console doctrine:migrations:up-to-date --env=prod --no-interaction --fail-on-unregistered >"$SCHEMA_CHECK_LOG" 2>&1 &
 SCHEMA_CHECK_PID=$!
 
 (
-    sleep "$SCHEMA_CHECK_TIMEOUT_SECONDS"
+    elapsed=0
+    while [ "$elapsed" -lt "$SCHEMA_CHECK_TIMEOUT_SECONDS" ]; do
+        sleep 1
+        if [ -f "$SCHEMA_CHECK_DONE_MARKER" ]; then
+            exit 0
+        fi
+        elapsed=$((elapsed + 1))
+    done
+
     if kill -0 "$SCHEMA_CHECK_PID" 2>/dev/null; then
         : >"$SCHEMA_CHECK_TIMEOUT_MARKER"
         kill -TERM "$SCHEMA_CHECK_PID" 2>/dev/null || true
@@ -265,7 +278,9 @@ else
     schema_check_status=$?
 fi
 SCHEMA_CHECK_PID=""
-cleanup_schema_check_watchdog
+: >"$SCHEMA_CHECK_DONE_MARKER"
+wait "$SCHEMA_CHECK_WATCHDOG_PID" 2>/dev/null || true
+SCHEMA_CHECK_WATCHDOG_PID=""
 
 if [ -f "$SCHEMA_CHECK_TIMEOUT_MARKER" ]; then
     cleanup_schema_check_log
