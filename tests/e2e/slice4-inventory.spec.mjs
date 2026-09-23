@@ -13,7 +13,6 @@ test.describe('Slice 4 — inventario', () => {
   test('ajusta y transfiere stock con trazabilidad desde el Admin', async ({
     page,
   }, testInfo) => {
-    test.setTimeout(60_000);
     const suffix = Date.now() + '-' + testInfo.retry;
     const productName = 'Inventario E2E ' + suffix;
     const slug = 'inventario-e2e-' + suffix;
@@ -72,15 +71,21 @@ test.describe('Slice 4 — inventario', () => {
     await inventory.getByRole('button', { name: 'Aplicar ajuste' }).click();
     await expect(inventory.getByText('Ajuste aplicado.')).toBeVisible();
 
-    await inventory.getByLabel('Origen', { exact: true }).selectOption({
-      label: sourceA,
+    const transferForm = inventory.locator('form.catalog-card').filter({
+      has: inventory.getByRole('heading', { name: 'Transferencia' }),
     });
-    await inventory.getByLabel('Destino', { exact: true }).selectOption({
-      label: sourceB,
+    await expect(transferForm).toBeVisible();
+
+    const transferSelects = transferForm.locator('select');
+    await expect(
+      transferSelects.nth(0).locator('option:checked')
+    ).toHaveText(sourceA);
+    await transferSelects.nth(1).selectOption({ label: sourceB });
+    await transferSelects.nth(2).selectOption({
+      label: productName + ' · ' + sku,
     });
-    await inventory.getByLabel('Variante').last().selectOption({ label: productName + ' · ' + sku });
-    await inventory.getByLabel('Cantidad', { exact: true }).fill('4');
-    await inventory.getByRole('button', { name: 'Transferir' }).click();
+    await transferForm.getByLabel('Cantidad', { exact: true }).fill('4');
+    await transferForm.getByRole('button', { name: 'Transferir' }).click();
     await expect(inventory.getByText('Transferencia aplicada.')).toBeVisible();
 
     const originBalance = inventory.locator('.catalog-card').filter({
