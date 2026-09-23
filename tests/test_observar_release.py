@@ -835,7 +835,7 @@ class ObserverTests(unittest.TestCase):
                 consultar, intentos=2, intervalo=0,
             )
 
-        self.assertEqual(result[0], False)
+        self.assertFalse(result[0])
         self.assertEqual(result[2:], (2, "transitorio"))
         self.assertNotIn("temporary", result[1])
         sleep.assert_called_once_with(0)
