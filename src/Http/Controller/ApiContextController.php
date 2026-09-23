@@ -8,6 +8,7 @@ use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Branch;
+use App\Domain\Organization\Entity\LegalEntity;
 use App\Infrastructure\Http\ApiErrorResponseFactory;
 use App\Shared\Version\AppVersion;
 use Doctrine\ORM\EntityManagerInterface;
@@ -103,18 +104,52 @@ final class ApiContextController extends AbstractController
             $activeBranch = $match[0];
         }
 
+        $legalEntitiesById = [];
+        foreach ($branches as $branch) {
+            $legalEntity = $branch->legalEntity();
+            if ($legalEntity instanceof LegalEntity) {
+                $legalEntitiesById[$legalEntity->id()] = $legalEntity;
+            }
+        }
+        $legalEntities = array_values($legalEntitiesById);
+        usort(
+            $legalEntities,
+            static fn (LegalEntity $left, LegalEntity $right): int =>
+                strcmp($left->legalName(), $right->legalName()),
+        );
+        $activeLegalEntity = $activeBranch->legalEntity();
+
         return $this->json([
             'tenant' => [
                 'id' => $tenant->id(),
                 'name' => $tenant->name(),
                 'slug' => $tenant->slug(),
             ],
+            'legal_entities' => array_map(
+                static fn (LegalEntity $legalEntity): array => [
+                    'id' => $legalEntity->id(),
+                    'name' => $legalEntity->legalName(),
+                ],
+                $legalEntities,
+            ),
+            'active_legal_entity' => $activeLegalEntity instanceof LegalEntity
+                ? [
+                    'id' => $activeLegalEntity->id(),
+                    'name' => $activeLegalEntity->legalName(),
+                ]
+                : null,
             'branches' => array_map(
                 static fn (Branch $branch): array => [
                     'id' => $branch->id(),
                     'name' => $branch->name(),
                     'slug' => $branch->slug(),
                     'is_default' => $branch->isDefault(),
+                    'legal_entity' => $branch->legalEntity() instanceof LegalEntity
+                        ? [
+                            'id' => $branch->legalEntity()?->id(),
+                            'name' => $branch->legalEntity()?->legalName(),
+                        ]
+                        : null,
                 ],
                 $branches,
             ),
@@ -123,6 +158,12 @@ final class ApiContextController extends AbstractController
                 'name' => $activeBranch->name(),
                 'slug' => $activeBranch->slug(),
                 'is_default' => $activeBranch->isDefault(),
+                'legal_entity' => $activeLegalEntity instanceof LegalEntity
+                    ? [
+                        'id' => $activeLegalEntity->id(),
+                        'name' => $activeLegalEntity->legalName(),
+                    ]
+                    : null,
             ],
             'permissions' => $authorization->permissions(
                 $user,
