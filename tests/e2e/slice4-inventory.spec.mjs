@@ -68,8 +68,38 @@ test.describe('Slice 4 — inventario', () => {
     await inventory.getByLabel('Variante').first().selectOption({ label: productName + ' · ' + sku });
     await inventory.getByLabel('Cantidad (+ entrada / - salida)').fill('10');
     await inventory.getByLabel('Motivo').fill('Carga E2E');
+
+    const adjustmentKeys = [];
+    let loseAdjustmentResponse = true;
+    await page.route('**/inventory/adjustments', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+
+      const payload = route.request().postDataJSON();
+      adjustmentKeys.push(payload.idempotency_key);
+      if (loseAdjustmentResponse) {
+        loseAdjustmentResponse = false;
+        const upstream = await route.fetch();
+        expect(upstream.ok()).toBeTruthy();
+        await route.abort('connectionfailed');
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await inventory.getByRole('button', { name: 'Aplicar ajuste' }).click();
+    await expect(
+      inventory.getByRole('button', { name: 'Aplicar ajuste' })
+    ).toBeEnabled();
     await inventory.getByRole('button', { name: 'Aplicar ajuste' }).click();
     await expect(inventory.getByText('Ajuste aplicado.')).toBeVisible();
+    await page.unroute('**/inventory/adjustments');
+
+    expect(adjustmentKeys).toHaveLength(2);
+    expect(adjustmentKeys[1]).toBe(adjustmentKeys[0]);
 
     const transferForm = inventory.locator('form.catalog-card').filter({
       has: page.getByRole('heading', { name: 'Transferencia' }),
@@ -85,8 +115,38 @@ test.describe('Slice 4 — inventario', () => {
       label: productName + ' · ' + sku,
     });
     await transferForm.getByLabel('Cantidad', { exact: true }).fill('4');
+
+    const transferKeys = [];
+    let loseTransferResponse = true;
+    await page.route('**/inventory/transfers', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+
+      const payload = route.request().postDataJSON();
+      transferKeys.push(payload.idempotency_key);
+      if (loseTransferResponse) {
+        loseTransferResponse = false;
+        const upstream = await route.fetch();
+        expect(upstream.ok()).toBeTruthy();
+        await route.abort('connectionfailed');
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await transferForm.getByRole('button', { name: 'Transferir' }).click();
+    await expect(
+      transferForm.getByRole('button', { name: 'Transferir' })
+    ).toBeEnabled();
     await transferForm.getByRole('button', { name: 'Transferir' }).click();
     await expect(inventory.getByText('Transferencia aplicada.')).toBeVisible();
+    await page.unroute('**/inventory/transfers');
+
+    expect(transferKeys).toHaveLength(2);
+    expect(transferKeys[1]).toBe(transferKeys[0]);
 
     const originBalance = inventory.locator('.catalog-card').filter({
       hasText: sourceA,
@@ -98,6 +158,15 @@ test.describe('Slice 4 — inventario', () => {
     await expect(originBalance.getByText('6 und.')).toBeVisible();
     await expect(destinationBalance.getByText('4 und.')).toBeVisible();
     await expect(inventory.getByText('Carga E2E')).toBeVisible();
+    await expect(
+      inventory.getByText('Ajuste de entrada', { exact: true })
+    ).toBeVisible();
+    await expect(
+      inventory.getByText('Transferencia de salida', { exact: true })
+    ).toBeVisible();
+    await expect(
+      inventory.getByText('Transferencia de entrada', { exact: true })
+    ).toBeVisible();
 
     await page.reload();
     productCard = page.locator('#catalog').locator('.catalog-card').filter({
