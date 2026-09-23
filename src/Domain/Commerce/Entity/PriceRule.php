@@ -133,6 +133,31 @@ class PriceRule extends CommercialItem
         return $this->priceList;
     }
 
+    public function name(): string
+    {
+        return $this->name;
+    }
+
+    public function discountType(): string
+    {
+        return $this->discountType;
+    }
+
+    public function discountValue(): int
+    {
+        return $this->discountValue;
+    }
+
+    public function validFrom(): ?DateTimeImmutable
+    {
+        return $this->validFrom;
+    }
+
+    public function validUntil(): ?DateTimeImmutable
+    {
+        return $this->validUntil;
+    }
+
     public function commercialCategory(): ?CommercialCategory
     {
         return $this->commercialCategory;

@@ -21,6 +21,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Routing\Attribute\Route;
@@ -52,6 +53,7 @@ final class PricingController extends AbstractController
 
         return $this->json([
             'price_lists' => $this->priceListPayloads($tenant),
+            'variants' => $this->variantPayloads($tenant),
             'variant_prices' => $this->variantPricePayloads($tenant),
             'rules' => $this->rulePayloads($tenant),
         ]);
@@ -148,6 +150,49 @@ final class PricingController extends AbstractController
         return $this->json([
             'price_list' => self::priceListPayload($list),
         ]);
+    }
+
+    #[Route(
+        '/api/v1/branches/{branchId}/pricing/lists/{listId}',
+        name: 'api_price_lists_delete',
+        methods: ['DELETE'],
+    )]
+    public function deleteList(
+        string $branchId,
+        string $listId,
+        Request $request,
+    ): Response {
+        $this->requireCsrf($request);
+        [$user, $tenant, $branch] = $this->authorizedBranchScope(
+            $branchId,
+            'pricing.delete',
+        );
+        $list = $this->priceList($tenant, $listId);
+        $preferredBy = $this->entityManager
+            ->getRepository(CommercialCategory::class)
+            ->findOneBy([
+                'tenant' => $tenant,
+                'preferredPriceList' => $list,
+                'active' => true,
+            ]);
+        if ($preferredBy instanceof CommercialCategory) {
+            throw new ConflictHttpException(
+                'No puedes desactivar una lista preferida por una categoría activa.',
+            );
+        }
+
+        $list->deactivate();
+        $this->audit(
+            $tenant,
+            $user,
+            'price_list.deactivated',
+            PriceList::class,
+            $list->id(),
+            ['branch_id' => $branch->id()],
+        );
+        $this->entityManager->flush();
+
+        return new Response(status: Response::HTTP_NO_CONTENT);
     }
 
     #[Route(
@@ -437,6 +482,33 @@ final class PricingController extends AbstractController
     }
 
     /** @return list<array<string, mixed>> */
+    private function variantPayloads(Tenant $tenant): array
+    {
+        $variants = $this->entityManager
+            ->getRepository(ProductVariant::class)
+            ->findBy(
+                ['tenant' => $tenant, 'active' => true],
+                ['name' => 'ASC'],
+            );
+
+        return array_values(array_map(
+            static fn (ProductVariant $variant): array => [
+                'id' => $variant->id(),
+                'sku' => $variant->sku(),
+                'name' => $variant->name(),
+                'product_name' => $variant->product()->name(),
+            ],
+            array_filter(
+                $variants,
+                static fn (mixed $value): bool => (
+                    $value instanceof ProductVariant
+                    && $value->product()->isActive()
+                ),
+            ),
+        ));
+    }
+
+    /** @return list<array<string, mixed>> */
     private function variantPricePayloads(Tenant $tenant): array
     {
         $prices = $this->entityManager
@@ -617,7 +689,12 @@ final class PricingController extends AbstractController
             'price_list_id' => $rule->priceList()->id(),
             'commercial_category_id' => $rule
                 ->commercialCategory()?->id(),
+            'name' => $rule->name(),
             'priority' => $rule->priority(),
+            'discount_type' => $rule->discountType(),
+            'discount_value' => $rule->discountValue(),
+            'valid_from' => $rule->validFrom()?->format(DATE_ATOM),
+            'valid_until' => $rule->validUntil()?->format(DATE_ATOM),
         ];
     }
 }

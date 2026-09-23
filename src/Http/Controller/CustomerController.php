@@ -14,6 +14,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -163,6 +164,49 @@ final class CustomerController extends AbstractController
         return $this->json([
             'category' => self::categoryPayload($category),
         ]);
+    }
+
+    #[Route(
+        '/api/v1/branches/{branchId}/customers/categories/{categoryId}',
+        name: 'api_customer_categories_delete',
+        methods: ['DELETE'],
+    )]
+    public function deleteCategory(
+        string $branchId,
+        string $categoryId,
+        Request $request,
+    ): Response {
+        $this->requireCsrf($request);
+        [$user, $tenant, $branch] = $this->authorizedBranchScope(
+            $branchId,
+            'customers.delete',
+        );
+        $category = $this->category($tenant, $categoryId);
+        $assigned = $this->entityManager
+            ->getRepository(Customer::class)
+            ->findOneBy([
+                'tenant' => $tenant,
+                'commercialCategory' => $category,
+                'active' => true,
+            ]);
+        if ($assigned instanceof Customer) {
+            throw new ConflictHttpException(
+                'No puedes desactivar una categoría asignada a clientes activos.',
+            );
+        }
+
+        $category->deactivate();
+        $this->audit(
+            $tenant,
+            $user,
+            'commercial_category.deactivated',
+            CommercialCategory::class,
+            $category->id(),
+            ['branch_id' => $branch->id()],
+        );
+        $this->entityManager->flush();
+
+        return new Response(status: Response::HTTP_NO_CONTENT);
     }
 
     #[Route(
