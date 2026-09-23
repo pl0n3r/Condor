@@ -25,7 +25,10 @@ final class HealthControllerTest extends WebTestCase
         self::assertIsArray($payload);
         self::assertSame('ok', $payload['status'] ?? null);
         self::assertArrayHasKey('schema_up_to_date', $payload);
-        self::assertIsBool($payload['schema_up_to_date']);
+        self::assertTrue(
+            $payload['schema_up_to_date'],
+            'La base de pruebas migrada debe reportar el esquema al día.',
+        );
         self::assertArrayNotHasKey('pending_migrations', $payload);
         self::assertArrayNotHasKey('database_url', $payload);
     }
