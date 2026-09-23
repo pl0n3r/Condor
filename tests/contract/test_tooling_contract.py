@@ -79,7 +79,7 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn('LOCK_INVALID_GRACE_MINUTES=5', script)
         self.assertIn('LOCK_GUARD_FILE="var/post-deploy.lock.guard"', script)
         self.assertIn('FLOCK_BIN=""', script)
-        self.assertIn('exec 9>"$LOCK_GUARD_FILE"', script)
+        self.assertIn('exec 9>>"$LOCK_GUARD_FILE"', script)
         self.assertIn('"$FLOCK_BIN" -n 9', script)
         self.assertNotIn('mv "$LOCK_GUARD', script)
         self.assertIn('LOCK_TOKEN="$$-$(date +%s)"', script)
@@ -162,6 +162,58 @@ class ToolingContractTests(unittest.TestCase):
                 "no fue posible adquirir el lock de forma segura",
                 result.stderr,
             )
+
+    def test_post_deploy_concurrent_guard_is_safe_skip(self) -> None:
+        """Un guard ocupado representa concurrencia legítima y termina con éxito."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            var = root / "var"
+            var.mkdir()
+            script = scripts / "post-deploy.sh"
+            script.write_text(
+                (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            for name in ("php85", "php"):
+                binary = fake_bin / name
+                binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                binary.chmod(0o755)
+
+            guard = str(var / "post-deploy.lock.guard")
+            holder = subprocess.Popen(
+                ["flock", "-n", guard, "sh", "-c", "printf ready; sleep 2"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                self.assertIsNotNone(holder.stdout)
+                self.assertEqual(holder.stdout.read(5), "ready")
+
+                env = dict(os.environ)
+                env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+                result = subprocess.run(
+                    ["sh", str(script)],
+                    cwd=root,
+                    env=env,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(
+                    "otra recuperación de lock sigue activa; se omite",
+                    result.stderr,
+                )
+            finally:
+                holder.wait(timeout=4)
 
     def test_post_deploy_schema_check_timeout_never_touches_cache(self) -> None:
         """Doctrine colgado vence el límite de pared antes de cualquier caché."""
