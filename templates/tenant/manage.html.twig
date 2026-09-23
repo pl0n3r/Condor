@@ -15,13 +15,15 @@
 
     <div class="storefront-admin-heading">
         <span class="eyebrow">Sitio y e-commerce · Empresa activa</span>
-        <h1>Identidad pública</h1>
-        <p>Configura la presentación real de <strong>{{ storefront.name }}</strong>.
-           Esta página no verifica ni modifica DNS o TLS.</p>
+        <h1>Identidad y canal público</h1>
+        <p>Configura la presentación pública y el origen comercial de <strong>{{ storefront.name }}</strong>.
+           DNS, TLS y despliegue siguen siendo operaciones separadas.</p>
     </div>
 
     {% if saved %}
-        <output class="storefront-admin-notice">Los cambios del sitio fueron guardados.</output>
+        <output class="storefront-admin-notice">
+            {{ saved == 'channel' ? 'La configuración del canal fue guardada.' : 'Los cambios del sitio fueron guardados.' }}
+        </output>
     {% endif %}
     {% for error in errors %}
         <p class="alert alert-error" role="alert">{{ error }}</p>
@@ -34,6 +36,7 @@
             {% if can_edit %}
                 <form method="post" action="{{ path('app_storefront_admin') }}" class="storefront-admin-form">
                     <input type="hidden" name="_token" value="{{ csrf_token('storefront_profile') }}">
+                    <input type="hidden" name="_action" value="profile">
                     <label for="storefront-headline">Titular</label>
                     <input id="storefront-headline" name="headline" maxlength="120"
                            value="{{ storefront.headline }}" placeholder="Titular opcional">
@@ -47,6 +50,74 @@
                 <p>Tu permiso permite consultar esta identidad, pero no modificarla.</p>
                 {% if storefront.headline %}<h3>{{ storefront.headline }}</h3>{% endif %}
                 {% if storefront.description %}<p>{{ storefront.description }}</p>{% endif %}
+            {% endif %}
+        </section>
+
+        <section class="storefront-admin-card" aria-labelledby="channel-heading">
+            <span class="eyebrow">Canal comercial</span>
+            <h2 id="channel-heading">E-commerce</h2>
+            {% if channel %}
+                <p>
+                    Estado:
+                    <strong>{{ channel.publishable ? 'Publicable' : 'No publicable' }}</strong>
+                    · Razón social: {{ channel.legal_entity }}
+                </p>
+            {% else %}
+                <p>Aún no hay un canal e-commerce configurado.</p>
+            {% endif %}
+
+            {% if can_edit %}
+                {% if channel_sources and price_lists %}
+                    <form method="post" action="{{ path('app_storefront_admin') }}"
+                          class="storefront-admin-form channel-admin-form">
+                        <input type="hidden" name="_token" value="{{ csrf_token('storefront_channel') }}">
+                        <input type="hidden" name="_action" value="channel">
+
+                        <label for="channel-name">Nombre del canal</label>
+                        <input id="channel-name" name="name" maxlength="160"
+                               value="{{ channel ? channel.name : 'Tienda web' }}" required>
+
+                        <label for="channel-slug">Identificador</label>
+                        <input id="channel-slug" name="slug" maxlength="120"
+                               value="{{ channel ? channel.slug : 'tienda-web' }}" required>
+
+                        <label for="channel-source">Fuente de inventario</label>
+                        <select id="channel-source" name="inventory_source_id" required>
+                            {% for source in channel_sources %}
+                                <option value="{{ source.id }}"
+                                    {% if channel and channel.inventory_source_id == source.id %}selected{% endif %}>
+                                    {{ source.name }} · {{ source.legal_entity }}
+                                </option>
+                            {% endfor %}
+                        </select>
+
+                        <label for="channel-price-list">Lista de precios</label>
+                        <select id="channel-price-list" name="price_list_id" required>
+                            {% for list in price_lists %}
+                                <option value="{{ list.id }}"
+                                    {% if channel and channel.price_list_id == list.id %}selected{% endif %}>
+                                    {{ list.name }} · {{ list.currency }}
+                                </option>
+                            {% endfor %}
+                        </select>
+
+                        <label>
+                            <input type="checkbox" name="active" value="1"
+                                {% if channel is null or channel.active %}checked{% endif %}>
+                            Canal activo
+                        </label>
+
+                        <button class="button" type="submit">
+                            {{ channel ? 'Guardar canal' : 'Crear canal e-commerce' }}
+                        </button>
+                    </form>
+                {% else %}
+                    <p class="muted">
+                        Necesitas al menos una fuente de inventario autorizada y una lista de precios activa.
+                    </p>
+                {% endif %}
+            {% else %}
+                <p>Tu permiso permite consultar el canal, pero no modificarlo.</p>
             {% endif %}
         </section>
 
