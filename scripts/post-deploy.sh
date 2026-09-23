@@ -53,6 +53,9 @@ case "$MIGRATION_TIMEOUT_SECONDS" in
         echo "post-deploy.sh: CONDOR_MIGRATION_TIMEOUT_SECONDS debe ser un entero entre 1 y 900." >&2
         exit 1
         ;;
+    *)
+        # Entero positivo; el límite superior se valida a continuación.
+        ;;
 esac
 if [ "$MIGRATION_TIMEOUT_SECONDS" -gt 900 ]; then
     echo "post-deploy.sh: CONDOR_MIGRATION_TIMEOUT_SECONDS no puede superar 900." >&2
