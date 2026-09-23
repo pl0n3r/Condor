@@ -21,6 +21,10 @@ test.describe('Slice 5 — clientes y precios', () => {
     const categorySlug = 'mayorista-' + suffix;
     const customerName = 'Cliente ' + suffix;
     const customerEmail = 'cliente-' + suffix + '@example.test';
+    const customerPhone = '+57 300 ' + suffix.slice(-7);
+    const customerNotes = 'Cliente de prueba ' + suffix;
+    const updatedPhone = '+57 301 ' + suffix.slice(-7);
+    const updatedNotes = 'Observación editada ' + suffix;
     const listName = 'Lista ' + suffix;
     const listSlug = 'lista-' + suffix;
 
@@ -64,12 +68,33 @@ test.describe('Slice 5 — clientes y precios', () => {
     });
     await customerForm.getByLabel('Nombre del cliente').fill(customerName);
     await customerForm.getByLabel('Correo del cliente').fill(customerEmail);
+    await customerForm.getByLabel('Teléfono del cliente').fill(customerPhone);
+    await customerForm.getByLabel('Observaciones').fill(customerNotes);
     await customerForm.locator('select').selectOption({ label: categoryName });
     await customerForm.getByRole('button', { name: 'Crear cliente' }).click();
     await expect(commerce.getByText('Cliente creado.')).toBeVisible();
     await expect(
       commerce.locator('strong').filter({ hasText: customerName })
     ).toBeVisible();
+    const customerRow = commerce.locator('.catalog-variant-row').filter({
+      hasText: customerName,
+    });
+    await expect(customerRow.getByText(customerPhone)).toBeVisible();
+    await expect(customerRow.getByText(customerNotes)).toBeVisible();
+
+    await customerRow.getByRole('button', { name: 'Editar' }).click();
+    await expect(customerForm.getByLabel('Teléfono del cliente')).toHaveValue(
+      customerPhone
+    );
+    await expect(customerForm.getByLabel('Observaciones')).toHaveValue(
+      customerNotes
+    );
+    await customerForm.getByLabel('Teléfono del cliente').fill(updatedPhone);
+    await customerForm.getByLabel('Observaciones').fill(updatedNotes);
+    await customerForm.getByRole('button', { name: 'Guardar cliente' }).click();
+    await expect(commerce.getByText('Cliente actualizado.')).toBeVisible();
+    await expect(customerRow.getByText(updatedPhone)).toBeVisible();
+    await expect(customerRow.getByText(updatedNotes)).toBeVisible();
 
     await commerce.getByLabel('Nombre de lista').fill(listName);
     await commerce.getByLabel('Slug de lista').fill(listSlug);
@@ -118,6 +143,8 @@ test.describe('Slice 5 — clientes y precios', () => {
       (candidate) => candidate.name === categoryName
     );
     expect(customer).toBeTruthy();
+    expect(customer.phone).toBe(updatedPhone);
+    expect(customer.notes).toBe(updatedNotes);
     expect(category).toBeTruthy();
 
     const pricingResponse = await page.request.get(

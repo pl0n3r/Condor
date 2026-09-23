@@ -87,6 +87,8 @@ type CustomerDraft = {
   id: string | null;
   name: string;
   email: string;
+  phone: string;
+  notes: string;
   categoryId: string;
 };
 
@@ -101,6 +103,8 @@ const emptyCustomer: CustomerDraft = {
   id: null,
   name: '',
   email: '',
+  phone: '',
+  notes: '',
   categoryId: '',
 };
 const emptyList: PriceListDraft = { id: null, name: '', slug: '' };
@@ -251,6 +255,8 @@ export function CommerceManagement({
       {
         name: customerDraft.name,
         email: customerDraft.email.trim() || null,
+        phone: customerDraft.phone.trim() || null,
+        notes: customerDraft.notes.trim() || null,
         category_id: customerDraft.categoryId || null,
       },
       editing ? 'Cliente actualizado.' : 'Cliente creado.',
@@ -601,6 +607,29 @@ export function CommerceManagement({
                     />
                   </label>
                   <label className="field">
+                    <span>Teléfono del cliente</span>
+                    <input
+                      type="tel"
+                      maxLength={40}
+                      value={customerDraft.phone}
+                      onChange={(event) => setCustomerDraft((current) => ({
+                        ...current,
+                        phone: event.target.value,
+                      }))}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Observaciones</span>
+                    <textarea
+                      maxLength={5000}
+                      value={customerDraft.notes}
+                      onChange={(event) => setCustomerDraft((current) => ({
+                        ...current,
+                        notes: event.target.value,
+                      }))}
+                    />
+                  </label>
+                  <label className="field">
                     <span>Categoría</span>
                     <select
                       value={customerDraft.categoryId}
@@ -654,8 +683,13 @@ export function CommerceManagement({
                         <span className="muted">
                           {customer.email ?? 'Sin correo'}
                           {' · '}
+                          {customer.phone ?? 'Sin teléfono'}
+                          {' · '}
                           {category?.name ?? 'Sin categoría'}
                         </span>
+                        {customer.notes && (
+                          <span className="muted">{customer.notes}</span>
+                        )}
                       </div>
                       <div className="catalog-actions">
                         {canUpdateCustomers && (
@@ -666,6 +700,8 @@ export function CommerceManagement({
                               id: customer.id,
                               name: customer.name,
                               email: customer.email ?? '',
+                              phone: customer.phone ?? '',
+                              notes: customer.notes ?? '',
                               categoryId:
                                 customer.commercial_category_id ?? '',
                             })}
