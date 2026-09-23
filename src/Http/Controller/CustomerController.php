@@ -289,6 +289,7 @@ final class CustomerController extends AbstractController
                 $this->commercialNullableString($payload, 'category_id'),
             )
             : $customer->commercialCategory();
+        $previousCategoryId = $customer->commercialCategory()?->id();
 
         $this->domain(function () use (
             $customer,
@@ -319,6 +320,7 @@ final class CustomerController extends AbstractController
             $customer->id(),
             [
                 'branch_id' => $branch->id(),
+                'previous_commercial_category_id' => $previousCategoryId,
                 'commercial_category_id' => $category?->id(),
             ],
         );

@@ -303,6 +303,7 @@ final class PricingController extends AbstractController
         $list = $listId === null
             ? null
             : $this->priceList($tenant, $listId);
+        $previousPriceListId = $category->preferredPriceList()?->id();
 
         $this->domain(
             static fn (): null => self::assignPreferredList(
@@ -318,6 +319,7 @@ final class PricingController extends AbstractController
             $category->id(),
             [
                 'branch_id' => $branch->id(),
+                'previous_price_list_id' => $previousPriceListId,
                 'price_list_id' => $list?->id(),
             ],
         );

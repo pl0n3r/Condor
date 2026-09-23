@@ -520,6 +520,116 @@ final class CommerceControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(404);
     }
 
+    public function testRelationshipReassignmentsAuditPreviousAndNewIds(): void
+    {
+        $client = static::createClient();
+        $em = $this->entityManager();
+        [$tenant, $branch, $owner] = $this->fixture($em);
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+
+        $categoryA = new CommercialCategory(
+            $tenant,
+            'Categoría A '.$suffix,
+            'categoria-a-'.$suffix,
+        );
+        $categoryB = new CommercialCategory(
+            $tenant,
+            'Categoría B '.$suffix,
+            'categoria-b-'.$suffix,
+        );
+        $listA = new PriceList(
+            $tenant,
+            'Lista A '.$suffix,
+            'lista-a-'.$suffix,
+        );
+        $listB = new PriceList(
+            $tenant,
+            'Lista B '.$suffix,
+            'lista-b-'.$suffix,
+        );
+        $categoryA->assignPreferredPriceList($listA);
+        $customer = new Customer(
+            $tenant,
+            'Cliente audit '.$suffix,
+            commercialCategory: $categoryA,
+        );
+
+        foreach ([$categoryA, $categoryB, $listA, $listB, $customer] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
+
+        $client->loginUser($owner);
+        $csrf = $this->csrf($client);
+
+        $client->jsonRequest(
+            'PATCH',
+            '/api/v1/branches/'.$branch->id().'/customers/'.$customer->id(),
+            ['category_id' => $categoryB->id()],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseIsSuccessful();
+
+        $client->jsonRequest(
+            'PATCH',
+            '/api/v1/branches/'.$branch->id()
+                .'/pricing/categories/'.$categoryA->id(),
+            ['preferred_price_list_id' => $listB->id()],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseIsSuccessful();
+
+        $customerContext = $em->getConnection()->fetchOne(
+            'SELECT context FROM condor_audit_event '
+            .'WHERE tenant_id = ? AND action = ? AND entity_id = ? '
+            .'ORDER BY created_at DESC LIMIT 1',
+            [$tenant->id(), 'customer.updated', $customer->id()],
+        );
+        self::assertIsString($customerContext);
+        $customerAudit = json_decode(
+            $customerContext,
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertIsArray($customerAudit);
+        self::assertSame(
+            $categoryA->id(),
+            $customerAudit['previous_commercial_category_id'] ?? null,
+        );
+        self::assertSame(
+            $categoryB->id(),
+            $customerAudit['commercial_category_id'] ?? null,
+        );
+
+        $categoryContext = $em->getConnection()->fetchOne(
+            'SELECT context FROM condor_audit_event '
+            .'WHERE tenant_id = ? AND action = ? AND entity_id = ? '
+            .'ORDER BY created_at DESC LIMIT 1',
+            [
+                $tenant->id(),
+                'commercial_category.price_list_assigned',
+                $categoryA->id(),
+            ],
+        );
+        self::assertIsString($categoryContext);
+        $categoryAudit = json_decode(
+            $categoryContext,
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertIsArray($categoryAudit);
+        self::assertSame(
+            $listA->id(),
+            $categoryAudit['previous_price_list_id'] ?? null,
+        );
+        self::assertSame(
+            $listB->id(),
+            $categoryAudit['price_list_id'] ?? null,
+        );
+    }
+
     public function testVariantPriceUpdateAuditsPreviousAndNewAmounts(): void
     {
         $client = static::createClient();
