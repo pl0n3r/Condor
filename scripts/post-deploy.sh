@@ -409,8 +409,11 @@ elif grep -Eiq 'not[[:space:]_-]*up[[:space:]_-]*to[[:space:]_-]*date|out[[:spac
     cleanup_schema_check_log
     if [ "$PRODUCTION_STAGE" = "construction" ]; then
         echo "post-deploy.sh: esquema pendiente en construction; ejecutando migraciones versionadas." >&2
-        if ! run_construction_migrations; then
-            exit $?
+        if run_construction_migrations; then
+            :
+        else
+            migration_result=$?
+            exit "$migration_result"
         fi
     else
         echo "post-deploy.sh: esquema pendiente en live; migración automática deshabilitada. Caché no modificada." >&2
