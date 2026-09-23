@@ -168,21 +168,58 @@ final class InventoryController extends AbstractController
             );
         }
 
-        $source = $this->domain(
-            fn (): InventorySource => new InventorySource(
+        $name = $this->requiredString($payload, 'name');
+        $slug = $this->requiredString($payload, 'slug');
+        $inactive = $type === InventorySource::TYPE_BRANCH
+            ? $this->entityManager
+                ->getRepository(InventorySource::class)
+                ->findOneBy([
+                    'tenant' => $tenant,
+                    'branch' => $branch,
+                    'active' => false,
+                ])
+            : $this->entityManager
+                ->getRepository(InventorySource::class)
+                ->findOneBy([
+                    'tenant' => $tenant,
+                    'legalEntity' => $legalEntity,
+                    'slug' => strtolower(trim($slug)),
+                    'type' => InventorySource::TYPE_LOGICAL,
+                    'active' => false,
+                ]);
+        $reactivated = $inactive instanceof InventorySource;
+
+        $source = $this->domain(function () use (
+            $inactive,
+            $tenant,
+            $legalEntity,
+            $name,
+            $slug,
+            $type,
+            $branch,
+        ): InventorySource {
+            if ($inactive instanceof InventorySource) {
+                $inactive->reactivate($name, $slug);
+
+                return $inactive;
+            }
+
+            return new InventorySource(
                 $tenant,
                 $legalEntity,
-                $this->requiredString($payload, 'name'),
-                $this->requiredString($payload, 'slug'),
+                $name,
+                $slug,
                 $type,
                 $type === InventorySource::TYPE_BRANCH ? $branch : null,
-            ),
-        );
+            );
+        });
         $this->entityManager->persist($source);
         $this->audit(
             $tenant,
             $user,
-            'inventory_source.created',
+            $reactivated
+                ? 'inventory_source.reactivated'
+                : 'inventory_source.created',
             InventorySource::class,
             $source->id(),
             [
@@ -197,7 +234,7 @@ final class InventoryController extends AbstractController
 
         return $this->json(
             ['source' => self::sourcePayload($source)],
-            Response::HTTP_CREATED,
+            $reactivated ? Response::HTTP_OK : Response::HTTP_CREATED,
         );
     }
 
@@ -358,40 +395,58 @@ final class InventoryController extends AbstractController
             );
         }
 
-        $movement = $this->domain(
-            fn (): InventoryMovement => $this->inventory->adjust(
-                $tenant,
-                $source,
-                $variant,
-                $this->requiredInt($payload, 'delta'),
-                $user->id(),
-                $this->requiredString($payload, 'idempotency_key'),
-                [
-                    'reason' => $reason,
-                    'branch_id' => $branch->id(),
-                    'legal_entity_id' => $legalEntity->id(),
-                ],
-            ),
-        );
-        $this->audit(
-            $tenant,
-            $user,
-            'inventory.adjusted',
-            InventoryMovement::class,
-            $movement->id(),
-            [
-                'branch_id' => $branch->id(),
-                'legal_entity_id' => $legalEntity->id(),
-                'source_id' => $source->id(),
-                'variant_id' => $variant->id(),
-                'delta' => $movement->delta(),
-            ],
-        );
-        $this->entityManager->flush();
+        $created = false;
+        try {
+            $movement = $this->domain(
+                fn (): InventoryMovement => $this->inventory->adjust(
+                    $tenant,
+                    $source,
+                    $variant,
+                    $this->requiredInt($payload, 'delta'),
+                    $user->id(),
+                    $this->requiredString($payload, 'idempotency_key'),
+                    [
+                        'reason' => $reason,
+                        'branch_id' => $branch->id(),
+                        'legal_entity_id' => $legalEntity->id(),
+                    ],
+                    function (InventoryMovement $createdMovement) use (
+                        &$created,
+                        $tenant,
+                        $user,
+                        $branch,
+                        $legalEntity,
+                        $source,
+                        $variant,
+                    ): void {
+                        $created = true;
+                        $this->audit(
+                            $tenant,
+                            $user,
+                            'inventory.adjusted',
+                            InventoryMovement::class,
+                            $createdMovement->id(),
+                            [
+                                'branch_id' => $branch->id(),
+                                'legal_entity_id' => $legalEntity->id(),
+                                'source_id' => $source->id(),
+                                'variant_id' => $variant->id(),
+                                'delta' => $createdMovement->delta(),
+                            ],
+                        );
+                    },
+                ),
+            );
+        } catch (UniqueConstraintViolationException $exception) {
+            throw new ConflictHttpException(
+                'La clave de idempotencia ya fue usada por otra operación concurrente.',
+                $exception,
+            );
+        }
 
         return $this->json(
             ['movement' => self::movementPayload($movement)],
-            Response::HTTP_CREATED,
+            $created ? Response::HTTP_CREATED : Response::HTTP_OK,
         );
     }
 
@@ -450,37 +505,56 @@ final class InventoryController extends AbstractController
             $tenant,
         );
 
-        $transfer = $this->domain(
-            fn (): InventoryTransfer => $this->inventory->transfer(
-                $tenant,
-                $variant,
-                $sourceFrom,
-                $sourceTo,
-                $this->requiredInt($payload, 'quantity'),
-                $user->id(),
-                $this->requiredString($payload, 'idempotency_key'),
-            ),
-        );
-        $this->audit(
-            $tenant,
-            $user,
-            'inventory.transferred',
-            InventoryTransfer::class,
-            $transfer->id(),
-            [
-                'branch_id' => $branch->id(),
-                'legal_entity_id' => $legalEntity->id(),
-                'source_from_id' => $sourceFrom->id(),
-                'source_to_id' => $sourceTo->id(),
-                'variant_id' => $variant->id(),
-                'quantity' => $transfer->quantity(),
-            ],
-        );
-        $this->entityManager->flush();
+        $created = false;
+        try {
+            $transfer = $this->domain(
+                fn (): InventoryTransfer => $this->inventory->transfer(
+                    $tenant,
+                    $variant,
+                    $sourceFrom,
+                    $sourceTo,
+                    $this->requiredInt($payload, 'quantity'),
+                    $user->id(),
+                    $this->requiredString($payload, 'idempotency_key'),
+                    function (InventoryTransfer $createdTransfer) use (
+                        &$created,
+                        $tenant,
+                        $user,
+                        $branch,
+                        $legalEntity,
+                        $sourceFrom,
+                        $sourceTo,
+                        $variant,
+                    ): void {
+                        $created = true;
+                        $this->audit(
+                            $tenant,
+                            $user,
+                            'inventory.transferred',
+                            InventoryTransfer::class,
+                            $createdTransfer->id(),
+                            [
+                                'branch_id' => $branch->id(),
+                                'legal_entity_id' => $legalEntity->id(),
+                                'source_from_id' => $sourceFrom->id(),
+                                'source_to_id' => $sourceTo->id(),
+                                'variant_id' => $variant->id(),
+                                'quantity' => $createdTransfer->quantity(),
+                            ],
+                        );
+                    },
+                ),
+            );
+        } catch (UniqueConstraintViolationException $exception) {
+            throw new ConflictHttpException(
+                'La clave de idempotencia ya fue usada por otra operación concurrente.',
+                $exception,
+            );
+        }
 
         return $this->json(
             ['transfer' => self::transferPayload($transfer)],
-            Response::HTTP_CREATED,
+            $created ? Response::HTTP_CREATED : Response::HTTP_OK,
         );
     }
 

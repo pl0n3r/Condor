@@ -23,7 +23,7 @@ class Product extends CatalogItem
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $description;
 
-    #[ORM\Column(name: 'allow_backorder', type: 'boolean')]
+    #[ORM\Column(name: 'allow_backorder', type: 'boolean', options: ['default' => false])]
     private bool $allowBackorder = false;
 
     public function __construct(

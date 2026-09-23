@@ -118,7 +118,18 @@ class InventoryBalance
             throw new DomainException('El movimiento de inventario no puede ser cero.');
         }
 
+        if ($delta > 2147483647 || $delta < -2147483648) {
+            throw new DomainException(
+                'La cantidad excede el rango permitido por inventario.',
+            );
+        }
+
         $next = $this->quantity + $delta;
+        if ($next > 2147483647 || $next < -2147483648) {
+            throw new DomainException(
+                'El saldo excede el rango permitido por inventario.',
+            );
+        }
         if ($next < 0 && !$this->variant->product()->allowsBackorder()) {
             throw new DomainException(
                 'Stock insuficiente: el producto no permite backorder.',

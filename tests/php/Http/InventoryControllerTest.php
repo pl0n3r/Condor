@@ -51,6 +51,7 @@ final class InventoryControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(201);
         $sourceB = $this->json($client)['source']['id'];
 
+        $adjustmentKey = 'adjust-http-'.bin2hex(random_bytes(5));
         $client->jsonRequest(
             'POST',
             $base.'/adjustments',
@@ -59,7 +60,36 @@ final class InventoryControllerTest extends WebTestCase
                 'variant_id' => $variant->id(),
                 'delta' => 10,
                 'reason' => 'Inventario inicial',
-                'idempotency_key' => 'adjust-http-'.bin2hex(random_bytes(5)),
+                'idempotency_key' => $adjustmentKey,
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+
+        $client->jsonRequest(
+            'POST',
+            $base.'/adjustments',
+            [
+                'source_id' => $sourceA,
+                'variant_id' => $variant->id(),
+                'delta' => 10,
+                'reason' => 'Inventario inicial',
+                'idempotency_key' => $adjustmentKey,
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(200);
+
+        $transferKey = 'transfer-http-'.bin2hex(random_bytes(5));
+        $client->jsonRequest(
+            'POST',
+            $base.'/transfers',
+            [
+                'source_from_id' => $sourceA,
+                'source_to_id' => $sourceB,
+                'variant_id' => $variant->id(),
+                'quantity' => 4,
+                'idempotency_key' => $transferKey,
             ],
             ['HTTP_X_CSRF_TOKEN' => $csrf],
         );
@@ -73,11 +103,11 @@ final class InventoryControllerTest extends WebTestCase
                 'source_to_id' => $sourceB,
                 'variant_id' => $variant->id(),
                 'quantity' => 4,
-                'idempotency_key' => 'transfer-http-'.bin2hex(random_bytes(5)),
+                'idempotency_key' => $transferKey,
             ],
             ['HTTP_X_CSRF_TOKEN' => $csrf],
         );
-        self::assertResponseStatusCodeSame(201);
+        self::assertResponseStatusCodeSame(200);
 
         $client->request('GET', $base);
         self::assertResponseIsSuccessful();
@@ -99,6 +129,68 @@ final class InventoryControllerTest extends WebTestCase
             ->getRepository(InventorySource::class)
             ->findBy(['tenant' => $tenant, 'legalEntity' => $legalEntity]);
         self::assertCount(2, $storedSources);
+        self::assertSame(
+            1,
+            (int) $entityManager->getConnection()->fetchOne(
+                'SELECT COUNT(*) FROM condor_audit_event WHERE action = ? AND entity_type = ?',
+                ['inventory.adjusted', InventoryMovement::class],
+            ),
+        );
+        self::assertSame(
+            1,
+            (int) $entityManager->getConnection()->fetchOne(
+                'SELECT COUNT(*) FROM condor_audit_event WHERE action = ? AND entity_type = ?',
+                ['inventory.transferred', \App\Domain\Inventory\Entity\InventoryTransfer::class],
+            ),
+        );
+    }
+
+    public function testBranchSourceCanBeReactivatedAfterDeactivation(): void
+    {
+        $client = static::createClient();
+        $entityManager = $this->entityManager();
+        [, , $branch, $owner] = $this->tenantWithOwner($entityManager);
+
+        $client->loginUser($owner);
+        $csrf = $this->csrf($client);
+        $base = '/api/v1/branches/'.$branch->id().'/inventory';
+
+        $client->jsonRequest(
+            'POST',
+            $base.'/sources',
+            ['name' => 'Principal', 'slug' => 'principal', 'type' => 'branch'],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $sourceId = $this->json($client)['source']['id'];
+
+        $client->request(
+            'DELETE',
+            $base.'/sources/'.$sourceId,
+            [],
+            [],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(204);
+
+        $client->jsonRequest(
+            'POST',
+            $base.'/sources',
+            [
+                'name' => 'Principal reactivada',
+                'slug' => 'principal-reactivada',
+                'type' => 'branch',
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(200);
+        $reactivated = $this->json($client)['source'];
+        self::assertSame($sourceId, $reactivated['id']);
+        self::assertSame('Principal reactivada', $reactivated['name']);
+
+        $source = $entityManager->getRepository(InventorySource::class)->find($sourceId);
+        self::assertInstanceOf(InventorySource::class, $source);
+        self::assertTrue($source->isActive());
     }
 
     public function testOwnerCanUpdateAndDeactivateEmptySource(): void

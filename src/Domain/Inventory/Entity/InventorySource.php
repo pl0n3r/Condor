@@ -141,6 +141,14 @@ class InventorySource
         $this->touch();
     }
 
+    public function reactivate(string $name, string $slug): void
+    {
+        $this->name = self::normalizeName($name);
+        $this->slug = self::normalizeSlug($slug);
+        $this->active = true;
+        $this->touch();
+    }
+
     private function touch(): void
     {
         $this->updatedAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));

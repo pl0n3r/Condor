@@ -22,6 +22,7 @@ final readonly class InventoryService
 
     /**
      * @param array<string, scalar|null> $context
+     * @param null|callable(InventoryMovement): void $onCreated
      */
     public function adjust(
         Tenant $tenant,
@@ -31,6 +32,7 @@ final readonly class InventoryService
         ?string $actorUserId,
         string $idempotencyKey,
         array $context = [],
+        ?callable $onCreated = null,
     ): InventoryMovement {
         $key = self::normalizeIdempotencyKey($idempotencyKey);
 
@@ -43,6 +45,7 @@ final readonly class InventoryService
                 $actorUserId,
                 $key,
                 $context,
+                $onCreated,
             ): InventoryMovement {
                 self::assertOwnedScope($tenant, $source, $variant);
                 $this->lockSourceAndVariant(
@@ -93,6 +96,9 @@ final readonly class InventoryService
                     $context,
                 );
                 $entityManager->persist($movement);
+                if ($onCreated !== null) {
+                    $onCreated($movement);
+                }
 
                 return $movement;
             },
@@ -107,6 +113,7 @@ final readonly class InventoryService
         int $quantity,
         ?string $actorUserId,
         string $idempotencyKey,
+        ?callable $onCreated = null,
     ): InventoryTransfer {
         $key = self::normalizeIdempotencyKey($idempotencyKey);
 
@@ -119,6 +126,7 @@ final readonly class InventoryService
                 $quantity,
                 $actorUserId,
                 $key,
+                $onCreated,
             ): InventoryTransfer {
                 self::assertOwnedScope($tenant, $sourceFrom, $variant);
                 self::assertOwnedScope($tenant, $sourceTo, $variant);
@@ -202,6 +210,9 @@ final readonly class InventoryService
                     $transfer,
                     ['origin_source_id' => $sourceFrom->id()],
                 ));
+                if ($onCreated !== null) {
+                    $onCreated($transfer);
+                }
 
                 return $transfer;
             },
@@ -233,7 +244,7 @@ final readonly class InventoryService
             return $balance;
         }
 
-        $entityManager->lock($balance, LockMode::PESSIMISTIC_WRITE);
+        $entityManager->refresh($balance, LockMode::PESSIMISTIC_WRITE);
 
         return $balance;
     }
@@ -243,8 +254,8 @@ final readonly class InventoryService
         InventorySource $source,
         ProductVariant $variant,
     ): void {
-        $entityManager->lock($source, LockMode::PESSIMISTIC_WRITE);
-        $entityManager->lock($variant, LockMode::PESSIMISTIC_WRITE);
+        $entityManager->refresh($source, LockMode::PESSIMISTIC_WRITE);
+        $entityManager->refresh($variant, LockMode::PESSIMISTIC_WRITE);
     }
 
     /**
@@ -262,9 +273,9 @@ final readonly class InventoryService
         );
 
         foreach ($sources as $source) {
-            $entityManager->lock($source, LockMode::PESSIMISTIC_WRITE);
+            $entityManager->refresh($source, LockMode::PESSIMISTIC_WRITE);
         }
-        $entityManager->lock($variant, LockMode::PESSIMISTIC_WRITE);
+        $entityManager->refresh($variant, LockMode::PESSIMISTIC_WRITE);
     }
 
     private static function assertOwnedScope(

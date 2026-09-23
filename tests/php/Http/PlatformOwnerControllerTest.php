@@ -186,11 +186,36 @@ final class PlatformOwnerControllerTest extends WebTestCase
         );
 
         $tenantPayload = null;
-        foreach ($payload['tenants'] as $candidate) {
-            if ($candidate['id'] === $tenant->id()) {
-                $tenantPayload = $candidate;
-                break;
+        $page = 1;
+        $totalPages = max(
+            1,
+            (int) ceil(
+                $payload['tenant_pagination']['total']
+                / $payload['tenant_pagination']['per_page'],
+            ),
+        );
+        while ($tenantPayload === null && $page <= $totalPages) {
+            $pagePayload = $payload;
+            if ($page > 1) {
+                $client->request(
+                    'GET',
+                    '/adminpl0n3r/api/context?page='.$page.'&per_page=24',
+                );
+                self::assertResponseIsSuccessful();
+                $pagePayload = json_decode(
+                    (string) $client->getResponse()->getContent(),
+                    true,
+                );
+                self::assertIsArray($pagePayload);
             }
+
+            foreach ($pagePayload['tenants'] as $candidate) {
+                if ($candidate['id'] === $tenant->id()) {
+                    $tenantPayload = $candidate;
+                    break;
+                }
+            }
+            $page++;
         }
 
         self::assertIsArray($tenantPayload);

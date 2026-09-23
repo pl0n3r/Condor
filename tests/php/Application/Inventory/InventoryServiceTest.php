@@ -184,6 +184,77 @@ final class InventoryServiceTest extends KernelTestCase
         );
     }
 
+    public function testAdjustmentRefreshesInactiveSourceBeforeApplying(): void
+    {
+        [$tenant, $source, , $variant] = $this->fixture();
+
+        self::assertTrue($source->isActive());
+        $this->entityManager->getConnection()->executeStatement(
+            'UPDATE condor_inventory_source SET active = 0 WHERE id = ?',
+            [$source->id()],
+        );
+        self::assertTrue($source->isActive());
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(
+            'No se puede modificar inventario de una fuente inactiva.',
+        );
+
+        $this->service->adjust(
+            $tenant,
+            $source,
+            $variant,
+            1,
+            null,
+            'stale-source-'.bin2hex(random_bytes(6)),
+        );
+    }
+
+    public function testAdjustmentRefreshesInactiveVariantBeforeApplying(): void
+    {
+        [$tenant, $source, , $variant] = $this->fixture();
+
+        self::assertTrue($variant->isActive());
+        $this->entityManager->getConnection()->executeStatement(
+            'UPDATE condor_product_variant SET active = 0 WHERE id = ?',
+            [$variant->id()],
+        );
+        self::assertTrue($variant->isActive());
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(
+            'No se puede modificar inventario de una variante inactiva.',
+        );
+
+        $this->service->adjust(
+            $tenant,
+            $source,
+            $variant,
+            1,
+            null,
+            'stale-variant-'.bin2hex(random_bytes(6)),
+        );
+    }
+
+    public function testAdjustmentRejectsValuesOutsideDatabaseIntegerRange(): void
+    {
+        [$tenant, $source, , $variant] = $this->fixture();
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(
+            'La cantidad excede el rango permitido por inventario.',
+        );
+
+        $this->service->adjust(
+            $tenant,
+            $source,
+            $variant,
+            2147483648,
+            null,
+            'overflow-'.bin2hex(random_bytes(6)),
+        );
+    }
+
     public function testFailedTransferRollsBackWithoutPartialMovement(): void
     {
         [$tenant, $sourceA, $sourceB, $variant] = $this->fixture();
