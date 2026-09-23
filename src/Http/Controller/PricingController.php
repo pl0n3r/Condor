@@ -665,6 +665,16 @@ final class PricingController extends AbstractController
             );
         }
 
+        $errors = DateTimeImmutable::getLastErrors();
+        if (
+            $errors !== false
+            && ($errors['warning_count'] > 0 || $errors['error_count'] > 0)
+        ) {
+            throw new UnprocessableEntityHttpException(
+                sprintf('El campo %s no contiene una fecha válida.', $field),
+            );
+        }
+
         return $date->setTimezone(new DateTimeZone('UTC'));
     }
 

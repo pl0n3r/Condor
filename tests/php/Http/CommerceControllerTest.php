@@ -259,6 +259,23 @@ final class CommerceControllerTest extends WebTestCase
             ['HTTP_X_CSRF_TOKEN' => $csrf],
         );
         self::assertResponseStatusCodeSame(422);
+
+        $client->jsonRequest(
+            'POST',
+            '/api/v1/branches/'.$branch->id().'/pricing/rules',
+            [
+                'price_list_id' => $listId,
+                'category_id' => null,
+                'name' => 'Fecha de calendario inválida',
+                'priority' => 5,
+                'discount_type' => 'fixed',
+                'discount_value' => 1000,
+                'valid_from' => '2026-02-30T10:00:00+00:00',
+                'valid_until' => null,
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(422);
     }
 
     public function testOwnerUpdatesAndDeactivatesCommercialRecordsWithAudit(): void
