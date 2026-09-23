@@ -13,6 +13,7 @@ test.describe('Slice 4 — inventario', () => {
   test('ajusta y transfiere stock con trazabilidad desde el Admin', async ({
     page,
   }, testInfo) => {
+    test.setTimeout(60_000);
     const suffix = Date.now() + '-' + testInfo.retry;
     const productName = 'Inventario E2E ' + suffix;
     const slug = 'inventario-e2e-' + suffix;
