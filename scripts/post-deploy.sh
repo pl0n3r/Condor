@@ -1,11 +1,11 @@
 #!/bin/sh
 # Cron/post-deploy seguro para Hostinger shared hosting.
 #
-# Este script NO ejecuta migraciones productivas. AGENTES.md §10 exige
-# autorización humana explícita para cualquier migración de producción.
-# El cron solo comprueba que el esquema ya esté al día y, si lo está,
-# regenera la caché bajo exclusión mutua. Si hay migraciones pendientes,
-# falla cerrado antes de tocar caché y deja una señal accionable.
+# En modo construction (D-053) este script puede reconciliar migraciones
+# Doctrine versionadas pendientes bajo exclusión mutua y luego regenerar
+# la caché. En modo live conserva el comportamiento estricto: una deriva
+# de esquema falla cerrado y requiere operación explícita. Nunca convierte
+# migraciones destructivas/contract en automáticas.
 set -eu
 umask 077
 
@@ -37,6 +37,28 @@ LOCK_TOKEN="$$-$(date +%s)"
 LOCK_GUARD_OWNED=0
 LOCK_SKIP_STATUS=10
 LOCK_ERROR_STATUS=11
+PRODUCTION_STAGE="${CONDOR_PRODUCTION_STAGE:-construction}"
+case "$PRODUCTION_STAGE" in
+    construction|live)
+        ;;
+    *)
+        echo "post-deploy.sh: CONDOR_PRODUCTION_STAGE debe ser construction o live." >&2
+        exit 1
+        ;;
+esac
+
+MIGRATION_TIMEOUT_SECONDS="${CONDOR_MIGRATION_TIMEOUT_SECONDS:-180}"
+case "$MIGRATION_TIMEOUT_SECONDS" in
+    ''|*[!0-9]*|0)
+        echo "post-deploy.sh: CONDOR_MIGRATION_TIMEOUT_SECONDS debe ser un entero entre 1 y 900." >&2
+        exit 1
+        ;;
+esac
+if [ "$MIGRATION_TIMEOUT_SECONDS" -gt 900 ]; then
+    echo "post-deploy.sh: CONDOR_MIGRATION_TIMEOUT_SECONDS no puede superar 900." >&2
+    exit 1
+fi
+
 SCHEMA_CHECK_TIMEOUT_SECONDS="${CONDOR_SCHEMA_CHECK_TIMEOUT_SECONDS:-60}"
 case "$SCHEMA_CHECK_TIMEOUT_SECONDS" in
     ''|*[!0-9]*|0)
@@ -56,6 +78,10 @@ SCHEMA_CHECK_TIMEOUT_MARKER=""
 SCHEMA_CHECK_DONE_MARKER=""
 SCHEMA_CHECK_PID=""
 SCHEMA_CHECK_WATCHDOG_PID=""
+MIGRATION_LOG=""
+MIGRATION_TIMEOUT_MARKER=""
+MIGRATION_PID=""
+MIGRATION_WATCHDOG_PID=""
 
 FLOCK_BIN=""
 for candidate in /usr/bin/flock flock
@@ -115,6 +141,91 @@ cleanup_schema_check_log() {
         rm -f -- "$SCHEMA_CHECK_LOG"
         SCHEMA_CHECK_LOG=""
     fi
+}
+
+cleanup_migration_process() {
+    if [ -n "$MIGRATION_PID" ] && kill -0 "$MIGRATION_PID" 2>/dev/null; then
+        kill -TERM "$MIGRATION_PID" 2>/dev/null || true
+        sleep 1
+        kill -KILL "$MIGRATION_PID" 2>/dev/null || true
+    fi
+    MIGRATION_PID=""
+}
+
+cleanup_migration_watchdog() {
+    if [ -n "$MIGRATION_WATCHDOG_PID" ]; then
+        kill -TERM "$MIGRATION_WATCHDOG_PID" 2>/dev/null || true
+        MIGRATION_WATCHDOG_PID=""
+    fi
+}
+
+cleanup_migration_log() {
+    if [ -n "$MIGRATION_TIMEOUT_MARKER" ]; then
+        rm -f -- "$MIGRATION_TIMEOUT_MARKER"
+        MIGRATION_TIMEOUT_MARKER=""
+    fi
+    if [ -n "$MIGRATION_LOG" ]; then
+        rm -f -- "$MIGRATION_LOG"
+        MIGRATION_LOG=""
+    fi
+}
+
+run_construction_migrations() {
+    MIGRATION_LOG="$(mktemp "${TMPDIR:-/tmp}/condor-migration-XXXXXX.log")"
+    MIGRATION_TIMEOUT_MARKER="${MIGRATION_LOG}.timeout"
+
+    "$PHP_BIN" bin/console doctrine:migrations:migrate         --env=prod         --no-interaction         --allow-no-migration         >"$MIGRATION_LOG" 2>&1 &
+    MIGRATION_PID=$!
+
+    (
+        elapsed=0
+        while [ "$elapsed" -lt "$MIGRATION_TIMEOUT_SECONDS" ]; do
+            sleep 1
+            if ! kill -0 "$MIGRATION_PID" 2>/dev/null; then
+                exit 0
+            fi
+            elapsed=$((elapsed + 1))
+        done
+
+        if kill -0 "$MIGRATION_PID" 2>/dev/null; then
+            : >"$MIGRATION_TIMEOUT_MARKER"
+            kill -TERM "$MIGRATION_PID" 2>/dev/null || true
+            sleep 2
+            kill -KILL "$MIGRATION_PID" 2>/dev/null || true
+        fi
+    ) &
+    MIGRATION_WATCHDOG_PID=$!
+
+    migration_status=0
+    if wait "$MIGRATION_PID"; then
+        migration_status=0
+    else
+        migration_status=$?
+    fi
+    MIGRATION_PID=""
+    wait "$MIGRATION_WATCHDOG_PID" 2>/dev/null || true
+    MIGRATION_WATCHDOG_PID=""
+
+    if [ -f "$MIGRATION_TIMEOUT_MARKER" ]; then
+        cleanup_migration_log
+        echo "post-deploy.sh: migración excedió ${MIGRATION_TIMEOUT_SECONDS}s; caché no modificada." >&2
+        return 2
+    fi
+
+    if [ "$migration_status" -ne 0 ]; then
+        cleanup_migration_log
+        echo "post-deploy.sh: Doctrine no pudo reconciliar las migraciones de construcción (código $migration_status); caché no modificada." >&2
+        return 2
+    fi
+
+    cleanup_migration_log
+
+    if ! "$PHP_BIN" bin/console doctrine:migrations:up-to-date         --env=prod         --no-interaction         --fail-on-unregistered         >/dev/null 2>&1; then
+        echo "post-deploy.sh: la migración terminó pero el esquema no quedó reconciliado; caché no modificada." >&2
+        return 2
+    fi
+
+    return 0
 }
 
 crear_lock() {
@@ -227,7 +338,7 @@ acquire_lock() {
     recuperar_lock
 }
 
-trap 'cleanup_schema_check_process; cleanup_schema_check_watchdog; cleanup_schema_check_log; cleanup_lock; cleanup_guard' EXIT
+trap 'cleanup_schema_check_process; cleanup_schema_check_watchdog; cleanup_schema_check_log; cleanup_migration_process; cleanup_migration_watchdog; cleanup_migration_log; cleanup_lock; cleanup_guard' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
@@ -243,8 +354,8 @@ else
     exit 3
 fi
 
-# D-044 / AGENTES.md §10: detectar deriva es automático; migrar producción no.
-# Un esquema pendiente requiere autorización explícita y una operación separada.
+# D-053 / AGENTES.md §10: construction converge migraciones versionadas;
+# live detecta deriva y falla cerrado.
 SCHEMA_CHECK_LOG="$(mktemp "${TMPDIR:-/tmp}/condor-schema-check-XXXXXX.log")"
 SCHEMA_CHECK_TIMEOUT_MARKER="${SCHEMA_CHECK_LOG}.timeout"
 SCHEMA_CHECK_DONE_MARKER="${SCHEMA_CHECK_LOG}.done"
@@ -290,17 +401,28 @@ fi
 
 if [ "$schema_check_status" -eq 0 ]; then
     cleanup_schema_check_log
-else
-    if grep -Eiq 'not[[:space:]_-]*up[[:space:]_-]*to[[:space:]_-]*date|out[[:space:]_-]*of[[:space:]_-]*date|new[[:space:]_-]*migration|pending[[:space:]_-]*migration|previously[[:space:]_-]*executed[[:space:]_-]*migration' "$SCHEMA_CHECK_LOG"; then
-        schema_diagnostic="Doctrine reporta migraciones pendientes o historial de migraciones no reconciliado."
-    elif grep -Eiq 'sqlstate|connection|database|driver|server[[:space:]_-]*has[[:space:]_-]*gone[[:space:]_-]*away|timed?[[:space:]_-]*out' "$SCHEMA_CHECK_LOG"; then
-        schema_diagnostic="Doctrine no pudo comprobar el esquema por un fallo de base de datos o conectividad."
-    else
-        schema_diagnostic="Doctrine no pudo comprobar el esquema; el fallo no pudo clasificarse de forma segura."
-    fi
-
+elif grep -Eiq 'previously[[:space:]_-]*executed|unregistered|not[[:space:]_-]*registered' "$SCHEMA_CHECK_LOG"; then
     cleanup_schema_check_log
-    echo "post-deploy.sh: comprobación de esquema falló (código $schema_check_status). $schema_diagnostic Caché no modificada." >&2
+    echo "post-deploy.sh: el historial de migraciones no coincide con el catálogo desplegado; se requiere reconciliación explícita. Caché no modificada." >&2
+    exit 2
+elif grep -Eiq 'not[[:space:]_-]*up[[:space:]_-]*to[[:space:]_-]*date|out[[:space:]_-]*of[[:space:]_-]*date|new[[:space:]_-]*migration|pending[[:space:]_-]*migration' "$SCHEMA_CHECK_LOG"; then
+    cleanup_schema_check_log
+    if [ "$PRODUCTION_STAGE" = "construction" ]; then
+        echo "post-deploy.sh: esquema pendiente en construction; ejecutando migraciones versionadas." >&2
+        if ! run_construction_migrations; then
+            exit $?
+        fi
+    else
+        echo "post-deploy.sh: esquema pendiente en live; migración automática deshabilitada. Caché no modificada." >&2
+        exit 2
+    fi
+elif grep -Eiq 'sqlstate|connection|database|driver|server[[:space:]_-]*has[[:space:]_-]*gone[[:space:]_-]*away|timed?[[:space:]_-]*out' "$SCHEMA_CHECK_LOG"; then
+    cleanup_schema_check_log
+    echo "post-deploy.sh: Doctrine no pudo comprobar el esquema por base de datos o conectividad. Caché no modificada." >&2
+    exit 2
+else
+    cleanup_schema_check_log
+    echo "post-deploy.sh: Doctrine no pudo comprobar el esquema; fallo no clasificable. Caché no modificada." >&2
     exit 2
 fi
 

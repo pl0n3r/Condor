@@ -1368,11 +1368,13 @@ La release debe poder reconstruirse desde Git + lockfiles + configuración exter
 
 #### Migraciones de producción
 
-- despliegue de código y migración de base de datos son etapas separables;
-- migraciones aditivas/compatibles pueden automatizarse en el futuro solo cuando exista rollback/observabilidad suficiente;
-- migraciones destructivas nunca se ejecutan automáticamente;
+- despliegue de código y migración de base de datos siguen siendo evidencias separables;
+- durante **CONSTRUCCIÓN**, sin usuarios finales ni datos reales a conservar, el post-deploy puede ejecutar automáticamente migraciones Doctrine versionadas que respeten el contrato forward / expand-compatible;
+- durante **OPERACIÓN REAL** (`CONDOR_PRODUCTION_STAGE=live`), una deriva de esquema vuelve a fallar cerrado y requiere el mecanismo/autorización operativa vigente;
+- migraciones destructivas/contract, SQL destructivo y cambios irreversibles nunca se ejecutan automáticamente por esta excepción;
 - cambios con datos reales usan expand → migrate/backfill → contract;
-- el roadmap registra por separado “código desplegado” y “migración aplicada” cuando el cambio lo requiera.
+- toda migración automática de construcción corre bajo exclusión mutua, se verifica después y solo entonces permite regenerar caché;
+- el roadmap registra por separado “código desplegado”, “esquema reconciliado” y “producción validada” cuando el cambio lo requiera.
 
 #### Observación del despliegue
 
@@ -1566,31 +1568,29 @@ Candidatos prioritarios a automatización a medida que exista superficie:
 
 Toda automatización debe ser idempotente cuando sea posible y operar con mínimo privilegio.
 
-#### Detección de deriva de esquema post-deploy en shared hosting
+#### Reconciliación de esquema post-deploy en shared hosting
 
-Mientras Condor opere en Hostinger shared hosting, el cron/post-deploy **no ejecuta
-migraciones productivas automáticamente**. Su responsabilidad es detectar si el
-esquema está atrasado y fallar cerrado antes de regenerar la caché.
+El cron/post-deploy opera con una etapa explícita mediante `CONDOR_PRODUCTION_STAGE`:
+
+- `construction` (default mientras aplique D-053): puede converger automáticamente migraciones versionadas pendientes;
+- `live`: conserva el comportamiento estricto y falla cerrado ante cualquier esquema pendiente.
 
 Contrato operativo:
 
 - una sola corrida de post-deploy opera a la vez; el script usa un lock explícito y una segunda corrida concurrente se omite, pero un error real al abrir, adquirir o publicar el lock falla con estado no-cero y diagnóstico accionable;
 - un lock con propietario vivo nunca se recupera por antigüedad;
 - un lock huérfano puede recuperarse de forma segura y un lock incompleto reciente obtiene un periodo de gracia antes de considerarse recuperable;
-- el cron ejecuta `doctrine:migrations:up-to-date --env=prod --no-interaction --fail-on-unregistered` como comprobación read-only, con límite de pared acotado (60 s por defecto, configurable solo dentro de un rango seguro); detecta tanto migraciones nuevas pendientes como migraciones ejecutadas ausentes del catálogo actual;
-- si existen migraciones pendientes, ejecutadas ya no registradas, un fallo de conectividad o un timeout del chequeo, termina con error accionable y **no** ejecuta `cache:clear` ni `cache:warmup`;
-- una migración productiva requiere autorización humana explícita conforme a `AGENTES.md` §10 y se ejecuta como operación separada, nunca implícita desde cron, deploy o smoke;
-- las migraciones autorizadas deben seguir siendo forward / expand-compatible; SQL destructivo, contracciones irreversibles, backfills riesgosos o cambios sin rollback permanecen fuera de cualquier automatización;
-- cuando el esquema ya está al día, el orden permitido es **comprobar esquema → limpiar caché → calentar caché**;
-- detectar esquema pendiente bloquea `VALIDATED_IN_PRODUCTION`; la identidad de release, el esquema migrado y el estado operativo reconciliado se registran como evidencias separadas;
-- el observador de release nunca debe inferir que una migración fue aplicada solo porque versión/SHA coincidan;
-- `/health` conserva la identidad pública (`status`, `version`, `release_sha`) y publica `schema_up_to_date: true|false` como única señal no sensible sobre migraciones; el observador exige `true` para `VALIDATED_IN_PRODUCTION`, sin exponer nombres de migración, SQL ni metadatos internos.
+- el cron ejecuta primero `doctrine:migrations:up-to-date --env=prod --no-interaction --fail-on-unregistered` con tiempo acotado;
+- historial de migraciones no registrado, conectividad fallida o timeout siempre fallan cerrado y no modifican caché;
+- si solo existen migraciones pendientes y la etapa es `construction`, ejecuta `doctrine:migrations:migrate --env=prod --no-interaction --allow-no-migration` bajo el mismo lock, con timeout acotado, y vuelve a verificar el esquema;
+- si existen migraciones pendientes y la etapa es `live`, termina con error accionable sin ejecutarlas;
+- las migraciones automáticas de construcción deben seguir siendo forward / expand-compatible; SQL destructivo, contracciones irreversibles, backfills riesgosos o cambios sin rollback permanecen fuera de esta automatización;
+- el orden exitoso es **comprobar esquema → migrar si construction lo necesita → volver a comprobar → limpiar caché → calentar caché**;
+- detectar una deriva no reconciliada bloquea `VALIDATED_IN_PRODUCTION`;
+- el observador de release nunca infiere que una migración fue aplicada solo porque versión/SHA coincidan;
+- `/health` conserva la identidad pública (`status`, `version`, `release_sha`) y `schema_up_to_date: true|false` como única señal no sensible sobre migraciones.
 
-Motivación operativa: V 0.1.20 demostró que Hostinger podía servir código nuevo
-mientras el esquema del storefront seguía atrasado, produciendo HTTP 500. El
-post-deploy debe hacer visible esa deriva sin convertir una mutación productiva
-en una operación automática. La corrección del esquema requiere autorización y
-ejecución separadas, seguida por el mismo smoke real que detectó el incidente.
+Motivación operativa: V 0.1.20–V 0.1.25 demostraron que Hostinger puede servir código nuevo mientras el esquema queda atrasado y terminar en HTTP 500. Mientras el entorno siga siendo de construcción, fallar cerrado sin reconciliar ese esquema prolonga una indisponibilidad que no protege datos reales; D-053 autoriza convergerlo automáticamente. Al pasar a operación real, `live` restaura el control estricto.
 
 #### Revisión periódica de seguridad
 
@@ -1958,6 +1958,25 @@ Reglas:
 - para tenants de una sola entidad legal, la interfaz usa el contexto primario sin complejidad visible innecesaria; si existen varias, el contexto debe ser explícito y mostrar solo entidades autorizadas.
 
 La primera aplicación ejecutable de esta decisión es Slice 4 — Inventario (#171/#172). Los dominios comerciales posteriores deben reutilizar la misma frontera, no crear modelos paralelos por cliente o sector.
+
+
+### D-053 — Producción operable durante etapa de construcción
+
+Decisión explícita de la propietaria del proyecto, 2026-09-23.
+
+Mientras Condor permanezca en construcción y no existan usuarios finales ni datos reales cuya conservación sea una obligación operativa, `condorapp.com.co` se considera **entorno de construcción operativo**.
+
+Reglas:
+
+- la etapa canónica es `construction`; los agentes pueden desplegar, reconciliar migraciones Doctrine versionadas forward/expand-compatible, ejecutar provisioning técnico, regenerar caché y corregir fallos productivos sin pedir aprobación adicional por cada acción;
+- toda mutación debe ser trazable a Issue/PR/SHA/release, usar el mecanismo más reversible disponible y comprobar después la superficie real afectada;
+- cuando exista estado persistente que se haya decidido conservar, se exige backup/restaurabilidad antes de una mutación relevante;
+- fallos HTTP 5xx, schema drift y deploys incompletos se investigan hasta causa raíz y se corrigen; `NO_OBSERVADO` es un estado diagnóstico, no un destino permanente;
+- la excepción de construcción nunca habilita SQL destructivo, migraciones contract/destructivas, borrados irreversibles, rotación de secretos o cambios de infraestructura/DNS irreversibles sin autorización explícita;
+- antes del primer uso real con usuarios o datos a conservar, la propietaria debe declarar **OPERACIÓN REAL**, establecer `CONDOR_PRODUCTION_STAGE=live`, revisar backups/rollback/ventanas de mantenimiento y retirar la autonomía ampliada de construcción;
+- código desplegado, esquema reconciliado y producción validada siguen siendo evidencias separadas.
+
+Esta decisión especializa D-043/D-044 durante la fase de construcción y debe retirarse explícitamente al entrar en operación real.
 
 
 ## 7. Criterio de actualización
