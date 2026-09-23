@@ -18,8 +18,10 @@ use DomainException;
     name: 'uniq_commercial_category_tenant_id',
     columns: ['tenant_id', 'id'],
 )]
-class CommercialCategory extends CommercialItem
+class CommercialCategory extends NamedCommercialItem
 {
+    private const LABEL = 'la categoría comercial';
+
     #[ORM\ManyToOne(targetEntity: PriceList::class)]
     #[ORM\JoinColumn(
         name: 'preferred_price_list_id',
@@ -29,27 +31,9 @@ class CommercialCategory extends CommercialItem
     )]
     private ?PriceList $preferredPriceList = null;
 
-    #[ORM\Column(type: 'string', length: 160)]
-    private string $name;
-
-    #[ORM\Column(type: 'string', length: 120)]
-    private string $slug;
-
     public function __construct(Tenant $tenant, string $name, string $slug)
     {
-        parent::__construct($tenant);
-        $this->name = self::normalizeName($name);
-        $this->slug = self::normalizeSlug($slug);
-    }
-
-    public function name(): string
-    {
-        return $this->name;
-    }
-
-    public function slug(): string
-    {
-        return $this->slug;
+        parent::__construct($tenant, $name, $slug, self::LABEL);
     }
 
     public function preferredPriceList(): ?PriceList
@@ -75,38 +59,6 @@ class CommercialCategory extends CommercialItem
 
     public function update(string $name, string $slug): void
     {
-        $this->name = self::normalizeName($name);
-        $this->slug = self::normalizeSlug($slug);
-        $this->touch();
-    }
-
-    private static function normalizeName(string $name): string
-    {
-        $name = trim($name);
-        if ($name === '' || mb_strlen($name, 'UTF-8') > 160) {
-            throw new DomainException(
-                'El nombre de la categoría comercial es obligatorio '
-                .'y admite máximo 160 caracteres.',
-            );
-        }
-
-        return $name;
-    }
-
-    private static function normalizeSlug(string $slug): string
-    {
-        $slug = strtolower(trim($slug));
-        if (
-            $slug === ''
-            || mb_strlen($slug, 'UTF-8') > 120
-            || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', $slug) !== 1
-        ) {
-            throw new DomainException(
-                'El slug de la categoría comercial debe usar letras '
-                .'minúsculas, números y guiones.',
-            );
-        }
-
-        return $slug;
+        $this->updateIdentity($name, $slug, self::LABEL);
     }
 }

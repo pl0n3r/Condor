@@ -186,7 +186,11 @@ final class Version20260923101500 extends AbstractMigration // NOSONAR -- nombre
         $priceRuleCount = (int) $this->connection->fetchOne('SELECT COUNT(*) FROM condor_price_rule');
 
         $this->abortIf(
-            $customerCount > 0 || $categoryCount > 0 || $priceListCount > 0 || $variantPriceCount > 0 || $priceRuleCount > 0,
+            $customerCount > 0
+            || $categoryCount > 0
+            || $priceListCount > 0
+            || $variantPriceCount > 0
+            || $priceRuleCount > 0,
             'Rollback bloqueado: existen clientes o configuración comercial real.',
         );
 

@@ -18,13 +18,9 @@ use DomainException;
     name: 'uniq_price_list_tenant_id',
     columns: ['tenant_id', 'id'],
 )]
-class PriceList extends CommercialItem
+class PriceList extends NamedCommercialItem
 {
-    #[ORM\Column(type: 'string', length: 160)]
-    private string $name;
-
-    #[ORM\Column(type: 'string', length: 120)]
-    private string $slug;
+    private const LABEL = 'la lista de precios';
 
     #[ORM\Column(type: 'string', length: 3)]
     private string $currency;
@@ -35,20 +31,8 @@ class PriceList extends CommercialItem
         string $slug,
         string $currency = 'COP',
     ) {
-        parent::__construct($tenant);
-        $this->name = self::normalizeName($name);
-        $this->slug = self::normalizeSlug($slug);
+        parent::__construct($tenant, $name, $slug, self::LABEL);
         $this->currency = self::normalizeCurrency($currency);
-    }
-
-    public function name(): string
-    {
-        return $this->name;
-    }
-
-    public function slug(): string
-    {
-        return $this->slug;
     }
 
     public function currency(): string
@@ -58,39 +42,7 @@ class PriceList extends CommercialItem
 
     public function update(string $name, string $slug): void
     {
-        $this->name = self::normalizeName($name);
-        $this->slug = self::normalizeSlug($slug);
-        $this->touch();
-    }
-
-    private static function normalizeName(string $name): string
-    {
-        $name = trim($name);
-        if ($name === '' || mb_strlen($name, 'UTF-8') > 160) {
-            throw new DomainException(
-                'El nombre de la lista de precios es obligatorio '
-                .'y admite máximo 160 caracteres.',
-            );
-        }
-
-        return $name;
-    }
-
-    private static function normalizeSlug(string $slug): string
-    {
-        $slug = strtolower(trim($slug));
-        if (
-            $slug === ''
-            || mb_strlen($slug, 'UTF-8') > 120
-            || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', $slug) !== 1
-        ) {
-            throw new DomainException(
-                'El slug de la lista de precios debe usar letras minúsculas, '
-                .'números y guiones.',
-            );
-        }
-
-        return $slug;
+        $this->updateIdentity($name, $slug, self::LABEL);
     }
 
     private static function normalizeCurrency(string $currency): string
