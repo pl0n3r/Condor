@@ -445,6 +445,53 @@ final class CommerceControllerTest extends WebTestCase
         );
     }
 
+    public function testDatabaseRejectsCrossTenantVariantPriceReference(): void
+    {
+        $em = $this->entityManager();
+        [$tenant] = $this->fixture($em);
+        $list = new PriceList(
+            $tenant,
+            'Propia DB',
+            'propia-db-'.bin2hex(random_bytes(4)),
+        );
+
+        $other = new Tenant(
+            'Otra empresa',
+            'otra-price-db-'.bin2hex(random_bytes(4)),
+        );
+        $otherProduct = new Product(
+            $other,
+            'Producto ajeno',
+            'producto-ajeno-'.bin2hex(random_bytes(4)),
+        );
+        $otherVariant = new ProductVariant(
+            $other,
+            $otherProduct,
+            'AJENO-DB-'.bin2hex(random_bytes(3)),
+            'Ajena',
+        );
+        foreach ([$list, $other, $otherProduct, $otherVariant] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
+
+        $this->expectException(
+            ForeignKeyConstraintViolationException::class,
+        );
+        $em->getConnection()->executeStatement(
+            'INSERT INTO condor_variant_price '
+            .'(id, tenant_id, price_list_id, variant_id, amount_minor, '
+            .'created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
+            [
+                UlidFactory::new(),
+                $tenant->id(),
+                $list->id(),
+                $otherVariant->id(),
+                1000,
+            ],
+        );
+    }
+
     private function entityManager(): EntityManagerInterface
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
