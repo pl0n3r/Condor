@@ -132,7 +132,7 @@ final class Version20260923101500 extends AbstractMigration // NOSONAR -- nombre
                     REFERENCES condor_product_variant (tenant_id, id)
                     ON DELETE CASCADE,
                 CONSTRAINT CHK_VARIANT_PRICE_AMOUNT
-                    CHECK (amount_minor >= 0)
+                    CHECK (amount_minor BETWEEN 0 AND 9007199254740991)
             ) DEFAULT CHARACTER SET utf8mb4
               COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
             SQL);
@@ -176,7 +176,10 @@ final class Version20260923101500 extends AbstractMigration // NOSONAR -- nombre
                     REFERENCES condor_commercial_category (tenant_id, id)
                     ON DELETE CASCADE,
                 CONSTRAINT CHK_PRICE_RULE_DISCOUNT
-                    CHECK (discount_value >= 0),
+                    CHECK (
+                        discount_value BETWEEN 0 AND 9007199254740991
+                        AND (discount_type <> 'percentage' OR discount_value <= 10000)
+                    ),
                 CONSTRAINT CHK_PRICE_RULE_TYPE
                     CHECK (discount_type IN ('percentage', 'fixed'))
             ) DEFAULT CHARACTER SET utf8mb4

@@ -17,6 +17,8 @@ use DomainException;
 )]
 class VariantPrice extends CommercialRecord
 {
+    private const MAX_SAFE_AMOUNT_MINOR = 9007199254740991;
+
     #[ORM\ManyToOne(targetEntity: PriceList::class)]
     #[ORM\JoinColumn(
         name: 'price_list_id',
@@ -87,6 +89,11 @@ class VariantPrice extends CommercialRecord
     {
         if ($amountMinor < 0) {
             throw new DomainException('El precio no puede ser negativo.');
+        }
+        if ($amountMinor > self::MAX_SAFE_AMOUNT_MINOR) {
+            throw new DomainException(
+                'El precio excede el rango monetario seguro permitido.',
+            );
         }
     }
 }

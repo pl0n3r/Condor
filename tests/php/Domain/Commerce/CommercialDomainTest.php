@@ -69,6 +69,47 @@ final class CommercialDomainTest extends TestCase
         $price->updateAmount(-1);
     }
 
+    public function testMonetaryValuesRejectAmountsOutsideJsonSafeRange(): void
+    {
+        $tenant = new Tenant('Empresa', 'empresa-'.bin2hex(random_bytes(4)));
+        $product = new Product($tenant, 'Producto', 'producto');
+        $variant = new ProductVariant(
+            $tenant,
+            $product,
+            'SKU-SAFE',
+            'Variante',
+        );
+        $list = new PriceList($tenant, 'Detal', 'detal');
+
+        try {
+            new VariantPrice(
+                $tenant,
+                $list,
+                $variant,
+                9007199254740992,
+            );
+            self::fail('El precio fuera del rango JSON seguro debía rechazarse.');
+        } catch (DomainException $exception) {
+            self::assertSame(
+                'El precio excede el rango monetario seguro permitido.',
+                $exception->getMessage(),
+            );
+        }
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(
+            'El valor del descuento está fuera del rango permitido.',
+        );
+        new PriceRule(
+            $tenant,
+            $list,
+            'Descuento fuera de rango',
+            1,
+            PriceRule::TYPE_FIXED,
+            9007199254740992,
+        );
+    }
+
     public function testVariantPriceRejectsCrossTenantReferences(): void
     {
         $tenant = new Tenant('Uno', 'uno-'.bin2hex(random_bytes(4)));

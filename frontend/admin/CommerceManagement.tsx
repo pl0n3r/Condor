@@ -287,18 +287,24 @@ export function CommerceManagement({
       return;
     }
     const pesos = Number(pricePesos);
-    if (!Number.isSafeInteger(pesos) || pesos < 0) {
+    const maxSafePesos = Math.floor(Number.MAX_SAFE_INTEGER / 100);
+    if (
+      !Number.isSafeInteger(pesos)
+      || pesos < 0
+      || pesos > maxSafePesos
+    ) {
       setNotice({
         kind: 'error',
-        text: 'El precio debe ser un valor entero en pesos.',
+        text: 'El precio debe ser un entero dentro del rango monetario permitido.',
       });
       return;
     }
+    const amountMinor = pesos * 100;
 
     const succeeded = await mutate(
       variantPricePath(branchId, priceListId, priceVariantId),
       'PUT',
-      { amount_minor: pesos * 100 },
+      { amount_minor: amountMinor },
       'Precio guardado.',
     );
     if (succeeded) {

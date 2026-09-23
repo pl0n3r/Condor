@@ -13,6 +13,8 @@ use DomainException;
 #[ORM\Table(name: 'condor_price_rule')]
 class PriceRule extends CommercialItem
 {
+    private const MAX_SAFE_AMOUNT_MINOR = 9007199254740991;
+
     public const TYPE_PERCENTAGE = 'percentage';
     public const TYPE_FIXED = 'fixed';
 
@@ -108,6 +110,10 @@ class PriceRule extends CommercialItem
             || (
                 $discountType === self::TYPE_PERCENTAGE
                 && $discountValue > 10000
+            )
+            || (
+                $discountType === self::TYPE_FIXED
+                && $discountValue > self::MAX_SAFE_AMOUNT_MINOR
             )
         ) {
             throw new DomainException(
