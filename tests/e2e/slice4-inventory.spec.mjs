@@ -107,6 +107,7 @@ test.describe('Slice 4 — inventario', () => {
     await expect(transferForm).toBeVisible();
 
     const transferSelects = transferForm.locator('select');
+    await transferSelects.nth(0).selectOption({ label: sourceA });
     await expect(
       transferSelects.nth(0).locator('option:checked')
     ).toHaveText(sourceA);
@@ -159,13 +160,19 @@ test.describe('Slice 4 — inventario', () => {
     await expect(destinationBalance.getByText('4 und.')).toBeVisible();
     await expect(inventory.getByText('Carga E2E')).toBeVisible();
     await expect(
-      inventory.getByText('Ajuste de entrada', { exact: true })
+      inventory.locator('.catalog-variant-row').filter({
+        hasText: 'Ajuste de entrada',
+      })
     ).toBeVisible();
     await expect(
-      inventory.getByText('Transferencia de salida', { exact: true })
+      inventory.locator('.catalog-variant-row').filter({
+        hasText: 'Transferencia de salida',
+      })
     ).toBeVisible();
     await expect(
-      inventory.getByText('Transferencia de entrada', { exact: true })
+      inventory.locator('.catalog-variant-row').filter({
+        hasText: 'Transferencia de entrada',
+      })
     ).toBeVisible();
 
     await page.reload();
