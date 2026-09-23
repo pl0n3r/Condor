@@ -494,6 +494,88 @@ final class StorefrontAdminControllerTest extends WebTestCase
         );
     }
 
+    public function testDatabaseRejectsCrossEntityChannelSource(): void
+    {
+        $entityManager = $this->entityManager();
+        [$tenant] = $this->tenantOwner($entityManager);
+        $legalA = new LegalEntity($tenant, 'Entidad A', null, true);
+        $legalB = new LegalEntity($tenant, 'Entidad B', null, false);
+        $sourceA = new InventorySource(
+            $tenant,
+            $legalA,
+            'Bodega A',
+            'bodega-a-'.bin2hex(random_bytes(3)),
+            InventorySource::TYPE_LOGICAL,
+        );
+        $list = new PriceList(
+            $tenant,
+            'Lista DB',
+            'lista-db-'.bin2hex(random_bytes(3)),
+        );
+        foreach ([$legalA, $legalB, $sourceA, $list] as $record) {
+            $entityManager->persist($record);
+        }
+        $entityManager->flush();
+
+        $this->expectException(UniqueConstraintViolationException::class);
+        $entityManager->getConnection()->executeStatement(
+            'INSERT INTO condor_sales_channel '
+            .'(id, tenant_id, legal_entity_id, inventory_source_id, '
+            .'price_list_id, name, slug, type, active, created_at, updated_at) '
+            .'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
+            [
+                UlidFactory::new(),
+                $tenant->id(),
+                $legalB->id(),
+                $sourceA->id(),
+                $list->id(),
+                'Canal inválido',
+                'canal-invalido-'.bin2hex(random_bytes(3)),
+                SalesChannel::TYPE_ECOMMERCE,
+            ],
+        );
+    }
+
+    public function testTenantKeepsSingleChannelPerType(): void
+    {
+        $entityManager = $this->entityManager();
+        [$tenant] = $this->tenantOwner($entityManager);
+        $legal = new LegalEntity($tenant, 'Entidad canal', null, true);
+        $source = new InventorySource(
+            $tenant,
+            $legal,
+            'Bodega canal',
+            'bodega-canal-'.bin2hex(random_bytes(3)),
+            InventorySource::TYPE_LOGICAL,
+        );
+        $list = new PriceList(
+            $tenant,
+            'Lista canal',
+            'lista-canal-'.bin2hex(random_bytes(3)),
+        );
+        $first = new SalesChannel(
+            $tenant,
+            'Web principal',
+            'web-principal',
+            $source,
+            $list,
+        );
+        $second = new SalesChannel(
+            $tenant,
+            'Web alterna',
+            'web-alterna',
+            $source,
+            $list,
+        );
+
+        foreach ([$legal, $source, $list, $first, $second] as $record) {
+            $entityManager->persist($record);
+        }
+
+        $this->expectException(UniqueConstraintViolationException::class);
+        $entityManager->flush();
+    }
+
     /**
      * @return array{0: KernelBrowser, 1: EntityManagerInterface, 2: Tenant, 3: User}
      */
