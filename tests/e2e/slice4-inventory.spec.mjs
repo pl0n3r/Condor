@@ -47,7 +47,7 @@ test.describe('Slice 4 — inventario', () => {
 
     const inventory = page.locator('#inventory');
     await expect(
-      inventory.getByRole('heading', { name: 'Inventario' })
+      inventory.getByRole('heading', { name: 'Inventario', exact: true })
     ).toBeVisible();
 
     async function createLogicalSource(name, sourceSlug) {
@@ -68,8 +68,12 @@ test.describe('Slice 4 — inventario', () => {
     await inventory.getByRole('button', { name: 'Aplicar ajuste' }).click();
     await expect(inventory.getByText('Ajuste aplicado.')).toBeVisible();
 
-    await inventory.getByLabel('Origen').selectOption({ label: sourceA });
-    await inventory.getByLabel('Destino').selectOption({ label: sourceB });
+    await inventory.getByLabel('Origen', { exact: true }).selectOption({
+      label: sourceA,
+    });
+    await inventory.getByLabel('Destino', { exact: true }).selectOption({
+      label: sourceB,
+    });
     await inventory.getByLabel('Variante').last().selectOption({ label: productName + ' · ' + sku });
     await inventory.getByLabel('Cantidad', { exact: true }).fill('4');
     await inventory.getByRole('button', { name: 'Transferir' }).click();
