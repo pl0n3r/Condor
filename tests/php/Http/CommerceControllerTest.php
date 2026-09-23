@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Tests\Http;
 
-use App\Domain\Audit\Entity\AuditEvent;
 use App\Domain\Catalog\Entity\Product;
 use App\Domain\Catalog\Entity\ProductVariant;
 use App\Domain\Commerce\Entity\CommercialCategory;
@@ -247,6 +246,8 @@ final class CommerceControllerTest extends WebTestCase
         ) {
             $em->persist($entity);
         }
+        $ownList = new PriceList($tenant, 'Propia', 'propia');
+        $em->persist($ownList);
         $em->flush();
 
         $client->loginUser($owner);
@@ -268,10 +269,6 @@ final class CommerceControllerTest extends WebTestCase
                 'name' => 'Escape',
             ]),
         );
-
-        $ownList = new PriceList($tenant, 'Propia', 'propia');
-        $em->persist($ownList);
-        $em->flush();
 
         $client->jsonRequest(
             'PUT',
