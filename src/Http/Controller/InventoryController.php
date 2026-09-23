@@ -200,6 +200,105 @@ final class InventoryController extends AbstractController
         );
     }
 
+
+    #[Route(
+        '/api/v1/branches/{branchId}/inventory/sources/{sourceId}',
+        name: 'api_inventory_source_update',
+        methods: ['PATCH'],
+    )]
+    public function updateSource(
+        string $branchId,
+        string $sourceId,
+        Request $request,
+    ): JsonResponse {
+        $this->requireCsrf($request);
+        [$user, $tenant, $branch, $membership] = $this->authorizedBranchScope(
+            $branchId,
+            'inventory.update',
+        );
+        $legalEntity = $this->legalEntity($branch);
+        $source = $this->source($sourceId, $tenant, $legalEntity);
+        $this->requireSourcePermission(
+            $user,
+            $tenant,
+            $membership,
+            $source,
+            'inventory.update',
+        );
+        $payload = $this->payload($request, ['name', 'slug']);
+
+        $this->domain(
+            fn (): mixed => $source->update(
+                $this->requiredString($payload, 'name'),
+                $this->requiredString($payload, 'slug'),
+            ),
+        );
+        $this->audit(
+            $tenant,
+            $user,
+            'inventory_source.updated',
+            InventorySource::class,
+            $source->id(),
+            [
+                'branch_id' => $branch->id(),
+                'legal_entity_id' => $legalEntity->id(),
+            ],
+        );
+        $this->flushUnique(
+            'Ya existe una fuente de inventario con ese identificador.',
+        );
+
+        return $this->json(['source' => self::sourcePayload($source)]);
+    }
+
+    #[Route(
+        '/api/v1/branches/{branchId}/inventory/sources/{sourceId}',
+        name: 'api_inventory_source_delete',
+        methods: ['DELETE'],
+    )]
+    public function deleteSource(
+        string $branchId,
+        string $sourceId,
+        Request $request,
+    ): Response {
+        $this->requireCsrf($request);
+        [$user, $tenant, $branch, $membership] = $this->authorizedBranchScope(
+            $branchId,
+            'inventory.delete',
+        );
+        $legalEntity = $this->legalEntity($branch);
+        $source = $this->source($sourceId, $tenant, $legalEntity);
+        $this->requireSourcePermission(
+            $user,
+            $tenant,
+            $membership,
+            $source,
+            'inventory.delete',
+        );
+
+        if ($this->sourceHasNonZeroStock($source)) {
+            throw new ConflictHttpException(
+                'No se puede desactivar una fuente que conserva stock.',
+            );
+        }
+
+        $source->deactivate();
+        $this->audit(
+            $tenant,
+            $user,
+            'inventory_source.deactivated',
+            InventorySource::class,
+            $source->id(),
+            [
+                'branch_id' => $branch->id(),
+                'legal_entity_id' => $legalEntity->id(),
+            ],
+        );
+        $this->entityManager->flush();
+
+        return new Response(status: Response::HTTP_NO_CONTENT);
+    }
+
     #[Route(
         '/api/v1/branches/{branchId}/inventory/adjustments',
         name: 'api_inventory_adjustment_create',
@@ -480,6 +579,25 @@ final class InventoryController extends AbstractController
         }
 
         return $value;
+    }
+
+    private function sourceHasNonZeroStock(
+        InventorySource $source,
+    ): bool {
+        $balances = $this->entityManager
+            ->getRepository(InventoryBalance::class)
+            ->findBy(['source' => $source]);
+
+        foreach ($balances as $balance) {
+            if (
+                $balance instanceof InventoryBalance
+                && $balance->quantity() !== 0
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function flushUnique(string $message): void
