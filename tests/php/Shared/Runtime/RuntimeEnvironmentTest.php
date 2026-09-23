@@ -52,7 +52,20 @@ final class RuntimeEnvironmentTest extends TestCase
 
     public function testBootstrapUsesUtcTimezone(): void
     {
-        self::assertSame('UTC', date_default_timezone_get());
+        $bootstrap = dirname(__DIR__, 4).'/config/bootstrap.php';
+        $code = 'require '.var_export($bootstrap, true).';'
+            .' echo date_default_timezone_get();';
+        $output = [];
+        exec(
+            escapeshellarg(PHP_BINARY)
+            .' -d date.timezone=America/Bogota -r '
+            .escapeshellarg($code),
+            $output,
+            $exitCode,
+        );
+
+        self::assertSame(0, $exitCode);
+        self::assertSame('UTC', end($output));
     }
 
     public function testGeneratesAndReusesPersistentRuntimeSecret(): void
