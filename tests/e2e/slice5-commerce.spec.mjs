@@ -92,7 +92,11 @@ test.describe('Slice 5 — clientes y precios', () => {
     await priceForm.getByLabel('Precio (COP)').fill('125000');
     await priceForm.getByRole('button', { name: 'Guardar precio' }).click();
     await expect(commerce.getByText('Precio guardado.')).toBeVisible();
-    await expect(commerce.getByText(/125[.\s]?000/)).toBeVisible();
+    await expect(
+      commerce.locator('.catalog-variant-row')
+        .filter({ hasText: sku })
+        .getByText(/125[.\s]?000/)
+    ).toBeVisible();
 
     const contextResponse = await page.request.get('/api/v1/context');
     expect(contextResponse.ok()).toBeTruthy();
@@ -150,6 +154,10 @@ test.describe('Slice 5 — clientes y precios', () => {
     await expect(
       reloadedCommerce.locator('strong').filter({ hasText: listName })
     ).toBeVisible();
-    await expect(reloadedCommerce.getByText(/125[.\s]?000/)).toBeVisible();
+    await expect(
+      reloadedCommerce.locator('.catalog-variant-row')
+        .filter({ hasText: sku })
+        .getByText(/125[.\s]?000/)
+    ).toBeVisible();
   });
 });
