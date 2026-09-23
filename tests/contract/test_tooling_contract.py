@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import tempfile
+import textwrap
 import time
 import unittest
 from pathlib import Path
@@ -433,7 +434,7 @@ esac
                     timeout=10,
                 )
 
-                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(result.returncode, 0, result.stderr)
                 return dump_args.read_text(encoding="utf-8").splitlines()
 
         supported = run_backup(True)
@@ -446,7 +447,7 @@ esac
             self.assertIn("--quick", args)
             self.assertIn("--skip-lock-tables", args)
             self.assertIn("--triggers", args)
-            self.assertEqual("condor", args[-1])
+            self.assertEqual(args[-1], "condor")
 
     def test_post_deploy_never_executes_destructive_schema_mutations_automatically(self) -> None:
         """Solo migrate versionado puede automatizarse; operaciones destructivas no."""

@@ -696,6 +696,25 @@ def observar(
         "sha_esperado": sha,
         "comprobaciones": evidencias,
     }
+def observacion_automatica_exitosa(resultado: dict[str, Any]) -> bool:
+    """Solo acepta smoke íntegro; la transición manual puede quedar pendiente."""
+    estado = resultado.get("estado")
+    comprobaciones = resultado.get("comprobaciones")
+    if estado not in {"DEPLOY_OBSERVED", "VALIDATED_IN_PRODUCTION"}:
+        return False
+    if not isinstance(comprobaciones, dict) or not comprobaciones:
+        return False
+
+    fallos = [
+        nombre
+        for nombre, item in comprobaciones.items()
+        if not isinstance(item, dict) or item.get("ok") is not True
+    ]
+    if estado == "VALIDATED_IN_PRODUCTION":
+        return not fallos
+    return fallos == ["transicion_release"]
+
+
 def resumen(resultado: dict[str, Any]) -> str:
     lineas = [
         "## Observación de release Condor",

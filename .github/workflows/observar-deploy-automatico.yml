@@ -121,12 +121,18 @@ jobs:
           PY
 
           estado="$(python3 -c 'import json; print(json.load(open("/tmp/release-observation.json"))["estado"])')"
+          aprobada="$(python3 -c 'import json, sys; sys.path.insert(0, "scripts"); from observar_release import observacion_automatica_exitosa; print(str(observacion_automatica_exitosa(json.load(open("/tmp/release-observation.json")))).lower())')"
           echo "estado=$estado" >> "$GITHUB_OUTPUT"
           echo "estado_cli=$estado_cli" >> "$GITHUB_OUTPUT"
+          echo "aprobada=$aprobada" >> "$GITHUB_OUTPUT"
 
           if (( estado_cli > 1 )); then
             echo "::error::El observador no pudo producir evidencia válida (uso incorrecto de argumentos)."
             exit "$estado_cli"
+          fi
+          if [[ "$aprobada" != "true" ]]; then
+            echo "::error::La observación automática detectó un smoke funcional fallido."
+            exit 1
           fi
 
       - name: Registrar estado observado en el roadmap

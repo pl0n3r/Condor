@@ -1018,5 +1018,33 @@ class ObserverTests(unittest.TestCase):
         self.assertNotIn("password", salida)
 
 
+    def test_observacion_automatica_solo_tolera_transicion_pendiente(self) -> None:
+        base = {
+            "estado": "DEPLOY_OBSERVED",
+            "comprobaciones": {
+                "health": {"ok": True},
+                "schema": {"ok": True},
+                "home": {"ok": True},
+                "transicion_release": {"ok": False},
+            },
+        }
+        self.assertTrue(modulo.observacion_automatica_exitosa(base))
+
+        con_schema_roto = json.loads(json.dumps(base))
+        con_schema_roto["comprobaciones"]["schema"]["ok"] = False
+        self.assertFalse(modulo.observacion_automatica_exitosa(con_schema_roto))
+
+        no_observado = {
+            "estado": "NO_OBSERVADO",
+            "comprobaciones": {"health": {"ok": False}},
+        }
+        self.assertFalse(modulo.observacion_automatica_exitosa(no_observado))
+
+        validado = {
+            "estado": "VALIDATED_IN_PRODUCTION",
+            "comprobaciones": {"health": {"ok": True}},
+        }
+        self.assertTrue(modulo.observacion_automatica_exitosa(validado))
+
 if __name__ == "__main__":
     unittest.main()
