@@ -22,6 +22,7 @@ use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\StorefrontProfile;
 use App\Domain\Organization\Entity\Tenant;
 use App\Domain\Organization\Entity\TenantDomain;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -49,13 +50,14 @@ final class StorefrontAdminControllerTest extends WebTestCase
             'description' => 'Herramientas y materiales disponibles en Pereira.',
         ]);
 
-        self::assertResponseRedirects('/admin/storefront?saved=1');
+        self::assertResponseRedirects('/admin/storefront?saved=profile');
 
         $profile = $entityManager->getRepository(StorefrontProfile::class)
             ->findOneBy(['tenant' => $tenant]);
         self::assertInstanceOf(StorefrontProfile::class, $profile);
         self::assertSame('Ferretería del barrio', $profile->headline());
 
+        $client->catchExceptions(false);
         $client->request('GET', '/'.$tenant->slug());
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h1', 'Ferretería del barrio');
@@ -517,7 +519,7 @@ final class StorefrontAdminControllerTest extends WebTestCase
         }
         $entityManager->flush();
 
-        $this->expectException(UniqueConstraintViolationException::class);
+        $this->expectException(ForeignKeyConstraintViolationException::class);
         $entityManager->getConnection()->executeStatement(
             'INSERT INTO condor_sales_channel '
             .'(id, tenant_id, legal_entity_id, inventory_source_id, '
