@@ -620,7 +620,7 @@ final class CommerceControllerTest extends WebTestCase
             .'FROM condor_commercial_category WHERE id = ?',
             [$categoryId],
         );
-        self::assertFalse($storedPreferredList);
+        self::assertNull($storedPreferredList);
 
         $auditContext = $em->getConnection()->fetchOne(
             'SELECT context FROM condor_audit_event '
