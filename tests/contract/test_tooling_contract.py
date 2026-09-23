@@ -374,6 +374,14 @@ esac
         self.assertIn('evidencias["schema"]', observer)
         self.assertIn('carga.get("schema_up_to_date") is True', observer)
 
+    def test_backup_disables_tablespace_metadata_when_client_supports_it(self) -> None:
+        """El backup no exige PROCESS global en clientes MySQL/MariaDB compatibles."""
+        script = (ROOT / "scripts/backup-database.sh").read_text(encoding="utf-8")
+
+        self.assertIn("'--no-tablespaces'", script)
+        self.assertIn('"$dump_bin" --help', script)
+        self.assertIn('set -- --no-tablespaces "$@"', script)
+
     def test_post_deploy_never_executes_destructive_schema_mutations_automatically(self) -> None:
         """Solo migrate versionado puede automatizarse; operaciones destructivas no."""
         script = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
