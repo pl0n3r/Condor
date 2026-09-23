@@ -8,9 +8,11 @@ use App\Application\Storefront\PublicCatalogPresentation;
 use App\Application\Storefront\StorefrontPresentation;
 use App\Domain\Organization\Entity\Tenant;
 use App\Infrastructure\Tenancy\TenantContext;
+use App\Infrastructure\Tenancy\TenantResolver;
 use App\Shared\Version\AppVersion;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
@@ -26,13 +28,14 @@ final class TenantPublicController extends AbstractController
     )]
     public function __invoke(
         string $tenant_slug,
+        Request $request,
         TenantContext $tenantContext,
         EntityManagerInterface $entityManager,
         StorefrontPresentation $storefront,
         PublicCatalogPresentation $catalog,
         AppVersion $version,
     ): Response {
-        if (!$tenantContext->isPlatformHost()) {
+        if (!TenantResolver::isPlatformHost($request->getHost())) {
             throw new NotFoundHttpException();
         }
 
