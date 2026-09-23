@@ -10,6 +10,7 @@ use App\Domain\Identity\Entity\BranchRoleAssignment;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\Role;
 use App\Domain\Identity\Entity\User;
+use App\Domain\Inventory\Entity\InventoryMovement;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\LegalEntity;
@@ -243,6 +244,19 @@ final class InventoryControllerTest extends WebTestCase
             ->find($sourceId);
         self::assertInstanceOf(InventorySource::class, $source);
         self::assertFalse($source->isActive());
+
+        $client->jsonRequest(
+            'POST',
+            $base.'/sources',
+            ['name' => 'Reactivada', 'slug' => 'renombrada', 'type' => 'logical'],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame($sourceId, $this->json($client)['source']['id']);
+
+        $entityManager->refresh($source);
+        self::assertTrue($source->isActive());
+        self::assertSame('Reactivada', $source->name());
     }
 
     public function testSourceWithStockCannotBeDeactivated(): void
