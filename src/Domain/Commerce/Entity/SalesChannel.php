@@ -24,7 +24,7 @@ use DomainException;
     name: 'uniq_sales_channel_tenant_type',
     columns: ['tenant_id', 'type'],
 )]
-class SalesChannel extends CommercialItem
+class SalesChannel extends NamedCommercialItem
 {
     public const TYPE_ECOMMERCE = 'ecommerce';
 
@@ -55,11 +55,7 @@ class SalesChannel extends CommercialItem
     )]
     private PriceList $priceList;
 
-    #[ORM\Column(type: 'string', length: 160)]
-    private string $name;
-
-    #[ORM\Column(type: 'string', length: 120)]
-    private string $slug;
+    private const LABEL = 'el canal';
 
     #[ORM\Column(type: 'string', length: 20)]
     private string $type;
@@ -74,12 +70,10 @@ class SalesChannel extends CommercialItem
     ) {
         self::assertReferences($tenant, $inventorySource, $priceList);
 
-        parent::__construct($tenant);
+        parent::__construct($tenant, $name, $slug, self::LABEL);
         $this->legalEntity = $inventorySource->legalEntity();
         $this->inventorySource = $inventorySource;
         $this->priceList = $priceList;
-        $this->name = self::normalizeName($name);
-        $this->slug = self::normalizeSlug($slug);
         $this->type = self::normalizeType($type);
     }
 
@@ -96,16 +90,6 @@ class SalesChannel extends CommercialItem
     public function priceList(): PriceList
     {
         return $this->priceList;
-    }
-
-    public function name(): string
-    {
-        return $this->name;
-    }
-
-    public function slug(): string
-    {
-        return $this->slug;
     }
 
     public function type(): string
@@ -131,9 +115,7 @@ class SalesChannel extends CommercialItem
         $this->legalEntity = $inventorySource->legalEntity();
         $this->inventorySource = $inventorySource;
         $this->priceList = $priceList;
-        $this->name = self::normalizeName($name);
-        $this->slug = self::normalizeSlug($slug);
-        $this->touch();
+        $this->updateIdentity($name, $slug, self::LABEL);
     }
 
     private static function assertReferences(
@@ -150,34 +132,6 @@ class SalesChannel extends CommercialItem
                 .'deben pertenecer al mismo tenant.',
             );
         }
-    }
-
-    private static function normalizeName(string $name): string
-    {
-        $name = trim($name);
-        if ($name === '' || mb_strlen($name, 'UTF-8') > 160) {
-            throw new DomainException(
-                'El nombre del canal es obligatorio y admite máximo 160 caracteres.',
-            );
-        }
-
-        return $name;
-    }
-
-    private static function normalizeSlug(string $slug): string
-    {
-        $slug = strtolower(trim($slug));
-        if (
-            $slug === ''
-            || mb_strlen($slug, 'UTF-8') > 120
-            || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', $slug) !== 1
-        ) {
-            throw new DomainException(
-                'El slug del canal debe usar letras minúsculas, números y guiones.',
-            );
-        }
-
-        return $slug;
     }
 
     private static function normalizeType(string $type): string
