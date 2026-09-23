@@ -24,6 +24,8 @@ TENANT_SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z", re.ASCII)
 STOREFRONT_VERSION = (0, 1, 13)
 STOREFRONT_IDENTITY_VERSION = (0, 1, 16)
 MAX_BYTES = 256 * 1024
+# El bundle admin crece con cada slice; su tope de lectura es independiente.
+MAX_ASSET_BYTES = 4 * 1024 * 1024
 
 
 class ObservacionError(Exception):
@@ -32,6 +34,14 @@ class ObservacionError(Exception):
 
 class ObservacionTransitoria(ObservacionError):
     """Fallo externo que puede recuperarse sin cambiar el release esperado."""
+
+
+class ObservacionIdentidad(ObservacionError):
+    """La versión o el SHA observados no corresponden al release esperado."""
+
+
+class ObservacionDeployPendiente(ObservacionIdentidad):
+    """Producción aún sirve una versión anterior: el deploy no ha llegado."""
 
 
 class NoRedirigir(HTTPRedirectHandler):
@@ -177,22 +187,62 @@ def clasificar_error_http(
     ) from error
 
 
+def tipo_aceptado_para(ruta: str) -> str:
+    """Devuelve el Accept mínimo esperado por el tipo de recurso."""
+    if ruta == "/health":
+        return "application/json"
+    if ruta.endswith(".css"):
+        return "text/css"
+    if ruta.endswith(".js"):
+        return "text/javascript, application/javascript, application/x-javascript"
+    return "text/html"
+
+
+def limite_respuesta_para(ruta: str) -> int:
+    """Separa el presupuesto de assets del de HTML/JSON."""
+    return MAX_ASSET_BYTES if ruta.endswith((".css", ".js")) else MAX_BYTES
+
+
+def elevar_error_url(error: URLError) -> None:
+    """Clasifica errores de urllib sin filtrar detalles sensibles."""
+    reason = error.reason
+    if isinstance(
+        reason,
+        (
+            TimeoutError,
+            ConnectionAbortedError,
+            ConnectionRefusedError,
+            ConnectionResetError,
+        ),
+    ):
+        raise ObservacionTransitoria(
+            "La conexión falló temporalmente durante la observación."
+        ) from error
+    if isinstance(reason, ssl.SSLError):
+        raise ObservacionError(
+            "La conexión TLS no pudo validarse de forma segura."
+        ) from error
+    if isinstance(reason, socket.gaierror):
+        if reason.errno == socket.EAI_AGAIN:
+            raise ObservacionTransitoria(
+                "La resolución DNS falló temporalmente durante la observación."
+            ) from error
+        raise ObservacionError(
+            "El dominio de producción no pudo resolverse de forma válida."
+        ) from error
+    raise ObservacionError(
+        "No se recibió una respuesta HTTP válida."
+    ) from error
+
+
 def obtener(
     origen: str, ruta: str, timeout: float, *, estado_esperado: int = 200,
 ) -> tuple[str, bytes]:
     """GET sin redirecciones, cookies ni credenciales, con cuerpo limitado."""
-    tipo_solicitado = "text/html"
-    if ruta == "/health":
-        tipo_solicitado = "application/json"
-    elif ruta.endswith(".css"):
-        tipo_solicitado = "text/css"
-    elif ruta.endswith(".js"):
-        tipo_solicitado = "text/javascript, application/javascript"
-
     solicitud = Request(
         origen + ruta,
         headers={
-            "Accept": tipo_solicitado,
+            "Accept": tipo_aceptado_para(ruta),
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
             "User-Agent": "Condor-Release-Observer/0.1",
@@ -205,38 +255,16 @@ def obtener(
                 raise ObservacionError(
                     f"HTTP {respuesta.status}; se esperaba {estado_esperado}."
                 )
-            contenido = respuesta.read(MAX_BYTES + 1)
-            if len(contenido) > MAX_BYTES:
+            limite = limite_respuesta_para(ruta)
+            contenido = respuesta.read(limite + 1)
+            if len(contenido) > limite:
                 raise ObservacionError("La respuesta supera el límite permitido.")
             return respuesta.headers.get_content_type(), contenido
     except HTTPError as error:
         return clasificar_error_http(error, estado_esperado)
     except URLError as error:
-        reason = error.reason
-        transient = isinstance(
-            reason,
-            (
-                TimeoutError,
-                ConnectionAbortedError,
-                ConnectionRefusedError,
-                ConnectionResetError,
-            ),
-        )
-        if transient:
-            raise ObservacionTransitoria(
-                "La conexión falló temporalmente durante la observación."
-            ) from error
-        if isinstance(reason, ssl.SSLError):
-            raise ObservacionError(
-                "La conexión TLS no pudo validarse de forma segura."
-            ) from error
-        if isinstance(reason, socket.gaierror):
-            raise ObservacionError(
-                "El dominio de producción no pudo resolverse de forma válida."
-            ) from error
-        raise ObservacionError(
-            "No se recibió una respuesta HTTP válida."
-        ) from error
+        elevar_error_url(error)
+        raise AssertionError("elevar_error_url siempre lanza una excepción")
     except (
         TimeoutError,
         ConnectionAbortedError,
@@ -252,7 +280,7 @@ def obtener(
         ) from error
 
 
-def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> None:
+def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> bool:
     if tipo != "application/json":
         raise ObservacionError("/health no respondió con JSON.")
     try:
@@ -261,10 +289,26 @@ def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> None:
         raise ObservacionError("/health devolvió JSON inválido.") from error
     if not isinstance(carga, dict) or carga.get("status") != "ok":
         raise ObservacionError("/health no informa estado ok.")
-    if carga.get("version") != version:
-        raise ObservacionError("La versión observada no coincide con la esperada.")
-    if carga.get("release_sha") != sha:
-        raise ObservacionError("El SHA observado no coincide con el esperado.")
+    observada = carga.get("version")
+    observada_sha = carga.get("release_sha")
+    if not isinstance(observada_sha, str) or SHA_PATTERN.fullmatch(observada_sha) is None:
+        raise ObservacionIdentidad(
+            "El SHA observado no tiene un formato válido."
+        )
+    if (isinstance(observada, str) and VERSION_PATTERN.fullmatch(observada)
+            and tuple(map(int, observada.split("."))) < tuple(map(int, version.split(".")))):
+        raise ObservacionDeployPendiente(
+            f"Producción aún sirve V {observada}; el deploy esperado no ha llegado."
+        )
+    if observada != version:
+        raise ObservacionIdentidad(
+            "La versión observada no coincide con la esperada."
+        )
+    if observada_sha != sha:
+        raise ObservacionIdentidad(
+            "El SHA observado no coincide con el esperado."
+        )
+    return carga.get("schema_up_to_date") is True
 
 
 def validar_pagina(tipo: str, cuerpo: bytes, version: str, login: bool) -> TextoVisible:
@@ -326,7 +370,7 @@ def validar_asset(tipo: str, cuerpo: bytes, ruta: str) -> None:
     """Comprueba que el asset servido no sea una página fallback, vacío ni MIME erróneo."""
     esperados = (
         {"text/css"} if ruta.endswith(".css")
-        else {"text/javascript", "application/javascript"}
+        else {"text/javascript", "application/javascript", "application/x-javascript"}
     )
     if tipo not in esperados:
         raise ObservacionError("El recurso estático no tiene el tipo de contenido esperado.")
@@ -348,6 +392,10 @@ def ejecutar_con_reintentos(
             if intento == intentos:
                 return False, str(error), intento, "transitorio"
             time.sleep(intervalo)
+        except ObservacionDeployPendiente as error:
+            return False, str(error), intento, "deploy_pendiente"
+        except ObservacionIdentidad as error:
+            return False, str(error), intento, "identidad"
         except ObservacionError as error:
             return False, str(error), intento, "funcional"
 
@@ -405,6 +453,58 @@ def observar_storefront(
     return evidencias
 
 
+def observar_health(
+    origen: str,
+    version: str,
+    sha: str,
+    *,
+    intentos: int,
+    intervalo: float,
+    timeout: float,
+    espera_deploy: float,
+    intervalo_deploy: float,
+) -> tuple[dict[str, Any], bool]:
+    """Espera solo despliegues atrasados y devuelve evidencia de identidad/esquema."""
+    schema_up_to_date = False
+
+    def comprobar_health() -> str:
+        nonlocal schema_up_to_date
+        tipo, cuerpo = obtener(origen, "/health", timeout)
+        schema_up_to_date = validar_health(tipo, cuerpo, version, sha)
+        return "Versión y SHA exactos confirmados."
+
+    limite_espera = time.monotonic() + espera_deploy
+    deploy_pendiente_observado = False
+    while True:
+        ok, detalle, intento, clase = ejecutar_con_reintentos(
+            comprobar_health,
+            intentos=intentos,
+            intervalo=intervalo,
+        )
+        if clase == "deploy_pendiente":
+            deploy_pendiente_observado = True
+        elif not (
+            deploy_pendiente_observado
+            and clase == "transitorio"
+        ):
+            break
+
+        tiempo_restante = limite_espera - time.monotonic()
+        if tiempo_restante <= 0:
+            break
+
+        time.sleep(min(intervalo_deploy, tiempo_restante))
+        if time.monotonic() >= limite_espera:
+            break
+
+    return {
+        "ok": ok,
+        "detalle": detalle,
+        "intento": intento,
+        "clase": clase,
+    }, schema_up_to_date
+
+
 def observar(
     origen: str,
     version: str,
@@ -417,6 +517,8 @@ def observar(
     transicion_verificada: bool = False,
     tenant_slug: str | None = None,
     canonical_storefront: str | None = None,
+    espera_deploy: float = 0,
+    intervalo_deploy: float = 30,
 ) -> dict[str, Any]:
     """Solo la identidad exacta permite pasar de NO_OBSERVADO a DEPLOY_OBSERVED."""
     evidencias: dict[str, dict[str, Any]] = {}
@@ -424,29 +526,34 @@ def observar(
         origen, tenant_slug, canonical_storefront,
     )
 
-    def comprobar_health() -> str:
-        tipo, cuerpo = obtener(origen, "/health", timeout)
-        validar_health(tipo, cuerpo, version, sha)
-        return "Versión y SHA exactos confirmados."
-
-    ok, detalle, intento, clase = ejecutar_con_reintentos(
-        comprobar_health,
+    health, schema_up_to_date = observar_health(
+        origen,
+        version,
+        sha,
         intentos=intentos,
         intervalo=intervalo,
+        timeout=timeout,
+        espera_deploy=espera_deploy,
+        intervalo_deploy=intervalo_deploy,
     )
-    evidencias["health"] = {
-        "ok": ok,
-        "detalle": detalle,
-        "intento": intento,
-        "clase": clase,
-    }
-    if not ok:
+    evidencias["health"] = health
+    if not health["ok"]:
         return {
             "estado": "NO_OBSERVADO",
             "version_esperada": version,
             "sha_esperado": sha,
             "comprobaciones": evidencias,
         }
+
+    evidencias["schema"] = {
+        "ok": schema_up_to_date,
+        "clase": "ok" if schema_up_to_date else "funcional",
+        "detalle": (
+            "El esquema de producción coincide con las migraciones del release."
+            if schema_up_to_date
+            else "El health no confirma que el esquema de producción esté al día."
+        ),
+    }
 
     for nombre, ruta, es_login in [
         ("home", "/", False),
@@ -539,13 +646,41 @@ def resumen(resultado: dict[str, Any]) -> str:
     return "\n".join(lineas) + "\n"
 
 
-def main(argv: list[str] | None = None) -> int:
+def comentario_roadmap(resultado: dict[str, Any]) -> str:
+    """Comentario honesto para #1: nombra la causa real en vez de suponerla."""
+    identidad = f"V {resultado['version_esperada']} ({resultado['sha_esperado']})"
+    fallos = [
+        f"`{nombre}`: {item['detalle']}"
+        for nombre, item in resultado["comprobaciones"].items() if not item["ok"]
+    ]
+    if resultado["estado"] == "VALIDATED_IN_PRODUCTION":
+        return (f"✅ VALIDATED_IN_PRODUCTION automático: producción sirve {identidad} "
+                "y los smoke checks de solo lectura pasaron.")
+    if resultado["estado"] == "DEPLOY_OBSERVED":
+        return (f"🚧 DEPLOY_OBSERVED automático: producción sirve {identidad}, "
+                "pero no se declara validada. Pendiente:\n- " + "\n- ".join(fallos))
+    health = resultado["comprobaciones"]["health"]
+    if health.get("clase") == "deploy_pendiente":
+        return (f"⏳ NO_OBSERVADO: tras la espera acotada, producción todavía no sirve {identidad}. "
+                f"{health['detalle']} Revisar el deploy de Hostinger si persiste.")
+    if health.get("clase") == "identidad":
+        return (f"⛔ NO_OBSERVADO: la identidad de producción no coincide con {identidad}. "
+                f"{health['detalle']}")
+    return (f"⛔ NO_OBSERVADO: no fue posible confirmar {identidad} en producción. "
+            f"{health['detalle']}")
+
+
+def crear_parser() -> argparse.ArgumentParser:
+    """Construye el contrato CLI sin mezclarlo con la ejecución."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True, help="Versión esperada, p. ej. 0.1.0")
     parser.add_argument("--sha", required=True, help="SHA exacto de 40 caracteres del merge")
     parser.add_argument("--intentos", type=int, default=3)
     parser.add_argument("--intervalo", type=float, default=2)
     parser.add_argument("--timeout", type=float, default=5)
+    parser.add_argument("--espera-deploy", type=float, default=0,
+                        help="Segundos máximos esperando que llegue el deploy (0-1800)")
+    parser.add_argument("--intervalo-deploy", type=float, default=30)
     parser.add_argument("--markdown", action="store_true", help="Salida para el Job Summary")
     parser.add_argument("--tenant-slug", help="Slug real conocido para smoke público del storefront")
     parser.add_argument("--canonical-storefront", help="Canonical HTTPS esperado para ese tenant")
@@ -559,29 +694,59 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Confirma que la transición requerida fue comprobada fuera del deploy de código.",
     )
-    args = parser.parse_args(argv)
+    return parser
 
-    try:
-        origen = DOMINIO_PRODUCCION
-        if not VERSION_PATTERN.fullmatch(args.version):
-            raise ObservacionError("La versión debe tener formato X.Y.Z.")
-        if not SHA_PATTERN.fullmatch(args.sha):
-            raise ObservacionError("El SHA esperado debe tener exactamente 40 caracteres hexadecimales minúsculos.")
-        if args.canonical_storefront and not args.tenant_slug:
-            raise ObservacionError("El canonical requiere --tenant-slug.")
-        if args.tenant_slug:
-            validar_tenant_slug(args.tenant_slug)
-            if args.canonical_storefront:
-                validar_canonical(args.canonical_storefront, origen, args.tenant_slug)
-        if not 1 <= args.intentos <= 10 or not 0 <= args.intervalo <= 60 or not 0.1 <= args.timeout <= 30:
-            raise ObservacionError("Intentos (1-10), intervalo (0-60) o timeout (0.1-30) fuera de rango.")
-    except ObservacionError as error:
-        parser.error(str(error))
 
+def validar_identidad_cli(args: argparse.Namespace) -> None:
+    if not VERSION_PATTERN.fullmatch(args.version):
+        raise ObservacionError("La versión debe tener formato X.Y.Z.")
+    if not SHA_PATTERN.fullmatch(args.sha):
+        raise ObservacionError(
+            "El SHA esperado debe tener exactamente 40 caracteres hexadecimales minúsculos."
+        )
+
+
+def validar_storefront_cli(args: argparse.Namespace, origen: str) -> None:
+    if args.canonical_storefront and not args.tenant_slug:
+        raise ObservacionError("El canonical requiere --tenant-slug.")
+    if args.tenant_slug:
+        validar_tenant_slug(args.tenant_slug)
+    if args.tenant_slug and args.canonical_storefront:
+        validar_canonical(args.canonical_storefront, origen, args.tenant_slug)
+
+
+def validar_presupuestos_cli(args: argparse.Namespace) -> None:
+    if not 1 <= args.intentos <= 10:
+        raise ObservacionError("Intentos debe estar entre 1 y 10.")
+    if not 0 <= args.intervalo <= 60:
+        raise ObservacionError("Intervalo debe estar entre 0 y 60 segundos.")
+    if not 0.1 <= args.timeout <= 30:
+        raise ObservacionError("Timeout debe estar entre 0.1 y 30 segundos.")
+    if not 0 <= args.espera_deploy <= 1800:
+        raise ObservacionError("Espera de deploy debe estar entre 0 y 1800 segundos.")
+    if not 5 <= args.intervalo_deploy <= 120:
+        raise ObservacionError("Intervalo de deploy debe estar entre 5 y 120 segundos.")
+
+
+def validar_transicion_cli(args: argparse.Namespace) -> None:
     if args.transicion_verificada and not args.transicion_requerida:
-        parser.error(
+        raise ObservacionError(
             "--transicion-verificada solo es válida junto con --transicion-requerida."
         )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = crear_parser()
+    args = parser.parse_args(argv)
+    origen = DOMINIO_PRODUCCION
+
+    try:
+        validar_identidad_cli(args)
+        validar_storefront_cli(args, origen)
+        validar_presupuestos_cli(args)
+        validar_transicion_cli(args)
+    except ObservacionError as error:
+        parser.error(str(error))
 
     resultado = observar(
         origen,
@@ -594,6 +759,8 @@ def main(argv: list[str] | None = None) -> int:
         transicion_verificada=args.transicion_verificada,
         tenant_slug=args.tenant_slug,
         canonical_storefront=args.canonical_storefront,
+        espera_deploy=args.espera_deploy,
+        intervalo_deploy=args.intervalo_deploy,
     )
     reporte = json.dumps(resultado, ensure_ascii=False, indent=2) + "\n"
     print(resumen(resultado) if args.markdown else reporte, end="")

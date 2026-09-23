@@ -3,7 +3,7 @@
 **Decisión canónica:** [Issue #177](https://github.com/pl0n3r/Condor/issues/177).  
 **Estado:** contrato de arquitectura; este documento no declara funciones ni migraciones desplegadas.  
 **Fuente de implementación:** `main` y los tests del SHA fusionado.  
-**Dependencias:** [#173 / PR #174](https://github.com/pl0n3r/Condor/pull/174), [Inventario #171 / PR #172](https://github.com/pl0n3r/Condor/pull/172), requisitos del primer cliente [#175 / PR #176](https://github.com/pl0n3r/Condor/pull/176).
+**Dependencias:** V 0.1.21 y requisitos del primer cliente ya integrados en `main`; [Inventario #171 / PR #172](https://github.com/pl0n3r/Condor/pull/172) aplica la primera frontera ejecutable. Este documento sigue siendo contrato arquitectónico y no acredita por sí solo deploy ni migración productiva.
 
 ## 1. Modelo de pertenencia
 
@@ -92,4 +92,4 @@ No se implementa en #171/#172 una excepción `crossEntity=true` ni se reinterpre
 | Tenant de una razón social | contexto primario automático sin selector visible innecesario | UI + HTTP |
 | Tenant multi-entidad | selector solo con entidades autorizadas; no eleva permisos | UI + HTTP |
 
-**Secuencia de entrega:** cerrar #174 y comprobar CI de su SHA fusionado; reconciliar #172 sin duplicar su reserva; completar propietario jurídico de Inventory y sus pruebas; después extender la misma invariante a ventas, costos, fabricación y reporting. Reflejar la decisión en `ESPECIFICACIONES.md` cuando no colisione con el PR serial activo. Los RF del primer cliente sirven de validación de producto, no de condicionales de código.
+**Secuencia de entrega:** cerrar Inventario #171/#172 con gates exact-head y exact-main; después aplicar esta misma invariante a ventas, costos, fabricación y reporting mediante slices reusables. La decisión durable queda registrada en D-052 de `ESPECIFICACIONES.md`. Los RF del primer cliente sirven de validación de producto, no de condicionales de código.
