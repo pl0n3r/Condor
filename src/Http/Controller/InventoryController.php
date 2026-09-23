@@ -227,12 +227,14 @@ final class InventoryController extends AbstractController
         );
         $payload = $this->payload($request, ['name', 'slug']);
 
-        $this->domain(
-            fn (): mixed => $source->update(
+        $this->domain(function () use ($source, $payload): null {
+            $source->update(
                 $this->requiredString($payload, 'name'),
                 $this->requiredString($payload, 'slug'),
-            ),
-        );
+            );
+
+            return null;
+        });
         $this->audit(
             $tenant,
             $user,
