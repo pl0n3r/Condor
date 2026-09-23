@@ -121,6 +121,50 @@ final class CommercialDomainTest extends TestCase
         self::assertSame($list->id(), $result->priceListId);
     }
 
+    public function testCompetingRulesWithSamePriorityUseStableIdTieBreak(): void
+    {
+        $tenant = new Tenant('Empresa', 'empresa-'.bin2hex(random_bytes(4)));
+        $product = new Product($tenant, 'Producto', 'producto');
+        $variant = new ProductVariant($tenant, $product, 'SKU-TIE', 'Variante');
+        $list = new PriceList($tenant, 'Detal', 'detal');
+        $category = new CommercialCategory($tenant, 'Mayorista', 'mayorista');
+        $price = new VariantPrice($tenant, $list, $variant, 100000);
+
+        $first = new PriceRule(
+            $tenant,
+            $list,
+            'A',
+            50,
+            PriceRule::TYPE_FIXED,
+            10000,
+            $category,
+        );
+        $second = new PriceRule(
+            $tenant,
+            $list,
+            'B',
+            50,
+            PriceRule::TYPE_FIXED,
+            20000,
+            $category,
+        );
+
+        $expected = strcmp($first->id(), $second->id()) <= 0
+            ? $first
+            : $second;
+        $result = (new EffectivePriceResolver())->resolve(
+            $price,
+            $category,
+            [$second, $first],
+        );
+
+        self::assertSame($expected->id(), $result->ruleId);
+        self::assertSame(
+            $expected->applyTo(100000),
+            $result->effectiveAmountMinor,
+        );
+    }
+
     public function testPriceRuleHonorsValidityAndNeverStacksDiscounts(): void
     {
         $tenant = new Tenant('Empresa', 'empresa-'.bin2hex(random_bytes(4)));
