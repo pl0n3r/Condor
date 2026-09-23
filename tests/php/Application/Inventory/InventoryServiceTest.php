@@ -142,6 +142,48 @@ final class InventoryServiceTest extends KernelTestCase
         );
     }
 
+    public function testIdempotentReplaySurvivesLaterSourceDeactivation(): void
+    {
+        [$tenant, $source, , $variant] = $this->fixture();
+        $key = 'adjust-replay-'.bin2hex(random_bytes(6));
+
+        $first = $this->service->adjust(
+            $tenant,
+            $source,
+            $variant,
+            2,
+            null,
+            $key,
+        );
+
+        $source->deactivate();
+        $this->entityManager->flush();
+
+        $replayed = $this->service->adjust(
+            $tenant,
+            $source,
+            $variant,
+            2,
+            null,
+            $key,
+        );
+        self::assertSame($first->id(), $replayed->id());
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage(
+            'No se puede modificar inventario de una fuente inactiva.',
+        );
+
+        $this->service->adjust(
+            $tenant,
+            $source,
+            $variant,
+            1,
+            null,
+            'new-after-deactivate-'.bin2hex(random_bytes(6)),
+        );
+    }
+
     public function testFailedTransferRollsBackWithoutPartialMovement(): void
     {
         [$tenant, $sourceA, $sourceB, $variant] = $this->fixture();
