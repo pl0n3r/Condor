@@ -1574,11 +1574,11 @@ esquema está atrasado y fallar cerrado antes de regenerar la caché.
 
 Contrato operativo:
 
-- una sola corrida de post-deploy opera a la vez; el script usa un lock explícito y una segunda corrida concurrente se omite;
+- una sola corrida de post-deploy opera a la vez; el script usa un lock explícito y una segunda corrida concurrente se omite, pero un error real al abrir, adquirir o publicar el lock falla con estado no-cero y diagnóstico accionable;
 - un lock con propietario vivo nunca se recupera por antigüedad;
 - un lock huérfano puede recuperarse de forma segura y un lock incompleto reciente obtiene un periodo de gracia antes de considerarse recuperable;
-- el cron ejecuta `doctrine:migrations:up-to-date --env=prod --no-interaction --fail-on-unregistered` como comprobación read-only, que detecta tanto migraciones nuevas pendientes como migraciones ejecutadas ausentes del catálogo actual;
-- si existen migraciones pendientes o ejecutadas ya no registradas, termina con error accionable y **no** ejecuta `cache:clear` ni `cache:warmup`;
+- el cron ejecuta `doctrine:migrations:up-to-date --env=prod --no-interaction --fail-on-unregistered` como comprobación read-only, con límite de pared acotado (60 s por defecto, configurable solo dentro de un rango seguro); detecta tanto migraciones nuevas pendientes como migraciones ejecutadas ausentes del catálogo actual;
+- si existen migraciones pendientes, ejecutadas ya no registradas, un fallo de conectividad o un timeout del chequeo, termina con error accionable y **no** ejecuta `cache:clear` ni `cache:warmup`;
 - una migración productiva requiere autorización humana explícita conforme a `AGENTES.md` §10 y se ejecuta como operación separada, nunca implícita desde cron, deploy o smoke;
 - las migraciones autorizadas deben seguir siendo forward / expand-compatible; SQL destructivo, contracciones irreversibles, backfills riesgosos o cambios sin rollback permanecen fuera de cualquier automatización;
 - cuando el esquema ya está al día, el orden permitido es **comprobar esquema → limpiar caché → calentar caché**;
