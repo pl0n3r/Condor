@@ -563,6 +563,35 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
         self.assertEqual(sleep.call_count, 2)
 
+    def test_espera_deploy_tolera_transitorio_despues_de_version_anterior(self) -> None:
+        viejo = (
+            200,
+            "application/json",
+            json.dumps({
+                "status": "ok",
+                "version": "0.0.9",
+                "release_sha": "c" * 40,
+            }).encode(),
+        )
+        transitorio = (503, "application/json", b'{"status":"unavailable"}')
+        respuestas = [viejo, transitorio, self.server.respuestas["/health"]]
+        self.server.respuestas["/health"] = lambda: respuestas.pop(0)
+
+        with patch.object(modulo.time, "sleep") as sleep:
+            resultado = modulo.observar(
+                self.base,
+                VERSION,
+                SHA,
+                intentos=1,
+                intervalo=0,
+                timeout=1,
+                espera_deploy=600,
+                intervalo_deploy=30,
+            )
+
+        self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertEqual(sleep.call_count, 2)
+
     def test_espera_deploy_agotada_no_observa(self) -> None:
         with patch.object(modulo.time, "monotonic", side_effect=[0, 10, 700]), \
                 patch.object(modulo.time, "sleep") as sleep:
