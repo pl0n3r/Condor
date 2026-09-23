@@ -60,6 +60,7 @@ class ObserverTests(unittest.TestCase):
             }).encode()),
             "/": (200, "text/html", HOME),
             "/admin/login": (200, "text/html", LOGIN),
+            "/adminpl0n3r": (302, "text/html", b""),
             "/app.css": (200, "text/css", b"body{margin:0}"),
             "/build/admin.css": (200, "text/css", b".admin{display:grid}"),
             "/build/admin.js": (200, "application/javascript; charset=utf-8", b"window.condor=true;"),
@@ -86,10 +87,38 @@ class ObserverTests(unittest.TestCase):
         resultado = self.observar()
         self.assertEqual(resultado["estado"], "VALIDATED_IN_PRODUCTION")
         self.assertEqual(self.server.visitas, [
-            "/health", "/", "/admin/login",
+            "/health", "/", "/admin/login", "/adminpl0n3r",
             "/app.css", "/build/admin.css", "/build/admin.js",
         ])
         self.assertTrue(all(v["ok"] for v in resultado["comprobaciones"].values()))
+
+    def test_centro_control_protegido_sin_5xx_es_observado(self) -> None:
+        resultado = self.observar()
+        self.assertTrue(resultado["comprobaciones"]["centro_control"]["ok"])
+        self.assertIn(
+            "sin 5xx",
+            resultado["comprobaciones"]["centro_control"]["detalle"],
+        )
+
+    def test_centro_control_5xx_impide_validar_produccion(self) -> None:
+        self.server.respuestas["/adminpl0n3r"] = (
+            500,
+            "text/html",
+            b"fallo",
+        )
+
+        resultado = modulo.observar(
+            self.base,
+            VERSION,
+            SHA,
+            intentos=1,
+            intervalo=0,
+            timeout=1,
+        )
+
+        self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
+        self.assertFalse(resultado["comprobaciones"]["centro_control"]["ok"])
+        self.assertIn("HTTP 500", resultado["comprobaciones"]["centro_control"]["detalle"])
 
     def preparar_storefront(
         self, *, canonical: str | None = None, version: str = "0.1.13",

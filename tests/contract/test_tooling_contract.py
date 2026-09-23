@@ -61,20 +61,38 @@ class ToolingContractTests(unittest.TestCase):
         self.assertIn('--title "Release $TAG (V ${TAG#v})"', workflow)
         self.assertNotIn("if: steps.tag.outputs.created == 'true'", workflow)
 
-    def test_post_deploy_blocks_pending_schema_before_cache_under_lock(self) -> None:
-        """La política mantiene esquema antes de caché y prohíbe migrar producción."""
+    def test_post_deploy_reconciles_construction_schema_before_cache_under_lock(self) -> None:
+        """Construction reconcilia migraciones versionadas antes de tocar caché."""
         script = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
 
         lock_index = script.index('LOCK_FILE="var/post-deploy.lock"')
-        check_index = script.index("doctrine:migrations:up-to-date")
-        clear_index = script.index("cache:clear")
-        warmup_index = script.index("cache:warmup")
+        main_check_index = script.index(
+            "if run_schema_check; then",
+            script.index("# D-053/D-054 / AGENTES.md §10"),
+        )
+        migrate_call_index = script.index(
+            "if run_construction_migrations; then",
+            main_check_index,
+        )
+        clear_index = script.index("cache:clear", migrate_call_index)
+        warmup_index = script.index("cache:warmup", clear_index)
 
-        self.assertLess(lock_index, check_index)
-        self.assertLess(check_index, clear_index)
+        self.assertLess(lock_index, main_check_index)
+        self.assertLess(main_check_index, migrate_call_index)
+        self.assertLess(migrate_call_index, clear_index)
         self.assertLess(clear_index, warmup_index)
-        self.assertIn("autorización explícita", script)
-        self.assertNotIn("doctrine:migrations:migrate", script)
+        self.assertIn(
+            'PRODUCTION_STAGE="${CONDOR_PRODUCTION_STAGE:-construction}"',
+            script,
+        )
+        self.assertIn(
+            'AUTO_MIGRATE="${CONDOR_AUTO_MIGRATE:-1}"',
+            script,
+        )
+        self.assertIn(
+            'if [ "$PRODUCTION_STAGE" = "construction" ] && [ "$AUTO_MIGRATE" = "1" ]; then',
+            script,
+        )
         self.assertNotIn("doctrine:migrations:execute", script)
         self.assertNotIn("doctrine:schema:update", script)
         self.assertNotIn("doctrine:schema:drop", script)
@@ -176,25 +194,39 @@ class ToolingContractTests(unittest.TestCase):
                 holder.wait(timeout=4)
 
     def test_post_deploy_classifies_schema_drift_before_database_word(self) -> None:
-        """La salida de Doctrine sobre historial se clasifica como deriva, no conectividad."""
-        messages = (
-            "Out-of-date! 1 migration to execute.",
-            "You have 1 previously executed migrations in the database "
-            "that are not registered migrations.",
+        """Pending migra en construction; historial desconocido sigue fallando cerrado."""
+        pending, pending_calls = self._run_post_deploy_with_fake_php(
+            schema_output="Out-of-date! 1 migration to execute.",
+            schema_status=1,
         )
-        for message in messages:
-            with self.subTest(message=message):
-                result, invoked = self._run_post_deploy_with_fake_php(
-                    schema_output=message,
-                    schema_status=1,
-                )
-                self.assertEqual(result.returncode, 2, result.stderr)
-                self.assertIn(
-                    "migraciones pendientes o historial de migraciones no reconciliado",
-                    result.stderr,
-                )
-                self.assertNotIn("cache:clear", invoked)
-                self.assertNotIn("cache:warmup", invoked)
+        self.assertEqual(pending.returncode, 2, pending.stderr)
+        self.assertIn(
+            "esquema pendiente en construction; validando migraciones versionadas",
+            pending.stderr,
+        )
+        self.assertIn("doctrine:migrations:migrate", pending_calls)
+        self.assertIn(
+            "la migración terminó pero el esquema no quedó reconciliado",
+            pending.stderr,
+        )
+        self.assertNotIn("cache:clear", pending_calls)
+        self.assertNotIn("cache:warmup", pending_calls)
+
+        unregistered, unregistered_calls = self._run_post_deploy_with_fake_php(
+            schema_output=(
+                "You have 1 previously executed migrations in the database "
+                "that are not registered migrations."
+            ),
+            schema_status=1,
+        )
+        self.assertEqual(unregistered.returncode, 2, unregistered.stderr)
+        self.assertIn(
+            "el historial de migraciones no coincide con el catálogo desplegado",
+            unregistered.stderr,
+        )
+        self.assertNotIn("doctrine:migrations:migrate", unregistered_calls)
+        self.assertNotIn("cache:clear", unregistered_calls)
+        self.assertNotIn("cache:warmup", unregistered_calls)
 
     def test_post_deploy_recovers_orphan_and_stale_incomplete_locks(self) -> None:
         """Locks sin guard activo se recuperan; metadata incompleta reciente se omite."""
@@ -342,12 +374,12 @@ esac
         self.assertIn('evidencias["schema"]', observer)
         self.assertIn('carga.get("schema_up_to_date") is True', observer)
 
-    def test_post_deploy_never_executes_production_migrations_automatically(self) -> None:
-        """La política operativa exige autorización humana fuera del cron."""
+    def test_post_deploy_never_executes_destructive_schema_mutations_automatically(self) -> None:
+        """Solo migrate versionado puede automatizarse; operaciones destructivas no."""
         script = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
 
+        self.assertIn("doctrine:migrations:migrate", script)
         forbidden = (
-            "doctrine:migrations:migrate",
             "doctrine:migrations:execute",
             "doctrine:schema:update",
             "doctrine:schema:drop",
@@ -374,6 +406,12 @@ esac
                 (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
+            backup = scripts / "backup-database.sh"
+            backup.write_text(
+                "#!/bin/sh\nset -eu\n[ -n \"${DATABASE_URL:-}\" ] || exit 19\nexit 0\n",
+                encoding="utf-8",
+            )
+            backup.chmod(0o755)
 
             if lock_metadata is not None:
                 lock_file = var / "post-deploy.lock"
@@ -391,6 +429,14 @@ case "$*" in
     printf '%s\\n' "$FAKE_SCHEMA_OUTPUT" >&2
     exit "$FAKE_SCHEMA_STATUS"
     ;;
+  *doctrine:migrations:migrate*"--dry-run"*)
+    for arg in "$@"; do
+      case "$arg" in
+        --write-sql=*) printf '%s\\n' 'CREATE TABLE safe_table (id INT);' > "${arg#--write-sql=}" ;;
+      esac
+    done
+    exit 0
+    ;;
   *)
     exit 0
     ;;
@@ -406,6 +452,7 @@ esac
             env["FAKE_PHP_LOG"] = str(calls)
             env["FAKE_SCHEMA_OUTPUT"] = schema_output
             env["FAKE_SCHEMA_STATUS"] = str(schema_status)
+            env["DATABASE_URL"] = "mysql://contract.example/condor"
             result = subprocess.run(
                 ["sh", str(script)],
                 cwd=root,

@@ -416,17 +416,43 @@ Comunicación humana no significa micro-log: seguir reportando hitos macro.
 
 ## 10. Producción y seguridad de transición
 
-**PROHIBIDO ejecutar sin autorización explícita previa, y nunca de forma automática:**
+### Modo actual: CONSTRUCCIÓN
 
-- SQL destructivo;
-- reset/seed de producción;
+Mientras Condor no tenga usuarios finales ni datos reales cuya conservación deba tratarse como operación de negocio, el entorno publicado en `condorapp.com.co` es un **entorno de construcción operativo**.
+
+En este modo los agentes pueden ejecutar autónomamente, sin pedir una aprobación humana adicional por cada acción:
+
+- deploys y correcciones de producción trazables a un SHA/release;
+- migraciones Doctrine versionadas, aditivas o expand-compatible;
+- provisioning, seed técnico y configuración necesarios para datos descartables de construcción;
+- limpieza/warmup de caché, reconciliación de esquema y correcciones de HTTP 5xx;
+- smoke checks y mutaciones de prueba acotadas con datos descartables.
+
+Toda mutación debe conservar trazabilidad, usar el mecanismo más reversible disponible, preservar backup/restaurabilidad cuando exista estado persistente relevante y validar después la misma superficie real afectada. Un HTTP 500, schema drift o deploy incompleto no se deja indefinidamente como `NO_OBSERVADO`: se diagnostica y se corrige.
+
+El post-deploy puede converger automáticamente el esquema en modo construcción ejecutando migraciones versionadas pendientes antes de regenerar caché. La decisión D-054 exige dry-run/allowlist aditivo, **backup exitoso previo** y permite el opt-out operativo `CONDOR_AUTO_MIGRATE=0`; si cualquiera falla, no se migra ni se toca caché. Esto **no** convierte las migraciones destructivas en aceptables.
+
+### Cambio a OPERACIÓN REAL
+
+Antes de incorporar usuarios finales o datos reales que deban conservarse, la propietaria del proyecto debe declarar explícitamente el cambio a **OPERACIÓN REAL**. En ese hito se debe:
+
+- cambiar `CONDOR_PRODUCTION_STAGE` a `live`;
+- actualizar esta sección y la decisión durable correspondiente;
+- volver a exigir autorización explícita para migraciones/mutaciones productivas no cubiertas por un mecanismo operativo aprobado;
+- revisar backups, rollback, ventanas de mantenimiento y smoke con criterios de datos reales.
+
+### Acciones que siempre requieren autorización explícita
+
+Incluso durante construcción, no ejecutar automáticamente:
+
+- SQL destructivo o migraciones contract/destructivas;
+- reset/seed que destruya estado que se haya decidido conservar;
 - borrado irreversible;
 - rotación de secretos reales;
 - cambio DNS/infra irreversible;
-- operación con riesgo de interrupción sin rollback;
-- migración productiva.
+- operación con riesgo relevante de interrupción sin rollback razonable.
 
-Escalar estos casos no equivale a autorización: después de escalar, esperar una aprobación explícita antes de ejecutar cualquier operación de esta lista.
+Escalar estos casos no equivale a autorización: después de escalar, esperar una aprobación explícita antes de ejecutarlos.
 
 Código desplegado, esquema migrado y estado operativo reconciliado son cosas distintas.
 
