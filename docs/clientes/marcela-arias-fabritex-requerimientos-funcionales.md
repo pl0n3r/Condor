@@ -146,6 +146,8 @@ El sistema debe centralizar inventarios, producción, costos, ventas, clientes, 
 
 **RF-042.** El sistema deberá calcular automáticamente el margen de utilidad y la utilidad estimada por producto.
 
+**Clarificación temporal para RF-039, RF-042 y RF-054.** Los reportes históricos de margen y rentabilidad deberán ser reproducibles y no podrán cambiar retroactivamente solo porque el costo vigente de un producto cambie después de la venta. El modelo deberá conservar una base histórica suficiente —por ejemplo un snapshot/referencia al costo aplicable a la transacción o a su fecha— y declarar el método de costeo utilizado. Si en el futuro se admiten distintos métodos de costeo por empresa, cada reporte deberá indicar cuál aplica y mantener resultados deterministas y auditables.
+
 **RF-043.** La información relacionada con costos y utilidades deberá ser visible únicamente para usuarios autorizados.
 
 ## 6. Códigos de barras
@@ -288,6 +290,8 @@ El sistema debe centralizar inventarios, producción, costos, ventas, clientes, 
 ## 16. Control de asistencia y huellero
 
 **RF-094.** El sistema deberá permitir integrar, cuando técnicamente sea posible, la información proveniente del huellero biométrico utilizado por la empresa.
+
+**Clarificación de privacidad para RF-094.** Por defecto, la integración deberá recibir únicamente los datos operativos mínimos necesarios para asistencia —por ejemplo identificador externo del empleado/dispositivo, tipo de marcación y fecha/hora— y **no deberá almacenar imágenes de huella, plantillas biométricas ni otros identificadores biométricos** en Condor. Si un proveedor o caso futuro exigiera procesar datos biométricos para que la integración funcione, esa capacidad deberá ser opcional y requerir antes de su implementación una definición explícita de propósito, minimización, base de acceso autorizado, protección/cifrado, retención, eliminación y auditoría. El adaptador del dispositivo deberá mantener esos datos separados del dominio general de asistencia siempre que sea técnicamente posible.
 
 **RF-095.** El sistema deberá registrar hora de entrada y salida de los empleados.
 
