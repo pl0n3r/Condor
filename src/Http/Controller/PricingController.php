@@ -413,6 +413,53 @@ final class PricingController extends AbstractController
     }
 
     #[Route(
+        '/api/v1/branches/{branchId}/pricing/rules/{ruleId}',
+        name: 'api_price_rules_delete',
+        methods: ['DELETE'],
+    )]
+    public function deleteRule(
+        string $branchId,
+        string $ruleId,
+        Request $request,
+    ): Response {
+        $this->requireCsrf($request);
+        [$user, $tenant, $branch] = $this->authorizedBranchScope(
+            $branchId,
+            'pricing.delete',
+        );
+        $rule = $this->entityManager
+            ->getRepository(PriceRule::class)
+            ->findOneBy([
+                'id' => $ruleId,
+                'tenant' => $tenant,
+                'active' => true,
+            ]);
+        if (!$rule instanceof PriceRule) {
+            throw new NotFoundHttpException(
+                'Regla de precio no encontrada.',
+            );
+        }
+
+        $rule->deactivate();
+        $this->audit(
+            $tenant,
+            $user,
+            'price_rule.deactivated',
+            PriceRule::class,
+            $rule->id(),
+            [
+                'branch_id' => $branch->id(),
+                'price_list_id' => $rule->priceList()->id(),
+                'commercial_category_id' => $rule
+                    ->commercialCategory()?->id(),
+            ],
+        );
+        $this->entityManager->flush();
+
+        return new Response(status: Response::HTTP_NO_CONTENT);
+    }
+
+    #[Route(
         '/api/v1/branches/{branchId}/pricing/effective',
         name: 'api_effective_price',
         methods: ['GET'],

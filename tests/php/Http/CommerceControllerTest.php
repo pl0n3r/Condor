@@ -172,6 +172,42 @@ final class CommerceControllerTest extends WebTestCase
             ],
         );
         self::assertSame(5, $auditCount);
+
+        $client->request(
+            'DELETE',
+            '/api/v1/branches/'.$branch->id()
+                .'/pricing/rules/'.$ruleId,
+            server: ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(204);
+
+        $client->request(
+            'GET',
+            '/api/v1/branches/'.$branch->id()
+                .'/pricing/effective?variant='.$variant->id()
+                .'&customer='.$customerId,
+        );
+        self::assertResponseIsSuccessful();
+        $effectiveWithoutRule = $this->json($client)['effective_price'];
+        self::assertSame(
+            100000,
+            $effectiveWithoutRule['amount_minor'],
+        );
+        self::assertNull($effectiveWithoutRule['rule_id']);
+
+        $client->request(
+            'GET',
+            '/api/v1/branches/'.$branch->id().'/pricing',
+        );
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $this->json($client)['rules']);
+
+        $deactivationAuditCount = (int) $em->getConnection()->fetchOne(
+            'SELECT COUNT(*) FROM condor_audit_event '
+            .'WHERE tenant_id = ? AND action = ? AND entity_id = ?',
+            [$tenant->id(), 'price_rule.deactivated', $ruleId],
+        );
+        self::assertSame(1, $deactivationAuditCount);
     }
 
     public function testPriceRuleValidityUsesUtcAndRequiresTimezoneOffset(): void
