@@ -71,6 +71,14 @@ final class InventoryController extends AbstractController
             static fn (mixed $source): bool => $source instanceof InventorySource,
         ));
 
+        $variants = array_values(array_filter(
+            $this->entityManager
+                ->getRepository(ProductVariant::class)
+                ->findBy(['tenant' => $tenant, 'active' => true], ['name' => 'ASC']),
+            static fn (mixed $variant): bool =>
+                $variant instanceof ProductVariant && $variant->product()->isActive(),
+        ));
+
         $balances = $sources === []
             ? []
             : $this->entityManager
@@ -105,6 +113,15 @@ final class InventoryController extends AbstractController
                 'name' => $branch->name(),
             ],
             'sources' => array_map(self::sourcePayload(...), $sources),
+            'variants' => array_map(
+                static fn (ProductVariant $variant): array => [
+                    'id' => $variant->id(),
+                    'sku' => $variant->sku(),
+                    'name' => $variant->name(),
+                    'product_name' => $variant->product()->name(),
+                ],
+                $variants,
+            ),
             'balances' => array_values(array_map(
                 static fn (mixed $balance): array => self::balancePayload(
                     self::inventoryBalance($balance),
