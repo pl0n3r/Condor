@@ -202,21 +202,21 @@ class ToolingContractTests(unittest.TestCase):
         cases = (
             (
                 "orphan-valid",
-                f"old-token\\n99999999\\n{now}\\n",
+                f"old-token\n99999999\n{now}\n",
                 None,
                 "lock huérfano detectado",
                 True,
             ),
             (
                 "stale-incomplete",
-                "broken-token\\n",
+                "broken-token\n",
                 now - 400,
                 "lock incompleto huérfano",
                 True,
             ),
             (
                 "recent-incomplete",
-                "broken-token\\n",
+                "broken-token\n",
                 None,
                 "lock incompleto reciente",
                 False,
