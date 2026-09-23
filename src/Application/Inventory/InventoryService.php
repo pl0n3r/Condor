@@ -44,7 +44,7 @@ final readonly class InventoryService
                 $key,
                 $context,
             ): InventoryMovement {
-                self::assertWritableScope($tenant, $source, $variant);
+                self::assertOwnedScope($tenant, $source, $variant);
                 $this->lockSourceAndVariant(
                     $entityManager,
                     $source,
@@ -67,6 +67,8 @@ final readonly class InventoryService
 
                     return $existing;
                 }
+
+                self::assertActiveScope($source, $variant);
 
                 $balance = $this->balanceForUpdate(
                     $entityManager,
@@ -118,8 +120,8 @@ final readonly class InventoryService
                 $actorUserId,
                 $key,
             ): InventoryTransfer {
-                self::assertWritableScope($tenant, $sourceFrom, $variant);
-                self::assertWritableScope($tenant, $sourceTo, $variant);
+                self::assertOwnedScope($tenant, $sourceFrom, $variant);
+                self::assertOwnedScope($tenant, $sourceTo, $variant);
 
                 $this->lockSourcesAndVariant(
                     $entityManager,
@@ -144,6 +146,9 @@ final readonly class InventoryService
 
                     return $existing;
                 }
+
+                self::assertActiveScope($sourceFrom, $variant);
+                self::assertActiveScope($sourceTo, $variant);
 
                 $transfer = new InventoryTransfer(
                     $tenant,
@@ -262,7 +267,7 @@ final readonly class InventoryService
         $entityManager->lock($variant, LockMode::PESSIMISTIC_WRITE);
     }
 
-    private static function assertWritableScope(
+    private static function assertOwnedScope(
         Tenant $tenant,
         InventorySource $source,
         ProductVariant $variant,
@@ -275,7 +280,12 @@ final readonly class InventoryService
                 'La fuente y la variante deben pertenecer al tenant activo.',
             );
         }
+    }
 
+    private static function assertActiveScope(
+        InventorySource $source,
+        ProductVariant $variant,
+    ): void {
         if (!$source->isActive()) {
             throw new DomainException(
                 'No se puede modificar inventario de una fuente inactiva.',
