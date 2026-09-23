@@ -56,7 +56,7 @@ test.describe('Slice 5 — clientes y precios', () => {
     await commerce.getByRole('button', { name: 'Crear categoría' }).click();
     await expect(commerce.getByText('Categoría creada.')).toBeVisible();
     await expect(
-      commerce.getByRole('strong', { name: categoryName })
+      commerce.locator('strong').filter({ hasText: categoryName })
     ).toBeVisible();
 
     await commerce.getByLabel('Nombre del cliente').fill(customerName);
@@ -65,7 +65,9 @@ test.describe('Slice 5 — clientes y precios', () => {
       .selectOption({ label: categoryName });
     await commerce.getByRole('button', { name: 'Crear cliente' }).click();
     await expect(commerce.getByText('Cliente creado.')).toBeVisible();
-    await expect(commerce.getByText(customerName)).toBeVisible();
+    await expect(
+      commerce.locator('strong').filter({ hasText: customerName })
+    ).toBeVisible();
 
     await commerce.getByLabel('Nombre de lista').fill(listName);
     await commerce.getByLabel('Slug de lista').fill(listSlug);
@@ -137,9 +139,15 @@ test.describe('Slice 5 — clientes y precios', () => {
 
     await page.reload();
     const reloadedCommerce = page.locator('#commerce');
-    await expect(reloadedCommerce.getByText(customerName)).toBeVisible();
-    await expect(reloadedCommerce.getByText(categoryName)).toBeVisible();
-    await expect(reloadedCommerce.getByText(listName)).toBeVisible();
+    await expect(
+      reloadedCommerce.locator('strong').filter({ hasText: customerName })
+    ).toBeVisible();
+    await expect(
+      reloadedCommerce.locator('strong').filter({ hasText: categoryName })
+    ).toBeVisible();
+    await expect(
+      reloadedCommerce.locator('strong').filter({ hasText: listName })
+    ).toBeVisible();
     await expect(reloadedCommerce.getByText(/125[.\s]?000/)).toBeVisible();
   });
 });
