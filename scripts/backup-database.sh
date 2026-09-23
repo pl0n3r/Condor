@@ -47,11 +47,7 @@ dump_pid=""
 cleanup() {
   if [ -n "$dump_pid" ] && kill -0 "$dump_pid" 2>/dev/null; then
     kill -TERM "$dump_pid" 2>/dev/null || true
-    elapsed=0
-    while kill -0 "$dump_pid" 2>/dev/null && [ "$elapsed" -lt 5 ]; do
-      sleep 1
-      elapsed=$((elapsed + 1))
-    done
+    sleep 1
     kill -KILL "$dump_pid" 2>/dev/null || true
     wait "$dump_pid" 2>/dev/null || true
   fi
