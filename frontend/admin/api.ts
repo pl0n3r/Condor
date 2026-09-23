@@ -134,3 +134,20 @@ export function catalogVariantPath(
     safeUlid(variantId)
   );
 }
+
+
+export function inventoryPath(branchId: string): string {
+  return '/api/v1/branches/' + safeUlid(branchId) + '/inventory';
+}
+
+export function inventorySourcePath(branchId: string): string {
+  return inventoryPath(branchId) + '/sources';
+}
+
+export function inventoryAdjustmentPath(branchId: string): string {
+  return inventoryPath(branchId) + '/adjustments';
+}
+
+export function inventoryTransferPath(branchId: string): string {
+  return inventoryPath(branchId) + '/transfers';
+}
