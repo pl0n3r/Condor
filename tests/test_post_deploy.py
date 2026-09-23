@@ -12,6 +12,7 @@ SCRIPT = REPO_ROOT / "scripts" / "post-deploy.sh"
 
 class PostDeployStageTest(unittest.TestCase):
     def sandbox(self):
+        """Crea un root descartable con PHP/lock compatibles con post-deploy."""
         temp = tempfile.TemporaryDirectory()
         root = pathlib.Path(temp.name)
         (root / "scripts").mkdir()
@@ -34,12 +35,29 @@ class PostDeployStageTest(unittest.TestCase):
                 case "$*" in
                   *"doctrine:migrations:up-to-date"*)
                     if [ -f "$root/migrated" ]; then
+                      if [ "${FAKE_POSTCHECK_HANG:-0}" = "1" ]; then
+                        while :; do :; done
+                      fi
                       exit 0
                     fi
                     echo "Database is not up to date; pending migration"
                     exit 1
                     ;;
+                  *"doctrine:migrations:migrate"*"--dry-run"*)
+                    sql_file=""
+                    for arg in "$@"; do
+                      case "$arg" in
+                        --write-sql=*) sql_file="${arg#--write-sql=}" ;;
+                      esac
+                    done
+                    printf '%s\n' "${FAKE_MIGRATION_SQL:-CREATE TABLE safe_table (id INT);}" > "$sql_file"
+                    exit 0
+                    ;;
                   *"doctrine:migrations:migrate"*)
+                    if [ "${FAKE_MIGRATION_FAILURE:-0}" = "1" ]; then
+                      echo "detalle-fallo-migracion" >&2
+                      exit 17
+                    fi
                     : > "$root/migrated"
                     exit 0
                     ;;
@@ -55,7 +73,8 @@ class PostDeployStageTest(unittest.TestCase):
         fake_php.chmod(0o755)
         return temp, root, fake_bin
 
-    def run_script(self, stage):
+    def run_script(self, stage, *, migration_sql="CREATE TABLE safe_table (id INT);", postcheck_hang=False, migration_failure=False):
+        """Ejecuta post-deploy en sandbox con comportamiento Doctrine controlado."""
         temp, root, fake_bin = self.sandbox()
         self.addCleanup(temp.cleanup)
         env = os.environ.copy()
@@ -63,6 +82,9 @@ class PostDeployStageTest(unittest.TestCase):
         env["CONDOR_PRODUCTION_STAGE"] = stage
         env["CONDOR_SCHEMA_CHECK_TIMEOUT_SECONDS"] = "5"
         env["CONDOR_MIGRATION_TIMEOUT_SECONDS"] = "5"
+        env["FAKE_MIGRATION_SQL"] = migration_sql
+        env["FAKE_POSTCHECK_HANG"] = "1" if postcheck_hang else "0"
+        env["FAKE_MIGRATION_FAILURE"] = "1" if migration_failure else "0"
         result = subprocess.run(
             ["sh", str(root / "scripts" / "post-deploy.sh")],
             cwd=root,
@@ -78,18 +100,21 @@ class PostDeployStageTest(unittest.TestCase):
         return result, calls, root
 
     def test_construction_reconciles_pending_schema_before_cache(self):
+        """Construction valida SQL, migra y solo después regenera caché."""
         result, calls, root = self.run_script("construction")
 
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertTrue((root / "migrated").exists())
-        self.assertIn("doctrine:migrations:migrate", calls)
-        self.assertLess(
-            calls.index("doctrine:migrations:migrate"),
-            calls.index("cache:clear"),
+        self.assertIn("--dry-run", calls)
+        actual_migrate = next(
+            line for line in calls.splitlines()
+            if "doctrine:migrations:migrate" in line and "--dry-run" not in line
         )
+        self.assertLess(calls.index(actual_migrate), calls.index("cache:clear"))
         self.assertIn("cache:warmup", calls)
 
     def test_live_fails_closed_without_migrating_or_touching_cache(self):
+        """Live conserva fail-closed y no ejecuta ni dry-run de migración."""
         result, calls, root = self.run_script("live")
 
         self.assertEqual(2, result.returncode)
@@ -98,6 +123,41 @@ class PostDeployStageTest(unittest.TestCase):
         self.assertNotIn("cache:clear", calls)
         self.assertNotIn("cache:warmup", calls)
 
+
+    def test_construction_blocks_destructive_versioned_migration(self):
+        """El dry-run destructivo se bloquea antes de ejecutar migrate real."""
+        result, calls, root = self.run_script(
+            "construction",
+            migration_sql="ALTER TABLE condor_customer DROP COLUMN email;",
+        )
+
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertIn("migración destructiva/contract detectada", result.stderr)
+        self.assertFalse((root / "migrated").exists())
+        actual = [
+            line for line in calls.splitlines()
+            if "doctrine:migrations:migrate" in line and "--dry-run" not in line
+        ]
+        self.assertEqual([], actual)
+        self.assertNotIn("cache:clear", calls)
+
+    def test_post_migration_schema_recheck_times_out_fail_closed(self):
+        """La recomprobación posterior usa timeout y libera el flujo sin caché."""
+        result, calls, _ = self.run_script("construction", postcheck_hang=True)
+
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertIn("recomprobación de esquema excedió 5s", result.stderr)
+        self.assertNotIn("cache:clear", calls)
+        self.assertNotIn("cache:warmup", calls)
+
+    def test_failed_migration_emits_diagnostic_tail_before_cleanup(self):
+        """Un fallo Doctrine conserva diagnóstico útil en stderr antes de limpiar."""
+        result, calls, _ = self.run_script("construction", migration_failure=True)
+
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertIn("detalle-fallo-migracion", result.stderr)
+        self.assertIn("código 17", result.stderr)
+        self.assertNotIn("cache:clear", calls)
 
 if __name__ == "__main__":
     unittest.main()

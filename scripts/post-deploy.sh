@@ -82,6 +82,7 @@ SCHEMA_CHECK_DONE_MARKER=""
 SCHEMA_CHECK_PID=""
 SCHEMA_CHECK_WATCHDOG_PID=""
 MIGRATION_LOG=""
+MIGRATION_SQL_FILE=""
 MIGRATION_TIMEOUT_MARKER=""
 MIGRATION_PID=""
 MIGRATION_WATCHDOG_PID=""
@@ -167,17 +168,97 @@ cleanup_migration_log() {
         rm -f -- "$MIGRATION_TIMEOUT_MARKER"
         MIGRATION_TIMEOUT_MARKER=""
     fi
+    if [ -n "$MIGRATION_SQL_FILE" ]; then
+        rm -f -- "$MIGRATION_SQL_FILE"
+        MIGRATION_SQL_FILE=""
+    fi
     if [ -n "$MIGRATION_LOG" ]; then
         rm -f -- "$MIGRATION_LOG"
         MIGRATION_LOG=""
     fi
 }
 
-run_construction_migrations() {
+print_log_tail() {
+    log_file="$1"
+    if [ -n "$log_file" ] && [ -s "$log_file" ]; then
+        tail -n 30 -- "$log_file" >&2 || true
+    fi
+}
+
+run_schema_check() {
+    SCHEMA_CHECK_LOG="$(mktemp "${TMPDIR:-/tmp}/condor-schema-check-XXXXXX.log")"
+    SCHEMA_CHECK_TIMEOUT_MARKER="${SCHEMA_CHECK_LOG}.timeout"
+    SCHEMA_CHECK_DONE_MARKER="${SCHEMA_CHECK_LOG}.done"
+
+    "$PHP_BIN" bin/console doctrine:migrations:up-to-date \
+        --env=prod \
+        --no-interaction \
+        --fail-on-unregistered \
+        >"$SCHEMA_CHECK_LOG" 2>&1 &
+    SCHEMA_CHECK_PID=$!
+
+    (
+        elapsed=0
+        while [ "$elapsed" -lt "$SCHEMA_CHECK_TIMEOUT_SECONDS" ]; do
+            sleep 1
+            if [ -f "$SCHEMA_CHECK_DONE_MARKER" ]; then
+                exit 0
+            fi
+            elapsed=$((elapsed + 1))
+        done
+
+        if kill -0 "$SCHEMA_CHECK_PID" 2>/dev/null; then
+            : >"$SCHEMA_CHECK_TIMEOUT_MARKER"
+            kill -TERM "$SCHEMA_CHECK_PID" 2>/dev/null || true
+            sleep 2
+            kill -KILL "$SCHEMA_CHECK_PID" 2>/dev/null || true
+        fi
+    ) &
+    SCHEMA_CHECK_WATCHDOG_PID=$!
+
+    schema_status=0
+    if wait "$SCHEMA_CHECK_PID"; then
+        schema_status=0
+    else
+        schema_status=$?
+    fi
+    SCHEMA_CHECK_PID=""
+    : >"$SCHEMA_CHECK_DONE_MARKER"
+    wait "$SCHEMA_CHECK_WATCHDOG_PID" 2>/dev/null || true
+    SCHEMA_CHECK_WATCHDOG_PID=""
+
+    if [ -f "$SCHEMA_CHECK_TIMEOUT_MARKER" ]; then
+        return 124
+    fi
+
+    return "$schema_status"
+}
+
+run_migration_command() {
+    migration_mode="$1"
+    cleanup_migration_process
+    cleanup_migration_watchdog
+    cleanup_migration_log
+
     MIGRATION_LOG="$(mktemp "${TMPDIR:-/tmp}/condor-migration-XXXXXX.log")"
     MIGRATION_TIMEOUT_MARKER="${MIGRATION_LOG}.timeout"
 
-    "$PHP_BIN" bin/console doctrine:migrations:migrate         --env=prod         --no-interaction         --allow-no-migration         >"$MIGRATION_LOG" 2>&1 &
+    if [ "$migration_mode" = "dry-run" ]; then
+        MIGRATION_SQL_FILE="${MIGRATION_LOG}.sql"
+        "$PHP_BIN" bin/console doctrine:migrations:migrate \
+            --env=prod \
+            --no-interaction \
+            --allow-no-migration \
+            --dry-run \
+            --write-sql="$MIGRATION_SQL_FILE" \
+            >"$MIGRATION_LOG" 2>&1 &
+    else
+        "$PHP_BIN" bin/console doctrine:migrations:migrate \
+            --env=prod \
+            --no-interaction \
+            --allow-no-migration \
+            >"$MIGRATION_LOG" 2>&1 &
+    fi
     MIGRATION_PID=$!
 
     (
@@ -210,27 +291,137 @@ run_construction_migrations() {
     MIGRATION_WATCHDOG_PID=""
 
     if [ -f "$MIGRATION_TIMEOUT_MARKER" ]; then
+        return 124
+    fi
+
+    return "$migration_status"
+}
+
+validate_construction_migrations() {
+    validation_status=0
+    if run_migration_command dry-run; then
+        validation_status=0
+    else
+        validation_status=$?
+    fi
+
+    if [ "$validation_status" -eq 124 ]; then
+        print_log_tail "$MIGRATION_LOG"
+        cleanup_migration_log
+        echo "post-deploy.sh: dry-run de migraciones excedió ${MIGRATION_TIMEOUT_SECONDS}s; caché no modificada." >&2
+        return 2
+    fi
+
+    if [ "$validation_status" -ne 0 ]; then
+        print_log_tail "$MIGRATION_LOG"
+        cleanup_migration_log
+        echo "post-deploy.sh: no fue posible validar las migraciones pendientes de construcción (código $validation_status); caché no modificada." >&2
+        return 2
+    fi
+
+    if [ ! -s "$MIGRATION_SQL_FILE" ]; then
+        print_log_tail "$MIGRATION_LOG"
+        cleanup_migration_log
+        echo "post-deploy.sh: Doctrine no produjo SQL para validar las migraciones pendientes; se falla cerrado." >&2
+        return 2
+    fi
+
+    if ! sed '/^[[:space:]]*--/d; /^[[:space:]]*$/d' "$MIGRATION_SQL_FILE" | awk '
+        BEGIN { RS = ";" }
+        {
+            statement = $0
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", statement)
+            if (statement == "") next
+            normalized = toupper(statement)
+
+            if (normalized ~ /(^|[[:space:]])(DROP|TRUNCATE)([[:space:]]|$)/ ||
+                normalized ~ /(^|[[:space:]])DELETE[[:space:]]+FROM([[:space:]]|$)/ ||
+                normalized ~ /(^|[[:space:]])UPDATE[[:space:]]/ ||
+                normalized ~ /(^|[[:space:]])RENAME[[:space:]]/ ||
+                normalized ~ /CREATE[[:space:]]+OR[[:space:]]+REPLACE/ ||
+                normalized ~ /REPLACE[[:space:]]+INTO/ ||
+                normalized ~ /FOREIGN_KEY_CHECKS[[:space:]]*=[[:space:]]*0/ ||
+                normalized ~ /^ALTER[[:space:]]+TABLE[[:space:]].*[[:space:]](MODIFY|CHANGE)[[:space:]]/) {
+                exit 2
+            }
+
+            if (normalized ~ /^CREATE[[:space:]]+(TABLE|INDEX|UNIQUE[[:space:]]+INDEX|VIEW)[[:space:]]/ ||
+                normalized ~ /^ALTER[[:space:]]+TABLE[[:space:]].*[[:space:]]ADD[[:space:]]/ ||
+                normalized ~ /^INSERT[[:space:]]+INTO[[:space:]]/ ||
+                normalized ~ /^START[[:space:]]+TRANSACTION$/ ||
+                normalized ~ /^COMMIT$/) {
+                next
+            }
+
+            exit 3
+        }
+    '
+    then
+        guard_status=$?
+        cleanup_migration_log
+        if [ "$guard_status" -eq 2 ]; then
+            echo "post-deploy.sh: migración destructiva/contract detectada; requiere autorización explícita. Caché no modificada." >&2
+        else
+            echo "post-deploy.sh: SQL de migración fuera del allowlist forward/expand-compatible; se falla cerrado." >&2
+        fi
+        return 2
+    fi
+
+    cleanup_migration_log
+    return 0
+}
+
+run_construction_migrations() {
+    if ! validate_construction_migrations; then
+        return $?
+    fi
+
+    migration_status=0
+    if run_migration_command apply; then
+        migration_status=0
+    else
+        migration_status=$?
+    fi
+
+    if [ "$migration_status" -eq 124 ]; then
+        print_log_tail "$MIGRATION_LOG"
         cleanup_migration_log
         echo "post-deploy.sh: migración excedió ${MIGRATION_TIMEOUT_SECONDS}s; caché no modificada." >&2
         return 2
     fi
 
     if [ "$migration_status" -ne 0 ]; then
+        print_log_tail "$MIGRATION_LOG"
         cleanup_migration_log
         echo "post-deploy.sh: Doctrine no pudo reconciliar las migraciones de construcción (código $migration_status); caché no modificada." >&2
         return 2
     fi
-
     cleanup_migration_log
 
-    if ! "$PHP_BIN" bin/console doctrine:migrations:up-to-date         --env=prod         --no-interaction         --fail-on-unregistered         >/dev/null 2>&1; then
+    recheck_status=0
+    if run_schema_check; then
+        recheck_status=0
+    else
+        recheck_status=$?
+    fi
+
+    if [ "$recheck_status" -eq 124 ]; then
+        print_log_tail "$SCHEMA_CHECK_LOG"
+        cleanup_schema_check_log
+        echo "post-deploy.sh: recomprobación de esquema excedió ${SCHEMA_CHECK_TIMEOUT_SECONDS}s tras migrar; caché no modificada." >&2
+        return 2
+    fi
+
+    if [ "$recheck_status" -ne 0 ]; then
+        print_log_tail "$SCHEMA_CHECK_LOG"
+        cleanup_schema_check_log
         echo "post-deploy.sh: la migración terminó pero el esquema no quedó reconciliado; caché no modificada." >&2
         return 2
     fi
 
+    cleanup_schema_check_log
     return 0
 }
-
 crear_lock() {
     now="$(date +%s)"
     if (
@@ -359,44 +550,15 @@ fi
 
 # D-053 / AGENTES.md §10: construction converge migraciones versionadas;
 # live detecta deriva y falla cerrado.
-SCHEMA_CHECK_LOG="$(mktemp "${TMPDIR:-/tmp}/condor-schema-check-XXXXXX.log")"
-SCHEMA_CHECK_TIMEOUT_MARKER="${SCHEMA_CHECK_LOG}.timeout"
-SCHEMA_CHECK_DONE_MARKER="${SCHEMA_CHECK_LOG}.done"
 schema_check_status=0
-
-"$PHP_BIN" bin/console doctrine:migrations:up-to-date --env=prod --no-interaction --fail-on-unregistered >"$SCHEMA_CHECK_LOG" 2>&1 &
-SCHEMA_CHECK_PID=$!
-
-(
-    elapsed=0
-    while [ "$elapsed" -lt "$SCHEMA_CHECK_TIMEOUT_SECONDS" ]; do
-        sleep 1
-        if [ -f "$SCHEMA_CHECK_DONE_MARKER" ]; then
-            exit 0
-        fi
-        elapsed=$((elapsed + 1))
-    done
-
-    if kill -0 "$SCHEMA_CHECK_PID" 2>/dev/null; then
-        : >"$SCHEMA_CHECK_TIMEOUT_MARKER"
-        kill -TERM "$SCHEMA_CHECK_PID" 2>/dev/null || true
-        sleep 2
-        kill -KILL "$SCHEMA_CHECK_PID" 2>/dev/null || true
-    fi
-) &
-SCHEMA_CHECK_WATCHDOG_PID=$!
-
-if wait "$SCHEMA_CHECK_PID"; then
+if run_schema_check; then
     schema_check_status=0
 else
     schema_check_status=$?
 fi
-SCHEMA_CHECK_PID=""
-: >"$SCHEMA_CHECK_DONE_MARKER"
-wait "$SCHEMA_CHECK_WATCHDOG_PID" 2>/dev/null || true
-SCHEMA_CHECK_WATCHDOG_PID=""
 
-if [ -f "$SCHEMA_CHECK_TIMEOUT_MARKER" ]; then
+if [ "$schema_check_status" -eq 124 ]; then
+    print_log_tail "$SCHEMA_CHECK_LOG"
     cleanup_schema_check_log
     echo "post-deploy.sh: comprobación de esquema excedió ${SCHEMA_CHECK_TIMEOUT_SECONDS}s. Caché no modificada." >&2
     exit 2
@@ -405,13 +567,14 @@ fi
 if [ "$schema_check_status" -eq 0 ]; then
     cleanup_schema_check_log
 elif grep -Eiq 'previously[[:space:]_-]*executed|unregistered|not[[:space:]_-]*registered' "$SCHEMA_CHECK_LOG"; then
+    print_log_tail "$SCHEMA_CHECK_LOG"
     cleanup_schema_check_log
     echo "post-deploy.sh: el historial de migraciones no coincide con el catálogo desplegado; se requiere reconciliación explícita. Caché no modificada." >&2
     exit 2
 elif grep -Eiq 'not[[:space:]_-]*up[[:space:]_-]*to[[:space:]_-]*date|out[[:space:]_-]*of[[:space:]_-]*date|new[[:space:]_-]*migration|pending[[:space:]_-]*migration' "$SCHEMA_CHECK_LOG"; then
     cleanup_schema_check_log
     if [ "$PRODUCTION_STAGE" = "construction" ]; then
-        echo "post-deploy.sh: esquema pendiente en construction; ejecutando migraciones versionadas." >&2
+        echo "post-deploy.sh: esquema pendiente en construction; validando migraciones versionadas." >&2
         if run_construction_migrations; then
             :
         else
@@ -423,14 +586,15 @@ elif grep -Eiq 'not[[:space:]_-]*up[[:space:]_-]*to[[:space:]_-]*date|out[[:spac
         exit 2
     fi
 elif grep -Eiq 'sqlstate|connection|database|driver|server[[:space:]_-]*has[[:space:]_-]*gone[[:space:]_-]*away|timed?[[:space:]_-]*out' "$SCHEMA_CHECK_LOG"; then
+    print_log_tail "$SCHEMA_CHECK_LOG"
     cleanup_schema_check_log
     echo "post-deploy.sh: Doctrine no pudo comprobar el esquema por base de datos o conectividad. Caché no modificada." >&2
     exit 2
 else
+    print_log_tail "$SCHEMA_CHECK_LOG"
     cleanup_schema_check_log
     echo "post-deploy.sh: Doctrine no pudo comprobar el esquema; fallo no clasificable. Caché no modificada." >&2
     exit 2
 fi
-
 "$PHP_BIN" bin/console cache:clear --env=prod --no-warmup
 "$PHP_BIN" bin/console cache:warmup --env=prod
