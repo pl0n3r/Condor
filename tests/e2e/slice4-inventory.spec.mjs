@@ -72,7 +72,7 @@ test.describe('Slice 4 — inventario', () => {
     await expect(inventory.getByText('Ajuste aplicado.')).toBeVisible();
 
     const transferForm = inventory.locator('form.catalog-card').filter({
-      has: inventory.getByRole('heading', { name: 'Transferencia' }),
+      has: page.getByRole('heading', { name: 'Transferencia' }),
     });
     await expect(transferForm).toBeVisible();
 
