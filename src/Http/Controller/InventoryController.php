@@ -18,6 +18,7 @@ use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -278,25 +279,39 @@ final class InventoryController extends AbstractController
             'inventory.delete',
         );
 
-        if ($this->sourceHasNonZeroStock($source)) {
-            throw new ConflictHttpException(
-                'No se puede desactivar una fuente que conserva stock.',
-            );
-        }
+        $this->entityManager->wrapInTransaction(
+            function (EntityManagerInterface $entityManager) use (
+                $source,
+                $tenant,
+                $user,
+                $branch,
+                $legalEntity,
+            ): void {
+                $entityManager->lock(
+                    $source,
+                    LockMode::PESSIMISTIC_WRITE,
+                );
 
-        $source->deactivate();
-        $this->audit(
-            $tenant,
-            $user,
-            'inventory_source.deactivated',
-            InventorySource::class,
-            $source->id(),
-            [
-                'branch_id' => $branch->id(),
-                'legal_entity_id' => $legalEntity->id(),
-            ],
+                if ($this->sourceHasNonZeroStock($source)) {
+                    throw new ConflictHttpException(
+                        'No se puede desactivar una fuente que conserva stock.',
+                    );
+                }
+
+                $source->deactivate();
+                $this->audit(
+                    $tenant,
+                    $user,
+                    'inventory_source.deactivated',
+                    InventorySource::class,
+                    $source->id(),
+                    [
+                        'branch_id' => $branch->id(),
+                        'legal_entity_id' => $legalEntity->id(),
+                    ],
+                );
+            },
         );
-        $this->entityManager->flush();
 
         return new Response(status: Response::HTTP_NO_CONTENT);
     }
