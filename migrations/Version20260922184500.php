@@ -25,6 +25,7 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
             CREATE TABLE condor_inventory_source (
                 id VARCHAR(26) NOT NULL,
                 tenant_id VARCHAR(26) NOT NULL,
+                legal_entity_id VARCHAR(26) NOT NULL,
                 branch_id VARCHAR(26) DEFAULT NULL,
                 name VARCHAR(160) NOT NULL,
                 slug VARCHAR(120) NOT NULL,
@@ -33,14 +34,23 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
                 created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 updated_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 INDEX IDX_INV_SOURCE_TENANT (tenant_id),
+                INDEX IDX_INV_SOURCE_LEGAL (legal_entity_id),
                 INDEX IDX_INV_SOURCE_BRANCH (branch_id),
-                UNIQUE INDEX uniq_inventory_source_tenant_slug (tenant_id, slug),
+                UNIQUE INDEX uniq_inventory_source_tenant_legal_slug (tenant_id, legal_entity_id, slug),
                 UNIQUE INDEX uniq_inventory_source_tenant_id (tenant_id, id),
+                UNIQUE INDEX uniq_inventory_source_tenant_legal_id (tenant_id, legal_entity_id, id),
                 UNIQUE INDEX uniq_inventory_source_tenant_branch (tenant_id, branch_id),
                 PRIMARY KEY(id),
                 CONSTRAINT FK_INV_SOURCE_TENANT
                     FOREIGN KEY (tenant_id) REFERENCES condor_tenant (id)
                     ON DELETE CASCADE,
+                CONSTRAINT FK_INV_SOURCE_LEGAL
+                    FOREIGN KEY (legal_entity_id) REFERENCES condor_legal_entity (id)
+                    ON DELETE RESTRICT,
+                CONSTRAINT FK_INV_SOURCE_LEGAL_TENANT
+                    FOREIGN KEY (tenant_id, legal_entity_id)
+                    REFERENCES condor_legal_entity (tenant_id, id)
+                    ON DELETE RESTRICT,
                 CONSTRAINT FK_INV_SOURCE_BRANCH
                     FOREIGN KEY (branch_id) REFERENCES condor_branch (id)
                     ON DELETE RESTRICT,
@@ -56,6 +66,7 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
             CREATE TABLE condor_inventory_balance (
                 id VARCHAR(26) NOT NULL,
                 tenant_id VARCHAR(26) NOT NULL,
+                legal_entity_id VARCHAR(26) NOT NULL,
                 source_id VARCHAR(26) NOT NULL,
                 variant_id VARCHAR(26) NOT NULL,
                 quantity INT NOT NULL,
@@ -63,24 +74,32 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
                 created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 updated_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 INDEX IDX_INV_BALANCE_TENANT (tenant_id),
+                INDEX IDX_INV_BALANCE_LEGAL (legal_entity_id),
                 INDEX IDX_INV_BALANCE_SOURCE (source_id),
                 INDEX IDX_INV_BALANCE_VARIANT (variant_id),
-                UNIQUE INDEX uniq_inventory_balance_tenant_source_variant
-                    (tenant_id, source_id, variant_id),
+                UNIQUE INDEX uniq_inventory_balance_scope_variant
+                    (tenant_id, legal_entity_id, source_id, variant_id),
                 UNIQUE INDEX uniq_inventory_balance_tenant_id (tenant_id, id),
                 PRIMARY KEY(id),
                 CONSTRAINT FK_INV_BALANCE_TENANT
                     FOREIGN KEY (tenant_id) REFERENCES condor_tenant (id)
                     ON DELETE CASCADE,
+                CONSTRAINT FK_INV_BALANCE_LEGAL
+                    FOREIGN KEY (legal_entity_id) REFERENCES condor_legal_entity (id)
+                    ON DELETE RESTRICT,
+                CONSTRAINT FK_INV_BALANCE_LEGAL_TENANT
+                    FOREIGN KEY (tenant_id, legal_entity_id)
+                    REFERENCES condor_legal_entity (tenant_id, id)
+                    ON DELETE RESTRICT,
                 CONSTRAINT FK_INV_BALANCE_SOURCE
                     FOREIGN KEY (source_id) REFERENCES condor_inventory_source (id)
                     ON DELETE RESTRICT,
                 CONSTRAINT FK_INV_BALANCE_VARIANT
                     FOREIGN KEY (variant_id) REFERENCES condor_product_variant (id)
                     ON DELETE RESTRICT,
-                CONSTRAINT FK_INV_BALANCE_SOURCE_TENANT
-                    FOREIGN KEY (tenant_id, source_id)
-                    REFERENCES condor_inventory_source (tenant_id, id)
+                CONSTRAINT FK_INV_BALANCE_SOURCE_SCOPE
+                    FOREIGN KEY (tenant_id, legal_entity_id, source_id)
+                    REFERENCES condor_inventory_source (tenant_id, legal_entity_id, id)
                     ON DELETE RESTRICT,
                 CONSTRAINT FK_INV_BALANCE_VARIANT_TENANT
                     FOREIGN KEY (tenant_id, variant_id)
@@ -94,6 +113,7 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
             CREATE TABLE condor_inventory_transfer (
                 id VARCHAR(26) NOT NULL,
                 tenant_id VARCHAR(26) NOT NULL,
+                legal_entity_id VARCHAR(26) NOT NULL,
                 variant_id VARCHAR(26) NOT NULL,
                 source_from_id VARCHAR(26) NOT NULL,
                 source_to_id VARCHAR(26) NOT NULL,
@@ -103,16 +123,25 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
                 status VARCHAR(20) NOT NULL,
                 created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 INDEX IDX_INV_TRANSFER_TENANT (tenant_id),
+                INDEX IDX_INV_TRANSFER_LEGAL (legal_entity_id),
                 INDEX IDX_INV_TRANSFER_VARIANT (variant_id),
                 INDEX IDX_INV_TRANSFER_FROM (source_from_id),
                 INDEX IDX_INV_TRANSFER_TO (source_to_id),
                 UNIQUE INDEX uniq_inventory_transfer_tenant_id (tenant_id, id),
+                UNIQUE INDEX uniq_inventory_transfer_tenant_legal_id (tenant_id, legal_entity_id, id),
                 UNIQUE INDEX uniq_inventory_transfer_tenant_key
                     (tenant_id, idempotency_key),
                 PRIMARY KEY(id),
                 CONSTRAINT FK_INV_TRANSFER_TENANT
                     FOREIGN KEY (tenant_id) REFERENCES condor_tenant (id)
                     ON DELETE CASCADE,
+                CONSTRAINT FK_INV_TRANSFER_LEGAL
+                    FOREIGN KEY (legal_entity_id) REFERENCES condor_legal_entity (id)
+                    ON DELETE RESTRICT,
+                CONSTRAINT FK_INV_TRANSFER_LEGAL_TENANT
+                    FOREIGN KEY (tenant_id, legal_entity_id)
+                    REFERENCES condor_legal_entity (tenant_id, id)
+                    ON DELETE RESTRICT,
                 CONSTRAINT FK_INV_TRANSFER_VARIANT
                     FOREIGN KEY (variant_id) REFERENCES condor_product_variant (id)
                     ON DELETE RESTRICT,
@@ -129,13 +158,13 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
                     FOREIGN KEY (tenant_id, variant_id)
                     REFERENCES condor_product_variant (tenant_id, id)
                     ON DELETE RESTRICT,
-                CONSTRAINT FK_INV_TRANSFER_FROM_TENANT
-                    FOREIGN KEY (tenant_id, source_from_id)
-                    REFERENCES condor_inventory_source (tenant_id, id)
+                CONSTRAINT FK_INV_TRANSFER_FROM_SCOPE
+                    FOREIGN KEY (tenant_id, legal_entity_id, source_from_id)
+                    REFERENCES condor_inventory_source (tenant_id, legal_entity_id, id)
                     ON DELETE RESTRICT,
-                CONSTRAINT FK_INV_TRANSFER_TO_TENANT
-                    FOREIGN KEY (tenant_id, source_to_id)
-                    REFERENCES condor_inventory_source (tenant_id, id)
+                CONSTRAINT FK_INV_TRANSFER_TO_SCOPE
+                    FOREIGN KEY (tenant_id, legal_entity_id, source_to_id)
+                    REFERENCES condor_inventory_source (tenant_id, legal_entity_id, id)
                     ON DELETE RESTRICT
             ) DEFAULT CHARACTER SET utf8mb4
               COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
@@ -145,6 +174,7 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
             CREATE TABLE condor_inventory_movement (
                 id VARCHAR(26) NOT NULL,
                 tenant_id VARCHAR(26) NOT NULL,
+                legal_entity_id VARCHAR(26) NOT NULL,
                 source_id VARCHAR(26) NOT NULL,
                 variant_id VARCHAR(26) NOT NULL,
                 transfer_id VARCHAR(26) DEFAULT NULL,
@@ -156,7 +186,7 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
                 context JSON NOT NULL,
                 created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 INDEX idx_inventory_movement_scope_time
-                    (tenant_id, source_id, variant_id, created_at),
+                    (tenant_id, legal_entity_id, source_id, variant_id, created_at),
                 INDEX idx_inventory_movement_transfer (transfer_id),
                 UNIQUE INDEX uniq_inventory_movement_tenant_key
                     (tenant_id, idempotency_key),
@@ -164,6 +194,13 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
                 CONSTRAINT FK_INV_MOVEMENT_TENANT
                     FOREIGN KEY (tenant_id) REFERENCES condor_tenant (id)
                     ON DELETE CASCADE,
+                CONSTRAINT FK_INV_MOVEMENT_LEGAL
+                    FOREIGN KEY (legal_entity_id) REFERENCES condor_legal_entity (id)
+                    ON DELETE RESTRICT,
+                CONSTRAINT FK_INV_MOVEMENT_LEGAL_TENANT
+                    FOREIGN KEY (tenant_id, legal_entity_id)
+                    REFERENCES condor_legal_entity (tenant_id, id)
+                    ON DELETE RESTRICT,
                 CONSTRAINT FK_INV_MOVEMENT_SOURCE
                     FOREIGN KEY (source_id) REFERENCES condor_inventory_source (id)
                     ON DELETE RESTRICT,
@@ -176,17 +213,17 @@ final class Version20260922184500 extends AbstractMigration // NOSONAR -- nombre
                 CONSTRAINT FK_INV_MOVEMENT_ACTOR
                     FOREIGN KEY (actor_user_id) REFERENCES condor_user (id)
                     ON DELETE SET NULL,
-                CONSTRAINT FK_INV_MOVEMENT_SOURCE_TENANT
-                    FOREIGN KEY (tenant_id, source_id)
-                    REFERENCES condor_inventory_source (tenant_id, id)
+                CONSTRAINT FK_INV_MOVEMENT_SOURCE_SCOPE
+                    FOREIGN KEY (tenant_id, legal_entity_id, source_id)
+                    REFERENCES condor_inventory_source (tenant_id, legal_entity_id, id)
                     ON DELETE RESTRICT,
                 CONSTRAINT FK_INV_MOVEMENT_VARIANT_TENANT
                     FOREIGN KEY (tenant_id, variant_id)
                     REFERENCES condor_product_variant (tenant_id, id)
                     ON DELETE RESTRICT,
-                CONSTRAINT FK_INV_MOVEMENT_TRANSFER_TENANT
-                    FOREIGN KEY (tenant_id, transfer_id)
-                    REFERENCES condor_inventory_transfer (tenant_id, id)
+                CONSTRAINT FK_INV_MOVEMENT_TRANSFER_SCOPE
+                    FOREIGN KEY (tenant_id, legal_entity_id, transfer_id)
+                    REFERENCES condor_inventory_transfer (tenant_id, legal_entity_id, id)
                     ON DELETE RESTRICT
             ) DEFAULT CHARACTER SET utf8mb4
               COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
