@@ -68,7 +68,7 @@ class ToolingContractTests(unittest.TestCase):
         lock_index = script.index('LOCK_FILE="var/post-deploy.lock"')
         main_check_index = script.index(
             "if run_schema_check; then",
-            script.index("# D-053 / AGENTES.md §10"),
+            script.index("# D-053/D-054 / AGENTES.md §10"),
         )
         migrate_call_index = script.index(
             "if run_construction_migrations; then",
@@ -85,7 +85,17 @@ class ToolingContractTests(unittest.TestCase):
             'PRODUCTION_STAGE="${CONDOR_PRODUCTION_STAGE:-construction}"',
             script,
         )
-        self.assertIn('if [ "$PRODUCTION_STAGE" = "construction" ]; then', script)
+        self.assertIn(
+            'AUTO_MIGRATE="${CONDOR_AUTO_MIGRATE:-1}"',
+            script,
+        )
+        self.assertIn(
+            'if [ "$PRODUCTION_STAGE" = "construction" ] && [ "$AUTO_MIGRATE" = "1" ]; then',
+            script,
+        )
+        self.assertIn("run_pre_migration_backup", script)
+        self.assertIn("scripts/backup-database.sh", script)
+        self.assertIn("Symfony\\\\Component\\\\Dotenv\\\\Dotenv", script)
         self.assertIn("--dry-run", script)
         self.assertIn("--write-sql=", script)
         self.assertIn("SQL de migración fuera del allowlist", script)

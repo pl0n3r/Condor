@@ -1,10 +1,10 @@
 #!/bin/sh
 # Cron/post-deploy seguro para Hostinger shared hosting.
 #
-# En modo construction (D-053) este script puede reconciliar migraciones
-# Doctrine versionadas pendientes bajo exclusión mutua y luego regenerar
-# la caché. En modo live conserva el comportamiento estricto: una deriva
-# de esquema falla cerrado y requiere operación explícita. Nunca convierte
+# En modo construction (D-053/D-054) este script puede reconciliar migraciones
+# Doctrine versionadas pendientes bajo exclusión mutua, backup previo y luego
+# regenerar la caché. CONDOR_AUTO_MIGRATE=0 conserva el modo solo-chequeo.
+# En modo live el esquema pendiente siempre falla cerrado. Nunca convierte
 # migraciones destructivas/contract en automáticas.
 set -eu
 umask 077
@@ -43,6 +43,16 @@ case "$PRODUCTION_STAGE" in
         ;;
     *)
         echo "post-deploy.sh: CONDOR_PRODUCTION_STAGE debe ser construction o live." >&2
+        exit 1
+        ;;
+esac
+
+AUTO_MIGRATE="${CONDOR_AUTO_MIGRATE:-1}"
+case "$AUTO_MIGRATE" in
+    0|1)
+        ;;
+    *)
+        echo "post-deploy.sh: CONDOR_AUTO_MIGRATE debe ser 0 o 1." >&2
         exit 1
         ;;
 esac
@@ -372,6 +382,47 @@ validate_construction_migrations() {
     return 0
 }
 
+resolve_database_url() {
+    if [ -n "${DATABASE_URL:-}" ]; then
+        printf '%s' "$DATABASE_URL"
+        return 0
+    fi
+
+    "$PHP_BIN" -r '
+        require "vendor/autoload.php";
+        $dotenv = new Symfony\\Component\\Dotenv\\Dotenv();
+        $dotenv->bootEnv(".env");
+        $value = $_SERVER["DATABASE_URL"] ?? $_ENV["DATABASE_URL"] ?? getenv("DATABASE_URL");
+        if (is_string($value) && $value !== "") {
+            echo $value;
+        }
+    '
+}
+
+run_pre_migration_backup() {
+    database_url="$(resolve_database_url 2>/dev/null || true)"
+    if [ -z "$database_url" ]; then
+        unset database_url
+        echo "post-deploy.sh: no fue posible resolver DATABASE_URL para el backup previo; migración no ejecutada." >&2
+        return 2
+    fi
+
+    backup_status=0
+    if DATABASE_URL="$database_url" sh scripts/backup-database.sh; then
+        backup_status=0
+    else
+        backup_status=$?
+    fi
+    unset database_url
+
+    if [ "$backup_status" -ne 0 ]; then
+        echo "post-deploy.sh: backup previo a migración falló (código $backup_status); migración y caché no modificadas." >&2
+        return 2
+    fi
+
+    return 0
+}
+
 run_construction_migrations() {
     validation_result=0
     if validate_construction_migrations; then
@@ -381,6 +432,16 @@ run_construction_migrations() {
     fi
     if [ "$validation_result" -ne 0 ]; then
         return "$validation_result"
+    fi
+
+    backup_result=0
+    if run_pre_migration_backup; then
+        backup_result=0
+    else
+        backup_result=$?
+    fi
+    if [ "$backup_result" -ne 0 ]; then
+        return "$backup_result"
     fi
 
     migration_status=0
@@ -555,8 +616,8 @@ else
     exit 3
 fi
 
-# D-053 / AGENTES.md §10: construction converge migraciones versionadas;
-# live detecta deriva y falla cerrado.
+# D-053/D-054 / AGENTES.md §10: construction puede converger migraciones
+# aditivas con backup previo; live y el opt-out detectan deriva y fallan cerrado.
 schema_check_status=0
 if run_schema_check; then
     schema_check_status=0
@@ -580,7 +641,7 @@ elif grep -Eiq 'previously[[:space:]_-]*executed|unregistered|not[[:space:]_-]*r
     exit 2
 elif grep -Eiq 'not[[:space:]_-]*up[[:space:]_-]*to[[:space:]_-]*date|out[[:space:]_-]*of[[:space:]_-]*date|new[[:space:]_-]*migration|pending[[:space:]_-]*migration' "$SCHEMA_CHECK_LOG"; then
     cleanup_schema_check_log
-    if [ "$PRODUCTION_STAGE" = "construction" ]; then
+    if [ "$PRODUCTION_STAGE" = "construction" ] && [ "$AUTO_MIGRATE" = "1" ]; then
         echo "post-deploy.sh: esquema pendiente en construction; validando migraciones versionadas." >&2
         if run_construction_migrations; then
             :
@@ -588,6 +649,9 @@ elif grep -Eiq 'not[[:space:]_-]*up[[:space:]_-]*to[[:space:]_-]*date|out[[:spac
             migration_result=$?
             exit "$migration_result"
         fi
+    elif [ "$PRODUCTION_STAGE" = "construction" ]; then
+        echo "post-deploy.sh: esquema pendiente en construction pero CONDOR_AUTO_MIGRATE=0; migración automática deshabilitada. Caché no modificada." >&2
+        exit 2
     else
         echo "post-deploy.sh: esquema pendiente en live; migración automática deshabilitada. Caché no modificada." >&2
         exit 2

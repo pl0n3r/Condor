@@ -22,6 +22,22 @@ class PostDeployStageTest(unittest.TestCase):
             SCRIPT.read_text(encoding="utf-8"),
             encoding="utf-8",
         )
+        fake_backup = root / "scripts" / "backup-database.sh"
+        fake_backup.write_text(
+            textwrap.dedent(
+                """\
+                #!/bin/sh
+                set -eu
+                root="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+                printf '%s\n' "backup" >> "$root/php-calls.log"
+                [ -n "${DATABASE_URL:-}" ] || exit 19
+                [ "${FAKE_BACKUP_FAILURE:-0}" = "1" ] && exit 23
+                : > "$root/backup-created"
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_backup.chmod(0o755)
         fake_bin = root / "fake-bin"
         fake_bin.mkdir()
         fake_php = fake_bin / "php85"
@@ -31,6 +47,10 @@ class PostDeployStageTest(unittest.TestCase):
                 #!/bin/sh
                 set -eu
                 root="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+                if [ "${1:-}" = "-r" ]; then
+                  printf '%s' "${FAKE_DATABASE_URL:-mysql://dotenv.example/condor}"
+                  exit 0
+                fi
                 printf '%s\n' "$*" >> "$root/php-calls.log"
                 case "$*" in
                   *"doctrine:migrations:up-to-date"*)
@@ -73,7 +93,17 @@ class PostDeployStageTest(unittest.TestCase):
         fake_php.chmod(0o755)
         return temp, root, fake_bin
 
-    def run_script(self, stage, *, migration_sql="CREATE TABLE safe_table (id INT);", postcheck_hang=False, migration_failure=False):
+    def run_script(
+        self,
+        stage,
+        *,
+        migration_sql="CREATE TABLE safe_table (id INT);",
+        postcheck_hang=False,
+        migration_failure=False,
+        backup_failure=False,
+        auto_migrate="1",
+        database_url_in_env=False,
+    ):
         """Ejecuta post-deploy en sandbox con comportamiento Doctrine controlado."""
         temp, root, fake_bin = self.sandbox()
         self.addCleanup(temp.cleanup)
@@ -85,6 +115,13 @@ class PostDeployStageTest(unittest.TestCase):
         env["FAKE_MIGRATION_SQL"] = migration_sql
         env["FAKE_POSTCHECK_HANG"] = "1" if postcheck_hang else "0"
         env["FAKE_MIGRATION_FAILURE"] = "1" if migration_failure else "0"
+        env["FAKE_BACKUP_FAILURE"] = "1" if backup_failure else "0"
+        env["CONDOR_AUTO_MIGRATE"] = auto_migrate
+        env["FAKE_DATABASE_URL"] = "mysql://dotenv.example/condor"
+        if database_url_in_env:
+            env["DATABASE_URL"] = "mysql://env.example/condor"
+        else:
+            env.pop("DATABASE_URL", None)
         result = subprocess.run(
             ["sh", str(root / "scripts" / "post-deploy.sh")],
             cwd=root,
@@ -110,8 +147,55 @@ class PostDeployStageTest(unittest.TestCase):
             line for line in calls.splitlines()
             if "doctrine:migrations:migrate" in line and "--dry-run" not in line
         )
+        self.assertIn("backup", calls)
+        self.assertTrue((root / "backup-created").exists())
+        self.assertLess(calls.index("--dry-run"), calls.index("backup"))
+        self.assertLess(calls.index("backup"), calls.index(actual_migrate))
         self.assertLess(calls.index(actual_migrate), calls.index("cache:clear"))
         self.assertIn("cache:warmup", calls)
+
+    def test_construction_resolves_database_url_from_dotenv_for_backup(self):
+        """Sin DATABASE_URL exportada, Symfony dotenv alimenta el backup previo."""
+        result, calls, root = self.run_script(
+            "construction",
+            database_url_in_env=False,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("backup", calls)
+        self.assertTrue((root / "backup-created").exists())
+
+    def test_backup_failure_prevents_migration_and_cache(self):
+        """Si el backup falla, no se ejecuta migrate real ni se toca caché."""
+        result, calls, root = self.run_script(
+            "construction",
+            backup_failure=True,
+        )
+
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertIn("backup previo a migración falló", result.stderr)
+        self.assertFalse((root / "migrated").exists())
+        self.assertIn("--dry-run", calls)
+        actual = [
+            line for line in calls.splitlines()
+            if "doctrine:migrations:migrate" in line and "--dry-run" not in line
+        ]
+        self.assertEqual([], actual)
+        self.assertNotIn("cache:clear", calls)
+
+    def test_auto_migrate_opt_out_preserves_fail_closed_behavior(self):
+        """CONDOR_AUTO_MIGRATE=0 detecta deriva sin dry-run, backup ni migrate."""
+        result, calls, root = self.run_script(
+            "construction",
+            auto_migrate="0",
+        )
+
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertIn("CONDOR_AUTO_MIGRATE=0", result.stderr)
+        self.assertNotIn("doctrine:migrations:migrate", calls)
+        self.assertNotIn("backup", calls)
+        self.assertFalse((root / "backup-created").exists())
+        self.assertNotIn("cache:clear", calls)
 
     def test_live_fails_closed_without_migrating_or_touching_cache(self):
         """Live conserva fail-closed y no ejecuta ni dry-run de migración."""

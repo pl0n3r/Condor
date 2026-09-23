@@ -430,7 +430,7 @@ En este modo los agentes pueden ejecutar autónomamente, sin pedir una aprobaci�
 
 Toda mutación debe conservar trazabilidad, usar el mecanismo más reversible disponible, preservar backup/restaurabilidad cuando exista estado persistente relevante y validar después la misma superficie real afectada. Un HTTP 500, schema drift o deploy incompleto no se deja indefinidamente como `NO_OBSERVADO`: se diagnostica y se corrige.
 
-El post-deploy puede converger automáticamente el esquema en modo construcción ejecutando migraciones versionadas pendientes antes de regenerar caché. Esto **no** convierte las migraciones destructivas en aceptables.
+El post-deploy puede converger automáticamente el esquema en modo construcción ejecutando migraciones versionadas pendientes antes de regenerar caché. La decisión D-054 exige dry-run/allowlist aditivo, **backup exitoso previo** y permite el opt-out operativo `CONDOR_AUTO_MIGRATE=0`; si cualquiera falla, no se migra ni se toca caché. Esto **no** convierte las migraciones destructivas en aceptables.
 
 ### Cambio a OPERACIÓN REAL
 

@@ -1572,7 +1572,7 @@ Toda automatización debe ser idempotente cuando sea posible y operar con mínim
 
 El cron/post-deploy opera con una etapa explícita mediante `CONDOR_PRODUCTION_STAGE`:
 
-- `construction` (default mientras aplique D-053): puede converger automáticamente migraciones versionadas pendientes;
+- `construction` (default mientras apliquen D-053/D-054): puede converger automáticamente migraciones versionadas pendientes aditivas/expand-compatible; `CONDOR_AUTO_MIGRATE=0` deshabilita esa convergencia y conserva solo detección fail-closed;
 - `live`: conserva el comportamiento estricto y falla cerrado ante cualquier esquema pendiente.
 
 Contrato operativo:
@@ -1582,10 +1582,11 @@ Contrato operativo:
 - un lock huérfano puede recuperarse de forma segura y un lock incompleto reciente obtiene un periodo de gracia antes de considerarse recuperable;
 - el cron ejecuta primero `doctrine:migrations:up-to-date --env=prod --no-interaction --fail-on-unregistered` con tiempo acotado;
 - historial de migraciones no registrado, conectividad fallida o timeout siempre fallan cerrado y no modifican caché;
-- si solo existen migraciones pendientes y la etapa es `construction`, ejecuta `doctrine:migrations:migrate --env=prod --no-interaction --allow-no-migration` bajo el mismo lock, con timeout acotado, y vuelve a verificar el esquema;
+- si solo existen migraciones pendientes y la etapa es `construction` con auto-migración habilitada, primero genera dry-run SQL y valida el allowlist forward/expand-compatible, luego crea un backup mediante `scripts/backup-database.sh` (resolviendo `DATABASE_URL` desde Symfony dotenv si no viene exportada), después ejecuta `doctrine:migrations:migrate --env=prod --no-interaction --allow-no-migration` bajo el mismo lock, con timeout acotado, y vuelve a verificar el esquema;
+- si `CONDOR_AUTO_MIGRATE=0`, una migración pendiente termina fail-closed sin dry-run, backup, migrate ni caché;
 - si existen migraciones pendientes y la etapa es `live`, termina con error accionable sin ejecutarlas;
 - las migraciones automáticas de construcción deben seguir siendo forward / expand-compatible; SQL destructivo, contracciones irreversibles, backfills riesgosos o cambios sin rollback permanecen fuera de esta automatización;
-- el orden exitoso es **comprobar esquema → migrar si construction lo necesita → volver a comprobar → limpiar caché → calentar caché**;
+- el orden exitoso es **comprobar esquema → dry-run/validar → backup → migrar → volver a comprobar → limpiar caché → calentar caché**;
 - detectar una deriva no reconciliada bloquea `VALIDATED_IN_PRODUCTION`;
 - el observador de release nunca infiere que una migración fue aplicada solo porque versión/SHA coincidan;
 - `/health` conserva la identidad pública (`status`, `version`, `release_sha`) y `schema_up_to_date: true|false` como única señal no sensible sobre migraciones.
@@ -1977,6 +1978,23 @@ Reglas:
 - código desplegado, esquema reconciliado y producción validada siguen siendo evidencias separadas.
 
 Esta decisión especializa D-043/D-044 durante la fase de construcción y debe retirarse explícitamente al entrar en operación real.
+
+
+### D-054 — Auto-migración aditiva con backup durante pre-lanzamiento
+
+Decisión explícita del dueño del repositorio, 2026-09-23, registrada en Issue #187. El Issue la propuso inicialmente como “D-045”, pero ese identificador ya pertenece a **IndexNow y Google Tag Manager por tenant**; para preservar trazabilidad durable se normaliza aquí como **D-054**.
+
+Mientras Condor continúe en pre-lanzamiento sin staging y bajo el modo `construction` de D-053:
+
+- `scripts/post-deploy.sh` aplica por defecto las migraciones pendientes únicamente cuando el dry-run completo encaja en el allowlist aditivo/expand-compatible;
+- `CONDOR_AUTO_MIGRATE=0` desactiva explícitamente la auto-migración y restaura el comportamiento de solo detección fail-closed;
+- antes del migrate real debe existir un backup exitoso mediante `scripts/backup-database.sh`; si `DATABASE_URL` no está exportada, se resuelve desde Symfony dotenv sin imprimirla;
+- si el backup falla, no se ejecuta la migración ni se regenera caché;
+- SQL destructivo/contract, historial no reconciliado, conectividad fallida, timeout, SQL desconocido o recomprobación fallida permanecen fail-closed;
+- la migración, el backup previo y las verificaciones ocurren dentro de la misma exclusión mutua de post-deploy;
+- al entrar en operación real/staging, `CONDOR_PRODUCTION_STAGE=live` mantiene las migraciones automáticas deshabilitadas aunque `CONDOR_AUTO_MIGRATE` no esté definido.
+
+Esta decisión refina D-053; no autoriza SQL destructivo ni elimina la distinción entre **DESPLEGADO**, esquema reconciliado y **VALIDADO EN PRODUCCIÓN**.
 
 
 ## 7. Criterio de actualización

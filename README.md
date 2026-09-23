@@ -28,7 +28,9 @@
 - `construction` como etapa vigente mientras no existan usuarios finales ni datos reales a conservar;
 - autorización durable para deploys, migraciones Doctrine versionadas forward/expand-compatible, provisioning técnico, caché y correcciones productivas durante construcción;
 - `scripts/post-deploy.sh` puede reconciliar migraciones pendientes bajo el lock existente en modo construction;
-- verificación posterior obligatoria del esquema antes de `cache:clear` y `cache:warmup`;
+- `CONDOR_AUTO_MIGRATE=0` permite volver a solo detección fail-closed sin dry-run, backup ni migrate;
+- cada auto-migración válida exige **dry-run/allowlist → backup → migrate → verificación** antes de `cache:clear` y `cache:warmup`;
+- si `DATABASE_URL` no viene exportada, el post-deploy la resuelve con Symfony dotenv exclusivamente para el proceso de backup, sin imprimirla;
 - `live` restaura el fallo cerrado ante migraciones pendientes;
 - historial de migraciones incoherente, conectividad fallida y timeouts siguen fallando cerrado;
 - migraciones destructivas/contract, SQL destructivo, secretos, DNS/infra irreversible y borrados irreversibles continúan fuera de la automatización;
@@ -40,6 +42,7 @@
 - toda mutación productiva queda asociada a una release/SHA;
 - construcción no equivale a permiso para destrucción irreversible;
 - ninguna caché se regenera si el esquema no quedó reconciliado;
+- ninguna migración automática se ejecuta si el backup previo falla;
 - el modo `live` debe establecerse antes del primer uso real con datos a conservar;
 - código desplegado, esquema reconciliado y producción validada se reportan por separado;
 - un HTTP 500 o `NO_OBSERVADO` activa diagnóstico y corrección, no una aceptación permanente del fallo.
