@@ -92,7 +92,7 @@ class ToolingContractTests(unittest.TestCase):
         self.assertNotIn('kill -0 "$owner_pid"', script)
         self.assertIn('--fail-on-unregistered', script)
         self.assertIn(
-            "trap 'cleanup_schema_check_log; cleanup_lock; cleanup_guard' EXIT",
+            "trap 'cleanup_schema_check_process; cleanup_schema_check_watchdog; cleanup_schema_check_log; cleanup_lock; cleanup_guard' EXIT",
             script,
         )
         self.assertIn('find "$LOCK_FILE" -mmin +', script)
@@ -154,6 +154,10 @@ class ToolingContractTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn(
+                "no fue posible preparar el directorio del lock",
+                result.stderr,
+            )
             self.assertIn(
                 "no fue posible adquirir el lock de forma segura",
                 result.stderr,
