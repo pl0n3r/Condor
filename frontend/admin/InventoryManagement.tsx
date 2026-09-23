@@ -291,13 +291,15 @@ export function InventoryManagement({
         </div>
       </div>
 
-      {notice && (
-        <div
-          className={'alert ' + (notice.kind === 'error' ? 'alert-error' : 'alert-success')}
-          role={notice.kind === 'error' ? 'alert' : 'status'}
-        >
+      {notice?.kind === 'error' && (
+        <div className="alert alert-error" role="alert">
           {notice.text}
         </div>
+      )}
+      {notice?.kind === 'success' && (
+        <output className="alert alert-success" aria-live="polite">
+          {notice.text}
+        </output>
       )}
 
       {state.status === 'loading' && (
