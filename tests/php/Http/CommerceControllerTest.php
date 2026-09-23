@@ -520,6 +520,93 @@ final class CommerceControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(404);
     }
 
+    public function testVariantPriceUpdateAuditsPreviousAndNewAmounts(): void
+    {
+        $client = static::createClient();
+        $em = $this->entityManager();
+        [$tenant, $branch, $owner] = $this->fixture($em);
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+
+        $list = new PriceList(
+            $tenant,
+            'Lista audit '.$suffix,
+            'lista-audit-'.$suffix,
+        );
+        $product = new Product(
+            $tenant,
+            'Producto audit '.$suffix,
+            'producto-audit-'.$suffix,
+        );
+        $variant = new ProductVariant(
+            $tenant,
+            $product,
+            'AUDIT-'.strtoupper($suffix),
+            'Única',
+        );
+        $price = new VariantPrice(
+            $tenant,
+            $list,
+            $variant,
+            100000,
+        );
+        foreach ([$list, $product, $variant, $price] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
+
+        $client->loginUser($owner);
+        $csrf = $this->csrf($client);
+        $client->jsonRequest(
+            'PUT',
+            '/api/v1/branches/'.$branch->id()
+                .'/pricing/lists/'.$list->id()
+                .'/variants/'.$variant->id(),
+            ['amount_minor' => 125000],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+
+        self::assertResponseIsSuccessful();
+        self::assertSame(
+            125000,
+            $this->json($client)['variant_price']['amount_minor'],
+        );
+
+        $storedContext = $em->getConnection()->fetchOne(
+            'SELECT context FROM condor_audit_event '
+            .'WHERE tenant_id = ? AND action = ? AND entity_id = ? '
+            .'ORDER BY created_at DESC LIMIT 1',
+            [
+                $tenant->id(),
+                'variant_price.updated',
+                $price->id(),
+            ],
+        );
+        self::assertIsString($storedContext);
+        $auditContext = json_decode(
+            $storedContext,
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertIsArray($auditContext);
+        self::assertSame(
+            100000,
+            $auditContext['previous_amount_minor'] ?? null,
+        );
+        self::assertSame(
+            125000,
+            $auditContext['amount_minor'] ?? null,
+        );
+        self::assertSame(
+            $list->id(),
+            $auditContext['price_list_id'] ?? null,
+        );
+        self::assertSame(
+            $variant->id(),
+            $auditContext['variant_id'] ?? null,
+        );
+    }
+
     public function testDatabaseRejectsCrossTenantCommercialReferences(): void
     {
         $em = $this->entityManager();

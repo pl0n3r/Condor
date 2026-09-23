@@ -228,6 +228,9 @@ final class PricingController extends AbstractController
                 'variant' => $variant,
             ]);
         $created = !$price instanceof VariantPrice;
+        $previousAmount = $price instanceof VariantPrice
+            ? $price->amountMinor()
+            : null;
         $price = $this->domain(function () use (
             $price,
             $tenant,
@@ -259,6 +262,8 @@ final class PricingController extends AbstractController
                 'branch_id' => $branch->id(),
                 'price_list_id' => $list->id(),
                 'variant_id' => $variant->id(),
+                'previous_amount_minor' => $previousAmount,
+                'amount_minor' => $price->amountMinor(),
             ],
         );
         $this->commercialFlushUnique(
