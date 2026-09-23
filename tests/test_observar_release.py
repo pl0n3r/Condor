@@ -1018,7 +1018,7 @@ class ObserverTests(unittest.TestCase):
         self.assertNotIn("password", salida)
 
 
-    def test_observacion_automatica_solo_tolera_transicion_pendiente(self) -> None:
+    def test_codigo_salida_distingue_transicion_de_fallo_funcional(self) -> None:
         base = {
             "estado": "DEPLOY_OBSERVED",
             "comprobaciones": {
@@ -1028,23 +1028,23 @@ class ObserverTests(unittest.TestCase):
                 "transicion_release": {"ok": False},
             },
         }
-        self.assertTrue(modulo.observacion_automatica_exitosa(base))
+        self.assertEqual(modulo.codigo_salida_observacion(base), 1)
 
         con_schema_roto = json.loads(json.dumps(base))
         con_schema_roto["comprobaciones"]["schema"]["ok"] = False
-        self.assertFalse(modulo.observacion_automatica_exitosa(con_schema_roto))
+        self.assertEqual(modulo.codigo_salida_observacion(con_schema_roto), 2)
 
         no_observado = {
             "estado": "NO_OBSERVADO",
             "comprobaciones": {"health": {"ok": False}},
         }
-        self.assertFalse(modulo.observacion_automatica_exitosa(no_observado))
+        self.assertEqual(modulo.codigo_salida_observacion(no_observado), 2)
 
         validado = {
             "estado": "VALIDATED_IN_PRODUCTION",
             "comprobaciones": {"health": {"ok": True}},
         }
-        self.assertTrue(modulo.observacion_automatica_exitosa(validado))
+        self.assertEqual(modulo.codigo_salida_observacion(validado), 0)
 
 if __name__ == "__main__":
     unittest.main()

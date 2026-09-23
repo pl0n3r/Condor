@@ -696,23 +696,23 @@ def observar(
         "sha_esperado": sha,
         "comprobaciones": evidencias,
     }
-def observacion_automatica_exitosa(resultado: dict[str, Any]) -> bool:
-    """Solo acepta smoke íntegro; la transición manual puede quedar pendiente."""
+def codigo_salida_observacion(resultado: dict[str, Any]) -> int:
+    """Distingue validación, transición pendiente y smoke funcional fallido."""
     estado = resultado.get("estado")
     comprobaciones = resultado.get("comprobaciones")
-    if estado not in {"DEPLOY_OBSERVED", "VALIDATED_IN_PRODUCTION"}:
-        return False
     if not isinstance(comprobaciones, dict) or not comprobaciones:
-        return False
+        return 2
 
     fallos = [
         nombre
         for nombre, item in comprobaciones.items()
         if not isinstance(item, dict) or item.get("ok") is not True
     ]
-    if estado == "VALIDATED_IN_PRODUCTION":
-        return not fallos
-    return fallos == ["transicion_release"]
+    if estado == "VALIDATED_IN_PRODUCTION" and not fallos:
+        return 0
+    if estado == "DEPLOY_OBSERVED" and fallos == ["transicion_release"]:
+        return 1
+    return 2
 
 
 def resumen(resultado: dict[str, Any]) -> str:
@@ -852,7 +852,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     reporte = json.dumps(resultado, ensure_ascii=False, indent=2) + "\n"
     print(resumen(resultado) if args.markdown else reporte, end="")
-    return 0 if resultado["estado"] == "VALIDATED_IN_PRODUCTION" else 1
+    return codigo_salida_observacion(resultado)
 
 
 if __name__ == "__main__":
