@@ -29,20 +29,21 @@ test.describe('Slice 4 — inventario', () => {
 
     await expect(page).toHaveURL(/\/admin$/);
 
-    await page.getByRole('button', { name: 'Nuevo producto' }).click();
-    await page.getByLabel('Nombre', { exact: true }).fill(productName);
-    await page.getByLabel('Slug').fill(slug);
-    await page.getByRole('button', { name: 'Crear producto' }).click();
-    await expect(page.getByText('Producto creado.')).toBeVisible();
+    const catalog = page.locator('#catalog');
+    await catalog.getByRole('button', { name: 'Nuevo producto' }).click();
+    await catalog.getByLabel('Nombre', { exact: true }).fill(productName);
+    await catalog.getByLabel('Slug').fill(slug);
+    await catalog.getByRole('button', { name: 'Crear producto' }).click();
+    await expect(catalog.getByText('Producto creado.')).toBeVisible();
 
-    let productCard = page.locator('.catalog-card').filter({
+    let productCard = catalog.locator('.catalog-card').filter({
       has: page.getByRole('heading', { name: productName }),
     });
     await productCard.getByRole('button', { name: 'Añadir variante' }).click();
     await productCard.getByLabel('SKU').fill(sku);
     await productCard.getByLabel('Nombre de variante').fill('Única');
     await productCard.getByRole('button', { name: 'Crear variante' }).click();
-    await expect(page.getByText('Variante creada.')).toBeVisible();
+    await expect(catalog.getByText('Variante creada.')).toBeVisible();
 
     const inventory = page.locator('#inventory');
     await expect(
@@ -86,7 +87,7 @@ test.describe('Slice 4 — inventario', () => {
     await expect(inventory.getByText('Carga E2E')).toBeVisible();
 
     await page.reload();
-    productCard = page.locator('.catalog-card').filter({
+    productCard = page.locator('#catalog').locator('.catalog-card').filter({
       has: page.getByRole('heading', { name: productName }),
     });
     await expect(productCard).toBeVisible();
