@@ -449,6 +449,26 @@ final class StorefrontAdminControllerTest extends WebTestCase
         $crawler = $client->request('GET', '/admin/storefront');
         self::assertResponseIsSuccessful();
         self::assertSelectorExists('form.channel-admin-form');
+        self::assertSelectorNotExists(
+            'form.channel-admin-form select[name="inventory_source_id"]',
+        );
+        self::assertSelectorNotExists(
+            'form.channel-admin-form select[name="price_list_id"]',
+        );
+        self::assertSelectorExists(
+            'form.channel-admin-form input[type="hidden"][name="inventory_source_id"]',
+        );
+        self::assertSelectorExists(
+            'form.channel-admin-form input[type="hidden"][name="price_list_id"]',
+        );
+        self::assertSelectorTextContains(
+            '[data-single-channel-source]',
+            'Bodega web',
+        );
+        self::assertSelectorTextContains(
+            '[data-single-price-list]',
+            'Lista web',
+        );
 
         $token = $crawler
             ->filter('form.channel-admin-form input[name="_token"]')
