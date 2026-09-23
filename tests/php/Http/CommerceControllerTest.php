@@ -172,6 +172,123 @@ final class CommerceControllerTest extends WebTestCase
         self::assertSame(5, $auditCount);
     }
 
+    public function testOwnerUpdatesAndDeactivatesCommercialRecordsWithAudit(): void
+    {
+        $client = static::createClient();
+        $em = $this->entityManager();
+        [$tenant, $branch, $owner] = $this->fixture($em);
+        $client->loginUser($owner);
+        $csrf = $this->csrf($client);
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+
+        $categoryUrl = '/api/v1/branches/'.$branch->id()
+            .'/customers/categories';
+        $client->jsonRequest(
+            'POST',
+            $categoryUrl,
+            ['name' => 'Categoría '.$suffix, 'slug' => 'categoria-'.$suffix],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $categoryId = $this->json($client)['category']['id'];
+
+        $customerUrl = '/api/v1/branches/'.$branch->id().'/customers';
+        $client->jsonRequest(
+            'POST',
+            $customerUrl,
+            [
+                'name' => 'Cliente '.$suffix,
+                'email' => 'cliente-'.$suffix.'@example.test',
+                'category_id' => $categoryId,
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $customerId = $this->json($client)['customer']['id'];
+
+        $listUrl = '/api/v1/branches/'.$branch->id().'/pricing/lists';
+        $client->jsonRequest(
+            'POST',
+            $listUrl,
+            ['name' => 'Lista '.$suffix, 'slug' => 'lista-'.$suffix],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $listId = $this->json($client)['price_list']['id'];
+
+        $client->jsonRequest(
+            'PATCH',
+            $categoryUrl.'/'.$categoryId,
+            ['name' => 'Categoría editada '.$suffix],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseIsSuccessful();
+        self::assertSame(
+            'Categoría editada '.$suffix,
+            $this->json($client)['category']['name'],
+        );
+
+        $client->jsonRequest(
+            'PATCH',
+            $customerUrl.'/'.$customerId,
+            ['email' => 'editado-'.$suffix.'@example.test'],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseIsSuccessful();
+        self::assertSame(
+            'editado-'.$suffix.'@example.test',
+            $this->json($client)['customer']['email'],
+        );
+
+        $client->jsonRequest(
+            'PATCH',
+            $listUrl.'/'.$listId,
+            ['name' => 'Lista editada '.$suffix],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseIsSuccessful();
+        self::assertSame(
+            'Lista editada '.$suffix,
+            $this->json($client)['price_list']['name'],
+        );
+
+        $client->request(
+            'DELETE',
+            $customerUrl.'/'.$customerId,
+            server: ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(204);
+
+        $client->request(
+            'DELETE',
+            $categoryUrl.'/'.$categoryId,
+            server: ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(204);
+
+        $client->request(
+            'DELETE',
+            $listUrl.'/'.$listId,
+            server: ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(204);
+
+        $auditCount = (int) $em->getConnection()->fetchOne(
+            'SELECT COUNT(*) FROM condor_audit_event '
+            .'WHERE tenant_id = ? AND action IN (?, ?, ?, ?, ?, ?)',
+            [
+                $tenant->id(),
+                'commercial_category.updated',
+                'customer.updated',
+                'price_list.updated',
+                'customer.deactivated',
+                'commercial_category.deactivated',
+                'price_list.deactivated',
+            ],
+        );
+        self::assertSame(6, $auditCount);
+    }
+
     public function testDelegatedViewerCannotMutateCustomersOrPricing(): void
     {
         $client = static::createClient();
