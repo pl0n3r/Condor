@@ -153,7 +153,7 @@ final class PlatformOwnerControllerTest extends WebTestCase
             'tenant-user-'.$suffix.'@example.test',
             'Usuario Tenant',
         );
-        $tenant = new Tenant('Empresa Contexto '.$suffix, 'empresa-contexto-'.$suffix);
+        $tenant = new Tenant('000 Contexto '.$suffix, 'empresa-contexto-'.$suffix);
         $branch = new Branch($tenant, 'Principal', 'principal', default: true);
         $membership = new Membership($tenant, $tenantUser, Membership::ROLE_OWNER);
 
