@@ -244,7 +244,7 @@ La plantilla acelera la implantación, pero todos esos elementos continúan sien
 | RF-055 | **PARCIAL / MAIN** | Storefront tenant-owned y dominio personalizado ya existen; falta e-commerce completo. La página de esta marca debe conservar identidad visual y catálogo propios, asociados a su entidad legal y canal dentro del tenant-grupo definido por #177, sin duplicar la plataforma. Los permisos y datos por entidad siguen sin implementarse plenamente. |
 | RF-056 | **DEFINIDO** | Storefront consume el mismo catálogo/inventario; nunca sincronización por copia de bases de datos. |
 | RF-057 | **DEFINIDO** | Checkout crea pedido y aplica la política transaccional de inventario. |
-| RF-058 | **DEFINIDO** | Disponibilidad usa fuente efectiva + backorder configurable; servidor es autoridad final. |
+| RF-058 | **DEFINIDO** | Disponibilidad usa la fuente efectiva y el servidor impide vender más unidades que el stock disponible en la página de Marcela Arias: **backorder desactivado para ese canal** según este RF. El motor conserva una política configurable para otros canales/tenants cuando sus requisitos lo permitan. |
 | RF-059 | **DEFINIDO** | Pedido web entra al mismo dominio Orders que tienda física/B2B; cambia el canal, no el modelo. |
 
 ## 5.9 Página web B2B Fabritex — RF-060 a RF-063
