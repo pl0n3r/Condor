@@ -57,8 +57,11 @@ export function AdminApp({
   const [context, setContext] = useState<ContextState>({
     status: 'loading',
   });
+  const [contextRequest] = useState(() => ({ latest: 0 }));
 
   async function loadContext(branchId?: string) {
+    const requestId = ++contextRequest.latest;
+
     try {
       const response = await fetch(contextPath(branchId), {
         credentials: 'same-origin',
@@ -76,14 +79,16 @@ export function AdminApp({
         };
         const tenant = denied.details?.tenant ?? denied.tenant;
         if (tenant) {
-          setContext({
-            status: 'denied',
-            tenant,
-            message:
-              denied.message ??
-              denied.error ??
-              'No tienes una sede asignada en esta empresa.',
-          });
+          if (requestId === contextRequest.latest) {
+            setContext({
+              status: 'denied',
+              tenant,
+              message:
+                denied.message ??
+                denied.error ??
+                'No tienes una sede asignada en esta empresa.',
+            });
+          }
           return;
         }
       }
@@ -93,9 +98,13 @@ export function AdminApp({
       }
 
       const data = await response.json() as TenantContextResponse;
-      setContext({ status: 'ready', data });
+      if (requestId === contextRequest.latest) {
+        setContext({ status: 'ready', data });
+      }
     } catch {
-      setContext({ status: 'error' });
+      if (requestId === contextRequest.latest) {
+        setContext({ status: 'error' });
+      }
     }
   }
 
@@ -110,7 +119,8 @@ export function AdminApp({
     || readyContext.legal_entities.length <= 1
     ? readyContext?.branches ?? []
     : readyContext.branches.filter((branch) => (
-        branch.legal_entity?.id
+        branch.legal_entity === null
+        || branch.legal_entity.id
         === readyContext.active_legal_entity?.id
       ));
 

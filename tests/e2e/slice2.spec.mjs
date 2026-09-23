@@ -63,6 +63,7 @@ test.describe('Slice 2 — roles y permisos por sede', () => {
   test('cambia razón social y acota las sedes visibles', async ({ page }) => {
     const branchA = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
     const branchB = '01ARZ3NDEKTSV4RRFFQ69G5FAW';
+    const legacyBranch = '01ARZ3NDEKTSV4RRFFQ69G5FAT';
     const legalA = '01ARZ3NDEKTSV4RRFFQ69G5FAX';
     const legalB = '01ARZ3NDEKTSV4RRFFQ69G5FAY';
 
@@ -87,6 +88,13 @@ test.describe('Slice 2 — roles y permisos por sede', () => {
           is_default: false,
           legal_entity: { id: legalB, name: 'Industrial SAS' },
         },
+        {
+          id: legacyBranch,
+          name: 'Sede legacy',
+          slug: 'sede-legacy',
+          is_default: false,
+          legal_entity: null,
+        },
       ];
 
       await route.fulfill({
@@ -108,7 +116,7 @@ test.describe('Slice 2 — roles y permisos por sede', () => {
           branches,
           active_branch: branches.find(({ id }) => id === activeId),
           permissions: [],
-          version: 'V 0.1.22',
+          version: 'V 0.1.23',
         }),
       });
     });
@@ -123,17 +131,20 @@ test.describe('Slice 2 — roles y permisos por sede', () => {
     await expect(page.getByLabel('Sede activa')).toHaveValue(branchA);
     await expect(
       page.getByLabel('Sede activa').getByRole('option'),
-    ).toHaveCount(1);
+    ).toHaveCount(2);
+    await expect(
+      page.getByLabel('Sede activa').getByRole('option'),
+    ).toContainText(['Tienda · principal', 'Sede legacy']);
 
     await page.getByLabel('Razón social activa').selectOption(legalB);
 
     await expect(page.getByLabel('Sede activa')).toHaveValue(branchB);
     await expect(
       page.getByLabel('Sede activa').getByRole('option'),
-    ).toHaveCount(1);
+    ).toHaveCount(2);
     await expect(
       page.getByLabel('Sede activa').getByRole('option'),
-    ).toHaveText('Fábrica');
+    ).toContainText(['Fábrica', 'Sede legacy']);
   });
 
   test('oculta selector jurídico cuando solo hay una razón social', async ({ page }) => {
@@ -167,7 +178,7 @@ test.describe('Slice 2 — roles y permisos por sede', () => {
             legal_entity: { id: legalId, name: 'Comercial SAS' },
           },
           permissions: [],
-          version: 'V 0.1.22',
+          version: 'V 0.1.23',
         }),
       });
     });
