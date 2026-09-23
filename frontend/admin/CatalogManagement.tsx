@@ -365,8 +365,8 @@ export function CatalogManagement({
           <span className="eyebrow">Productos</span>
           <h2 id="catalog-title">Catálogo</h2>
           <p className="muted">
-            Define productos y variantes. Inventario y precios se
-            administrarán en slices separados.
+            Define productos, variantes y su política de backorder.
+            Las existencias se gestionan en la sección Inventario.
           </p>
         </div>
         {canCreate && !productEditorOpen && (
