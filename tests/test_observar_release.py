@@ -58,6 +58,22 @@ class ObserverTests(unittest.TestCase):
                 "status": "ok", "version": VERSION, "release_sha": SHA,
                 "schema_up_to_date": True,
             }).encode()),
+            "/post-deploy-status.php": (
+                200,
+                "application/json",
+                json.dumps({
+                    "status": "ok",
+                    "version": VERSION,
+                    "release_sha": SHA,
+                    "post_deploy": {
+                        "version": VERSION,
+                        "phase": "complete",
+                        "result": "success",
+                        "code": 0,
+                        "updated_at": "2026-09-23T23:59:59Z",
+                    },
+                }).encode(),
+            ),
             "/": (200, "text/html", HOME),
             "/admin/login": (200, "text/html", LOGIN),
             "/adminpl0n3r": (302, "text/html", b""),
@@ -77,6 +93,35 @@ class ObserverTests(unittest.TestCase):
 
     def observar(self) -> dict:
         return modulo.observar(self.base, VERSION, SHA, intentos=2, intervalo=0, timeout=1)
+
+    def test_probe_post_deploy_solicita_json(self) -> None:
+        self.assertEqual(
+            modulo.tipo_aceptado_para("/post-deploy-status.php"),
+            "application/json",
+        )
+
+    def test_probe_post_deploy_no_refleja_campos_extra(self) -> None:
+        payload = {
+            "status": "ok",
+            "version": VERSION,
+            "release_sha": SHA,
+            "post_deploy": {
+                "version": VERSION,
+                "phase": "backup",
+                "result": "failure",
+                "code": 2,
+                "updated_at": "2026-09-23T23:59:59Z",
+                "log": "DATABASE_URL=secreto",
+            },
+        }
+        detalle = modulo.validar_post_deploy_status(
+            "application/json",
+            json.dumps(payload).encode(),
+            VERSION,
+            SHA,
+        )
+        self.assertNotIn("secreto", detalle)
+        self.assertNotIn("DATABASE_URL", detalle)
 
     def test_accept_de_javascript_incluye_mime_legacy_de_hostinger(self) -> None:
         self.assertEqual(
@@ -672,6 +717,22 @@ class ObserverTests(unittest.TestCase):
             "application/json",
             b'{"status":"unavailable"}',
         )
+        self.server.respuestas["/post-deploy-status.php"] = (
+            200,
+            "application/json",
+            json.dumps({
+                "status": "ok",
+                "version": VERSION,
+                "release_sha": SHA,
+                "post_deploy": {
+                    "version": VERSION,
+                    "phase": "backup",
+                    "result": "failure",
+                    "code": 2,
+                    "updated_at": "2026-09-23T23:59:59Z",
+                },
+            }).encode(),
+        )
 
         with patch.object(modulo.time, "monotonic", side_effect=[0, 10, 700]), \
                 patch.object(modulo.time, "sleep") as sleep:
@@ -688,6 +749,14 @@ class ObserverTests(unittest.TestCase):
 
         self.assertEqual(resultado["estado"], "NO_OBSERVADO")
         self.assertEqual(resultado["comprobaciones"]["health"]["clase"], "transitorio")
+        diagnostico = resultado["comprobaciones"]["post_deploy_status"]
+        self.assertTrue(diagnostico["ok"])
+        self.assertIn("phase=backup", diagnostico["detalle"])
+        self.assertIn("result=failure", diagnostico["detalle"])
+        self.assertIn("code=2", diagnostico["detalle"])
+        comentario = modulo.comentario_roadmap(resultado)
+        self.assertIn("Diagnóstico post-deploy", comentario)
+        self.assertIn("phase=backup", comentario)
         sleep.assert_called_once_with(30)
 
     def test_espera_deploy_tolera_transitorio_despues_de_version_anterior(self) -> None:

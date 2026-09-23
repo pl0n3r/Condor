@@ -20,6 +20,15 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 DOMINIO_PRODUCCION = "https://www.condorapp.com.co"
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}\Z", re.ASCII)
 VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+\Z", re.ASCII)
+POST_DEPLOY_TIMESTAMP_PATTERN = re.compile(
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z",
+    re.ASCII,
+)
+POST_DEPLOY_PHASES = {
+    "bootstrap", "lock", "schema-check", "dry-run", "backup",
+    "migrate", "recheck", "cache", "complete", "missing",
+}
+POST_DEPLOY_RESULTS = {"running", "success", "failure", "skipped", "unknown"}
 TENANT_SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z", re.ASCII)
 STOREFRONT_VERSION = (0, 1, 13)
 STOREFRONT_IDENTITY_VERSION = (0, 1, 16)
@@ -189,7 +198,7 @@ def clasificar_error_http(
 
 def tipo_aceptado_para(ruta: str) -> str:
     """Devuelve el Accept mínimo esperado por el tipo de recurso."""
-    if ruta == "/health":
+    if ruta in {"/health", "/post-deploy-status.php"}:
         return "application/json"
     if ruta.endswith(".css"):
         return "text/css"
@@ -354,6 +363,132 @@ def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> bool:
             "El SHA observado no coincide con el esperado."
         )
     return carga.get("schema_up_to_date") is True
+
+
+def validar_post_deploy_status(
+    tipo: str,
+    cuerpo: bytes,
+    version: str,
+    sha: str,
+) -> str:
+    """Valida solo campos operacionales acotados del probe independiente."""
+    if tipo != "application/json":
+        raise ObservacionError(
+            "/post-deploy-status.php no respondió con JSON."
+        )
+    try:
+        carga = json.loads(cuerpo.decode("utf-8"))
+    except ValueError as error:
+        raise ObservacionError(
+            "/post-deploy-status.php devolvió JSON inválido."
+        ) from error
+
+    if not isinstance(carga, dict) or carga.get("status") != "ok":
+        raise ObservacionError(
+            "/post-deploy-status.php no informa estado diagnóstico válido."
+        )
+
+    observada = carga.get("version")
+    observada_sha = carga.get("release_sha")
+    if observada != version:
+        if (
+            isinstance(observada, str)
+            and VERSION_PATTERN.fullmatch(observada)
+            and tuple(map(int, observada.split(".")))
+                < tuple(map(int, version.split(".")))
+        ):
+            raise ObservacionDeployPendiente(
+                f"Probe post-deploy aún sirve V {observada}."
+            )
+        raise ObservacionIdentidad(
+            "La versión del probe post-deploy no coincide con la esperada."
+        )
+    if not isinstance(observada_sha, str) or SHA_PATTERN.fullmatch(observada_sha) is None:
+        raise ObservacionIdentidad(
+            "El SHA del probe post-deploy no tiene un formato válido."
+        )
+    if observada_sha != sha:
+        raise ObservacionIdentidad(
+            "El SHA del probe post-deploy no coincide con el esperado."
+        )
+
+    estado = carga.get("post_deploy")
+    if not isinstance(estado, dict):
+        raise ObservacionError(
+            "El probe post-deploy no contiene estado operacional."
+        )
+
+    status_version = estado.get("version")
+    phase = estado.get("phase")
+    result = estado.get("result")
+    code = estado.get("code")
+    updated_at = estado.get("updated_at")
+
+    if not (
+        (status_version is None or (
+            isinstance(status_version, str)
+            and (
+                status_version == "unknown"
+                or VERSION_PATTERN.fullmatch(status_version) is not None
+            )
+        ))
+        and isinstance(phase, str)
+        and phase in POST_DEPLOY_PHASES
+        and isinstance(result, str)
+        and result in POST_DEPLOY_RESULTS
+        and (
+            code is None
+            or (isinstance(code, int) and not isinstance(code, bool) and 0 <= code <= 255)
+        )
+        and (
+            updated_at is None
+            or (
+                isinstance(updated_at, str)
+                and POST_DEPLOY_TIMESTAMP_PATTERN.fullmatch(updated_at) is not None
+            )
+        )
+    ):
+        raise ObservacionError(
+            "El probe post-deploy contiene campos fuera del contrato seguro."
+        )
+
+    rendered_version = status_version if status_version is not None else "sin-estado"
+    rendered_code = str(code) if code is not None else "n/a"
+    rendered_time = updated_at if updated_at is not None else "n/a"
+    return (
+        "V/SHA exactos en probe independiente; "
+        f"cron phase={phase}, result={result}, code={rendered_code}, "
+        f"status_version={rendered_version}, updated_at={rendered_time}."
+    )
+
+
+def observar_post_deploy_status(
+    origen: str,
+    version: str,
+    sha: str,
+    *,
+    timeout: float,
+) -> dict[str, Any]:
+    """Obtiene una sola evidencia diagnóstica sin ampliar la ventana de espera."""
+    def comprobar() -> str:
+        tipo, cuerpo = obtener(
+            origen,
+            "/post-deploy-status.php",
+            timeout,
+        )
+        return validar_post_deploy_status(tipo, cuerpo, version, sha)
+
+    ok, detalle, intento, clase = ejecutar_con_reintentos(
+        comprobar,
+        intentos=1,
+        intervalo=0,
+    )
+    return {
+        "ok": ok,
+        "detalle": detalle,
+        "intento": intento,
+        "clase": "diagnostico" if ok else clase,
+    }
 
 
 def validar_pagina(tipo: str, cuerpo: bytes, version: str, login: bool) -> TextoVisible:
@@ -584,6 +719,13 @@ def observar(
     )
     evidencias["health"] = health
     if not health["ok"]:
+        if health.get("clase") == "transitorio":
+            evidencias["post_deploy_status"] = observar_post_deploy_status(
+                origen,
+                version,
+                sha,
+                timeout=timeout,
+            )
         return {
             "estado": "NO_OBSERVADO",
             "version_esperada": version,
@@ -754,8 +896,14 @@ def comentario_roadmap(resultado: dict[str, Any]) -> str:
     if health.get("clase") == "identidad":
         return (f"⛔ NO_OBSERVADO: la identidad de producción no coincide con {identidad}. "
                 f"{health['detalle']}")
+    diagnostico = resultado["comprobaciones"].get("post_deploy_status")
+    sufijo = ""
+    if isinstance(diagnostico, dict):
+        detalle_diagnostico = diagnostico.get("detalle")
+        if isinstance(detalle_diagnostico, str) and detalle_diagnostico:
+            sufijo = f" Diagnóstico post-deploy: {detalle_diagnostico}"
     return (f"⛔ NO_OBSERVADO: no fue posible confirmar {identidad} en producción. "
-            f"{health['detalle']}")
+            f"{health['detalle']}{sufijo}")
 
 
 def crear_parser() -> argparse.ArgumentParser:
