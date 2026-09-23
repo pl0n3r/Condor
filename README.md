@@ -60,11 +60,10 @@
 - ejecutar la migración productiva únicamente mediante una operación separada después de autorización explícita;
 - repetir el smoke del storefront representativo y solo entonces evaluar `VALIDATED_IN_PRODUCTION`.
 
-## AHORA / SIGUE / DESPUÉS
+## Estado inmediato
 
-- **AHORA:** cerrar V 0.1.21 (#173/#174) con evidencia exact-head.
-- **SIGUE:** reconstruir Inventario (#171/#172) sobre el nuevo `main` como V 0.1.22.
-- **DESPUÉS:** continuar el Roadmap #1 sin mezclar identidad de código, deploy observado y validación productiva.
+- **V 0.1.21:** candidato en validación exact-head; merge, deploy y validación productiva permanecen como estados separados.
+- La planificación posterior vive exclusivamente en el Roadmap canónico #1.
 
 ## Referencias
 
