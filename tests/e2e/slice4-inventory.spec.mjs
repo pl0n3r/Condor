@@ -56,6 +56,9 @@ test.describe('Slice 4 — inventario', () => {
       await inventory.getByLabel('Tipo').selectOption('logical');
       await inventory.getByRole('button', { name: 'Crear fuente' }).click();
       await expect(inventory.getByText('Fuente creada.')).toBeVisible();
+      await expect(
+        inventory.locator('.catalog-card').filter({ hasText: name }).first()
+      ).toBeVisible();
     }
 
     await createLogicalSource(sourceA, sourceSlugA);
