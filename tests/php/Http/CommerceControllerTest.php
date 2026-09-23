@@ -172,6 +172,95 @@ final class CommerceControllerTest extends WebTestCase
         self::assertSame(5, $auditCount);
     }
 
+    public function testPriceRuleValidityUsesUtcAndRequiresTimezoneOffset(): void
+    {
+        $client = static::createClient();
+        $em = $this->entityManager();
+        [, $branch, $owner] = $this->fixture($em);
+        $client->loginUser($owner);
+        $csrf = $this->csrf($client);
+
+        $client->jsonRequest(
+            'POST',
+            '/api/v1/branches/'.$branch->id().'/pricing/lists',
+            ['name' => 'Temporal', 'slug' => 'temporal'],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $listId = $this->json($client)['price_list']['id'];
+
+        $client->jsonRequest(
+            'POST',
+            '/api/v1/branches/'.$branch->id().'/pricing/rules',
+            [
+                'price_list_id' => $listId,
+                'category_id' => null,
+                'name' => 'Vigencia con offset',
+                'priority' => 20,
+                'discount_type' => 'percentage',
+                'discount_value' => 1000,
+                'valid_from' => '2026-09-23T08:15:00-05:00',
+                'valid_until' => '2026-09-23T10:45:00-05:00',
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(201);
+        $created = $this->json($client)['rule'];
+        $ruleId = $created['id'];
+        self::assertSame(
+            '2026-09-23T13:15:00+00:00',
+            $created['valid_from'],
+        );
+        self::assertSame(
+            '2026-09-23T15:45:00+00:00',
+            $created['valid_until'],
+        );
+
+        $stored = $em->getConnection()->fetchAssociative(
+            'SELECT valid_from, valid_until FROM condor_price_rule WHERE id = ?',
+            [$ruleId],
+        );
+        self::assertIsArray($stored);
+        self::assertSame('2026-09-23 13:15:00', $stored['valid_from']);
+        self::assertSame('2026-09-23 15:45:00', $stored['valid_until']);
+
+        $client->request(
+            'GET',
+            '/api/v1/branches/'.$branch->id().'/pricing',
+        );
+        self::assertResponseIsSuccessful();
+        $rules = array_values(array_filter(
+            $this->json($client)['rules'],
+            static fn (array $rule): bool => $rule['id'] === $ruleId,
+        ));
+        self::assertCount(1, $rules);
+        self::assertSame(
+            '2026-09-23T13:15:00+00:00',
+            $rules[0]['valid_from'],
+        );
+        self::assertSame(
+            '2026-09-23T15:45:00+00:00',
+            $rules[0]['valid_until'],
+        );
+
+        $client->jsonRequest(
+            'POST',
+            '/api/v1/branches/'.$branch->id().'/pricing/rules',
+            [
+                'price_list_id' => $listId,
+                'category_id' => null,
+                'name' => 'Vigencia sin offset',
+                'priority' => 10,
+                'discount_type' => 'fixed',
+                'discount_value' => 1000,
+                'valid_from' => '2026-09-23T08:15:00',
+                'valid_until' => null,
+            ],
+            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        );
+        self::assertResponseStatusCodeSame(422);
+    }
+
     public function testOwnerUpdatesAndDeactivatesCommercialRecordsWithAudit(): void
     {
         $client = static::createClient();

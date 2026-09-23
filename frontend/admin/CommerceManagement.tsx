@@ -179,10 +179,14 @@ export function CommerceManagement({
 
       setState({ status: 'ready', customers, pricing });
       setPriceListId((current) => (
-        current || pricing?.price_lists[0]?.id || ''
+        pricing?.price_lists.some((list) => list.id === current)
+          ? current
+          : pricing?.price_lists[0]?.id ?? ''
       ));
       setPriceVariantId((current) => (
-        current || pricing?.variants[0]?.id || ''
+        pricing?.variants.some((variant) => variant.id === current)
+          ? current
+          : pricing?.variants[0]?.id ?? ''
       ));
     } catch (error) {
       setState({

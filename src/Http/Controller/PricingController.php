@@ -15,6 +15,7 @@ use App\Domain\Commerce\Entity\PriceRule;
 use App\Domain\Commerce\Entity\VariantPrice;
 use App\Domain\Organization\Entity\Tenant;
 use DateTimeImmutable;
+use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -639,14 +640,32 @@ final class PricingController extends AbstractController
             return null;
         }
 
+        $value = trim($value);
+        if (
+            preg_match(
+                '/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}'
+                .'(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$/D',
+                $value,
+            ) !== 1
+        ) {
+            throw new UnprocessableEntityHttpException(
+                sprintf(
+                    'El campo %s debe usar una fecha ISO 8601 con zona horaria.',
+                    $field,
+                ),
+            );
+        }
+
         try {
-            return new DateTimeImmutable($value);
+            $date = new DateTimeImmutable($value);
         } catch (Exception $exception) {
             throw new UnprocessableEntityHttpException(
                 sprintf('El campo %s no contiene una fecha válida.', $field),
                 $exception,
             );
         }
+
+        return $date->setTimezone(new DateTimeZone('UTC'));
     }
 
     private static function assignPreferredList(

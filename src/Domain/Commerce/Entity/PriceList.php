@@ -22,6 +22,8 @@ class PriceList extends NamedCommercialItem
 {
     private const LABEL = 'la lista de precios';
 
+    private const SUPPORTED_CURRENCIES = ['COP'];
+
     #[ORM\Column(type: 'string', length: 3)]
     private string $currency;
 
@@ -48,9 +50,9 @@ class PriceList extends NamedCommercialItem
     private static function normalizeCurrency(string $currency): string
     {
         $currency = mb_strtoupper(trim($currency), 'UTF-8');
-        if (preg_match('/^[A-Z]{3}$/D', $currency) !== 1) {
+        if (!in_array($currency, self::SUPPORTED_CURRENCIES, true)) {
             throw new DomainException(
-                'La moneda debe usar un código ISO de tres letras.',
+                'La moneda no está soportada en esta versión.',
             );
         }
 

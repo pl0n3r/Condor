@@ -225,7 +225,7 @@ final class CommercialDomainTest extends TestCase
         );
     }
 
-    public function testInvalidCommercialSlugsAndCurrencyAreRejected(): void
+    public function testInvalidCommercialSlugsAndUnsupportedCurrencyAreRejected(): void
     {
         $tenant = new Tenant('Empresa', 'empresa-'.bin2hex(random_bytes(4)));
 
@@ -236,7 +236,15 @@ final class CommercialDomainTest extends TestCase
             self::assertTrue(true);
         }
 
+        self::assertSame(
+            'COP',
+            (new PriceList($tenant, 'Detal', 'detal-cop', ' cop '))->currency(),
+        );
+
         $this->expectException(DomainException::class);
-        new PriceList($tenant, 'Detal', 'detal', 'PESO');
+        $this->expectExceptionMessage(
+            'La moneda no está soportada en esta versión.',
+        );
+        new PriceList($tenant, 'Detal', 'detal', 'USD');
     }
 }
