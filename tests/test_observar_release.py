@@ -790,6 +790,56 @@ class ObserverTests(unittest.TestCase):
                     modulo.ObservacionTransitoria,
                 )
 
+    def test_dns_eai_again_si_es_transitorio_y_se_recupera_con_reintento(self) -> None:
+        fallo_temporal = modulo.URLError(
+            modulo.socket.gaierror(
+                modulo.socket.EAI_AGAIN,
+                "Temporary failure in name resolution",
+            )
+        )
+        with patch.object(modulo, "build_opener") as opener:
+            opener.return_value.open.side_effect = fallo_temporal
+            with self.assertRaises(modulo.ObservacionTransitoria) as caught:
+                modulo.obtener("https://example.invalid", "/health", 1)
+        self.assertNotIn("example.invalid", str(caught.exception))
+
+        llamadas = 0
+
+        def consultar() -> str:
+            nonlocal llamadas
+            llamadas += 1
+            if llamadas == 1:
+                modulo.elevar_error_url(fallo_temporal)
+            return "respuesta correcta"
+
+        with patch.object(modulo.time, "sleep") as sleep:
+            result = modulo.ejecutar_con_reintentos(
+                consultar, intentos=2, intervalo=0.25,
+            )
+
+        self.assertEqual(result, (True, "respuesta correcta", 2, "ok"))
+        self.assertEqual(llamadas, 2)
+        sleep.assert_called_once_with(0.25)
+
+    def test_dns_eai_again_agotado_no_se_reintenta_indefinidamente(self) -> None:
+        fallo_temporal = modulo.URLError(
+            modulo.socket.gaierror(modulo.socket.EAI_AGAIN, "temporary")
+        )
+
+        def consultar() -> str:
+            modulo.elevar_error_url(fallo_temporal)
+            self.fail("No debe retornar cuando falla DNS temporal.")
+
+        with patch.object(modulo.time, "sleep") as sleep:
+            result = modulo.ejecutar_con_reintentos(
+                consultar, intentos=2, intervalo=0,
+            )
+
+        self.assertEqual(result[0], False)
+        self.assertEqual(result[2:], (2, "transitorio"))
+        self.assertNotIn("temporary", result[1])
+        sleep.assert_called_once_with(0)
+
     def test_timeout_de_urllib_si_es_transitorio(self) -> None:
         with patch.object(modulo, "build_opener") as opener:
             opener.return_value.open.side_effect = modulo.URLError(
