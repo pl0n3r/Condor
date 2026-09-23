@@ -48,6 +48,14 @@ La capa HTTP determina 403/404/409 según identidad, existencia y compatibilidad
 
 Las referencias fuertes deben impedir asociaciones cruzadas aun si se omite un filtro en un controlador. Para inventario, usar las claves compuestas equivalentes a `(tenant_id, legal_entity_id, id)` en fuente y transferencia y FKs desde saldo/movimiento/transferencia a su entidad y fuente; preservar las FKs tenant + variant existentes. Un campo `legal_entity_id` aislado **sin FKs compuestas** no demuestra este contrato.
 
+### Frontera sede ↔ fuente en la propia base de datos
+
+Hay una diferencia crucial entre dos FKs correctas por separado y **una pertenencia jurídica coherente**. Una fuente con `(tenant=A, legal_entity=X, branch_id=B)` puede pasar tanto la FK `(tenant,legal_entity)` a `LegalEntity` como la FK `(tenant,branch_id)` a `Branch`, aunque la sede B pertenezca a la entidad Y del mismo tenant. El constructor y la autorización HTTP lo deben rechazar, pero no son sustitutos de la segunda barrera relacional.
+
+En el slice de Inventario, la migración deberá ofrecer una clave candidata `Branch(tenant_id,legal_entity_id,id)` y una FK desde `InventorySource(tenant_id,legal_entity_id,branch_id)` hacia esa clave. Esta FK no impide sedes legacy con `legal_entity_id=NULL` en la tabla `Branch`; sí impide crear una fuente de sede que apunte a una sede sin titular compatible. Una fuente lógica utiliza `branch_id=NULL`, declara titular de forma explícita y no hereda acceso por relación de sede. Mantener además la validación de tipo de fuente (sede requiere branch; lógica no admite branch) en dominio y, donde se soporte sin romper compatibilidad, con una restricción de base de datos.
+
+**Regresión MariaDB requerida:** crear dos entidades jurídicas X/Y del *mismo tenant* y su sede B en Y; intentar insertar por SQL una fuente de X apuntando a B. Debe fallar por FK sin depender de `InventorySource::__construct` ni del controlador. Repetir con una sede legacy `legal_entity_id=NULL` y fuente no nula, también denegada. Una fuente lógica válida de X con sede NULL y un movimiento dentro de X siguen permitidos. Verificar `doctrine:schema:validate` y la migración en MariaDB descartable antes de incorporar el cambio; nunca corregir sedes productivas a ciegas.
+
 La ruta de integración exige pruebas MariaDB reales que intenten insertar o modificar asociaciones cruzadas, además de pruebas del servicio. La inspección de ORM por sí sola no es evidencia suficiente.
 
 ## 4. Despliegue compatible para sedes anteriores
