@@ -9,8 +9,16 @@ use App\Shared\Id\UlidFactory;
 use App\Domain\Identity\Entity\BranchRoleAssignment;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\Role;
+use App\Domain\Catalog\Entity\Product;
+use App\Domain\Catalog\Entity\ProductVariant;
+use App\Domain\Commerce\Entity\PriceList;
+use App\Domain\Commerce\Entity\SalesChannel;
+use App\Domain\Commerce\Entity\VariantPrice;
 use App\Domain\Identity\Entity\User;
+use App\Domain\Inventory\Entity\InventoryBalance;
+use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Organization\Entity\Branch;
+use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\StorefrontProfile;
 use App\Domain\Organization\Entity\Tenant;
 use App\Domain\Organization\Entity\TenantDomain;
@@ -260,7 +268,7 @@ final class StorefrontAdminControllerTest extends WebTestCase
         );
     }
 
-    public function testDelegatedUserNeedsSitePermissionAndViewOnlyStaysReadOnly(): void
+    public function testDelegatedViewPermissionStaysReadOnly(): void
     {
         [$client, $entityManager, $tenant] = $this->tenantBrowser();
         $branch = $entityManager->getRepository(Branch::class)->findOneBy([
@@ -284,7 +292,7 @@ final class StorefrontAdminControllerTest extends WebTestCase
         $role = new Role(
             $tenant,
             'Gestión de sitio por sede',
-            ['site.view', 'site.update'],
+            ['site.view'],
         );
         $entityManager->persist($role);
         $entityManager->persist(new BranchRoleAssignment(
@@ -324,6 +332,166 @@ final class StorefrontAdminControllerTest extends WebTestCase
             ->findOneBy(['tenant' => $tenant]);
         self::assertInstanceOf(StorefrontProfile::class, $stored);
         self::assertSame('Identidad protegida', $stored->headline());
+    }
+
+    public function testDelegatedUpdatePermissionCanEditStorefront(): void
+    {
+        [$client, $entityManager, $tenant] = $this->tenantBrowser();
+        $branch = $entityManager->getRepository(Branch::class)->findOneBy([
+            'tenant' => $tenant,
+        ]);
+        self::assertInstanceOf(Branch::class, $branch);
+
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+        $user = new User(
+            'site-update-'.$suffix.'@example.test',
+            'Editor del sitio',
+        );
+        $membership = new Membership($tenant, $user, 'ADMIN');
+        $role = new Role($tenant, 'Editor sitio', ['site.update']);
+        foreach ([$user, $membership, $role] as $record) {
+            $entityManager->persist($record);
+        }
+        $entityManager->persist(new BranchRoleAssignment(
+            $membership,
+            $branch,
+            $role,
+        ));
+        $entityManager->flush();
+
+        $client->loginUser($user);
+        $crawler = $client->request('GET', '/admin/storefront');
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorExists('form.storefront-admin-form');
+        $token = $crawler
+            ->filter('form.storefront-admin-form input[name="_token"]')
+            ->first()
+            ->attr('value');
+        self::assertIsString($token);
+
+        $client->request('POST', '/admin/storefront', [
+            '_token' => $token,
+            '_action' => 'profile',
+            'headline' => 'Editado por permiso',
+            'description' => 'Cambio autorizado por site.update.',
+        ]);
+
+        self::assertResponseRedirects('/admin/storefront?saved=profile');
+        $stored = $entityManager->getRepository(StorefrontProfile::class)
+            ->findOneBy(['tenant' => $tenant]);
+        self::assertInstanceOf(StorefrontProfile::class, $stored);
+        self::assertSame('Editado por permiso', $stored->headline());
+    }
+
+    public function testOwnerConfiguresAuditedChannelAndPublishesCatalog(): void
+    {
+        [$client, $entityManager, $tenant, $owner] = $this->tenantBrowser();
+        $suffix = strtolower(bin2hex(random_bytes(4)));
+        $legal = new LegalEntity(
+            $tenant,
+            'Empresa web '.$suffix.' SAS',
+            null,
+            true,
+        );
+        $source = new InventorySource(
+            $tenant,
+            $legal,
+            'Bodega web',
+            'bodega-web-'.$suffix,
+            InventorySource::TYPE_LOGICAL,
+        );
+        $list = new PriceList(
+            $tenant,
+            'Lista web',
+            'lista-web-'.$suffix,
+        );
+        $product = new Product(
+            $tenant,
+            'Body público',
+            'body-publico-'.$suffix,
+            'Prenda visible en el storefront.',
+        );
+        $variant = new ProductVariant(
+            $tenant,
+            $product,
+            'WEB-'.strtoupper($suffix),
+            'Talla única',
+        );
+        $price = new VariantPrice(
+            $tenant,
+            $list,
+            $variant,
+            125000,
+        );
+        $balance = new InventoryBalance(
+            $tenant,
+            $source,
+            $variant,
+            2,
+        );
+        foreach ([
+            $legal,
+            $source,
+            $list,
+            $product,
+            $variant,
+            $price,
+            $balance,
+        ] as $record) {
+            $entityManager->persist($record);
+        }
+        $entityManager->flush();
+
+        $client->loginUser($owner);
+        $crawler = $client->request('GET', '/admin/storefront');
+        self::assertResponseIsSuccessful();
+        self::assertSelectorExists('form.channel-admin-form');
+
+        $token = $crawler
+            ->filter('form.channel-admin-form input[name="_token"]')
+            ->attr('value');
+        self::assertIsString($token);
+
+        $client->request('POST', '/admin/storefront', [
+            '_token' => $token,
+            '_action' => 'channel',
+            'name' => 'Tienda web',
+            'slug' => 'tienda-web',
+            'inventory_source_id' => $source->id(),
+            'price_list_id' => $list->id(),
+            'active' => '1',
+        ]);
+
+        self::assertResponseRedirects('/admin/storefront?saved=channel');
+
+        $channel = $entityManager->getRepository(SalesChannel::class)
+            ->findOneBy(['tenant' => $tenant]);
+        self::assertInstanceOf(SalesChannel::class, $channel);
+        self::assertSame($source->id(), $channel->inventorySource()->id());
+        self::assertSame($list->id(), $channel->priceList()->id());
+
+        $auditCount = (int) $entityManager->getConnection()->fetchOne(
+            'SELECT COUNT(*) FROM condor_audit_event '
+            .'WHERE tenant_id = ? AND action = ? AND entity_id = ?',
+            [$tenant->id(), 'sales_channel.created', $channel->id()],
+        );
+        self::assertSame(1, $auditCount);
+
+        $client->request('GET', '/'.$tenant->slug());
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains(
+            '.storefront-catalog',
+            'Body público',
+        );
+        self::assertSelectorTextContains(
+            '.storefront-catalog',
+            'COP 1.250',
+        );
+        self::assertSelectorTextContains(
+            '.storefront-catalog',
+            'Disponible',
+        );
     }
 
     /**
