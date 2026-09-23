@@ -5,27 +5,24 @@ declare(strict_types=1);
 namespace App\Domain\Commerce\Entity;
 
 use App\Domain\Organization\Entity\Tenant;
-use App\Shared\Id\UlidFactory;
-use DateTimeImmutable;
-use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
 use DomainException;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_customer')]
-#[ORM\UniqueConstraint(name: 'uniq_customer_tenant_id', columns: ['tenant_id', 'id'])]
-class Customer
+#[ORM\UniqueConstraint(
+    name: 'uniq_customer_tenant_id',
+    columns: ['tenant_id', 'id'],
+)]
+class Customer extends CommercialItem
 {
-    #[ORM\Id]
-    #[ORM\Column(type: 'string', length: 26)]
-    private string $id;
-
-    #[ORM\ManyToOne(targetEntity: Tenant::class)]
-    #[ORM\JoinColumn(name: 'tenant_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
-    private Tenant $tenant;
-
     #[ORM\ManyToOne(targetEntity: CommercialCategory::class)]
-    #[ORM\JoinColumn(name: 'commercial_category_id', referencedColumnName: 'id', nullable: true, onDelete: 'RESTRICT')]
+    #[ORM\JoinColumn(
+        name: 'commercial_category_id',
+        referencedColumnName: 'id',
+        nullable: true,
+        onDelete: 'RESTRICT',
+    )]
     private ?CommercialCategory $commercialCategory;
 
     #[ORM\Column(type: 'string', length: 180)]
@@ -40,15 +37,6 @@ class Customer
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $notes;
 
-    #[ORM\Column(type: 'boolean')]
-    private bool $active = true;
-
-    #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
-    private DateTimeImmutable $createdAt;
-
-    #[ORM\Column(name: 'updated_at', type: 'datetime_immutable')]
-    private DateTimeImmutable $updatedAt;
-
     public function __construct(
         Tenant $tenant,
         string $name,
@@ -57,29 +45,46 @@ class Customer
         ?string $notes = null,
         ?CommercialCategory $commercialCategory = null,
     ) {
-        $this->id = UlidFactory::new();
-        $this->tenant = $tenant;
+        parent::__construct($tenant);
         $this->name = self::normalizeName($name);
         $this->email = self::normalizeEmail($email);
         $this->phone = self::normalizePhone($phone);
         $this->notes = self::normalizeNotes($notes);
         $this->commercialCategory = null;
         $this->assignCommercialCategory($commercialCategory);
-        $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
-        $this->updatedAt = $this->createdAt;
     }
 
-    public function id(): string { return $this->id; }
-    public function tenant(): Tenant { return $this->tenant; }
-    public function name(): string { return $this->name; }
-    public function email(): ?string { return $this->email; }
-    public function phone(): ?string { return $this->phone; }
-    public function notes(): ?string { return $this->notes; }
-    public function commercialCategory(): ?CommercialCategory { return $this->commercialCategory; }
-    public function isActive(): bool { return $this->active; }
-
-    public function update(string $name, ?string $email, ?string $phone, ?string $notes): void
+    public function name(): string
     {
+        return $this->name;
+    }
+
+    public function email(): ?string
+    {
+        return $this->email;
+    }
+
+    public function phone(): ?string
+    {
+        return $this->phone;
+    }
+
+    public function notes(): ?string
+    {
+        return $this->notes;
+    }
+
+    public function commercialCategory(): ?CommercialCategory
+    {
+        return $this->commercialCategory;
+    }
+
+    public function update(
+        string $name,
+        ?string $email,
+        ?string $phone,
+        ?string $notes,
+    ): void {
         $this->name = self::normalizeName($name);
         $this->email = self::normalizeEmail($email);
         $this->phone = self::normalizePhone($phone);
@@ -87,38 +92,31 @@ class Customer
         $this->touch();
     }
 
-    public function assignCommercialCategory(?CommercialCategory $category): void
-    {
-        if ($category !== null && $category->tenant()->id() !== $this->tenant->id()) {
-            throw new DomainException('La categoría comercial debe pertenecer al mismo tenant del cliente.');
+    public function assignCommercialCategory(
+        ?CommercialCategory $category,
+    ): void {
+        if (
+            $category !== null
+            && $category->tenant()->id() !== $this->tenant()->id()
+        ) {
+            throw new DomainException(
+                'La categoría comercial debe pertenecer al mismo tenant '
+                .'del cliente.',
+            );
         }
 
         $this->commercialCategory = $category;
-        if (isset($this->updatedAt)) {
-            $this->touch();
-        }
-    }
-
-    public function deactivate(): void
-    {
-        if (!$this->active) {
-            return;
-        }
-
-        $this->active = false;
         $this->touch();
-    }
-
-    private function touch(): void
-    {
-        $this->updatedAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
     private static function normalizeName(string $name): string
     {
         $name = trim($name);
         if ($name === '' || mb_strlen($name, 'UTF-8') > 180) {
-            throw new DomainException('El nombre del cliente es obligatorio y admite máximo 180 caracteres.');
+            throw new DomainException(
+                'El nombre del cliente es obligatorio '
+                .'y admite máximo 180 caracteres.',
+            );
         }
 
         return $name;
@@ -131,8 +129,13 @@ class Customer
         }
 
         $email = mb_strtolower(trim($email), 'UTF-8');
-        if (mb_strlen($email, 'UTF-8') > 254 || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
-            throw new DomainException('El correo del cliente no es válido.');
+        if (
+            mb_strlen($email, 'UTF-8') > 254
+            || filter_var($email, FILTER_VALIDATE_EMAIL) === false
+        ) {
+            throw new DomainException(
+                'El correo del cliente no es válido.',
+            );
         }
 
         return $email;
@@ -146,7 +149,9 @@ class Customer
 
         $phone = trim($phone);
         if (mb_strlen($phone, 'UTF-8') > 40) {
-            throw new DomainException('El teléfono del cliente admite máximo 40 caracteres.');
+            throw new DomainException(
+                'El teléfono del cliente admite máximo 40 caracteres.',
+            );
         }
 
         return $phone;
@@ -160,7 +165,9 @@ class Customer
 
         $notes = trim($notes);
         if (mb_strlen($notes, 'UTF-8') > 5000) {
-            throw new DomainException('Las observaciones del cliente admiten máximo 5000 caracteres.');
+            throw new DomainException(
+                'Las observaciones del cliente admiten máximo 5000 caracteres.',
+            );
         }
 
         return $notes;
