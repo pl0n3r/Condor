@@ -603,17 +603,15 @@ run_pre_migration_backup() {
         capture_backup_client "$BACKUP_LOG"
         POST_DEPLOY_REASON="timeout"
         POST_DEPLOY_SUBCODE=124
-        print_log_tail "$BACKUP_LOG"
         cleanup_backup_log
-        echo "post-deploy.sh: backup previo a migración excedió ${BACKUP_TIMEOUT_SECONDS}s; migración y caché no modificadas." >&2
+        echo "post-deploy.sh: backup previo a migración excedió ${BACKUP_TIMEOUT_SECONDS}s; reason=$POST_DEPLOY_REASON, client=$POST_DEPLOY_BACKUP_CLIENT, subcode=$POST_DEPLOY_SUBCODE; migración y caché no modificadas." >&2
         return 2
     fi
 
     if [ "$backup_status" -ne 0 ]; then
         classify_backup_failure "$BACKUP_LOG" "$backup_status"
-        print_log_tail "$BACKUP_LOG"
         cleanup_backup_log
-        echo "post-deploy.sh: backup previo a migración falló (código $backup_status); migración y caché no modificadas." >&2
+        echo "post-deploy.sh: backup previo a migración falló; reason=$POST_DEPLOY_REASON, client=$POST_DEPLOY_BACKUP_CLIENT, subcode=$POST_DEPLOY_SUBCODE; migración y caché no modificadas." >&2
         return 2
     fi
 
