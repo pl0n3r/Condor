@@ -504,6 +504,20 @@ esac
             self.assertNotIn("--triggers", args)
             self.assertEqual(args[-1], "condor")
 
+    def test_post_deploy_client_extraction_avoids_nonportable_sed_alternation(self) -> None:
+        """La detección del cliente usa patrones BRE portables y explícitos."""
+        script = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
+
+        self.assertNotIn(r"mariadb-dump\|mysqldump", script)
+        self.assertIn(
+            "cliente seleccionado: mariadb-dump\\.$/mariadb-dump/p",
+            script,
+        )
+        self.assertIn(
+            "cliente seleccionado: mysqldump\\.$/mysqldump/p",
+            script,
+        )
+
     def test_post_deploy_persists_sanitized_terminal_status(self) -> None:
         """El cron deja una fase terminal segura sin logs, SQL ni credenciales."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -566,9 +580,21 @@ esac
             self.assertEqual(payload["phase"], "complete")
             self.assertEqual(payload["result"], "success")
             self.assertEqual(payload["code"], 0)
+            self.assertEqual(payload["reason"], "none")
+            self.assertEqual(payload["subcode"], 0)
+            self.assertEqual(payload["backup_client"], "unknown")
             self.assertEqual(
                 set(payload),
-                {"version", "phase", "result", "code", "updated_at"},
+                {
+                    "version",
+                    "phase",
+                    "result",
+                    "code",
+                    "reason",
+                    "subcode",
+                    "backup_client",
+                    "updated_at",
+                },
             )
 
     def test_post_deploy_marks_early_configuration_failure_terminal(self) -> None:
@@ -622,6 +648,106 @@ esac
             self.assertEqual(payload["result"], "failure")
             self.assertEqual(payload["code"], 1)
 
+    def test_post_deploy_classifies_backup_failure_without_exposing_raw_error(self) -> None:
+        """El probe persiste solo enums seguros ante un fallo realista del dump."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            (root / "var").mkdir()
+            (root / "config").mkdir()
+            (root / "config/version.php").write_text(
+                "<?php return ['version' => '0.1.30'];\n",
+                encoding="utf-8",
+            )
+            script = scripts / "post-deploy.sh"
+            script.write_text(
+                (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            backup = scripts / "backup-database.sh"
+            backup.write_text(
+                textwrap.dedent(
+                    """\
+                    #!/bin/sh
+                    set -eu
+                    printf '%s\\n' 'backup-database.sh: cliente seleccionado: mariadb-dump.' >&2
+                    printf '%s\\n' "mariadb-dump: Got error: 1044 Access denied for user 'secret-user'@'secret-host' to database 'secret_db' when using LOCK TABLES" >&2
+                    exit 2
+                    """
+                ),
+                encoding="utf-8",
+            )
+            backup.chmod(0o755)
+
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            fake_php = """#!/bin/sh
+case "$*" in
+  *"-r "*"config/version.php"*)
+    printf '%s' '0.1.30'
+    exit 0
+    ;;
+  *doctrine:migrations:up-to-date*)
+    printf '%s\\n' 'Out-of-date! 1 migration to execute.' >&2
+    exit 1
+    ;;
+  *doctrine:migrations:migrate*"--dry-run"*)
+    for arg in "$@"; do
+      case "$arg" in
+        --write-sql=*) printf '%s\\n' 'CREATE TABLE safe_table (id INT);' > "${arg#--write-sql=}" ;;
+      esac
+    done
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+"""
+            for name in ("php85", "php"):
+                binary = fake_bin / name
+                binary.write_text(fake_php, encoding="utf-8")
+                binary.chmod(0o755)
+
+            env = dict(os.environ)
+            env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+            env["DATABASE_URL"] = (
+                "mysql://backup_user:backup_pass@127.0.0.1:3306/condor"
+            )
+            result = subprocess.run(
+                ["sh", str(script)],
+                cwd=root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=8,
+            )
+
+            self.assertEqual(result.returncode, 2, result.stderr)
+            payload = json.loads(
+                (root / "var/runtime/post-deploy-status.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(payload["phase"], "backup")
+            self.assertEqual(payload["result"], "failure")
+            self.assertEqual(payload["code"], 2)
+            self.assertEqual(payload["reason"], "access_denied")
+            self.assertEqual(payload["subcode"], 2)
+            self.assertEqual(payload["backup_client"], "mariadb-dump")
+            rendered = json.dumps(payload)
+            self.assertNotIn("secret-user", rendered)
+            self.assertNotIn("secret-host", rendered)
+            self.assertNotIn("secret_db", rendered)
+            self.assertNotIn("secret-user", result.stderr)
+            self.assertNotIn("secret-host", result.stderr)
+            self.assertNotIn("secret_db", result.stderr)
+            self.assertIn("reason=access_denied", result.stderr)
+            self.assertIn("client=mariadb-dump", result.stderr)
+            self.assertIn("subcode=2", result.stderr)
+
     def test_post_deploy_status_endpoint_never_exposes_logs_or_secrets(self) -> None:
         """El probe público solo publica identidad y estado operacional acotado."""
         endpoint = (
@@ -633,6 +759,9 @@ esac
         self.assertNotIn("SCHEMA_CHECK_LOG", endpoint)
         self.assertNotIn("MIGRATION_LOG", endpoint)
         self.assertNotIn("BACKUP_LOG", endpoint)
+        self.assertIn("'reason' => $reason", endpoint)
+        self.assertIn("'subcode' => $subcode", endpoint)
+        self.assertIn("'backup_client' => $backupClient", endpoint)
 
     def test_post_deploy_never_executes_destructive_schema_mutations_automatically(self) -> None:
         """Solo migrate versionado puede automatizarse; operaciones destructivas no."""

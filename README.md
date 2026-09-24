@@ -1,13 +1,13 @@
-# Condor App — Snapshot operativo · candidato V 0.1.29
+# Condor App — Snapshot operativo · candidato V 0.1.30
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** desbloquear el backup previo obligatorio de D-054 en hosting compartido y reconciliar el esquema sin SQL destructivo.
+> **Objetivo actual:** confirmar de forma sanitizada la causa exacta del backup fallido de D-054 en hosting compartido, sin exponer logs ni relajar seguridad.
 
 <p align="center">
-  <strong>Base integrada:</strong> V 0.1.28 · main `6f2de74a2f67f74a5242ed8289d237acca577e4d` ·
-  <strong>Candidato:</strong> V 0.1.29 ·
+  <strong>Base desplegada:</strong> V 0.1.29 · main `fd0243b83a5fba1e16e1f027a42c395dd7f770be` ·
+  <strong>Candidato:</strong> V 0.1.30 ·
   <strong>Incidente:</strong> #200
 </p>
 
@@ -15,38 +15,32 @@
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base integrada | ✅ **V 0.1.28 / MAIN** | SHA `6f2de74a2f67f74a5242ed8289d237acca577e4d` |
-| Exact-main V 0.1.28 | ✅ **VALIDADO EN CÓDIGO** | CI run 35939812755 (#915) en success |
-| Observador V 0.1.28 | ⛔ **NO_OBSERVADO** | run 35939812691 (#18): HTTP 500; probe exacto `phase=backup`, `result=failure`, `code=2` |
-| Incidente actual | 🚧 **#200 / V 0.1.29** | eliminar requisito GTID/RELOAD de `mysqldump` sin relajar credenciales ni omitir esquema/datos |
-| CI/Sonar/CodeRabbit | ⏳ **PENDIENTE DEL HEAD FINAL** | se exige exact-head antes del merge |
+| Base integrada | ✅ **V 0.1.29 / MAIN** | SHA `fd0243b83a5fba1e16e1f027a42c395dd7f770be` |
+| Exact-main V 0.1.29 | ✅ **VALIDADO EN CÓDIGO** | CI run 35942476302 (#918) en success |
+| Observador V 0.1.29 | ⛔ **NO_OBSERVADO** | run 35942476298 (#19): HTTP 500; probe `phase=backup`, `result=failure`, `code=2`, actualizado 2026-09-24T01:40:04Z |
+| Incidente actual | 🚧 **#200 / V 0.1.30** | confirmar clase de fallo y cliente de dump con enums seguros |
+| CI/Sonar/CodeRabbit | ⏳ **PENDIENTE DEL HEAD FINAL** | exact-head obligatorio antes del merge |
 
-## Qué corrige V 0.1.29
+## Qué añade V 0.1.30
 
-- preserva D-054: schema-check → dry-run/allowlist forward → backup obligatorio → migrate → recheck → caché;
-- mantiene prohibidos SQL destructivo, migraciones contract y borrados irreversibles;
-- conserva `--single-transaction`, `--quick`, `--skip-lock-tables`, `--skip-triggers` y `--no-tablespaces` cuando corresponde;
-- para `mysqldump`, si el cliente anuncia `--set-gtid-purged`, usa `--set-gtid-purged=OFF`: Condor no provisiona replicación y así evita requerir `RELOAD/FLUSH_TABLES` por metadata GTID en MySQL moderno;
-- MariaDB nunca recibe la opción específica de MySQL;
-- las opciones se habilitan únicamente cuando el binario las anuncia;
-- secretos siguen en option-files temporales `0600` y nunca se imprimen.
+- conserva D-054 sin cambiar su orden ni permitir SQL destructivo;
+- registra en el status operacional únicamente `reason`, `subcode` y `backup_client` bajo allowlists cerradas;
+- clasifica fallos de configuración, filesystem, opción no soportada, privilegio global, acceso, conexión, timeout o dump no clasificable;
+- nunca publica stderr, hostname, usuario, contraseña, nombre de tabla/base ni SQL;
+- el observer valida esos campos antes de mostrarlos en el Roadmap;
+- una regresión de comportamiento demuestra que un error con identificadores sensibles termina expuesto solo como `reason=access_denied`, `subcode=2`, `backup_client=mariadb-dump`.
 
-## Invariantes operativas
+## Invariantes
 
-- una sola corrida de post-deploy opera a la vez;
-- ninguna migración se aplica si el backup previo falla;
-- ninguna caché se regenera si el esquema no queda reconciliado;
-- `construction` permite únicamente migraciones forward/expand-compatible;
-- `live` conserva el fallo cerrado;
-- código, deploy, esquema y validación productiva siguen siendo evidencias separadas.
+- esquema pendiente → dry-run/allowlist → backup exitoso → migrate → recheck → cache;
+- cualquier fallo de backup sigue bloqueando migración y caché;
+- secretos permanecen fuera del probe;
+- `construction` solo admite migraciones forward/expand-compatible;
+- `live` conserva fail-closed.
 
-## Validación requerida antes de cerrar #200
+## Cierre de TANDA 1
 
-1. `/health` responde 200 con V 0.1.29, SHA exacto de `main` y `schema_up_to_date:true`.
-2. `/`, `/admin/login`, `/marcela-arias-tienda`, `/adminpl0n3r` y `/adminpl0n3r/api/context` no responden 5xx.
-3. El último observador automático registra resultado funcional positivo y workflow `success`.
-4. No quedan Issues abiertos `tipo: incidente` ni `[AUTO]` de fallo productivo.
-5. El último CI de `main` está en `success`.
+No declarar producción verde hasta demostrar los cinco puntos del plan: health 200 con V/SHA/schema exactos; home/login/storefront/centro de control sin 5xx; observador success; 0 incidentes/[AUTO]; CI exact-main success.
 
 ## Referencias
 

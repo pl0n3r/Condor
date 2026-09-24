@@ -30,16 +30,21 @@ if [ -z "$PHP_BIN" ]; then
 fi
 
 POST_DEPLOY_STATUS_FILE="var/runtime/post-deploy-status.json"
+POST_DEPLOY_UNKNOWN="unknown"
 POST_DEPLOY_PHASE="bootstrap"
+POST_DEPLOY_REASON="none"
+POST_DEPLOY_SUBCODE=0
+POST_DEPLOY_BACKUP_CLIENT="$POST_DEPLOY_UNKNOWN"
 POST_DEPLOY_VERSION="$("$PHP_BIN" -r '$config = require "config/version.php"; echo is_array($config) ? ($config["version"] ?? "unknown") : "unknown";' 2>/dev/null || true)"
 case "$POST_DEPLOY_VERSION" in
     [0-9]*.[0-9]*.[0-9]*)
         ;;
     *)
-        POST_DEPLOY_VERSION="unknown"
+        POST_DEPLOY_VERSION="$POST_DEPLOY_UNKNOWN"
         ;;
 esac
 
+# Persiste solo estado operacional acotado; nunca logs ni secretos.
 write_post_deploy_status() {
     phase="$1"
     result="$2"
@@ -49,8 +54,10 @@ write_post_deploy_status() {
     status_tmp="$(mktemp "$status_dir/.post-deploy-status-XXXXXX" 2>/dev/null || true)"
     [ -n "$status_tmp" ] || return 0
     updated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '{"version":"%s","phase":"%s","result":"%s","code":%s,"updated_at":"%s"}\n' \
-        "$POST_DEPLOY_VERSION" "$phase" "$result" "$code" "$updated_at" >"$status_tmp" || {
+    printf '{"version":"%s","phase":"%s","result":"%s","code":%s,"reason":"%s","subcode":%s,"backup_client":"%s","updated_at":"%s"}\n' \
+        "$POST_DEPLOY_VERSION" "$phase" "$result" "$code" \
+        "$POST_DEPLOY_REASON" "$POST_DEPLOY_SUBCODE" "$POST_DEPLOY_BACKUP_CLIENT" \
+        "$updated_at" >"$status_tmp" || {
             rm -f -- "$status_tmp"
             return 0
         }
@@ -61,11 +68,16 @@ write_post_deploy_status() {
     }
 }
 
+# Avanza de fase y reinicia el diagnóstico específico del paso anterior.
 set_post_deploy_phase() {
     POST_DEPLOY_PHASE="$1"
+    POST_DEPLOY_REASON="none"
+    POST_DEPLOY_SUBCODE=0
+    POST_DEPLOY_BACKUP_CLIENT="$POST_DEPLOY_UNKNOWN"
     write_post_deploy_status "$POST_DEPLOY_PHASE" "running" 0
 }
 
+# Convierte el exit status del cron en un resultado terminal compartible.
 finalize_post_deploy_status() {
     exit_status="$1"
     if [ "$exit_status" -eq 0 ]; then
@@ -503,10 +515,55 @@ resolve_database_url() {
     '
 }
 
+# Extrae únicamente el nombre allowlisted del cliente anunciado por el backup.
+capture_backup_client() {
+    backup_log="$1"
+    detected_client="$(sed -n \
+        -e 's/^backup-database\.sh: cliente seleccionado: mariadb-dump\.$/mariadb-dump/p' \
+        -e 's/^backup-database\.sh: cliente seleccionado: mysqldump\.$/mysqldump/p' \
+        "$backup_log" 2>/dev/null | tail -n 1)"
+    case "$detected_client" in
+        mariadb-dump|mysqldump)
+            POST_DEPLOY_BACKUP_CLIENT="$detected_client"
+            ;;
+        *)
+            POST_DEPLOY_BACKUP_CLIENT="$POST_DEPLOY_UNKNOWN"
+            ;;
+    esac
+}
+
+# Reduce stderr privado a un enum seguro y un subcódigo numérico.
+classify_backup_failure() {
+    backup_log="$1"
+    backup_status="$2"
+    capture_backup_client "$backup_log"
+    POST_DEPLOY_SUBCODE="$backup_status"
+    POST_DEPLOY_REASON="dump_failed_unknown"
+
+    if grep -Eiq 'no se encontró mariadb-dump ni mysqldump' "$backup_log"; then
+        POST_DEPLOY_REASON="client_missing"
+    elif grep -Eiq 'parse-database-url\.php:|falta DATABASE_URL|option-file' "$backup_log"; then
+        POST_DEPLOY_REASON="configuration"
+    elif grep -Eiq 'no space left|disk quota|read-only file system|permission denied|mktemp:|cannot create|failed to create' "$backup_log"; then
+        POST_DEPLOY_REASON="filesystem"
+    elif grep -Eiq 'unknown (variable|option)|unrecognized option|unknown option' "$backup_log"; then
+        POST_DEPLOY_REASON="unsupported_option"
+    elif grep -Eiq '(PROCESS|RELOAD|FLUSH_TABLES|SUPER).*(privilege|required)|requires.*(PROCESS|RELOAD|FLUSH_TABLES|SUPER)' "$backup_log"; then
+        POST_DEPLOY_REASON="server_privilege"
+    elif grep -Eiq 'access denied|command denied to user|permission denied for user' "$backup_log"; then
+        POST_DEPLOY_REASON="access_denied"
+    elif grep -Eiq "can.t connect|cannot connect|connection refused|lost connection|server has gone away|unknown server host|timed?[[:space:]_-]*out" "$backup_log"; then
+        POST_DEPLOY_REASON="connection"
+    fi
+}
+
+# Ejecuta el backup obligatorio y falla cerrado antes de cualquier migración.
 run_pre_migration_backup() {
     set_post_deploy_phase "backup"
     database_url="$(resolve_database_url 2>/dev/null || true)"
     if [ -z "$database_url" ]; then
+        POST_DEPLOY_REASON="database_url_missing"
+        POST_DEPLOY_SUBCODE=2
         unset database_url
         echo "post-deploy.sh: no fue posible resolver DATABASE_URL para el backup previo; migración no ejecutada." >&2
         return 2
@@ -552,16 +609,18 @@ run_pre_migration_backup() {
     BACKUP_WATCHDOG_PID=""
 
     if [ -f "$BACKUP_TIMEOUT_MARKER" ]; then
-        print_log_tail "$BACKUP_LOG"
+        capture_backup_client "$BACKUP_LOG"
+        POST_DEPLOY_REASON="timeout"
+        POST_DEPLOY_SUBCODE=124
         cleanup_backup_log
-        echo "post-deploy.sh: backup previo a migración excedió ${BACKUP_TIMEOUT_SECONDS}s; migración y caché no modificadas." >&2
+        echo "post-deploy.sh: backup previo a migración excedió ${BACKUP_TIMEOUT_SECONDS}s; reason=$POST_DEPLOY_REASON, client=$POST_DEPLOY_BACKUP_CLIENT, subcode=$POST_DEPLOY_SUBCODE; migración y caché no modificadas." >&2
         return 2
     fi
 
     if [ "$backup_status" -ne 0 ]; then
-        print_log_tail "$BACKUP_LOG"
+        classify_backup_failure "$BACKUP_LOG" "$backup_status"
         cleanup_backup_log
-        echo "post-deploy.sh: backup previo a migración falló (código $backup_status); migración y caché no modificadas." >&2
+        echo "post-deploy.sh: backup previo a migración falló; reason=$POST_DEPLOY_REASON, client=$POST_DEPLOY_BACKUP_CLIENT, subcode=$POST_DEPLOY_SUBCODE; migración y caché no modificadas." >&2
         return 2
     fi
 
