@@ -541,6 +541,19 @@ classify_backup_failure() {
     POST_DEPLOY_SUBCODE="$backup_status"
     POST_DEPLOY_REASON="dump_failed_unknown"
 
+    # El log puede contener primero el fallo del dump nativo y después el
+    # fallback PDO. Si el cliente final es PDO y devuelve uno de sus códigos
+    # allowlisted por etapa, esa es la causa terminal; nunca se hereda el
+    # "Access denied" del cliente nativo anterior.
+    if [ "$POST_DEPLOY_BACKUP_CLIENT" = "pdo" ]; then
+        case "$backup_status" in
+            31|32|33|34|35|36|37|38)
+                POST_DEPLOY_REASON="pdo_failure"
+                return 0
+                ;;
+        esac
+    fi
+
     if grep -Eiq 'no se encontró mariadb-dump ni mysqldump' "$backup_log"; then
         POST_DEPLOY_REASON="client_missing"
     elif grep -Eiq 'parse-database-url\.php:|falta DATABASE_URL|option-file' "$backup_log"; then
