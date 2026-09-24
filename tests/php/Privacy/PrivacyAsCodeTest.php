@@ -39,8 +39,10 @@ final class PrivacyAsCodeTest extends TestCase
         self::assertContains('trace', $this->treatment($data, 'error_incidents')['fields']);
     }
 
+    /** Verifica derivación desde datos.yml y huella byte-a-byte del Factory fijado. */
     public function testGeneratedPrivacyDocumentsAreCurrent(): void
     {
+        $generated = $this->renderDocuments($this->data());
         $expected = [
             'aviso-privacidad.md' => '42d8a576fa0d9914140f9947c422c5edfb1a1c55f8c8248a06f798fc0addbe80',
             'canal-derechos.md' => 'e0a95e42aca6f5f8a1f2b6a69ab746a84be35e799222905d492fdb4cb56adecb',
@@ -55,9 +57,15 @@ final class PrivacyAsCodeTest extends TestCase
         self::assertSame(array_keys($expected), $actual);
 
         foreach ($expected as $name => $sha256) {
+            $actualContent = file_get_contents($directory.'/'.$name);
+            self::assertSame(
+                $generated[$name],
+                $actualContent,
+                $name.' derivó de datos.yml respecto al contrato Factory '.self::FACTORY_SHA.'.',
+            );
             self::assertSame(
                 $sha256,
-                hash_file('sha256', $directory.'/'.$name),
+                hash('sha256', $actualContent),
                 $name.' no coincide byte a byte con Factory '.self::FACTORY_SHA.'.',
             );
         }
@@ -184,6 +192,219 @@ final class PrivacyAsCodeTest extends TestCase
         }
 
         self::fail('Tratamiento no encontrado: '.$id);
+    }
+
+
+    /**
+     * Reproduce el contrato determinista de documentos del Factory fijado.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, string>
+     */
+    private function renderDocuments(array $data): array
+    {
+        $treatments = $data['treatments'];
+        usort(
+            $treatments,
+            static fn (array $left, array $right): int => $left['id'] <=> $right['id'],
+        );
+
+        $table = [
+            '| Tratamiento | Categoría | Campos | Finalidad | '
+                .'Base documentada | Consentimiento | Proveedores | Retención |',
+            '| --- | --- | --- | --- | --- | --- | --- | --- |',
+        ];
+        $sections = [];
+        $retention = [
+            '| Tratamiento | Categoría | Retención declarada | Máximo común |',
+            '| --- | --- | --- | --- |',
+        ];
+
+        foreach ($treatments as $treatment) {
+            $providers = $treatment['providers'] === []
+                ? 'ninguno_declarado'
+                : implode(', ', $treatment['providers']);
+            $table[] = '| '.implode(' | ', [
+                $treatment['id'],
+                $treatment['category'],
+                implode(', ', $treatment['fields']),
+                $treatment['purpose'],
+                $treatment['basis'],
+                $treatment['consent'],
+                $providers,
+                $treatment['retention'],
+            ]).' |';
+
+            $quotedFields = array_map(
+                static fn (string $field): string => chr(96).$field.chr(96),
+                $treatment['fields'],
+            );
+            $quotedProviders = $treatment['providers'] === []
+                ? 'ninguno_declarado'
+                : implode(', ', array_map(
+                    static fn (string $provider): string => chr(96).$provider.chr(96),
+                    $treatment['providers'],
+                ));
+            $sections[] = '## '.$treatment['id'];
+            $sections[] = '';
+            $sections[] = '- Categoría: '.chr(96).$treatment['category'].chr(96);
+            $sections[] = '- Campos de software: '.implode(', ', $quotedFields);
+            $sections[] = '- Finalidad: '.chr(96).$treatment['purpose'].chr(96);
+            $sections[] = '- Base documentada: '.chr(96).$treatment['basis'].chr(96).' (revisión jurídica requerida)';
+            $sections[] = '- Consentimiento: '.chr(96).$treatment['consent'].chr(96);
+            $sections[] = '- Proveedores: '.$quotedProviders;
+            $sections[] = '- Retención: '.chr(96).$treatment['retention'].chr(96);
+            $sections[] = '';
+
+            $retention[] = '| '.implode(' | ', [
+                $treatment['id'],
+                $treatment['category'],
+                $treatment['retention'],
+                'review_required',
+            ]).' |';
+        }
+
+        $controller = $data['controller'];
+        $responsible = [
+            '- Nombre o razón social: '.$controller['name'],
+            '- Identificación: '.$controller['identifier'],
+            '- Dirección: '.$controller['address'],
+            '- Canal de derechos: '.$controller['rights_email'],
+        ];
+        $tableText = implode("\n", $table);
+        $projectCode = chr(96).$data['project'].chr(96);
+
+        $policy = implode("\n", [
+            '# Política de tratamiento de datos personales',
+            '',
+            '> Estado: documento técnico generado; **no constituye aprobación jurídica**.',
+            '',
+            '## Responsable',
+            '',
+            ...$responsible,
+            '',
+            '## Producto',
+            '',
+            $projectCode,
+            '',
+            '## Tratamientos documentados',
+            '',
+            $tableText,
+            '',
+            '## Derechos y revisión',
+            '',
+            'Las solicitudes de acceso, corrección, actualización, supresión o revocación '
+                .'se canalizan mediante el canal de derechos indicado arriba. Las finalidades, '
+                .'bases, consentimientos, proveedores y retenciones aquí documentadas requieren '
+                .'la revisión jurídica aplicable antes de declararse aprobadas.',
+            '',
+        ]);
+
+        $notice = implode("\n", [
+            '# Aviso de privacidad y autorización',
+            '',
+            '> Estado: borrador técnico generado; **revisión jurídica requerida**.',
+            '',
+            '## Responsable',
+            '',
+            ...$responsible,
+            '',
+            '## Producto',
+            '',
+            $projectCode,
+            '',
+            '## Tratamientos documentados',
+            '',
+            $tableText,
+            '',
+            '## Autorización técnica pendiente',
+            '',
+            'La integración que recoja autorización debe presentar una **casilla no premarcada** '
+                .'y un enlace visible a la política de tratamiento antes de registrar la decisión '
+                .'de la persona. Para tratamientos que requieran consentimiento explícito, la '
+                .'implementación debe conservar evidencia verificable de esa decisión.',
+            '',
+            'Este borrador **no acredita que exista consentimiento**, no sustituye la revisión '
+                .'jurídica y no autoriza por sí mismo ningún tratamiento.',
+            '',
+        ]);
+
+        $terms = implode("\n", [
+            '# Términos y condiciones',
+            '',
+            '> Estado: borrador técnico generado; **revisión jurídica requerida antes de publicación**.',
+            '',
+            'Producto: '.$projectCode,
+            '',
+            '## Responsable',
+            '',
+            ...$responsible,
+            '',
+            '## Condiciones pendientes de definición',
+            '',
+            '- Condiciones comerciales: '.self::PLACEHOLDER.' — revisión jurídica requerida.',
+            '- Niveles de servicio (SLA), si aplican: '.self::PLACEHOLDER.' — revisión jurídica requerida.',
+            '- Garantías y limitaciones aplicables: '.self::PLACEHOLDER.' — revisión jurídica requerida.',
+            '- Jurisdicción y mecanismo de solución de controversias: '.self::PLACEHOLDER.' — revisión jurídica requerida.',
+            '',
+            'Este documento no inventa ni presume condiciones del producto. Los hechos comerciales '
+                .'y jurídicos anteriores deben completarse y aprobarse antes de su uso público.',
+            '',
+        ]);
+
+        $register = implode("\n", [
+            '# Registro de tratamientos',
+            '',
+            '> Estado: inventario técnico generado; **revisión jurídica requerida**.',
+            '',
+            'Producto: '.$projectCode,
+            '',
+            rtrim(implode("\n", $sections)),
+            '',
+        ]);
+
+        $rights = implode("\n", [
+            '# Canal para ejercer derechos sobre datos personales',
+            '',
+            '> Estado: borrador técnico generado; **revisión jurídica requerida**.',
+            '',
+            'Producto: '.$projectCode,
+            '',
+            '## Responsable y canal',
+            '',
+            ...$responsible,
+            '',
+            '## Procedimiento pendiente',
+            '',
+            '- Requisitos de la solicitud: '.self::PLACEHOLDER.' — revisión jurídica requerida.',
+            '- Flujo interno de atención: '.self::PLACEHOLDER.' — revisión jurídica requerida.',
+            '- Plazos aplicables: '.self::PLACEHOLDER.' — deben ser definidos con revisión jurídica; este kit no inventa un plazo legal.',
+            '',
+            'El canal debe permitir solicitudes de acceso, corrección, actualización, supresión o '
+                .'revocación según corresponda. Este documento describe una frontera técnica y no '
+                .'constituye aprobación jurídica.',
+            '',
+        ]);
+
+        $retentionDocument = implode("\n", [
+            '# Tabla de retención',
+            '',
+            '> Estado: calendario técnico documentado; **revisión jurídica requerida**.',
+            '',
+            'Producto: '.$projectCode,
+            '',
+            implode("\n", $retention),
+            '',
+        ]);
+
+        return [
+            'aviso-privacidad.md' => $notice,
+            'canal-derechos.md' => $rights,
+            'politica-tratamiento.md' => $policy,
+            'registro-tratamientos.md' => $register,
+            'retencion.md' => $retentionDocument,
+            'terminos-condiciones.md' => $terms,
+        ];
     }
 
 }
