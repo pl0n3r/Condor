@@ -386,8 +386,8 @@ esac
             supports_no_tablespaces: bool,
             supports_gtid_purged: bool = False,
             supports_column_statistics: bool = False,
-        ) -> list[str]:
-            """Ejecuta el backup con un cliente simulado y devuelve sus argumentos."""
+        ) -> tuple[list[str], str]:
+            """Ejecuta el backup y devuelve argumentos más login-path observado."""
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 scripts = root / "scripts"
@@ -404,6 +404,7 @@ esac
                 fake_bin = root / "fake-bin"
                 fake_bin.mkdir()
                 dump_args = root / "dump-args.log"
+                login_path = root / "login-path.log"
                 dump = fake_bin / dump_name
                 dump.write_text(
                     textwrap.dedent(
@@ -420,6 +421,7 @@ esac
                           exit 0
                         fi
                         printf '%s\\n' "$@" > "$FAKE_DUMP_ARGS"
+                        printf '%s' "${MYSQL_TEST_LOGIN_FILE:-}" > "$FAKE_LOGIN_PATH"
                         printf '%s\\n' 'CREATE TABLE backup_probe (id INT);'
                         """
                     ),
@@ -434,6 +436,7 @@ esac
                 )
                 env["BACKUP_DIR"] = str(root / "backups")
                 env["FAKE_DUMP_ARGS"] = str(dump_args)
+                env["FAKE_LOGIN_PATH"] = str(login_path)
                 env["FAKE_SUPPORTS_NO_TABLESPACES"] = (
                     "1" if supports_no_tablespaces else "0"
                 )
@@ -455,24 +458,27 @@ esac
                 )
 
                 self.assertEqual(result.returncode, 0, result.stderr)
-                return dump_args.read_text(encoding="utf-8").splitlines()
+                return (
+                    dump_args.read_text(encoding="utf-8").splitlines(),
+                    login_path.read_text(encoding="utf-8"),
+                )
 
-        mariadb_supported = run_backup(
+        mariadb_supported, mariadb_supported_login = run_backup(
             "mariadb-dump",
             supports_no_tablespaces=True,
             supports_gtid_purged=True,
         )
-        mariadb_legacy = run_backup(
+        mariadb_legacy, mariadb_legacy_login = run_backup(
             "mariadb-dump",
             supports_no_tablespaces=False,
         )
-        mysql_supported = run_backup(
+        mysql_supported, mysql_supported_login = run_backup(
             "mysqldump",
             supports_no_tablespaces=True,
             supports_gtid_purged=True,
             supports_column_statistics=True,
         )
-        mysql_legacy = run_backup(
+        mysql_legacy, mysql_legacy_login = run_backup(
             "mysqldump",
             supports_no_tablespaces=False,
             supports_gtid_purged=False,
@@ -491,12 +497,22 @@ esac
         self.assertNotIn("--set-gtid-purged=OFF", mysql_legacy)
         self.assertNotIn("--column-statistics=0", mysql_legacy)
 
+        self.assertEqual(mariadb_supported_login, "")
+        self.assertEqual(mariadb_legacy_login, "")
+        self.assertTrue(mysql_supported_login.endswith(".cnf.login"))
+        self.assertTrue(mysql_legacy_login.endswith(".cnf.login"))
+
         for args in (
             mariadb_supported,
             mariadb_legacy,
             mysql_supported,
             mysql_legacy,
         ):
+            self.assertTrue(args[0].startswith("--defaults-file="), args)
+            self.assertFalse(
+                any(arg.startswith("--defaults-extra-file=") for arg in args),
+                args,
+            )
             self.assertIn("--single-transaction", args)
             self.assertIn("--quick", args)
             self.assertIn("--skip-lock-tables", args)

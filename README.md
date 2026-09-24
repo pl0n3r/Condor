@@ -1,13 +1,13 @@
-# Condor App — Snapshot operativo · candidato V 0.1.30
+# Condor App — Snapshot operativo · candidato V 0.1.31
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** confirmar de forma sanitizada la causa exacta del backup fallido de D-054 en hosting compartido, sin exponer logs ni relajar seguridad.
+> **Objetivo actual:** corregir el `access_denied` confirmado de `mariadb-dump` aislando el option-file temporal de configuraciones externas del hosting, sin ampliar privilegios ni exponer secretos.
 
 <p align="center">
-  <strong>Base desplegada:</strong> V 0.1.29 · main `fd0243b83a5fba1e16e1f027a42c395dd7f770be` ·
-  <strong>Candidato:</strong> V 0.1.30 ·
+  <strong>Base integrada:</strong> V 0.1.30 · main `32006c9c5cf1189c882aa8c1eb116373003b5c8e` ·
+  <strong>Candidato:</strong> V 0.1.31 ·
   <strong>Incidente:</strong> #200
 </p>
 
@@ -15,20 +15,21 @@
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base integrada | ✅ **V 0.1.29 / MAIN** | SHA `fd0243b83a5fba1e16e1f027a42c395dd7f770be` |
-| Exact-main V 0.1.29 | ✅ **VALIDADO EN CÓDIGO** | CI run 35942476302 (#918) en success |
-| Observador V 0.1.29 | ⛔ **NO_OBSERVADO** | run 35942476298 (#19): HTTP 500; probe `phase=backup`, `result=failure`, `code=2`, actualizado 2026-09-24T01:40:04Z |
-| Incidente actual | 🚧 **#200 / V 0.1.30** | confirmar clase de fallo y cliente de dump con enums seguros |
+| Base integrada | ✅ **V 0.1.30 / MAIN** | SHA `32006c9c5cf1189c882aa8c1eb116373003b5c8e` |
+| Exact-main V 0.1.30 | ✅ **VALIDADO EN CÓDIGO** | CI run 35946593975 (#926) en success |
+| Observador V 0.1.30 | ⛔ **NO_OBSERVADO** | run 35946593943 (#20): HTTP 500; `phase=backup`, `reason=access_denied`, `subcode=2`, `backup_client=mariadb-dump` |
+| Incidente actual | 🚧 **#200 / V 0.1.31** | usar option-file exclusivo para impedir overrides posteriores de `~/.my.cnf` |
 | CI/Sonar/CodeRabbit | ⏳ **PENDIENTE DEL HEAD FINAL** | exact-head obligatorio antes del merge |
 
-## Qué añade V 0.1.30
+## Qué añade V 0.1.31
 
 - conserva D-054 sin cambiar su orden ni permitir SQL destructivo;
-- registra en el status operacional únicamente `reason`, `subcode` y `backup_client` bajo allowlists cerradas;
-- clasifica fallos de configuración, filesystem, opción no soportada, privilegio global, acceso, conexión, timeout o dump no clasificable;
-- nunca publica stderr, hostname, usuario, contraseña, nombre de tabla/base ni SQL;
-- el observer valida esos campos antes de mostrarlos en el Roadmap;
-- una regresión de comportamiento demuestra que un error con identificadores sensibles termina expuesto solo como `reason=access_denied`, `subcode=2`, `backup_client=mariadb-dump`.
+- reemplaza `--defaults-extra-file` por `--defaults-file` como primer argumento del dump;
+- evita que option-files normales sobrescriban las credenciales temporales derivadas de `DATABASE_URL`;
+- en el fallback Oracle `mysqldump`, redirige `MYSQL_TEST_LOGIN_FILE` a una ruta temporal inexistente para neutralizar la excepción `.mylogin.cnf` que MySQL conserva incluso con `--defaults-file`;
+- mantiene el password fuera de la línea de comandos y el option-file en modo `0600`;
+- añade regresión que exige `--defaults-file` como primer argumento y prohíbe `--defaults-extra-file`;
+- conserva el diagnóstico sanitizado `reason/subcode/backup_client` para validar producción sin exponer stderr ni secretos.
 
 ## Invariantes
 
