@@ -98,26 +98,58 @@ try {
         $create = $pdo->query("SHOW CREATE TABLE {$quoted}")->fetch(PDO::FETCH_NUM);
         $expected = (int) $pdo->query("SELECT COUNT(*) FROM {$quoted}")->fetchColumn();
 
+        $columns = $pdo->query("SHOW FULL COLUMNS FROM {$quoted}")
+            ->fetchAll(PDO::FETCH_ASSOC);
+        $insertableColumns = [];
+        foreach ($columns as $column) {
+            $name = $column['Field'] ?? null;
+            $extra = strtoupper((string) ($column['Extra'] ?? ''));
+            if (!is_string($name) || $name === '') {
+                fail("no fue posible identificar las columnas de {$table}.");
+            }
+            if (str_contains($extra, 'GENERATED')) {
+                continue;
+            }
+            $insertableColumns[] = '`' . str_replace('`', '``', $name) . '`';
+        }
+        if ($insertableColumns === [] && $expected > 0) {
+            fail("la tabla {$table} no tiene columnas insertables para {$expected} filas.");
+        }
+        $columnList = implode(',', $insertableColumns);
+
         $write("DROP TABLE IF EXISTS {$quoted};\n{$create[1]};\n\n");
 
         $dumped = 0;
         $batch = [];
-        $rows = $pdo->query("SELECT * FROM {$quoted}", PDO::FETCH_NUM);
-        foreach ($rows as $row) {
-            $values = array_map(
-                static fn (mixed $value): string => $value === null ? 'NULL' : $pdo->quote((string) $value),
-                $row,
+        if ($expected > 0) {
+            $rows = $pdo->query(
+                "SELECT {$columnList} FROM {$quoted}",
+                PDO::FETCH_NUM,
             );
-            $batch[] = '(' . implode(',', $values) . ')';
-            $dumped++;
-            if (count($batch) === 200) {
-                $write("INSERT INTO {$quoted} VALUES " . implode(",\n", $batch) . ";\n");
-                $batch = [];
+            foreach ($rows as $row) {
+                $values = array_map(
+                    static fn (mixed $value): string => $value === null ? 'NULL' : $pdo->quote((string) $value),
+                    $row,
+                );
+                $batch[] = '(' . implode(',', $values) . ')';
+                $dumped++;
+                if (count($batch) === 200) {
+                    $write(
+                        "INSERT INTO {$quoted} ({$columnList}) VALUES "
+                        . implode(",\n", $batch)
+                        . ";\n",
+                    );
+                    $batch = [];
+                }
             }
-        }
-        $rows->closeCursor();
-        if ($batch !== []) {
-            $write("INSERT INTO {$quoted} VALUES " . implode(",\n", $batch) . ";\n");
+            $rows->closeCursor();
+            if ($batch !== []) {
+                $write(
+                    "INSERT INTO {$quoted} ({$columnList}) VALUES "
+                    . implode(",\n", $batch)
+                    . ";\n",
+                );
+            }
         }
         $write("\n");
 
