@@ -5,36 +5,55 @@ declare(strict_types=1);
 /*
  * Backup lógico de MariaDB/MySQL usando solo PDO con la cuenta de aplicación.
  *
- * Existe porque el usuario de base de datos de Hostinger no tiene los
- * privilegios que exigen mariadb-dump/mysqldump (Access denied, GTID,
- * PROCESS). Este camino solo necesita SELECT y SHOW CREATE TABLE sobre las
- * tablas propias. Escribe SQL plano restaurable por verify-backup-restore.sh
- * y comprueba al final que cada tabla volcó exactamente las filas contadas
- * dentro de la misma transacción consistente (fail-closed).
+ * Las consultas de metadata permanecen bufferizadas. Solo el SELECT de filas
+ * se vuelve no bufferizado durante el streaming y siempre cierra su cursor
+ * antes de restaurar el modo normal. Los fallos salen con códigos por etapa
+ * allowlisted para diagnosticar producción sin exponer SQL ni credenciales.
  *
  * Uso: DATABASE_URL=... php backup-database-pdo.php <salida.sql>
  */
 
-function fail(string $message): never
+const EXIT_CONNECT = 31;
+const EXIT_FILESYSTEM = 32;
+const EXIT_SNAPSHOT = 33;
+const EXIT_TABLE_LIST = 34;
+const EXIT_METADATA = 35;
+const EXIT_ROWS = 36;
+const EXIT_COMMIT = 37;
+const EXIT_CHECKSUM = 38;
+
+function failStage(string $stage, int $code, string $message): never
 {
-    fwrite(STDERR, "backup-database-pdo.php: {$message}\n");
-    exit(1);
+    fwrite(STDERR, "backup-database-pdo.php: stage={$stage}; {$message}\n");
+    exit($code);
+}
+
+function stageCode(string $stage): int
+{
+    return match ($stage) {
+        'snapshot' => EXIT_SNAPSHOT,
+        'table-list' => EXIT_TABLE_LIST,
+        'metadata' => EXIT_METADATA,
+        'rows' => EXIT_ROWS,
+        'commit' => EXIT_COMMIT,
+        default => EXIT_METADATA,
+    };
 }
 
 $output = $argv[1] ?? '';
 if ($output === '') {
-    fail('falta la ruta de salida.');
+    failStage('filesystem', EXIT_FILESYSTEM, 'falta la ruta de salida.');
 }
 
 $url = getenv('DATABASE_URL');
 if (!is_string($url) || $url === '') {
-    fail('falta DATABASE_URL en el entorno.');
+    failStage('connect', EXIT_CONNECT, 'falta DATABASE_URL en el entorno.');
 }
 
 $parts = parse_url(preg_replace('#^mariadb://#i', 'mysql://', $url) ?? '');
 if (!is_array($parts) || !isset($parts['host'], $parts['path'])
     || !in_array(strtolower($parts['scheme'] ?? ''), ['mysql'], true)) {
-    fail('DATABASE_URL no es una URL mysql:// o mariadb:// válida.');
+    failStage('connect', EXIT_CONNECT, 'DATABASE_URL no es una URL mysql:// o mariadb:// válida.');
 }
 
 $database = rawurldecode(ltrim($parts['path'], '/'));
@@ -53,18 +72,16 @@ try {
         rawurldecode($parts['pass'] ?? ''),
         [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            Pdo\Mysql::ATTR_USE_BUFFERED_QUERY => false,
         ],
     );
-} catch (PDOException) {
-    // El mensaje del driver puede incluir host o usuario; no se reenvía.
-    fail('no fue posible conectar a la base de datos.');
+} catch (Throwable) {
+    failStage('connect', EXIT_CONNECT, 'no fue posible conectar a la base de datos.');
 }
 unset($url, $parts);
 
 $handle = fopen($output, 'wb');
 if ($handle === false) {
-    fail('no fue posible crear el archivo de salida.');
+    failStage('filesystem', EXIT_FILESYSTEM, 'no fue posible crear el archivo de salida.');
 }
 
 $hash = hash_init('sha256');
@@ -75,45 +92,59 @@ $write = static function (string $sql) use ($handle, $hash): void {
         $remaining = substr($sql, $offset);
         $written = fwrite($handle, $remaining);
         if ($written === false || $written === 0) {
-            fail('no fue posible escribir el backup completo.');
+            failStage('filesystem', EXIT_FILESYSTEM, 'no fue posible escribir el backup completo.');
         }
         hash_update($hash, substr($remaining, 0, $written));
         $offset += $written;
     }
 };
 
+$stage = 'snapshot';
 try {
-    // Snapshot consistente sin LOCK TABLES ni privilegios globales.
     $pdo->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
     $pdo->exec('START TRANSACTION WITH CONSISTENT SNAPSHOT');
 
-    $tables = $pdo->query("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'")
-        ->fetchAll(PDO::FETCH_COLUMN, 0);
+    $stage = 'table-list';
+    $tableStatement = $pdo->query("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'");
+    $tables = $tableStatement->fetchAll(PDO::FETCH_COLUMN, 0);
+    $tableStatement->closeCursor();
     sort($tables, SORT_STRING);
 
     $write("-- Condor backup PDO\nSET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\n\n");
 
     foreach ($tables as $table) {
-        $quoted = '`' . str_replace('`', '``', (string) $table) . '`';
-        $create = $pdo->query("SHOW CREATE TABLE {$quoted}")->fetch(PDO::FETCH_NUM);
-        $expected = (int) $pdo->query("SELECT COUNT(*) FROM {$quoted}")->fetchColumn();
+        $quoted = chr(96) . str_replace(chr(96), chr(96).chr(96), (string) $table) . chr(96);
 
-        $columns = $pdo->query("SHOW FULL COLUMNS FROM {$quoted}")
-            ->fetchAll(PDO::FETCH_ASSOC);
+        $stage = 'metadata';
+        $createStatement = $pdo->query("SHOW CREATE TABLE {$quoted}");
+        $create = $createStatement->fetch(PDO::FETCH_NUM);
+        $createStatement->closeCursor();
+        if (!is_array($create) || !is_string($create[1] ?? null) || $create[1] === '') {
+            failStage('metadata', EXIT_METADATA, 'no fue posible leer la definición de una tabla.');
+        }
+
+        $countStatement = $pdo->query("SELECT COUNT(*) FROM {$quoted}");
+        $expected = (int) $countStatement->fetchColumn();
+        $countStatement->closeCursor();
+
+        $columnStatement = $pdo->query("SHOW FULL COLUMNS FROM {$quoted}");
+        $columns = $columnStatement->fetchAll(PDO::FETCH_ASSOC);
+        $columnStatement->closeCursor();
+
         $insertableColumns = [];
         foreach ($columns as $column) {
             $name = $column['Field'] ?? null;
             $extra = strtoupper((string) ($column['Extra'] ?? ''));
             if (!is_string($name) || $name === '') {
-                fail("no fue posible identificar las columnas de {$table}.");
+                failStage('metadata', EXIT_METADATA, 'no fue posible identificar una columna.');
             }
             if (str_contains($extra, 'GENERATED')) {
                 continue;
             }
-            $insertableColumns[] = '`' . str_replace('`', '``', $name) . '`';
+            $insertableColumns[] = chr(96) . str_replace(chr(96), chr(96).chr(96), $name) . chr(96);
         }
         if ($insertableColumns === [] && $expected > 0) {
-            fail("la tabla {$table} no tiene columnas insertables para {$expected} filas.");
+            failStage('metadata', EXIT_METADATA, 'una tabla con filas no tiene columnas insertables.');
         }
         $columnList = implode(',', $insertableColumns);
 
@@ -122,27 +153,45 @@ try {
         $dumped = 0;
         $batch = [];
         if ($expected > 0) {
-            $rows = $pdo->query(
-                "SELECT {$columnList} FROM {$quoted}",
-                PDO::FETCH_NUM,
-            );
-            foreach ($rows as $row) {
-                $values = array_map(
-                    static fn (mixed $value): string => $value === null ? 'NULL' : $pdo->quote((string) $value),
-                    $row,
+            $stage = 'rows';
+            $rows = null;
+            $pdo->setAttribute(Pdo\Mysql::ATTR_USE_BUFFERED_QUERY, false);
+            try {
+                $rows = $pdo->query(
+                    "SELECT {$columnList} FROM {$quoted}",
+                    PDO::FETCH_NUM,
                 );
-                $batch[] = '(' . implode(',', $values) . ')';
-                $dumped++;
-                if (count($batch) === 200) {
-                    $write(
-                        "INSERT INTO {$quoted} ({$columnList}) VALUES "
-                        . implode(",\n", $batch)
-                        . ";\n",
-                    );
-                    $batch = [];
+                foreach ($rows as $row) {
+                    $values = [];
+                    foreach ($row as $value) {
+                        if ($value === null) {
+                            $values[] = 'NULL';
+                            continue;
+                        }
+                        $quotedValue = $pdo->quote((string) $value);
+                        if ($quotedValue === false) {
+                            failStage('rows', EXIT_ROWS, 'no fue posible serializar un valor.');
+                        }
+                        $values[] = $quotedValue;
+                    }
+                    $batch[] = '(' . implode(',', $values) . ')';
+                    $dumped++;
+                    if (count($batch) === 200) {
+                        $write(
+                            "INSERT INTO {$quoted} ({$columnList}) VALUES "
+                            . implode(",\n", $batch)
+                            . ";\n",
+                        );
+                        $batch = [];
+                    }
                 }
+            } finally {
+                if ($rows instanceof PDOStatement) {
+                    $rows->closeCursor();
+                }
+                $pdo->setAttribute(Pdo\Mysql::ATTR_USE_BUFFERED_QUERY, true);
             }
-            $rows->closeCursor();
+
             if ($batch !== []) {
                 $write(
                     "INSERT INTO {$quoted} ({$columnList}) VALUES "
@@ -154,24 +203,25 @@ try {
         $write("\n");
 
         if ($dumped !== $expected) {
-            fail("la tabla {$table} volcó {$dumped} filas y se esperaban {$expected}.");
+            failStage('rows', EXIT_ROWS, 'el conteo de filas del backup no coincide con el snapshot.');
         }
     }
 
     $write("SET FOREIGN_KEY_CHECKS=1;\n");
+    $stage = 'commit';
     $pdo->exec('COMMIT');
-} catch (PDOException) {
-    fail('la consulta de backup falló; SQL y parámetros redactados.');
+} catch (Throwable) {
+    failStage($stage, stageCode($stage), 'falló la etapa de backup; detalles internos redactados.');
 }
 
 $expectedChecksum = hash_final($hash);
 if (!fclose($handle)) {
-    fail('no fue posible cerrar el backup.');
+    failStage('filesystem', EXIT_FILESYSTEM, 'no fue posible cerrar el backup.');
 }
 
 $actualChecksum = hash_file('sha256', $output);
 if (!is_string($actualChecksum) || !hash_equals($expectedChecksum, $actualChecksum)) {
-    fail('el checksum SHA-256 del backup no coincide con los bytes escritos.');
+    failStage('checksum', EXIT_CHECKSUM, 'el checksum SHA-256 no coincide con los bytes escritos.');
 }
 
 fwrite(
