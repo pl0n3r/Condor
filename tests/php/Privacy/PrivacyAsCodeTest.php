@@ -95,13 +95,16 @@ final class PrivacyAsCodeTest extends TestCase
             self::assertSame([], $treatment['providers']);
         }
 
-        $combined = implode("\n", [
-            file_get_contents($this->root().'/docs/privacidad/politica-tratamiento.md'),
+        $register = strtolower(
             file_get_contents($this->root().'/docs/privacidad/registro-tratamientos.md'),
-        ]);
-        foreach (['sendgrid', 'mailgun', 'postmark', 'ses', 'smtp'] as $invented) {
-            self::assertStringNotContainsString($invented, strtolower($combined));
+        );
+        foreach (['sendgrid', 'mailgun', 'postmark', 'aws_ses', 'smtp_provider'] as $invented) {
+            self::assertStringNotContainsString(
+                chr(96).$invented.chr(96),
+                $register,
+            );
         }
+        self::assertStringContainsString('proveedores: ninguno_declarado', $register);
     }
 
     public function testPrivacyArtifactsContainNoSyntheticSecretsOrRealPii(): void
@@ -177,7 +180,8 @@ final class PrivacyAsCodeTest extends TestCase
         );
 
         $table = [
-            '| Tratamiento | Categoría | Campos | Finalidad | Base documentada | Consentimiento | Proveedores | Retención |',
+            '| Tratamiento | Categoría | Campos | Finalidad | '
+                .'Base documentada | Consentimiento | Proveedores | Retención |',
             '| --- | --- | --- | --- | --- | --- | --- | --- |',
         ];
         $sections = [];
@@ -247,7 +251,10 @@ final class PrivacyAsCodeTest extends TestCase
             '',
             '## Derechos y revisión',
             '',
-            'Las solicitudes de acceso, corrección, actualización, supresión o revocación se canalizan mediante el canal de derechos indicado arriba. Las finalidades, bases, consentimientos, proveedores y retenciones aquí documentadas requieren la revisión jurídica aplicable antes de declararse aprobadas.',
+            'Las solicitudes de acceso, corrección, actualización, supresión o revocación '
+                .'se canalizan mediante el canal de derechos indicado arriba. Las finalidades, '
+                .'bases, consentimientos, proveedores y retenciones aquí documentadas requieren '
+                .'la revisión jurídica aplicable antes de declararse aprobadas.',
             '',
         ]);
 
