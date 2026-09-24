@@ -2,6 +2,11 @@ name: Auditoría de privacidad
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - trabajo/issue-221
+    paths:
+      - .github/workflows/auditoria-privacidad.yml
   schedule:
     - cron: '17 8 * * 1'
 
