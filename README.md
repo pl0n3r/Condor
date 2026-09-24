@@ -18,8 +18,8 @@
 | Contrato Factory | ✅ **6 DOCUMENTOS** | pin `4b2be9fcf827278631caa3e3e68603b6e2a680d7` |
 | Mapa de datos | ✅ **SIN CAMBIO MATERIAL** | `datos.yml` continúa como fuente de verdad; placeholders y `review_required` se preservan |
 | Documentos | ✅ **GENERADOS** | política, aviso, términos, registro, canal de derechos y retención |
-| Caller de auditoría | ⛔ **SIN EJECUCIÓN REAL AÚN** | el workflow existe y queda pinneado al contrato vigente; no se inventa evidencia |
-| Candidato V0.1.38 | 🚧 **EN REVISIÓN** | PR #222; CI/Sonar/CodeQL/revisión y auditoría real pendientes antes de integrar |
+| Caller de auditoría | ✅ **EJECUCIÓN REAL CLEAN** | run `36054140014`; Factory `4b2be9fc…`; `clean: true`, sin hallazgos pendientes |
+| Candidato V0.1.38 | 🚧 **REVALIDACIÓN FINAL** | PR #222; CI/privacidad/Sonar/CodeRabbit previos verdes; revalidar HEAD final tras retirar trigger temporal |
 
 ## Qué añade V 0.1.38
 
@@ -47,7 +47,7 @@ Los tres documentos históricos —política, registro y retención— ya coinci
 - los documentos técnicos no constituyen aprobación jurídica;
 - no se introducen PII real, secretos ni datos del responsable;
 - `datos.yml` sigue siendo la fuente única de verdad del producto;
-- una auditoría real se registra solo cuando exista una ejecución verificable de GitHub Actions;
+- auditoría real verificada: run `36054140014`, resultado sanitizado `clean: true`; el trigger temporal de rama fue retirado antes del merge;
 - merge o CI verde no equivalen a producción verde;
 - producción solo se declara verde con versión/SHA exactos, observer, smoke y gates exact-main aprobados.
 
@@ -57,18 +57,19 @@ Los tres documentos históricos —política, registro y retención— ya coinci
 flowchart LR
   A["V0.1.37 · producción verde"] --> B["#221 · seis documentos"]
   B --> C["PR #222 · CI + privacidad + Sonar/CodeQL + revisión"]
-  C --> D["Auditoría real sanitizada"]
-  D --> E["Squash merge"]
-  E --> F["CI exact-main"]
+  C --> D["Auditoría real sanitizada · clean"]
+  D --> E["HEAD final sin trigger temporal"]
+  E --> M["Squash merge"]
+  M --> F["CI exact-main"]
   F --> G["Observer + Production Smoke"]
 ```
 
 ## Qué sigue
 
-1. cerrar gates del HEAD estable de PR #222;
-2. obtener una ejecución real y sanitizada del caller de auditoría;
-3. integrar serialmente V0.1.38;
-4. validar exact-main, observer y smoke antes de actualizar el Roadmap #1 y Factory#54.
+1. revalidar CI/privacidad/Sonar/CodeRabbit sobre el HEAD final sin trigger temporal;
+2. integrar serialmente V0.1.38;
+3. validar exact-main, observer y smoke;
+4. actualizar Roadmap #1 y Factory#54 con la evidencia del run `36054140014`.
 
 ## Referencias
 
