@@ -443,6 +443,7 @@ def _timestamp_estado_post_deploy_valido(value: Any) -> bool:
 def _extraer_estado_post_deploy(
     carga: dict[str, Any],
 ) -> tuple[Any, str, str, Any, Any]:
+    """Extrae y valida el diagnóstico allowlisted del cron productivo."""
     estado = carga.get("post_deploy")
     if not isinstance(estado, dict):
         raise ObservacionError(

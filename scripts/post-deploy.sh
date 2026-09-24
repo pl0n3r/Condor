@@ -44,6 +44,7 @@ case "$POST_DEPLOY_VERSION" in
         ;;
 esac
 
+# Persiste solo estado operacional acotado; nunca logs ni secretos.
 write_post_deploy_status() {
     phase="$1"
     result="$2"
@@ -67,6 +68,7 @@ write_post_deploy_status() {
     }
 }
 
+# Avanza de fase y reinicia el diagnóstico específico del paso anterior.
 set_post_deploy_phase() {
     POST_DEPLOY_PHASE="$1"
     POST_DEPLOY_REASON="none"
@@ -75,6 +77,7 @@ set_post_deploy_phase() {
     write_post_deploy_status "$POST_DEPLOY_PHASE" "running" 0
 }
 
+# Convierte el exit status del cron en un resultado terminal compartible.
 finalize_post_deploy_status() {
     exit_status="$1"
     if [ "$exit_status" -eq 0 ]; then
@@ -512,6 +515,7 @@ resolve_database_url() {
     '
 }
 
+# Extrae únicamente el nombre allowlisted del cliente anunciado por el backup.
 capture_backup_client() {
     backup_log="$1"
     detected_client="$(sed -n \
@@ -528,6 +532,7 @@ capture_backup_client() {
     esac
 }
 
+# Reduce stderr privado a un enum seguro y un subcódigo numérico.
 classify_backup_failure() {
     backup_log="$1"
     backup_status="$2"
@@ -552,6 +557,7 @@ classify_backup_failure() {
     fi
 }
 
+# Ejecuta el backup obligatorio y falla cerrado antes de cualquier migración.
 run_pre_migration_backup() {
     set_post_deploy_phase "backup"
     database_url="$(resolve_database_url 2>/dev/null || true)"
