@@ -10,6 +10,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Throwable;
 
@@ -37,11 +38,14 @@ final class BackupDatabaseCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $path = (string) ($input->getOption('output') ?? '');
+        $diagnosticOutput = $output instanceof ConsoleOutputInterface
+            ? $output->getErrorOutput()
+            : $output;
 
         try {
             $result = $this->backup->write($path);
         } catch (BackupFailure $failure) {
-            $output->writeln(sprintf(
+            $diagnosticOutput->writeln(sprintf(
                 'backup-database-pdo: stage=%s; %s',
                 $failure->stage,
                 $failure->safeMessage,
@@ -49,7 +53,7 @@ final class BackupDatabaseCommand extends Command
 
             return $failure->exitCode;
         } catch (Throwable) {
-            $output->writeln(
+            $diagnosticOutput->writeln(
                 'backup-database-pdo: stage=metadata; '
                 .'fallo inesperado; detalles internos redactados.',
             );
@@ -57,7 +61,7 @@ final class BackupDatabaseCommand extends Command
             return PdoDatabaseBackup::EXIT_METADATA;
         }
 
-        $output->writeln(sprintf(
+        $diagnosticOutput->writeln(sprintf(
             'backup-database-pdo: %d tablas volcadas y verificadas; '
             .'checksum SHA-256 verificado: %s.',
             $result['tables'],
