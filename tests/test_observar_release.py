@@ -123,6 +123,35 @@ class ObserverTests(unittest.TestCase):
         self.assertNotIn("secreto", detalle)
         self.assertNotIn("DATABASE_URL", detalle)
 
+    def test_probe_post_deploy_acepta_pdo_failure_sanitizado(self) -> None:
+        """El diagnóstico PDO allowlisted llega íntegro al comentario seguro."""
+        payload = {
+            "status": "ok",
+            "version": VERSION,
+            "release_sha": SHA,
+            "post_deploy": {
+                "version": VERSION,
+                "phase": "backup",
+                "result": "failure",
+                "code": 2,
+                "reason": "pdo_failure",
+                "subcode": 35,
+                "backup_client": "pdo",
+                "updated_at": "2026-09-24T07:00:00Z",
+            },
+        }
+
+        detalle = modulo.validar_post_deploy_status(
+            "application/json",
+            json.dumps(payload).encode(),
+            VERSION,
+            SHA,
+        )
+
+        self.assertIn("reason=pdo_failure", detalle)
+        self.assertIn("subcode=35", detalle)
+        self.assertIn("backup_client=pdo", detalle)
+
     def test_accept_de_javascript_incluye_mime_legacy_de_hostinger(self) -> None:
         self.assertEqual(
             modulo.tipo_aceptado_para("/build/admin.js"),
