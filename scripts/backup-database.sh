@@ -106,7 +106,10 @@ if printf '%s\n' "$dump_help" | grep -q -- '--no-tablespaces'; then
   set -- --no-tablespaces "$@"
 fi
 
-case "$(basename "$dump_bin")" in
+dump_name="$(basename "$dump_bin")"
+echo "backup-database.sh: cliente seleccionado: $dump_name." >&2
+
+case "$dump_name" in
   mysqldump)
     # MySQL 8.0.32+ puede exigir RELOAD/FLUSH_TABLES con
     # --single-transaction cuando GTID está activo y set-gtid-purged=AUTO.

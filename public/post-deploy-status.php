@@ -35,6 +35,9 @@ $postDeploy = [
     'phase' => 'missing',
     'result' => 'unknown',
     'code' => null,
+    'reason' => 'unknown',
+    'subcode' => null,
+    'backup_client' => 'unknown',
     'updated_at' => null,
 ];
 
@@ -59,6 +62,24 @@ if (is_file($statusPath) && is_readable($statusPath)) {
             'complete',
         ];
         $allowedResults = ['running', 'success', 'failure', 'skipped'];
+        $allowedReasons = [
+            'none',
+            'database_url_missing',
+            'client_missing',
+            'configuration',
+            'filesystem',
+            'unsupported_option',
+            'server_privilege',
+            'access_denied',
+            'connection',
+            'timeout',
+            'dump_failed_unknown',
+            'unknown',
+        ];
+        $allowedBackupClients = ['unknown', 'mariadb-dump', 'mysqldump'];
+        $reason = $decoded['reason'] ?? 'unknown';
+        $subcode = $decoded['subcode'] ?? null;
+        $backupClient = $decoded['backup_client'] ?? 'unknown';
 
         if (
             is_array($decoded)
@@ -71,6 +92,14 @@ if (is_file($statusPath) && is_readable($statusPath)) {
             && is_int($decoded['code'] ?? null)
             && $decoded['code'] >= 0
             && $decoded['code'] <= 255
+            && is_string($reason)
+            && in_array($reason, $allowedReasons, true)
+            && (
+                $subcode === null
+                || (is_int($subcode) && $subcode >= 0 && $subcode <= 255)
+            )
+            && is_string($backupClient)
+            && in_array($backupClient, $allowedBackupClients, true)
             && is_string($decoded['updated_at'] ?? null)
             && preg_match('/\\A\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z\\z/', $decoded['updated_at']) === 1
         ) {
@@ -79,6 +108,9 @@ if (is_file($statusPath) && is_readable($statusPath)) {
                 'phase' => $decoded['phase'],
                 'result' => $decoded['result'],
                 'code' => $decoded['code'],
+                'reason' => $reason,
+                'subcode' => $subcode,
+                'backup_client' => $backupClient,
                 'updated_at' => $decoded['updated_at'],
             ];
         }

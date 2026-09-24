@@ -30,6 +30,12 @@ POST_DEPLOY_PHASES = {
     "migrate", "recheck", "cache", "complete", "missing",
 }
 POST_DEPLOY_RESULTS = {"running", "success", "failure", "skipped", "unknown"}
+POST_DEPLOY_REASONS = {
+    "none", "database_url_missing", "client_missing", "configuration",
+    "filesystem", "unsupported_option", "server_privilege", "access_denied",
+    "connection", "timeout", "dump_failed_unknown", "unknown",
+}
+POST_DEPLOY_BACKUP_CLIENTS = {"unknown", "mariadb-dump", "mysqldump"}
 TENANT_SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z", re.ASCII)
 STOREFRONT_VERSION = (0, 1, 13)
 STOREFRONT_IDENTITY_VERSION = (0, 1, 16)
@@ -447,6 +453,9 @@ def _extraer_estado_post_deploy(
     phase = estado.get("phase")
     result = estado.get("result")
     code = estado.get("code")
+    reason = estado.get("reason", "unknown")
+    subcode = estado.get("subcode")
+    backup_client = estado.get("backup_client", "unknown")
     updated_at = estado.get("updated_at")
 
     fields_valid = (
@@ -456,6 +465,11 @@ def _extraer_estado_post_deploy(
         and isinstance(result, str)
         and result in POST_DEPLOY_RESULTS
         and _codigo_estado_post_deploy_valido(code)
+        and isinstance(reason, str)
+        and reason in POST_DEPLOY_REASONS
+        and _codigo_estado_post_deploy_valido(subcode)
+        and isinstance(backup_client, str)
+        and backup_client in POST_DEPLOY_BACKUP_CLIENTS
         and _timestamp_estado_post_deploy_valido(updated_at)
     )
     if not fields_valid:
@@ -463,7 +477,16 @@ def _extraer_estado_post_deploy(
             "El probe post-deploy contiene campos fuera del contrato seguro."
         )
 
-    return status_version, phase, result, code, updated_at
+    return (
+        status_version,
+        phase,
+        result,
+        code,
+        reason,
+        subcode,
+        backup_client,
+        updated_at,
+    )
 
 
 def validar_post_deploy_status(
@@ -490,16 +513,26 @@ def validar_post_deploy_status(
         )
 
     _validar_identidad_post_deploy(carga, version, sha)
-    status_version, phase, result, code, updated_at = (
-        _extraer_estado_post_deploy(carga)
-    )
+    (
+        status_version,
+        phase,
+        result,
+        code,
+        reason,
+        subcode,
+        backup_client,
+        updated_at,
+    ) = _extraer_estado_post_deploy(carga)
 
     rendered_version = status_version if status_version is not None else "sin-estado"
     rendered_code = str(code) if code is not None else "n/a"
+    rendered_subcode = str(subcode) if subcode is not None else "n/a"
     rendered_time = updated_at if updated_at is not None else "n/a"
     return (
         "V/SHA exactos en probe independiente; "
         f"cron phase={phase}, result={result}, code={rendered_code}, "
+        f"reason={reason}, subcode={rendered_subcode}, "
+        f"backup_client={backup_client}, "
         f"status_version={rendered_version}, updated_at={rendered_time}."
     )
 
