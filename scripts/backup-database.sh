@@ -81,7 +81,7 @@ run_pdo_backup() {
   echo "backup-database.sh: cliente seleccionado: pdo." >&2
   : > "$raw_tmp"
   pdo_status=0
-  DATABASE_URL="$pdo_database_url" "$PHP_BIN" "$script_dir/backup-database-pdo.php" "$raw_tmp" &
+  DATABASE_URL="$pdo_database_url" "$PHP_BIN" bin/console app:database:backup-pdo --no-interaction --output="$raw_tmp" &
   dump_pid=$!
   if wait "$dump_pid"; then
     pdo_status=0
