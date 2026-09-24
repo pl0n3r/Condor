@@ -377,10 +377,17 @@ esac
         self.assertIn('evidencias["schema"]', observer)
         self.assertIn('carga.get("schema_up_to_date") is True', observer)
 
-    def test_backup_disables_tablespace_metadata_only_when_supported(self) -> None:
-        """El dump recibe --no-tablespaces solo si el cliente lo anuncia."""
+    def test_backup_uses_only_supported_shared_hosting_options(self) -> None:
+        """El dump reduce privilegios globales sin romper MariaDB/legacy."""
 
-        def run_backup(supports_no_tablespaces: bool) -> list[str]:
+        def run_backup(
+            dump_name: str,
+            *,
+            supports_no_tablespaces: bool,
+            supports_gtid_purged: bool = False,
+            supports_column_statistics: bool = False,
+        ) -> list[str]:
+            """Ejecuta el backup con un cliente simulado y devuelve sus argumentos."""
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 scripts = root / "scripts"
@@ -397,16 +404,19 @@ esac
                 fake_bin = root / "fake-bin"
                 fake_bin.mkdir()
                 dump_args = root / "dump-args.log"
-                dump = fake_bin / "mariadb-dump"
+                dump = fake_bin / dump_name
                 dump.write_text(
                     textwrap.dedent(
-                        """\\
+                        """\
                         #!/bin/sh
                         set -eu
                         if [ "${1:-}" = "--help" ]; then
-                          if [ "${FAKE_SUPPORTS_NO_TABLESPACES:-0}" = "1" ]; then
+                          [ "${FAKE_SUPPORTS_NO_TABLESPACES:-0}" = "1" ] &&
                             printf '%s\\n' '  --no-tablespaces'
-                          fi
+                          [ "${FAKE_SUPPORTS_GTID_PURGED:-0}" = "1" ] &&
+                            printf '%s\\n' '  --set-gtid-purged=value'
+                          [ "${FAKE_SUPPORTS_COLUMN_STATISTICS:-0}" = "1" ] &&
+                            printf '%s\\n' '  --column-statistics'
                           exit 0
                         fi
                         printf '%s\\n' "$@" > "$FAKE_DUMP_ARGS"
@@ -419,11 +429,19 @@ esac
 
                 env = dict(os.environ)
                 env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
-                env["DATABASE_URL"] = "mysql://backup_user:backup_pass@127.0.0.1:3306/condor"
+                env["DATABASE_URL"] = (
+                    "mysql://backup_user:backup_pass@127.0.0.1:3306/condor"
+                )
                 env["BACKUP_DIR"] = str(root / "backups")
                 env["FAKE_DUMP_ARGS"] = str(dump_args)
                 env["FAKE_SUPPORTS_NO_TABLESPACES"] = (
                     "1" if supports_no_tablespaces else "0"
+                )
+                env["FAKE_SUPPORTS_GTID_PURGED"] = (
+                    "1" if supports_gtid_purged else "0"
+                )
+                env["FAKE_SUPPORTS_COLUMN_STATISTICS"] = (
+                    "1" if supports_column_statistics else "0"
                 )
 
                 result = subprocess.run(
@@ -439,12 +457,46 @@ esac
                 self.assertEqual(result.returncode, 0, result.stderr)
                 return dump_args.read_text(encoding="utf-8").splitlines()
 
-        supported = run_backup(True)
-        unsupported = run_backup(False)
+        mariadb_supported = run_backup(
+            "mariadb-dump",
+            supports_no_tablespaces=True,
+            supports_gtid_purged=True,
+        )
+        mariadb_legacy = run_backup(
+            "mariadb-dump",
+            supports_no_tablespaces=False,
+        )
+        mysql_supported = run_backup(
+            "mysqldump",
+            supports_no_tablespaces=True,
+            supports_gtid_purged=True,
+            supports_column_statistics=True,
+        )
+        mysql_legacy = run_backup(
+            "mysqldump",
+            supports_no_tablespaces=False,
+            supports_gtid_purged=False,
+            supports_column_statistics=False,
+        )
 
-        self.assertIn("--no-tablespaces", supported)
-        self.assertNotIn("--no-tablespaces", unsupported)
-        for args in (supported, unsupported):
+        self.assertIn("--no-tablespaces", mariadb_supported)
+        self.assertNotIn("--no-tablespaces", mariadb_legacy)
+        self.assertNotIn("--set-gtid-purged=OFF", mariadb_supported)
+        self.assertNotIn("--set-gtid-purged=OFF", mariadb_legacy)
+
+        self.assertIn("--no-tablespaces", mysql_supported)
+        self.assertIn("--set-gtid-purged=OFF", mysql_supported)
+        self.assertIn("--column-statistics=0", mysql_supported)
+        self.assertNotIn("--no-tablespaces", mysql_legacy)
+        self.assertNotIn("--set-gtid-purged=OFF", mysql_legacy)
+        self.assertNotIn("--column-statistics=0", mysql_legacy)
+
+        for args in (
+            mariadb_supported,
+            mariadb_legacy,
+            mysql_supported,
+            mysql_legacy,
+        ):
             self.assertIn("--single-transaction", args)
             self.assertIn("--quick", args)
             self.assertIn("--skip-lock-tables", args)

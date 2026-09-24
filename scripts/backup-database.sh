@@ -95,17 +95,27 @@ fi
 # y evita metadata/objetos fuera de ese contrato.
 set -- --single-transaction --quick --skip-lock-tables --skip-triggers
 
+# Inspeccionar capacidades una sola vez evita asumir opciones entre clientes.
+dump_help="$("$dump_bin" --help 2>&1 || true)"
+
 # Usuarios de aplicación en hosting compartido no deben tener privilegios
 # globales como PROCESS. MySQL 8 puede exigirlo al inspeccionar tablespaces
 # salvo que el dump use --no-tablespaces. Activarlo solo si el cliente lo
 # soporta mantiene compatibilidad con MariaDB/MySQL sin relajar credenciales.
-if "$dump_bin" --help 2>&1 | grep -q -- '--no-tablespaces'; then
+if printf '%s\n' "$dump_help" | grep -q -- '--no-tablespaces'; then
   set -- --no-tablespaces "$@"
 fi
 
 case "$(basename "$dump_bin")" in
   mysqldump)
-    if "$dump_bin" --help 2>&1 | grep -q -- '--column-statistics'; then
+    # MySQL 8.0.32+ puede exigir RELOAD/FLUSH_TABLES con
+    # --single-transaction cuando GTID está activo y set-gtid-purged=AUTO.
+    # El backup de Condor no provisiona replicación: excluir esa metadata
+    # evita privilegios globales innecesarios sin quitar esquema ni datos.
+    if printf '%s\n' "$dump_help" | grep -q -- '--set-gtid-purged'; then
+      set -- --set-gtid-purged=OFF "$@"
+    fi
+    if printf '%s\n' "$dump_help" | grep -q -- '--column-statistics'; then
       set -- --column-statistics=0 "$@"
     fi
     ;;
@@ -116,6 +126,7 @@ case "$(basename "$dump_bin")" in
     exit 1
     ;;
 esac
+unset dump_help
 
 dump_status=0
 "$dump_bin" --defaults-extra-file="$credentials_tmp" "$@" "$db" > "$raw_tmp" &
