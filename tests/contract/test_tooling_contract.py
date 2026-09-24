@@ -270,7 +270,9 @@ class ToolingContractTests(unittest.TestCase):
                     self.assertIn("cache:clear", invoked)
                     self.assertIn("cache:warmup", invoked)
                 else:
-                    self.assertEqual(invoked, "")
+                    self.assertNotIn("doctrine:migrations:up-to-date", invoked)
+                    self.assertNotIn("cache:clear", invoked)
+                    self.assertNotIn("cache:warmup", invoked)
 
     def test_post_deploy_schema_check_timeout_never_touches_cache(self) -> None:
         """Doctrine colgado vence el límite de pared antes de cualquier caché."""
@@ -516,6 +518,57 @@ esac
                 set(payload),
                 {"version", "phase", "result", "code", "updated_at"},
             )
+
+    def test_post_deploy_marks_early_configuration_failure_terminal(self) -> None:
+        """Fallos de bootstrap nunca dejan el probe falsamente running."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            (root / "config").mkdir()
+            (root / "config/version.php").write_text(
+                "<?php return ['version' => '0.1.28'];\n",
+                encoding="utf-8",
+            )
+            script = scripts / "post-deploy.sh"
+            script.write_text(
+                (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            for name in ("php85", "php"):
+                binary = fake_bin / name
+                binary.write_text(
+                    "#!/bin/sh\nprintf '%s' '0.1.28'\n",
+                    encoding="utf-8",
+                )
+                binary.chmod(0o755)
+
+            env = dict(os.environ)
+            env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+            env["CONDOR_AUTO_MIGRATE"] = "invalid"
+            result = subprocess.run(
+                ["sh", str(script)],
+                cwd=root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=6,
+            )
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            payload = json.loads(
+                (root / "var/runtime/post-deploy-status.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(payload["version"], "0.1.28")
+            self.assertEqual(payload["phase"], "bootstrap")
+            self.assertEqual(payload["result"], "failure")
+            self.assertEqual(payload["code"], 1)
 
     def test_post_deploy_status_endpoint_never_exposes_logs_or_secrets(self) -> None:
         """El probe público solo publica identidad y estado operacional acotado."""

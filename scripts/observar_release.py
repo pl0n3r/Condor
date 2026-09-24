@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 DOMINIO_PRODUCCION = "https://www.condorapp.com.co"
+JSON_CONTENT_TYPE = "application/json"
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}\Z", re.ASCII)
 VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+\Z", re.ASCII)
 POST_DEPLOY_TIMESTAMP_PATTERN = re.compile(
@@ -199,7 +200,7 @@ def clasificar_error_http(
 def tipo_aceptado_para(ruta: str) -> str:
     """Devuelve el Accept mínimo esperado por el tipo de recurso."""
     if ruta in {"/health", "/post-deploy-status.php"}:
-        return "application/json"
+        return JSON_CONTENT_TYPE
     if ruta.endswith(".css"):
         return "text/css"
     if ruta.endswith(".js"):
@@ -335,7 +336,7 @@ def obtener_estado_protegido(origen: str, ruta: str, timeout: float) -> int:
 
 
 def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> bool:
-    if tipo != "application/json":
+    if tipo != JSON_CONTENT_TYPE:
         raise ObservacionError("/health no respondió con JSON.")
     try:
         carga = json.loads(cuerpo.decode("utf-8"))
@@ -365,6 +366,106 @@ def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> bool:
     return carga.get("schema_up_to_date") is True
 
 
+def _validar_identidad_post_deploy(
+    carga: dict[str, Any],
+    version: str,
+    sha: str,
+) -> None:
+    observada = carga.get("version")
+    if observada != version:
+        if (
+            isinstance(observada, str)
+            and VERSION_PATTERN.fullmatch(observada)
+            and tuple(map(int, observada.split(".")))
+                < tuple(map(int, version.split(".")))
+        ):
+            raise ObservacionDeployPendiente(
+                f"Probe post-deploy aún sirve V {observada}."
+            )
+        raise ObservacionIdentidad(
+            "La versión del probe post-deploy no coincide con la esperada."
+        )
+
+    observada_sha = carga.get("release_sha")
+    if (
+        not isinstance(observada_sha, str)
+        or SHA_PATTERN.fullmatch(observada_sha) is None
+    ):
+        raise ObservacionIdentidad(
+            "El SHA del probe post-deploy no tiene un formato válido."
+        )
+    if observada_sha != sha:
+        raise ObservacionIdentidad(
+            "El SHA del probe post-deploy no coincide con el esperado."
+        )
+
+
+def _version_estado_post_deploy_valida(value: Any) -> bool:
+    return (
+        value is None
+        or (
+            isinstance(value, str)
+            and (
+                value == "unknown"
+                or VERSION_PATTERN.fullmatch(value) is not None
+            )
+        )
+    )
+
+
+def _codigo_estado_post_deploy_valido(value: Any) -> bool:
+    return (
+        value is None
+        or (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and 0 <= value <= 255
+        )
+    )
+
+
+def _timestamp_estado_post_deploy_valido(value: Any) -> bool:
+    return (
+        value is None
+        or (
+            isinstance(value, str)
+            and POST_DEPLOY_TIMESTAMP_PATTERN.fullmatch(value) is not None
+        )
+    )
+
+
+def _extraer_estado_post_deploy(
+    carga: dict[str, Any],
+) -> tuple[Any, str, str, Any, Any]:
+    estado = carga.get("post_deploy")
+    if not isinstance(estado, dict):
+        raise ObservacionError(
+            "El probe post-deploy no contiene estado operacional."
+        )
+
+    status_version = estado.get("version")
+    phase = estado.get("phase")
+    result = estado.get("result")
+    code = estado.get("code")
+    updated_at = estado.get("updated_at")
+
+    fields_valid = (
+        _version_estado_post_deploy_valida(status_version)
+        and isinstance(phase, str)
+        and phase in POST_DEPLOY_PHASES
+        and isinstance(result, str)
+        and result in POST_DEPLOY_RESULTS
+        and _codigo_estado_post_deploy_valido(code)
+        and _timestamp_estado_post_deploy_valido(updated_at)
+    )
+    if not fields_valid:
+        raise ObservacionError(
+            "El probe post-deploy contiene campos fuera del contrato seguro."
+        )
+
+    return status_version, phase, result, code, updated_at
+
+
 def validar_post_deploy_status(
     tipo: str,
     cuerpo: bytes,
@@ -372,7 +473,7 @@ def validar_post_deploy_status(
     sha: str,
 ) -> str:
     """Valida solo campos operacionales acotados del probe independiente."""
-    if tipo != "application/json":
+    if tipo != JSON_CONTENT_TYPE:
         raise ObservacionError(
             "/post-deploy-status.php no respondió con JSON."
         )
@@ -388,69 +489,10 @@ def validar_post_deploy_status(
             "/post-deploy-status.php no informa estado diagnóstico válido."
         )
 
-    observada = carga.get("version")
-    observada_sha = carga.get("release_sha")
-    if observada != version:
-        if (
-            isinstance(observada, str)
-            and VERSION_PATTERN.fullmatch(observada)
-            and tuple(map(int, observada.split(".")))
-                < tuple(map(int, version.split(".")))
-        ):
-            raise ObservacionDeployPendiente(
-                f"Probe post-deploy aún sirve V {observada}."
-            )
-        raise ObservacionIdentidad(
-            "La versión del probe post-deploy no coincide con la esperada."
-        )
-    if not isinstance(observada_sha, str) or SHA_PATTERN.fullmatch(observada_sha) is None:
-        raise ObservacionIdentidad(
-            "El SHA del probe post-deploy no tiene un formato válido."
-        )
-    if observada_sha != sha:
-        raise ObservacionIdentidad(
-            "El SHA del probe post-deploy no coincide con el esperado."
-        )
-
-    estado = carga.get("post_deploy")
-    if not isinstance(estado, dict):
-        raise ObservacionError(
-            "El probe post-deploy no contiene estado operacional."
-        )
-
-    status_version = estado.get("version")
-    phase = estado.get("phase")
-    result = estado.get("result")
-    code = estado.get("code")
-    updated_at = estado.get("updated_at")
-
-    if not (
-        (status_version is None or (
-            isinstance(status_version, str)
-            and (
-                status_version == "unknown"
-                or VERSION_PATTERN.fullmatch(status_version) is not None
-            )
-        ))
-        and isinstance(phase, str)
-        and phase in POST_DEPLOY_PHASES
-        and isinstance(result, str)
-        and result in POST_DEPLOY_RESULTS
-        and (
-            code is None
-            or (isinstance(code, int) and not isinstance(code, bool) and 0 <= code <= 255)
-        )
-        and (
-            updated_at is None
-            or (
-                isinstance(updated_at, str)
-                and POST_DEPLOY_TIMESTAMP_PATTERN.fullmatch(updated_at) is not None
-            )
-        )
-    ):
-        raise ObservacionError(
-            "El probe post-deploy contiene campos fuera del contrato seguro."
-        )
+    _validar_identidad_post_deploy(carga, version, sha)
+    status_version, phase, result, code, updated_at = (
+        _extraer_estado_post_deploy(carga)
+    )
 
     rendered_version = status_version if status_version is not None else "sin-estado"
     rendered_code = str(code) if code is not None else "n/a"

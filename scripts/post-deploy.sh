@@ -81,6 +81,7 @@ finalize_post_deploy_status() {
 }
 
 set_post_deploy_phase "bootstrap"
+trap 'exit_status=$?; finalize_post_deploy_status "$exit_status"; exit "$exit_status"' EXIT
 
 LOCK_FILE="var/post-deploy.lock"
 LOCK_GUARD_FILE="var/post-deploy.lock.guard"
