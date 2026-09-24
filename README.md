@@ -18,7 +18,7 @@
 | Base integrada | ✅ **V 0.1.33 / MAIN** | SHA `b58ebc2d0041c63c8615f93e7ae48b1aff93d193` |
 | Exact-main V 0.1.33 | ✅ **VALIDADO EN CÓDIGO** | CI #943 / run `35971886157` en success; release `v0.1.33` publicada |
 | Observador V 0.1.33 | ⛔ **NO_OBSERVADO** | run `35971886104`: V/SHA exactos; cron termina en `phase=backup`, `reason=pdo_failure`, subcode 31 |
-| Candidato actual | 🚧 **PR #214 / V 0.1.34** | parser DSN DBAL compartido + conexión PDO construida por Doctrine + soporte de `unix_socket`/charset |
+| Candidato actual | 🚧 **PR #214 / V 0.1.34** | parser DSN compartido con paridad DBAL + conexión PDO construida por Doctrine + soporte de `unix_socket`/charset |
 | Incidente actual | 🚧 **#200** | no cerrar hasta completar los cinco puntos de PRODUCCIÓN EN VERDE |
 
 ## Qué añade V 0.1.34

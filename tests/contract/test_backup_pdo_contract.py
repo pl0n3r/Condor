@@ -59,9 +59,9 @@ class BackupPdoContractTest(unittest.TestCase):
         self.assertIn("socket=", native_parser)
         self.assertNotIn("function parseDatabaseUrl", native_parser)
 
-        self.assertIn("new DsnParser", shared)
-        self.assertIn("'mysql' => 'pdo_mysql'", shared)
-        self.assertIn("'mariadb' => 'pdo_mysql'", shared)
+        self.assertIn("parse_url($url)", shared)
+        self.assertIn("parse_str($parts[\'query\']", shared)
+        self.assertIn("'mysql', 'mariadb' => 'pdo_mysql'", shared)
         self.assertIn("unix_socket", shared)
         self.assertNotIn("getMessage()", shared)
 

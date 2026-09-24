@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use App\Shared\Runtime\DatabaseDsn;
 
-require dirname(__DIR__).'/vendor/autoload.php';
+require dirname(__DIR__).'/src/Shared/Runtime/DatabaseDsn.php';
 
 /**
  * Termina el parser con un mensaje sanitizado y un código de error.

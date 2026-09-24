@@ -400,6 +400,14 @@ esac
                     (ROOT / "scripts/parse-database-url.php").read_text(encoding="utf-8"),
                     encoding="utf-8",
                 )
+                runtime = root / "src" / "Shared" / "Runtime"
+                runtime.mkdir(parents=True)
+                (runtime / "DatabaseDsn.php").write_text(
+                    (
+                        ROOT / "src" / "Shared" / "Runtime" / "DatabaseDsn.php"
+                    ).read_text(encoding="utf-8"),
+                    encoding="utf-8",
+                )
 
                 fake_bin = root / "fake-bin"
                 fake_bin.mkdir()
