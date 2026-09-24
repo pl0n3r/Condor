@@ -74,6 +74,7 @@ if (is_file($statusPath) && is_readable($statusPath)) {
             'connection',
             'timeout',
             'dump_failed_unknown',
+            'pdo_failure',
             'unknown',
         ];
         $allowedBackupClients = ['unknown', 'mariadb-dump', 'mysqldump', 'pdo'];
