@@ -23,7 +23,7 @@ return static function (ContainerConfigurator $container): void {
 
     $container->parameters()->set(
         'env(SENTRY_DSN)',
-        'https://2851f04250f2eed90778b0f03be7bfce@o4512139951865856.ingest.us.sentry.io/4512139962286080',
+        'https://f011cbab6e5d3fa8446cba4809159022@o4512139951865856.ingest.us.sentry.io/4512140002918400',
     );
 
     $container->extension('sentry', [
