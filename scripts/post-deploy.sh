@@ -546,16 +546,11 @@ classify_backup_failure() {
     # allowlisted por etapa, esa es la causa terminal; nunca se hereda el
     # "Access denied" del cliente nativo anterior.
     if [ "$POST_DEPLOY_BACKUP_CLIENT" = "pdo" ]; then
-        case "$backup_status" in
-            31|32|33|34|35|36|37|38)
-                POST_DEPLOY_REASON="pdo_failure"
-                return 0
-                ;;
-            *)
-                # Código inesperado: continuar con la clasificación genérica
-                # del log sin afirmar una etapa PDO no demostrada.
-                ;;
-        esac
+        # El cliente terminal es el fallback PDO. Incluso si Symfony falla
+        # antes de entrar al comando (p. ej. contenedor prod obsoleto), no se
+        # debe heredar un "Access denied" emitido antes por el dump nativo.
+        POST_DEPLOY_REASON="pdo_failure"
+        return 0
     fi
 
     if grep -Eiq 'no se encontró mariadb-dump ni mysqldump' "$backup_log"; then

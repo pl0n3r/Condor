@@ -35,8 +35,14 @@ class PostDeployStageTest(unittest.TestCase):
                 if [ "${FAKE_BACKUP_PDO_FAILURE:-0}" = "1" ]; then
                   printf '%s\n' "mariadb-dump: Access denied for user" >&2
                   printf '%s\n' "backup-database.sh: cliente seleccionado: pdo." >&2
-                  printf '%s\n' "backup-database-pdo.php: stage=metadata; detalles internos redactados." >&2
+                  printf '%s\n' "backup-database-pdo: stage=metadata; detalles internos redactados." >&2
                   exit 35
+                fi
+                if [ "${FAKE_BACKUP_PDO_BOOTSTRAP_FAILURE:-0}" = "1" ]; then
+                  printf '%s\n' "mariadb-dump: Access denied for user" >&2
+                  printf '%s\n' "backup-database.sh: cliente seleccionado: pdo." >&2
+                  printf '%s\n' "Command app:database:backup-pdo is not defined." >&2
+                  exit 1
                 fi
                 [ "${FAKE_BACKUP_FAILURE:-0}" = "1" ] && exit 23
                 if [ "${FAKE_BACKUP_HANG:-0}" = "1" ]; then
@@ -116,6 +122,7 @@ class PostDeployStageTest(unittest.TestCase):
         migration_failure=False,
         backup_failure=False,
         backup_pdo_failure=False,
+        backup_pdo_bootstrap_failure=False,
         backup_hang=False,
         auto_migrate="1",
         database_url_in_env=False,
@@ -134,6 +141,9 @@ class PostDeployStageTest(unittest.TestCase):
         env["FAKE_MIGRATION_FAILURE"] = "1" if migration_failure else "0"
         env["FAKE_BACKUP_FAILURE"] = "1" if backup_failure else "0"
         env["FAKE_BACKUP_PDO_FAILURE"] = "1" if backup_pdo_failure else "0"
+        env["FAKE_BACKUP_PDO_BOOTSTRAP_FAILURE"] = (
+            "1" if backup_pdo_bootstrap_failure else "0"
+        )
         env["FAKE_BACKUP_HANG"] = "1" if backup_hang else "0"
         env["CONDOR_AUTO_MIGRATE"] = auto_migrate
         env["FAKE_DATABASE_URL"] = "mysql://dotenv.example/condor"
@@ -256,6 +266,29 @@ class PostDeployStageTest(unittest.TestCase):
         self.assertEqual("failure", payload["result"])
         self.assertEqual("pdo_failure", payload["reason"])
         self.assertEqual(35, payload["subcode"])
+        self.assertEqual("pdo", payload["backup_client"])
+        self.assertFalse((root / "migrated").exists())
+        self.assertNotIn("cache:clear", calls)
+        self.assertNotIn("cache:warmup", calls)
+
+    def test_pdo_bootstrap_failure_does_not_inherit_native_access_denied(self):
+        """Un exit 1 terminal PDO sigue siendo pdo_failure, no access_denied."""
+        result, calls, root = self.run_script(
+            "construction",
+            backup_pdo_bootstrap_failure=True,
+        )
+
+        self.assertEqual(2, result.returncode, result.stderr)
+        import json
+        payload = json.loads(
+            (root / "var/runtime/post-deploy-status.json").read_text(
+                encoding="utf-8",
+            )
+        )
+        self.assertEqual("backup", payload["phase"])
+        self.assertEqual("failure", payload["result"])
+        self.assertEqual("pdo_failure", payload["reason"])
+        self.assertEqual(1, payload["subcode"])
         self.assertEqual("pdo", payload["backup_client"])
         self.assertFalse((root / "migrated").exists())
         self.assertNotIn("cache:clear", calls)
