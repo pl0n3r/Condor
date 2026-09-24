@@ -131,8 +131,13 @@ case "$dump_name" in
 esac
 unset dump_help
 
+# El archivo temporal debe ser la única fuente de opciones del cliente.
+# --defaults-extra-file se carga antes de ~/.my.cnf; en hosting compartido,
+# una configuración posterior puede sobrescribir credenciales/host y provocar
+# Access denied aunque DATABASE_URL sea correcta. --defaults-file, como primer
+# argumento, aísla el dump de esas opciones externas sin exponer secretos.
 dump_status=0
-"$dump_bin" --defaults-extra-file="$credentials_tmp" "$@" "$db" > "$raw_tmp" &
+"$dump_bin" --defaults-file="$credentials_tmp" "$@" "$db" > "$raw_tmp" &
 dump_pid=$!
 if wait "$dump_pid"; then
   dump_status=0

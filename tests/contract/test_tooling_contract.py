@@ -497,6 +497,11 @@ esac
             mysql_supported,
             mysql_legacy,
         ):
+            self.assertTrue(args[0].startswith("--defaults-file="), args)
+            self.assertFalse(
+                any(arg.startswith("--defaults-extra-file=") for arg in args),
+                args,
+            )
             self.assertIn("--single-transaction", args)
             self.assertIn("--quick", args)
             self.assertIn("--skip-lock-tables", args)
