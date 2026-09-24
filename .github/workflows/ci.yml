@@ -821,6 +821,7 @@ jobs:
           bash scripts/backup-database.sh 2> var/pdo-backup.log
           grep -F 'cliente seleccionado: pdo.' var/pdo-backup.log
           grep -F 'tablas volcadas y verificadas' var/pdo-backup.log
+          grep -F 'checksum SHA-256 verificado:' var/pdo-backup.log
 
       - name: Demostrar que el backup PDO restaura esquema y datos
         env:

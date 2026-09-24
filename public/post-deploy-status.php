@@ -76,7 +76,7 @@ if (is_file($statusPath) && is_readable($statusPath)) {
             'dump_failed_unknown',
             'unknown',
         ];
-        $allowedBackupClients = ['unknown', 'mariadb-dump', 'mysqldump'];
+        $allowedBackupClients = ['unknown', 'mariadb-dump', 'mysqldump', 'pdo'];
         $reason = $decoded['reason'] ?? 'unknown';
         $subcode = $decoded['subcode'] ?? null;
         $backupClient = $decoded['backup_client'] ?? 'unknown';

@@ -80,9 +80,18 @@ unset DATABASE_URL
 run_pdo_backup() {
   echo "backup-database.sh: cliente seleccionado: pdo." >&2
   : > "$raw_tmp"
-  if ! DATABASE_URL="$pdo_database_url" "$PHP_BIN" "$script_dir/backup-database-pdo.php" "$raw_tmp"; then
-    echo "backup-database.sh: el backup PDO falló." >&2
-    exit 1
+  pdo_status=0
+  DATABASE_URL="$pdo_database_url" "$PHP_BIN" "$script_dir/backup-database-pdo.php" "$raw_tmp" &
+  dump_pid=$!
+  if wait "$dump_pid"; then
+    pdo_status=0
+  else
+    pdo_status=$?
+  fi
+  dump_pid=""
+  if [ "$pdo_status" -ne 0 ]; then
+    echo "backup-database.sh: el backup PDO falló (código $pdo_status)." >&2
+    exit "$pdo_status"
   fi
 }
 

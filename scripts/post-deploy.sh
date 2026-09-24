@@ -524,7 +524,7 @@ capture_backup_client() {
         -e 's/^backup-database\.sh: cliente seleccionado: pdo\.$/pdo/p' \
         "$backup_log" 2>/dev/null | tail -n 1)"
     case "$detected_client" in
-        mariadb-dump|mysqldump)
+        mariadb-dump|mysqldump|pdo)
             POST_DEPLOY_BACKUP_CLIENT="$detected_client"
             ;;
         *)

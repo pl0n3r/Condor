@@ -764,6 +764,24 @@ esac
             self.assertIn("client=mariadb-dump", result.stderr)
             self.assertIn("subcode=2", result.stderr)
 
+    def test_pdo_backup_hardening_is_wired_end_to_end(self) -> None:
+        """PDO queda bajo watchdog, checksum y allowlists de telemetría."""
+        backup = (ROOT / "scripts/backup-database.sh").read_text(encoding="utf-8")
+        pdo = (ROOT / "scripts/backup-database-pdo.php").read_text(encoding="utf-8")
+        post_deploy = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
+        observer = (ROOT / "scripts/observar_release.py").read_text(encoding="utf-8")
+        endpoint = (ROOT / "public/post-deploy-status.php").read_text(encoding="utf-8")
+
+        self.assertIn(
+            '"$PHP_BIN" "$script_dir/backup-database-pdo.php" "$raw_tmp" &',
+            backup,
+        )
+        self.assertIn("hash_init('sha256')", pdo)
+        self.assertIn("hash_equals($expectedChecksum, $actualChecksum)", pdo)
+        self.assertIn("mariadb-dump|mysqldump|pdo", post_deploy)
+        self.assertIn('"pdo"', observer)
+        self.assertIn("'pdo'", endpoint)
+
     def test_post_deploy_status_endpoint_never_exposes_logs_or_secrets(self) -> None:
         """El probe público solo publica identidad y estado operacional acotado."""
         endpoint = (

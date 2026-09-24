@@ -35,7 +35,7 @@ POST_DEPLOY_REASONS = {
     "filesystem", "unsupported_option", "server_privilege", "access_denied",
     "connection", "timeout", "dump_failed_unknown", "unknown",
 }
-POST_DEPLOY_BACKUP_CLIENTS = {"unknown", "mariadb-dump", "mysqldump"}
+POST_DEPLOY_BACKUP_CLIENTS = {"unknown", "mariadb-dump", "mysqldump", "pdo"}
 TENANT_SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z", re.ASCII)
 STOREFRONT_VERSION = (0, 1, 13)
 STOREFRONT_IDENTITY_VERSION = (0, 1, 16)

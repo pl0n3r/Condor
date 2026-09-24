@@ -67,9 +67,18 @@ if ($handle === false) {
     fail('no fue posible crear el archivo de salida.');
 }
 
-$write = static function (string $sql) use ($handle): void {
-    if (fwrite($handle, $sql) === false) {
-        fail('no fue posible escribir el backup.');
+$hash = hash_init('sha256');
+$write = static function (string $sql) use ($handle, $hash): void {
+    $offset = 0;
+    $length = strlen($sql);
+    while ($offset < $length) {
+        $remaining = substr($sql, $offset);
+        $written = fwrite($handle, $remaining);
+        if ($written === false || $written === 0) {
+            fail('no fue posible escribir el backup completo.');
+        }
+        hash_update($hash, substr($remaining, 0, $written));
+        $offset += $written;
     }
 };
 
@@ -123,8 +132,21 @@ try {
     fail('la consulta de backup falló; SQL y parámetros redactados.');
 }
 
+$expectedChecksum = hash_final($hash);
 if (!fclose($handle)) {
     fail('no fue posible cerrar el backup.');
 }
 
-fwrite(STDERR, sprintf("backup-database-pdo.php: %d tablas volcadas y verificadas.\n", count($tables)));
+$actualChecksum = hash_file('sha256', $output);
+if (!is_string($actualChecksum) || !hash_equals($expectedChecksum, $actualChecksum)) {
+    fail('el checksum SHA-256 del backup no coincide con los bytes escritos.');
+}
+
+fwrite(
+    STDERR,
+    sprintf(
+        "backup-database-pdo.php: %d tablas volcadas y verificadas; checksum SHA-256 verificado: %s.\n",
+        count($tables),
+        $actualChecksum,
+    ),
+);
