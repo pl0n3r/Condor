@@ -1116,6 +1116,110 @@ class ObserverTests(unittest.TestCase):
         self.assertNotIn("password", salida)
 
 
+    def test_same_version_previous_sha_waits_until_expected_sha(self) -> None:
+        previous_sha = "b" * 40
+        responses = [
+            (
+                200,
+                "application/json",
+                json.dumps({
+                    "status": "ok",
+                    "version": VERSION,
+                    "release_sha": previous_sha,
+                    "schema_up_to_date": True,
+                }).encode(),
+            ),
+            self.server.respuestas["/health"],
+        ]
+        self.server.respuestas["/health"] = lambda: responses.pop(0)
+
+        with (
+            patch.object(modulo.time, "monotonic", side_effect=[0, 10, 20]),
+            patch.object(modulo.time, "sleep") as sleep,
+        ):
+            result = modulo.observar(
+                self.base,
+                VERSION,
+                SHA,
+                intentos=1,
+                intervalo=0,
+                timeout=1,
+                espera_deploy=600,
+                intervalo_deploy=30,
+            )
+
+        self.assertEqual(result["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertEqual(result["comprobaciones"]["health"]["clase"], "ok")
+        sleep.assert_called_once_with(30)
+
+    def test_same_version_previous_sha_timeout_stays_no_observado(self) -> None:
+        previous_sha = "b" * 40
+        self.server.respuestas["/health"] = (
+            200,
+            "application/json",
+            json.dumps({
+                "status": "ok",
+                "version": VERSION,
+                "release_sha": previous_sha,
+                "schema_up_to_date": True,
+            }).encode(),
+        )
+
+        with (
+            patch.object(modulo.time, "monotonic", side_effect=[0, 10, 700]),
+            patch.object(modulo.time, "sleep") as sleep,
+        ):
+            result = modulo.observar(
+                self.base,
+                VERSION,
+                SHA,
+                intentos=1,
+                intervalo=0,
+                timeout=1,
+                espera_deploy=600,
+                intervalo_deploy=30,
+            )
+
+        self.assertEqual(result["estado"], "NO_OBSERVADO")
+        self.assertEqual(
+            result["comprobaciones"]["health"]["clase"],
+            "deploy_pendiente",
+        )
+        self.assertEqual(modulo.codigo_salida_observacion(result), 2)
+        self.assertIn("tras la espera acotada", modulo.comentario_roadmap(result))
+        sleep.assert_called_once_with(30)
+
+    def test_malformed_observed_sha_remains_identity_failure(self) -> None:
+        body = json.dumps({
+            "status": "ok",
+            "version": VERSION,
+            "release_sha": "invalid",
+            "schema_up_to_date": True,
+        }).encode()
+
+        with self.assertRaisesRegex(
+            modulo.ObservacionIdentidad,
+            "formato válido",
+        ):
+            modulo.validar_health("application/json", body, VERSION, SHA)
+
+    def test_automatic_workflow_describes_exit_two_as_observation_failure(self) -> None:
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "observar-deploy-automatico.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "La observación automática terminó sin validar producción",
+            workflow,
+        )
+        self.assertNotIn(
+            "uso incorrecto de argumentos",
+            workflow,
+        )
+
     def test_codigo_salida_distingue_transicion_de_fallo_funcional(self) -> None:
         base = {
             "estado": "DEPLOY_OBSERVED",
