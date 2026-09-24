@@ -813,6 +813,26 @@ jobs:
           dump="$(ls -1t var/backups/condor-condor_backup_source-*.sql.gz | head -1)"
           bash scripts/verify-backup-restore.sh "$dump"
 
+      - name: Crear backup PDO sin privilegios de mariadb-dump
+        env:
+          CONDOR_BACKUP_CLIENT: pdo
+        run: |
+          set -euo pipefail
+          bash scripts/backup-database.sh 2> var/pdo-backup.log
+          grep -F 'cliente seleccionado: pdo.' var/pdo-backup.log
+          grep -F 'tablas volcadas y verificadas' var/pdo-backup.log
+
+      - name: Demostrar que el backup PDO restaura esquema y datos
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/condor_backup_restored?serverVersion=mariadb-11.4.0&charset=utf8mb4
+          CONDOR_ALLOW_DESTRUCTIVE_RESTORE: '1'
+          CONDOR_RESTORE_EXPECT_TENANT_SLUG: backup-sentinel
+          CONDOR_RESTORE_EXPECT_USER_EMAIL: backup-sentinel@example.test
+        run: |
+          set -euo pipefail
+          dump="$(ls -1t var/backups/condor-condor_backup_source-*.sql.gz | head -1)"
+          bash scripts/verify-backup-restore.sh "$dump"
+
 
   validar:
     name: Validar

@@ -521,6 +521,7 @@ capture_backup_client() {
     detected_client="$(sed -n \
         -e 's/^backup-database\.sh: cliente seleccionado: mariadb-dump\.$/mariadb-dump/p' \
         -e 's/^backup-database\.sh: cliente seleccionado: mysqldump\.$/mysqldump/p' \
+        -e 's/^backup-database\.sh: cliente seleccionado: pdo\.$/pdo/p' \
         "$backup_log" 2>/dev/null | tail -n 1)"
     case "$detected_client" in
         mariadb-dump|mysqldump)

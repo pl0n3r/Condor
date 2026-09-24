@@ -70,7 +70,21 @@ trap 'handle_signal 130' INT
 trap 'handle_signal 143' TERM
 
 "$PHP_BIN" "$script_dir/parse-database-url.php" client-config "$credentials_tmp"
+# Copia no exportada: solo la recibe el backup PDO de respaldo, nunca el entorno.
+pdo_database_url="$DATABASE_URL"
 unset DATABASE_URL
+
+# Backup lógico por PDO con la cuenta de aplicación. Hostinger no concede los
+# privilegios que exigen mariadb-dump/mysqldump; este camino solo usa SELECT y
+# SHOW CREATE TABLE y verifica filas por tabla antes de dar el backup por bueno.
+run_pdo_backup() {
+  echo "backup-database.sh: cliente seleccionado: pdo." >&2
+  : > "$raw_tmp"
+  if ! DATABASE_URL="$pdo_database_url" "$PHP_BIN" "$script_dir/backup-database-pdo.php" "$raw_tmp"; then
+    echo "backup-database.sh: el backup PDO falló." >&2
+    exit 1
+  fi
+}
 
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 raw_tmp="$(mktemp "$backup_dir/.condor-${db}-${timestamp}-XXXXXX.sql")"
@@ -86,80 +100,88 @@ for candidate in mariadb-dump mysqldump; do
     break
   fi
 done
+if [ "${CONDOR_BACKUP_CLIENT:-auto}" = "pdo" ]; then
+  dump_bin=""
+elif [ -z "$dump_bin" ]; then
+  echo "backup-database.sh: no se encontró mariadb-dump ni mysqldump en PATH; se usa PDO." >&2
+fi
+
 if [ -z "$dump_bin" ]; then
-  echo "backup-database.sh: no se encontró mariadb-dump ni mysqldump en PATH." >&2
-  exit 1
-fi
-
-# Condor no define triggers de base de datos. En shared hosting, pedirlos en el
-# dump puede exigir privilegios adicionales que la cuenta de aplicación no
-# necesita. El respaldo de D-054 conserva esquema+datos administrados por Condor
-# y evita metadata/objetos fuera de ese contrato.
-set -- --single-transaction --quick --skip-lock-tables --skip-triggers
-
-# Inspeccionar capacidades una sola vez evita asumir opciones entre clientes.
-dump_help="$("$dump_bin" --help 2>&1 || true)"
-
-# Usuarios de aplicación en hosting compartido no deben tener privilegios
-# globales como PROCESS. MySQL 8 puede exigirlo al inspeccionar tablespaces
-# salvo que el dump use --no-tablespaces. Activarlo solo si el cliente lo
-# soporta mantiene compatibilidad con MariaDB/MySQL sin relajar credenciales.
-if printf '%s\n' "$dump_help" | grep -q -- '--no-tablespaces'; then
-  set -- --no-tablespaces "$@"
-fi
-
-dump_name="$(basename "$dump_bin")"
-echo "backup-database.sh: cliente seleccionado: $dump_name." >&2
-
-case "$dump_name" in
-  mysqldump)
-    # MySQL 8.0.32+ puede exigir RELOAD/FLUSH_TABLES con
-    # --single-transaction cuando GTID está activo y set-gtid-purged=AUTO.
-    # El backup de Condor no provisiona replicación: excluir esa metadata
-    # evita privilegios globales innecesarios sin quitar esquema ni datos.
-    if printf '%s\n' "$dump_help" | grep -q -- '--set-gtid-purged'; then
-      set -- --set-gtid-purged=OFF "$@"
-    fi
-    if printf '%s\n' "$dump_help" | grep -q -- '--column-statistics'; then
-      set -- --column-statistics=0 "$@"
-    fi
-    ;;
-  mariadb-dump)
-    ;;
-  *)
-    echo "backup-database.sh: binario de dump no soportado: $dump_bin" >&2
-    exit 1
-    ;;
-esac
-unset dump_help
-
-# El option-file temporal debe prevalecer sobre configuración externa.
-# --defaults-file, como primer argumento, evita los option-files normales.
-# Oracle MySQL conserva una excepción para .mylogin.cnf incluso con esa opción;
-# redirigir MYSQL_TEST_LOGIN_FILE a una ruta inexistente aísla solo mysqldump.
-if [ "$dump_name" = "mysqldump" ]; then
-  mysql_login_file="${credentials_tmp}.login"
-  rm -f -- "$mysql_login_file"
-  MYSQL_TEST_LOGIN_FILE="$mysql_login_file"
-  export MYSQL_TEST_LOGIN_FILE
-fi
-
-dump_status=0
-"$dump_bin" --defaults-file="$credentials_tmp" "$@" "$db" > "$raw_tmp" &
-dump_pid=$!
-if wait "$dump_pid"; then
-  dump_status=0
+  run_pdo_backup
 else
-  dump_status=$?
+  # Condor no define triggers de base de datos. En shared hosting, pedirlos en el
+  # dump puede exigir privilegios adicionales que la cuenta de aplicación no
+  # necesita. El respaldo de D-054 conserva esquema+datos administrados por Condor
+  # y evita metadata/objetos fuera de ese contrato.
+  set -- --single-transaction --quick --skip-lock-tables --skip-triggers
+
+  # Inspeccionar capacidades una sola vez evita asumir opciones entre clientes.
+  dump_help="$("$dump_bin" --help 2>&1 || true)"
+
+  # Usuarios de aplicación en hosting compartido no deben tener privilegios
+  # globales como PROCESS. MySQL 8 puede exigirlo al inspeccionar tablespaces
+  # salvo que el dump use --no-tablespaces. Activarlo solo si el cliente lo
+  # soporta mantiene compatibilidad con MariaDB/MySQL sin relajar credenciales.
+  if printf '%s\n' "$dump_help" | grep -q -- '--no-tablespaces'; then
+    set -- --no-tablespaces "$@"
+  fi
+
+  dump_name="$(basename "$dump_bin")"
+  echo "backup-database.sh: cliente seleccionado: $dump_name." >&2
+
+  case "$dump_name" in
+    mysqldump)
+      # MySQL 8.0.32+ puede exigir RELOAD/FLUSH_TABLES con
+      # --single-transaction cuando GTID está activo y set-gtid-purged=AUTO.
+      # El backup de Condor no provisiona replicación: excluir esa metadata
+      # evita privilegios globales innecesarios sin quitar esquema ni datos.
+      if printf '%s\n' "$dump_help" | grep -q -- '--set-gtid-purged'; then
+        set -- --set-gtid-purged=OFF "$@"
+      fi
+      if printf '%s\n' "$dump_help" | grep -q -- '--column-statistics'; then
+        set -- --column-statistics=0 "$@"
+      fi
+      ;;
+    mariadb-dump)
+      ;;
+    *)
+      echo "backup-database.sh: binario de dump no soportado: $dump_bin" >&2
+      exit 1
+      ;;
+  esac
+  unset dump_help
+
+  # El option-file temporal debe prevalecer sobre configuración externa.
+  # --defaults-file, como primer argumento, evita los option-files normales.
+  # Oracle MySQL conserva una excepción para .mylogin.cnf incluso con esa opción;
+  # redirigir MYSQL_TEST_LOGIN_FILE a una ruta inexistente aísla solo mysqldump.
+  if [ "$dump_name" = "mysqldump" ]; then
+    mysql_login_file="${credentials_tmp}.login"
+    rm -f -- "$mysql_login_file"
+    MYSQL_TEST_LOGIN_FILE="$mysql_login_file"
+    export MYSQL_TEST_LOGIN_FILE
+  fi
+
+  dump_status=0
+  "$dump_bin" --defaults-file="$credentials_tmp" "$@" "$db" > "$raw_tmp" &
+  dump_pid=$!
+  if wait "$dump_pid"; then
+    dump_status=0
+  else
+    dump_status=$?
+  fi
+  dump_pid=""
+  if [ "$dump_name" = "mysqldump" ]; then
+    unset MYSQL_TEST_LOGIN_FILE
+  fi
+  if [ "$dump_status" -ne 0 ]; then
+    # Access denied, GTID o PROCESS en hosting compartido: el dump nativo no es
+    # recuperable desde aquí, pero el backup PDO sí.
+    echo "backup-database.sh: el dump falló (código $dump_status); se usa PDO." >&2
+    run_pdo_backup
+  fi
 fi
-dump_pid=""
-if [ "$dump_name" = "mysqldump" ]; then
-  unset MYSQL_TEST_LOGIN_FILE
-fi
-if [ "$dump_status" -ne 0 ]; then
-  echo "backup-database.sh: el dump falló (código $dump_status)." >&2
-  exit "$dump_status"
-fi
+unset pdo_database_url
 
 gzip -c "$raw_tmp" > "$gzip_tmp"
 mv -- "$gzip_tmp" "$out"
