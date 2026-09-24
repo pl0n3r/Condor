@@ -30,16 +30,17 @@ if [ -z "$PHP_BIN" ]; then
 fi
 
 POST_DEPLOY_STATUS_FILE="var/runtime/post-deploy-status.json"
+POST_DEPLOY_UNKNOWN="unknown"
 POST_DEPLOY_PHASE="bootstrap"
 POST_DEPLOY_REASON="none"
 POST_DEPLOY_SUBCODE=0
-POST_DEPLOY_BACKUP_CLIENT="unknown"
+POST_DEPLOY_BACKUP_CLIENT="$POST_DEPLOY_UNKNOWN"
 POST_DEPLOY_VERSION="$("$PHP_BIN" -r '$config = require "config/version.php"; echo is_array($config) ? ($config["version"] ?? "unknown") : "unknown";' 2>/dev/null || true)"
 case "$POST_DEPLOY_VERSION" in
     [0-9]*.[0-9]*.[0-9]*)
         ;;
     *)
-        POST_DEPLOY_VERSION="unknown"
+        POST_DEPLOY_VERSION="$POST_DEPLOY_UNKNOWN"
         ;;
 esac
 
@@ -70,7 +71,7 @@ set_post_deploy_phase() {
     POST_DEPLOY_PHASE="$1"
     POST_DEPLOY_REASON="none"
     POST_DEPLOY_SUBCODE=0
-    POST_DEPLOY_BACKUP_CLIENT="unknown"
+    POST_DEPLOY_BACKUP_CLIENT="$POST_DEPLOY_UNKNOWN"
     write_post_deploy_status "$POST_DEPLOY_PHASE" "running" 0
 }
 
@@ -519,7 +520,7 @@ capture_backup_client() {
             POST_DEPLOY_BACKUP_CLIENT="$detected_client"
             ;;
         *)
-            POST_DEPLOY_BACKUP_CLIENT="unknown"
+            POST_DEPLOY_BACKUP_CLIENT="$POST_DEPLOY_UNKNOWN"
             ;;
     esac
 }
