@@ -514,7 +514,10 @@ resolve_database_url() {
 
 capture_backup_client() {
     backup_log="$1"
-    detected_client="$(sed -n 's/^backup-database\.sh: cliente seleccionado: \(mariadb-dump\|mysqldump\)\.$/\1/p' "$backup_log" 2>/dev/null | tail -n 1)"
+    detected_client="$(sed -n \
+        -e 's/^backup-database\.sh: cliente seleccionado: mariadb-dump\.$/mariadb-dump/p' \
+        -e 's/^backup-database\.sh: cliente seleccionado: mysqldump\.$/mysqldump/p' \
+        "$backup_log" 2>/dev/null | tail -n 1)"
     case "$detected_client" in
         mariadb-dump|mysqldump)
             POST_DEPLOY_BACKUP_CLIENT="$detected_client"
