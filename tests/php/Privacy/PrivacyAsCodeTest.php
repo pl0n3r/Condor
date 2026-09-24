@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 final class PrivacyAsCodeTest extends TestCase
 {
     private const PLACEHOLDER = '[COMPLETAR POR EL DUEÑO]';
-    private const FACTORY_SHA = '4b2be9fcf827278631caa3e3e68603b6e2a680d7';
+    private const FACTORY_SHA = '68eef82e3b21939143a4cbea23b7df2615534e77';
 
     /** Verifica que el mapa represente únicamente tratamientos observados. */
     public function testDataMapMatchesObservedCondorTreatments(): void
