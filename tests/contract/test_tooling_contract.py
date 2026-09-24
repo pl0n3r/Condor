@@ -504,6 +504,20 @@ esac
             self.assertNotIn("--triggers", args)
             self.assertEqual(args[-1], "condor")
 
+    def test_post_deploy_client_extraction_avoids_nonportable_sed_alternation(self) -> None:
+        """La detección del cliente usa patrones BRE portables y explícitos."""
+        script = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
+
+        self.assertNotIn(r"mariadb-dump\|mysqldump", script)
+        self.assertIn(
+            "cliente seleccionado: mariadb-dump\\.$/mariadb-dump/p",
+            script,
+        )
+        self.assertIn(
+            "cliente seleccionado: mysqldump\\.$/mysqldump/p",
+            script,
+        )
+
     def test_post_deploy_persists_sanitized_terminal_status(self) -> None:
         """El cron deja una fase terminal segura sin logs, SQL ni credenciales."""
         with tempfile.TemporaryDirectory() as tmp:
