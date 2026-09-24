@@ -33,7 +33,7 @@ POST_DEPLOY_RESULTS = {"running", "success", "failure", "skipped", "unknown"}
 POST_DEPLOY_REASONS = {
     "none", "database_url_missing", "client_missing", "configuration",
     "filesystem", "unsupported_option", "server_privilege", "access_denied",
-    "connection", "timeout", "dump_failed_unknown", "unknown",
+    "connection", "timeout", "dump_failed_unknown", "pdo_failure", "unknown",
 }
 POST_DEPLOY_BACKUP_CLIENTS = {"unknown", "mariadb-dump", "mysqldump", "pdo"}
 TENANT_SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z", re.ASCII)
