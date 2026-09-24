@@ -270,7 +270,9 @@ class ToolingContractTests(unittest.TestCase):
                     self.assertIn("cache:clear", invoked)
                     self.assertIn("cache:warmup", invoked)
                 else:
-                    self.assertEqual(invoked, "")
+                    self.assertNotIn("doctrine:migrations:up-to-date", invoked)
+                    self.assertNotIn("cache:clear", invoked)
+                    self.assertNotIn("cache:warmup", invoked)
 
     def test_post_deploy_schema_check_timeout_never_touches_cache(self) -> None:
         """Doctrine colgado vence el límite de pared antes de cualquier caché."""
@@ -446,8 +448,139 @@ esac
             self.assertIn("--single-transaction", args)
             self.assertIn("--quick", args)
             self.assertIn("--skip-lock-tables", args)
-            self.assertIn("--triggers", args)
+            self.assertIn("--skip-triggers", args)
+            self.assertNotIn("--triggers", args)
             self.assertEqual(args[-1], "condor")
+
+    def test_post_deploy_persists_sanitized_terminal_status(self) -> None:
+        """El cron deja una fase terminal segura sin logs, SQL ni credenciales."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            (root / "var").mkdir()
+            (root / "config").mkdir()
+            (root / "config/version.php").write_text(
+                "<?php return ['version' => '0.1.28'];\n",
+                encoding="utf-8",
+            )
+            script = scripts / "post-deploy.sh"
+            script.write_text(
+                (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            fake_php = """#!/bin/sh
+case "$*" in
+  *"-r "*"config/version.php"*)
+    printf '%s' '0.1.28'
+    exit 0
+    ;;
+  *doctrine:migrations:up-to-date*)
+    printf '%s\\n' 'Up-to-date!' >&2
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+"""
+            for name in ("php85", "php"):
+                binary = fake_bin / name
+                binary.write_text(fake_php, encoding="utf-8")
+                binary.chmod(0o755)
+
+            env = dict(os.environ)
+            env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+            result = subprocess.run(
+                ["sh", str(script)],
+                cwd=root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=6,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(
+                (root / "var/runtime/post-deploy-status.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(payload["version"], "0.1.28")
+            self.assertEqual(payload["phase"], "complete")
+            self.assertEqual(payload["result"], "success")
+            self.assertEqual(payload["code"], 0)
+            self.assertEqual(
+                set(payload),
+                {"version", "phase", "result", "code", "updated_at"},
+            )
+
+    def test_post_deploy_marks_early_configuration_failure_terminal(self) -> None:
+        """Fallos de bootstrap nunca dejan el probe falsamente running."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            (root / "config").mkdir()
+            (root / "config/version.php").write_text(
+                "<?php return ['version' => '0.1.28'];\n",
+                encoding="utf-8",
+            )
+            script = scripts / "post-deploy.sh"
+            script.write_text(
+                (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            for name in ("php85", "php"):
+                binary = fake_bin / name
+                binary.write_text(
+                    "#!/bin/sh\nprintf '%s' '0.1.28'\n",
+                    encoding="utf-8",
+                )
+                binary.chmod(0o755)
+
+            env = dict(os.environ)
+            env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+            env["CONDOR_AUTO_MIGRATE"] = "invalid"
+            result = subprocess.run(
+                ["sh", str(script)],
+                cwd=root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=6,
+            )
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            payload = json.loads(
+                (root / "var/runtime/post-deploy-status.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(payload["version"], "0.1.28")
+            self.assertEqual(payload["phase"], "bootstrap")
+            self.assertEqual(payload["result"], "failure")
+            self.assertEqual(payload["code"], 1)
+
+    def test_post_deploy_status_endpoint_never_exposes_logs_or_secrets(self) -> None:
+        """El probe público solo publica identidad y estado operacional acotado."""
+        endpoint = (
+            ROOT / "public/post-deploy-status.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn("'post_deploy' => $postDeploy", endpoint)
+        self.assertIn("'release_sha' => $releaseSha", endpoint)
+        self.assertNotIn("DATABASE_URL", endpoint)
+        self.assertNotIn("SCHEMA_CHECK_LOG", endpoint)
+        self.assertNotIn("MIGRATION_LOG", endpoint)
+        self.assertNotIn("BACKUP_LOG", endpoint)
 
     def test_post_deploy_never_executes_destructive_schema_mutations_automatically(self) -> None:
         """Solo migrate versionado puede automatizarse; operaciones destructivas no."""
