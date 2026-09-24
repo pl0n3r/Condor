@@ -551,6 +551,10 @@ classify_backup_failure() {
                 POST_DEPLOY_REASON="pdo_failure"
                 return 0
                 ;;
+            *)
+                # Código inesperado: continuar con la clasificación genérica
+                # del log sin afirmar una etapa PDO no demostrada.
+                ;;
         esac
     fi
 
