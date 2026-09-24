@@ -1,13 +1,13 @@
-# Condor App — Snapshot operativo · candidato V 0.1.31
+# Condor App — Snapshot operativo · candidato V 0.1.32
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** corregir el `access_denied` confirmado de `mariadb-dump` aislando el option-file temporal de configuraciones externas del hosting, sin ampliar privilegios ni exponer secretos.
+> **Objetivo actual:** desbloquear D-054 en Hostinger usando un backup lógico PDO verificable cuando el cliente nativo no dispone de privilegios suficientes, sin relajar el fail-closed previo a migraciones.
 
 <p align="center">
-  <strong>Base integrada:</strong> V 0.1.30 · main `32006c9c5cf1189c882aa8c1eb116373003b5c8e` ·
-  <strong>Candidato:</strong> V 0.1.31 ·
+  <strong>Base integrada:</strong> V 0.1.31 · main `50bce23ca7e172aa87b46302acf4c911782c47c9` ·
+  <strong>Candidato:</strong> V 0.1.32 ·
   <strong>Incidente:</strong> #200
 </p>
 
@@ -15,33 +15,33 @@
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base integrada | ✅ **V 0.1.30 / MAIN** | SHA `32006c9c5cf1189c882aa8c1eb116373003b5c8e` |
-| Exact-main V 0.1.30 | ✅ **VALIDADO EN CÓDIGO** | CI run 35946593975 (#926) en success |
-| Observador V 0.1.30 | ⛔ **NO_OBSERVADO** | run 35946593943 (#20): HTTP 500; `phase=backup`, `reason=access_denied`, `subcode=2`, `backup_client=mariadb-dump` |
-| Incidente actual | 🚧 **#200 / V 0.1.31** | usar option-file exclusivo para impedir overrides posteriores de `~/.my.cnf` |
-| CI/Sonar/CodeRabbit | ⏳ **PENDIENTE DEL HEAD FINAL** | exact-head obligatorio antes del merge |
+| Base integrada | ✅ **V 0.1.31 / MAIN** | SHA `50bce23ca7e172aa87b46302acf4c911782c47c9` |
+| Exact-main V 0.1.31 | ✅ **VALIDADO EN CÓDIGO** | CI run 35950457989 (#929) en success |
+| Observador V 0.1.31 | ⛔ **NO_OBSERVADO** | run 35950457985 (#21): HTTP 500; `phase=backup`, `reason=access_denied`, `backup_client=mariadb-dump` |
+| Candidato actual | 🚧 **PR #205 / V 0.1.32** | backup PDO + restauración demostrada; revalidación exact-head obligatoria tras hardening |
+| Incidente actual | 🚧 **#200** | no cerrar hasta completar los cinco puntos de PRODUCCIÓN EN VERDE |
 
-## Qué añade V 0.1.31
+## Qué añade V 0.1.32
 
-- conserva D-054 sin cambiar su orden ni permitir SQL destructivo;
-- reemplaza `--defaults-extra-file` por `--defaults-file` como primer argumento del dump;
-- evita que option-files normales sobrescriban las credenciales temporales derivadas de `DATABASE_URL`;
-- en el fallback Oracle `mysqldump`, redirige `MYSQL_TEST_LOGIN_FILE` a una ruta temporal inexistente para neutralizar la excepción `.mylogin.cnf` que MySQL conserva incluso con `--defaults-file`;
-- mantiene el password fuera de la línea de comandos y el option-file en modo `0600`;
-- añade regresión que exige `--defaults-file` como primer argumento y prohíbe `--defaults-extra-file`;
-- conserva el diagnóstico sanitizado `reason/subcode/backup_client` para validar producción sin exponer stderr ni secretos.
+- conserva `mariadb-dump|mysqldump` como camino preferido y cae a PDO si el cliente nativo no puede completar el respaldo;
+- el backup PDO usa la misma cuenta de aplicación, snapshot consistente, `SHOW CREATE TABLE` y lectura por lotes sin `LOCK TABLES`, `PROCESS` ni GTID;
+- verifica por tabla que las filas volcadas coinciden con el conteo del mismo snapshot;
+- escribe el SQL de forma exhaustiva aun ante `fwrite()` parcial y verifica SHA-256 contra los bytes persistidos;
+- el proceso PHP de backup queda rastreado por el mismo cleanup que usa el watchdog, evitando hijos huérfanos ante timeout;
+- telemetría, endpoint de estado y observador reconocen `pdo` como cliente seguro allowlisted;
+- CI fuerza el camino PDO y demuestra restauración de esquema + datos centinela.
 
 ## Invariantes
 
 - esquema pendiente → dry-run/allowlist → backup exitoso → migrate → recheck → cache;
-- cualquier fallo de backup sigue bloqueando migración y caché;
-- secretos permanecen fuera del probe;
+- cualquier fallo de backup bloquea migración y caché;
+- secretos permanecen fuera del probe y de la línea de comandos;
 - `construction` solo admite migraciones forward/expand-compatible;
 - `live` conserva fail-closed.
 
 ## Cierre de TANDA 1
 
-No declarar producción verde hasta demostrar los cinco puntos del plan: health 200 con V/SHA/schema exactos; home/login/storefront/centro de control sin 5xx; observador success; 0 incidentes/[AUTO]; CI exact-main success.
+No declarar producción verde hasta demostrar: `/health` 200 con V/SHA/schema exactos; home/login/storefront/centro de control sin 5xx; observador productivo aprobado; cero incidentes/[AUTO] abiertos; CI exact-main aprobado.
 
 ## Referencias
 
