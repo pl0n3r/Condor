@@ -62,6 +62,7 @@ class BackupPdoContractTest(unittest.TestCase):
             '"$PHP_BIN" bin/console app:database:backup-pdo',
             backup,
         )
+        self.assertIn("APP_ENV=prod APP_DEBUG=0 CONDOR_EPHEMERAL_CACHE=1", backup)
         self.assertNotIn("backup-database-pdo.php", backup)
         self.assertIn("PdoDatabaseBackup $backup", command)
         self.assertIn("private readonly Connection $connection", service)
@@ -70,6 +71,11 @@ class BackupPdoContractTest(unittest.TestCase):
         self.assertNotIn("DatabaseDsn", service)
         self.assertNotIn("DATABASE_URL", service)
         self.assertNotIn("getenv(", service)
+
+        kernel = (ROOT / "src/Kernel.php").read_text(encoding="utf-8")
+        self.assertIn("CONDOR_EPHEMERAL_CACHE", kernel)
+        self.assertIn("sys_get_temp_dir()", kernel)
+        self.assertIn("parent::getCacheDir()", kernel)
 
         # El parser standalone queda únicamente para el dump nativo.
         self.assertIn("DatabaseDsn::parse($url)", native_parser)

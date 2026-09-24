@@ -1,13 +1,13 @@
-# Condor App — Snapshot operativo · candidato V 0.1.35
+# Condor App — Snapshot operativo · candidato V 0.1.36
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** cerrar TANDA 1 haciendo que el fallback PDO del backup use la misma conexión Doctrine activa que los comandos Symfony, sin crear una conexión paralela desde `DATABASE_URL`.
+> **Objetivo actual:** cerrar TANDA 1 evitando que el backup previo dependa del contenedor Symfony `prod` cacheado de la release anterior; el fallback PDO compila un contenedor efímero con semántica `prod` sin tocar la caché viva antes de migrar.
 
 <p align="center">
-  <strong>Base integrada en código:</strong> V 0.1.34 · main `8a4b5a9e8a7835f8df46c2e27788919667f8120a` ·
-  <strong>Candidato:</strong> V 0.1.35 · PR #215 ·
+  <strong>Base integrada en código:</strong> V 0.1.35 · main `8c9d819c99443bb92df5b60fc7d637db0a8dabea` ·
+  <strong>Candidato:</strong> V 0.1.36 · PR #216 ·
   <strong>Incidente:</strong> #200
 </p>
 
@@ -15,20 +15,20 @@
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base integrada | ✅ **V 0.1.34 / MAIN** | SHA `8a4b5a9e8a7835f8df46c2e27788919667f8120a` |
-| Exact-main V 0.1.34 | ✅ **VALIDADO EN CÓDIGO** | CI #948: 12/12 jobs success; release `v0.1.34` publicada |
-| Observador V 0.1.34 | ⛔ **NO_OBSERVADO** | observer #24: cron `09:15:05Z`, `phase=backup`, `reason=pdo_failure`, subcode 31 |
-| Candidato actual | 🚧 **PR #215 / V 0.1.35** | fallback PDO entra por Symfony y reutiliza `Doctrine\DBAL\Connection` |
+| Base integrada | ✅ **V 0.1.35 / MAIN** | SHA `8c9d819c99443bb92df5b60fc7d637db0a8dabea` |
+| Exact-main V 0.1.35 | ✅ **VALIDADO EN CÓDIGO** | CI #953: 12/12 jobs success; release `v0.1.35` publicada |
+| Observador V 0.1.35 | ⛔ **NO_OBSERVADO** | observer #25: cron `09:50:05Z`, `phase=backup`, `backup_client=pdo`, subcode 1 |
+| Candidato actual | 🚧 **PR #216 / V 0.1.36** | fallback PDO usa caché Symfony efímera manteniendo `APP_ENV=prod` |
 | Incidente actual | 🚧 **#200** | no cerrar hasta completar los cinco puntos de PRODUCCIÓN EN VERDE |
 
-## Qué añade V 0.1.35
+## Qué añade V 0.1.36
 
-- registra `app:database:backup-pdo` como comando Symfony autoconfigurado;
-- inyecta `Doctrine\DBAL\Connection` y obtiene el PDO nativo con `getNativeConnection()`, evitando `DriverManager` y un segundo armado de conexión;
-- mantiene el dump nativo como primera opción; solo el fallback PDO cambia de camino;
-- conserva snapshot consistente, streaming no bufferizado únicamente para filas, conteo por tabla y checksum SHA-256;
-- conserva códigos de etapa 31..38 y mensajes sanitizados sin publicar excepciones del driver;
-- reutiliza el gate CI existente que fuerza `CONDOR_BACKUP_CLIENT=pdo` y restaura esquema + datos reales.
+- conserva el comando `app:database:backup-pdo` y la conexión `Doctrine\DBAL\Connection` introducidos en V0.1.35;
+- ejecuta el fallback con `APP_ENV=prod APP_DEBUG=0 CONDOR_EPHEMERAL_CACHE=1`, forzando un contenedor Symfony actual sin reutilizar `var/cache/prod`;
+- `Kernel::getCacheDir()` solo cambia cuando el flag efímero está activo; web y demás comandos conservan la caché normal;
+- un exit terminal PDO inesperado ya no hereda el `Access denied` del dump nativo anterior;
+- mantiene snapshot consistente, streaming acotado, conteo por tabla, checksum y restore real en CI;
+- no limpia ni calienta la caché `prod` antes de que D-054 complete backup/migración/recheck.
 
 ## Invariantes
 
@@ -37,7 +37,7 @@
 - secretos permanecen fuera del probe, logs compartibles y línea de comandos;
 - `construction` solo admite migraciones forward/expand-compatible;
 - `live` conserva fail-closed;
-- V 0.1.35 no contiene migraciones ni cambios de producto.
+- V 0.1.36 no contiene migraciones ni cambios de producto.
 
 ## Cierre de TANDA 1
 
