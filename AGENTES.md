@@ -1,5 +1,7 @@
 # Condor — manual operativo canónico para agentes
 
+> **Antes de trabajar, lee y aplica [PLAN-AGENTES.md](https://github.com/pl0n3r/factory/blob/main/PLAN-AGENTES.md)** (protocolo común de la fábrica: prioridades, límites, formatos, roles y decisiones del dueño). Si contradice este archivo, gana el plan.
+
 > **Punto de arranque obligatorio para ChatGPT, Codex y cualquier agente que trabaje en Condor.**
 >
 > Leer este archivo antes de modificar el proyecto. La continuidad debe poder reconstruirse desde GitHub y el repositorio, no desde memoria conversacional.
