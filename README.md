@@ -25,7 +25,8 @@
 
 - conserva D-054 sin cambiar su orden ni permitir SQL destructivo;
 - reemplaza `--defaults-extra-file` por `--defaults-file` como primer argumento del dump;
-- evita que opciones globales o `~/.my.cnf` cargadas después puedan sobrescribir las credenciales temporales derivadas de `DATABASE_URL`;
+- evita que option-files normales sobrescriban las credenciales temporales derivadas de `DATABASE_URL`;
+- en el fallback Oracle `mysqldump`, redirige `MYSQL_TEST_LOGIN_FILE` a una ruta temporal inexistente para neutralizar la excepción `.mylogin.cnf` que MySQL conserva incluso con `--defaults-file`;
 - mantiene el password fuera de la línea de comandos y el option-file en modo `0600`;
 - añade regresión que exige `--defaults-file` como primer argumento y prohíbe `--defaults-extra-file`;
 - conserva el diagnóstico sanitizado `reason/subcode/backup_client` para validar producción sin exponer stderr ni secretos.

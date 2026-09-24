@@ -44,6 +44,7 @@ credentials_tmp="$(mktemp "${TMPDIR:-/tmp}/condor-mysql-XXXXXX.cnf")"
 raw_tmp=""
 gzip_tmp=""
 dump_pid=""
+mysql_login_file=""
 cleanup() {
   if [ -n "$dump_pid" ] && kill -0 "$dump_pid" 2>/dev/null; then
     kill -TERM "$dump_pid" 2>/dev/null || true
@@ -54,6 +55,7 @@ cleanup() {
   dump_pid=""
   [ -z "$raw_tmp" ] || rm -f -- "$raw_tmp"
   [ -z "$gzip_tmp" ] || rm -f -- "$gzip_tmp"
+  [ -z "$mysql_login_file" ] || rm -f -- "$mysql_login_file"
   rm -f -- "$credentials_tmp"
 }
 handle_signal() {
@@ -131,11 +133,17 @@ case "$dump_name" in
 esac
 unset dump_help
 
-# El archivo temporal debe ser la única fuente de opciones del cliente.
-# --defaults-extra-file se carga antes de ~/.my.cnf; en hosting compartido,
-# una configuración posterior puede sobrescribir credenciales/host y provocar
-# Access denied aunque DATABASE_URL sea correcta. --defaults-file, como primer
-# argumento, aísla el dump de esas opciones externas sin exponer secretos.
+# El option-file temporal debe prevalecer sobre configuración externa.
+# --defaults-file, como primer argumento, evita los option-files normales.
+# Oracle MySQL conserva una excepción para .mylogin.cnf incluso con esa opción;
+# redirigir MYSQL_TEST_LOGIN_FILE a una ruta inexistente aísla solo mysqldump.
+if [ "$dump_name" = "mysqldump" ]; then
+  mysql_login_file="${credentials_tmp}.login"
+  rm -f -- "$mysql_login_file"
+  MYSQL_TEST_LOGIN_FILE="$mysql_login_file"
+  export MYSQL_TEST_LOGIN_FILE
+fi
+
 dump_status=0
 "$dump_bin" --defaults-file="$credentials_tmp" "$@" "$db" > "$raw_tmp" &
 dump_pid=$!
@@ -145,6 +153,9 @@ else
   dump_status=$?
 fi
 dump_pid=""
+if [ "$dump_name" = "mysqldump" ]; then
+  unset MYSQL_TEST_LOGIN_FILE
+fi
 if [ "$dump_status" -ne 0 ]; then
   echo "backup-database.sh: el dump falló (código $dump_status)." >&2
   exit "$dump_status"
@@ -153,6 +164,7 @@ fi
 gzip -c "$raw_tmp" > "$gzip_tmp"
 mv -- "$gzip_tmp" "$out"
 rm -f -- "$raw_tmp" "$credentials_tmp"
+[ -z "$mysql_login_file" ] || rm -f -- "$mysql_login_file"
 trap - 0 HUP INT TERM
 
 echo "Backup creado: $out"
