@@ -1,0 +1,17 @@
+name: Auditoría de privacidad
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 8 * * 1'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  auditoria:
+    uses: pl0n3r/factory/.github/workflows/auditoria-privacidad.yml@a14f38d5b4b1bb0db21101021375c76f1e36699c
+    with:
+      kit_ref: a14f38d5b4b1bb0db21101021375c76f1e36699c
+      label_language: es
