@@ -7,7 +7,6 @@ namespace App\Tests\Shared\Runtime;
 use App\Shared\Runtime\DatabaseDsn;
 use Doctrine\DBAL\Tools\DsnParser;
 use InvalidArgumentException;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class DatabaseDsnTest extends TestCase
@@ -26,19 +25,19 @@ final class DatabaseDsnTest extends TestCase
         ];
     }
 
-    #[DataProvider('doctrineParityCases')]
-    public function testMatchesDoctrineDsnParserForConnectionParams(
-        string $url,
-    ): void {
-        $actual = DatabaseDsn::parse($url);
-        $expected = (new DsnParser([
-            'mysql' => 'pdo_mysql',
-            'mariadb' => 'pdo_mysql',
-        ]))->parse($url);
+    public function testMatchesDoctrineDsnParserForConnectionParams(): void
+    {
+        foreach (self::doctrineParityCases() as [$url]) {
+            $actual = DatabaseDsn::parse($url);
+            $expected = (new DsnParser([
+                'mysql' => 'pdo_mysql',
+                'mariadb' => 'pdo_mysql',
+            ]))->parse($url);
 
-        foreach ($expected as $key => $value) {
-            self::assertArrayHasKey($key, $actual);
-            self::assertSame($value, $actual[$key]);
+            foreach ($expected as $key => $value) {
+                self::assertArrayHasKey($key, $actual);
+                self::assertSame($value, $actual[$key]);
+            }
         }
     }
 
