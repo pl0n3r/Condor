@@ -2,12 +2,18 @@
 
 declare(strict_types=1);
 
+use App\Shared\Runtime\DatabaseDsn;
+use Doctrine\DBAL\DriverManager;
+
+require dirname(__DIR__).'/vendor/autoload.php';
+
 /*
  * Backup lógico de MariaDB/MySQL usando solo PDO con la cuenta de aplicación.
  *
- * Las consultas de metadata permanecen bufferizadas. Solo el SELECT de filas
- * se vuelve no bufferizado durante el streaming y siempre cierra su cursor
- * antes de restaurar el modo normal. Los fallos salen con códigos por etapa
+ * La conexión usa el mismo parser Doctrine DBAL que la aplicación. Las
+ * consultas de metadata permanecen bufferizadas. Solo el SELECT de filas se
+ * vuelve no bufferizado durante el streaming y siempre cierra su cursor antes
+ * de restaurar el modo normal. Los fallos salen con códigos por etapa
  * allowlisted para diagnosticar producción sin exponer SQL ni credenciales.
  *
  * Uso: DATABASE_URL=... php backup-database-pdo.php <salida.sql>
@@ -50,34 +56,22 @@ if (!is_string($url) || $url === '') {
     failStage('connect', EXIT_CONNECT, 'falta DATABASE_URL en el entorno.');
 }
 
-$parts = parse_url(preg_replace('#^mariadb://#i', 'mysql://', $url) ?? '');
-if (!is_array($parts) || !isset($parts['host'], $parts['path'])
-    || !in_array(strtolower($parts['scheme'] ?? ''), ['mysql'], true)) {
-    failStage('connect', EXIT_CONNECT, 'DATABASE_URL no es una URL mysql:// o mariadb:// válida.');
-}
-
-$database = rawurldecode(ltrim($parts['path'], '/'));
-$host = trim($parts['host'], '[]');
-$dsn = sprintf(
-    'mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',
-    $host,
-    (int) ($parts['port'] ?? 3306),
-    $database,
-);
-
 try {
-    $pdo = new PDO(
-        $dsn,
-        rawurldecode($parts['user'] ?? ''),
-        rawurldecode($parts['pass'] ?? ''),
-        [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        ],
-    );
+    $connection = DriverManager::getConnection(DatabaseDsn::parse($url));
+    $nativeConnection = $connection->getNativeConnection();
+    if (!$nativeConnection instanceof PDO) {
+        failStage(
+            'connect',
+            EXIT_CONNECT,
+            'el driver de base de datos no expone una conexión PDO.',
+        );
+    }
+    $pdo = $nativeConnection;
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (Throwable) {
     failStage('connect', EXIT_CONNECT, 'no fue posible conectar a la base de datos.');
 }
-unset($url, $parts);
+unset($url, $nativeConnection);
 
 $handle = fopen($output, 'wb');
 if ($handle === false) {
@@ -223,6 +217,8 @@ $actualChecksum = hash_file('sha256', $output);
 if (!is_string($actualChecksum) || !hash_equals($expectedChecksum, $actualChecksum)) {
     failStage('checksum', EXIT_CHECKSUM, 'el checksum SHA-256 no coincide con los bytes escritos.');
 }
+
+$connection->close();
 
 fwrite(
     STDERR,

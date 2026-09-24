@@ -1,13 +1,13 @@
-# Condor App — Snapshot operativo · candidato V 0.1.33
+# Condor App — Snapshot operativo · candidato V 0.1.34
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** cerrar TANDA 1 corrigiendo el fallo productivo del backup PDO: metadata bufferizada, streaming acotado y diagnóstico por etapa sin heredar errores del dump nativo.
+> **Objetivo actual:** cerrar TANDA 1 eliminando la divergencia entre la conexión Doctrine que sí alcanza a inspeccionar el esquema y los caminos de backup que reconstruían la DSN por separado.
 
 <p align="center">
-  <strong>Base desplegada en código:</strong> V 0.1.32 · main `f38eb6cab2f29b2dc7b41639b5c74b1428cb552f` ·
-  <strong>Candidato:</strong> V 0.1.33 ·
+  <strong>Base integrada en código:</strong> V 0.1.33 · main `b58ebc2d0041c63c8615f93e7ae48b1aff93d193` ·
+  <strong>Candidato:</strong> V 0.1.34 · PR #214 ·
   <strong>Incidente:</strong> #200
 </p>
 
@@ -15,27 +15,29 @@
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base integrada | ✅ **V 0.1.32 / MAIN** | SHA `f38eb6cab2f29b2dc7b41639b5c74b1428cb552f` |
-| Exact-main V 0.1.32 | ✅ **VALIDADO EN CÓDIGO** | CI #933 en success; release `v0.1.32` publicada |
-| Observador V 0.1.32 | ⛔ **NO_OBSERVADO** | run 35959253158 (#22): V/SHA exactos, pero `phase=backup`, cliente final `pdo`; el `access_denied` estaba contaminado por el dump nativo previo |
-| Candidato actual | 🚧 **PR #213 / V 0.1.33** | buffering PDO corregido + diagnóstico terminal por etapas 31–38 |
+| Base integrada | ✅ **V 0.1.33 / MAIN** | SHA `b58ebc2d0041c63c8615f93e7ae48b1aff93d193` |
+| Exact-main V 0.1.33 | ✅ **VALIDADO EN CÓDIGO** | CI #943 / run `35971886157` en success; release `v0.1.33` publicada |
+| Observador V 0.1.33 | ⛔ **NO_OBSERVADO** | run `35971886104`: V/SHA exactos; cron termina en `phase=backup`, `reason=pdo_failure`, subcode 31 |
+| Candidato actual | 🚧 **PR #214 / V 0.1.34** | parser DSN compartido con paridad DBAL + conexión PDO construida por Doctrine + soporte de `unix_socket`/charset |
 | Incidente actual | 🚧 **#200** | no cerrar hasta completar los cinco puntos de PRODUCCIÓN EN VERDE |
 
-## Qué añade V 0.1.33
+## Qué añade V 0.1.34
 
-- mantiene las consultas PDO de metadata bufferizadas y usa modo no bufferizado únicamente durante el streaming de filas;
-- cierra el cursor de filas antes de restaurar el buffering normal, evitando estados incompatibles del driver entre consultas;
-- convierte fallos PDO en códigos de etapa sanitizados `31..38` sin exponer SQL, tabla, host, usuario ni credenciales;
-- cuando el dump nativo falla antes del fallback, el diagnóstico terminal del PDO ya no hereda su `Access denied`;
-- conserva snapshot consistente, conteo por tabla, checksum SHA-256, timeout y restauración demostrada en CI.
+- centraliza la interpretación de `DATABASE_URL` en `DatabaseDsn`, usando `Doctrine\DBAL\Tools\DsnParser`;
+- hace que el backup PDO cree la conexión con `DriverManager` y obtenga su conexión PDO nativa, en vez de reconstruir un DSN manual;
+- conserva parámetros que el backup anterior descartaba, especialmente `unix_socket` y `charset`;
+- hace que el option-file del dump nativo consuma la misma interpretación y propague el socket cuando exista;
+- mantiene errores sanitizados: ninguna excepción de conexión, URL, host, usuario o contraseña se publica;
+- añade regresiones para credenciales codificadas, esquema MariaDB y parámetros de conexión adicionales.
 
 ## Invariantes
 
 - esquema pendiente → dry-run/allowlist → backup exitoso → migrate → recheck → cache;
 - cualquier fallo de backup bloquea migración y caché;
-- secretos permanecen fuera del probe y de la línea de comandos;
+- secretos permanecen fuera del probe, logs compartibles y línea de comandos;
 - `construction` solo admite migraciones forward/expand-compatible;
-- `live` conserva fail-closed.
+- `live` conserva fail-closed;
+- V 0.1.34 no contiene migraciones ni cambios de producto.
 
 ## Cierre de TANDA 1
 

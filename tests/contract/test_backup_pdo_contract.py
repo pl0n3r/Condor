@@ -39,6 +39,32 @@ class BackupPdoContractTest(unittest.TestCase):
         self.assertIn("stage={$stage}", script)
         self.assertNotIn("getMessage()", script)
 
+    def test_backup_uses_same_doctrine_dsn_semantics_as_application(self) -> None:
+        backup = (ROOT / "scripts/backup-database-pdo.php").read_text(
+            encoding="utf-8"
+        )
+        native_parser = (ROOT / "scripts/parse-database-url.php").read_text(
+            encoding="utf-8"
+        )
+        shared = (ROOT / "src/Shared/Runtime/DatabaseDsn.php").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("DatabaseDsn::parse($url)", backup)
+        self.assertIn("DriverManager::getConnection", backup)
+        self.assertIn("getNativeConnection()", backup)
+        self.assertNotIn("parse_url(", backup)
+
+        self.assertIn("DatabaseDsn::parse($url)", native_parser)
+        self.assertIn("socket=", native_parser)
+        self.assertNotIn("function parseDatabaseUrl", native_parser)
+
+        self.assertIn("parse_url($url)", shared)
+        self.assertIn("parse_str($parts[\'query\']", shared)
+        self.assertIn("'mysql', 'mariadb' => 'pdo_mysql'", shared)
+        self.assertIn("unix_socket", shared)
+        self.assertNotIn("getMessage()", shared)
+
 
 if __name__ == "__main__":
     unittest.main()
