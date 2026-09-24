@@ -387,6 +387,7 @@ esac
             supports_gtid_purged: bool = False,
             supports_column_statistics: bool = False,
         ) -> list[str]:
+            """Ejecuta el backup con un cliente simulado y devuelve sus argumentos."""
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 scripts = root / "scripts"
