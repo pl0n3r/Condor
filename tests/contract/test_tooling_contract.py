@@ -727,6 +727,12 @@ esac
             self.assertNotIn("secret-user", rendered)
             self.assertNotIn("secret-host", rendered)
             self.assertNotIn("secret_db", rendered)
+            self.assertNotIn("secret-user", result.stderr)
+            self.assertNotIn("secret-host", result.stderr)
+            self.assertNotIn("secret_db", result.stderr)
+            self.assertIn("reason=access_denied", result.stderr)
+            self.assertIn("client=mariadb-dump", result.stderr)
+            self.assertIn("subcode=2", result.stderr)
 
     def test_post_deploy_status_endpoint_never_exposes_logs_or_secrets(self) -> None:
         """El probe público solo publica identidad y estado operacional acotado."""
