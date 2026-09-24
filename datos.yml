@@ -1,0 +1,164 @@
+{
+  "version": 1,
+  "project": "pl0n3r/Condor",
+  "phase": "construccion",
+  "controller": {
+    "name": "[COMPLETAR POR EL DUEÑO]",
+    "identifier": "[COMPLETAR POR EL DUEÑO]",
+    "address": "[COMPLETAR POR EL DUEÑO]",
+    "rights_email": "[COMPLETAR POR EL DUEÑO]"
+  },
+  "treatments": [
+    {
+      "id": "account_identity",
+      "category": "contact",
+      "fields": [
+        "email",
+        "display_name",
+        "roles",
+        "active",
+        "created_at"
+      ],
+      "purpose": "account_access",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
+      "id": "account_password",
+      "category": "authentication",
+      "fields": [
+        "password_hash"
+      ],
+      "purpose": "account_security",
+      "basis": "review_required",
+      "retention": "credential_lifecycle",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
+      "id": "customer_contact",
+      "category": "contact",
+      "fields": [
+        "name",
+        "email",
+        "phone",
+        "notes",
+        "commercial_category_id"
+      ],
+      "purpose": "customer_management",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
+      "id": "account_invitation",
+      "category": "authentication",
+      "fields": [
+        "user_id",
+        "tenant_id",
+        "token_hash",
+        "created_by_user_id",
+        "expires_at",
+        "consumed_at",
+        "revoked_at"
+      ],
+      "purpose": "account_invitation",
+      "basis": "review_required",
+      "retention": "invitation_lifecycle",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
+      "id": "notification_preferences",
+      "category": "usage",
+      "fields": [
+        "user_id",
+        "event_key",
+        "channel_key",
+        "enabled"
+      ],
+      "purpose": "notification_preferences",
+      "basis": "review_required",
+      "retention": "account_lifecycle",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
+      "id": "notification_delivery",
+      "category": "usage",
+      "fields": [
+        "user_id",
+        "event_key",
+        "channel_key",
+        "payload",
+        "status",
+        "attempt_count",
+        "last_error",
+        "available_at",
+        "delivered_at"
+      ],
+      "purpose": "notification_delivery",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
+      "id": "audit_events",
+      "category": "usage",
+      "fields": [
+        "actor_user_id",
+        "action",
+        "entity_type",
+        "entity_id",
+        "context",
+        "created_at"
+      ],
+      "purpose": "security_audit",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
+      "id": "error_incidents",
+      "category": "usage",
+      "fields": [
+        "request_id",
+        "status",
+        "method",
+        "route_name",
+        "exception_class",
+        "message",
+        "fingerprint",
+        "version",
+        "release_sha",
+        "trace",
+        "occurred_at"
+      ],
+      "purpose": "error_diagnostics",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
+      "id": "diagnostic_shares",
+      "category": "authentication",
+      "fields": [
+        "token_hash",
+        "expires_at",
+        "revoked_at",
+        "created_at"
+      ],
+      "purpose": "support_diagnostics",
+      "basis": "review_required",
+      "retention": "diagnostic_share_lifecycle",
+      "consent": "review_required",
+      "providers": []
+    }
+  ]
+}
