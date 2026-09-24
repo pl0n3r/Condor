@@ -1,81 +1,80 @@
-# Condor App — Snapshot operativo · candidato V 0.1.38
+# Condor App — Snapshot operativo · candidato V 0.1.39
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** revalidar privacidad como código contra el contrato vigente de seis documentos de Factory, conservando el mapa técnico existente y sin declarar aprobación jurídica.
+> **Objetivo actual:** resolver el falso positivo técnico `health` de la primera auditoría real repineando los callers de privacidad al Factory corregido, sin cambiar el mapa de datos ni declarar aprobación jurídica.
 
 <p align="center">
-  <strong>Producción verificada:</strong> V 0.1.37 · main `a25b88f49ce2a2fc5492dd16d22afc8c0bc79b8c` ·
-  <strong>Candidato:</strong> V 0.1.38 · Issue #221 · PR #222
+  <strong>Producción verificada:</strong> V 0.1.38 · main `6d9bb71c47fbd460a462ef5fa03d7132bd475dee` ·
+  <strong>Candidato:</strong> V 0.1.39 · Issue #223
 </p>
 
 ## Estado del deploy
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base productiva | ✅ **V 0.1.37 / GREEN** | `a25b88f49ce2a2fc5492dd16d22afc8c0bc79b8c`; exact-main, observer y smoke aprobados |
-| Contrato Factory | ✅ **6 DOCUMENTOS** | pin `4b2be9fcf827278631caa3e3e68603b6e2a680d7` |
-| Mapa de datos | ✅ **SIN CAMBIO MATERIAL** | `datos.yml` continúa como fuente de verdad; placeholders y `review_required` se preservan |
-| Documentos | ✅ **GENERADOS** | política, aviso, términos, registro, canal de derechos y retención |
-| Caller de auditoría | ✅ **EJECUCIÓN REAL CLEAN** | run `36054140014`; Factory `4b2be9fc…`; `clean: true`, sin hallazgos pendientes |
-| Candidato V0.1.38 | 🚧 **REVALIDACIÓN FINAL** | PR #222; CI/privacidad/Sonar/CodeRabbit previos verdes; revalidar HEAD final tras retirar trigger temporal |
+| Base productiva | ✅ **V 0.1.38 / GREEN** | `6d9bb71c47fbd460a462ef5fa03d7132bd475dee`; exact-main CI/CodeQL, observer y smoke aprobados |
+| Contrato Factory | ✅ **FIX HEALTH INTEGRADO** | pin `68eef82e3b21939143a4cbea23b7df2615534e77`; Factory #91/#92 |
+| Mapa de datos | ✅ **SIN CAMBIO EN ESTE CANDIDATO** | `datos.yml` no se modifica; la adopción inicial sigue bajo puerta jurídica #224 |
+| Documentos | ✅ **SIN REGENERACIÓN** | los seis documentos no cambian porque el fix de Factory solo ajusta detección de señales |
+| Primera auditoría real | ⚠️ **REVIEW_REQUIRED** | run `36054140014`; creó #223 por falso positivo `health` y #224 por adopción inicial material |
+| Finding técnico #223 | 🚧 **CORRECCIÓN EN CURSO** | repin al Factory corregido y reejecución real pendiente |
+| Puerta jurídica #224 | ⛔ **SEPARADA / VIGENTE** | requiere decisión humana; este candidato no la resuelve |
 
-## Qué añade V 0.1.38
+## Qué añade V 0.1.39
 
-- actualiza los callers de privacidad y auditoría al Factory vigente;
-- amplía el set versionado de tres a **seis documentos canónicos**;
-- congela los seis documentos con regresiones SHA-256 byte-a-byte;
-- falla si falta o deriva cualquiera de los documentos esperados;
-- mantiene responsable, bases, consentimientos y retenciones no demostradas en estado pendiente de revisión;
-- no modifica esquema, lógica de negocio ni datos productivos.
+- repinea `.github/workflows/privacidad.yml` al Factory `68eef82e3b21939143a4cbea23b7df2615534e77`;
+- repinea la auditoría semanal al mismo SHA inmutable;
+- actualiza el contrato PHP para exigir ese pin exacto;
+- mantiene los seis documentos canónicos y sus hashes actuales sin regenerarlos;
+- corrige la trazabilidad del primer reporte real: fue `review_required`, no `clean`;
+- no modifica esquema, lógica de negocio, `datos.yml`, tratamientos ni documentos jurídicos.
 
 ## Archivos del candidato
 
 - `.github/workflows/privacidad.yml`
 - `.github/workflows/auditoria-privacidad.yml`
-- `config/version.php`
-- `docs/privacidad/aviso-privacidad.md`
-- `docs/privacidad/canal-derechos.md`
-- `docs/privacidad/terminos-condiciones.md`
 - `tests/php/Privacy/PrivacyAsCodeTest.php`
-
-Los tres documentos históricos —política, registro y retención— ya coincidían byte a byte con el nuevo generador y por eso no generan diff.
+- `config/version.php`
+- `README.md`
 
 ## Invariantes
 
+- `/health` por sí solo no representa un dato personal de salud;
+- campos explícitos `health` siguen siendo sensibles en el Factory corregido;
 - los documentos técnicos no constituyen aprobación jurídica;
-- no se introducen PII real, secretos ni datos del responsable;
-- `datos.yml` sigue siendo la fuente única de verdad del producto;
-- auditoría real verificada: run `36054140014`, resultado sanitizado `clean: true`; el trigger temporal de rama fue retirado antes del merge;
+- #224 permanece abierta hasta decisión humana;
 - merge o CI verde no equivalen a producción verde;
-- producción solo se declara verde con versión/SHA exactos, observer, smoke y gates exact-main aprobados.
+- la resolución de #223 exige reejecutar la auditoría real con el nuevo Factory y comprobar que el finding técnico desaparece.
 
 ## Flujo de entrega
 
 ```mermaid
 flowchart LR
-  A["V0.1.37 · producción verde"] --> B["#221 · seis documentos"]
-  B --> C["PR #222 · CI + privacidad + Sonar/CodeQL + revisión"]
-  C --> D["Auditoría real sanitizada · clean"]
-  D --> E["HEAD final sin trigger temporal"]
-  E --> M["Squash merge"]
-  M --> F["CI exact-main"]
-  F --> G["Observer + Production Smoke"]
+  A["V0.1.38 · producción verde"] --> B["Factory #91/#92 · fix /health"]
+  B --> C["V0.1.39 · repin exacto"]
+  C --> D["CI + Privacy + Sonar/CodeQL + revisión"]
+  D --> E["Squash merge"]
+  E --> F["CI exact-main"]
+  F --> G["Observer + smoke"]
+  G --> H["Auditoría real con Factory corregido"]
+  H --> I["Cerrar #223 si health desaparece"]
 ```
 
 ## Qué sigue
 
-1. revalidar CI/privacidad/Sonar/CodeRabbit sobre el HEAD final sin trigger temporal;
-2. integrar serialmente V0.1.38;
-3. validar exact-main, observer y smoke;
-4. actualizar Roadmap #1 y Factory#54 con la evidencia del run `36054140014`.
+1. validar el candidato V0.1.39 sobre el HEAD final;
+2. integrar por squash y validar el SHA exacto de `main`;
+3. observar producción por separado;
+4. reejecutar `Auditoría de privacidad`;
+5. cerrar #223 únicamente si `health` deja de aparecer y conservar #224 separada.
 
 ## Referencias
 
 - [AGENTES.md](./AGENTES.md)
 - [ESPECIFICACIONES.md](./ESPECIFICACIONES.md)
 - Roadmap canónico: Issue #1
-- Revalidación vigente: Issue #221
-- Adopción histórica: Issue #217
+- Finding técnico: Issue #223
+- Puerta jurídica: Issue #224
 - Factory privacidad: pl0n3r/factory#54
