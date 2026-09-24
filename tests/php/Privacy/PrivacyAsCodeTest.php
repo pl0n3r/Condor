@@ -12,6 +12,7 @@ final class PrivacyAsCodeTest extends TestCase
     private const PLACEHOLDER = '[COMPLETAR POR EL DUEÑO]';
     private const FACTORY_SHA = '4b2be9fcf827278631caa3e3e68603b6e2a680d7';
 
+    /** Verifica que el mapa represente únicamente tratamientos observados. */
     public function testDataMapMatchesObservedCondorTreatments(): void
     {
         $data = $this->data();
@@ -71,6 +72,7 @@ final class PrivacyAsCodeTest extends TestCase
         }
     }
 
+    /** Verifica pins de Factory y permisos mínimos de los callers. */
     public function testPrivacyWorkflowsUseFactoryWithMinimumPermissions(): void
     {
         $privacy = file_get_contents($this->root().'/.github/workflows/privacidad.yml');
@@ -95,6 +97,7 @@ final class PrivacyAsCodeTest extends TestCase
         self::assertStringNotContainsString('secrets:', $audit);
     }
 
+    /** Mantiene tratamientos sensibles bajo revisión mientras el producto está en construcción. */
     public function testSensitiveTreatmentsRemainUnderReviewDuringConstruction(): void
     {
         $data = $this->data();
@@ -107,6 +110,7 @@ final class PrivacyAsCodeTest extends TestCase
         }
     }
 
+    /** Evita inventar un proveedor de correo no demostrado por el repositorio. */
     public function testUnknownMailProviderIsNotInvented(): void
     {
         $data = $this->data();
@@ -126,6 +130,7 @@ final class PrivacyAsCodeTest extends TestCase
         self::assertStringContainsString('proveedores: ninguno_declarado', $register);
     }
 
+    /** Impide secretos sintéticos o PII real en los artefactos de privacidad. */
     public function testPrivacyArtifactsContainNoSyntheticSecretsOrRealPii(): void
     {
         $raw = file_get_contents($this->root().'/datos.yml');
@@ -241,16 +246,21 @@ final class PrivacyAsCodeTest extends TestCase
             );
             $quotedProviders = $treatment['providers'] === []
                 ? 'ninguno_declarado'
-                : implode(', ', array_map(
-                    static fn (string $provider): string => chr(96).$provider.chr(96),
-                    $treatment['providers'],
-                ));
+                : implode(
+                    ', ',
+                    array_map(
+                        static fn (string $provider): string => chr(96).$provider.chr(96),
+                        $treatment['providers'],
+                    ),
+                );
             $sections[] = '## '.$treatment['id'];
             $sections[] = '';
             $sections[] = '- Categoría: '.chr(96).$treatment['category'].chr(96);
             $sections[] = '- Campos de software: '.implode(', ', $quotedFields);
             $sections[] = '- Finalidad: '.chr(96).$treatment['purpose'].chr(96);
-            $sections[] = '- Base documentada: '.chr(96).$treatment['basis'].chr(96).' (revisión jurídica requerida)';
+            $sections[] = '- Base documentada: '
+                .chr(96).$treatment['basis'].chr(96)
+                .' (revisión jurídica requerida)';
             $sections[] = '- Consentimiento: '.chr(96).$treatment['consent'].chr(96);
             $sections[] = '- Proveedores: '.$quotedProviders;
             $sections[] = '- Retención: '.chr(96).$treatment['retention'].chr(96);
@@ -343,9 +353,12 @@ final class PrivacyAsCodeTest extends TestCase
             '## Condiciones pendientes de definición',
             '',
             '- Condiciones comerciales: '.self::PLACEHOLDER.' — revisión jurídica requerida.',
-            '- Niveles de servicio (SLA), si aplican: '.self::PLACEHOLDER.' — revisión jurídica requerida.',
-            '- Garantías y limitaciones aplicables: '.self::PLACEHOLDER.' — revisión jurídica requerida.',
-            '- Jurisdicción y mecanismo de solución de controversias: '.self::PLACEHOLDER.' — revisión jurídica requerida.',
+            '- Niveles de servicio (SLA), si aplican: '
+                .self::PLACEHOLDER.' — revisión jurídica requerida.',
+            '- Garantías y limitaciones aplicables: '
+                .self::PLACEHOLDER.' — revisión jurídica requerida.',
+            '- Jurisdicción y mecanismo de solución de controversias: '
+                .self::PLACEHOLDER.' — revisión jurídica requerida.',
             '',
             'Este documento no inventa ni presume condiciones del producto. Los hechos comerciales '
                 .'y jurídicos anteriores deben completarse y aprobarse antes de su uso público.',
@@ -378,7 +391,9 @@ final class PrivacyAsCodeTest extends TestCase
             '',
             '- Requisitos de la solicitud: '.self::PLACEHOLDER.' — revisión jurídica requerida.',
             '- Flujo interno de atención: '.self::PLACEHOLDER.' — revisión jurídica requerida.',
-            '- Plazos aplicables: '.self::PLACEHOLDER.' — deben ser definidos con revisión jurídica; este kit no inventa un plazo legal.',
+            '- Plazos aplicables: '.self::PLACEHOLDER
+                .' — deben ser definidos con revisión jurídica; '
+                .'este kit no inventa un plazo legal.',
             '',
             'El canal debe permitir solicitudes de acceso, corrección, actualización, supresión o '
                 .'revocación según corresponda. Este documento describe una frontera técnica y no '
