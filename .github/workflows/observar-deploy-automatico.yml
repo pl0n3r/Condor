@@ -125,7 +125,7 @@ jobs:
           echo "estado_cli=$estado_cli" >> "$GITHUB_OUTPUT"
 
           if (( estado_cli > 1 )); then
-            echo "::error::El observador no pudo producir evidencia válida (uso incorrecto de argumentos)."
+            echo "::error::La observación automática terminó sin validar producción; revise la evidencia publicada."
             exit "$estado_cli"
           fi
 

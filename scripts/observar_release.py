@@ -57,7 +57,7 @@ class ObservacionIdentidad(ObservacionError):
 
 
 class ObservacionDeployPendiente(ObservacionIdentidad):
-    """Producción aún sirve una versión anterior: el deploy no ha llegado."""
+    """Producción aún sirve una identidad anterior: el deploy no ha llegado."""
 
 
 class NoRedirigir(HTTPRedirectHandler):
@@ -366,8 +366,9 @@ def validar_health(tipo: str, cuerpo: bytes, version: str, sha: str) -> bool:
             "La versión observada no coincide con la esperada."
         )
     if observada_sha != sha:
-        raise ObservacionIdentidad(
-            "El SHA observado no coincide con el esperado."
+        raise ObservacionDeployPendiente(
+            f"Producción aún sirve otro SHA de V {observada}; "
+            "el deploy esperado no ha llegado."
         )
     return carga.get("schema_up_to_date") is True
 
