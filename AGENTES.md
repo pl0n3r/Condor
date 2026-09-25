@@ -91,7 +91,7 @@ El check agregado `Validar` debe exigir el CI Factory y los gates locales aplica
 
 Antes de un push que toque PHP o tooling:
 - `vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --no-progress --memory-limit=1G` debe quedar limpio contra la baseline vigente.
-- `vendor/bin/rector process --dry-run --no-progress-bar` se usa localmente para inspección; no es gate obligatorio hasta completar #245.
+- `vendor/bin/rector process --dry-run --no-progress-bar` debe quedar limpio para el alcance configurado y es gate obligatorio de CI; ampliar sus paths/reglas solo en lotes pequeños, revisados y con regresión.
 - La baseline de PHPStan representa deuda heredada, no permiso para añadir errores nuevos.
 
 ## 6. Versionado y entrega

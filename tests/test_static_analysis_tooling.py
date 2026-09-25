@@ -53,6 +53,7 @@ class StaticAnalysisToolingTests(unittest.TestCase):
             self.assertIn(expected, config)
 
     def test_ci_runs_phpstan_and_defers_rector_gate(self):
+        """Compatibilidad del contrato histórico #244 tras activar #245."""
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("name: Análisis estático PHP", workflow)
         self.assertIn(
@@ -62,7 +63,7 @@ class StaticAnalysisToolingTests(unittest.TestCase):
         )
         self.assertIn("static-analysis", workflow)
         self.assertIn('[[ "$STATIC_ANALYSIS" == "success" ]]', workflow)
-        self.assertNotIn("vendor/bin/rector process --dry-run", workflow)
+        self.assertIn("rector-dry-run", workflow)
 
     def test_agents_documents_static_analysis_commands(self):
         agents = (ROOT / "AGENTES.md").read_text(encoding="utf-8")
@@ -72,7 +73,7 @@ class StaticAnalysisToolingTests(unittest.TestCase):
             agents,
         )
         self.assertIn("vendor/bin/rector process --dry-run --no-progress-bar", agents)
-        self.assertIn("no es gate obligatorio hasta completar #245", agents)
+        self.assertIn("es gate obligatorio de CI", agents)
 
     def test_bootstrap_workflow_is_not_part_of_final_tooling(self):
         self.assertFalse(

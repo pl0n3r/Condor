@@ -1,32 +1,32 @@
-# Condor App — Snapshot operativo · PHPStan/Rector base V 0.1.46
+# Condor App — Snapshot operativo · Rector gate V 0.1.47
 
-> **Candidato:** Issue #244 · base reproducible de análisis estático PHP.
+> **Candidato:** Issue #245 · primer lote Rector acotado y dry-run obligatorio.
 
-Condor permanece en **construcción**. V0.1.46 incorpora PHPStan nivel 8 con baseline versionada y prepara Rector de forma conservadora, sin aplicar todavía el refactor masivo ni convertir Rector en gate.
+Condor permanece en **construcción**. V0.1.47 aplica el primer lote Rector con cambios mecánicos y verificables, y convierte el dry-run de Rector en gate del CI para el alcance configurado.
 
 ## Alcance
-- PHPStan + extensiones Symfony/Doctrine y Rector fijados en Composer con lock regenerado sobre V0.1.45;
-- baseline PHPStan regenerada con PHP 8.5 y verificada limpia;
-- job `Análisis estático PHP` obligatorio dentro del check agregado `Validar`;
-- Rector disponible para inspección local, sin gate bloqueante hasta #245;
-- comandos locales documentados en AGENTES.md;
-- contratos que impiden perder tooling, baseline o introducir Rector prematuramente como gate.
+- lote Rector limitado a `CatalogSchemaListener.php` y `ContainerRecovery.php`;
+- cambios producidos por Rector: tipado explícito `string` en cuatro constantes privadas;
+- ningún cambio de firma pública, lógica de negocio, Sentry, Doctrine runtime o flujo de requests;
+- `rector.php` conserva sets PHP/code-quality/dead-code/Symfony/Doctrine, pero con paths explícitamente acotados;
+- job `Rector dry-run` integrado al check agregado `Validar`;
+- contratos que fijan el allowlist, el estado post-Rector y la presencia del gate.
 
 ## Seguridad y reversión
-- herramientas exclusivamente `require-dev`;
-- no hay migraciones, SQL, secretos, cambios de permisos productivos ni refactors de aplicación;
-- el workflow bootstrap que generó lock/baseline fue efímero y se elimina en el candidato final;
-- revertir este corte elimina tooling/config/gate sin tocar datos ni runtime productivo.
+- el workflow efímero que aplicó Rector validó allowlist de archivos, ejecutó dry-run posterior y PHPStan antes de fijar el commit; no forma parte del candidato final;
+- no hay migraciones, SQL, secretos ni cambios de permisos productivos;
+- revertir este corte restaura las constantes sin afectar datos ni contratos externos;
+- futuras ampliaciones de Rector deben hacerse por lotes pequeños y revisables.
 
 ## Evidencia base
-- `main@4a2923139af9aff775312db827f0159ffc512b34` · V0.1.45 GREEN;
-- bootstrap reproducible #246 generó lock + baseline con PHP 8.5;
-- #245 queda bloqueado como segundo slice para aplicar un lote Rector acotado y solo entonces activar su dry-run en CI;
-- reserva v2 #244: `ad1e7435-14a5-49e4-b76e-1a7c9a0d16b2`.
+- `main@d14f8ca88873e717eec1c310be5a5d481543be3b` · V0.1.46 GREEN;
+- workflow controlado #248 aplicó Rector real y el diff resultante tocó exactamente dos archivos allowlisted;
+- dry-run posterior + PHPStan: SUCCESS;
+- reserva v2 #245: `02fb736e-c1ab-4526-aef4-2ef0fdeeb731`.
 
 ## Fuentes de verdad
 - [AGENTES.md](./AGENTES.md)
 - [ESPECIFICACIONES.md](./ESPECIFICACIONES.md)
 - Roadmap: Issue #1
 - Parent de calidad: #212
-- Slice actual: #244
+- Slice actual: #245

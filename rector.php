@@ -6,7 +6,8 @@ use Rector\Config\RectorConfig;
 
 return RectorConfig::configure()
     ->withPaths([
-        __DIR__ . '/src',
+        __DIR__ . '/src/Infrastructure/Persistence/CatalogSchemaListener.php',
+        __DIR__ . '/src/Infrastructure/Runtime/ContainerRecovery.php',
     ])
     ->withPhpSets()
     ->withPreparedSets(
