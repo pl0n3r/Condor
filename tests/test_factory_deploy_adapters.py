@@ -40,7 +40,7 @@ class FactoryDeployAdaptersTests(unittest.TestCase):
         self.assertIn("FACTORY_DEPLOY_ENABLED == 'true'",kit)
         adapter=(ROOT/"ops/factory/adapter.py").read_text(encoding="utf-8")
         self.assertIn('STAGES={"build":build,"backup":backup,"migrate":migrate,"deploy":deploy,"rollback":rollback}',adapter)
-        self.assertIn('target=$(cat \\"$prev\\")',adapter)
+        self.assertIn('target=$(cat "$prev")',adapter)
 
     def test_exact_release_or_rollback(self):
         source=(ROOT/"ops/factory/adapter.py").read_text(encoding="utf-8")
