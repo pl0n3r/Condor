@@ -1,0 +1,81 @@
+name: Aplicar primer lote Rector issue 245
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - rector.php
+      - .github/workflows/issue-245-apply.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: issue-245-rector-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'trabajo/issue-245'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Descargar rama reservada
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+
+      - name: Preparar PHP 8.5
+        uses: shivammathur/setup-php@f3e473d116dccc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Instalar dependencias reproducibles
+        run: |
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "composer install Rector" \
+            -- composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Aplicar Rector al lote acotado
+        run: |
+          set -euo pipefail
+          vendor/bin/rector process --no-progress-bar
+          mapfile -t changed < <(git diff --name-only)
+          printf '%s\n' "${changed[@]}"
+          for path in "${changed[@]}"; do
+            case "$path" in
+              src/Infrastructure/Persistence/CatalogSchemaListener.php|src/Infrastructure/Runtime/ContainerRecovery.php) ;;
+              *)
+                echo "::error::Rector modificó un archivo fuera del lote permitido: $path"
+                exit 1
+                ;;
+            esac
+          done
+          test "${#changed[@]}" -gt 0
+
+      - name: Verificar lote
+        run: |
+          set -euo pipefail
+          vendor/bin/rector process --dry-run --no-progress-bar
+          vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --no-progress --memory-limit=1G
+          php -l src/Infrastructure/Persistence/CatalogSchemaListener.php
+          php -l src/Infrastructure/Runtime/ContainerRecovery.php
+
+      - name: Fijar lote Rector en la rama reservada
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/Infrastructure/Persistence/CatalogSchemaListener.php \
+            src/Infrastructure/Runtime/ContainerRecovery.php
+          git diff --cached --quiet && exit 0
+          git commit -m "refactor(rector): aplicar primer lote acotado"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
