@@ -7,6 +7,9 @@ namespace App\Tests\Infrastructure\Observability;
 use App\Infrastructure\Observability\SentryEventSanitizer;
 use PHPUnit\Framework\TestCase;
 use Sentry\Event;
+use Sentry\ExceptionDataBag;
+use Sentry\Frame;
+use Sentry\Stacktrace;
 use Sentry\UserDataBag;
 
 final class SentryEventSanitizerTest extends TestCase
@@ -23,6 +26,7 @@ final class SentryEventSanitizerTest extends TestCase
             'headers' => [
                 'Authorization' => ['Bearer secret'],
                 'Cookie' => ['session=secret'],
+                'Referer' => ['https://www.condorapp.com.co/login?token=secret'],
                 'X-Real-IP' => ['203.0.113.10'],
                 'X-Request-Id' => ['safe-id'],
             ],
@@ -45,7 +49,38 @@ final class SentryEventSanitizerTest extends TestCase
         self::assertSame(['safe-id'], $request['headers']['X-Request-Id']);
         self::assertArrayNotHasKey('Authorization', $request['headers']);
         self::assertArrayNotHasKey('Cookie', $request['headers']);
+        self::assertArrayNotHasKey('Referer', $request['headers']);
         self::assertArrayNotHasKey('X-Real-IP', $request['headers']);
+    }
+
+    public function testRemovesVarsFromEventAndExceptionStacktraces(): void
+    {
+        $eventFrame = new Frame(
+            'eventHandler',
+            '/srv/app/src/EventHandler.php',
+            42,
+            vars: ['token' => 'event-secret'],
+        );
+        $exceptionFrame = new Frame(
+            'exceptionHandler',
+            '/srv/app/src/ExceptionHandler.php',
+            21,
+            vars: ['password' => 'exception-secret'],
+        );
+
+        $event = Event::createEvent();
+        $event->setStacktrace(new Stacktrace([$eventFrame]));
+        $event->setExceptions([
+            new ExceptionDataBag(
+                new \RuntimeException('boom'),
+                new Stacktrace([$exceptionFrame]),
+            ),
+        ]);
+
+        (new SentryEventSanitizer())($event);
+
+        self::assertSame([], $eventFrame->getVars());
+        self::assertSame([], $exceptionFrame->getVars());
     }
 
     public function testLeavesQuerylessUrlStable(): void

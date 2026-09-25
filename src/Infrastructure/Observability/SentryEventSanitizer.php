@@ -6,6 +6,7 @@ namespace App\Infrastructure\Observability;
 
 use Sentry\Event;
 use Sentry\EventHint;
+use Sentry\Stacktrace;
 
 final class SentryEventSanitizer
 {
@@ -14,6 +15,7 @@ final class SentryEventSanitizer
         'authorization',
         'cookie',
         'set-cookie',
+        'referer',
         'x-forwarded-for',
         'x-real-ip',
     ];
@@ -47,10 +49,27 @@ final class SentryEventSanitizer
             $event->setRequest($request);
         }
 
+        $this->removeFrameVars($event->getStacktrace());
+
+        foreach ($event->getExceptions() as $exception) {
+            $this->removeFrameVars($exception->getStacktrace());
+        }
+
         // Incluso si otra integración añadió user context, Condor no lo envía.
         $event->setUser(null);
 
         return $event;
+    }
+
+    private function removeFrameVars(?Stacktrace $stacktrace): void
+    {
+        if ($stacktrace === null) {
+            return;
+        }
+
+        foreach ($stacktrace->getFrames() as $frame) {
+            $frame->setVars([]);
+        }
     }
 
     private function withoutQuery(string $url): string
