@@ -34,9 +34,26 @@ final readonly class AppVersion
             }
         }
 
+        $fromReleaseFile = $this->readShaFromReleaseFile();
+        if ($fromReleaseFile !== null) {
+            return $fromReleaseFile;
+        }
+
         $fromGit = $this->readShaFromGitHead();
 
         return $fromGit ?? 'dev';
+    }
+
+    private function readShaFromReleaseFile(): ?string
+    {
+        $path = $this->projectDir.'/.release-sha';
+        if (is_link($path) || !is_file($path) || !is_readable($path)) {
+            return null;
+        }
+
+        $sha = trim((string) file_get_contents($path));
+
+        return $this->isValidSha($sha) ? $sha : null;
     }
 
     /**
