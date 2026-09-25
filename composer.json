@@ -29,7 +29,7 @@
   "require-dev": {
     "symfony/browser-kit": "7.4.*",
     "symfony/css-selector": "7.4.*",
-    "symfony/phpunit-bridge": "7.4.*"
+    "symfony/phpunit-bridge": "8.1.*"
   },
   "autoload": {
     "psr-4": {
