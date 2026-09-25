@@ -205,7 +205,18 @@ def external_workflow_finding(
     """Valida el pin de un reusable workflow externo."""
     if FACTORY_V1_WORKFLOW_RE.fullmatch(reference):
         return None
-    if reference.startswith("$/") or "@" not in reference:
+    if reference.startswith("$/"):
+        if (
+            not reference.startswith("$/.github/workflows/")
+            or not reference.endswith(".yml")
+            or "@" in reference
+        ):
+            return (
+                f"{path}: job '{job_name}' usa workflow local inválido: "
+                f"{reference}."
+            )
+        return None
+    if "@" not in reference:
         return f"{path}: job '{job_name}' usa workflow externo sin SHA fijo: {reference}."
     _, ref = reference.rsplit("@", 1)
     if PIN_RE.fullmatch(ref):

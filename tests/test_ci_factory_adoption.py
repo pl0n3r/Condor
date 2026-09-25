@@ -7,6 +7,8 @@ import json
 import unittest
 from pathlib import Path
 
+from scripts.ci_self_audit import job_blocks, job_value
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -67,6 +69,12 @@ class FactoryAdoptionTests(unittest.TestCase):
             "uses: pl0n3r/factory/.github/workflows/ci.yml@v1",
             ci,
         )
+        validar = job_blocks(ci)["validar"]
+        needs = job_value(validar, "needs") or ""
+        for gate in ("factory-ci", "backend-php", "backup-restore", "e2e"):
+            with self.subTest(gate=gate):
+                self.assertIn(gate, needs)
+
         for token in (
             "stack: php",
             "domain: https://www.condorapp.com.co",

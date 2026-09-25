@@ -2,7 +2,7 @@
   "version": 1,
   "review_round_limit": 3,
   "decisions": [
-    {"id":"D-054","status":"active","text":"Migraciones aditivas automáticas con backup previo en post-deploy; restauraciones y rollback deben fallar cerrado."},
+    {"id":"D-054","status":"active","text":"En fase construction, las migraciones versionadas aditivas/expand-compatible solo pueden ejecutarse automáticamente tras dry-run y allowlist completos, backup previo exitoso y CONDOR_AUTO_MIGRATE habilitado; live, CONDOR_AUTO_MIGRATE=0 o cualquier fallo de validación, migración o recheck deben fallar cerrado."},
     {"id":"D-055","status":"active","text":"Durante fase construccion se permiten escrituras autónomas en producción con trazabilidad y backup; SQL destructivo o borrado irreversible requiere autorización explícita."},
     {"id":"D-056","status":"active","text":"Los releases se publican mediante el kit Factory y se validan por versión/SHA exactos."},
     {"id":"D-057","status":"active","text":"Todo Issue y PR debe tener exactamente una etiqueta de tipo, una de prioridad y una de estado."},
