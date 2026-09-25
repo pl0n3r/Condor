@@ -314,6 +314,35 @@ jobs:
       - name: Ejecutar PHPStan nivel 8
         run: vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --no-progress --memory-limit=1G
 
+  rector-dry-run:
+    name: Rector dry-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Preparar PHP 8.5
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Instalar dependencias PHP reproducibles
+        run: |
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "composer install Rector" \
+            -- composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Verificar Rector sin cambios pendientes
+        run: vendor/bin/rector process --dry-run --no-progress-bar
+
   frontend:
     name: Frontend TypeScript / build
     needs: preflight
@@ -902,7 +931,7 @@ jobs:
 
   validar:
     name: Validar
-    needs: [factory-ci, preflight, documentacion, gobierno, coordinacion, pruebas-base, static-analysis, frontend, audit-npm, audit-composer, backend-php, backup-restore, e2e]
+    needs: [factory-ci, preflight, documentacion, gobierno, coordinacion, pruebas-base, static-analysis, rector-dry-run, frontend, audit-npm, audit-composer, backend-php, backup-restore, e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -916,6 +945,7 @@ jobs:
           COORDINACION: ${{ needs.coordinacion.result }}
           PRUEBAS_BASE: ${{ needs.pruebas-base.result }}
           STATIC_ANALYSIS: ${{ needs.static-analysis.result }}
+          RECTOR_DRY_RUN: ${{ needs.rector-dry-run.result }}
           FRONTEND: ${{ needs.frontend.result }}
           AUDIT_NPM: ${{ needs.audit-npm.result }}
           AUDIT_COMPOSER: ${{ needs.audit-composer.result }}
@@ -941,6 +971,7 @@ jobs:
           esac
 
           [[ "$STATIC_ANALYSIS" == "success" ]] || { echo "::error::PHPStan no pasó."; exit 1; }
+          [[ "$RECTOR_DRY_RUN" == "success" ]] || { echo "::error::Rector dry-run no pasó."; exit 1; }
 
           case "$FRONTEND" in
             success|skipped) ;;
@@ -983,6 +1014,7 @@ jobs:
             printf -- '- Motivo: `%s`\n' "$MOTIVO"
             echo "- Pruebas base: **$PRUEBAS_BASE**"
             echo "- PHPStan: **$STATIC_ANALYSIS**"
+            echo "- Rector dry-run: **$RECTOR_DRY_RUN**"
             echo "- Frontend: **$FRONTEND**"
             echo "- Auditoría npm: **$AUDIT_NPM**"
             echo "- Auditoría Composer: **$AUDIT_COMPOSER**"
