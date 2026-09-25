@@ -143,7 +143,9 @@
       "basis": "review_required",
       "retention": "review_required",
       "consent": "review_required",
-      "providers": []
+      "providers": [
+        "sentry"
+      ]
     },
     {
       "id": "diagnostic_shares",
