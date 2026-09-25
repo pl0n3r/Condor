@@ -10,10 +10,11 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 /*
  * Errores de producción hacia Sentry (proyecto Condor en pl0n3r.sentry.io).
  *
- * El DSN solo permite enviar eventos a ese proyecto. SENTRY_DSN puede
- * reemplazarlo y SENTRY_DSN="" desactiva el envío. El SDK se configura sin
- * PII por defecto, sin cuerpos de request y con un before_send que elimina
- * query strings, cookies, datos del request, cabeceras sensibles y user context.
+ * SENTRY_DSN queda vacío por defecto: la integración no envía eventos hasta
+ * que el entorno configure explícitamente el DSN tras la puerta legal vigente.
+ * El SDK se configura sin PII por defecto, sin cuerpos de request y con un
+ * before_send que elimina query strings, cookies, datos del request, cabeceras
+ * sensibles, variables locales de stacktrace y user context.
  */
 return static function (ContainerConfigurator $container): void {
     if ($container->env() !== 'prod' || !class_exists(SentryBundle::class)) {
@@ -30,7 +31,7 @@ return static function (ContainerConfigurator $container): void {
 
     $container->parameters()->set(
         'env(SENTRY_DSN)',
-        'https://f011cbab6e5d3fa8446cba4809159022@o4512139951865856.ingest.us.sentry.io/4512140002918400',
+        '',
     );
 
     $container->extension('sentry', [

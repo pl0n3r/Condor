@@ -20,6 +20,15 @@ class SentryConfigContractTests(unittest.TestCase):
         self.assertIn("'traces_sample_rate' => 0.0", config)
         self.assertNotIn("config/version.php", config)
 
+    def test_sentry_stays_disabled_until_dsn_is_explicitly_configured(self) -> None:
+        config = (ROOT / "config/packages/sentry.php").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "$container->parameters()->set(\n        'env(SENTRY_DSN)',\n        '',\n    );",
+            config,
+        )
+        self.assertNotIn("ingest.us.sentry.io", config)
+
     def test_sentry_is_documented_as_error_incident_provider(self) -> None:
         data = json.loads((ROOT / "datos.yml").read_text(encoding="utf-8"))
         incident = next(
