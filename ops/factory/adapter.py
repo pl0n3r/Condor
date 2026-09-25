@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 HOST_RE = re.compile(r"^(?=.{1,253}$)(?!-)[A-Za-z0-9.-]+(?<!-)$")
 USER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+REMOTE_SHELL = "sh -c"
 
 class AdapterError(RuntimeError): pass
 
@@ -83,7 +84,7 @@ def deploy() -> None:
             'for p in "$root" "$root/releases" "$root/shared" "$root/shared/var" "$root/shared/var/runtime" "$rel"; '
             'do [ ! -L "$p" ] || exit 30; done'
         )
-        remote(ssh,"sh -c",preflight,"condor-deploy-preflight",root,release)
+        remote(ssh,REMOTE_SHELL,preflight,"condor-deploy-preflight",root,release)
         rsync_ssh=f"ssh -i {shlex.quote(str(keyfile))} -p {port} -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile={shlex.quote(str(knownfile))}"
         run(["rsync","-a","--delete","--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r",
              "--exclude=.git/","--exclude=.github/","--exclude=.env","--exclude=.env.*",
@@ -108,7 +109,7 @@ def deploy() -> None:
             'elif [ -e "$cur" ]; then exit 35; fi; '
             'rm -f "$root/current.next"; ln -s "$rel" "$root/current.next"; mv -Tf "$root/current.next" "$cur"'
         )
-        remote(ssh,"sh -c",finalize,"condor-deploy",root,release,commit)
+        remote(ssh,REMOTE_SHELL,finalize,"condor-deploy",root,release,commit)
 
 def rollback() -> None:
     root=release_root()
@@ -121,7 +122,7 @@ def rollback() -> None:
             'release_sha=$(cat "$target/.release-sha"); [ "$target" = "$root/releases/$release_sha" ] || exit 24; '
             'rm -f "$root/current.next"; ln -s "$target" "$root/current.next"; mv -Tf "$root/current.next" "$root/current"'
         )
-        remote(ssh,"sh -c",script,"condor-rollback",root)
+        remote(ssh,REMOTE_SHELL,script,"condor-rollback",root)
 
 STAGES={"build":build,"backup":backup,"migrate":migrate,"deploy":deploy,"rollback":rollback}
 def main() -> int:
