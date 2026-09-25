@@ -1,0 +1,28 @@
+name: Deploy Factory v1 (inactive until cutover)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: vars.FACTORY_DEPLOY_ENABLED == 'true'
+    uses: pl0n3r/factory/.github/workflows/deploy.yml@v1
+    with:
+      domain: https://www.condorapp.com.co
+      health_path: /health
+      version_source: config/version.php
+      version_format: php
+      phase: construccion
+      migration_mode: additive
+      transport: hostinger-ssh
+      hostinger_ssh_host: ${{ vars.HOSTINGER_SSH_HOST }}
+      hostinger_ssh_user: ${{ vars.HOSTINGER_SSH_USER }}
+      hostinger_ssh_port: ${{ vars.HOSTINGER_SSH_PORT }}
+      hostinger_release_root: ${{ vars.HOSTINGER_RELEASE_ROOT }}
+    secrets:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      HOSTINGER_KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
