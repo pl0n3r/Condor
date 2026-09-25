@@ -1,31 +1,30 @@
-# Condor App — Snapshot operativo · Factory v1 E2E V 0.1.44
+# Condor App — Snapshot operativo · Dependabot V 0.1.45
 
-> **Candidato:** Issue #228 · prueba end-to-end y cierre de adopción Factory v1.
+> **Candidato:** Issue #208 · actualizaciones agrupadas de Composer, npm y GitHub Actions.
 
-Condor permanece en **construcción**. V0.1.44 es un corte deliberadamente mínimo para ejercer en serie el `main` real, los gates Factory/Condor, el release observable y la verificación productiva exacta sin introducir cambios funcionales ni de esquema.
+Condor permanece en **construcción**. V0.1.45 recupera el PR histórico #209 sobre el `main` GREEN V0.1.44 y añade únicamente mantenimiento automatizado de dependencias; no cambia runtime, esquema, secretos ni autoridad productiva.
 
 ## Alcance
-- ejecutar CI Factory v1, política, coordinación y gates específicos de Condor sobre el HEAD exacto del PR;
-- integrar serialmente sobre el `main` real;
-- verificar después del merge versión `0.1.44`, SHA exacto y esquema sano mediante el observer;
-- mantener probado el contrato fail-closed de backup/migración y rollback exclusivo de artefacto;
-- documentar explícitamente los remanentes reales de #188 y #190 antes de cerrar el épico #192.
+- habilitar Dependabot para Composer, npm y GitHub Actions;
+- agrupar actualizaciones minor/patch con frecuencia semanal los lunes;
+- limitar a tres PRs abiertos por ecosistema;
+- aplicar clasificación inicial canónica de tipo, prioridad y estado a los PRs de Dependabot;
+- conservar Factory v1, CI Condor, release, observer y deploy reversible sin cambios funcionales.
 
 ## Seguridad y reversión
-- no añade migraciones ni SQL;
-- no restaura automáticamente la base de datos;
-- no cambia DNS, plan de Hostinger ni secretos;
-- el caller reusable de Factory solo puede operar con su configuración segura existente; no se inventan variables/secretos faltantes;
-- si el release productivo no coincide exactamente con versión/SHA o falla smoke, no se declara GREEN y #192 permanece abierto.
+- Dependabot solo propone PRs; no habilita automerge;
+- ningún token, secreto, dato productivo ni permiso adicional se añade al repositorio;
+- revertir este corte elimina `.github/dependabot.yml` y vuelve al comportamiento anterior;
+- este candidato incrementa versión a 0.1.45 para mantener identidad única versión/SHA tras el merge.
 
 ## Evidencia base
-- #226: adopción del núcleo/workflows Factory v1 completada;
-- #227 / PR #236: adapters deploy/rollback V0.1.43 integrados y producción GREEN;
-- #228: cierre E2E de TANDA 2, condicionado a evidencia exact-main y productiva.
+- `main@30ed70c265653291fb768f111a30c72826c955cb` · V0.1.44;
+- TANDA 2 / Factory v1 completada en #228;
+- CI exact-main, Release Factory y Observer productivo de V0.1.44: GREEN;
+- reserva v2 #208: `882f4656-e2a0-4710-b9b1-a4faa5fdde85`.
 
 ## Fuentes de verdad
 - [AGENTES.md](./AGENTES.md)
 - [ESPECIFICACIONES.md](./ESPECIFICACIONES.md)
 - Roadmap: Issue #1
-- Épico Factory: #192
-- Slice actual: #228
+- Slice actual: #208
