@@ -19,7 +19,7 @@
 | CI exact-main base | ✅ **success** | run `36063691913` |
 | Push on main base | ✅ **success** | run `36063690840` |
 | Release base | ✅ **success** | run `36063691909` |
-| Factory común | 🚧 **CANDIDATO** | CI base, coordinador, etiquetas, política y release consumidos desde `factory@v1` |
+| Factory común | 🚧 **CANDIDATO** | CI PHP base, coordinador, etiquetas, política y release consumidos desde `factory@v1` |
 | Decisiones como código | 🚧 **CANDIDATO** | `decisiones.yml` con D-054…D-058 y límite de 3 rondas |
 | Gates específicos Condor | ✅ **PRESERVADOS EN DISEÑO** | MariaDB, contratos, frontend, auditorías, backup/restore y Playwright siguen en CI local |
 | Producción objetivo | ⏳ **NO TOCADA EN ESTE SLICE** | deploy/rollback Factory queda en #227 |
@@ -28,7 +28,7 @@
 
 - crea `decisiones.yml` como contrato normativo verificable por Factory;
 - reduce `AGENTES.md` a la capa propia de Condor y referencia el núcleo Factory v1;
-- añade CI Factory reusable en paralelo como gate base PHP/Node y lo vuelve requisito del agregado `Validar`; Symfony/MariaDB permanece en el CI local;
+- añade CI Factory reusable en paralelo como gate PHP base y lo vuelve requisito del agregado `Validar`; Node/TypeScript, Symfony/MariaDB, contratos y Playwright permanecen en los gates locales para evitar que el `npm ci` reusable contamine la validación documental con `node_modules`;
 - consume el coordinador canónico desde `factory@v1` mediante un adaptador por evento con permisos mínimos; etiquetas, política y release usan los reusable workflows Factory;
 - sustituye la ejecución de la coordinación local en CI por la validación reusable Factory;
 - adapta la autoauditoría para permitir exclusivamente el canal mayor aprobado `factory@v1`, manteniendo SHA fijo para otros workflows externos;
@@ -52,7 +52,7 @@
 
 ## Invariantes
 
-- Factory v1 reemplaza únicamente lógica común; la cobertura específica de Condor no se elimina.
+- Factory v1 reemplaza únicamente lógica común; la cobertura específica de Condor no se elimina. Node queda deshabilitado en el CI Factory porque su `npm ci` hace que `npm test` vea documentación de `node_modules`; la cobertura Node real permanece en los gates locales.
 - Los reusable workflows Factory se consumen por el canal compatible `@v1`; otros workflows externos siguen requiriendo SHA de 40 caracteres.
 - No se heredan secretos a Factory.
 - `Validar` no puede quedar verde si falla el CI Factory.

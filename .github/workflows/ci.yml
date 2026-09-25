@@ -25,8 +25,7 @@ jobs:
       label_language: es
       phase: construccion
       php_version: '8.5'
-      node_enabled: true
-      node_version: '24'
+      node_enabled: false
       working_directory: .
       kit_ref: v1
 
