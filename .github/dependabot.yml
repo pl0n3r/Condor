@@ -1,0 +1,42 @@
+version: 2
+# Actualizaciones agrupadas y semanales: pocos PRs, para no cargar GitHub ni a los agentes.
+updates:
+  - package-ecosystem: "composer"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    groups:
+      composer-minor:
+        update-types: ["minor", "patch"]
+    labels:
+      - "tipo: mejora"
+      - "prioridad: media"
+      - "estado: en revisión"
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    groups:
+      npm-minor:
+        update-types: ["minor", "patch"]
+    labels:
+      - "tipo: mejora"
+      - "prioridad: media"
+      - "estado: en revisión"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    groups:
+      github-actions-minor:
+        update-types: ["minor", "patch"]
+    labels:
+      - "tipo: mejora"
+      - "prioridad: media"
+      - "estado: en revisión"
