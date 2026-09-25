@@ -218,15 +218,37 @@ jobs:
     name: Validar coordinación Factory v1
     needs: preflight
     if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       issues: read
       pull-requests: read
-    uses: pl0n3r/factory/.github/workflows/coordinacion.yml@v1
-    with:
-      operation: validate
-      pr_number: ${{ github.event.pull_request.number }}
-      require_reservation: true
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Descargar kit Factory v1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: pl0n3r/factory
+          ref: v1
+          path: .factory
+          persist-credentials: false
+
+      - name: Validar reserva y colisiones con coordinador Factory
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORIO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: >-
+          python3 .factory/scripts/coordinar_trabajo.py validar-pr
+          --repo "$REPOSITORIO"
+          --pr "$PR"
+          --require-reservation
 
   pruebas-base:
     name: Pruebas de contrato e integración

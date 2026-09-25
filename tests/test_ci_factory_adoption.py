@@ -54,12 +54,13 @@ class FactoryAdoptionTests(unittest.TestCase):
     def test_local_coordination_copy_is_not_executed_by_active_workflows(self) -> None:
         ci = self.read(".github/workflows/ci.yml")
         coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
-        self.assertNotIn("scripts/coordinar_trabajo.py", ci)
+        self.assertNotIn("python3 scripts/coordinar_trabajo.py", ci)
         self.assertNotIn("tests/test_coordinar_trabajo.py", ci)
-        self.assertNotIn("scripts/coordinar_trabajo.py", coordination)
+        self.assertNotIn("python3 scripts/coordinar_trabajo.py", coordination)
+        self.assertIn(".factory/scripts/coordinar_trabajo.py validar-pr", ci)
         self.assertIn(
             "pl0n3r/factory/.github/workflows/coordinacion.yml@v1",
-            ci,
+            coordination,
         )
 
     def test_condor_ci_requires_factory_without_dropping_specific_gates(self) -> None:
