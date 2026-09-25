@@ -1,0 +1,92 @@
+name: Bootstrap estático issue 244
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - composer.json
+      - phpstan.neon.dist
+      - rector.php
+      - .github/workflows/issue-244-bootstrap.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: issue-244-bootstrap-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resolver:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'trabajo/issue-244'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Descargar rama reservada
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+
+      - name: Preparar PHP 8.5
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Resolver herramientas de análisis
+        run: |
+          set -euo pipefail
+          composer update \
+            phpstan/phpstan \
+            phpstan/phpstan-doctrine \
+            phpstan/phpstan-symfony \
+            rector/rector \
+            --with-all-dependencies \
+            --no-interaction \
+            --prefer-dist \
+            --no-progress
+          composer validate --strict
+
+      - name: Generar y verificar baseline PHPStan
+        run: |
+          set -euo pipefail
+          vendor/bin/phpstan analyse \
+            --configuration=phpstan.neon.dist \
+            --generate-baseline=phpstan-baseline.neon \
+            --no-progress
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("phpstan.neon.dist")
+          text = path.read_text(encoding="utf-8")
+          needle = "includes:\n"
+          include = "    - phpstan-baseline.neon\n"
+          if include not in text:
+              text = text.replace(needle, needle + include, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+          vendor/bin/phpstan analyse \
+            --configuration=phpstan.neon.dist \
+            --no-progress
+
+      - name: Inspeccionar Rector sin bloquear este slice
+        run: |
+          set +e
+          vendor/bin/rector process --dry-run --no-progress-bar > /tmp/rector-output.txt 2>&1
+          status=$?
+          set -e
+          echo "RECTOR_EXIT_STATUS=$status"
+          tail -n 120 /tmp/rector-output.txt
+
+      - name: Fijar lock y baseline en la rama reservada
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add composer.lock phpstan-baseline.neon phpstan.neon.dist
+          git diff --cached --quiet && exit 0
+          git commit -m "build(static): fijar lock y baseline PHPStan"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
