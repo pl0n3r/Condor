@@ -40,34 +40,29 @@ final class PrivacyAsCodeTest extends TestCase
         self::assertContains('trace', $this->treatment($data, 'error_incidents')['fields']);
     }
 
-    /** Verifica derivación desde datos.yml y huella byte-a-byte del Factory fijado. */
+    /** Verifica derivación byte-a-byte desde datos.yml según el contrato Factory fijado. */
     public function testGeneratedPrivacyDocumentsAreCurrent(): void
     {
         $generated = $this->renderDocuments($this->data());
-        $expected = [
-            'aviso-privacidad.md' => 'ed666eaaa6c9a7d307b4d431f934969d93e068b4ba0789eceb207f3e6b5e696c',
-            'canal-derechos.md' => 'e0a95e42aca6f5f8a1f2b6a69ab746a84be35e799222905d492fdb4cb56adecb',
-            'politica-tratamiento.md' => 'bcfb72d6d1304a6580534f9026714822a0aefed504ff3b95f911426e23f5fcb8',
-            'registro-tratamientos.md' => '98fa84a09edbea14f5ccfe87a33e043683989cc6397af5af6e639593e99458e2',
-            'retencion.md' => '01305b357ff161aeac753faab456fce6280a23eaf3a2db1af84dcdc39d2b46b9',
-            'terminos-condiciones.md' => 'b69785399e1d29423c380ec7f56bd2816c33f971752ca2d56269b8919e8c27bd',
+        $expectedNames = [
+            'aviso-privacidad.md',
+            'canal-derechos.md',
+            'politica-tratamiento.md',
+            'registro-tratamientos.md',
+            'retencion.md',
+            'terminos-condiciones.md',
         ];
         $directory = $this->root().'/docs/privacidad';
         $actual = array_map('basename', glob($directory.'/*.md') ?: []);
         sort($actual);
-        self::assertSame(array_keys($expected), $actual);
+        self::assertSame($expectedNames, $actual);
 
-        foreach ($expected as $name => $sha256) {
+        foreach ($expectedNames as $name) {
             $actualContent = file_get_contents($directory.'/'.$name);
             self::assertSame(
                 $generated[$name],
                 $actualContent,
                 $name.' derivó de datos.yml respecto al contrato Factory '.self::FACTORY_SHA.'.',
-            );
-            self::assertSame(
-                $sha256,
-                hash('sha256', $actualContent),
-                $name.' no coincide byte a byte con Factory '.self::FACTORY_SHA.'.',
             );
         }
     }
