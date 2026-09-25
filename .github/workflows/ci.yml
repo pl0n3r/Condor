@@ -15,6 +15,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  factory-ci:
+    name: CI Factory v1
+    uses: pl0n3r/factory/.github/workflows/ci.yml@v1
+    with:
+      stack: php
+      domain: https://www.condorapp.com.co
+      version_source: config/version.php
+      label_language: es
+      phase: construccion
+      php_version: '8.5'
+      node_enabled: false
+      working_directory: .
+      kit_ref: v1
+
   preflight:
     name: Preflight
     runs-on: ubuntu-latest
@@ -163,12 +177,10 @@ jobs:
             .github/workflows/coordinacion-trabajo.yml \
             .github/workflows/sonar-annotation-relay.yml \
             .github/workflows/ci-throughput-telemetry.yml \
-            scripts/coordinar_trabajo.py \
             scripts/ci_change_classifier.py \
             scripts/ci_retry.py \
             scripts/ci_self_audit.py \
             scripts/ci_throughput_report.py \
-            tests/test_coordinar_trabajo.py \
             tests/test_ci_change_classifier.py \
             tests/test_ci_retry.py \
             tests/test_ci_self_audit.py \
@@ -202,8 +214,9 @@ jobs:
           done
 
   coordinacion:
-    name: Validar coordinación
+    name: Validar coordinación Factory v1
     needs: preflight
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -217,11 +230,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Probar reglas de coordinación
-        run: python3 -m unittest tests/test_coordinar_trabajo.py
+      - name: Descargar kit Factory v1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: pl0n3r/factory
+          ref: v1
+          path: .factory
+          persist-credentials: false
 
-      - name: Validar reserva y colisiones
-        if: github.event_name == 'pull_request'
+      - name: Validar reserva y colisiones con coordinador Factory
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORIO: ${{ github.repository }}
@@ -229,16 +246,16 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          argumentos=()
-          if git cat-file -e "$BASE_SHA:.github/workflows/coordinacion-trabajo.yml" 2>/dev/null; then
-            argumentos+=(--require-reservation)
+          args=()
+          if git cat-file -e "$BASE_SHA:decisiones.yml" 2>/dev/null; then
+            args+=(--require-reservation)
           else
-            echo "Bootstrap: la base aún no contiene coordinación multiagente; se validan rama, Issue y colisiones."
+            echo "Bootstrap TANDA 2: la base legacy aún no tiene decisiones.yml; se validan rama, Issue y colisiones sin fingerprint."
           fi
-          python3 scripts/coordinar_trabajo.py validar-pr \
+          python3 .factory/scripts/coordinar_trabajo.py validar-pr \
             --repo "$REPOSITORIO" \
             --pr "$PR" \
-            "${argumentos[@]}"
+            "${args[@]}"
 
   pruebas-base:
     name: Pruebas de contrato e integración
@@ -849,13 +866,14 @@ jobs:
 
   validar:
     name: Validar
-    needs: [preflight, documentacion, gobierno, coordinacion, pruebas-base, frontend, audit-npm, audit-composer, backend-php, backup-restore, e2e]
+    needs: [factory-ci, preflight, documentacion, gobierno, coordinacion, pruebas-base, frontend, audit-npm, audit-composer, backend-php, backup-restore, e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Consolidar gates
         env:
+          FACTORY_CI: ${{ needs.factory-ci.result }}
           PREFLIGHT: ${{ needs.preflight.result }}
           DOCUMENTACION: ${{ needs.documentacion.result }}
           GOBIERNO: ${{ needs.gobierno.result }}
@@ -873,9 +891,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          [[ "$FACTORY_CI" == "success" ]] || { echo "::error::CI Factory v1 no pasó."; exit 1; }
           [[ "$PREFLIGHT" == "success" ]] || { echo "::error::Preflight no pasó."; exit 1; }
           [[ "$GOBIERNO" == "success" ]] || { echo "::error::Gobierno no pasó."; exit 1; }
-          [[ "$COORDINACION" == "success" ]] || { echo "::error::Coordinación no pasó."; exit 1; }
+          case "$COORDINACION" in
+            success|skipped) ;;
+            *) echo "::error::Coordinación Factory no pasó."; exit 1 ;;
+          esac
           case "$PRUEBAS_BASE" in
             success|skipped) ;;
             *) echo "::error::Pruebas base no pasaron."; exit 1 ;;
@@ -912,6 +934,7 @@ jobs:
           {
             echo "## Resultado CI Condor"
             echo
+            echo "- CI Factory v1: **$FACTORY_CI**"
             echo "- Preflight: **$PREFLIGHT**"
             echo "- Documentación: **$DOCUMENTACION**"
             echo "- Gobierno: **$GOBIERNO**"
