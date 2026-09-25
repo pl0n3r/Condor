@@ -81,12 +81,18 @@ Condor conserva como extensión local mientras sigan aportando cobertura propia:
 - contratos e integración;
 - TypeScript/build;
 - auditorías npm/Composer;
+- análisis estático PHP con PHPStan nivel 8 + baseline versionada;
 - backend PHP/MariaDB;
 - backup + restauración real;
 - Playwright/runtime;
 - observer y transición productiva hasta el slice de deploy/rollback #227.
 
 El check agregado `Validar` debe exigir el CI Factory y los gates locales aplicables. Un check `skipped` solo cuenta cuando el clasificador o el contexto demuestra que no aplica.
+
+Antes de un push que toque PHP o tooling:
+- `vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --no-progress --memory-limit=1G` debe quedar limpio contra la baseline vigente.
+- `vendor/bin/rector process --dry-run --no-progress-bar` se usa localmente para inspección; no es gate obligatorio hasta completar #245.
+- La baseline de PHPStan representa deuda heredada, no permiso para añadir errores nuevos.
 
 ## 6. Versionado y entrega
 
