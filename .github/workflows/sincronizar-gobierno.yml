@@ -1,73 +1,62 @@
-name: Gobierno GitHub (V 0.1.0)
+name: Etiquetas Factory v1
 
 on:
   push:
     branches: [main]
-    paths:
-      - ".github/labels.json"
-      - ".github/workflows/sincronizar-gobierno.yml"
   workflow_dispatch:
+  schedule:
+    - cron: '41 4 * * *'
+  issues:
+    types: [opened, edited, reopened, labeled, unlabeled]
+  pull_request:
+    types: [opened, edited, reopened, ready_for_review, labeled, unlabeled]
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
-  sincronizar:
-    name: Sincronizar labels y milestone
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    steps:
-      - name: Descargar repositorio
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
+  sync:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    uses: pl0n3r/factory/.github/workflows/etiquetas.yml@v1
+    with:
+      mode: sync
+      language: es
 
-      - name: Crear o actualizar labels en español
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
+  validar-issue:
+    if: github.event_name == 'issues'
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    uses: pl0n3r/factory/.github/workflows/etiquetas.yml@v1
+    with:
+      mode: validate
+      language: es
+      issue_number: ${{ github.event.issue.number }}
 
-          jq -c '.[]' .github/labels.json | while read -r item; do
-            nombre="$(jq -r '.name' <<<"$item")"
-            color="$(jq -r '.color' <<<"$item")"
-            descripcion="$(jq -r '.description' <<<"$item")"
-            gh label create "$nombre"               --repo "$GITHUB_REPOSITORY"               --color "$color"               --description "$descripcion"               --force
-          done
+  validar-pr:
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    uses: pl0n3r/factory/.github/workflows/etiquetas.yml@v1
+    with:
+      mode: validate
+      language: es
+      issue_number: ${{ github.event.pull_request.number }}
 
-          for etiqueta in "bug" "documentation" "duplicate" "enhancement" "good first issue" "help wanted" "invalid" "question" "wontfix"; do
-            gh label delete "$etiqueta" --repo "$GITHUB_REPOSITORY" --yes 2>/dev/null || true
-          done
-
-      - name: Crear milestone inicial
-        id: milestone
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TITULO: "Primera entrega (V 0.1.0)"
-        run: |
-          set -euo pipefail
-
-          numero="$(
-            gh api --paginate "repos/$GITHUB_REPOSITORY/milestones?state=all&per_page=100"               --jq '.[] | select(.title == env.TITULO) | .number' 2>/dev/null | head -n1
-          )"
-
-          if [[ -z "$numero" ]]; then
-            respuesta="$(
-              gh api --method POST "repos/$GITHUB_REPOSITORY/milestones"                 -f title="$TITULO"                 -f description="Primera etapa de tracking de Condor antes del primer deploy real."
-            )"
-            numero="$(jq -r '.number' <<<"$respuesta")"
-          fi
-
-          echo "numero=$numero" >> "$GITHUB_OUTPUT"
-          echo "Milestone: $TITULO (#$numero)"
-
-      - name: Resumen de gobierno
-        run: |
-          {
-            echo "## Gobierno GitHub"
-            echo
-            echo '- Labels sincronizados desde `.github/labels.json`.'
-            echo "- Labels predeterminados en inglés retirados cuando existían."
-            echo "- Milestone: **Primera entrega (V 0.1.0)** (#${{ steps.milestone.outputs.numero }})."
-          } >> "$GITHUB_STEP_SUMMARY"
+  sweep:
+    if: github.event_name == 'schedule'
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    uses: pl0n3r/factory/.github/workflows/etiquetas.yml@v1
+    with:
+      mode: sweep
+      language: es

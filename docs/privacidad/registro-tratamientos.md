@@ -71,7 +71,7 @@ Producto: `pl0n3r/Condor`
 - Finalidad: `error_diagnostics`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
-- Proveedores: ninguno_declarado
+- Proveedores: `sentry`
 - Retención: `review_required`
 
 ## notification_delivery

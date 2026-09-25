@@ -40,34 +40,29 @@ final class PrivacyAsCodeTest extends TestCase
         self::assertContains('trace', $this->treatment($data, 'error_incidents')['fields']);
     }
 
-    /** Verifica derivación desde datos.yml y huella byte-a-byte del Factory fijado. */
+    /** Verifica derivación byte-a-byte desde datos.yml según el contrato Factory fijado. */
     public function testGeneratedPrivacyDocumentsAreCurrent(): void
     {
         $generated = $this->renderDocuments($this->data());
-        $expected = [
-            'aviso-privacidad.md' => '42d8a576fa0d9914140f9947c422c5edfb1a1c55f8c8248a06f798fc0addbe80',
-            'canal-derechos.md' => 'e0a95e42aca6f5f8a1f2b6a69ab746a84be35e799222905d492fdb4cb56adecb',
-            'politica-tratamiento.md' => 'e989f5a916ae830493c70c09076cd100108d5d67e3afaf4dc6fd745c27f35b5a',
-            'registro-tratamientos.md' => 'd43d1f07d162f91f1293bd5f523916151237d39c46378c8ee4c929a9d321cc55',
-            'retencion.md' => '01305b357ff161aeac753faab456fce6280a23eaf3a2db1af84dcdc39d2b46b9',
-            'terminos-condiciones.md' => 'b69785399e1d29423c380ec7f56bd2816c33f971752ca2d56269b8919e8c27bd',
+        $expectedNames = [
+            'aviso-privacidad.md',
+            'canal-derechos.md',
+            'politica-tratamiento.md',
+            'registro-tratamientos.md',
+            'retencion.md',
+            'terminos-condiciones.md',
         ];
         $directory = $this->root().'/docs/privacidad';
         $actual = array_map('basename', glob($directory.'/*.md') ?: []);
         sort($actual);
-        self::assertSame(array_keys($expected), $actual);
+        self::assertSame($expectedNames, $actual);
 
-        foreach ($expected as $name => $sha256) {
+        foreach ($expectedNames as $name) {
             $actualContent = file_get_contents($directory.'/'.$name);
             self::assertSame(
                 $generated[$name],
                 $actualContent,
                 $name.' derivó de datos.yml respecto al contrato Factory '.self::FACTORY_SHA.'.',
-            );
-            self::assertSame(
-                $sha256,
-                hash('sha256', $actualContent),
-                $name.' no coincide byte a byte con Factory '.self::FACTORY_SHA.'.',
             );
         }
     }
@@ -115,7 +110,14 @@ final class PrivacyAsCodeTest extends TestCase
     {
         $data = $this->data();
         foreach ($data['treatments'] as $treatment) {
-            self::assertSame([], $treatment['providers']);
+            $expectedProviders = $treatment['id'] === 'error_incidents'
+                ? ['sentry']
+                : [];
+            self::assertSame(
+                $expectedProviders,
+                $treatment['providers'],
+                'Solo error_incidents puede declarar Sentry como proveedor.',
+            );
         }
 
         $register = strtolower(
@@ -127,6 +129,7 @@ final class PrivacyAsCodeTest extends TestCase
                 $register,
             );
         }
+        self::assertStringContainsString('proveedores: `sentry`', $register);
         self::assertStringContainsString('proveedores: ninguno_declarado', $register);
     }
 

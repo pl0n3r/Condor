@@ -112,6 +112,34 @@ jobs:
             findings = audit_workflow(path)
         self.assertTrue(any("workflow externo" in item for item in findings))
 
+    def test_allows_factory_v1_job_level_reusable_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Factory
+on: pull_request
+jobs:
+  ci:
+    uses: pl0n3r/factory/.github/workflows/ci.yml@v1
+""",
+            )
+            findings = audit_workflow(path)
+        self.assertFalse(any("workflow externo" in item for item in findings))
+
+    def test_rejects_factory_unapproved_job_level_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Factory
+on: pull_request
+jobs:
+  ci:
+    uses: pl0n3r/factory/.github/workflows/ci.yml@main
+""",
+            )
+            findings = audit_workflow(path)
+        self.assertTrue(any("workflow externo" in item for item in findings))
+
     def test_allows_local_job_level_reusable_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self.write_workflow(
@@ -125,6 +153,37 @@ jobs:
             )
             findings = audit_workflow(path)
         self.assertFalse(any("workflow local" in item for item in findings))
+
+    def test_allows_dollar_local_job_level_reusable_workflow(self) -> None:
+        """Acepta $/ solo para reusable workflows locales del mismo commit."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Good
+on: push
+jobs:
+  reuse:
+    uses: $/.github/workflows/reuse.yml
+""",
+            )
+            findings = audit_workflow(path)
+        self.assertFalse(any("workflow local" in item for item in findings))
+        self.assertFalse(any("workflow externo" in item for item in findings))
+
+    def test_rejects_invalid_dollar_local_workflow_reference(self) -> None:
+        """Rechaza $/ fuera de .github/workflows o con un ref explícito."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Bad
+on: push
+jobs:
+  reuse:
+    uses: $/other/reuse.yml@main
+""",
+            )
+            findings = audit_workflow(path)
+        self.assertTrue(any("workflow local inválido" in item for item in findings))
 
     def test_detects_continue_on_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

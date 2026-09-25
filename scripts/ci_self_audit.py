@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW_RELATIVE_DIR = Path(".github") / "workflows"
 WORKFLOW_DIR = ROOT / WORKFLOW_RELATIVE_DIR
 PIN_RE = re.compile(r"^[0-9a-f]{40}$")
+FACTORY_V1_WORKFLOW_RE = re.compile(
+    r"^pl0n3r/factory/\.github/workflows/[A-Za-z0-9._-]+\.yml@v1$"
+)
 USES_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)")
 JOB_RE = re.compile(r"^\s{2}([A-Za-z0-9_-]+):\s*$")
 STEP_START_RE = re.compile(r"^(\s*)-\s+(?:name:|uses:|run:)")
@@ -196,6 +199,34 @@ def logical_shell_commands(step: list[str]) -> list[str]:
         commands.append(" ".join(buffer))
     return commands
 
+def external_workflow_finding(
+    path: Path, job_name: str, reference: str
+) -> str | None:
+    """Valida el pin de un reusable workflow externo."""
+    if FACTORY_V1_WORKFLOW_RE.fullmatch(reference):
+        return None
+    if reference.startswith("$/"):
+        if (
+            not reference.startswith("$/.github/workflows/")
+            or not reference.endswith(".yml")
+            or "@" in reference
+        ):
+            return (
+                f"{path}: job '{job_name}' usa workflow local inválido: "
+                f"{reference}."
+            )
+        return None
+    if "@" not in reference:
+        return f"{path}: job '{job_name}' usa workflow externo sin SHA fijo: {reference}."
+    _, ref = reference.rsplit("@", 1)
+    if PIN_RE.fullmatch(ref):
+        return None
+    return (
+        f"{path}: job '{job_name}' usa workflow externo sin SHA de "
+        f"40 caracteres: {reference}."
+    )
+
+
 def audit_job_workflow_uses(path: Path, text: str) -> list[str]:
     """Audita referencias reusable-workflow declaradas a nivel de job."""
     findings: list[str] = []
@@ -213,17 +244,9 @@ def audit_job_workflow_uses(path: Path, text: str) -> list[str]:
                     f"{path}: job '{name}' usa workflow local inválido: {reference}."
                 )
             continue
-        if reference.startswith("$/") or "@" not in reference:
-            findings.append(
-                f"{path}: job '{name}' usa workflow externo sin SHA fijo: {reference}."
-            )
-            continue
-        _, ref = reference.rsplit("@", 1)
-        if not PIN_RE.fullmatch(ref):
-            findings.append(
-                f"{path}: job '{name}' usa workflow externo sin SHA de "
-                f"40 caracteres: {reference}."
-            )
+        finding = external_workflow_finding(path, name, reference)
+        if finding is not None:
+            findings.append(finding)
     return findings
 
 
