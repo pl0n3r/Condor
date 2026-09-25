@@ -22,9 +22,12 @@ class FactoryAdoptionTests(unittest.TestCase):
         self.assertEqual(payload["version"], 1)
         self.assertEqual(payload["review_round_limit"], 3)
         decisions = {item["id"]: item for item in payload["decisions"]}
-        self.assertEqual(set(decisions), {"D-054", "D-055", "D-056", "D-057", "D-058"})
+        self.assertEqual(set(decisions), {"D-054", "D-055", "D-056", "D-057", "D-058", "D-059"})
         self.assertTrue(all(item["status"] == "active" for item in decisions.values()))
         self.assertIn("backup previo", decisions["D-054"]["text"])
+        self.assertIn("datos.yml", decisions["D-059"]["text"])
+        self.assertIn("puerta legal", decisions["D-059"]["text"])
+        self.assertIn("[COMPLETAR POR EL DUEÑO]", decisions["D-059"]["text"])
 
     def test_agent_manual_consumes_factory_core_and_keeps_condor_layer(self) -> None:
         manual = self.read("AGENTES.md")

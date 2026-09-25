@@ -20,7 +20,7 @@
 | Push on main base | ✅ **success** | run `36063690840` |
 | Release base | ✅ **success** | run `36063691909` |
 | Factory común | 🚧 **CANDIDATO** | CI PHP base, coordinador, etiquetas, política y release consumidos desde `factory@v1` |
-| Decisiones como código | 🚧 **CANDIDATO** | `decisiones.yml` con D-054…D-058 y límite de 3 rondas |
+| Decisiones como código | 🚧 **CANDIDATO** | `decisiones.yml` con D-054…D-059 y límite de 3 rondas |
 | Gates específicos Condor | ✅ **PRESERVADOS EN DISEÑO** | MariaDB, contratos, frontend, auditorías, backup/restore y Playwright siguen en CI local |
 | Producción objetivo | ⏳ **NO TOCADA EN ESTE SLICE** | deploy/rollback Factory queda en #227 |
 
@@ -30,7 +30,7 @@
 - reduce `AGENTES.md` a la capa propia de Condor y referencia el núcleo Factory v1;
 - añade CI Factory reusable en paralelo como gate PHP base y lo vuelve requisito del agregado `Validar`; Node/TypeScript, Symfony/MariaDB, contratos y Playwright permanecen en los gates locales para evitar que el `npm ci` reusable contamine la validación documental con `node_modules`;
 - consume el coordinador canónico desde `factory@v1` mediante un adaptador por evento con permisos mínimos; etiquetas, política y release usan los reusable workflows Factory;
-- sustituye la ejecución de la coordinación local en CI por la validación reusable Factory;
+- sustituye la ejecución de la coordinación local en CI por la validación reusable Factory y elimina la implementación/test locales ya supersedidos;
 - adapta la autoauditoría para permitir exclusivamente el canal mayor aprobado `factory@v1`, manteniendo SHA fijo para otros workflows externos;
 - mantiene intactos los gates específicos de Condor y no modifica datos, esquema ni runtime de producto.
 
@@ -45,9 +45,11 @@
 - `config/version.php`
 - `decisiones.yml`
 - `scripts/ci_self_audit.py`
+- `scripts/coordinar_trabajo.py` — eliminado; sustituido por Factory v1
 - `tests/contract/test_tooling_contract.py`
 - `tests/test_ci_factory_adoption.py`
 - `tests/test_ci_self_audit.py`
+- `tests/test_coordinar_trabajo.py` — eliminado junto con la copia local del coordinador
 - `README.md`
 
 ## Invariantes
@@ -56,7 +58,7 @@
 - Los reusable workflows Factory se consumen por el canal compatible `@v1`; otros workflows externos siguen requiriendo SHA de 40 caracteres.
 - No se heredan secretos a Factory.
 - `Validar` no puede quedar verde si falla el CI Factory.
-- La coordinación activa ya no ejecuta la copia local `scripts/coordinar_trabajo.py`; usa `.factory/scripts/coordinar_trabajo.py` desde `factory@v1`. El PR bootstrap #226 valida la reserva legacy sin fingerprint y los PR siguientes vuelven a exigir fingerprint automáticamente al detectar `decisiones.yml` en la base.
+- La coordinación activa usa `.factory/scripts/coordinar_trabajo.py` desde `factory@v1`; la copia local y su suite fueron retiradas. El PR bootstrap #226 valida la reserva legacy sin fingerprint y los PR siguientes vuelven a exigir fingerprint automáticamente al detectar `decisiones.yml` en la base.
 - Merge/CI verde no equivalen a producción validada.
 - #227 concentra deploy/rollback Hostinger y #228 la prueba end-to-end/cierre del épico #192.
 
