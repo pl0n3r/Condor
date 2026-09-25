@@ -3,6 +3,7 @@ import { AccessManagement } from './AccessManagement';
 import { CatalogManagement } from './CatalogManagement';
 import { InventoryManagement } from './InventoryManagement';
 import { CommerceManagement } from './CommerceManagement';
+import { OrdersManagement } from './OrdersManagement';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
 import { contextPath } from './api';
@@ -136,6 +137,7 @@ export function AdminApp({
         { href: '#catalog', label: 'Catálogo' },
         { href: '#inventory', label: 'Inventario' },
         { href: '#commerce', label: 'Comercial' },
+        { href: '#orders', label: 'Pedidos' },
         { href: '#roles', label: 'Roles y permisos' },
       ]}
     >
@@ -276,6 +278,13 @@ export function AdminApp({
 
           <CommerceManagement
             key={'commerce-' + context.data.active_branch.id}
+            branchId={context.data.active_branch.id}
+            permissions={context.data.permissions}
+            csrfToken={accessToken}
+          />
+
+          <OrdersManagement
+            key={'orders-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}

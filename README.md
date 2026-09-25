@@ -1,75 +1,66 @@
-# Condor App — Snapshot operativo · recuperación V 0.1.41
+# Condor App — Snapshot operativo · candidato V 0.1.42
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** corregir la identidad release↔SHA después de que #230 desplegara un SHA nuevo conservando V 0.1.40, ya publicada para otro commit. Este hotfix no cambia Sentry ni datos; solo asigna una versión nueva al estado ya desplegado.
+> **Objetivo actual:** completar el slice de pedidos compartido por Admin y e-commerce con reservas transaccionales de inventario, aislamiento por sede y defensas contra abuso del checkout anónimo.
 
 <p align="center">
-  <strong>Última producción formalmente GREEN:</strong> V 0.1.40 · `8c52dc4fefab9ac16722ec11ea09d52359008030` ·
-  <strong>Estado observado sin release único:</strong> `025a3ed10d87a83ab9686202abac1a55978855dc` ·
-  <strong>Candidato de recuperación:</strong> V 0.1.41 · Issue #233
+  <strong>Producción GREEN vigente:</strong> V 0.1.41 · `de23a54904fd1342ad110d00f7c995f98f2696ad` ·
+  <strong>Candidato:</strong> V 0.1.42 · Issue #183 / PR #184
 </p>
 
-## Estado del deploy
+## Estado
 
-| Señal | Estado | Evidencia |
-| --- | --- | --- |
-| Producción base GREEN | ✅ **V 0.1.40** | cierre GREEN en Roadmap #1 sobre `8c52dc4...` |
-| SHA actual observado | ⚠️ **025a3ed… bajo V 0.1.40 reutilizada** | observer productivo exacto; release no pudo publicarse |
-| Causa raíz | ⚠️ **versión canónica no incrementada en #230** | `config/version.php` permaneció 0.1.40 |
-| Release 0.1.40 | ✅ **ya existe** | tag/GitHub Release pertenecen al SHA anterior |
-| Hotfix | 🚧 **V 0.1.41** | cambia versión + este snapshot; sin cambio de runtime |
-| Sentry | ✅ **sin activación nueva** | `SENTRY_DSN` permanece vacío; #224 sigue siendo la puerta legal |
-| Esquema/datos | ✅ **sin cambios** | no hay migraciones ni mutaciones |
+| Señal | Estado |
+| --- | --- |
+| Producción vigente | ✅ V 0.1.41 GREEN |
+| Candidato serial | 🚧 V 0.1.42 · pedidos/reservas |
+| Factory kit | ✅ `pl0n3r/factory@v1` · 1.0.4 |
+| Deploy/rollback Factory | ⏭️ #227 · V 0.1.43 |
+| Cierre adopción Factory | ⏭️ #228 · V 0.1.44 |
 
-## Qué hace V 0.1.41
+## Qué incorpora V 0.1.42
 
-- asigna una identidad humana nueva al código ya desplegado tras #230;
-- permite que Factory Release cree `v0.1.41` sin colisionar con `v0.1.40`;
-- conserva intacta la integración Sentry minimizada y apagada por defecto;
-- no cambia esquema, configuración productiva, DNS, cron ni hosting;
-- obliga a validar por separado tag/Release, observer y cinco puntos de PRODUCCIÓN EN VERDE.
+- dominio único `Order / OrderLine / OrderEvent` para pedido manual y storefront;
+- snapshots históricos de precio y estados separados de pedido, pago y fulfillment;
+- `InventoryReservation` y `reserved_quantity` separados del on-hand;
+- creación idempotente y transaccional, sin oversell cuando backorder no aplica;
+- cancelación/liberación y consumo exactamente una vez;
+- UI Admin y checkout público sobre el mismo `OrderService`;
+- aislamiento de lectura/cancelación/consumo por fuentes de inventario accesibles a la sede;
+- rate limit por tenant + IP para checkout anónimo;
+- TTL de 30 minutos para reservas e-commerce y comando acotado `app:orders:release-expired`;
+- migración expand-compatible; rollback destructivo sigue bloqueado si existen pedidos/reservas reales.
 
-## Archivos del candidato
+## Seguridad y recuperación
 
-- `config/version.php` — 0.1.40 → 0.1.41.
-- `README.md` — snapshot exacto del incidente #233.
+- El servidor sigue siendo autoridad de precio, inventario, fuente y total.
+- Usuarios de una sede no pueden leer ni mutar pedidos asociados a fuentes de otra sede.
+- El checkout anónimo limita creación masiva de reservas y las reservas abandonadas tienen expiración explícita.
+- La activación de un cron productivo para liberar vencidas **no forma parte de este PR**; el proceso CLI queda disponible para la fase de operación aprobada.
+- Ningún SQL destructivo se ejecuta automáticamente.
 
-## Invariantes
+## Validación esperada
 
-- Merge/CI verde no equivalen a producción validada.
-- No se mueve ni reemplaza el tag `v0.1.40`.
-- No se activa Sentry sin la puerta legal correspondiente.
-- No se ejecuta #227 hasta recuperar GREEN sobre V 0.1.41.
-- El deploy/rollback Factory sigue separado en #227.
-
-## Flujo de recuperación
-
-```mermaid
-flowchart LR
-  A["main 025a3ed · V0.1.40 reutilizada"] --> B["#233 · V0.1.41"]
-  B --> C["CI + review"]
-  C --> D["squash merge"]
-  D --> E["tag/Release v0.1.41"]
-  E --> F["observer exacto"]
-  F --> G["PRODUCCIÓN EN VERDE"]
-  G --> H["#227 · deploy + rollback Factory"]
-```
+- `Backend PHP / MariaDB`;
+- `Frontend TypeScript / build`;
+- `Playwright Chromium`;
+- gates Factory v1, seguridad, privacidad y análisis estático aplicables.
 
 ## Qué sigue
 
-1. integrar #233 solo con gates verdes;
-2. demostrar `v0.1.41` sobre el SHA exacto de main;
-3. revalidar producción GREEN;
-4. desplazar #227/#228 a V 0.1.42 / V 0.1.43;
-5. retomar TANDA 2 de #192.
+1. integrar #183 / PR #184 solo con gates exact-head verdes;
+2. validar V 0.1.42 en producción según los cinco puntos GREEN;
+3. ejecutar #227 como V 0.1.43;
+4. cerrar la adopción Factory con #228 como V 0.1.44;
+5. retomar el Roadmap normal.
 
 ## Referencias
 
 - [AGENTES.md](./AGENTES.md)
 - [ESPECIFICACIONES.md](./ESPECIFICACIONES.md)
+- [GLOSARIO.md](./GLOSARIO.md)
 - Roadmap canónico: Issue #1
-- Incidente actual: Issue #233
 - Épico Factory: Issue #192
 - Factory: `pl0n3r/factory@v1`

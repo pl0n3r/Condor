@@ -33,6 +33,7 @@ class InventoryMovement
     public const TYPE_ADJUSTMENT_OUT = 'adjustment_out';
     public const TYPE_TRANSFER_OUT = 'transfer_out';
     public const TYPE_TRANSFER_IN = 'transfer_in';
+    public const TYPE_ORDER_CONSUMPTION = 'order_consumption';
 
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 26)]
@@ -231,6 +232,7 @@ class InventoryMovement
             self::TYPE_ADJUSTMENT_OUT,
             self::TYPE_TRANSFER_OUT,
             self::TYPE_TRANSFER_IN,
+            self::TYPE_ORDER_CONSUMPTION,
         ];
         if (!in_array($type, $known, true)) {
             throw new DomainException('El tipo de movimiento no es válido.');

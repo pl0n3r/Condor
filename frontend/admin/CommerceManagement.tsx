@@ -413,7 +413,7 @@ export function CommerceManagement({
           <h2 id="commerce-title">Comercial</h2>
           <p className="muted">
             Clientes, categorías y precios reutilizables por los canales
-            de venta. Pedidos y pagos se incorporan en slices posteriores.
+            de venta. Los pedidos reutilizan este contexto y conservan snapshots históricos.
           </p>
         </div>
       </div>

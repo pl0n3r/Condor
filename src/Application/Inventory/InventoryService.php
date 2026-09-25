@@ -6,9 +6,11 @@ namespace App\Application\Inventory;
 
 use App\Domain\Catalog\Entity\ProductVariant;
 use App\Domain\Inventory\Entity\InventoryBalance;
+use App\Domain\Inventory\Entity\InventoryReservation;
 use App\Domain\Inventory\Entity\InventoryMovement;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Inventory\Entity\InventoryTransfer;
+use App\Domain\Orders\Entity\OrderLine;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
@@ -236,6 +238,231 @@ final readonly class InventoryService
         }
     }
 
+    public function reserveOrderLine(
+        OrderLine $orderLine,
+        string $reserveKey,
+    ): InventoryReservation {
+        $order = $orderLine->order();
+        $tenant = $order->tenant();
+        $source = $order->inventorySource();
+        $variant = $orderLine->variant();
+
+        try {
+            return $this->transactional(
+                function (EntityManagerInterface $entityManager) use (
+                    $tenant,
+                    $source,
+                    $variant,
+                    $orderLine,
+                    $reserveKey,
+                ): InventoryReservation {
+                    self::assertOwnedScope($tenant, $source, $variant);
+                    $this->lockSourceAndVariant(
+                        $entityManager,
+                        $source,
+                        $variant,
+                    );
+
+                    $existing = $entityManager
+                        ->getRepository(InventoryReservation::class)
+                        ->findOneBy([
+                            'tenant' => $tenant,
+                            'reserveKey' => trim($reserveKey),
+                        ]);
+                    if ($existing instanceof InventoryReservation) {
+                        self::assertSameReservation(
+                            $existing,
+                            $orderLine,
+                            $source,
+                        );
+
+                        return $existing;
+                    }
+
+                    self::assertActiveScope($source, $variant);
+
+                    $balance = $this->balanceForUpdate(
+                        $entityManager,
+                        $tenant,
+                        $source,
+                        $variant,
+                    );
+                    $balance->reserve($orderLine->quantity());
+
+                    $reservation = new InventoryReservation(
+                        $orderLine,
+                        $source,
+                        $reserveKey,
+                    );
+                    $entityManager->persist($reservation);
+
+                    return $reservation;
+                },
+            );
+        } catch (UniqueConstraintViolationException $exception) {
+            throw new InventoryConflictException(
+                'La reserva de inventario entró en conflicto con otra solicitud concurrente.',
+                0,
+                $exception,
+            );
+        }
+    }
+
+    public function releaseReservation(
+        InventoryReservation $reservation,
+        string $releaseKey,
+    ): InventoryReservation {
+        try {
+            return $this->transactional(
+                function (EntityManagerInterface $entityManager) use (
+                    $reservation,
+                    $releaseKey,
+                ): InventoryReservation {
+                    $tenant = $reservation->tenant();
+                    $source = $reservation->source();
+                    $variant = $reservation->variant();
+
+                    self::assertOwnedScope($tenant, $source, $variant);
+                    $this->lockSourceAndVariant(
+                        $entityManager,
+                        $source,
+                        $variant,
+                    );
+                    $balance = $this->reservedBalanceForUpdate(
+                        $entityManager,
+                        $tenant,
+                        $source,
+                        $variant,
+                    );
+                    $entityManager->refresh(
+                        $reservation,
+                        LockMode::PESSIMISTIC_WRITE,
+                    );
+
+                    if ($reservation->markReleased($releaseKey)) {
+                        $balance->releaseReserved(
+                            $reservation->quantity(),
+                        );
+                    }
+
+                    return $reservation;
+                },
+            );
+        } catch (UniqueConstraintViolationException $exception) {
+            throw new InventoryConflictException(
+                'La liberación de inventario entró en conflicto con otra solicitud concurrente.',
+                0,
+                $exception,
+            );
+        }
+    }
+
+    public function consumeReservation(
+        InventoryReservation $reservation,
+        string $consumeKey,
+        ?string $actorUserId = null,
+    ): InventoryReservation {
+        try {
+            return $this->transactional(
+                function (EntityManagerInterface $entityManager) use (
+                    $reservation,
+                    $consumeKey,
+                    $actorUserId,
+                ): InventoryReservation {
+                    $tenant = $reservation->tenant();
+                    $source = $reservation->source();
+                    $variant = $reservation->variant();
+
+                    self::assertOwnedScope($tenant, $source, $variant);
+                    $this->lockSourceAndVariant(
+                        $entityManager,
+                        $source,
+                        $variant,
+                    );
+                    $balance = $this->reservedBalanceForUpdate(
+                        $entityManager,
+                        $tenant,
+                        $source,
+                        $variant,
+                    );
+                    $entityManager->refresh(
+                        $reservation,
+                        LockMode::PESSIMISTIC_WRITE,
+                    );
+
+                    if (!$reservation->markConsumed($consumeKey)) {
+                        return $reservation;
+                    }
+
+                    $balance->consumeReserved($reservation->quantity());
+                    $entityManager->persist(new InventoryMovement(
+                        $tenant,
+                        $source,
+                        $variant,
+                        InventoryMovement::TYPE_ORDER_CONSUMPTION,
+                        -$reservation->quantity(),
+                        $balance->quantity(),
+                        $actorUserId,
+                        trim($consumeKey),
+                        null,
+                        [
+                            'order_id' => $reservation->order()->id(),
+                            'order_line_id' => $reservation->orderLine()->id(),
+                            'reservation_id' => $reservation->id(),
+                        ],
+                    ));
+
+                    return $reservation;
+                },
+            );
+        } catch (UniqueConstraintViolationException $exception) {
+            throw new InventoryConflictException(
+                'El consumo de inventario entró en conflicto con otra solicitud concurrente.',
+                0,
+                $exception,
+            );
+        }
+    }
+
+    /**
+     * @template T
+     * @param callable(EntityManagerInterface): T $operation
+     * @return T
+     */
+    private function transactional(callable $operation): mixed
+    {
+        if ($this->entityManager->getConnection()->isTransactionActive()) {
+            return $operation($this->entityManager);
+        }
+
+        return $this->entityManager->wrapInTransaction($operation);
+    }
+
+    private function reservedBalanceForUpdate(
+        EntityManagerInterface $entityManager,
+        Tenant $tenant,
+        InventorySource $source,
+        ProductVariant $variant,
+    ): InventoryBalance {
+        $balance = $entityManager
+            ->getRepository(InventoryBalance::class)
+            ->findOneBy([
+                'tenant' => $tenant,
+                'source' => $source,
+                'variant' => $variant,
+            ]);
+
+        if (!$balance instanceof InventoryBalance) {
+            throw new DomainException(
+                'La reserva no tiene un saldo de inventario asociado.',
+            );
+        }
+
+        $entityManager->refresh($balance, LockMode::PESSIMISTIC_WRITE);
+
+        return $balance;
+    }
+
     private function balanceForUpdate(
         EntityManagerInterface $entityManager,
         Tenant $tenant,
@@ -345,6 +572,24 @@ final readonly class InventoryService
         }
 
         return $key;
+    }
+
+    private static function assertSameReservation(
+        InventoryReservation $reservation,
+        OrderLine $orderLine,
+        InventorySource $source,
+    ): void {
+        if (
+            $reservation->orderLine()->id() !== $orderLine->id()
+            || $reservation->order()->id() !== $orderLine->order()->id()
+            || $reservation->source()->id() !== $source->id()
+            || $reservation->variant()->id() !== $orderLine->variant()->id()
+            || $reservation->quantity() !== $orderLine->quantity()
+        ) {
+            throw new DomainException(
+                'La clave de idempotencia ya fue usada por otra reserva.',
+            );
+        }
     }
 
     private static function assertSameAdjustment(
