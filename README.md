@@ -19,7 +19,7 @@
 | CI exact-main base | ✅ **success** | run `36063691913` |
 | Push on main base | ✅ **success** | run `36063690840` |
 | Release base | ✅ **success** | run `36063691909` |
-| Factory común | 🚧 **CANDIDATO** | CI, coordinación, etiquetas, política y release por `factory@v1` |
+| Factory común | 🚧 **CANDIDATO** | CI base, coordinador, etiquetas, política y release consumidos desde `factory@v1` |
 | Decisiones como código | 🚧 **CANDIDATO** | `decisiones.yml` con D-054…D-058 y límite de 3 rondas |
 | Gates específicos Condor | ✅ **PRESERVADOS EN DISEÑO** | MariaDB, contratos, frontend, auditorías, backup/restore y Playwright siguen en CI local |
 | Producción objetivo | ⏳ **NO TOCADA EN ESTE SLICE** | deploy/rollback Factory queda en #227 |
@@ -28,8 +28,8 @@
 
 - crea `decisiones.yml` como contrato normativo verificable por Factory;
 - reduce `AGENTES.md` a la capa propia de Condor y referencia el núcleo Factory v1;
-- añade CI Factory reusable en paralelo y lo vuelve requisito del agregado `Validar`;
-- delega coordinación, etiquetas, política y release a workflows `pl0n3r/factory/...@v1`;
+- añade CI Factory reusable en paralelo como gate base PHP/Node y lo vuelve requisito del agregado `Validar`; Symfony/MariaDB permanece en el CI local;
+- consume el coordinador canónico desde `factory@v1` mediante un adaptador por evento con permisos mínimos; etiquetas, política y release usan los reusable workflows Factory;
 - sustituye la ejecución de la coordinación local en CI por la validación reusable Factory;
 - adapta la autoauditoría para permitir exclusivamente el canal mayor aprobado `factory@v1`, manteniendo SHA fijo para otros workflows externos;
 - mantiene intactos los gates específicos de Condor y no modifica datos, esquema ni runtime de producto.
@@ -56,7 +56,7 @@
 - Los reusable workflows Factory se consumen por el canal compatible `@v1`; otros workflows externos siguen requiriendo SHA de 40 caracteres.
 - No se heredan secretos a Factory.
 - `Validar` no puede quedar verde si falla el CI Factory.
-- La coordinación activa ya no ejecuta `scripts/coordinar_trabajo.py`; ese artefacto queda supersedido y puede retirarse físicamente en una limpieza posterior sin riesgo.
+- La coordinación activa ya no ejecuta la copia local `scripts/coordinar_trabajo.py`; usa `.factory/scripts/coordinar_trabajo.py` desde `factory@v1`. El PR bootstrap #226 valida la reserva legacy sin fingerprint y los PR siguientes vuelven a exigir fingerprint automáticamente al detectar `decisiones.yml` en la base.
 - Merge/CI verde no equivalen a producción validada.
 - #227 concentra deploy/rollback Hostinger y #228 la prueba end-to-end/cierre del épico #192.
 

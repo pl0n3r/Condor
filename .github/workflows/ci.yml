@@ -19,7 +19,7 @@ jobs:
     name: CI Factory v1
     uses: pl0n3r/factory/.github/workflows/ci.yml@v1
     with:
-      stack: symfony
+      stack: php
       domain: https://www.condorapp.com.co
       version_source: config/version.php
       label_language: es
@@ -244,11 +244,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORIO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
-        run: >-
-          python3 .factory/scripts/coordinar_trabajo.py validar-pr
-          --repo "$REPOSITORIO"
-          --pr "$PR"
-          --require-reservation
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          args=()
+          if git cat-file -e "$BASE_SHA:decisiones.yml" 2>/dev/null; then
+            args+=(--require-reservation)
+          else
+            echo "Bootstrap TANDA 2: la base legacy aún no tiene decisiones.yml; se validan rama, Issue y colisiones sin fingerprint."
+          fi
+          python3 .factory/scripts/coordinar_trabajo.py validar-pr \
+            --repo "$REPOSITORIO" \
+            --pr "$PR" \
+            "${args[@]}"
 
   pruebas-base:
     name: Pruebas de contrato e integración

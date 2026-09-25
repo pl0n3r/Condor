@@ -199,6 +199,23 @@ def logical_shell_commands(step: list[str]) -> list[str]:
         commands.append(" ".join(buffer))
     return commands
 
+def external_workflow_finding(
+    path: Path, job_name: str, reference: str
+) -> str | None:
+    """Valida el pin de un reusable workflow externo."""
+    if FACTORY_V1_WORKFLOW_RE.fullmatch(reference):
+        return None
+    if reference.startswith("$/") or "@" not in reference:
+        return f"{path}: job '{job_name}' usa workflow externo sin SHA fijo: {reference}."
+    _, ref = reference.rsplit("@", 1)
+    if PIN_RE.fullmatch(ref):
+        return None
+    return (
+        f"{path}: job '{job_name}' usa workflow externo sin SHA de "
+        f"40 caracteres: {reference}."
+    )
+
+
 def audit_job_workflow_uses(path: Path, text: str) -> list[str]:
     """Audita referencias reusable-workflow declaradas a nivel de job."""
     findings: list[str] = []
@@ -216,19 +233,9 @@ def audit_job_workflow_uses(path: Path, text: str) -> list[str]:
                     f"{path}: job '{name}' usa workflow local inválido: {reference}."
                 )
             continue
-        if FACTORY_V1_WORKFLOW_RE.fullmatch(reference):
-            continue
-        if reference.startswith("$/") or "@" not in reference:
-            findings.append(
-                f"{path}: job '{name}' usa workflow externo sin SHA fijo: {reference}."
-            )
-            continue
-        _, ref = reference.rsplit("@", 1)
-        if not PIN_RE.fullmatch(ref):
-            findings.append(
-                f"{path}: job '{name}' usa workflow externo sin SHA de "
-                f"40 caracteres: {reference}."
-            )
+        finding = external_workflow_finding(path, name, reference)
+        if finding is not None:
+            findings.append(finding)
     return findings
 
 

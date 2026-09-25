@@ -35,8 +35,6 @@ class FactoryAdoptionTests(unittest.TestCase):
 
     def test_common_workflows_delegate_to_factory_v1(self) -> None:
         expected = {
-            ".github/workflows/coordinacion-trabajo.yml":
-                "pl0n3r/factory/.github/workflows/coordinacion.yml@v1",
             ".github/workflows/sincronizar-gobierno.yml":
                 "pl0n3r/factory/.github/workflows/etiquetas.yml@v1",
             ".github/workflows/politica.yml":
@@ -58,10 +56,10 @@ class FactoryAdoptionTests(unittest.TestCase):
         self.assertNotIn("tests/test_coordinar_trabajo.py", ci)
         self.assertNotIn("python3 scripts/coordinar_trabajo.py", coordination)
         self.assertIn(".factory/scripts/coordinar_trabajo.py validar-pr", ci)
-        self.assertIn(
-            "pl0n3r/factory/.github/workflows/coordinacion.yml@v1",
-            coordination,
-        )
+        self.assertIn("repository: pl0n3r/factory", coordination)
+        self.assertIn("ref: v1", coordination)
+        self.assertIn(".factory/scripts/coordinar_trabajo.py", coordination)
+        self.assertIn("/migrar-contrato ", coordination)
 
     def test_condor_ci_requires_factory_without_dropping_specific_gates(self) -> None:
         ci = self.read(".github/workflows/ci.yml")
@@ -70,7 +68,7 @@ class FactoryAdoptionTests(unittest.TestCase):
             ci,
         )
         for token in (
-            "stack: symfony",
+            "stack: php",
             "domain: https://www.condorapp.com.co",
             "version_source: config/version.php",
             "php_version: '8.5'",
@@ -81,6 +79,7 @@ class FactoryAdoptionTests(unittest.TestCase):
             "backup-restore",
             "e2e",
             '[[ "$FACTORY_CI" == "success" ]]',
+            '$BASE_SHA:decisiones.yml',
         ):
             with self.subTest(token=token):
                 self.assertIn(token, ci)
