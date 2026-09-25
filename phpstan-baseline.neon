@@ -1,0 +1,451 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Instanceof between App\\Domain\\Commerce\\Entity\\PriceRule and App\\Domain\\Commerce\\Entity\\PriceRule will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Application/Commerce/PricingService.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Commerce\\Entity\\VariantPrice and App\\Domain\\Commerce\\Entity\\VariantPrice will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Application/Commerce/PricingService.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Identity\\Entity\\BranchRoleAssignment and App\\Domain\\Identity\\Entity\\BranchRoleAssignment will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 2
+			path: src/Application/Identity/BranchAuthorization.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: src/Application/Identity/BranchAuthorization.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Catalog\\Entity\\Product and App\\Domain\\Catalog\\Entity\\Product will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Application/Identity/PlatformOwnerTenantContext.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Catalog\\Entity\\ProductVariant and App\\Domain\\Catalog\\Entity\\ProductVariant will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Application/Identity/PlatformOwnerTenantContext.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Organization\\Entity\\Branch and App\\Domain\\Organization\\Entity\\Branch will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Application/Identity/PlatformOwnerTenantContext.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Organization\\Entity\\Tenant and App\\Domain\\Organization\\Entity\\Tenant will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Application/Identity/PlatformOwnerTenantContext.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<array\{id\: string, name\: string, slug\: string, branch_count\: int, active_membership_count\: int\}\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: src/Application/Identity/PlatformOwnerTenantContext.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<array\{id\: string, name\: string, slug\: string, is_default\: bool\}\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: src/Application/Identity/PlatformOwnerTenantContext.php
+
+		-
+			message: '#^Parameter \#1 \$rows of method App\\Application\\Identity\\PlatformOwnerTenantContext\:\:indexCounts\(\) expects list\<array\<string, mixed\>\>, array\<mixed\> given\.$#'
+			identifier: argument.type
+			count: 2
+			path: src/Application/Identity/PlatformOwnerTenantContext.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Identity\\Entity\\PlatformStaffGrant and App\\Domain\\Identity\\Entity\\PlatformStaffGrant will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Application/Identity/PlatformStaffAuthorization.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Organization\\Entity\\Tenant and App\\Domain\\Organization\\Entity\\Tenant will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Application/Identity/PlatformStaffAuthorization.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<non\-falsy\-string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: src/Application/Identity/PlatformStaffAuthorization.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<mixed\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Application/Identity/PlatformStaffManager.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\{tenant_id\: string\|null, module\: string, actions\: array\<mixed\>\} will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Application/Identity/PlatformStaffManager.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Application/Identity/PlatformStaffManager.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Identity\\Entity\\AccountInvitation and App\\Domain\\Identity\\Entity\\AccountInvitation will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Application/Identity/PlatformStaffManager.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Identity\\Entity\\PlatformStaffGrant and App\\Domain\\Identity\\Entity\\PlatformStaffGrant will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 2
+			path: src/Application/Identity/PlatformStaffManager.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<array\{tenant_id\: string\|null, module\: string, actions\: list\<string\>\}\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: src/Application/Identity/PlatformStaffManager.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Identity\\Entity\\User and App\\Domain\\Identity\\Entity\\User will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Application/Identity/ProvisionPlatformOwner.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Catalog\\Entity\\ProductVariant and App\\Domain\\Catalog\\Entity\\ProductVariant will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Application/Storefront/PublicCatalogPresentation.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Inventory\\Entity\\InventoryBalance and App\\Domain\\Inventory\\Entity\\InventoryBalance will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Application/Storefront/PublicCatalogPresentation.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Organization\\Entity\\TenantDomain and App\\Domain\\Organization\\Entity\\TenantDomain will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Application/Storefront/StorefrontPresentation.php
+
+		-
+			message: '#^Method App\\Domain\\Audit\\Entity\\AuditEvent\:\:__construct\(\) has parameter \$context with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Domain/Audit/Entity/AuditEvent.php
+
+		-
+			message: '#^Property App\\Domain\\Audit\\Entity\\AuditEvent\:\:\$context type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Domain/Audit/Entity/AuditEvent.php
+
+		-
+			message: '#^Property App\\Domain\\Identity\\Entity\\PlatformStaffGrant\:\:\$actions \(list\<string\>\) does not accept array\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: src/Domain/Identity/Entity/PlatformStaffGrant.php
+
+		-
+			message: '#^Property App\\Domain\\Identity\\Entity\\PlatformStaffGrant\:\:\$actions \(list\<string\>\) does not accept non\-empty\-array\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: src/Domain/Identity/Entity/PlatformStaffGrant.php
+
+		-
+			message: '#^Property App\\Domain\\Identity\\Entity\\Role\:\:\$permissions \(list\<string\>\) does not accept array\.$#'
+			identifier: assign.propertyType
+			count: 2
+			path: src/Domain/Identity/Entity/Role.php
+
+		-
+			message: '#^Method App\\Domain\\Identity\\Entity\\User\:\:getUserIdentifier\(\) should return non\-empty\-string but returns string\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Domain/Identity/Entity/User.php
+
+		-
+			message: '#^Method App\\Domain\\Identity\\PermissionCatalog\:\:normalize\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Domain/Identity/PermissionCatalog.php
+
+		-
+			message: '#^Method App\\Domain\\Identity\\PermissionCatalog\:\:normalizeActions\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Domain/Identity/PermissionCatalog.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 2
+			path: src/Domain/Identity/PermissionCatalog.php
+
+		-
+			message: '#^Property App\\Domain\\Observability\\Entity\\FunctionalSignal\:\:\$context type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Domain/Observability/Entity/FunctionalSignal.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Organization\\Entity\\Branch and App\\Domain\\Organization\\Entity\\Branch will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/ApiContextController.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type App\\Domain\\Organization\\Entity\\LegalEntity\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: src/Http/Controller/ApiContextController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Identity\\Entity\\BranchRoleAssignment and App\\Domain\\Identity\\Entity\\BranchRoleAssignment will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/BranchAccessController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Identity\\Entity\\Role and App\\Domain\\Identity\\Entity\\Role will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/BranchAccessController.php
+
+		-
+			message: '#^Method App\\Http\\Controller\\BranchAccessController\:\:assertDelegable\(\) has parameter \$requested with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Http/Controller/BranchAccessController.php
+
+		-
+			message: '#^Method App\\Http\\Controller\\BranchAccessController\:\:audit\(\) has parameter \$context with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Http/Controller/BranchAccessController.php
+
+		-
+			message: '#^Method App\\Http\\Controller\\BranchAccessController\:\:permissionsFromPayload\(\) should return list\<string\> but returns array\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Http/Controller/BranchAccessController.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: src/Http/Controller/BranchAccessController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Catalog\\Entity\\Product and App\\Domain\\Catalog\\Entity\\Product will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/CatalogController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Catalog\\Entity\\ProductVariant and App\\Domain\\Catalog\\Entity\\ProductVariant will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 3
+			path: src/Http/Controller/CatalogController.php
+
+		-
+			message: '#^Method App\\Http\\Controller\\CatalogController\:\:audit\(\) has parameter \$context with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Http/Controller/CatalogController.php
+
+		-
+			message: '#^Method App\\Http\\Controller\\CatalogController\:\:nullableString\(\) has parameter \$payload with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Http/Controller/CatalogController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Commerce\\Entity\\CommercialCategory and App\\Domain\\Commerce\\Entity\\CommercialCategory will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/CustomerController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Commerce\\Entity\\Customer and App\\Domain\\Commerce\\Entity\\Customer will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/CustomerController.php
+
+		-
+			message: '#^Method App\\Http\\Controller\\CustomerController\:\:audit\(\) has parameter \$context with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Http/Controller/CustomerController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Catalog\\Entity\\ProductVariant and App\\Domain\\Catalog\\Entity\\ProductVariant will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/InventoryController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Inventory\\Entity\\InventoryBalance and App\\Domain\\Inventory\\Entity\\InventoryBalance will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/InventoryController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Inventory\\Entity\\InventorySource and App\\Domain\\Inventory\\Entity\\InventorySource will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/InventoryController.php
+
+		-
+			message: '#^Method App\\Http\\Controller\\InventoryController\:\:audit\(\) has parameter \$context with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Http/Controller/InventoryController.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<array\<string, mixed\>\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 2
+			path: src/Http/Controller/InventoryController.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between Symfony\\Component\\Validator\\ConstraintViolationInterface and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Http/Controller/PlatformTenantController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Catalog\\Entity\\ProductVariant and App\\Domain\\Catalog\\Entity\\ProductVariant will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/PricingController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Commerce\\Entity\\PriceList and App\\Domain\\Commerce\\Entity\\PriceList will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/PricingController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Commerce\\Entity\\PriceRule and App\\Domain\\Commerce\\Entity\\PriceRule will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/PricingController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Commerce\\Entity\\VariantPrice and App\\Domain\\Commerce\\Entity\\VariantPrice will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/PricingController.php
+
+		-
+			message: '#^Method App\\Http\\Controller\\PricingController\:\:audit\(\) has parameter \$context with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Http/Controller/PricingController.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type App\\Domain\\Commerce\\Entity\\CommercialCategory\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Http/Controller/PricingController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Commerce\\Entity\\PriceList and App\\Domain\\Commerce\\Entity\\PriceList will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/StorefrontAdminController.php
+
+		-
+			message: '#^Instanceof between App\\Domain\\Inventory\\Entity\\InventorySource and App\\Domain\\Inventory\\Entity\\InventorySource will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Http/Controller/StorefrontAdminController.php
+
+		-
+			message: '#^Argument of an invalid type PDOStatement\|false supplied for foreach, only iterables are supported\.$#'
+			identifier: foreach.nonIterable
+			count: 1
+			path: src/Infrastructure/Database/PdoDatabaseBackup.php
+
+		-
+			message: '#^Cannot call method closeCursor\(\) on PDOStatement\|false\.$#'
+			identifier: method.nonObject
+			count: 4
+			path: src/Infrastructure/Database/PdoDatabaseBackup.php
+
+		-
+			message: '#^Cannot call method fetch\(\) on PDOStatement\|false\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: src/Infrastructure/Database/PdoDatabaseBackup.php
+
+		-
+			message: '#^Cannot call method fetchAll\(\) on PDOStatement\|false\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: src/Infrastructure/Database/PdoDatabaseBackup.php
+
+		-
+			message: '#^Cannot call method fetchColumn\(\) on PDOStatement\|false\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: src/Infrastructure/Database/PdoDatabaseBackup.php
+
+		-
+			message: '#^Right side of && is always true\.$#'
+			identifier: booleanAnd.rightAlwaysTrue
+			count: 1
+			path: src/Infrastructure/Http/ApiExceptionSubscriber.php
+
+		-
+			message: '#^Method App\\Infrastructure\\Observability\\ErrorSanitizer\:\:fingerprint\(\) has parameter \$trace with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Infrastructure/Observability/ErrorSanitizer.php
+
+		-
+			message: '#^Offset ''function'' on array\{function\: string, line\?\: int, file\?\: string, class\?\: class\-string, type\?\: ''\-\>''\|''\:\:'', args\?\: list\<mixed\>, object\?\: object\} in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: src/Infrastructure/Observability/ErrorSanitizer.php
+
+		-
+			message: '#^Right side of && is always true\.$#'
+			identifier: booleanAnd.rightAlwaysTrue
+			count: 5
+			path: src/Infrastructure/Observability/ErrorSanitizer.php
+
+		-
+			message: '#^Offset ''file'' on array\{file\: string, line\: int\|null, call\?\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Infrastructure/Observability/FatalLog.php
+
+		-
+			message: '#^Parameter \#1 \$params of static method App\\Shared\\Runtime\\DatabaseDsn\:\:validate\(\) expects array\<string, mixed\>, array\<int\|string, array\<mixed\>\|int\<0, 65535\>\|string\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Shared/Runtime/DatabaseDsn.php
+
+		-
+			message: '#^Negated boolean expression is always true\.$#'
+			identifier: booleanNot.alwaysTrue
+			count: 1
+			path: src/Shared/Runtime/RuntimeEnvironment.php
