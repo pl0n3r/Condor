@@ -12,8 +12,8 @@ use Doctrine\ORM\Tools\ToolEvents;
 #[AsDoctrineListener(event: ToolEvents::postGenerateSchemaTable)]
 final class CatalogSchemaListener
 {
-    private const TENANT_PRODUCT_FOREIGN_KEY = 'FK_VARIANT_PRODUCT_TENANT';
-    private const TENANT_PRODUCT_INDEX = 'IDX_VARIANT_TENANT_PRODUCT';
+    private const string TENANT_PRODUCT_FOREIGN_KEY = 'FK_VARIANT_PRODUCT_TENANT';
+    private const string TENANT_PRODUCT_INDEX = 'IDX_VARIANT_TENANT_PRODUCT';
 
     public function postGenerateSchemaTable(
         GenerateSchemaTableEventArgs $event,

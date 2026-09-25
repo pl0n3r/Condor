@@ -21,8 +21,8 @@ use Throwable;
  */
 final class ContainerRecovery
 {
-    private const RELATIVE_CACHE_DIR = 'var/cache/prod';
-    private const RELATIVE_LOCK_FILE = 'var/cache/.recovery.lock';
+    private const string RELATIVE_CACHE_DIR = 'var/cache/prod';
+    private const string RELATIVE_LOCK_FILE = 'var/cache/.recovery.lock';
 
     public static function looksLikeStaleContainer(
         Throwable $error,
