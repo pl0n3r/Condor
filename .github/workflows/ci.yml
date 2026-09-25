@@ -272,6 +272,9 @@ jobs:
       - name: Probar herramientas internas del CI
         run: python3 -m unittest discover -s tests -p 'test_ci_*.py'
 
+      - name: Probar adapters Factory del consumer
+        run: python3 tests/test_factory_deploy_adapters.py
+
       - name: Ejecutar contratos
         run: python3 -m unittest discover -s tests/contract -p 'test_*.py'
 

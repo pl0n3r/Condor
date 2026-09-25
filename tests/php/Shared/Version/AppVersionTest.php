@@ -68,6 +68,29 @@ final class AppVersionTest extends TestCase
         self::assertSame($sha, $version->releaseSha());
     }
 
+    public function testReleaseShaFallsBackToImmutableReleaseFile(): void
+    {
+        $sha = str_repeat('f', 40);
+        file_put_contents($this->projectDir.'/.release-sha', $sha."\n");
+
+        $version = new AppVersion($this->projectDir);
+
+        self::assertSame($sha, $version->releaseSha());
+    }
+
+    public function testReleaseShaIgnoresSymlinkedReleaseFile(): void
+    {
+        $sha = str_repeat('e', 40);
+        file_put_contents($this->projectDir.'/release-target', $sha."\n");
+        if (!@symlink($this->projectDir.'/release-target', $this->projectDir.'/.release-sha')) {
+            self::markTestSkipped('El entorno no permite crear symlinks.');
+        }
+
+        $version = new AppVersion($this->projectDir);
+
+        self::assertSame('dev', $version->releaseSha());
+    }
+
     public function testReleaseShaFallsBackToDetachedGitHead(): void
     {
         $sha = str_repeat('a', 40);
