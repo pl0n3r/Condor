@@ -1,80 +1,96 @@
-# Condor App — Snapshot operativo · candidato V 0.1.39
+# Condor App — Snapshot operativo · candidato V 0.1.40
 
 [![CI Condor](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0n3r/Condor/actions/workflows/ci.yml)
 [![SonarQube Cloud](https://sonarcloud.io/api/project_badges/measure?project=pl0n3r_Condor&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pl0n3r_Condor)
 
-> **Objetivo actual:** resolver el falso positivo técnico `health` de la primera auditoría real repineando los callers de privacidad al Factory corregido, sin cambiar el mapa de datos ni declarar aprobación jurídica.
+> **Objetivo actual:** primer slice de TANDA 2. Adoptar el núcleo Factory v1 y las decisiones del dueño como código sin reducir la cobertura específica de Condor ni tocar lógica de negocio, esquema o datos.
 
 <p align="center">
-  <strong>Producción verificada:</strong> V 0.1.38 · main `6d9bb71c47fbd460a462ef5fa03d7132bd475dee` ·
-  <strong>Candidato:</strong> V 0.1.39 · Issue #223
+  <strong>Producción verificada:</strong> V 0.1.39 · main `9b652077be9f18b920d15cb02bf3941b9358baf9` ·
+  <strong>Candidato:</strong> V 0.1.40 · Issue #226 · PR #229
 </p>
 
 ## Estado del deploy
 
 | Señal | Estado | Evidencia |
 | --- | --- | --- |
-| Base productiva | ✅ **V 0.1.38 / GREEN** | `6d9bb71c47fbd460a462ef5fa03d7132bd475dee`; exact-main CI/CodeQL, observer y smoke aprobados |
-| Contrato Factory | ✅ **FIX HEALTH INTEGRADO** | pin `68eef82e3b21939143a4cbea23b7df2615534e77`; Factory #91/#92 |
-| Mapa de datos | ✅ **SIN CAMBIO EN ESTE CANDIDATO** | `datos.yml` no se modifica; la adopción inicial sigue bajo puerta jurídica #224 |
-| Documentos | ✅ **SIN REGENERACIÓN** | los seis documentos no cambian porque el fix de Factory solo ajusta detección de señales |
-| Primera auditoría real | ⚠️ **REVIEW_REQUIRED** | run `36054140014`; creó #223 por falso positivo `health` y #224 por adopción inicial material |
-| Finding técnico #223 | 🚧 **CORRECCIÓN EN CURSO** | repin al Factory corregido y reejecución real pendiente |
-| Puerta jurídica #224 | ⛔ **SEPARADA / VIGENTE** | requiere decisión humana; este candidato no la resuelve |
+| Base productiva | ✅ **V 0.1.39 / GREEN** | `9b652077be9f18b920d15cb02bf3941b9358baf9`; cierre GREEN en Roadmap #1 |
+| Observer base | ✅ **success** | run `36063691947`; versión/SHA exactos observados |
+| CI exact-main base | ✅ **success** | run `36063691913` |
+| Push on main base | ✅ **success** | run `36063690840` |
+| Release base | ✅ **success** | run `36063691909` |
+| Factory común | 🚧 **CANDIDATO** | CI, coordinación, etiquetas, política y release por `factory@v1` |
+| Decisiones como código | 🚧 **CANDIDATO** | `decisiones.yml` con D-054…D-058 y límite de 3 rondas |
+| Gates específicos Condor | ✅ **PRESERVADOS EN DISEÑO** | MariaDB, contratos, frontend, auditorías, backup/restore y Playwright siguen en CI local |
+| Producción objetivo | ⏳ **NO TOCADA EN ESTE SLICE** | deploy/rollback Factory queda en #227 |
 
-## Qué añade V 0.1.39
+## Qué añade V 0.1.40
 
-- repinea `.github/workflows/privacidad.yml` al Factory `68eef82e3b21939143a4cbea23b7df2615534e77`;
-- repinea la auditoría semanal al mismo SHA inmutable;
-- actualiza el contrato PHP para exigir ese pin exacto;
-- mantiene los seis documentos canónicos y sus hashes actuales sin regenerarlos;
-- corrige la trazabilidad del primer reporte real: fue `review_required`, no `clean`;
-- no modifica esquema, lógica de negocio, `datos.yml`, tratamientos ni documentos jurídicos.
+- crea `decisiones.yml` como contrato normativo verificable por Factory;
+- reduce `AGENTES.md` a la capa propia de Condor y referencia el núcleo Factory v1;
+- añade CI Factory reusable en paralelo y lo vuelve requisito del agregado `Validar`;
+- delega coordinación, etiquetas, política y release a workflows `pl0n3r/factory/...@v1`;
+- sustituye la ejecución de la coordinación local en CI por la validación reusable Factory;
+- adapta la autoauditoría para permitir exclusivamente el canal mayor aprobado `factory@v1`, manteniendo SHA fijo para otros workflows externos;
+- mantiene intactos los gates específicos de Condor y no modifica datos, esquema ni runtime de producto.
 
 ## Archivos del candidato
 
-- `.github/workflows/privacidad.yml`
-- `.github/workflows/auditoria-privacidad.yml`
-- `tests/php/Privacy/PrivacyAsCodeTest.php`
+- `.github/workflows/ci.yml`
+- `.github/workflows/coordinacion-trabajo.yml`
+- `.github/workflows/politica.yml`
+- `.github/workflows/sincronizar-gobierno.yml`
+- `.github/workflows/tag-release.yml`
+- `AGENTES.md`
 - `config/version.php`
+- `decisiones.yml`
+- `scripts/ci_self_audit.py`
+- `tests/contract/test_tooling_contract.py`
+- `tests/test_ci_factory_adoption.py`
+- `tests/test_ci_self_audit.py`
 - `README.md`
 
 ## Invariantes
 
-- `/health` por sí solo no representa un dato personal de salud;
-- campos explícitos `health` siguen siendo sensibles en el Factory corregido;
-- los documentos técnicos no constituyen aprobación jurídica;
-- #224 permanece abierta hasta decisión humana;
-- merge o CI verde no equivalen a producción verde;
-- la resolución de #223 exige reejecutar la auditoría real con el nuevo Factory y comprobar que el finding técnico desaparece.
+- Factory v1 reemplaza únicamente lógica común; la cobertura específica de Condor no se elimina.
+- Los reusable workflows Factory se consumen por el canal compatible `@v1`; otros workflows externos siguen requiriendo SHA de 40 caracteres.
+- No se heredan secretos a Factory.
+- `Validar` no puede quedar verde si falla el CI Factory.
+- La coordinación activa ya no ejecuta `scripts/coordinar_trabajo.py`; ese artefacto queda supersedido y puede retirarse físicamente en una limpieza posterior sin riesgo.
+- Merge/CI verde no equivalen a producción validada.
+- #227 concentra deploy/rollback Hostinger y #228 la prueba end-to-end/cierre del épico #192.
 
 ## Flujo de entrega
 
 ```mermaid
 flowchart LR
-  A["V0.1.38 · producción verde"] --> B["Factory #91/#92 · fix /health"]
-  B --> C["V0.1.39 · repin exacto"]
-  C --> D["CI + Privacy + Sonar/CodeQL + revisión"]
-  D --> E["Squash merge"]
-  E --> F["CI exact-main"]
-  F --> G["Observer + smoke"]
-  G --> H["Auditoría real con Factory corregido"]
-  H --> I["Cerrar #223 si health desaparece"]
+  A["V0.1.39 · producción GREEN"] --> B["#226 · núcleo Factory v1"]
+  B --> C["CI Factory @v1"]
+  B --> L["Gates locales Condor"]
+  B --> P["Política + decisiones.yml"]
+  C --> V["Validar"]
+  L --> V
+  P --> V
+  V --> R["Sonar + CodeQL + CodeRabbit"]
+  R --> M["squash merge"]
+  M --> X["exact-main"]
+  X --> O["observer / GREEN"]
+  O --> N["#227 · deploy + rollback"]
 ```
 
 ## Qué sigue
 
-1. validar el candidato V0.1.39 sobre el HEAD final;
-2. integrar por squash y validar el SHA exacto de `main`;
-3. observar producción por separado;
-4. reejecutar `Auditoría de privacidad`;
-5. cerrar #223 únicamente si `health` deja de aparecer y conservar #224 separada.
+1. estabilizar PR #229 sobre un HEAD final;
+2. squash merge solo con CI/revisión completos;
+3. validar exact-main y producción por separado;
+4. cerrar/superseder #206/#207 y deuda absorbida por el kit solo con evidencia post-merge;
+5. continuar #227 y después #228.
 
 ## Referencias
 
 - [AGENTES.md](./AGENTES.md)
 - [ESPECIFICACIONES.md](./ESPECIFICACIONES.md)
 - Roadmap canónico: Issue #1
-- Finding técnico: Issue #223
-- Puerta jurídica: Issue #224
-- Factory privacidad: pl0n3r/factory#54
+- Épico Factory: Issue #192
+- Slice actual: Issue #226 / PR #229
+- Factory: `pl0n3r/factory@v1`

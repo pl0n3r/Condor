@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""Regresiones de adopción del núcleo Factory v1 en Condor."""
+
+from __future__ import annotations
+
+import json
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class FactoryAdoptionTests(unittest.TestCase):
+    def read(self, path: str) -> str:
+        return (ROOT / path).read_text(encoding="utf-8")
+
+    def test_decisions_include_owner_contract(self) -> None:
+        payload = json.loads(self.read("decisiones.yml"))
+        self.assertEqual(payload["version"], 1)
+        self.assertEqual(payload["review_round_limit"], 3)
+        decisions = {item["id"]: item for item in payload["decisions"]}
+        self.assertEqual(set(decisions), {"D-054", "D-055", "D-056", "D-057", "D-058"})
+        self.assertTrue(all(item["status"] == "active" for item in decisions.values()))
+        self.assertIn("backup previo", decisions["D-054"]["text"])
+
+    def test_agent_manual_consumes_factory_core_and_keeps_condor_layer(self) -> None:
+        manual = self.read("AGENTES.md")
+        self.assertIn("factory/blob/main/PLAN-AGENTES.md", manual)
+        self.assertIn("factory/blob/v1/agentes/NUCLEO.md", manual)
+        self.assertIn("PHP 8.5 + Symfony 7.4 LTS", manual)
+        self.assertIn("Hostinger shared hosting", manual)
+        self.assertIn("CONDOR_AUTO_MIGRATE=0", manual)
+        self.assertIn("Issue #1", manual)
+
+    def test_common_workflows_delegate_to_factory_v1(self) -> None:
+        expected = {
+            ".github/workflows/coordinacion-trabajo.yml":
+                "pl0n3r/factory/.github/workflows/coordinacion.yml@v1",
+            ".github/workflows/sincronizar-gobierno.yml":
+                "pl0n3r/factory/.github/workflows/etiquetas.yml@v1",
+            ".github/workflows/politica.yml":
+                "pl0n3r/factory/.github/workflows/politica.yml@v1",
+            ".github/workflows/tag-release.yml":
+                "pl0n3r/factory/.github/workflows/release.yml@v1",
+        }
+        for path, reference in expected.items():
+            with self.subTest(path=path):
+                workflow = self.read(path)
+                self.assertIn(reference, workflow)
+                self.assertNotIn("@main", workflow)
+                self.assertNotIn("secrets: inherit", workflow)
+
+    def test_local_coordination_copy_is_not_executed_by_active_workflows(self) -> None:
+        ci = self.read(".github/workflows/ci.yml")
+        coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
+        self.assertNotIn("scripts/coordinar_trabajo.py", ci)
+        self.assertNotIn("tests/test_coordinar_trabajo.py", ci)
+        self.assertNotIn("scripts/coordinar_trabajo.py", coordination)
+        self.assertIn(
+            "pl0n3r/factory/.github/workflows/coordinacion.yml@v1",
+            ci,
+        )
+
+    def test_condor_ci_requires_factory_without_dropping_specific_gates(self) -> None:
+        ci = self.read(".github/workflows/ci.yml")
+        self.assertIn(
+            "uses: pl0n3r/factory/.github/workflows/ci.yml@v1",
+            ci,
+        )
+        for token in (
+            "stack: symfony",
+            "domain: https://www.condorapp.com.co",
+            "version_source: config/version.php",
+            "php_version: '8.5'",
+            "node_enabled: true",
+            "node_version: '24'",
+            "kit_ref: v1",
+            "backend-php",
+            "backup-restore",
+            "e2e",
+            '[[ "$FACTORY_CI" == "success" ]]',
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, ci)
+
+    def test_release_uses_condor_version_source(self) -> None:
+        release = self.read(".github/workflows/tag-release.yml")
+        self.assertIn("version_source: config/version.php", release)
+        self.assertIn("version_format: auto", release)
+        self.assertNotIn("gh release create", release)
+
+
+if __name__ == "__main__":
+    unittest.main()
