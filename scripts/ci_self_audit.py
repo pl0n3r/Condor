@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW_RELATIVE_DIR = Path(".github") / "workflows"
 WORKFLOW_DIR = ROOT / WORKFLOW_RELATIVE_DIR
 PIN_RE = re.compile(r"^[0-9a-f]{40}$")
+FACTORY_V1_WORKFLOW_RE = re.compile(
+    r"^pl0n3r/factory/\.github/workflows/[A-Za-z0-9._-]+\.yml@v1$"
+)
 USES_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)")
 JOB_RE = re.compile(r"^\s{2}([A-Za-z0-9_-]+):\s*$")
 STEP_START_RE = re.compile(r"^(\s*)-\s+(?:name:|uses:|run:)")
@@ -212,6 +215,8 @@ def audit_job_workflow_uses(path: Path, text: str) -> list[str]:
                 findings.append(
                     f"{path}: job '{name}' usa workflow local inválido: {reference}."
                 )
+            continue
+        if FACTORY_V1_WORKFLOW_RE.fullmatch(reference):
             continue
         if reference.startswith("$/") or "@" not in reference:
             findings.append(

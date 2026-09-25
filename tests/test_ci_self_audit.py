@@ -112,6 +112,34 @@ jobs:
             findings = audit_workflow(path)
         self.assertTrue(any("workflow externo" in item for item in findings))
 
+    def test_allows_factory_v1_job_level_reusable_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Factory
+on: pull_request
+jobs:
+  ci:
+    uses: pl0n3r/factory/.github/workflows/ci.yml@v1
+""",
+            )
+            findings = audit_workflow(path)
+        self.assertFalse(any("workflow externo" in item for item in findings))
+
+    def test_rejects_factory_unapproved_job_level_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Factory
+on: pull_request
+jobs:
+  ci:
+    uses: pl0n3r/factory/.github/workflows/ci.yml@main
+""",
+            )
+            findings = audit_workflow(path)
+        self.assertTrue(any("workflow externo" in item for item in findings))
+
     def test_allows_local_job_level_reusable_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self.write_workflow(

@@ -1,4 +1,4 @@
-name: Coordinación multiagente (V 0.1.0)
+name: Coordinación Factory v1
 
 on:
   schedule:
@@ -14,17 +14,11 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: coordinacion-${{ github.event.issue.number || github.event.pull_request.head.ref || github.run_id }}
-  cancel-in-progress: false
-
 jobs:
-  comando-comentario:
-    name: Procesar comando de coordinación
+  comentario:
     if: >-
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request == null &&
-      github.event.sender.login != 'github-actions[bot]' &&
       github.event.sender.login == github.event.comment.user.login &&
       (
         github.event.comment.body == '/tomar' ||
@@ -32,139 +26,63 @@ jobs:
         startsWith(github.event.comment.body, '/liberar ') ||
         startsWith(github.event.comment.body, '/transferir ')
       )
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
     permissions:
       contents: write
       issues: write
       pull-requests: write
-    steps:
-      - name: Descargar coordinador canónico
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          persist-credentials: false
+    uses: pl0n3r/factory/.github/workflows/coordinacion.yml@v1
+    with:
+      operation: comment
+      issue_number: ${{ github.event.issue.number }}
+      actor: ${{ github.event.comment.user.login }}
+      association: ${{ github.event.comment.author_association }}
+      body: ${{ github.event.comment.body }}
 
-      - name: Procesar comando solicitado
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORIO: ${{ github.repository }}
-          ISSUE: ${{ github.event.issue.number }}
-          ACTOR: ${{ github.event.comment.user.login }}
-          ASOCIACION: ${{ github.event.comment.author_association }}
-          CUERPO: ${{ github.event.comment.body }}
-        run: |
-          set -euo pipefail
-          python3 scripts/coordinar_trabajo.py comentario \
-            --repo "$REPOSITORIO" \
-            --issue "$ISSUE" \
-            --actor "$ACTOR" \
-            --association "$ASOCIACION" \
-            --body "$CUERPO"
-
-  reserva-silenciosa:
-    name: Sincronizar reserva silenciosa
+  etiqueta:
     if: >-
       github.event_name == 'issues' &&
       github.event.action == 'labeled' &&
-      github.event.issue.pull_request == null &&
-      github.event.sender.login != 'github-actions[bot]' &&
       github.event.label.name == 'estado: reservado'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
     permissions:
       contents: write
       issues: write
-    steps:
-      - name: Descargar coordinador canónico
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          persist-credentials: false
+      pull-requests: write
+    uses: pl0n3r/factory/.github/workflows/coordinacion.yml@v1
+    with:
+      operation: label
+      issue_number: ${{ github.event.issue.number }}
+      actor: ${{ github.event.sender.login }}
+      label: ${{ github.event.label.name }}
 
-      - name: Procesar estado solicitado
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORIO: ${{ github.repository }}
-          ISSUE: ${{ github.event.issue.number }}
-          ACTOR: ${{ github.event.sender.login }}
-          LABEL: ${{ github.event.label.name }}
-        run: |
-          set -euo pipefail
-          python3 scripts/coordinar_trabajo.py label-event             --repo "$REPOSITORIO"             --issue "$ISSUE"             --actor "$ACTOR"             --label "$LABEL"
-
-  estado-pr:
-    name: Sincronizar estado desde PR
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  pr:
+    if: github.event_name == 'pull_request'
     permissions:
       contents: write
       issues: write
       pull-requests: read
-    steps:
-      - name: Descargar coordinador canónico
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          persist-credentials: false
+    uses: pl0n3r/factory/.github/workflows/coordinacion.yml@v1
+    with:
+      operation: pr
+      pr_number: ${{ github.event.pull_request.number }}
+      action: ${{ github.event.action }}
 
-      - name: Sincronizar estado
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORIO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-          ACCION: ${{ github.event.action }}
-        run: |
-          set -euo pipefail
-          python3 scripts/coordinar_trabajo.py pr-event             --repo "$REPOSITORIO"             --pr "$PR"             --action "$ACCION"
-
-  estado-issue:
-    name: Limpiar o reabrir reserva
-    if: >-
-      github.event_name == 'issues' &&
-      (github.event.action == 'closed' || github.event.action == 'reopened')
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  issue:
+    if: github.event_name == 'issues' && (github.event.action == 'closed' || github.event.action == 'reopened')
     permissions:
       contents: write
       issues: write
       pull-requests: write
-    steps:
-      - name: Descargar coordinador canónico
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          persist-credentials: false
+    uses: pl0n3r/factory/.github/workflows/coordinacion.yml@v1
+    with:
+      operation: issue
+      issue_number: ${{ github.event.issue.number }}
+      action: ${{ github.event.action }}
 
-      - name: Sincronizar estado
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORIO: ${{ github.repository }}
-          ISSUE: ${{ github.event.issue.number }}
-          ACCION: ${{ github.event.action }}
-        run: |
-          set -euo pipefail
-          python3 scripts/coordinar_trabajo.py issue-event             --repo "$REPOSITORIO"             --issue "$ISSUE"             --action "$ACCION"
-
-  marcar-reservas-inactivas:
-    name: Marcar reservas recuperables
+  sweep:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
     permissions:
-      contents: read
+      contents: write
       issues: write
-    steps:
-      - name: Descargar coordinador canónico
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          persist-credentials: false
-      - name: Marcar reservas sin progreso verificable
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORIO: ${{ github.repository }}
-        run: python3 scripts/coordinar_trabajo.py marcar-inactivas --repo "$REPOSITORIO"
+    uses: pl0n3r/factory/.github/workflows/coordinacion.yml@v1
+    with:
+      operation: sweep
