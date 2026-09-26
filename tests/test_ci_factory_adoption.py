@@ -77,13 +77,51 @@ class FactoryAdoptionTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, coordination)
 
-    def test_coordination_comment_job_has_checks_write_only(self) -> None:
+    def test_coordination_sensitive_jobs_have_checks_write_only(self) -> None:
         coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
         jobs = job_blocks(coordination)
         self.assertIn("checks: write", jobs["comentario"])
-        for name in ("etiqueta", "pr", "issue", "sweep"):
+        self.assertIn("checks: write", jobs["issue"])
+        for name in ("etiqueta", "pr", "sweep"):
             with self.subTest(job=name):
                 self.assertNotIn("checks: write", jobs[name])
+
+    def test_issue_edits_are_routed_to_factory_coordination(self) -> None:
+        coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
+        jobs = job_blocks(coordination)
+        self.assertIn("types: [labeled, closed, reopened, edited]", coordination)
+        self.assertIn("github.event.action == 'edited'", jobs["issue"])
+        self.assertIn(
+            ".factory/scripts/coordinar_trabajo.py issue-event",
+            jobs["issue"],
+        )
+
+    def test_issue_coordination_has_minimum_checks_permission(self) -> None:
+        coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
+        jobs = job_blocks(coordination)
+        self.assertIn("checks: write", jobs["issue"])
+        for name in ("etiqueta", "pr", "sweep"):
+            with self.subTest(job=name):
+                self.assertNotIn("checks: write", jobs[name])
+
+    def test_coordination_comments_remain_created_only(self) -> None:
+        coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
+        self.assertIn("issue_comment:\n    types: [created]", coordination)
+        self.assertNotIn("issue_comment:\n    types: [created, edited]", coordination)
+
+    def test_coordination_drift_guard_is_covered(self) -> None:
+        coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
+        jobs = job_blocks(coordination)
+        guarantees = (
+            "types: [labeled, closed, reopened, edited]",
+            "github.event.action == 'edited'",
+            "checks: write",
+            "issue_comment:\n    types: [created]",
+        )
+        for guarantee in guarantees:
+            with self.subTest(guarantee=guarantee):
+                self.assertIn(guarantee, coordination)
+        self.assertIn("checks: write", jobs["issue"])
 
     def test_coordination_wrapper_stays_on_factory_v1(self) -> None:
         coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
