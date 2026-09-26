@@ -306,20 +306,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
     public function testDeliveryFailureIsTerminalEvenWhenInvitationCleanupFails(): void
     {
         $client = $this->client('127.0.0.81');
-        $gateway = new class implements TransactionalEmailGateway {
-            public bool $fail = true;
-            /** @var list<TransactionalEmailMessage> */
-            public array $messages = [];
-            public function isAvailable(): bool { return true; }
-            public function deliver(TransactionalEmailMessage $message): void
-            {
-                if ($this->fail) {
-                    throw new \RuntimeException('forced delivery failure');
-                }
-                $this->messages[] = $message;
-            }
-        };
-        static::getContainer()->set(TransactionalEmailGateway::class, $gateway);
+        $gateway = $this->installRecordingGateway(fail: true);
         $db = static::getContainer()->get(Connection::class);
         $db->executeStatement('DROP TRIGGER IF EXISTS condor_invitation_revoke_fail');
         $db->executeStatement(<<<'SQL'
@@ -394,16 +381,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
     public function testCrashAfterSuccessfulDeliveryDoesNotRedeliverOnEquivalentRetry(): void
     {
         $client = $this->client('127.0.0.82');
-        $gateway = new class implements TransactionalEmailGateway {
-            /** @var list<TransactionalEmailMessage> */
-            public array $messages = [];
-            public function isAvailable(): bool { return true; }
-            public function deliver(TransactionalEmailMessage $message): void
-            {
-                $this->messages[] = $message;
-            }
-        };
-        static::getContainer()->set(TransactionalEmailGateway::class, $gateway);
+        $gateway = $this->installRecordingGateway();
         $db = static::getContainer()->get(Connection::class);
         $db->executeStatement('DROP TRIGGER IF EXISTS condor_idempotency_complete_fail');
         $db->executeStatement(<<<'SQL'
@@ -482,11 +460,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
     public function testInvitedStaffCannotBeReactivatedBeforeInvitationConsumption(): void
     {
         $client = $this->client();
-        $gateway = new class implements TransactionalEmailGateway {
-            public function isAvailable(): bool { return true; }
-            public function deliver(TransactionalEmailMessage $message): void {}
-        };
-        static::getContainer()->set(TransactionalEmailGateway::class, $gateway);
+        $this->installRecordingGateway(record: false);
         $suffix = bin2hex(random_bytes(4));
         $createUri = '/ops/staff';
         $json = json_encode([
@@ -526,14 +500,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
     public function testDeliveryFailureRevokesPersistedInvitation(): void
     {
         $client = $this->client('127.0.0.80');
-        $gateway = new class implements TransactionalEmailGateway {
-            public function isAvailable(): bool { return true; }
-            public function deliver(TransactionalEmailMessage $message): void
-            {
-                throw new \RuntimeException('forced delivery failure');
-            }
-        };
-        static::getContainer()->set(TransactionalEmailGateway::class, $gateway);
+        $this->installRecordingGateway(fail: true, record: false);
         $db = static::getContainer()->get(Connection::class);
         $suffix = bin2hex(random_bytes(4));
         $email = 'controlbot-delivery-fail-'.$suffix.'@example.test';
@@ -944,11 +911,19 @@ final class ControlBotStaffControllerTest extends WebTestCase
         return $staff;
     }
 
-    private function installRecordingGateway(): object
-    {
-        $gateway = new class implements TransactionalEmailGateway {
+    private function installRecordingGateway(
+        bool $fail = false,
+        bool $record = true,
+    ): object {
+        $gateway = new class($fail, $record) implements TransactionalEmailGateway {
             /** @var list<TransactionalEmailMessage> */
             public array $messages = [];
+
+            public function __construct(
+                public bool $fail,
+                private readonly bool $record,
+            ) {
+            }
 
             public function isAvailable(): bool
             {
@@ -957,7 +932,12 @@ final class ControlBotStaffControllerTest extends WebTestCase
 
             public function deliver(TransactionalEmailMessage $message): void
             {
-                $this->messages[] = $message;
+                if ($this->fail) {
+                    throw new \RuntimeException('forced delivery failure');
+                }
+                if ($this->record) {
+                    $this->messages[] = $message;
+                }
             }
         };
         static::getContainer()->set(TransactionalEmailGateway::class, $gateway);
