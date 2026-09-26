@@ -66,6 +66,40 @@ class FactoryAdoptionTests(unittest.TestCase):
         self.assertIn(".factory/scripts/coordinar_trabajo.py", coordination)
         self.assertIn("/migrar-contrato ", coordination)
 
+    def test_coordination_wrapper_routes_v2_commands(self) -> None:
+        coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
+        for token in (
+            "github.event.comment.body == '/adoptar-contrato-huerfana'",
+            "startsWith(github.event.comment.body, '/renovar-contrato ')",
+            "github.event.comment.body == '/tomar'",
+            "startsWith(github.event.comment.body, '/migrar-contrato ')",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, coordination)
+
+    def test_coordination_comment_job_has_checks_write_only(self) -> None:
+        coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
+        jobs = job_blocks(coordination)
+        self.assertIn("checks: write", jobs["comentario"])
+        for name in ("etiqueta", "pr", "issue", "sweep"):
+            with self.subTest(job=name):
+                self.assertNotIn("checks: write", jobs[name])
+
+    def test_coordination_wrapper_stays_on_factory_v1(self) -> None:
+        coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
+        self.assertIn("repository: pl0n3r/factory", coordination)
+        self.assertIn("ref: v1", coordination)
+        self.assertNotIn("@main", coordination)
+        self.assertNotIn("python3 scripts/coordinar_trabajo.py", coordination)
+        self.assertIn(".factory/scripts/coordinar_trabajo.py", coordination)
+
+    def test_coordination_wrapper_candidate_version(self) -> None:
+        version = self.read("config/version.php")
+        readme = self.read("README.md")
+        self.assertIn("'version' => '0.1.48'", version)
+        self.assertIn("V 0.1.48", readme)
+        self.assertIn("Issue #251", readme)
+
     def test_condor_ci_requires_factory_without_dropping_specific_gates(self) -> None:
         ci = self.read(".github/workflows/ci.yml")
         self.assertIn(
