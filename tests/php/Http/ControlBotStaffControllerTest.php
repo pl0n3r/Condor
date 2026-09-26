@@ -221,13 +221,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
         $em->persist($staff);
         $em->flush();
 
-        $db->executeStatement('DROP TRIGGER IF EXISTS condor_controlbot_audit_fail');
-        $db->executeStatement(<<<'SQL'
-            CREATE TRIGGER condor_controlbot_audit_fail
-            BEFORE INSERT ON condor_controlbot_audit
-            FOR EACH ROW
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced audit failure'
-            SQL);
+        $this->installAuditFailureTrigger($db);
         try {
             $uri = '/ops/staff/'.$staff->id().'/suspend';
             $body = json_encode(['reason_code' => 'audit_failure'], JSON_THROW_ON_ERROR);
@@ -244,7 +238,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
             );
             self::assertResponseStatusCodeSame(500);
         } finally {
-            $db->executeStatement('DROP TRIGGER IF EXISTS condor_controlbot_audit_fail');
+            $this->dropAuditFailureTrigger($db);
         }
 
         self::assertSame(
@@ -267,13 +261,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
     public function testStaffCreationDeliversInvitationWithoutExposingToken(): void
     {
         $client = $this->client();
-        $gateway = new class implements TransactionalEmailGateway {
-            /** @var list<TransactionalEmailMessage> */
-            public array $messages = [];
-            public function isAvailable(): bool { return true; }
-            public function deliver(TransactionalEmailMessage $message): void { $this->messages[] = $message; }
-        };
-        static::getContainer()->set(TransactionalEmailGateway::class, $gateway);
+        $gateway = $this->installRecordingGateway();
 
         $suffix = bin2hex(random_bytes(4));
         $uri = '/ops/staff';
@@ -296,21 +284,9 @@ final class ControlBotStaffControllerTest extends WebTestCase
     public function testFailedAuditDoesNotDeliverInvitation(): void
     {
         $client = $this->client('127.0.0.79');
-        $gateway = new class implements TransactionalEmailGateway {
-            /** @var list<TransactionalEmailMessage> */
-            public array $messages = [];
-            public function isAvailable(): bool { return true; }
-            public function deliver(TransactionalEmailMessage $message): void { $this->messages[] = $message; }
-        };
-        static::getContainer()->set(TransactionalEmailGateway::class, $gateway);
+        $gateway = $this->installRecordingGateway();
         $db = static::getContainer()->get(Connection::class);
-        $db->executeStatement('DROP TRIGGER IF EXISTS condor_controlbot_audit_fail');
-        $db->executeStatement(<<<'SQL'
-            CREATE TRIGGER condor_controlbot_audit_fail
-            BEFORE INSERT ON condor_controlbot_audit
-            FOR EACH ROW
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced audit failure'
-            SQL);
+        $this->installAuditFailureTrigger($db);
         try {
             $suffix = bin2hex(random_bytes(4));
             $uri = '/ops/staff';
@@ -328,7 +304,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
             self::assertResponseStatusCodeSame(500);
             self::assertCount(0, $gateway->messages);
         } finally {
-            $db->executeStatement('DROP TRIGGER IF EXISTS condor_controlbot_audit_fail');
+            $this->dropAuditFailureTrigger($db);
         }
     }
 
@@ -968,6 +944,43 @@ final class ControlBotStaffControllerTest extends WebTestCase
         $snapshot = clone $user;
         $user->grantRole(User::ROLE_LEGACY_SUPER_ADMIN);
         self::assertFalse($user->isEqualTo($snapshot));
+    }
+
+    private function installRecordingGateway(): object
+    {
+        $gateway = new class implements TransactionalEmailGateway {
+            /** @var list<TransactionalEmailMessage> */
+            public array $messages = [];
+
+            public function isAvailable(): bool
+            {
+                return true;
+            }
+
+            public function deliver(TransactionalEmailMessage $message): void
+            {
+                $this->messages[] = $message;
+            }
+        };
+        static::getContainer()->set(TransactionalEmailGateway::class, $gateway);
+
+        return $gateway;
+    }
+
+    private function installAuditFailureTrigger(Connection $db): void
+    {
+        $this->dropAuditFailureTrigger($db);
+        $db->executeStatement(<<<'SQL'
+            CREATE TRIGGER condor_controlbot_audit_fail
+            BEFORE INSERT ON condor_controlbot_audit
+            FOR EACH ROW
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced audit failure'
+            SQL);
+    }
+
+    private function dropAuditFailureTrigger(Connection $db): void
+    {
+        $db->executeStatement('DROP TRIGGER IF EXISTS condor_controlbot_audit_fail');
     }
 
     private function client(string $ip = '127.0.0.1'): \Symfony\Bundle\FrameworkBundle\KernelBrowser
