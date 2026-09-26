@@ -48,6 +48,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: observer-release-${{ github.repository }}
+  cancel-in-progress: true
+
 jobs:
   observar:
     name: Validar release y smoke público

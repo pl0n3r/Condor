@@ -1,39 +1,27 @@
-# Condor App — Snapshot operativo · Coordinación Factory v2 V 0.1.48
+# Condor App — Snapshot operativo · GitHub CI de baja amplificación V 0.1.49
 
-> **Candidato:** Issue #251 · enrutar comandos v2 del coordinador Factory.
+> **Candidato:** Issue #188, optimización de disparadores y observadores sobre Factory v1.
 
-Condor permanece en **construcción**. V0.1.48 prepara el wrapper local de coordinación para recuperar contratos huérfanos y renovar contratos v2 sin cerrar ni duplicar ramas/PR existentes.
+Condor continúa en **construcción**. V0.1.49 reduce llamadas y ejecuciones derivadas de GitHub Actions sin cambiar la funcionalidad del SaaS, el protocolo Factory v1 ni la política de producción.
 
 ## Alcance
-- enruta `/adoptar-contrato-huerfana` hacia el coordinador canónico de Factory;
-- enruta `/renovar-contrato <uuid>` y concede `checks: write` únicamente al job de comentarios que necesita invalidar evidencia previa;
-- conserva `pl0n3r/factory@v1`, acciones fijadas por SHA y permisos mínimos en los demás jobs;
-- añade regresiones de contrato sobre comandos, permisos, referencia estable y versión;
-- prepara la recuperación de #188/PR #249 y la renovación de #191/PR #232 cuando Factory v1.0.5 sea publicado por su puerta humana.
-
-## Dependencia externa
-- Factory #176 sigue siendo una puerta humana exact-SHA y no se considera aprobada por mensajes genéricos;
-- mientras el canal estable `factory@v1` siga en v1.0.4, los comandos nuevos pueden quedar rechazados por el coordinador publicado;
-- no se usa `@main` como bypass.
-
-## Serialización
-- `main` base: V0.1.47;
-- este candidato ocupa V0.1.48;
-- #188/PR #249 deberá rebasarse después sobre este `main` y pasar a V0.1.49 antes de integrar.
+- throughput CI por `schedule` horario o `workflow_dispatch`, sin artifacts duplicados por run ni reportes cuando no hay CI reciente;
+- relay de Sonar solo manual, preservando el Quality Gate nativo;
+- coordinación `issue_comment` exclusivamente `created`, manteniendo filtros de comandos en el job;
+- observadores de deploy/release con concurrencia cancelable para evidencia reemplazada;
+- reglas locales anti-polling, push agrupado y máximo 2–3 agentes simultáneos;
+- pruebas de contrato deterministas en `tests/test_github_load_contract.py`.
 
 ## Seguridad y reversión
-- no hay SQL, migraciones, secretos, Hostinger ni cambios de runtime;
-- `checks: write` no se concede globalmente ni a jobs que no lo requieren;
-- revertir este corte restaura el filtro previo sin modificar datos ni producto.
+La telemetría conserva token de solo lectura y artifacts de evidencia; el relay mantiene controles de asociación check→PR. El sweep programado Factory v1 queda intacto. Ningún cambio muta producción, BD, migraciones, Hostinger o secretos. Revertir el PR recupera los disparadores anteriores, con mayor tráfico de GitHub.
 
 ## Evidencia base
-- `main@d12dee38cf4227889a00207acc2229af0089e64f` · V0.1.47;
-- #188/PR #249 está huérfano y Factory exige adopción explícita;
-- #191/PR #232 requiere renovación de contrato v2;
-- reserva v2 #251: `f5609a24-5c3c-4917-9d08-17bbd16dfd51`.
+- `main@c80859cf692be708f81da10d84c20096a1e15a9e` · V0.1.48; #251 / PR #252 ya fusionado; #191 quedó pausado sin merge.
+- Factory v1 sweep horario: run #36143480634 SUCCESS previo a este corte.
+- Merge/CI y observación de producción de V0.1.49 deben verificarse por separado; este snapshot no declara un deploy confirmado.
 
 ## Fuentes de verdad
 - [AGENTES.md](./AGENTES.md)
 - [ESPECIFICACIONES.md](./ESPECIFICACIONES.md)
 - Roadmap: Issue #1
-- Slice actual: Issue #251
+- Slice actual: #188

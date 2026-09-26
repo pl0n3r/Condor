@@ -1,8 +1,6 @@
 name: Relay de hallazgos Sonar (V 0.1.0)
 
 on:
-  check_run:
-    types: [completed]
   workflow_dispatch:
     inputs:
       check_run_id:
@@ -20,12 +18,11 @@ permissions:
 
 concurrency:
   group: sonar-relay-${{ github.repository }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   publicar:
     name: Publicar hallazgos de Sonar en la PR
-    if: github.event_name == 'workflow_dispatch' || github.event.check_run.name == 'SonarCloud Code Analysis'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
