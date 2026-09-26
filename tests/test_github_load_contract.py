@@ -66,7 +66,8 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
         manual = (ROOT / "AGENTES.md").read_text(encoding="utf-8")
         for term in (
             "polling de checks", "Agrupar los pushes",
-            "2–3 agentes simultáneos", "comentarios de progreso",
+            "2–3 agentes simultáneos entre repos distintos", "uno por repo",
+            "comentarios de progreso",
             "telemetría CI se muestrea una vez por hora",
         ):
             with self.subTest(term=term):
