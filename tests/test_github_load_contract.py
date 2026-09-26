@@ -26,11 +26,12 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
         self.assertNotIn("workflow_run:", trigger)
         self.assertIn("actions: write", workflow)
         self.assertIn("contents: read", workflow)
-        self.assertIn("actions/workflows/ci.yml/runs?per_page=30", workflow)
+        self.assertIn("actions/workflows/ci.yml/runs?per_page=30&status=success&event=$SOURCE_EVENT", workflow)
         self.assertIn("status == \"completed\"", workflow)
         self.assertIn("now_epoch - updated_epoch > 86400", workflow)
         self.assertIn("run_attempt", workflow)
-        self.assertIn("actions/artifacts?per_page=100", workflow)
+        self.assertIn("actions/artifacts?name=$artifact_name&per_page=100", workflow)
+        self.assertIn("actions/runs/$RUN_ID/artifacts?per_page=100", workflow)
         self.assertIn("actions/artifacts/$artifact_id", workflow)
         self.assertIn(".name == $name and .expired == false", workflow)
         self.assertIn("steps.source.outputs.should_report == 'true'", workflow)
@@ -43,6 +44,7 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
         self.assertNotIn("check_run:", trigger)
         self.assertIn("check_run_id:", trigger)
         self.assertIn("pr_number:", trigger)
+        self.assertIn("group: sonar-relay-${{ github.repository }}-${{ inputs.pr_number }}", workflow)
         self.assertIn("cancel-in-progress: true", workflow)
         self.assertIn("checks: read", workflow)
         self.assertIn("pull-requests: write", workflow)
@@ -93,6 +95,7 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
         self.assertIn("'version' => '0.1.49'", version)
         self.assertIn("V 0.1.49", readme)
         self.assertIn("Issue #188", readme)
+        self.assertIn("`contents: read` y `actions: write` únicamente", readme)
 
 
 if __name__ == "__main__":
