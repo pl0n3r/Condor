@@ -17,7 +17,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: sonar-relay-${{ github.repository }}
+  group: sonar-relay-${{ github.repository }}-${{ inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
