@@ -92,10 +92,10 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
     def test_release_candidate_version_and_snapshot(self) -> None:
         version = (ROOT / "config/version.php").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("'version' => '0.1.51'", version)
-        self.assertIn("V 0.1.51", readme)
-        self.assertIn("Issue #235", readme)
-        self.assertIn("reducción de fan-out integrada en V0.1.49", readme)
+        self.assertIn("'version' => '0.1.52'", version)
+        self.assertIn("V 0.1.52", readme)
+        self.assertIn("Issue #247", readme)
+        self.assertIn("Dependabot policy V 0.1.52", readme)
 
 
 if __name__ == "__main__":

@@ -1,30 +1,28 @@
-# Condor App — Snapshot operativo · API staff ControlBot V 0.1.51
+# Condor App — Snapshot operativo · Dependabot policy V 0.1.52
 
-> **Candidato:** Issue #235, API M2M segura para administración acotada de staff por ControlBot.
+> **Candidato:** Issue #247 · impedir upgrades semver-major automáticos fuera del stack canónico.
 
-Condor continúa en **construcción**. V0.1.51 añade la superficie `/ops` para ControlBot con autenticación HMAC, anti-replay, allowlist, rate limit, auditoría local y frontera estricta sobre staff no-owner; la integración queda desactivada por defecto. Se conserva la reducción de fan-out integrada en V0.1.49.
+Condor continúa en **construcción**. V0.1.52 mantiene Dependabot semanal para minor/patch, pero evita que Composer, npm y GitHub Actions abran PRs automáticos de upgrades major que deben planificarse explícitamente.
 
 ## Alcance
-- autenticación M2M HMAC SHA-256 con timestamp, nonce anti-replay, allowlist IP y rate limiting;
-- resumen y búsqueda de staff con correo enmascarado, sin clientes ni usuarios tenant;
-- owner de plataforma fuera del dominio mutable de ControlBot;
-- invitación sin contraseñas ni tokens en respuesta y fail-closed si no existe entrega transaccional real;
-- suspensión, reactivación y rol de staff con mutación + auditoría dentro de la misma transacción;
-- password reset bloqueado hasta integrar #191;
-- tratamiento `controlbot_staff_operations` documentado sin inventar proveedor o base legal.
+- Composer conserva el grupo `composer-minor` para minor/patch;
+- npm conserva el grupo `npm-minor` para minor/patch;
+- GitHub Actions conserva el grupo `github-actions-minor` para minor/patch;
+- cada ecosistema ignora `version-update:semver-major` mediante una regla única `dependency-name: "*"`;
+- se preservan labels, frecuencia semanal y `open-pull-requests-limit: 3`;
+- regresión `tests/test_dependabot_policy.py` fija AC-01..AC-03.
 
 ## Seguridad y reversión
-El slice conserva aislamiento por tenant y entidad, no ejecuta SQL de producción ni modifica secretos o infraestructura. La migración es aditiva; cualquier despliegue requiere el flujo normal de backup, migración versionada y observación productiva. Revertir este candidato retira la superficie M2M de staff sin alterar la telemetría/coordinación integrada en V0.1.49.
+Este slice solo modifica configuración de Dependabot y su contrato de regresión. No cambia runtime, base de datos, secretos, permisos, producción ni automerge. Revertir el candidato restaura la política anterior sin tocar dependencias instaladas.
 
 ## Evidencia base
-- `main@479247d01aa862cff24ee0b2dcc360fdb1762ff2` · V0.1.50.
-- Rama recuperada canónicamente para #235 / PR #255; candidato V0.1.51.
-- Versión desplegada: **no verificada en este PR** · producción validada: **pendiente**.
-- Merge/CI verde no equivale automáticamente a producción validada.
-- Factory v1, Política, Privacidad, PHP/MariaDB y coordinación deben pasar sobre el HEAD exacto.
+- `main@c6c6d684d744a4896bb86f5379291f6ae529afa4` · V0.1.51.
+- Reserva activa #247: `495ae98f-9186-43af-95e0-6d0867f5122f`.
+- Rama histórica reconstruida desde main actual; no se arrastran commits obsoletos de V0.1.47.
+- Factory v1, Política, Privacidad, CI Condor y revisión deben pasar sobre el HEAD exacto.
 
 ## Fuentes de verdad
 - [AGENTES.md](./AGENTES.md)
 - [ESPECIFICACIONES.md](./ESPECIFICACIONES.md)
 - Roadmap: Issue #1
-- Slice actual: #235
+- Slice actual: #247
