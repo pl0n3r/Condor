@@ -174,7 +174,7 @@ final readonly class PublicCatalogPresentation
 
             $balance = $balancesByVariant[$variant->id()] ?? null;
             $quantity = $balance instanceof InventoryBalance
-                ? $balance->quantity()
+                ? $balance->sellableQuantity()
                 : 0;
             $product = $variant->product();
             $backorder = $product->allowsBackorder();

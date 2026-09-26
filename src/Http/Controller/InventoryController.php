@@ -713,7 +713,10 @@ final class InventoryController extends AbstractController
         foreach ($balances as $balance) {
             if (
                 $balance instanceof InventoryBalance
-                && $balance->quantity() !== 0
+                && (
+                    $balance->quantity() !== 0
+                    || $balance->reservedQuantity() !== 0
+                )
             ) {
                 return true;
             }

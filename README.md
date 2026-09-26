@@ -1,27 +1,29 @@
-# Condor App — Snapshot operativo · GitHub CI de baja amplificación V 0.1.49
+# Condor App — Snapshot operativo · Pedidos transaccionales V 0.1.50
 
-> **Candidato:** Issue #188, optimización de disparadores y observadores sobre Factory v1.
+> **Candidato:** Issue #183, pedido manual/e-commerce con reserva, liberación y consumo de inventario.
 
-Condor continúa en **construcción**. V0.1.49 reduce llamadas y ejecuciones derivadas de GitHub Actions sin cambiar la funcionalidad del SaaS, el protocolo Factory v1 ni la política de producción.
+Condor continúa en **construcción**. V0.1.50 recupera sobre el main actual el slice transaccional de pedidos y checkout, preservando la coordinación Factory v2 y la reducción de fan-out integrada en V0.1.49.
 
 ## Alcance
-- throughput CI por `schedule` horario o `workflow_dispatch`, sin artifacts duplicados por run ni reportes cuando no hay CI reciente;
-- relay de Sonar solo manual, preservando el Quality Gate nativo;
-- coordinación `issue_comment` exclusivamente `created`, manteniendo filtros de comandos en el job;
-- observadores de deploy/release con concurrencia cancelable para evidencia reemplazada;
-- reglas locales anti-polling, push agrupado y máximo 2–3 agentes simultáneos;
-- pruebas de contrato deterministas en `tests/test_github_load_contract.py`.
+- dominio único de pedidos con `Order`, `OrderLine` y `OrderEvent`, snapshots monetarios y estados independientes;
+- reservas de inventario persistentes con operaciones idempotentes de reservar, liberar y consumir;
+- pedido manual Admin y checkout público sobre el mismo servicio transaccional;
+- liberación de reservas expiradas mediante servicio/command dedicado;
+- migración aditiva y expand-compatible para pedidos y reservas;
+- UI Admin, contratos PHP y cobertura Playwright para retry, cancelación y consumo;
+- rate limiting de checkout y validación por tenant/entidad/sede/fuente.
 
 ## Seguridad y reversión
-La telemetría usa `contents: read` y `actions: write` únicamente en su workflow para consultar y retirar artifacts de evidencia; el relay mantiene controles de asociación check→PR. El sweep programado Factory v1 queda intacto. Ningún cambio muta producción, BD, migraciones, Hostinger o secretos. Revertir el PR recupera los disparadores anteriores, con mayor tráfico de GitHub.
+El slice conserva aislamiento por tenant y entidad, no ejecuta SQL de producción ni modifica secretos o infraestructura. La migración es aditiva; cualquier despliegue requiere el flujo normal de backup, migración versionada y observación productiva. Revertir este candidato retira la superficie de pedidos sin alterar la telemetría/coordinación integrada en V0.1.49.
 
 ## Evidencia base
-- `main@c80859cf692be708f81da10d84c20096a1e15a9e` · V0.1.48; #251 / PR #252 ya fusionado; #191 quedó pausado sin merge.
-- Factory v1 sweep horario: run #36143480634 SUCCESS previo a este corte.
-- Merge/CI y observación de producción de V0.1.49 deben verificarse por separado; este snapshot no declara un deploy confirmado.
+- `main@ddd7c5376f0d61b14851e4e16f700858d4962c51` · V0.1.49; #188 / PR #253 ya fusionado.
+- Trabajo recuperado desde el antecedente histórico #184 y validado de nuevo sobre el main actual.
+- El candidato V0.1.50 debe pasar CI exact-head, Política/Privacidad, revisión y gates de coordinación antes de merge.
+- Merge/CI verde no equivale automáticamente a producción validada.
 
 ## Fuentes de verdad
 - [AGENTES.md](./AGENTES.md)
 - [ESPECIFICACIONES.md](./ESPECIFICACIONES.md)
 - Roadmap: Issue #1
-- Slice actual: #188
+- Slice actual: #183

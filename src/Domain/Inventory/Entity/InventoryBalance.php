@@ -45,6 +45,9 @@ class InventoryBalance
     #[ORM\Column(type: 'integer')]
     private int $quantity = 0;
 
+    #[ORM\Column(name: 'reserved_quantity', type: 'integer', options: ['default' => 0])]
+    private int $reservedQuantity = 0;
+
     #[ORM\Column(type: 'integer')]
     private int $version = 0;
 
@@ -111,9 +114,83 @@ class InventoryBalance
         return $this->quantity;
     }
 
+    public function reservedQuantity(): int
+    {
+        return $this->reservedQuantity;
+    }
+
+    public function sellableQuantity(): int
+    {
+        return $this->quantity - $this->reservedQuantity;
+    }
+
     public function version(): int
     {
         return $this->version;
+    }
+
+    public function reserve(int $quantity): void
+    {
+        self::assertPositiveQuantity($quantity);
+
+        $nextReserved = $this->reservedQuantity + $quantity;
+        self::assertDatabaseInteger(
+            $nextReserved,
+            'La cantidad reservada excede el rango permitido por inventario.',
+        );
+
+        if (
+            $this->quantity - $nextReserved < 0
+            && !$this->variant->product()->allowsBackorder()
+        ) {
+            throw new DomainException(
+                'Stock insuficiente: no hay disponibilidad vendible para reservar.',
+            );
+        }
+
+        $this->reservedQuantity = $nextReserved;
+        $this->touch();
+    }
+
+    public function releaseReserved(int $quantity): void
+    {
+        self::assertPositiveQuantity($quantity);
+        if ($quantity > $this->reservedQuantity) {
+            throw new DomainException(
+                'No se puede liberar más inventario del que está reservado.',
+            );
+        }
+
+        $this->reservedQuantity -= $quantity;
+        $this->touch();
+    }
+
+    public function consumeReserved(int $quantity): void
+    {
+        self::assertPositiveQuantity($quantity);
+        if ($quantity > $this->reservedQuantity) {
+            throw new DomainException(
+                'No se puede consumir más inventario del que está reservado.',
+            );
+        }
+
+        $nextQuantity = $this->quantity - $quantity;
+        self::assertDatabaseInteger(
+            $nextQuantity,
+            'El saldo excede el rango permitido por inventario.',
+        );
+        if (
+            $nextQuantity < 0
+            && !$this->variant->product()->allowsBackorder()
+        ) {
+            throw new DomainException(
+                'Stock insuficiente: el producto no permite backorder.',
+            );
+        }
+
+        $this->quantity = $nextQuantity;
+        $this->reservedQuantity -= $quantity;
+        $this->touch();
     }
 
     public function apply(int $delta): void
@@ -134,17 +211,36 @@ class InventoryBalance
         );
         if (
             $delta < 0
-            && $next < 0
+            && $next - $this->reservedQuantity < 0
             && !$this->variant->product()->allowsBackorder()
         ) {
             throw new DomainException(
-                'Stock insuficiente: el producto no permite backorder.',
+                'Stock insuficiente: el producto no permite backorder. '
+                .'No se pueden comprometer reservas activas.',
             );
         }
 
         $this->quantity = $next;
+        $this->touch();
+    }
+
+    private function touch(): void
+    {
         $this->version++;
         $this->updatedAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    }
+
+    private static function assertPositiveQuantity(int $quantity): void
+    {
+        if ($quantity <= 0) {
+            throw new DomainException(
+                'La cantidad de inventario debe ser mayor que cero.',
+            );
+        }
+        self::assertDatabaseInteger(
+            $quantity,
+            'La cantidad excede el rango permitido por inventario.',
+        );
     }
 
     private static function assertDatabaseInteger(

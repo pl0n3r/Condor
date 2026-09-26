@@ -128,6 +128,7 @@ trait BranchApiSupport
         }
     }
 
+    /** @param array<string, mixed> $context */
     private function audit(
         Tenant $tenant,
         User $actor,

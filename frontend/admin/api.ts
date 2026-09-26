@@ -231,3 +231,22 @@ export function effectivePricePath(
 
   return pricingPath(branchId) + '/effective?' + params.toString();
 }
+
+
+export function ordersPath(branchId: string): string {
+  return '/api/v1/branches/' + safeUlid(branchId) + '/orders';
+}
+
+export function orderCancelPath(
+  branchId: string,
+  orderId: string,
+): string {
+  return ordersPath(branchId) + '/' + safeUlid(orderId) + '/cancel';
+}
+
+export function orderConsumePath(
+  branchId: string,
+  orderId: string,
+): string {
+  return ordersPath(branchId) + '/' + safeUlid(orderId) + '/consume';
+}

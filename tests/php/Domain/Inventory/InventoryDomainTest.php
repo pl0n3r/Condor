@@ -82,6 +82,55 @@ final class InventoryDomainTest extends TestCase
         }
     }
 
+    public function testReservationsKeepOnHandSeparateFromSellableStock(): void
+    {
+        [$tenant, $source, $variant] = $this->fixture();
+        $balance = new InventoryBalance($tenant, $source, $variant, 5);
+
+        $balance->reserve(3);
+
+        self::assertSame(5, $balance->quantity());
+        self::assertSame(3, $balance->reservedQuantity());
+        self::assertSame(2, $balance->sellableQuantity());
+
+        try {
+            $balance->apply(-3);
+            self::fail('Una salida no debe comprometer reservas activas.');
+        } catch (DomainException) {
+            self::assertSame(5, $balance->quantity());
+            self::assertSame(3, $balance->reservedQuantity());
+        }
+
+        $balance->releaseReserved(2);
+        self::assertSame(1, $balance->reservedQuantity());
+        self::assertSame(4, $balance->sellableQuantity());
+    }
+
+    public function testConsumingReservationDecrementsOnHandExactlyOnce(): void
+    {
+        [$tenant, $source, $variant] = $this->fixture();
+        $balance = new InventoryBalance($tenant, $source, $variant, 5);
+        $balance->reserve(2);
+        $balance->consumeReserved(2);
+
+        self::assertSame(3, $balance->quantity());
+        self::assertSame(0, $balance->reservedQuantity());
+        self::assertSame(3, $balance->sellableQuantity());
+    }
+
+    public function testBackorderAllowsReservationBeyondOnHand(): void
+    {
+        [$tenant, $source, $variant] = $this->fixture();
+        $variant->product()->setBackorderAllowed(true);
+        $balance = new InventoryBalance($tenant, $source, $variant, 1);
+
+        $balance->reserve(3);
+
+        self::assertSame(1, $balance->quantity());
+        self::assertSame(3, $balance->reservedQuantity());
+        self::assertSame(-2, $balance->sellableQuantity());
+    }
+
     public function testBalanceRejectsInitialQuantityOutsideDatabaseRange(): void
     {
         [$tenant, $source, $variant] = $this->fixture();
