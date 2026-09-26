@@ -1,32 +1,27 @@
-# Condor App — Snapshot operativo · Rector gate V 0.1.47
+# Condor App — Snapshot operativo · GitHub CI de baja amplificación V 0.1.48
 
-> **Candidato:** Issue #245 · primer lote Rector acotado y dry-run obligatorio.
+> **Candidato:** Issue #188, optimización de disparadores y observadores sobre Factory v1.
 
-Condor permanece en **construcción**. V0.1.47 aplica el primer lote Rector con cambios mecánicos y verificables, y convierte el dry-run de Rector en gate del CI para el alcance configurado.
+Condor continúa en **construcción**. V0.1.48 reduce llamadas y ejecuciones derivadas de GitHub Actions sin cambiar la funcionalidad del SaaS, el protocolo Factory v1 ni la política de producción.
 
 ## Alcance
-- lote Rector limitado a `CatalogSchemaListener.php` y `ContainerRecovery.php`;
-- cambios producidos por Rector: tipado explícito `string` en cuatro constantes privadas;
-- ningún cambio de firma pública, lógica de negocio, Sentry, Doctrine runtime o flujo de requests;
-- `rector.php` conserva sets PHP/code-quality/dead-code/Symfony/Doctrine, pero con paths explícitamente acotados;
-- job `Rector dry-run` integrado al check agregado `Validar`;
-- contratos que fijan el allowlist, el estado post-Rector y la presencia del gate.
+- throughput CI por `schedule` horario o `workflow_dispatch`, sin artifacts duplicados por run ni reportes cuando no hay CI reciente;
+- relay de Sonar solo manual, preservando el Quality Gate nativo;
+- coordinación `issue_comment` exclusivamente `created`, manteniendo filtros de comandos en el job;
+- observadores de deploy/release con concurrencia cancelable para evidencia reemplazada;
+- reglas locales anti-polling, push agrupado y máximo 2–3 agentes simultáneos;
+- pruebas de contrato deterministas en `tests/test_github_load_contract.py`.
 
 ## Seguridad y reversión
-- el workflow efímero que aplicó Rector validó allowlist de archivos, ejecutó dry-run posterior y PHPStan antes de fijar el commit; no forma parte del candidato final;
-- no hay migraciones, SQL, secretos ni cambios de permisos productivos;
-- revertir este corte restaura las constantes sin afectar datos ni contratos externos;
-- futuras ampliaciones de Rector deben hacerse por lotes pequeños y revisables.
+La telemetría conserva token de solo lectura y artifacts de evidencia; el relay mantiene controles de asociación check→PR. El sweep programado Factory v1 queda intacto. Ningún cambio muta producción, BD, migraciones, Hostinger o secretos. Revertir el PR recupera los disparadores anteriores, con mayor tráfico de GitHub.
 
 ## Evidencia base
-- `main@d14f8ca88873e717eec1c310be5a5d481543be3b` · V0.1.46 GREEN;
-- workflow controlado #248 aplicó Rector real y el diff resultante tocó exactamente dos archivos allowlisted;
-- dry-run posterior + PHPStan: SUCCESS;
-- reserva v2 #245: `02fb736e-c1ab-4526-aef4-2ef0fdeeb731`.
+- `main@d12dee38cf4227889a00207acc2229af0089e64f` · V0.1.47; PR #232 de recuperación de contraseña es independiente.
+- Factory v1 sweep horario: run #36143480634 SUCCESS previo a este corte.
+- Merge/CI y observación de producción de V0.1.48 deben verificarse por separado; este snapshot no declara un deploy confirmado.
 
 ## Fuentes de verdad
 - [AGENTES.md](./AGENTES.md)
 - [ESPECIFICACIONES.md](./ESPECIFICACIONES.md)
 - Roadmap: Issue #1
-- Parent de calidad: #212
-- Slice actual: #245
+- Slice actual: #188

@@ -22,6 +22,10 @@ permissions:
   contents: read
   issues: write
 
+concurrency:
+  group: observer-deploy-${{ github.repository }}-main
+  cancel-in-progress: true
+
 jobs:
   observar-deploy:
     name: Observar producción tras push a main
