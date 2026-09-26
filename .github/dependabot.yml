@@ -1,5 +1,6 @@
 version: 2
 # Actualizaciones agrupadas y semanales: pocos PRs, para no cargar GitHub ni a los agentes.
+# Los majors se planifican explícitamente: no deben abrir PRs automáticos fuera del stack vigente.
 updates:
   - package-ecosystem: "composer"
     directory: "/"
@@ -10,6 +11,9 @@ updates:
     groups:
       composer-minor:
         update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels:
       - "tipo: mejora"
       - "prioridad: media"
@@ -23,6 +27,9 @@ updates:
     groups:
       npm-minor:
         update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels:
       - "tipo: mejora"
       - "prioridad: media"
@@ -36,6 +43,9 @@ updates:
     groups:
       github-actions-minor:
         update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels:
       - "tipo: mejora"
       - "prioridad: media"
