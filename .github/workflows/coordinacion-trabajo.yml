@@ -77,7 +77,6 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-      checks: write
     steps:
       - name: Descargar Factory v1
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -138,6 +137,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+      checks: write
     steps:
       - name: Descargar Factory v1
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
