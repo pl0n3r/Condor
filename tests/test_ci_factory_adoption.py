@@ -97,7 +97,7 @@ class FactoryAdoptionTests(unittest.TestCase):
         version = self.read("config/version.php")
         readme = self.read("README.md")
         self.assertIn("'version' => '0.1.49'", version)
-        self.assertIn("V 0.1.48", readme)
+        self.assertIn("V 0.1.49", readme)
         self.assertIn("Issue #251", readme)
 
     def test_condor_ci_requires_factory_without_dropping_specific_gates(self) -> None:
