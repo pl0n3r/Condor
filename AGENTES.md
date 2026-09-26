@@ -128,7 +128,15 @@ Antes de OPERACIÓN REAL, el dueño debe declarar explícitamente el cambio y `C
 
 Siempre requieren autorización explícita: SQL/migraciones destructivas, borrado irreversible, rotación de secretos reales y cambios DNS/infra irreversibles o sin rollback razonable.
 
-## 8. Roadmap, incidentes y handoff
+## 8. Carga y coordinación con varios agentes
+
+- No hacer polling de checks, comentarios ni workflows: una lectura del CI tras entregar el PR y nuevos chequeos solo por hito verificable.
+- Agrupar los pushes por bloque lógico y evitar comentarios de progreso sin resultado.
+- Capacidad operativa de **2–3 agentes simultáneos entre repos distintos**; máximo **uno por repo** (Factory admite el segundo agente solo en los archivos exclusivos previstos por el protocolo). Cada trabajo conserva su reserva válida y evita colisiones.
+- La telemetría CI se muestrea una vez por hora; no dispara una corrida por cada CI ni duplica artifacts para el mismo run.
+- Relay de Sonar exclusivamente manual: SonarCloud ya publica Quality Gate nativo.
+
+## 9. Roadmap, incidentes y handoff
 
 Issue #1 es el único Roadmap activo; los comentarios registran hitos macro, no micro-logs.
 
