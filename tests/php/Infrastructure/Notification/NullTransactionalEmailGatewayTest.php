@@ -11,17 +11,17 @@ use PHPUnit\Framework\TestCase;
 
 final class NullTransactionalEmailGatewayTest extends TestCase
 {
-    public function testImplementsTheAdapterContract(): void
-    {
-        self::assertInstanceOf(TransactionalEmailGateway::class, new NullTransactionalEmailGateway());
-    }
-
-    public function testDeliverNeverThrows(): void
+    public function testSafeDefaultIsUnavailableButPreservesManualFallback(): void
     {
         $gateway = new NullTransactionalEmailGateway();
+        self::assertInstanceOf(TransactionalEmailGateway::class, $gateway);
+        self::assertFalse($gateway->isAvailable());
 
-        $gateway->deliver(new TransactionalEmailMessage('user@example.test', 'invitation', []));
-
+        $gateway->deliver(new TransactionalEmailMessage(
+            'user@example.test',
+            'invitation',
+            [],
+        ));
         $this->addToAssertionCount(1);
     }
 }

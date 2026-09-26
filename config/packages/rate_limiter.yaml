@@ -14,3 +14,8 @@ framework:
       policy: sliding_window
       limit: 10
       interval: '5 minutes'
+
+    control_bot_api:
+      policy: sliding_window
+      limit: 60
+      interval: '1 minute'

@@ -85,6 +85,7 @@ final class PlatformStaffAuthorizationTest extends KernelTestCase
         self::assertContains($second->id(), $accessibleTenantIds);
 
         $staff->deactivate();
+        $entityManager->flush();
         self::assertFalse(
             $authorization->can($staff, $first, 'orders.view'),
         );
@@ -92,6 +93,14 @@ final class PlatformStaffAuthorizationTest extends KernelTestCase
             [],
             $authorization->accessibleTenants($staff),
         );
+
+        // This suite shares one MariaDB instance across test classes. Remove
+        // the fixture entirely after asserting deactivation so it cannot leak
+        // into D-060 summary counts as suspended operational staff.
+        $entityManager->remove($staff);
+        $entityManager->remove($first);
+        $entityManager->remove($second);
+        $entityManager->flush();
     }
 
     public function testOwnerGetsCatalogPermissionsButNormalUserGetsNone(): void
