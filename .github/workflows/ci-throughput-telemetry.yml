@@ -49,7 +49,7 @@ jobs:
           # El ID no cambia al reejecutar CI: distinguir intento y retirar
           # evidencia vieja solo después de recolectar el nuevo reporte.
           artifact_name="ci-throughput-$run_id-attempt-$attempt"
-          existing="$(gh api --paginate --slurp "repos/$REPOSITORIO/actions/artifacts?per_page=100")"
+          existing="$(gh api --paginate --slurp "repos/$REPOSITORIO/actions/artifacts?name=$artifact_name&per_page=100")"
           if jq -e --arg name "$artifact_name" '[.[].artifacts[] | select(.name == $name and .expired == false)] | length > 0' <<< "$existing" >/dev/null; then
             echo "CI $run_id intento $attempt ya cuenta con telemetría." >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -76,7 +76,7 @@ jobs:
           mkdir -p artifacts
           gh api "repos/$REPOSITORIO/contents/scripts/ci_throughput_report.py?ref=$TRUSTED_REF"             --jq '.content' | base64 --decode > /tmp/ci_throughput_report.py
           gh api --paginate "repos/$REPOSITORIO/actions/runs/$RUN_ID/jobs?per_page=100"             --slurp > artifacts/job-pages.json
-          gh api "repos/$REPOSITORIO/actions/runs?per_page=30" > artifacts/recent-runs.json
+          gh api "repos/$REPOSITORIO/actions/workflows/ci.yml/runs?per_page=30&status=success&event=$SOURCE_EVENT" > artifacts/recent-runs.json
           : > artifacts/history-jobs.ndjson
           jq -r --argjson current "$RUN_ID" --arg event "$SOURCE_EVENT"             '[.workflow_runs[] | select(.id != $current)
               | select(.name == "CI Condor (V 0.1.0)")
@@ -107,7 +107,7 @@ jobs:
         run: |
           set -euo pipefail
           # Evita tener simultáneamente artifacts vigentes de dos intentos.
-          gh api --paginate --slurp "repos/$REPOSITORIO/actions/artifacts?per_page=100" |
+          gh api --paginate --slurp "repos/$REPOSITORIO/actions/runs/$RUN_ID/artifacts?per_page=100" |
             jq -r --arg legacy "ci-throughput-$RUN_ID" --arg prefix "ci-throughput-$RUN_ID-attempt-" --arg keep "ci-throughput-$RUN_ID-attempt-$RUN_ATTEMPT"               '.[].artifacts[] | select(.expired == false and (.name == $legacy or (.name | startswith($prefix))) and .name != $keep) | .id' |
             while read -r artifact_id; do
               gh api --method DELETE "repos/$REPOSITORIO/actions/artifacts/$artifact_id"
