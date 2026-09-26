@@ -1,4 +1,7 @@
 parameters:
+  # El deploy Factory usa este origen; el entorno puede sobrescribirlo explícitamente.
+  app.canonical_url.default: 'https://www.condorapp.com.co'
+  app.canonical_url: '%env(default:app.canonical_url.default:CONDOR_CANONICAL_URL)%'
 
 services:
   _defaults:
@@ -21,3 +24,17 @@ services:
   App\Infrastructure\Observability\ErrorIncidentSubscriber:
     arguments:
       $environment: '%kernel.environment%'
+
+  App\Application\Identity\PasswordResetUrlFactory:
+    arguments:
+      $canonicalUrl: '%app.canonical_url%'
+
+  App\Infrastructure\Notification\MailerFactory:
+    alias: App\Infrastructure\Notification\SymfonyMailerFactory
+
+  App\Application\Notification\TransactionalEmailGateway:
+    alias: App\Infrastructure\Notification\SymfonyMailerTransactionalEmailGateway
+
+  App\Infrastructure\Notification\SymfonyMailerTransactionalEmailGateway:
+    arguments:
+      $projectDir: '%kernel.project_dir%'

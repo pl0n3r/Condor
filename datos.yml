@@ -38,6 +38,22 @@
       "providers": []
     },
     {
+      "id": "condor_password_reset",
+      "category": "authentication",
+      "fields": [
+        "user_id",
+        "token_hash",
+        "expires_at",
+        "consumed_at",
+        "revoked_at"
+      ],
+      "purpose": "account_recovery",
+      "basis": "review_required",
+      "retention": "password_reset_lifecycle",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
       "id": "customer_contact",
       "category": "contact",
       "fields": [

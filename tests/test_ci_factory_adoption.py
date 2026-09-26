@@ -65,6 +65,16 @@ class FactoryAdoptionTests(unittest.TestCase):
         self.assertIn("ref: v1", coordination)
         self.assertIn(".factory/scripts/coordinar_trabajo.py", coordination)
         self.assertIn("/migrar-contrato ", coordination)
+        self.assertIn("/renovar-contrato ", coordination)
+        comentario = job_blocks(coordination)["comentario"]
+        self.assertIn("checks: write", comentario)
+        etiqueta = job_blocks(coordination)["etiqueta"]
+        self.assertNotIn("checks: write", etiqueta)
+        self.assertIn("types: [labeled, closed, reopened, edited]", coordination)
+        issue = job_blocks(coordination)["issue"]
+        self.assertIn("github.event.action == 'edited'", issue)
+        self.assertIn("checks: write", issue)
+        self.assertNotIn("checks: write", etiqueta)
 
     def test_condor_ci_requires_factory_without_dropping_specific_gates(self) -> None:
         ci = self.read(".github/workflows/ci.yml")

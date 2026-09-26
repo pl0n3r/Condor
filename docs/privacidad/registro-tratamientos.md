@@ -44,6 +44,16 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `review_required`
 
+## condor_password_reset
+
+- Categoría: `authentication`
+- Campos de software: `user_id`, `token_hash`, `expires_at`, `consumed_at`, `revoked_at`
+- Finalidad: `account_recovery`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `password_reset_lifecycle`
+
 ## customer_contact
 
 - Categoría: `contact`

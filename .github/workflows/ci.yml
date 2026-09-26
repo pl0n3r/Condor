@@ -2,6 +2,7 @@ name: CI Condor (V 0.1.0)
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
     branches: [main]
   push:
     branches: [main]

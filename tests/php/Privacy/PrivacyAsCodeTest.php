@@ -24,6 +24,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'account_invitation',
                 'account_password',
                 'audit_events',
+                'condor_password_reset',
                 'customer_contact',
                 'diagnostic_shares',
                 'error_incidents',
@@ -97,7 +98,7 @@ final class PrivacyAsCodeTest extends TestCase
     {
         $data = $this->data();
         self::assertSame('construccion', $data['phase']);
-        foreach (['account_invitation', 'account_password', 'diagnostic_shares'] as $id) {
+        foreach (['account_invitation', 'account_password', 'condor_password_reset', 'diagnostic_shares'] as $id) {
             $treatment = $this->treatment($data, $id);
             self::assertSame('authentication', $treatment['category']);
             self::assertSame('review_required', $treatment['consent']);
