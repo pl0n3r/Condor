@@ -248,43 +248,12 @@ final readonly class ControlBotStaffController
         }
 
         if (is_array($replay)) {
-            $pendingUserId = $replay['payload']['user_id'] ?? null;
-            if (
-                $replay['status'] === Response::HTTP_ACCEPTED
-                && ($replay['payload']['state'] ?? null) === 'pending_delivery'
-                && is_string($pendingUserId)
-                && preg_match('/^[A-Za-z0-9]{26}$/D', $pendingUserId) === 1
-            ) {
-                $preparedInvitation = $this->entityManager->wrapInTransaction(
-                    function () use ($request, $target, $pendingUserId): PlatformStaffInvitationResult {
-                        $user = $this->entityManager->getRepository(User::class)->find($pendingUserId);
-                        if (!$user instanceof User || !$this->isOperationalStaff($user)) {
-                            throw new ConflictHttpException('Invitación pendiente no recuperable.');
-                        }
-                        $result = $this->staffManager->reissueInvitation($user);
-                        $this->authenticator->audit(
-                            $request,
-                            'controlbot.staff.invitation_reissued',
-                            $user->id(),
-                            ['result' => 'success'],
-                        );
-                        $this->authenticator->completeIdempotentMutation(
-                            $request,
-                            'invite_staff',
-                            $target,
-                            Response::HTTP_ACCEPTED,
-                            [
-                                'state' => 'pending_delivery',
-                                'user_id' => $user->id(),
-                            ],
-                        );
-
-                        return $result;
-                    },
-                );
-            } else {
-                return new JsonResponse($replay['payload'], $replay['status']);
-            }
+            // pending_delivery is deliberately replayed as-is. Once control
+            // crossed the external mail boundary we cannot prove whether a
+            // provider side effect happened before a crash/timeout. Reissuing
+            // here would violate equivalent-retry semantics by potentially
+            // sending a second invitation and invalidating the first token.
+            return new JsonResponse($replay['payload'], $replay['status']);
         }
         if (!$preparedInvitation instanceof PlatformStaffInvitationResult) {
             throw new \LogicException('Invitación ControlBot no preparada.');
@@ -293,36 +262,43 @@ final readonly class ControlBotStaffController
         try {
             $this->staffManager->deliverInvitation($preparedInvitation);
         } catch (\Throwable $exception) {
-            $this->entityManager->wrapInTransaction(
-                function () use (
-                    $request,
-                    $target,
-                    $preparedInvitation,
-                ): void {
-                    $this->staffManager->revokeInvitation($preparedInvitation);
-                    $this->authenticator->audit(
-                        $request,
-                        'controlbot.staff.invitation_delivery_failed',
-                        $preparedInvitation->user->id(),
-                        ['result' => 'failed'],
-                    );
-                    $this->authenticator->completeIdempotentMutation(
-                        $request,
-                        'invite_staff',
-                        $target,
-                        Response::HTTP_SERVICE_UNAVAILABLE,
-                        [
-                            'error' => 'INVITATION_DELIVERY_FAILED',
-                            'invitation_sent' => false,
-                        ],
-                    );
-                },
+            $cleanupPending = false;
+            try {
+                $this->entityManager->wrapInTransaction(
+                    function () use ($request, $preparedInvitation): void {
+                        $this->staffManager->revokeInvitation($preparedInvitation);
+                        $this->authenticator->audit(
+                            $request,
+                            'controlbot.staff.invitation_delivery_failed',
+                            $preparedInvitation->user->id(),
+                            ['result' => 'failed'],
+                        );
+                    },
+                );
+            } catch (\Throwable) {
+                // Cleanup is best-effort and must not leave the idempotency
+                // record permanently pending. A later request with the same
+                // key must replay the same terminal result, not redeliver.
+                $cleanupPending = true;
+            }
+
+            $failurePayload = [
+                'error' => 'INVITATION_DELIVERY_FAILED',
+                'delivery_state' => 'failed_or_unknown',
+                'cleanup_pending' => $cleanupPending,
+            ];
+            $this->authenticator->completeIdempotentMutation(
+                $request,
+                'invite_staff',
+                $target,
+                Response::HTTP_SERVICE_UNAVAILABLE,
+                $failurePayload,
             );
 
-            return new JsonResponse([
-                'error' => 'INVITATION_DELIVERY_FAILED',
-                'invitation_sent' => false,
-            ], Response::HTTP_SERVICE_UNAVAILABLE);
+            return new JsonResponse(
+                $failurePayload,
+                Response::HTTP_SERVICE_UNAVAILABLE,
+            );
         }
 
         $responsePayload = [
