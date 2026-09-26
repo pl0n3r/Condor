@@ -96,7 +96,7 @@ class FactoryAdoptionTests(unittest.TestCase):
     def test_coordination_wrapper_candidate_version(self) -> None:
         version = self.read("config/version.php")
         readme = self.read("README.md")
-        self.assertIn("'version' => '0.1.48'", version)
+        self.assertIn("'version' => '0.1.49'", version)
         self.assertIn("V 0.1.48", readme)
         self.assertIn("Issue #251", readme)
 
