@@ -332,7 +332,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
         }
     }
 
-    public function testPendingInvitationDeliveryCanBeRetriedAfterRevokeFailure(): void
+    public function testDeliveryFailureIsTerminalEvenWhenInvitationCleanupFails(): void
     {
         $client = $this->client('127.0.0.81');
         $gateway = new class implements TransactionalEmailGateway {
@@ -380,21 +380,25 @@ final class ControlBotStaffControllerTest extends WebTestCase
                 ),
                 content: $body,
             );
-            self::assertResponseStatusCodeSame(500);
+            self::assertResponseStatusCodeSame(503);
+            $first = (string) $client->getResponse()->getContent();
+            $firstPayload = json_decode($first, true, 512, JSON_THROW_ON_ERROR);
+            self::assertSame('failed_or_unknown', $firstPayload['delivery_state']);
+            self::assertTrue($firstPayload['cleanup_pending']);
         } finally {
             $db->executeStatement('DROP TRIGGER IF EXISTS condor_invitation_revoke_fail');
         }
 
-        $pending = $db->fetchAssociative(
+        $terminal = $db->fetchAssociative(
             "SELECT response_status,response_body FROM condor_controlbot_idempotency "
             ."WHERE action='invite_staff' AND target_key=? LIMIT 1",
             ['controlbot-pending-'.$suffix.'@example.test'],
         );
-        self::assertIsArray($pending);
-        self::assertSame(202, (int) $pending['response_status']);
-        self::assertSame(
-            'pending_delivery',
-            json_decode((string) $pending['response_body'], true, 512, JSON_THROW_ON_ERROR)['state'] ?? null,
+        self::assertIsArray($terminal);
+        self::assertSame(503, (int) $terminal['response_status']);
+        self::assertTrue(
+            json_decode((string) $terminal['response_body'], true, 512, JSON_THROW_ON_ERROR)['cleanup_pending']
+                ?? false,
         );
 
         $gateway->fail = false;
@@ -411,10 +415,97 @@ final class ControlBotStaffControllerTest extends WebTestCase
             ),
             content: $body,
         );
-        self::assertResponseStatusCodeSame(201);
-        self::assertCount(1, $gateway->messages);
-        $payload = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertTrue($payload['invitation_sent']);
+        self::assertResponseStatusCodeSame(503);
+        self::assertCount(0, $gateway->messages);
+        self::assertSame($first, (string) $client->getResponse()->getContent());
+    }
+
+    public function testCrashAfterSuccessfulDeliveryDoesNotRedeliverOnEquivalentRetry(): void
+    {
+        $client = $this->client('127.0.0.82');
+        $gateway = new class implements TransactionalEmailGateway {
+            /** @var list<TransactionalEmailMessage> */
+            public array $messages = [];
+            public function isAvailable(): bool { return true; }
+            public function deliver(TransactionalEmailMessage $message): void
+            {
+                $this->messages[] = $message;
+            }
+        };
+        static::getContainer()->set(TransactionalEmailGateway::class, $gateway);
+        $db = static::getContainer()->get(Connection::class);
+        $db->executeStatement('DROP TRIGGER IF EXISTS condor_idempotency_complete_fail');
+        $db->executeStatement(<<<'SQL'
+            CREATE TRIGGER condor_idempotency_complete_fail
+            BEFORE UPDATE ON condor_controlbot_idempotency
+            FOR EACH ROW
+            BEGIN
+                IF NEW.response_status = 201 THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced completion crash';
+                END IF;
+            END
+            SQL);
+        $suffix = bin2hex(random_bytes(4));
+        $uri = '/ops/staff';
+        $body = json_encode([
+            'email' => 'controlbot-delivered-'.$suffix.'@example.test',
+            'name' => 'Delivered Once',
+            'role' => 'staff',
+        ], JSON_THROW_ON_ERROR);
+        $key = 'idem-delivered-'.$suffix;
+
+        try {
+            $client->request(
+                'POST',
+                $uri,
+                server: $this->signedHeaders(
+                    'POST',
+                    $uri,
+                    $body,
+                    $this->validNonce('delivered_first', $suffix),
+                    null,
+                    $key,
+                ),
+                content: $body,
+            );
+            self::assertResponseStatusCodeSame(500);
+            self::assertCount(1, $gateway->messages);
+        } finally {
+            $db->executeStatement('DROP TRIGGER IF EXISTS condor_idempotency_complete_fail');
+        }
+
+        $pending = $db->fetchAssociative(
+            "SELECT response_status,response_body FROM condor_controlbot_idempotency "
+            ."WHERE action='invite_staff' AND target_key=? LIMIT 1",
+            ['controlbot-delivered-'.$suffix.'@example.test'],
+        );
+        self::assertIsArray($pending);
+        self::assertSame(202, (int) $pending['response_status']);
+        self::assertSame(
+            'pending_delivery',
+            json_decode((string) $pending['response_body'], true, 512, JSON_THROW_ON_ERROR)['state']
+                ?? null,
+        );
+
+        $client->request(
+            'POST',
+            $uri,
+            server: $this->signedHeaders(
+                'POST',
+                $uri,
+                $body,
+                $this->validNonce('delivered_retry', $suffix),
+                null,
+                $key,
+            ),
+            content: $body,
+        );
+        self::assertResponseStatusCodeSame(202);
+        self::assertCount(
+            1,
+            $gateway->messages,
+            'Equivalent retry must not deliver or reissue a second invitation.',
+        );
     }
 
     public function testInvitedStaffCannotBeReactivatedBeforeInvitationConsumption(): void
