@@ -21,3 +21,7 @@ services:
   App\Infrastructure\Observability\ErrorIncidentSubscriber:
     arguments:
       $environment: '%kernel.environment%'
+
+  App\Http\Controller\StorefrontCheckoutController:
+    arguments:
+      $storefrontCheckoutLimiter: '@limiter.storefront_checkout'

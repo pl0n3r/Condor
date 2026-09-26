@@ -74,6 +74,25 @@ final class PublicCatalogPresentationTest extends KernelTestCase
         self::assertFalse($catalog['products'][0]['variants'][0]['backorder']);
     }
 
+    public function testActiveReservationsReducePublicAvailability(): void
+    {
+        [$tenant, $source, , , $variant] = $this->fixture();
+        $balance = new InventoryBalance($tenant, $source, $variant, 1);
+        $balance->reserve(1);
+        $this->entityManager->persist($balance);
+        $this->entityManager->flush();
+
+        $catalog = $this->presentation->catalog($tenant);
+
+        self::assertSame(
+            'out_of_stock',
+            $catalog['products'][0]['variants'][0]['availability'],
+        );
+        self::assertSame(1, $balance->quantity());
+        self::assertSame(1, $balance->reservedQuantity());
+        self::assertSame(0, $balance->sellableQuantity());
+    }
+
     public function testBackorderMakesConfiguredVariantAvailableWithoutMutatingStock(): void
     {
         [$tenant, $source, , , $variant] = $this->fixture(true);

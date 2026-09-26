@@ -235,12 +235,6 @@ parameters:
 			path: src/Http/Controller/BranchAccessController.php
 
 		-
-			message: '#^Method App\\Http\\Controller\\BranchAccessController\:\:audit\(\) has parameter \$context with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Http/Controller/BranchAccessController.php
-
-		-
 			message: '#^Method App\\Http\\Controller\\BranchAccessController\:\:permissionsFromPayload\(\) should return list\<string\> but returns array\.$#'
 			identifier: return.type
 			count: 1
@@ -265,12 +259,6 @@ parameters:
 			path: src/Http/Controller/CatalogController.php
 
 		-
-			message: '#^Method App\\Http\\Controller\\CatalogController\:\:audit\(\) has parameter \$context with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Http/Controller/CatalogController.php
-
-		-
 			message: '#^Method App\\Http\\Controller\\CatalogController\:\:nullableString\(\) has parameter \$payload with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -289,12 +277,6 @@ parameters:
 			path: src/Http/Controller/CustomerController.php
 
 		-
-			message: '#^Method App\\Http\\Controller\\CustomerController\:\:audit\(\) has parameter \$context with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Http/Controller/CustomerController.php
-
-		-
 			message: '#^Instanceof between App\\Domain\\Catalog\\Entity\\ProductVariant and App\\Domain\\Catalog\\Entity\\ProductVariant will always evaluate to true\.$#'
 			identifier: instanceof.alwaysTrue
 			count: 1
@@ -309,12 +291,6 @@ parameters:
 		-
 			message: '#^Instanceof between App\\Domain\\Inventory\\Entity\\InventorySource and App\\Domain\\Inventory\\Entity\\InventorySource will always evaluate to true\.$#'
 			identifier: instanceof.alwaysTrue
-			count: 1
-			path: src/Http/Controller/InventoryController.php
-
-		-
-			message: '#^Method App\\Http\\Controller\\InventoryController\:\:audit\(\) has parameter \$context with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
 			count: 1
 			path: src/Http/Controller/InventoryController.php
 
@@ -351,12 +327,6 @@ parameters:
 		-
 			message: '#^Instanceof between App\\Domain\\Commerce\\Entity\\VariantPrice and App\\Domain\\Commerce\\Entity\\VariantPrice will always evaluate to true\.$#'
 			identifier: instanceof.alwaysTrue
-			count: 1
-			path: src/Http/Controller/PricingController.php
-
-		-
-			message: '#^Method App\\Http\\Controller\\PricingController\:\:audit\(\) has parameter \$context with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
 			count: 1
 			path: src/Http/Controller/PricingController.php
 
