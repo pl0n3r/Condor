@@ -148,12 +148,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
         $headers = $this->signedHeaders('GET', '/ops/summary', '', 'nonce_'.$suffix.'_summary');
         $client->request('GET', '/ops/summary', server: $headers);
         self::assertResponseIsSuccessful();
-        $summary = json_decode(
-            (string) $client->getResponse()->getContent(),
-            true,
-            512,
-            JSON_THROW_ON_ERROR,
-        );
+        $summary = $this->responseJson($client);
         self::assertSame(
             ['active', 'suspended', 'invited', 'recent_failed_logins'],
             array_keys($summary),
@@ -268,7 +263,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
         $json = json_encode(['email' => 'controlbot-botstaff-'.$suffix.'@example.test', 'name' => 'Bot Staff '.$suffix, 'role' => 'staff'], JSON_THROW_ON_ERROR);
         $client->request('POST', $uri, server: $this->signedHeaders('POST', $uri, $json, $this->validNonce('create', $suffix)), content: $json);
         self::assertResponseStatusCodeSame(201);
-        $payload = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $payload = $this->responseJson($client);
         self::assertSame('invited', $payload['status']);
         self::assertTrue($payload['invitation_sent']);
         self::assertArrayHasKey('id', $payload);
@@ -506,7 +501,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
             content: $json,
         );
         self::assertResponseStatusCodeSame(201);
-        $created = json_decode((string)$client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $created = $this->responseJson($client);
         $id = (string)$created['id'];
 
         $searchUri = '/ops/staff?q='.rawurlencode('Invited Staff');
@@ -516,7 +511,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
             server: $this->signedHeaders('GET', $searchUri, '', $this->validNonce('search', $suffix)),
         );
         self::assertResponseIsSuccessful();
-        $search = json_decode((string)$client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $search = $this->responseJson($client);
         self::assertSame('invited', $search['items'][0]['status']);
 
         $uri = '/ops/staff/'.$id.'/reactivate';
@@ -594,12 +589,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
             server: $this->signedHeaders('GET', $searchUri, '', 'nonce_'.$suffix.'_owner_read'),
         );
         self::assertResponseIsSuccessful();
-        $payload = json_decode(
-            (string) $client->getResponse()->getContent(),
-            true,
-            512,
-            JSON_THROW_ON_ERROR,
-        );
+        $payload = $this->responseJson($client);
         self::assertCount(1, $payload['items']);
         self::assertSame($owner->id(), $payload['items'][0]['id']);
         self::assertSame('owner', $payload['items'][0]['role']);
@@ -835,12 +825,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
             ),
         );
         self::assertResponseIsSuccessful();
-        $payload = json_decode(
-            (string) $client->getResponse()->getContent(),
-            true,
-            512,
-            JSON_THROW_ON_ERROR,
-        );
+        $payload = $this->responseJson($client);
         self::assertSame(25, $payload['limit']);
         self::assertCount(25, $payload['items']);
         self::assertNotNull($payload['next_cursor']);
@@ -863,12 +848,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
             ),
         );
         self::assertResponseIsSuccessful();
-        $second = json_decode(
-            (string) $client->getResponse()->getContent(),
-            true,
-            512,
-            JSON_THROW_ON_ERROR,
-        );
+        $second = $this->responseJson($client);
         self::assertCount(1, $second['items']);
         self::assertNull($second['next_cursor']);
     }
@@ -911,12 +891,7 @@ final class ControlBotStaffControllerTest extends WebTestCase
             content: $body,
         );
         self::assertResponseIsSuccessful();
-        $payload = json_decode(
-            (string) $client->getResponse()->getContent(),
-            true,
-            512,
-            JSON_THROW_ON_ERROR,
-        );
+        $payload = $this->responseJson($client);
         self::assertSame($staff->id(), $payload['id']);
         self::assertSame('suspended', $payload['status']);
     }
@@ -938,6 +913,23 @@ final class ControlBotStaffControllerTest extends WebTestCase
         $snapshot = clone $user;
         $user->grantRole(User::ROLE_LEGACY_SUPER_ADMIN);
         self::assertFalse($user->isEqualTo($snapshot));
+    }
+
+    /** @return array<string, mixed> */
+    private function responseJson(
+        \Symfony\Bundle\FrameworkBundle\KernelBrowser $client,
+    ): array {
+        $payload = json_decode(
+            (string) $client->getResponse()->getContent(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        if (!is_array($payload)) {
+            throw new \RuntimeException('Respuesta JSON inesperada en test ControlBot.');
+        }
+
+        return $payload;
     }
 
     private function persistStaffFixture(
