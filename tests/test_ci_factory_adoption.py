@@ -77,13 +77,25 @@ class FactoryAdoptionTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, coordination)
 
-    def test_coordination_comment_job_has_checks_write_only(self) -> None:
+    def test_coordination_sensitive_jobs_have_checks_write_only(self) -> None:
         coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
         jobs = job_blocks(coordination)
         self.assertIn("checks: write", jobs["comentario"])
-        for name in ("etiqueta", "pr", "issue", "sweep"):
+        self.assertIn("checks: write", jobs["issue"])
+        for name in ("etiqueta", "pr", "sweep"):
             with self.subTest(job=name):
                 self.assertNotIn("checks: write", jobs[name])
+
+    def test_coordination_issue_edit_invalidates_contract_evidence(self) -> None:
+        coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
+        jobs = job_blocks(coordination)
+        self.assertIn(
+            "types: [labeled, closed, reopened, edited]",
+            coordination,
+        )
+        self.assertIn("github.event.action == 'edited'", jobs["issue"])
+        self.assertIn("checks: write", jobs["issue"])
+        self.assertIn("issue_comment:\n    types: [created]", coordination)
 
     def test_coordination_wrapper_stays_on_factory_v1(self) -> None:
         coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
