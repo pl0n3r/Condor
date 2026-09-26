@@ -81,29 +81,34 @@ class FactoryAdoptionTests(unittest.TestCase):
         jobs = job_blocks(self.read(".github/workflows/coordinacion-trabajo.yml"))
         self.assertIn("checks: write", jobs["comentario"])
 
-    def test_issue_edits_are_routed_to_factory_coordination(self) -> None:
+    def coordination_workflow(self) -> tuple[str, dict[str, str]]:
         coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
-        issue = job_blocks(coordination)["issue"]
+        return coordination, job_blocks(coordination)
+
+    def test_issue_edits_are_routed_to_factory_coordination(self) -> None:
+        coordination, jobs = self.coordination_workflow()
         self.assertIn("types: [labeled, closed, reopened, edited]", coordination)
-        self.assertIn("github.event.action == 'edited'", issue)
+        self.assertIn("github.event.action == 'edited'", jobs["issue"])
 
     def test_issue_coordination_has_minimum_checks_permission(self) -> None:
-        jobs = job_blocks(self.read(".github/workflows/coordinacion-trabajo.yml"))
+        _, jobs = self.coordination_workflow()
         self.assertIn("checks: write", jobs["issue"])
-        for name in ("etiqueta", "pr", "sweep"):
-            with self.subTest(job=name):
-                self.assertNotIn("checks: write", jobs[name])
+        self.assertFalse(any("checks: write" in jobs[name] for name in ("etiqueta", "pr", "sweep")))
 
     def test_coordination_comments_remain_created_only(self) -> None:
-        coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
+        coordination, _ = self.coordination_workflow()
         self.assertIn("issue_comment:\n    types: [created]", coordination)
         self.assertNotIn("types: [created, edited]", coordination)
 
     def test_coordination_drift_guard_is_covered(self) -> None:
-        issue = job_blocks(self.read(".github/workflows/coordinacion-trabajo.yml"))["issue"]
-        self.assertIn(".factory/scripts/coordinar_trabajo.py issue-event", issue)
-        self.assertIn("ACCION: ${{ github.event.action }}", issue)
-        self.assertIn('--action "$ACCION"', issue)
+        _, jobs = self.coordination_workflow()
+        issue = jobs["issue"]
+        for token in (
+            ".factory/scripts/coordinar_trabajo.py issue-event",
+            "ACCION: ${{ github.event.action }}",
+            '--action "$ACCION"',
+        ):
+            self.assertIn(token, issue)
 
     def test_coordination_wrapper_stays_on_factory_v1(self) -> None:
         coordination = self.read(".github/workflows/coordinacion-trabajo.yml")
