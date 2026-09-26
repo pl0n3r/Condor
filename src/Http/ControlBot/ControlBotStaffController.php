@@ -346,10 +346,7 @@ final readonly class ControlBotStaffController
                     ['result' => 'success', 'reason_code' => $reasonCode],
                 );
 
-                return new JsonResponse([
-                    'id' => $staff->id(),
-                    'status' => 'suspended',
-                ]);
+                return $this->staffStateResponse($staff, 'suspended');
             },
         );
     }
@@ -385,10 +382,7 @@ final readonly class ControlBotStaffController
                     ['result' => 'success'],
                 );
 
-                return new JsonResponse([
-                    'id' => $staff->id(),
-                    'status' => 'active',
-                ]);
+                return $this->staffStateResponse($staff, 'active');
             },
         );
     }
@@ -497,6 +491,14 @@ final readonly class ControlBotStaffController
                 return $response;
             },
         );
+    }
+
+    private function staffStateResponse(User $staff, string $status): JsonResponse
+    {
+        return new JsonResponse([
+            'id' => $staff->id(),
+            'status' => $status,
+        ]);
     }
 
     /** @return array<string, mixed> */
