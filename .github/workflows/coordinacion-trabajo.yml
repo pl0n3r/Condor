@@ -7,7 +7,7 @@ on:
   pull_request:
     types: [opened, ready_for_review, converted_to_draft, closed]
   issues:
-    types: [labeled, closed, reopened]
+    types: [labeled, closed, reopened, edited]
   issue_comment:
     types: [created]
 
@@ -130,13 +130,14 @@ jobs:
 
   issue:
     name: Sincronizar Issue Factory
-    if: github.event_name == 'issues' && (github.event.action == 'closed' || github.event.action == 'reopened')
+    if: github.event_name == 'issues' && (github.event.action == 'closed' || github.event.action == 'reopened' || github.event.action == 'edited')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write
       issues: write
       pull-requests: write
+      checks: write
     steps:
       - name: Descargar Factory v1
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
