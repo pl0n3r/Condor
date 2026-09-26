@@ -629,9 +629,11 @@ final class ControlBotStaffControllerTest extends WebTestCase
         $client = $this->client();
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $suffix = bin2hex(random_bytes(4));
-        $staff = new User('controlbot-reset-'.$suffix.'@example.test', 'Reset Staff', [User::ROLE_PLATFORM_STAFF]);
-        $em->persist($staff);
-        $em->flush();
+        $staff = $this->persistStaffFixture(
+            $em,
+            'controlbot-reset-'.$suffix.'@example.test',
+            'Reset Staff',
+        );
         $uri = '/ops/staff/'.$staff->id().'/password-reset';
         $client->request('POST', $uri, server: $this->signedHeaders('POST', $uri, '', $this->validNonce('reset', $suffix)));
         self::assertResponseStatusCodeSame(409);
@@ -642,13 +644,11 @@ final class ControlBotStaffControllerTest extends WebTestCase
         $client = $this->client();
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $suffix = bin2hex(random_bytes(4));
-        $staff = new User(
+        $staff = $this->persistStaffFixture(
+            $em,
             'controlbot-idem-required-'.$suffix.'@example.test',
             'Idempotency Required',
-            [User::ROLE_PLATFORM_STAFF],
         );
-        $em->persist($staff);
-        $em->flush();
 
         $uri = '/ops/staff/'.$staff->id().'/suspend';
         $headers = $this->signedHeaders(
@@ -670,13 +670,11 @@ final class ControlBotStaffControllerTest extends WebTestCase
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $db = static::getContainer()->get(Connection::class);
         $suffix = bin2hex(random_bytes(4));
-        $staff = new User(
+        $staff = $this->persistStaffFixture(
+            $em,
             'controlbot-idem-replay-'.$suffix.'@example.test',
             'Idempotent Staff',
-            [User::ROLE_PLATFORM_STAFF],
         );
-        $em->persist($staff);
-        $em->flush();
 
         $uri = '/ops/staff/'.$staff->id().'/suspend';
         $body = json_encode(['reason_code' => 'security'], JSON_THROW_ON_ERROR);
@@ -725,13 +723,11 @@ final class ControlBotStaffControllerTest extends WebTestCase
         $client = $this->client();
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $suffix = bin2hex(random_bytes(4));
-        $staff = new User(
+        $staff = $this->persistStaffFixture(
+            $em,
             'controlbot-idem-conflict-'.$suffix.'@example.test',
             'Idempotency Conflict',
-            [User::ROLE_PLATFORM_STAFF],
         );
-        $em->persist($staff);
-        $em->flush();
 
         $uri = '/ops/staff/'.$staff->id().'/suspend';
         $key = 'idem-conflict-'.$suffix;
@@ -882,13 +878,11 @@ final class ControlBotStaffControllerTest extends WebTestCase
         $client = $this->client();
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $suffix = bin2hex(random_bytes(4));
-        $staff = new User(
+        $staff = $this->persistStaffFixture(
+            $em,
             'controlbot-reason-'.$suffix.'@example.test',
             'Reason Staff',
-            [User::ROLE_PLATFORM_STAFF],
         );
-        $em->persist($staff);
-        $em->flush();
 
         $uri = '/ops/staff/'.$staff->id().'/suspend';
         $client->request(
@@ -944,6 +938,18 @@ final class ControlBotStaffControllerTest extends WebTestCase
         $snapshot = clone $user;
         $user->grantRole(User::ROLE_LEGACY_SUPER_ADMIN);
         self::assertFalse($user->isEqualTo($snapshot));
+    }
+
+    private function persistStaffFixture(
+        EntityManagerInterface $entityManager,
+        string $email,
+        string $name,
+    ): User {
+        $staff = new User($email, $name, [User::ROLE_PLATFORM_STAFF]);
+        $entityManager->persist($staff);
+        $entityManager->flush();
+
+        return $staff;
     }
 
     private function installRecordingGateway(): object
