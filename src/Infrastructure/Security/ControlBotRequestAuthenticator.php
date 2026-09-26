@@ -23,6 +23,11 @@ final readonly class ControlBotRequestAuthenticator
     private const MIN_KEY_BYTES = 32;
     private const IDEMPOTENCY_RETENTION_SECONDS = 86400;
     private const IDEMPOTENCY_PRODUCT = 'condor';
+    private const IDEMPOTENCY_SCOPE_SQL = 'product_key = :product '
+        .'AND actor_key_id = :actor '
+        .'AND action = :action '
+        .'AND target_key = :target '
+        .'AND idempotency_key_hash = :key_hash';
 
     public function __construct(
         private Connection $connection,
@@ -151,20 +156,15 @@ final readonly class ControlBotRequestAuthenticator
         } catch (UniqueConstraintViolationException) {
             $row = $this->connection->fetchAssociative(
                 'SELECT request_fingerprint, response_status, response_body '
-                .'FROM condor_controlbot_idempotency '
-                .'WHERE product_key = :product '
-                .'AND actor_key_id = :actor '
-                .'AND action = :action '
-                .'AND target_key = :target '
-                .'AND idempotency_key_hash = :key_hash '
-                .'FOR UPDATE',
-                [
-                    'product' => self::IDEMPOTENCY_PRODUCT,
-                    'actor' => $keyId,
-                    'action' => $action,
-                    'target' => $target,
-                    'key_hash' => $keyHash,
-                ],
+                .'FROM condor_controlbot_idempotency WHERE '
+                .self::IDEMPOTENCY_SCOPE_SQL
+                .' FOR UPDATE',
+                $this->idempotencyScopeParams(
+                    $keyId,
+                    $action,
+                    $target,
+                    $keyHash,
+                ),
             );
             if ($row === false) {
                 throw new ConflictHttpException('Estado de idempotencia no disponible.');
@@ -206,27 +206,42 @@ final readonly class ControlBotRequestAuthenticator
         $idempotencyKey = $this->idempotencyKey($request);
         $updated = $this->connection->executeStatement(
             'UPDATE condor_controlbot_idempotency '
-            .'SET response_status = :status, response_body = :body '
-            .'WHERE product_key = :product '
-            .'AND actor_key_id = :actor '
-            .'AND action = :action '
-            .'AND target_key = :target '
-            .'AND idempotency_key_hash = :key_hash '
-            .'AND request_fingerprint = :fingerprint',
-            [
-                'status' => $status,
-                'body' => json_encode($payload, JSON_THROW_ON_ERROR),
-                'product' => self::IDEMPOTENCY_PRODUCT,
-                'actor' => $request->headers->get('X-Factory-Key-Id', ''),
-                'action' => $action,
-                'target' => $target,
-                'key_hash' => hash('sha256', $idempotencyKey),
-                'fingerprint' => $this->mutationFingerprint($request),
-            ],
+            .'SET response_status = :status, response_body = :body WHERE '
+            .self::IDEMPOTENCY_SCOPE_SQL
+            .' AND request_fingerprint = :fingerprint',
+            array_merge(
+                $this->idempotencyScopeParams(
+                    $request->headers->get('X-Factory-Key-Id', ''),
+                    $action,
+                    $target,
+                    hash('sha256', $idempotencyKey),
+                ),
+                [
+                    'status' => $status,
+                    'body' => json_encode($payload, JSON_THROW_ON_ERROR),
+                    'fingerprint' => $this->mutationFingerprint($request),
+                ],
+            ),
         );
         if ($updated !== 1) {
             throw new ConflictHttpException('No fue posible consolidar la mutación idempotente.');
         }
+    }
+
+    /** @return array{product:string,actor:string,action:string,target:string,key_hash:string} */
+    private function idempotencyScopeParams(
+        string $actor,
+        string $action,
+        string $target,
+        string $keyHash,
+    ): array {
+        return [
+            'product' => self::IDEMPOTENCY_PRODUCT,
+            'actor' => $actor,
+            'action' => $action,
+            'target' => $target,
+            'key_hash' => $keyHash,
+        ];
     }
 
     private function idempotencyKey(Request $request): string
