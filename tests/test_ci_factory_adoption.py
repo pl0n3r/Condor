@@ -136,7 +136,7 @@ class FactoryAdoptionTests(unittest.TestCase):
         readme = self.read("README.md")
         self.assertIn("'version' => '0.1.52'", version)
         self.assertIn("V 0.1.52", readme)
-        self.assertIn("Issue #235", readme)
+        self.assertIn("Issue #247", readme)
 
     def test_condor_ci_requires_factory_without_dropping_specific_gates(self) -> None:
         ci = self.read(".github/workflows/ci.yml")

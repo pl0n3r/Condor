@@ -94,7 +94,7 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("'version' => '0.1.52'", version)
         self.assertIn("V 0.1.52", readme)
-        self.assertIn("Issue #235", readme)
+        self.assertIn("Issue #247", readme)
         self.assertIn("reducción de fan-out integrada en V0.1.49", readme)
 
 
