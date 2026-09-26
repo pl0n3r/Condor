@@ -28,9 +28,11 @@ jobs:
       (
         github.event.comment.body == '/tomar' ||
         github.event.comment.body == '/liberar-forzado' ||
+        github.event.comment.body == '/adoptar-contrato-huerfana' ||
         startsWith(github.event.comment.body, '/liberar ') ||
         startsWith(github.event.comment.body, '/transferir ') ||
-        startsWith(github.event.comment.body, '/migrar-contrato ')
+        startsWith(github.event.comment.body, '/migrar-contrato ') ||
+        startsWith(github.event.comment.body, '/renovar-contrato ')
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -38,6 +40,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+      checks: write
     steps:
       - name: Descargar Factory v1
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
