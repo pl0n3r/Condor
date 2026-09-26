@@ -24,6 +24,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'account_invitation',
                 'account_password',
                 'audit_events',
+                'controlbot_staff_operations',
                 'customer_contact',
                 'diagnostic_shares',
                 'error_incidents',

@@ -17,7 +17,8 @@
         "display_name",
         "roles",
         "active",
-        "created_at"
+        "created_at",
+        "last_access_at"
       ],
       "purpose": "account_access",
       "basis": "review_required",
@@ -159,6 +160,26 @@
       "purpose": "support_diagnostics",
       "basis": "review_required",
       "retention": "diagnostic_share_lifecycle",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
+      "id": "controlbot_staff_operations",
+      "category": "usage",
+      "fields": [
+        "action",
+        "actor_key_id",
+        "target_staff_user_id",
+        "result",
+        "request_id",
+        "request_nonce_hash",
+        "request_ip",
+        "created_at",
+        "context"
+      ],
+      "purpose": "staff_administration_audit",
+      "basis": "review_required",
+      "retention": "review_required",
       "consent": "review_required",
       "providers": []
     }

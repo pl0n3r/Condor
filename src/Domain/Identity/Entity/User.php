@@ -8,12 +8,13 @@ use App\Shared\Id\UlidFactory;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Security\Core\User\EquatableInterface;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_user')]
-class User implements UserInterface, PasswordAuthenticatedUserInterface
+class User implements UserInterface, PasswordAuthenticatedUserInterface, EquatableInterface
 {
     public const ROLE_PLATFORM_OWNER = 'ROLE_PLATFORM_OWNER';
     public const ROLE_PLATFORM_STAFF = 'ROLE_PLATFORM_STAFF';
@@ -41,6 +42,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\Column(type: 'datetime_immutable')]
     private DateTimeImmutable $createdAt;
+
+    #[ORM\Column(name: 'last_access_at', type: 'datetime_immutable', nullable: true)]
+    private ?DateTimeImmutable $lastAccessAt = null;
 
     /** @param list<string> $roles */
     public function __construct(string $email, string $displayName, array $roles = [])
@@ -80,6 +84,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function activate(): void
     {
         $this->active = true;
+    }
+
+    public function lastAccessAt(): ?DateTimeImmutable
+    {
+        return $this->lastAccessAt;
+    }
+
+    public function markAccessedAt(?DateTimeImmutable $at = null): void
+    {
+        $this->lastAccessAt = $at
+            ?? new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
     public function getUserIdentifier(): string
@@ -124,6 +139,24 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setPasswordHash(string $passwordHash): void
     {
         $this->passwordHash = $passwordHash;
+    }
+
+    public function isEqualTo(UserInterface $user): bool
+    {
+        if (!$user instanceof self) {
+            return false;
+        }
+
+        $roles = $this->roles;
+        $otherRoles = $user->roles;
+        sort($roles);
+        sort($otherRoles);
+
+        return hash_equals($this->id, $user->id)
+            && hash_equals($this->email, $user->email)
+            && hash_equals($this->passwordHash, $user->passwordHash)
+            && $this->active === $user->active
+            && $roles === $otherRoles;
     }
 
     public function eraseCredentials(): void

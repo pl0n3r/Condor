@@ -7,7 +7,7 @@ Producto: `pl0n3r/Condor`
 ## account_identity
 
 - Categoría: `contact`
-- Campos de software: `email`, `display_name`, `roles`, `active`, `created_at`
+- Campos de software: `email`, `display_name`, `roles`, `active`, `created_at`, `last_access_at`
 - Finalidad: `account_access`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
@@ -39,6 +39,16 @@ Producto: `pl0n3r/Condor`
 - Categoría: `usage`
 - Campos de software: `actor_user_id`, `action`, `entity_type`, `entity_id`, `context`, `created_at`
 - Finalidad: `security_audit`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
+## controlbot_staff_operations
+
+- Categoría: `usage`
+- Campos de software: `action`, `actor_key_id`, `target_staff_user_id`, `result`, `request_id`, `request_nonce_hash`, `request_ip`, `created_at`, `context`
+- Finalidad: `staff_administration_audit`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
 - Proveedores: ninguno_declarado
