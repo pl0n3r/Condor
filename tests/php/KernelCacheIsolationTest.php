@@ -41,12 +41,15 @@ final class KernelCacheIsolationTest extends TestCase
 
         try {
             $kernel = new Kernel('prod', false);
+            /** @var array{version:string} $release */
+            $release = require $kernel->getProjectDir().'/config/version.php';
+
             self::assertSame(
-                $kernel->getProjectDir().'/var/cache/prod-v0.1.60',
+                $kernel->getProjectDir().'/var/cache/prod-v'.$release['version'],
                 $kernel->getCacheDir(),
             );
             self::assertNotSame(
-                $kernel->getProjectDir().'/var/cache/prod-v0.1.59',
+                $kernel->getProjectDir().'/var/cache/prod',
                 $kernel->getCacheDir(),
             );
         } finally {
