@@ -75,11 +75,26 @@ final class VerticalCapability
         return strtolower(trim($verticalKey)).'--'.strtolower(trim($capabilityKey));
     }
 
-    public function id(): string { return $this->id; }
-    public function key(): string { return $this->key; }
-    public function vertical(): Vertical { return $this->vertical; }
-    public function capability(): Capability { return $this->capability; }
-    public function priority(): int { return $this->priority; }
+    public function id(): string
+    {
+        return $this->id;
+    }
+    public function key(): string
+    {
+        return $this->key;
+    }
+    public function vertical(): Vertical
+    {
+        return $this->vertical;
+    }
+    public function capability(): Capability
+    {
+        return $this->capability;
+    }
+    public function priority(): int
+    {
+        return $this->priority;
+    }
 
     public function reorder(int $priority): void
     {
