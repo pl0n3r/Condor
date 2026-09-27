@@ -41,11 +41,13 @@ class FactoryAdoptionTests(unittest.TestCase):
     def test_factory_v1_is_only_label_catalog(self) -> None:
         self.assertFalse((ROOT / ".github/labels.json").exists())
         workflow = self.read(".github/workflows/sincronizar-gobierno.yml")
+        ci = self.read(".github/workflows/ci.yml")
         self.assertIn(
             "pl0n3r/factory/.github/workflows/etiquetas.yml@v1",
             workflow,
         )
         self.assertNotIn(".github/labels.json", workflow)
+        self.assertNotIn(".github/labels.json", ci)
 
     def test_agents_require_classification_at_creation(self) -> None:
         manual = self.read("AGENTES.md")
