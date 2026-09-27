@@ -1,20 +1,19 @@
 <?php
-
 declare(strict_types=1);
 
 namespace App\Application\Commercial;
 
+use App\Domain\Commercial\Entity\Plan;
 use App\Domain\Commercial\Entity\PlanVersion;
 use App\Domain\Commercial\Entity\Quote;
 use App\Domain\Commercial\Entity\Vertical;
-use DateInterval;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
 
 final readonly class PlanQuoteService
 {
-    private const EXTRA_ADDON = [
+    private const EXTRA = [
         'users' => 'extra-user',
         'locations' => 'extra-location',
         'companies' => 'extra-company',
@@ -23,13 +22,9 @@ final readonly class PlanQuoteService
     public function __construct(
         private PlanConfiguratorCatalogReader $catalog,
         private EntityManagerInterface $entityManager,
-    ) {
-    }
+    ) {}
 
-    /**
-     * @param array<string,int> $quantities
-     * @param list<string> $addOnKeys
-     */
+    /** @param array<string,int> $quantities @param list<string> $addOnKeys */
     public function quote(
         string $planKey,
         string $verticalKey,
@@ -40,51 +35,39 @@ final readonly class PlanQuoteService
         ?int $clientSuppliedTotal = null,
     ): Quote {
         unset($clientSuppliedTotal);
-
-        $options = $this->catalog->options($planKey, $verticalKey, $at);
         if (!in_array($cycle, ['monthly', 'annual'], true)) {
             throw new DomainException('Ciclo comercial inválido.');
         }
 
-        $allowedAddOns = [];
+        $options = $this->catalog->options($planKey, $verticalKey, $at);
+        $allowed = [];
         foreach ($options['addons'] as $addOn) {
-            $allowedAddOns[$addOn['key']] = $addOn;
+            $allowed[$addOn['key']] = $addOn;
         }
 
-        $normalizedQuantities = $this->quantities($quantities, $options['limits']);
+        $quantities = $this->normalizeQuantities($quantities, $options['limits']);
         $selected = array_values(array_unique(array_map(
             static fn (string $key): string => strtolower(trim($key)),
             $addOnKeys,
         )));
         foreach ($selected as $key) {
-            if (!isset($allowedAddOns[$key])) {
+            if (in_array($key, self::EXTRA, true)) {
+                throw new DomainException('Los extras de escala se derivan de cantidades.');
+            }
+            if (!isset($allowed[$key])) {
                 throw new DomainException('Add-on incompatible con la PlanVersion.');
             }
         }
 
-        $extraAmount = 0;
-        $extraKeys = $selected;
-        foreach (self::EXTRA_ADDON as $quantityKey => $addOnKey) {
-            $extraUnits = $normalizedQuantities[$quantityKey]
-                - (int) ($options['limits'][$quantityKey] ?? 0);
-            if ($extraUnits <= 0) {
-                continue;
-            }
-            if (!isset($allowedAddOns[$addOnKey])) {
-                throw new DomainException('La cantidad excede el catálogo permitido.');
-            }
-            $price = $allowedAddOns[$addOnKey]['monthly_amount'];
-            if (!is_int($price) || $price < 1) {
-                throw new DomainException('El extra requiere propuesta comercial.');
-            }
-            $extraAmount += $extraUnits * $price;
-            $extraKeys[] = $addOnKey;
-        }
-
+        [$extraAmount, $derived] = $this->scaleExtras(
+            $quantities,
+            $options['limits'],
+            $allowed,
+        );
         foreach ($selected as $key) {
-            $price = $allowedAddOns[$key]['monthly_amount'];
+            $price = $allowed[$key]['monthly_amount'];
             if (!is_int($price) || $price < 1) {
-                return $this->persistProposal($options, $cycle, $normalizedQuantities, $extraKeys, $at);
+                return $this->persist($options, $cycle, $quantities, [...$derived, ...$selected], null, null, true, $at);
             }
             $extraAmount += $price;
         }
@@ -92,68 +75,65 @@ final readonly class PlanQuoteService
         $base = $cycle === 'monthly'
             ? $options['plan']['monthly_amount']
             : $options['plan']['annual_amount'];
-
-        $requiresProposal = $options['plan']['quote_required']
+        $proposal = $options['plan']['quote_required']
             || !is_int($base)
             || ($cycle === 'annual' && $extraAmount > 0);
-
-        if ($requiresProposal) {
-            return $this->persistProposal($options, $cycle, $normalizedQuantities, $extraKeys, $at);
-        }
 
         return $this->persist(
             $options,
             $cycle,
-            $normalizedQuantities,
-            $extraKeys,
-            $base,
-            $extraAmount,
-            $base + $extraAmount,
-            false,
+            $quantities,
+            [...$derived, ...$selected],
+            is_int($base) ? $base : null,
+            $proposal ? null : $base + $extraAmount,
+            $proposal,
             $at,
+            $proposal ? null : $extraAmount,
         );
     }
 
-    /**
-     * @param array<string,int> $input
-     * @param array<string,mixed> $limits
-     * @return array<string,int>
-     */
-    private function quantities(array $input, array $limits): array
+    /** @param array<string,int> $input @param array<string,mixed> $limits @return array<string,int> */
+    private function normalizeQuantities(array $input, array $limits): array
     {
+        foreach ($input as $key => $_) {
+            if (!array_key_exists($key, self::EXTRA)) {
+                throw new DomainException('Cantidad comercial desconocida.');
+            }
+        }
         $result = [];
-        foreach (self::EXTRA_ADDON as $key => $_) {
-            $value = $input[$key] ?? $limits[$key] ?? 0;
+        foreach (self::EXTRA as $key => $_) {
+            $value = $input[$key] ?? $limits[$key] ?? null;
             if (!is_int($value) || $value < 1) {
                 throw new DomainException('Cantidad comercial inválida.');
             }
             $result[$key] = $value;
         }
-        foreach ($input as $key => $_) {
-            if (!array_key_exists($key, self::EXTRA_ADDON)) {
-                throw new DomainException('Cantidad comercial desconocida.');
-            }
-        }
-
         return $result;
     }
 
     /**
-     * @param array<string,mixed> $options
      * @param array<string,int> $quantities
-     * @param list<string> $addOns
+     * @param array<string,mixed> $limits
+     * @param array<string,array<string,mixed>> $allowed
+     * @return array{int,list<string>}
      */
-    private function persistProposal(
-        array $options,
-        string $cycle,
-        array $quantities,
-        array $addOns,
-        DateTimeImmutable $at,
-    ): Quote {
-        return $this->persist(
-            $options, $cycle, $quantities, $addOns,
-            null, null, null, true, $at,
-        );
+    private function scaleExtras(array $quantities, array $limits, array $allowed): array
+    {
+        $amount = 0;
+        $keys = [];
+        foreach (self::EXTRA as $quantityKey => $addOnKey) {
+            $units = $quantities[$quantityKey] - (int) ($limits[$quantityKey] ?? 0);
+            if ($units <= 0) {
+                continue;
+            }
+            $price = $allowed[$addOnKey]['monthly_amount'] ?? null;
+            if (!is_int($price) || $price < 1) {
+                throw new DomainException('La cantidad excede el catálogo permitido.');
+            }
+            $amount += $units * $price;
+            $keys[] = $addOnKey;
+        }
+        return [$amount, $keys];
     }
 
     /**
@@ -167,39 +147,38 @@ final readonly class PlanQuoteService
         array $quantities,
         array $addOns,
         ?int $base,
-        ?int $extras,
         ?int $total,
-        bool $proposalRequired,
+        bool $proposal,
         DateTimeImmutable $at,
+        ?int $extras = null,
     ): Quote {
-        $planVersion = $this->entityManager->getRepository(PlanVersion::class)->findOneBy([
-            'version' => $options['plan']['version'],
-            'plan' => $this->entityManager->getRepository(\App\Domain\Commercial\Entity\Plan::class)
-                ->findOneBy(['key' => $options['plan']['key']]),
-        ]);
+        $plan = $this->entityManager->getRepository(Plan::class)
+            ->findOneBy(['key' => $options['plan']['key']]);
         $vertical = $this->entityManager->getRepository(Vertical::class)
             ->findOneBy(['key' => $options['vertical']['key']]);
-
-        if (!$planVersion instanceof PlanVersion || !$vertical instanceof Vertical) {
-            throw new DomainException('No fue posible fijar la versión comercial de la cotización.');
+        if (!$plan instanceof Plan || !$vertical instanceof Vertical) {
+            throw new DomainException('Catálogo comercial inconsistente.');
+        }
+        $version = $this->entityManager->getRepository(PlanVersion::class)
+            ->findOneBy(['plan' => $plan, 'version' => $options['plan']['version']]);
+        if (!$version instanceof PlanVersion) {
+            throw new DomainException('PlanVersion comercial no disponible.');
         }
 
         $quote = new Quote(
-            $planVersion,
+            $version,
             $vertical,
             $cycle,
             $quantities,
-            $addOns,
+            array_values(array_unique($addOns)),
             $base,
             $extras,
             $total,
-            $proposalRequired,
-            $at->add(new DateInterval('P30D')),
+            $proposal,
             $at,
         );
         $this->entityManager->persist($quote);
         $this->entityManager->flush();
-
         return $quote;
     }
 }
