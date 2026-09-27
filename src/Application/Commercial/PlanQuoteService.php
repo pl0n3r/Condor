@@ -108,7 +108,7 @@ final readonly class PlanQuoteService
             $cycle,
             $quantities,
             [...$derived, ...$selected],
-            is_int($base) ? $base : null,
+            $base,
             $proposal ? null : $base + $extraAmount,
             $proposal,
             $at,
