@@ -37,10 +37,12 @@ final class Kernel extends BaseKernel
                 .$controlBotProfile;
         }
 
+        if ($this->getEnvironment() !== 'prod') {
+            return parent::getCacheDir();
+        }
+
         return $this->getProjectDir()
-            .'/var/cache/'
-            .$this->getEnvironment()
-            .'-v'
+            .'/var/cache/prod-v'
             .$this->releaseCacheKey();
     }
 
