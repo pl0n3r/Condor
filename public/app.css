@@ -58,6 +58,7 @@ a { color: inherit; }
 }
 
 .nav-link { font-size: .9rem; }
+.public-nav > div { display: flex; align-items: center; gap: 18px; }
 
 .home-hero {
   width: min(100% - 40px, 1180px);

@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PRICING_CONTROLLER = (ROOT / "src/Http/Controller/CommercialPricingController.php").read_text(encoding="utf-8")
 PRICING_TWIG = (ROOT / "templates/pricing/index.html.twig").read_text(encoding="utf-8")
 CONFIG_CONTROLLER = (ROOT / "src/Http/Controller/PlanConfiguratorController.php").read_text(encoding="utf-8")
+HOME_TWIG = (ROOT / "templates/home/index.html.twig").read_text(encoding="utf-8")
 CONFIG_APP = (ROOT / "frontend/configurator/main.tsx").read_text(encoding="utf-8")
 OWNER_CONTEXT = (ROOT / "src/Http/Controller/PlatformOwnerContextController.php").read_text(encoding="utf-8")
 OWNER_APP = (ROOT / "frontend/admin/PlatformOwnerApp.tsx").read_text(encoding="utf-8")
@@ -22,6 +23,7 @@ class PlanConfiguratorConsumerTests(unittest.TestCase):
         self.assertIn("{% for plan in plans %}", PRICING_TWIG)
         self.assertIn("plan.monthly_amount", PRICING_TWIG)
         self.assertIn("plan.annual_amount", PRICING_TWIG)
+        self.assertIn("app_commercial_pricing", HOME_TWIG)
 
     def test_pricing_configurator_and_superadmin_share_catalog(self) -> None:
         self.assertIn("$this->catalog->current($at)", CONFIG_CONTROLLER)
