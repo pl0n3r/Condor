@@ -25,3 +25,6 @@ services:
   App\Http\Controller\StorefrontCheckoutController:
     arguments:
       $storefrontCheckoutLimiter: '@limiter.storefront_checkout'
+
+  App\Domain\CommercialCatalog\CommercialCatalogRepository:
+    alias: App\Infrastructure\Persistence\DoctrineCommercialCatalogRepository
