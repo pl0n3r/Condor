@@ -1,8 +1,6 @@
 <?php
 declare(strict_types=1);
-
 namespace App\Tests\Security;
-
 use App\Application\Identity\AccountPasswordPolicy;
 use App\Application\Identity\PasswordResetSecurity;
 use App\Domain\Identity\Entity\PasswordResetToken;
@@ -33,22 +31,27 @@ final class PasswordResetPrimitivesTest extends TestCase
         $this->expectException(DomainException::class);
         $token->consume($now->modify('+5 minutes'));
     }
-
     public function testResetTokenRejectsRawMaterial(): void
     {
         $this->expectException(DomainException::class);
-        new PasswordResetToken(new User('admin@example.test', 'Admin'), 'raw-token', new DateTimeImmutable('+1 hour'));
+        new PasswordResetToken(
+            new User('admin@example.test', 'Admin'),
+            'raw-token',
+            new DateTimeImmutable('+1 hour'),
+        );
     }
-
     public function testResetTokenRejectsExpiryBoundaryAndExpiredConsume(): void
     {
         $now = new DateTimeImmutable('2026-09-27T15:00:00+00:00');
-        $token = new PasswordResetToken(new User('expired@example.test', 'Expired'), str_repeat('c', 64), $now);
+        $token = new PasswordResetToken(
+            new User('expired@example.test', 'Expired'),
+            str_repeat('c', 64),
+            $now,
+        );
         self::assertFalse($token->isUsableAt($now));
         $this->expectException(DomainException::class);
         $token->consume($now->modify('+1 second'));
     }
-
     public function testSecurityIssuesOpaqueOneHourTokenAndHashesOnlyValidRawTokens(): void
     {
         $security = new PasswordResetSecurity();
@@ -60,7 +63,6 @@ final class PasswordResetPrimitivesTest extends TestCase
         self::assertLessThanOrEqual(3600, $expiresAt->getTimestamp() - time());
         self::assertNull($security->hashRawToken('invalid'));
     }
-
     public function testPasswordPolicyRejectsWeakIdentityAndReusedPasswords(): void
     {
         $hasher = $this->createMock(UserPasswordHasherInterface::class);
@@ -70,14 +72,9 @@ final class PasswordResetPrimitivesTest extends TestCase
         $policy = new AccountPasswordPolicy($hasher);
         $user = new User('marcela@example.test', 'Marcela');
         $user->setPasswordHash('existing-hash');
-
         $rejected = [
-            'password1234',
-            'password123456',
-            '            ',
-            'áááááá',
-            'Marcela-super-segura-2026',
-            'Current-secure-password-123!',
+            'password1234', 'password123456', '            ', 'áááááá',
+            'Marcela-super-segura-2026', 'Current-secure-password-123!',
         ];
         foreach ($rejected as $candidate) {
             try {

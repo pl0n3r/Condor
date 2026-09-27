@@ -1,8 +1,6 @@
 <?php
 declare(strict_types=1);
-
 namespace App\Tests\Infrastructure\Persistence;
-
 use App\Domain\Identity\Entity\User;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Schema\Schema;
@@ -10,7 +8,6 @@ use Doctrine\Migrations\Exception\AbortMigration;
 use DoctrineMigrations\Version20260925040000;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
-
 require_once dirname(__DIR__, 4).'/migrations/Version20260925040000.php';
 
 final class PasswordResetMigrationTest extends KernelTestCase
@@ -29,7 +26,6 @@ final class PasswordResetMigrationTest extends KernelTestCase
             $table->getForeignKeys(),
         );
         self::assertContains('condor_user', $foreignTables);
-
         $user = new User('migration-reset@example.test', 'Migration Reset');
         $manager = static::getContainer()->get('doctrine.orm.entity_manager');
         $manager->persist($user);
@@ -63,7 +59,6 @@ final class PasswordResetMigrationTest extends KernelTestCase
             $connection->delete('condor_user', ['id' => $user->id()]);
         }
     }
-
     private function executeSql(Connection $connection, array $queries): void
     {
         foreach ($queries as $query) {
