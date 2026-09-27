@@ -28,8 +28,11 @@ final readonly class AccountPasswordPolicy
 
     public function assertAcceptable(User $user, string $plainPassword): void
     {
-        if (strlen($plainPassword) < 12 || strlen($plainPassword) > 4096) {
-            throw new DomainException('La contraseña debe tener entre 12 y 4096 caracteres.');
+        if (
+            mb_strlen($plainPassword, 'UTF-8') < 12
+            || strlen($plainPassword) > 4096
+        ) {
+            throw new DomainException('La contraseña debe tener al menos 12 caracteres y máximo 4096 bytes.');
         }
 
         $normalized = mb_strtolower(trim($plainPassword), 'UTF-8');

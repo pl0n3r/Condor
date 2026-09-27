@@ -65,6 +65,7 @@ final class PasswordResetPrimitivesTest extends TestCase
 
         foreach ([
             'password1234',
+            'áááááá',
             'Marcela-super-segura-2026',
             'Current-secure-password-123!',
         ] as $candidate) {
