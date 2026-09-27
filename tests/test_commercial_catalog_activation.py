@@ -9,8 +9,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PHP_TEST = ROOT / "tests/php/Application/Commercial/CommercialCatalogActivationTest.php"
-SEEDER = ROOT / "src/Application/Commercial/CommercialCatalogSeeder.php"
-COMMAND = ROOT / "src/Command/CommercialCatalogSeedCommand.php"
 POST_DEPLOY_TEST = ROOT / "tests/test_post_deploy.py"
 
 
@@ -46,12 +44,7 @@ class CommercialCatalogActivationTests(unittest.TestCase):
         self.phpunit("testSeedCommandIsIdempotent")
 
     def test_seed_command_rolls_back_on_failure(self) -> None:
-        seeder = SEEDER.read_text(encoding="utf-8")
-        command = COMMAND.read_text(encoding="utf-8")
-        self.assertIn("wrapInTransaction", seeder)
-        self.assertIn("$this->materialize();", seeder)
-        self.assertIn("catch (Throwable)", command)
-        self.assertIn("Command::FAILURE", command)
+        self.phpunit("testSeedTransactionRollsBackOnFailure")
 
     def test_post_deploy_runs_seed_after_schema_reconciliation(self) -> None:
         self.post_deploy_test(
