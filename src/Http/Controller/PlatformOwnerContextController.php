@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
+use App\Application\Commercial\CommercialCatalogReader;
 use App\Application\Identity\PlatformOwnerTenantContext;
 use App\Domain\Identity\Entity\User;
 use App\Shared\Version\AppVersion;
+use DateTimeImmutable;
+use DateTimeZone;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -23,6 +26,7 @@ final class PlatformOwnerContextController extends AbstractController
     public function __invoke(
         Request $request,
         PlatformOwnerTenantContext $context,
+        CommercialCatalogReader $catalog,
         AppVersion $version,
     ): JsonResponse {
         $this->denyAccessUnlessGranted(User::ROLE_PLATFORM_OWNER);
@@ -45,6 +49,9 @@ final class PlatformOwnerContextController extends AbstractController
             ),
         );
         $tenantPage = $context->tenantPage($page, $perPage);
+        $commercialCatalog = $catalog->current(
+            new DateTimeImmutable('now', new DateTimeZone('UTC')),
+        );
 
         return $this->json([
             'mode' => $tenantId === '' ? 'global' : 'tenant',
@@ -55,6 +62,7 @@ final class PlatformOwnerContextController extends AbstractController
             ],
             'metrics' => $context->metrics(),
             'signals_last_30_days' => $context->functionalSignals(),
+            'commercial_catalog' => $commercialCatalog,
             'tenants' => $tenantPage['items'],
             'tenant_pagination' => [
                 'page' => $tenantPage['page'],
