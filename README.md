@@ -1,29 +1,32 @@
-# Condor App — Snapshot operativo · Commercial Catalog Activation V 0.1.56
+# Condor App — Snapshot operativo · Plan Configurator A V 0.1.57
 
-> **Candidato:** Issue #275 · activación productiva idempotente del catálogo comercial.
+> **Candidato:** Issue #277 · compatibilidad canónica Vertical↔Capability y read model del configurador.
 
-Condor continúa en **construcción**. V0.1.56 convierte el catálogo persistente de V0.1.55 en una capacidad operable: el seed canónico se ejecuta de forma transaccional e idempotente mediante comando Symfony y el post-deploy lo activa después de reconciliar schema, antes de declarar el deploy completo.
+Condor continúa en **construcción**. V0.1.57 abre el Plan Configurator sin duplicar precios ni reglas en React: persiste relevancia por vertical con claves estables y prioridad explícita, y deriva las opciones configurables desde el Commercial Catalog vigente.
 
 ## Alcance
-- `app:commercial:seed` como comando Symfony sin duplicar definiciones comerciales;
-- `CommercialCatalogSeeder::seed()` ejecutado dentro de `EntityManager#wrapInTransaction`;
-- activación automática únicamente en etapa `construction`;
-- orden productivo: schema check → D-054 migrate/recheck si aplica → catalog seed → cache → complete;
-- fallo de seed bloquea cache/complete y deja evidencia `phase=catalog-seed/result=failure`;
-- `live` conserva el contrato sin escritura automática del catálogo;
-- aceptación Factory en `tests/test_commercial_catalog_activation.py`.
+- relación persistida expand-only `VerticalCapability` con key estable, prioridad y unicidad Vertical↔Capability;
+- seed idempotente de relevancia para commerce, textile, manufacturing, professional-services y legal;
+- `PlanConfiguratorCatalogReader` server-side: PlanVersion vigente + vertical + límites + capabilities relevantes + add-ons permitidos;
+- capabilities finales = intersección entre PlanVersion y relevancia del vertical;
+- add-ons provienen exclusivamente de PlanVersion;
+- Legal prioriza contacts/cases/documents/deadlines y excluye inventory/manufacturing incluso en Pro/Enterprise;
+- vertical desconocido o incompatible falla cerrado;
+- aceptación Factory en `tests/test_plan_configurator_catalog.py`.
 
 ## Seguridad, datos y reversión
-El comando materializa solo el catálogo comercial aprobado en #265; no procesa PII ni secretos y `datos.yml` no cambia. La transacción evita estados parciales. El post-deploy sigue protegido por lock y D-054 para schema. Revertir código desactiva la automatización; no se borra catálogo productivo automáticamente.
+No cambia RBAC, PII, secretos ni `datos.yml`. La migración solo agrega tabla/índices/FKs y el seed es idempotente. Revertir código elimina el read model; la tabla puede quedar sin uso hasta una reversión de esquema planificada, sin borrado automático de datos productivos.
 
 ## Evidencia base
-- `main@f78ab084944421e3b9a2736642f02230853ac0e5` · V0.1.55 · PRODUCCIÓN EN VERDE.
-- Reserva #275: `dcfe035b-7078-431e-a93e-fd0cacbce1b9`.
-- #269 permanece abierto hasta integrar esta activación y verificar 4 planes en producción.
+- `main@372e12d447900ea392b69d76b0bd2cd2188ca245` · V0.1.56.
+- CI exact-main `36298321922`: **SUCCESS**.
+- Production observer `36298321578`: **SUCCESS**.
+- Reserva #277: `3dc7d909-90c0-45a8-89b9-c75dd974cfaf`.
+- #278 permanece dependiente de integrar este read model antes del quote autoritativo.
 
 ## Fuentes de verdad
 - [AGENTES.md](./AGENTES.md)
 - Roadmap: Issue #1
 - Épico comercial: #265
-- Commercial Catalog parent: #266
-- Activación actual: #275
+- Plan Configurator: #267
+- Slice actual: #277

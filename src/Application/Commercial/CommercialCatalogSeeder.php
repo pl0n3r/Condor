@@ -9,6 +9,7 @@ use App\Domain\Commercial\Entity\Capability;
 use App\Domain\Commercial\Entity\Plan;
 use App\Domain\Commercial\Entity\PlanVersion;
 use App\Domain\Commercial\Entity\Vertical;
+use App\Domain\Commercial\Entity\VerticalCapability;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
@@ -62,6 +63,7 @@ final readonly class CommercialCatalogSeeder
             'calendar-deadlines' => 'Calendario y plazos',
         ]);
         $addOns = $this->addOns();
+        $this->verticalCapabilities($verticals, $capabilities);
 
         $effectiveFrom = new DateTimeImmutable('2026-09-27T00:00:00Z', new DateTimeZone('UTC'));
         $definitions = [
@@ -185,6 +187,62 @@ final readonly class CommercialCatalogSeeder
             $result[$key] = $entity;
         }
         return $result;
+    }
+
+    /**
+     * @param array<string,Vertical> $verticals
+     * @param array<string,Capability> $capabilities
+     */
+    private function verticalCapabilities(array $verticals, array $capabilities): void
+    {
+        $definitions = [
+            'commerce' => [
+                'catalog', 'contacts', 'sales-orders', 'pricing', 'inventory',
+                'purchasing', 'transfers', 'custom-domain', 'reports',
+                'api-webhooks', 'advanced-permissions', 'advanced-analytics',
+                'multi-company',
+            ],
+            'textile' => [
+                'catalog', 'contacts', 'sales-orders', 'pricing', 'inventory',
+                'purchasing', 'transfers', 'manufacturing', 'custom-domain',
+                'reports', 'api-webhooks', 'advanced-permissions',
+                'advanced-analytics', 'multi-company',
+            ],
+            'manufacturing' => [
+                'inventory', 'purchasing', 'manufacturing', 'catalog',
+                'contacts', 'sales-orders', 'pricing', 'transfers', 'reports',
+                'api-webhooks', 'advanced-permissions', 'advanced-analytics',
+                'multi-company',
+            ],
+            'professional-services' => [
+                'contacts', 'sales-orders', 'pricing', 'documents',
+                'calendar-deadlines', 'custom-domain', 'reports',
+                'api-webhooks', 'advanced-permissions', 'advanced-analytics',
+                'multi-company',
+            ],
+            'legal' => [
+                'contacts', 'legal-cases', 'documents', 'calendar-deadlines',
+                'reports', 'advanced-permissions', 'api-webhooks',
+                'custom-domain', 'advanced-analytics', 'multi-company',
+            ],
+        ];
+
+        $repository = $this->entityManager->getRepository(VerticalCapability::class);
+        foreach ($definitions as $verticalKey => $capabilityKeys) {
+            foreach ($capabilityKeys as $offset => $capabilityKey) {
+                $vertical = $verticals[$verticalKey];
+                $capability = $capabilities[$capabilityKey];
+                $relationKey = VerticalCapability::keyFor($vertical, $capability);
+                $priority = $offset + 1;
+                $relation = $repository->findOneBy(['key' => $relationKey]);
+                if (!$relation instanceof VerticalCapability) {
+                    $relation = new VerticalCapability($vertical, $capability, $priority);
+                    $this->entityManager->persist($relation);
+                    continue;
+                }
+                $relation->reorder($priority);
+            }
+        }
     }
 
     /** @param array<string,bool|int|string|null> $limits */
