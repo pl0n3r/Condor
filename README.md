@@ -1,32 +1,23 @@
-# Condor App — Snapshot operativo · Plan Configurator A V 0.1.57
+# Condor App — Snapshot operativo · Plan Configurator B V 0.1.58
 
-> **Candidato:** Issue #277 · compatibilidad canónica Vertical↔Capability y read model del configurador.
+> **Candidato:** Issue #278 · quote autoritativo y trazable.
 
-Condor continúa en **construcción**. V0.1.57 abre el Plan Configurator sin duplicar precios ni reglas en React: persiste relevancia por vertical con claves estables y prioridad explícita, y deriva las opciones configurables desde el Commercial Catalog vigente.
+Condor continúa en construcción. V0.1.58 añade cotización server-side sobre el Commercial Catalog vigente: revalida plan/vertical/add-ons/cantidades, ignora totales enviados por cliente, persiste PlanVersion/composición exacta y deriva a propuesta cuando no existe precio cerrado.
 
 ## Alcance
-- relación persistida expand-only `VerticalCapability` con key estable, prioridad y unicidad Vertical↔Capability;
-- seed idempotente de relevancia para commerce, textile, manufacturing, professional-services y legal;
-- `PlanConfiguratorCatalogReader` server-side: PlanVersion vigente + vertical + límites + capabilities relevantes + add-ons permitidos;
-- capabilities finales = intersección entre PlanVersion y relevancia del vertical;
-- add-ons provienen exclusivamente de PlanVersion;
-- Legal prioriza contacts/cases/documents/deadlines y excluye inventory/manufacturing incluso en Pro/Enterprise;
-- vertical desconocido o incompatible falla cerrado;
-- aceptación Factory en `tests/test_plan_configurator_catalog.py`.
+- `PlanQuoteService` consume `PlanConfiguratorCatalogReader`;
+- cantidades de usuarios/sedes/empresas se recalculan con límites y add-ons canónicos;
+- add-ons incompatibles fallan cerrado;
+- mensual calcula total cerrado; anual con extras queda en proposal hasta política comercial explícita;
+- Enterprise/unpriced nunca inventa total;
+- `Quote` persiste PlanVersion, vertical, cantidades, add-ons, vigencia y estado;
+- tax policy/amount permanecen null mientras no exista política fiscal configurada;
+- aceptación Factory: `tests/test_plan_quote.py`.
 
-## Seguridad, datos y reversión
-No cambia RBAC, PII, secretos ni `datos.yml`. La migración solo agrega tabla/índices/FKs y el seed es idempotente. Revertir código elimina el read model; la tabla puede quedar sin uso hasta una reversión de esquema planificada, sin borrado automático de datos productivos.
+## Seguridad y reversión
+No se confía en precio/total del frontend. No cambia RBAC, PII, secretos ni `datos.yml`. La migración es expand-only.
 
 ## Evidencia base
-- `main@372e12d447900ea392b69d76b0bd2cd2188ca245` · V0.1.56.
-- CI exact-main `36298321922`: **SUCCESS**.
-- Production observer `36298321578`: **SUCCESS**.
-- Reserva #277: `3dc7d909-90c0-45a8-89b9-c75dd974cfaf`.
-- #278 permanece dependiente de integrar este read model antes del quote autoritativo.
-
-## Fuentes de verdad
-- [AGENTES.md](./AGENTES.md)
-- Roadmap: Issue #1
-- Épico comercial: #265
-- Plan Configurator: #267
-- Slice actual: #277
+- `main@0852d3bf42513ddf21ba7cfabc571130c78e42ac` · V0.1.57 GREEN.
+- Reserva #278: `b06dba8c-1c4a-40b2-b63e-d3420d913ce6`.
+- #279 permanece bloqueado hasta integrar este quote autoritativo.
