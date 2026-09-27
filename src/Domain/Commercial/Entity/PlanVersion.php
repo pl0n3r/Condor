@@ -60,15 +60,15 @@ final class PlanVersion
     /** @var Collection<int, Capability> */
     #[ORM\ManyToMany(targetEntity: Capability::class)]
     #[ORM\JoinTable(name: 'condor_commercial_plan_version_capability')]
-    #[ORM\JoinColumn(name: 'plan_version_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
-    #[ORM\InverseJoinColumn(name: 'capability_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    #[ORM\JoinColumn(name: 'plan_version_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    #[ORM\InverseJoinColumn(name: 'capability_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
     private Collection $capabilities;
 
     /** @var Collection<int, AddOn> */
     #[ORM\ManyToMany(targetEntity: AddOn::class)]
     #[ORM\JoinTable(name: 'condor_commercial_plan_version_addon')]
-    #[ORM\JoinColumn(name: 'plan_version_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
-    #[ORM\InverseJoinColumn(name: 'addon_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    #[ORM\JoinColumn(name: 'plan_version_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    #[ORM\InverseJoinColumn(name: 'addon_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
     private Collection $addOns;
 
     /**
