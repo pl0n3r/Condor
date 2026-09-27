@@ -128,10 +128,12 @@ final readonly class CommercialCatalogSeeder
         foreach (['basic', 'business', 'pro', 'enterprise'] as $key) {
             $plan = $this->entityManager->getRepository(Plan::class)
                 ->findOneBy(['key' => $key]);
+            $version = $plan instanceof Plan
+                ? $versions->findOneBy(['plan' => $plan, 'version' => 1])
+                : null;
             if (
-                !$plan instanceof Plan
-                || !$versions->findOneBy(['plan' => $plan, 'version' => 1])
-                    instanceof PlanVersion
+                !($plan instanceof Plan)
+                || !($version instanceof PlanVersion)
             ) {
                 throw new RuntimeException(
                     sprintf('Falta PlanVersion v1 para %s.', $key),
