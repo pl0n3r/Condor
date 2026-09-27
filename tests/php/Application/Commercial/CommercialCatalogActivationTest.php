@@ -56,11 +56,8 @@ final class CommercialCatalogActivationTest extends KernelTestCase
 
     private function commandTester(): CommandTester
     {
-        if (!self::$booted) {
-            self::bootKernel();
-        }
-
-        $application = new Application(self::$kernel);
+        $kernel = self::bootKernel();
+        $application = new Application($kernel);
 
         return new CommandTester(
             $application->find('app:commercial:seed'),
