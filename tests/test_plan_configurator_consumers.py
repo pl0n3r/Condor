@@ -2,6 +2,7 @@
 """Aceptación ejecutable de Plan Configurator #290."""
 
 from pathlib import Path
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,11 +13,26 @@ HOME_TWIG = (ROOT / "templates/home/index.html.twig").read_text(encoding="utf-8"
 CONFIG_APP = (ROOT / "frontend/configurator/main.tsx").read_text(encoding="utf-8")
 OWNER_CONTEXT = (ROOT / "src/Http/Controller/PlatformOwnerContextController.php").read_text(encoding="utf-8")
 OWNER_APP = (ROOT / "frontend/admin/PlatformOwnerApp.tsx").read_text(encoding="utf-8")
+PHP_TEST = ROOT / "tests/php/Http/CommercialPricingConsumersTest.php"
 SEED_PRICES = ("79900", "799000", "199900", "1999000", "499900", "4999000", "14900", "29900", "49900", "99900")
 
 
 class PlanConfiguratorConsumerTests(unittest.TestCase):
+    def phpunit(self, name: str) -> None:
+        runner = ROOT / "vendor/bin/simple-phpunit"
+        if not runner.exists():
+            self.fail("vendor/bin/simple-phpunit no está disponible")
+        result = subprocess.run(
+            [str(runner), "--filter", name, str(PHP_TEST)],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_pricing_page_reads_canonical_catalog(self) -> None:
+        self.phpunit("testPricingPageReadsCanonicalCatalog")
         self.assertIn("#[Route('/precios'", PRICING_CONTROLLER)
         self.assertIn("CommercialCatalogReader", PRICING_CONTROLLER)
         self.assertIn("$catalog->current(", PRICING_CONTROLLER)
@@ -26,6 +42,7 @@ class PlanConfiguratorConsumerTests(unittest.TestCase):
         self.assertIn("app_commercial_pricing", HOME_TWIG)
 
     def test_pricing_configurator_and_superadmin_share_catalog(self) -> None:
+        self.phpunit("testConsumersShareCatalogIdentity")
         self.assertIn("$this->catalog->current($at)", CONFIG_CONTROLLER)
         self.assertIn("'version' => $plan['version']", CONFIG_CONTROLLER)
         self.assertIn("CommercialCatalogReader", OWNER_CONTEXT)
@@ -46,6 +63,7 @@ class PlanConfiguratorConsumerTests(unittest.TestCase):
         self.assertNotIn("capability.key ===", CONFIG_APP)
 
     def test_enterprise_remains_unpriced_across_consumers(self) -> None:
+        self.phpunit("testEnterpriseRemainsUnpricedAcrossConsumers")
         proposal = PRICING_TWIG.split("{% if plan.quote_required %}", 1)[1].split("{% else %}", 1)[0]
         self.assertIn("Solicitar propuesta", proposal)
         self.assertNotIn("monthly_amount", proposal)
