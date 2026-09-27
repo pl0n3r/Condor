@@ -6,16 +6,18 @@ namespace App\Tests\Http;
 use App\Application\Commercial\CommercialCatalogSeeder;
 use App\Domain\Commercial\Entity\Quote;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 final class PlanConfiguratorPublicApiTest extends WebTestCase
 {
     private EntityManagerInterface $manager;
+    private KernelBrowser $client;
 
     protected function setUp(): void
     {
         self::ensureKernelShutdown();
-        static::createClient();
+        $this->client = static::createClient();
         $manager = static::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $manager);
         $this->manager = $manager;
@@ -24,7 +26,7 @@ final class PlanConfiguratorPublicApiTest extends WebTestCase
 
     public function testPublicCatalogAndOptionsUseCanonicalReadModel(): void
     {
-        $client = static::createClient();
+        $client = $this->client;
         $client->request('GET', '/configurar-condor');
         self::assertResponseIsSuccessful();
 
@@ -55,7 +57,7 @@ final class PlanConfiguratorPublicApiTest extends WebTestCase
     public function testPreviewIsAuthoritativeAndDoesNotPersistQuote(): void
     {
         $before = $this->manager->getRepository(Quote::class)->count([]);
-        $client = static::createClient();
+        $client = $this->client;
         $client->jsonRequest('POST', '/api/public/configurator/quote', [
             'plan' => 'business',
             'vertical' => 'commerce',
@@ -73,7 +75,7 @@ final class PlanConfiguratorPublicApiTest extends WebTestCase
 
     public function testIncompatibleAndManualScaleAddonsFailClosed(): void
     {
-        $client = static::createClient();
+        $client = $this->client;
         $base = [
             'plan' => 'pro',
             'vertical' => 'legal',
@@ -98,7 +100,7 @@ final class PlanConfiguratorPublicApiTest extends WebTestCase
 
     public function testPreviewIsRateLimitedAndPayloadAllowlisted(): void
     {
-        $client = static::createClient();
+        $client = $this->client;
         for ($attempt = 0; $attempt < 3; ++$attempt) {
             $client->jsonRequest(
                 'POST',
@@ -119,7 +121,7 @@ final class PlanConfiguratorPublicApiTest extends WebTestCase
 
     public function testLegalAndProposalStatesComeFromCanonicalServices(): void
     {
-        $client = static::createClient();
+        $client = $this->client;
         $client->request(
             'GET',
             '/api/public/configurator/options?plan=pro&vertical=legal',
@@ -142,7 +144,7 @@ final class PlanConfiguratorPublicApiTest extends WebTestCase
     }
 
     /** @return array<string,mixed> */
-    private static function payload($client): array
+    private static function payload(KernelBrowser $client): array
     {
         $payload = json_decode(
             (string) $client->getResponse()->getContent(),
