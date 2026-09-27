@@ -29,3 +29,7 @@ services:
   App\Http\Controller\PlanConfiguratorController:
     arguments:
       $planConfiguratorLimiter: '@limiter.plan_configurator'
+
+  App\Http\Controller\PlanConfiguratorTelemetryController:
+    arguments:
+      $planConfiguratorEventsLimiter: '@limiter.plan_configurator_events'
