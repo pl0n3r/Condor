@@ -204,11 +204,15 @@ class PostDeployStageTest(unittest.TestCase):
         self.assertIn("app:commercial:seed --env=prod --no-interaction", calls)
         self.assertLess(
             calls.rindex("doctrine:migrations:up-to-date"),
+            calls.index("cache:clear"),
+        )
+        self.assertLess(
+            calls.index("cache:clear"),
             calls.index("app:commercial:seed"),
         )
         self.assertLess(
             calls.index("app:commercial:seed"),
-            calls.index("cache:clear"),
+            calls.index("cache:warmup"),
         )
 
     def test_catalog_seed_failure_blocks_cache_and_success(self):
@@ -221,7 +225,7 @@ class PostDeployStageTest(unittest.TestCase):
         self.assertEqual(2, result.returncode, result.stderr)
         self.assertIn("materialización del catálogo comercial falló", result.stderr)
         self.assertIn("app:commercial:seed", calls)
-        self.assertNotIn("cache:clear", calls)
+        self.assertIn("cache:clear", calls)
         self.assertNotIn("cache:warmup", calls)
 
         import json

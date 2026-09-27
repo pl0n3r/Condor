@@ -889,17 +889,19 @@ else
     echo "post-deploy.sh: Doctrine no pudo comprobar el esquema; fallo no clasificable. Caché no modificada." >&2
     exit 2
 fi
+set_post_deploy_phase "cache"
+"$PHP_BIN" bin/console cache:clear --env=prod --no-warmup
+
 if [ "$PRODUCTION_STAGE" = "construction" ]; then
     set_post_deploy_phase "catalog-seed"
     if "$PHP_BIN" bin/console app:commercial:seed --env=prod --no-interaction; then
         :
     else
-        echo "post-deploy.sh: materialización del catálogo comercial falló; caché no modificada." >&2
+        echo "post-deploy.sh: materialización del catálogo comercial falló; cache warmup omitido." >&2
         exit 2
     fi
 fi
 
 set_post_deploy_phase "cache"
-"$PHP_BIN" bin/console cache:clear --env=prod --no-warmup
 "$PHP_BIN" bin/console cache:warmup --env=prod
 set_post_deploy_phase "complete"
