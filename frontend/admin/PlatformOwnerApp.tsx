@@ -9,6 +9,16 @@ import { PlatformStaffPanel } from './PlatformStaffPanel';
 import { PlatformTenantCreationPanel } from './PlatformTenantCreationPanel';
 import { platformOwnerContextPath } from './api';
 
+type CommercialPlan = {
+  key: string;
+  name: string;
+  version: number;
+  currency: string;
+  monthly_amount: number | null;
+  annual_amount: number | null;
+  quote_required: boolean;
+};
+
 type TenantSummary = {
   id: string;
   name: string;
@@ -51,6 +61,7 @@ type PlatformContextResponse = {
     active_membership_count: number;
   };
   signals_last_30_days: FunctionalSignalCounts;
+  commercial_catalog: CommercialPlan[];
   tenants: TenantSummary[];
   tenant_pagination: {
     page: number;
@@ -127,6 +138,18 @@ function parseInternalErrorPayload(value: unknown): InternalErrorPayload | null 
     error_id: value.error_id,
     diagnostic: value.diagnostic,
   };
+}
+
+function commercialMoney(amount: number | null, currency: string): string {
+  if (amount === null) {
+    return 'Sin precio publicado';
+  }
+
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
 type State =
@@ -422,6 +445,52 @@ export function PlatformOwnerApp({
               <FunctionalSignalsPanel
                 signals={state.data.signals_last_30_days}
               />
+
+              <section
+                className="platform-section"
+                aria-labelledby="commercial-catalog-title"
+              >
+                <div className="section-heading compact">
+                  <div>
+                    <span className="eyebrow">Oferta comercial</span>
+                    <h2 id="commercial-catalog-title">Catálogo vigente</h2>
+                  </div>
+                  <span className="status-pill">Solo lectura</span>
+                </div>
+
+                {state.data.commercial_catalog.length === 0 ? (
+                  <div className="platform-empty">
+                    No hay planes comerciales vigentes.
+                  </div>
+                ) : (
+                  <div className="tenant-grid">
+                    {state.data.commercial_catalog.map((plan) => (
+                      <article className="tenant-card" key={plan.key}>
+                        <div>
+                          <span className="tenant-slug">
+                            {plan.key} · v{plan.version}
+                          </span>
+                          <h3>{plan.name}</h3>
+                        </div>
+                        {plan.quote_required ? (
+                          <p><strong>Propuesta personalizada</strong></p>
+                        ) : (
+                          <dl>
+                            <div>
+                              <dt>Mensual</dt>
+                              <dd>{commercialMoney(plan.monthly_amount, plan.currency)}</dd>
+                            </div>
+                            <div>
+                              <dt>Anual</dt>
+                              <dd>{commercialMoney(plan.annual_amount, plan.currency)}</dd>
+                            </div>
+                          </dl>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
             </>
           )}
 

@@ -9,7 +9,10 @@
 {% block body %}
 <header class="public-nav">
     <a class="wordmark" href="{{ path('app_home') }}" aria-label="Condor App, inicio">Condor App</a>
-    <a class="nav-link" href="{{ path('app_login') }}">Ingresar</a>
+    <div>
+        <a class="nav-link" href="{{ path('app_commercial_pricing') }}">Precios</a>
+        <a class="nav-link" href="{{ path('app_login') }}">Ingresar</a>
+    </div>
 </header>
 <section class="configurator-page" aria-labelledby="configurator-title">
     <span class="eyebrow">Configura tu Cóndor</span>

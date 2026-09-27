@@ -1,0 +1,54 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Precios · Condor App{% endblock %}
+
+{% block body %}
+<header class="public-nav">
+    <a class="wordmark" href="{{ path('app_home') }}" aria-label="Condor App, inicio">Condor App</a>
+    <div>
+        <a class="nav-link" href="{{ path('app_plan_configurator') }}">Configurar</a>
+        <a class="nav-link" href="{{ path('app_login') }}">Ingresar</a>
+    </div>
+</header>
+
+<section class="pricing-page" aria-labelledby="pricing-title">
+    <div class="pricing-heading">
+        <span class="eyebrow">Planes vigentes</span>
+        <h1 id="pricing-title">Una base comercial, sin precios paralelos.</h1>
+        <p>Estos planes provienen del catálogo comercial vigente de Condor. El configurador usa la misma versión para calcular cada propuesta.</p>
+    </div>
+
+    <div class="pricing-grid">
+        {% for plan in plans %}
+            <article
+                class="pricing-card"
+                data-plan-key="{{ plan.key }}"
+                data-plan-version="{{ plan.version }}"
+            >
+                <span class="eyebrow">{{ plan.key }} · v{{ plan.version }}</span>
+                <h2>{{ plan.name }}</h2>
+
+                {% if plan.quote_required %}
+                    <strong>Solicitar propuesta</strong>
+                    <p class="muted">Este plan requiere validación comercial. No mostramos un total ficticio.</p>
+                {% else %}
+                    <dl>
+                        <div>
+                            <dt>Mensual</dt>
+                            <dd>{{ plan.currency }} {{ plan.monthly_amount|number_format(0, ',', '.') }}</dd>
+                        </div>
+                        <div>
+                            <dt>Anual</dt>
+                            <dd>{{ plan.currency }} {{ plan.annual_amount|number_format(0, ',', '.') }}</dd>
+                        </div>
+                    </dl>
+                {% endif %}
+
+                <a class="button" href="{{ path('app_plan_configurator') }}">Configurar este plan</a>
+            </article>
+        {% else %}
+            <p class="muted">No hay planes comerciales vigentes en este momento.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
