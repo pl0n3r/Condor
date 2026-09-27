@@ -222,7 +222,7 @@ class PlanVersion
      */
     private static function normalizeLimits(array $limits): array
     {
-        if (count($limits) > 50 || array_is_list($limits)) {
+        if (count($limits) > 50 || ($limits !== [] && array_is_list($limits))) {
             throw new DomainException('Los límites comerciales deben ser un mapa acotado.');
         }
 

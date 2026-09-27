@@ -48,7 +48,7 @@ class CommercialCatalogModelTests(unittest.TestCase):
         )
         for pattern in forbidden:
             with self.subTest(pattern=pattern):
-                self.assertIsNone(re.search(pattern, source, flags=re.IGNORECASE))
+                self.assertIsNone(re.search(pattern, up, flags=re.IGNORECASE))
         self.phpunit(
             "testGeneratedAndMigratedCommercialSchemaAlign",
             SCHEMA_TEST,
