@@ -1,0 +1,76 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Commercial;
+
+use App\Domain\Commercial\Entity\Plan;
+use App\Domain\Commercial\Entity\PlanVersion;
+use DateTimeImmutable;
+use DomainException;
+
+final class PlanVersionTimeline
+{
+    /**
+     * @param iterable<PlanVersion> $existing
+     */
+    public function assertCanAdd(
+        iterable $existing,
+        PlanVersion $candidate,
+    ): void {
+        foreach ($existing as $version) {
+            if ($version->plan()->id() !== $candidate->plan()->id()) {
+                continue;
+            }
+            if ($version->version() === $candidate->version()) {
+                throw new DomainException(
+                    'La versión comercial ya existe para este plan.',
+                );
+            }
+            if ($this->overlaps($version, $candidate)) {
+                throw new DomainException(
+                    'Las vigencias de un mismo plan no pueden solaparse.',
+                );
+            }
+        }
+    }
+
+    /**
+     * @param iterable<PlanVersion> $versions
+     */
+    public function effectiveAt(
+        iterable $versions,
+        Plan $plan,
+        DateTimeImmutable $at,
+    ): ?PlanVersion {
+        $match = null;
+        foreach ($versions as $version) {
+            if (
+                $version->plan()->id() !== $plan->id()
+                || !$version->isEffectiveAt($at)
+            ) {
+                continue;
+            }
+            if ($match !== null) {
+                throw new DomainException(
+                    'El catálogo contiene más de una versión vigente para el plan.',
+                );
+            }
+            $match = $version;
+        }
+
+        return $match;
+    }
+
+    private function overlaps(
+        PlanVersion $left,
+        PlanVersion $right,
+    ): bool {
+        $leftEndsAfterRightStarts = $left->effectiveUntil() === null
+            || $right->effectiveFrom() < $left->effectiveUntil();
+        $rightEndsAfterLeftStarts = $right->effectiveUntil() === null
+            || $left->effectiveFrom() < $right->effectiveUntil();
+
+        return $leftEndsAfterRightStarts && $rightEndsAfterLeftStarts;
+    }
+}
