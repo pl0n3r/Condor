@@ -92,10 +92,10 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
     def test_release_candidate_version_and_snapshot(self) -> None:
         version = (ROOT / "config/version.php").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("'version' => '0.1.59'", version)
-        self.assertIn("V 0.1.59", readme)
-        self.assertIn("Issue #283", readme)
-        self.assertIn("Plan Configurator Public API V 0.1.59", readme)
+        self.assertIn("'version' => '0.1.60'", version)
+        self.assertIn("V 0.1.60", readme)
+        self.assertIn("Issue #286", readme)
+        self.assertIn("Plan Configurator Public API V 0.1.60", readme)
 
 
 if __name__ == "__main__":
