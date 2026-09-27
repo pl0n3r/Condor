@@ -137,7 +137,11 @@
   }
 
   async function observe(meta, response, payloadPromise) {
-    if (meta === null || !response.ok) {
+    if (
+      meta === null
+      || meta.url.origin !== window.location.origin
+      || !response.ok
+    ) {
       return;
     }
 

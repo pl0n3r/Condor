@@ -48,6 +48,7 @@ class PlanConfiguratorTelemetryFrontendTests(unittest.TestCase):
         self.assertIn("navigator.sendBeacon", SCRIPT)
         self.assertIn("credentials: \'omit\'", SCRIPT)
         self.assertIn("Object.is(state.vertical, vertical)", SCRIPT)
+        self.assertIn("meta.url.origin !== window.location.origin", SCRIPT)
         self.assertIn("Object.is(state.lastOutcome, signature)", SCRIPT)
         self.assertIn("sort((left, right) => left.localeCompare(right))", SCRIPT)
         self.assertIn("'pagehide'", SCRIPT)
