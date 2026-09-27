@@ -65,7 +65,7 @@ final class PlanConfiguratorPublicApiTest extends WebTestCase
             'quantities' => ['users' => 12, 'locations' => 3, 'companies' => 1],
             'addons' => [],
             'total' => 1,
-        ]);
+        ], server: ['REMOTE_ADDR' => '198.51.100.10']);
 
         self::assertResponseIsSuccessful();
         $payload = self::payload($client);
@@ -85,7 +85,7 @@ final class PlanConfiguratorPublicApiTest extends WebTestCase
 
         $client->jsonRequest('POST', '/api/public/configurator/quote', $base + [
             'addons' => ['production-lite'],
-        ]);
+        ], server: ['REMOTE_ADDR' => '198.51.100.20']);
         self::assertResponseStatusCodeSame(422);
 
         $client->jsonRequest('POST', '/api/public/configurator/quote', [
@@ -94,7 +94,7 @@ final class PlanConfiguratorPublicApiTest extends WebTestCase
             'cycle' => 'monthly',
             'quantities' => ['users' => 10, 'locations' => 3, 'companies' => 1],
             'addons' => ['extra-user'],
-        ]);
+        ], server: ['REMOTE_ADDR' => '198.51.100.20']);
         self::assertResponseStatusCodeSame(422);
     }
 
@@ -136,7 +136,7 @@ final class PlanConfiguratorPublicApiTest extends WebTestCase
             'cycle' => 'monthly',
             'quantities' => ['users' => 1, 'locations' => 1, 'companies' => 1],
             'addons' => [],
-        ]);
+        ], server: ['REMOTE_ADDR' => '198.51.100.30']);
         self::assertResponseIsSuccessful();
         $quote = self::payload($client)['quote'];
         self::assertTrue($quote['proposal_required']);
