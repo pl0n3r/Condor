@@ -1,23 +1,23 @@
-# Condor App — Snapshot operativo · Plan Configurator Public API V 0.1.59
+# Condor App — Snapshot operativo · Runtime Cache Hotfix V 0.1.60
 
-> **Candidato:** Issue #283 · API pública canónica y preview no persistente.
+> **Candidato:** Issue #286 · rutas nuevas 404 tras post-deploy V0.1.59.
 
-Condor continúa en construcción. V0.1.59 expone el contrato público que consumirá la experiencia visual del configurador sin convertir el frontend en fuente de precios o compatibilidad.
+Condor continúa en construcción. V0.1.60 corrige el aislamiento de cache Symfony entre releases en Hostinger shared hosting: el cache no efímero incorpora la versión canónica para que PHP-FPM cargue un matcher/router nuevo en cada release en vez de reutilizar el mismo path compilado.
 
 ## Alcance
-- host público `/configurar-condor` preparado para el entry React del siguiente slice;
-- catálogo y opciones públicas derivadas de Commercial Catalog + compatibilidad canónica;
-- preview server-side de quote que ignora totales cliente y no persiste filas `Quote`;
-- extras de escala derivados únicamente de cantidades y marcados no seleccionables;
-- payload allowlisted y errores fail-closed;
-- rate limit anónimo por IP sobre preview;
-- Legal conserva filtrado canónico; Enterprise/proposal nunca inventa precio;
-- aceptación Factory: `tests/test_plan_configurator_public_api.py`.
+- cache prod versionado como `var/cache/prod-v<version>`;
+- la versión se lee de `config/version.php` y se normaliza a un componente filesystem-safe;
+- `CONDOR_EPHEMERAL_CACHE=1` conserva el contrato previo de aislamiento por PID/perfil;
+- no se borra ningún cache de releases anteriores;
+- no se usa `opcache_reset()`, restart de PHP-FPM, SSH ni endpoint de mantenimiento;
+- regresión ejecutable en `tests/test_versioned_runtime_cache.py`;
+- aceptación productiva exige que las rutas #283 dejen de responder 404.
 
 ## Seguridad y reversión
-No agrega PII, cookies nuevas, permisos, checkout ni telemetría. El preview no escribe base de datos. Las rutas pueden retirarse por revert sin migraciones ni pérdida de datos.
+No hay DB, PII, secretos ni permisos nuevos. El cambio solo altera la ubicación del cache compilado de Symfony para releases normales. Revertir restaura el path estándar; los caches versionados antiguos quedan inertes y no se eliminan durante este incidente.
 
 ## Evidencia base
-- `main@2e928ae157b29513fb16652af6140444a190a8da` · V0.1.58 GREEN.
-- Reserva #283: `cbc2e643-d249-4e5d-9a9f-8f4e15111e78`.
-- #284 permanece bloqueado hasta integrar y validar este contrato público.
+- `main@dcd48c302433f1ba388042bc9781aa168db7b5fc` · V0.1.59.
+- Health exact-SHA y schema estaban sanos, pero `/configurar-condor` y `/api/public/configurator/catalog` seguían 404 incluso después de post-deploy V0.1.59 `complete/success`.
+- Reserva #286: `dd6198a4-22b0-440a-9746-f08605e7ed8c`.
+- #284 permanece bloqueado hasta recuperar PRODUCCIÓN EN VERDE.

@@ -21,20 +21,20 @@ final class KernelCacheIsolationTest extends TestCase
                 .'condor-symfony-cache-prod-';
 
             self::assertStringStartsWith($expectedPrefix, $kernel->getCacheDir());
-            self::assertNotSame(
-                $kernel->getProjectDir().'/var/cache/prod',
+            self::assertStringContainsString(
+                '-'.getmypid().'-',
+                $kernel->getCacheDir(),
+            );
+            self::assertStringNotContainsString(
+                '/var/cache/prod-v',
                 $kernel->getCacheDir(),
             );
         } finally {
-            if ($previous === false) {
-                putenv('CONDOR_EPHEMERAL_CACHE');
-            } else {
-                putenv('CONDOR_EPHEMERAL_CACHE='.$previous);
-            }
+            self::restoreEnv('CONDOR_EPHEMERAL_CACHE', $previous);
         }
     }
 
-    public function testDefaultProdCacheRemainsUnchanged(): void
+    public function testDefaultProdCacheIsVersionedByRelease(): void
     {
         $previous = getenv('CONDOR_EPHEMERAL_CACHE');
         putenv('CONDOR_EPHEMERAL_CACHE');
@@ -42,15 +42,25 @@ final class KernelCacheIsolationTest extends TestCase
         try {
             $kernel = new Kernel('prod', false);
             self::assertSame(
-                $kernel->getProjectDir().'/var/cache/prod',
+                $kernel->getProjectDir().'/var/cache/prod-v0.1.60',
+                $kernel->getCacheDir(),
+            );
+            self::assertNotSame(
+                $kernel->getProjectDir().'/var/cache/prod-v0.1.59',
                 $kernel->getCacheDir(),
             );
         } finally {
-            if ($previous === false) {
-                putenv('CONDOR_EPHEMERAL_CACHE');
-            } else {
-                putenv('CONDOR_EPHEMERAL_CACHE='.$previous);
-            }
+            self::restoreEnv('CONDOR_EPHEMERAL_CACHE', $previous);
         }
+    }
+
+    private static function restoreEnv(string $name, string|false $value): void
+    {
+        if ($value === false) {
+            putenv($name);
+            return;
+        }
+
+        putenv($name.'='.$value);
     }
 }
