@@ -18,7 +18,7 @@ El candidato es dominio puro: no agrega PII, proveedores, DB, migraciones ni efe
 
 ## Evidencia base
 - `main@c797055cab0a53905acb6f3193bfc4b36e469115` · V0.1.52 · PRODUCCIÓN EN VERDE.
-- Reserva #268 iniciada como `e9c9fd84-1653-4d89-a2f6-cf05c6bef959`; contrato v2 reducido pendiente de renovación.
+- Reserva v2 #268 renovada: `3d592618-7484-526e-9ff2-09b877640050`.
 - #270 queda detrás de este slice para persistencia Doctrine/migración.
 - #269 queda después de #270 para Capability/AddOn, seed y reader.
 

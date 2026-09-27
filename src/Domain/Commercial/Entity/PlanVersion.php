@@ -104,6 +104,7 @@ final class PlanVersion
             if (
                 !is_string($key)
                 || preg_match('/^[a-z][a-z0-9_]{1,63}$/D', $key) !== 1
+                || (!is_bool($value) && !is_int($value) && !is_string($value) && $value !== null)
                 || (is_int($value) && $value < 0)
                 || (is_string($value) && mb_strlen($value, 'UTF-8') > 120)
             ) {

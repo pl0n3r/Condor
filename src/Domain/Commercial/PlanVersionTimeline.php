@@ -15,7 +15,7 @@ final class PlanVersionTimeline
     public function assertCanAdd(iterable $existing, PlanVersion $candidate): void
     {
         foreach ($existing as $version) {
-            if ($version->plan()->id() !== $candidate->plan()->id()) {
+            if ($version->plan()->key() !== $candidate->plan()->key()) {
                 continue;
             }
             if (
@@ -38,7 +38,7 @@ final class PlanVersionTimeline
         $match = null;
         foreach ($versions as $version) {
             if (
-                $version->plan()->id() !== $plan->id()
+                $version->plan()->key() !== $plan->key()
                 || !$version->isEffectiveAt($at)
             ) {
                 continue;

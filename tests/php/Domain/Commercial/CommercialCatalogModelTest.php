@@ -46,7 +46,7 @@ final class CommercialCatalogModelTest extends TestCase
 
         $this->expectException(DomainException::class);
         $timeline->assertCanAdd([$v1, $v2], new PlanVersion(
-            $plan, 3, 229900, null, false, [],
+            new Plan('negocio', 'Negocio renombrado'), 3, 229900, null, false, [],
             new DateTimeImmutable('2026-06-01T00:00:00Z'),
             new DateTimeImmutable('2026-08-01T00:00:00Z'),
         ));
@@ -69,6 +69,16 @@ final class CommercialCatalogModelTest extends TestCase
                 static fn (Vertical $vertical): string => $vertical->key(),
                 $version->verticals(),
             ),
+        );
+    }
+
+    public function testInvalidLimitPayloadIsRejected(): void
+    {
+        $this->expectException(DomainException::class);
+        new PlanVersion(
+            new Plan('basic', 'Básico'),
+            1, 79900, 799000, false, ['nested' => ['not-allowed']],
+            new DateTimeImmutable('2026-01-01T00:00:00Z'),
         );
     }
 
