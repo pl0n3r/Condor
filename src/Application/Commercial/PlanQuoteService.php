@@ -13,12 +13,6 @@ use DomainException;
 
 final readonly class PlanQuoteService
 {
-    private const EXTRA = [
-        'users' => 'extra-user',
-        'locations' => 'extra-location',
-        'companies' => 'extra-company',
-    ];
-
     public function __construct(
         private PlanConfiguratorCatalogReader $catalog,
         private EntityManagerInterface $entityManager,
@@ -37,6 +31,57 @@ final readonly class PlanQuoteService
         DateTimeImmutable $at,
         ?int $clientSuppliedTotal = null,
     ): Quote {
+        return $this->calculate(
+            $planKey,
+            $verticalKey,
+            $cycle,
+            $quantities,
+            $addOnKeys,
+            $at,
+            $clientSuppliedTotal,
+            true,
+        );
+    }
+
+    /**
+     * @param array<string,int> $quantities
+     * @param list<string> $addOnKeys
+     */
+    public function preview(
+        string $planKey,
+        string $verticalKey,
+        string $cycle,
+        array $quantities,
+        array $addOnKeys,
+        DateTimeImmutable $at,
+        ?int $clientSuppliedTotal = null,
+    ): Quote {
+        return $this->calculate(
+            $planKey,
+            $verticalKey,
+            $cycle,
+            $quantities,
+            $addOnKeys,
+            $at,
+            $clientSuppliedTotal,
+            false,
+        );
+    }
+
+    /**
+     * @param array<string,int> $quantities
+     * @param list<string> $addOnKeys
+     */
+    private function calculate(
+        string $planKey,
+        string $verticalKey,
+        string $cycle,
+        array $quantities,
+        array $addOnKeys,
+        DateTimeImmutable $at,
+        ?int $clientSuppliedTotal,
+        bool $persist,
+    ): Quote {
         unset($clientSuppliedTotal);
         if (!in_array($cycle, ['monthly', 'annual'], true)) {
             throw new DomainException('Ciclo comercial inválido.');
@@ -54,7 +99,7 @@ final readonly class PlanQuoteService
             $addOnKeys,
         )));
         foreach ($selected as $key) {
-            if (in_array($key, self::EXTRA, true)) {
+            if (in_array($key, PlanConfigurationRules::SCALE_ADDONS, true)) {
                 throw new DomainException('Los extras de escala se derivan de cantidades.');
             }
             if (!isset($allowed[$key])) {
@@ -67,7 +112,7 @@ final readonly class PlanQuoteService
             : $options['plan']['annual_amount'];
 
         if ($options['plan']['quote_required'] || !is_int($base)) {
-            return $this->persist(
+            return $this->finish(
                 $options,
                 $cycle,
                 $quantities,
@@ -76,6 +121,7 @@ final readonly class PlanQuoteService
                 null,
                 true,
                 $at,
+                $persist,
             );
         }
 
@@ -87,7 +133,7 @@ final readonly class PlanQuoteService
         foreach ($selected as $key) {
             $price = $allowed[$key]['monthly_amount'];
             if (!is_int($price) || $price < 1) {
-                return $this->persist(
+                return $this->finish(
                     $options,
                     $cycle,
                     $quantities,
@@ -96,6 +142,7 @@ final readonly class PlanQuoteService
                     null,
                     true,
                     $at,
+                    $persist,
                 );
             }
             $extraAmount += $price;
@@ -103,7 +150,7 @@ final readonly class PlanQuoteService
 
         $proposal = $cycle === 'annual' && $extraAmount > 0;
 
-        return $this->persist(
+        return $this->finish(
             $options,
             $cycle,
             $quantities,
@@ -112,6 +159,7 @@ final readonly class PlanQuoteService
             $proposal ? null : $base + $extraAmount,
             $proposal,
             $at,
+            $persist,
             $proposal ? null : $extraAmount,
         );
     }
@@ -124,12 +172,12 @@ final readonly class PlanQuoteService
     private function normalizeQuantities(array $input, array $limits): array
     {
         foreach ($input as $key => $_) {
-            if (!array_key_exists($key, self::EXTRA)) {
+            if (!array_key_exists($key, PlanConfigurationRules::SCALE_ADDONS)) {
                 throw new DomainException('Cantidad comercial desconocida.');
             }
         }
         $result = [];
-        foreach (self::EXTRA as $key => $_) {
+        foreach (PlanConfigurationRules::SCALE_ADDONS as $key => $_) {
             $value = $input[$key] ?? $limits[$key] ?? null;
             if (!is_int($value) || $value < 1) {
                 throw new DomainException('Cantidad comercial inválida.');
@@ -149,7 +197,7 @@ final readonly class PlanQuoteService
     {
         $amount = 0;
         $keys = [];
-        foreach (self::EXTRA as $quantityKey => $addOnKey) {
+        foreach (PlanConfigurationRules::SCALE_ADDONS as $quantityKey => $addOnKey) {
             $units = $quantities[$quantityKey] - (int) ($limits[$quantityKey] ?? 0);
             if ($units <= 0) {
                 continue;
@@ -169,7 +217,7 @@ final readonly class PlanQuoteService
      * @param array<string,int> $quantities
      * @param list<string> $addOns
      */
-    private function persist(
+    private function finish(
         array $options,
         string $cycle,
         array $quantities,
@@ -178,6 +226,7 @@ final readonly class PlanQuoteService
         ?int $total,
         bool $proposal,
         DateTimeImmutable $at,
+        bool $persist,
         ?int $extras = null,
     ): Quote {
         $plan = $this->entityManager->getRepository(Plan::class)
@@ -205,8 +254,11 @@ final readonly class PlanQuoteService
             $proposal,
             $at,
         );
-        $this->entityManager->persist($quote);
-        $this->entityManager->flush();
+        if ($persist) {
+            $this->entityManager->persist($quote);
+            $this->entityManager->flush();
+        }
+
         return $quote;
     }
 }

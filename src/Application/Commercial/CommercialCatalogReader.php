@@ -57,6 +57,7 @@ final readonly class CommercialCatalogReader
                 'addons' => array_map(
                     static fn (AddOn $item): array => [
                         'key' => $item->key(),
+                        'name' => $item->name(),
                         'monthly_amount' => $item->monthlyAmount(),
                         'quote_required' => $item->quoteRequired(),
                     ],

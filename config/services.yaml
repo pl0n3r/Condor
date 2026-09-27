@@ -25,3 +25,7 @@ services:
   App\Http\Controller\StorefrontCheckoutController:
     arguments:
       $storefrontCheckoutLimiter: '@limiter.storefront_checkout'
+
+  App\Http\Controller\PlanConfiguratorController:
+    arguments:
+      $planConfiguratorLimiter: '@limiter.plan_configurator'

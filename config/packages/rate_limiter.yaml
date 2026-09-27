@@ -15,6 +15,11 @@ framework:
       limit: 10
       interval: '5 minutes'
 
+    plan_configurator:
+      policy: sliding_window
+      limit: 240
+      interval: '1 minute'
+
     control_bot_api:
       policy: sliding_window
       limit: 60

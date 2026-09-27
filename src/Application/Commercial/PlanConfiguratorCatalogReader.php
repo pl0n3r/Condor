@@ -73,7 +73,14 @@ final readonly class PlanConfiguratorCatalogReader
             ],
             'limits' => $plan['limits'],
             'capabilities' => $capabilities,
-            'addons' => $plan['addons'],
+            'addons' => array_map(
+                static fn (array $addOn): array => $addOn + [
+                    'selectable' => PlanConfigurationRules::isSelectableAddOn(
+                        (string) $addOn['key'],
+                    ),
+                ],
+                $plan['addons'],
+            ),
         ];
     }
 
