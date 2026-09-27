@@ -21,6 +21,13 @@ final readonly class CommercialCatalogSeeder
 
     public function seed(): void
     {
+        $this->entityManager->wrapInTransaction(function (): void {
+            $this->materialize();
+        });
+    }
+
+    private function materialize(): void
+    {
         $plans = $this->identities(Plan::class, [
             'basic' => 'Básico',
             'business' => 'Negocio',
@@ -76,7 +83,6 @@ final readonly class CommercialCatalogSeeder
             }
         }
 
-        $this->entityManager->flush();
     }
 
     /**
