@@ -83,13 +83,15 @@ final class PlanConfiguratorController extends AbstractController
                 self::queryString($request, 'vertical'),
                 self::now(),
             );
+            /** @var list<array<string,mixed>> $addOns */
+            $addOns = $options['addons'];
             $options['addons'] = array_map(
                 static fn (array $addOn): array => $addOn + [
                     'selectable' => PlanConfigurationRules::isSelectableAddOn(
                         (string) $addOn['key'],
                     ),
                 ],
-                $options['addons'],
+                $addOns,
             );
 
             return $this->json($options);
@@ -208,12 +210,14 @@ final class PlanConfiguratorController extends AbstractController
         if (!is_array($input) || !array_is_list($input)) {
             throw new UnprocessableEntityHttpException('Add-ons inválidos.');
         }
+        $result = [];
         foreach ($input as $value) {
             if (!is_string($value)) {
                 throw new UnprocessableEntityHttpException('Add-ons inválidos.');
             }
+            $result[] = $value;
         }
-        return array_values($input);
+        return $result;
     }
 
     private static function queryString(Request $request, string $key): string
