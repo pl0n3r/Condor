@@ -101,6 +101,14 @@ class PostDeployStageTest(unittest.TestCase):
                     : > "$root/migrated"
                     exit 0
                     ;;
+                  *"app:commercial:seed"*)
+                    if [ "${FAKE_CATALOG_SEED_FAILURE:-0}" = "1" ]; then
+                      echo "catalog-seed-failure" >&2
+                      exit 31
+                    fi
+                    : > "$root/catalog-seeded"
+                    exit 0
+                    ;;
                   *"cache:clear"*|*"cache:warmup"*)
                     exit 0
                     ;;
@@ -126,6 +134,7 @@ class PostDeployStageTest(unittest.TestCase):
         backup_hang=False,
         auto_migrate="1",
         database_url_in_env=False,
+        catalog_seed_failure=False,
     ):
         """Ejecuta post-deploy en sandbox con comportamiento Doctrine controlado."""
         temp, root, fake_bin = self.sandbox()
@@ -145,6 +154,9 @@ class PostDeployStageTest(unittest.TestCase):
             "1" if backup_pdo_bootstrap_failure else "0"
         )
         env["FAKE_BACKUP_HANG"] = "1" if backup_hang else "0"
+        env["FAKE_CATALOG_SEED_FAILURE"] = (
+            "1" if catalog_seed_failure else "0"
+        )
         env["CONDOR_AUTO_MIGRATE"] = auto_migrate
         env["FAKE_DATABASE_URL"] = "mysql://dotenv.example/condor"
         if database_url_in_env:
@@ -182,6 +194,48 @@ class PostDeployStageTest(unittest.TestCase):
         self.assertLess(calls.index("backup"), calls.index(actual_migrate))
         self.assertLess(calls.index(actual_migrate), calls.index("cache:clear"))
         self.assertIn("cache:warmup", calls)
+
+    def test_construction_seeds_catalog_after_schema_before_cache(self):
+        """El catálogo se activa tras reconciliar schema y antes de cache."""
+        result, calls, root = self.run_script("construction")
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue((root / "catalog-seeded").exists())
+        self.assertIn("app:commercial:seed --env=prod --no-interaction", calls)
+        self.assertLess(
+            calls.rindex("doctrine:migrations:up-to-date"),
+            calls.index("cache:clear"),
+        )
+        self.assertLess(
+            calls.index("cache:clear"),
+            calls.index("app:commercial:seed"),
+        )
+        self.assertLess(
+            calls.index("app:commercial:seed"),
+            calls.index("cache:warmup"),
+        )
+
+    def test_catalog_seed_failure_blocks_cache_and_success(self):
+        """Un seed fallido deja phase=failure y no regenera cache."""
+        result, calls, root = self.run_script(
+            "construction",
+            catalog_seed_failure=True,
+        )
+
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertIn("materialización del catálogo comercial falló", result.stderr)
+        self.assertIn("app:commercial:seed", calls)
+        self.assertIn("cache:clear", calls)
+        self.assertNotIn("cache:warmup", calls)
+
+        import json
+        payload = json.loads(
+            (root / "var/runtime/post-deploy-status.json").read_text(
+                encoding="utf-8",
+            )
+        )
+        self.assertEqual("catalog-seed", payload["phase"])
+        self.assertEqual("failure", payload["result"])
 
     def test_construction_resolves_database_url_from_dotenv_for_backup(self):
         """Sin DATABASE_URL exportada, Symfony dotenv alimenta el backup previo."""
@@ -317,6 +371,7 @@ class PostDeployStageTest(unittest.TestCase):
         self.assertNotIn("doctrine:migrations:migrate", calls)
         self.assertNotIn("cache:clear", calls)
         self.assertNotIn("cache:warmup", calls)
+        self.assertNotIn("app:commercial:seed", calls)
 
 
     def test_construction_blocks_sql_outside_allowlist(self):

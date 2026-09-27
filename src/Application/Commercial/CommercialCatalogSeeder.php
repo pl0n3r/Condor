@@ -12,6 +12,7 @@ use App\Domain\Commercial\Entity\Vertical;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
+use RuntimeException;
 
 final readonly class CommercialCatalogSeeder
 {
@@ -20,6 +21,13 @@ final readonly class CommercialCatalogSeeder
     }
 
     public function seed(): void
+    {
+        $this->entityManager->wrapInTransaction(function (): void {
+            $this->materialize();
+        });
+    }
+
+    private function materialize(): void
     {
         $plans = $this->identities(Plan::class, [
             'basic' => 'Básico',
@@ -77,6 +85,61 @@ final readonly class CommercialCatalogSeeder
         }
 
         $this->entityManager->flush();
+        $this->assertCanonicalCatalogPersisted();
+    }
+
+    private function assertCanonicalCatalogPersisted(): void
+    {
+        $expected = [
+            Plan::class => ['basic', 'business', 'pro', 'enterprise'],
+            Vertical::class => [
+                'commerce',
+                'textile',
+                'manufacturing',
+                'professional-services',
+                'legal',
+            ],
+            Capability::class => [
+                'catalog', 'inventory', 'contacts', 'purchasing',
+                'sales-orders', 'pricing', 'transfers', 'custom-domain',
+                'reports', 'manufacturing', 'api-webhooks',
+                'advanced-permissions', 'advanced-analytics',
+                'multi-company', 'legal-cases', 'documents',
+                'calendar-deadlines',
+            ],
+            AddOn::class => [
+                'extra-user', 'extra-location', 'extra-company',
+                'extra-store', 'production-lite', 'premium-integration',
+            ],
+        ];
+
+        foreach ($expected as $class => $keys) {
+            $repository = $this->entityManager->getRepository($class);
+            foreach ($keys as $key) {
+                if (!$repository->findOneBy(['key' => $key]) instanceof $class) {
+                    throw new RuntimeException(
+                        sprintf('Falta la clave comercial canónica %s.', $key),
+                    );
+                }
+            }
+        }
+
+        $versions = $this->entityManager->getRepository(PlanVersion::class);
+        foreach (['basic', 'business', 'pro', 'enterprise'] as $key) {
+            $plan = $this->entityManager->getRepository(Plan::class)
+                ->findOneBy(['key' => $key]);
+            $version = $plan instanceof Plan
+                ? $versions->findOneBy(['plan' => $plan, 'version' => 1])
+                : null;
+            if (
+                !($plan instanceof Plan)
+                || !($version instanceof PlanVersion)
+            ) {
+                throw new RuntimeException(
+                    sprintf('Falta PlanVersion v1 para %s.', $key),
+                );
+            }
+        }
     }
 
     /**

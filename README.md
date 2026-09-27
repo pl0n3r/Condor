@@ -1,30 +1,29 @@
-# Condor App — Snapshot operativo · Commercial Catalog V1 V 0.1.55
+# Condor App — Snapshot operativo · Commercial Catalog Activation V 0.1.56
 
-> **Candidato:** Issue #269 · capabilities, add-ons, seed y reader del Commercial Catalog.
+> **Candidato:** Issue #275 · activación productiva idempotente del catálogo comercial.
 
-Condor continúa en **construcción**. V0.1.55 completa el catálogo comercial base iniciado en #268/#270 sin activar todavía entitlements, suscripciones ni UI.
+Condor continúa en **construcción**. V0.1.56 convierte el catálogo persistente de V0.1.55 en una capacidad operable: el seed canónico se ejecuta de forma transaccional e idempotente mediante comando Symfony y el post-deploy lo activa después de reconciliar schema, antes de declarar el deploy completo.
 
 ## Alcance
-- `Capability` y `AddOn` con claves comerciales estables, separados de RBAC;
-- compatibilidad PlanVersion↔Capability/AddOn por relaciones persistentes;
-- seed idempotente de Básico, Negocio, Pro y Enterprise con las hipótesis aprobadas en #265;
-- verticales iniciales compartidas, incluido Legal/Abogados sin fork;
-- Producción Lite como add-on de Negocio por COP 99.900/mes;
-- reader vigente por fecha que consume el catálogo persistido y no conoce nombres de planes;
-- migración expand-only para nuevas tablas y relaciones;
-- aceptación Factory en `tests/test_commercial_catalog_seed.py`.
+- `app:commercial:seed` como comando Symfony sin duplicar definiciones comerciales;
+- `CommercialCatalogSeeder::seed()` ejecutado dentro de `EntityManager#wrapInTransaction`;
+- activación automática únicamente en etapa `construction`;
+- orden productivo: schema check → D-054 migrate/recheck si aplica → catalog seed → cache → complete;
+- fallo de seed bloquea cache/complete y deja evidencia `phase=catalog-seed/result=failure`;
+- `live` conserva el contrato sin escritura automática del catálogo;
+- aceptación Factory en `tests/test_commercial_catalog_activation.py`.
 
 ## Seguridad, datos y reversión
-No se agregan PII ni proveedores; `datos.yml` no cambia. No hay enforcement comercial ni cambios de permisos. La migración solo crea estructuras y relaciones. En construcción sigue aplicando D-054 antes de cualquier migrate real.
+El comando materializa solo el catálogo comercial aprobado en #265; no procesa PII ni secretos y `datos.yml` no cambia. La transacción evita estados parciales. El post-deploy sigue protegido por lock y D-054 para schema. Revertir código desactiva la automatización; no se borra catálogo productivo automáticamente.
 
 ## Evidencia base
-- `main@5ca6081680581b235ca34223fc1c1fb50af6f597` · V0.1.54.
-- Reserva #269: `5d560e99-073a-472c-80cd-07ab2fae550f`.
-- #267 permanece dependiente del cierre del Commercial Catalog V1.
+- `main@f78ab084944421e3b9a2736642f02230853ac0e5` · V0.1.55 · PRODUCCIÓN EN VERDE.
+- Reserva #275: `dcfe035b-7078-431e-a93e-fd0cacbce1b9`.
+- #269 permanece abierto hasta integrar esta activación y verificar 4 planes en producción.
 
 ## Fuentes de verdad
 - [AGENTES.md](./AGENTES.md)
 - Roadmap: Issue #1
 - Épico comercial: #265
 - Commercial Catalog parent: #266
-- Slice actual: #269
+- Activación actual: #275
