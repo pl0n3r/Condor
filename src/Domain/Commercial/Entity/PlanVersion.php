@@ -53,8 +53,8 @@ final class PlanVersion
     /** @var Collection<int, Vertical> */
     #[ORM\ManyToMany(targetEntity: Vertical::class)]
     #[ORM\JoinTable(name: 'condor_commercial_plan_version_vertical')]
-    #[ORM\JoinColumn(name: 'plan_version_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
-    #[ORM\InverseJoinColumn(name: 'vertical_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    #[ORM\JoinColumn(name: 'plan_version_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    #[ORM\InverseJoinColumn(name: 'vertical_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
     private Collection $verticals;
 
     /** @var Collection<int, Capability> */

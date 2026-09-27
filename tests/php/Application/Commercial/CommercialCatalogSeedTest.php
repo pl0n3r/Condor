@@ -8,6 +8,7 @@ use App\Application\Commercial\CommercialCatalogReader;
 use App\Application\Commercial\CommercialCatalogSeeder;
 use App\Domain\Commercial\Entity\AddOn;
 use App\Domain\Commercial\Entity\Capability;
+use App\Domain\Commercial\PlanVersionTimeline;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -23,14 +24,13 @@ final class CommercialCatalogSeedTest extends KernelTestCase
         self::bootKernel();
         $container = static::getContainer();
         $manager = $container->get(EntityManagerInterface::class);
-        $seeder = $container->get(CommercialCatalogSeeder::class);
-        $reader = $container->get(CommercialCatalogReader::class);
         self::assertInstanceOf(EntityManagerInterface::class, $manager);
-        self::assertInstanceOf(CommercialCatalogSeeder::class, $seeder);
-        self::assertInstanceOf(CommercialCatalogReader::class, $reader);
         $this->entityManager = $manager;
-        $this->seeder = $seeder;
-        $this->reader = $reader;
+        $this->seeder = new CommercialCatalogSeeder($manager);
+        $this->reader = new CommercialCatalogReader(
+            $manager,
+            new PlanVersionTimeline(),
+        );
     }
 
     public function testCapabilitiesAndAddOnsUseStableKeys(): void
