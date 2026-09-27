@@ -89,4 +89,6 @@ final class Quote
     public function totalAmount(): ?int { return $this->totalAmount; }
     public function proposalRequired(): bool { return $this->proposalRequired; }
     public function status(): string { return $this->status; }
+    public function convert(): void { $this->status = 'converted'; }
+    public function expire(): void { $this->status = 'expired'; }
 }
