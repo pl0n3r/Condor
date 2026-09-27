@@ -47,7 +47,10 @@ final class Quote
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
     private DateTimeImmutable $createdAt;
 
-    /** @param array<string,int> $quantities @param list<string> $addOns */
+    /**
+     * @param array<string,int> $quantities
+     * @param list<string> $addOns
+     */
     public function __construct(
         PlanVersion $planVersion,
         Vertical $vertical,
