@@ -140,14 +140,19 @@ final class PlanConfiguratorTelemetryController extends AbstractController
             }
         }
 
-        $context = [
-            'event' => self::allowedValue(
-                $payload,
-                'event',
-                self::EVENTS,
-                true,
-            ),
-        ];
+        $event = self::allowedValue(
+            $payload,
+            'event',
+            self::EVENTS,
+            true,
+        );
+        if ($event === null) {
+            throw new UnprocessableEntityHttpException(
+                'El evento es obligatorio.',
+            );
+        }
+
+        $context = ['event' => $event];
 
         foreach ([
             'plan' => array_values(array_unique($planKeys)),
@@ -162,7 +167,6 @@ final class PlanConfiguratorTelemetryController extends AbstractController
             }
         }
 
-        /** @var array<string, scalar> $context */
         return $context;
     }
 
