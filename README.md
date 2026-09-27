@@ -1,30 +1,29 @@
-# Condor App — Snapshot operativo · Plan Configurator E V 0.1.63
+# Condor App — Snapshot operativo · Plan Configurator F V 0.1.64
 
-> **Candidato:** Issue #291 · backend de telemetría privacy-safe.
+> **Candidato:** Issue #292 · instrumentación frontend privacy-safe del funnel.
 
-Condor continúa en construcción. V0.1.63 añade el contrato backend del funnel del configurador sin introducir tracking identificable: endpoint público cerrado, limiter independiente y señal funcional agregable reutilizando la infraestructura existente.
+Condor continúa en construcción. V0.1.64 conecta el navegador al endpoint de telemetría privacy-safe entregado en V0.1.63 mediante un script estático best-effort cargado antes del bundle React, sin convertir el frontend en autoridad comercial ni introducir tracking persistente.
 
 ## Alcance
-- endpoint `POST /api/public/configurator/events`;
-- tipo funcional `configurator_funnel` sin tabla ni migración nueva;
-- eventos documentados: start, plan selected/changed, vertical, add-on, abandonment, completion y proposal;
-- contexto allowlisted exclusivamente a `event/plan/vertical/cycle/addon/step`;
-- plan, vertical y add-on validados contra el catálogo comercial canónico;
-- `tenant_id = null` y ausencia de correo, nombre, IP, sesión, user-agent, cantidades, cookies, fingerprint e identificadores cross-session;
-- limiter `plan_configurator_events` independiente del limiter de quote;
-- `configurator_funnel` incorporado al reporte funcional agregado;
-- contrato de finalidad, explotación y retención documentado en `docs/telemetria-configurador.md`;
-- regresiones runtime y wrapper Factory para privacidad + independencia de rate limits.
+- script estático `/configurator-telemetry.js` cargado antes de `/build/configurator.js`;
+- preserva `originalFetch` y observa únicamente APIs canónicas de options/quote;
+- eventos documentados: `start`, `plan_selected`, `plan_changed`, `vertical`, `addon`, `abandonment`, `completion` y `proposal`;
+- contexto emitido limitado a `event/plan/vertical/cycle/addon/step`;
+- abandono por `navigator.sendBeacon` en `pagehide`/visibility hidden;
+- cualquier fallo de telemetría se absorbe y siempre se devuelve la promesa funcional original;
+- no se capturan ni envían cantidades, precios, texto libre, correo, cookies, storage, user-agent, fingerprint o identificadores de sesión;
+- React y `frontend/configurator/main.tsx` permanecen sin lógica de telemetría ni cambios comerciales;
+- regresiones estáticas AC-01..AC-03 y wrapper macro ejecutable de #289.
 
 ## Privacidad, seguridad y reversión
-La IP solo puede intervenir transitoriamente como clave del limiter y no se persiste como señal funcional. El endpoint reconstruye el contexto server-side y rechaza campos extra o claves comerciales inexistentes. `datos.yml` permanece intacto porque #291 no incorpora tratamiento de dato personal.
+El script no crea cookies, storage ni identificadores cross-session. Solo deriva claves técnicas ya usadas por las APIs canónicas y el backend vuelve a validar todo el payload. `datos.yml` permanece intacto porque no aparece un tratamiento personal nuevo.
 
-La explotación operativa usa la ventana móvil de 30 días del reporte funcional. La tabla existente no tiene purga automática; este slice no ejecuta borrados destructivos y documenta esa limitación antes de una política de retención definitiva.
+La telemetría es estrictamente best-effort: usa el fetch original para enviar eventos, no intercepta su propia telemetría y nunca cambia errores, respuestas ni tiempos contractuales del flujo catálogo/opciones/quote.
 
-Reversión: retirar controller, limiter y tipo `configurator_funnel`; no hay cambios de Commercial Catalog, Quote ni migraciones.
+Reversión: retirar el script del Twig y eliminar `public/configurator-telemetry.js`; el configurador React continúa operando sin dependencia de telemetría.
 
 ## Evidencia base
-- `main@fc2d5365401af69396a87f2e6bf4e416119d6ee5` · V0.1.62 GREEN.
-- Reserva #291: `10c40351-5466-4e70-a215-fcb5e9268592`.
-- #292 permanece fuera de alcance y conectará la instrumentación de navegador cuando #291 esté integrado.
-- #280 permanece como parent hasta cerrar también la instrumentación frontend.
+- `main@268dd438ab895072b5d16aaefc8cd8539b0f5cfe` · V0.1.63 GREEN.
+- Reserva #292: `6612f7d8-311e-4480-ab1e-ef36ad22dd14`.
+- Backend privacy-safe #291 integrado y validado.
+- #289 queda listo para cierre cuando este slice se integre y sus contratos macro pasen.
