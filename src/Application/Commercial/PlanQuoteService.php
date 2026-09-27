@@ -62,6 +62,23 @@ final readonly class PlanQuoteService
             }
         }
 
+        $base = $cycle === 'monthly'
+            ? $options['plan']['monthly_amount']
+            : $options['plan']['annual_amount'];
+
+        if ($options['plan']['quote_required'] || !is_int($base)) {
+            return $this->persist(
+                $options,
+                $cycle,
+                $quantities,
+                $selected,
+                null,
+                null,
+                true,
+                $at,
+            );
+        }
+
         [$extraAmount, $derived] = $this->scaleExtras(
             $quantities,
             $options['limits'],
@@ -70,17 +87,21 @@ final readonly class PlanQuoteService
         foreach ($selected as $key) {
             $price = $allowed[$key]['monthly_amount'];
             if (!is_int($price) || $price < 1) {
-                return $this->persist($options, $cycle, $quantities, [...$derived, ...$selected], null, null, true, $at);
+                return $this->persist(
+                    $options,
+                    $cycle,
+                    $quantities,
+                    [...$derived, ...$selected],
+                    null,
+                    null,
+                    true,
+                    $at,
+                );
             }
             $extraAmount += $price;
         }
 
-        $base = $cycle === 'monthly'
-            ? $options['plan']['monthly_amount']
-            : $options['plan']['annual_amount'];
-        $proposal = $options['plan']['quote_required']
-            || !is_int($base)
-            || ($cycle === 'annual' && $extraAmount > 0);
+        $proposal = $cycle === 'annual' && $extraAmount > 0;
 
         return $this->persist(
             $options,
