@@ -1,6 +1,8 @@
 # Condor App — Snapshot operativo · Password Recovery A V 0.1.65
 
-> **Candidato:** Issue #296 · primitivas de credenciales y token de recuperación.
+> **Candidato objetivo:** V0.1.65 · Issue #296 · primitivas de credenciales y token de recuperación.
+>
+> **Producción desplegada y validada:** V0.1.64 · `main@df7a87059e90b4834e8f26480637906e7cfce1f5` · release/observer y gates exact-main verdes. **V0.1.65 aún no está desplegada ni validada en producción.**
 
 Condor continúa en construcción. V0.1.65 inicia la reconstrucción serial de #191 sobre el main actual, reutilizando el trabajo revisado de PR #232 sin revivir su PR monolítico.
 

@@ -88,6 +88,13 @@ class PasswordResetToken
             && $this->expiresAt > $now;
     }
 
+    /**
+     * Reemplaza deliberadamente el estado consumido/revocado con un token nuevo.
+     *
+     * El caso de uso que invoque esta operación debe mantener una transacción y
+     * un lock pesimista de escritura sobre el registro de recuperación del usuario,
+     * para que un consume()/revoke() concurrente no pueda quedar sobrescrito.
+     */
     public function reissue(string $tokenHash, DateTimeImmutable $expiresAt, DateTimeImmutable $now): void
     {
         $this->tokenHash = self::normalizeHash($tokenHash);

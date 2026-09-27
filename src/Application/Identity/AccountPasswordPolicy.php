@@ -28,15 +28,21 @@ final readonly class AccountPasswordPolicy
 
     public function assertAcceptable(User $user, string $plainPassword): void
     {
+        $meaningful = trim($plainPassword);
         if (
-            mb_strlen($plainPassword, 'UTF-8') < 12
+            $meaningful === ''
+            || mb_strlen($meaningful, 'UTF-8') < 12
             || strlen($plainPassword) > 4096
         ) {
-            throw new DomainException('La contraseña debe tener al menos 12 caracteres y máximo 4096 bytes.');
+            throw new DomainException('La contraseña debe tener al menos 12 caracteres significativos y máximo 4096 bytes.');
         }
 
-        $normalized = mb_strtolower(trim($plainPassword), 'UTF-8');
-        if (in_array($normalized, self::COMMON, true)) {
+        $normalized = mb_strtolower($meaningful, 'UTF-8');
+        $looksCommon = preg_match(
+            '/^(?:password|qwerty|administrator|administrador|contraseña|contrasena)(?:[0-9!@#$%^&*._-]+)?$/u',
+            $normalized,
+        ) === 1;
+        if (in_array($normalized, self::COMMON, true) || $looksCommon) {
             throw new DomainException('Elige una contraseña menos común.');
         }
 

@@ -23,15 +23,18 @@ final class PasswordResetPrimitivesTest extends TestCase
             $now->modify('+60 minutes'),
         );
         self::assertTrue($token->isUsableAt($now));
-        $token->reissue(str_repeat('b', 64), $now->modify('+30 minutes'), $now);
+        $token->revoke($now->modify('+1 minute'));
+        self::assertFalse($token->isUsableAt($now->modify('+1 minute')));
+        $token->reissue(str_repeat('b', 64), $now->modify('+30 minutes'), $now->modify('+2 minutes'));
         self::assertSame(str_repeat('b', 64), $token->tokenHash());
-        $token->consume($now->modify('+1 minute'));
-        self::assertFalse($token->isUsableAt($now->modify('+2 minutes')));
+        self::assertTrue($token->isUsableAt($now->modify('+2 minutes')));
+        $token->consume($now->modify('+3 minutes'));
+        self::assertFalse($token->isUsableAt($now->modify('+4 minutes')));
         $this->expectException(DomainException::class);
         $token->consume($now->modify('+3 minutes'));
     }
 
-    public function testResetTokenRejectsRawOrExpiredMaterial(): void
+    public function testResetTokenRejectsRawMaterial(): void
     {
         $this->expectException(DomainException::class);
         new PasswordResetToken(
@@ -39,6 +42,20 @@ final class PasswordResetPrimitivesTest extends TestCase
             'raw-token',
             new DateTimeImmutable('+1 hour'),
         );
+    }
+
+    public function testResetTokenRejectsExpiryBoundaryAndExpiredConsume(): void
+    {
+        $now = new DateTimeImmutable('2026-09-27T15:00:00+00:00');
+        $token = new PasswordResetToken(
+            new User('expired@example.test', 'Expired'),
+            str_repeat('c', 64),
+            $now,
+        );
+        self::assertFalse($token->isUsableAt($now));
+
+        $this->expectException(DomainException::class);
+        $token->consume($now->modify('+1 second'));
     }
 
     public function testSecurityIssuesOpaqueOneHourTokenAndHashesOnlyValidRawTokens(): void
@@ -65,6 +82,8 @@ final class PasswordResetPrimitivesTest extends TestCase
 
         foreach ([
             'password1234',
+            'password123456',
+            '            ',
             'áááááá',
             'Marcela-super-segura-2026',
             'Current-secure-password-123!',
