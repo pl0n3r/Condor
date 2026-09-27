@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace App\Tests\Security;
+
 use App\Application\Identity\AccountPasswordPolicy;
 use App\Application\Identity\PasswordResetSecurity;
 use App\Domain\Identity\Entity\PasswordResetToken;

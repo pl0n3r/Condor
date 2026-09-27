@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace App\Application\Identity;
+
 use App\Domain\Identity\Entity\User;
 use DomainException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
