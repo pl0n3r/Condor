@@ -158,10 +158,20 @@ final class PlanConfiguratorController extends AbstractController
     private static function payload(Request $request): array
     {
         try {
-            $payload = $request->toArray();
+            $decoded = json_decode(
+                (string) $request->getContent(),
+                true,
+                512,
+                JSON_THROW_ON_ERROR,
+            );
         } catch (JsonException $exception) {
             throw new BadRequestHttpException('JSON inválido.', $exception);
         }
+        if (!is_array($decoded)) {
+            throw new BadRequestHttpException('El cuerpo JSON debe ser un objeto.');
+        }
+        /** @var array<string,mixed> $payload */
+        $payload = $decoded;
         foreach (array_keys($payload) as $key) {
             if (!in_array($key, [
                 'plan', 'vertical', 'cycle', 'quantities', 'addons', 'total',
@@ -186,7 +196,10 @@ final class PlanConfiguratorController extends AbstractController
         return trim($value);
     }
 
-    /** @param array<string,mixed> $payload @return array<string,int> */
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,int>
+     */
     private static function quantities(array $payload): array
     {
         $input = $payload['quantities'] ?? [];
@@ -203,7 +216,10 @@ final class PlanConfiguratorController extends AbstractController
         return $result;
     }
 
-    /** @param array<string,mixed> $payload @return list<string> */
+    /**
+     * @param array<string,mixed> $payload
+     * @return list<string>
+     */
     private static function addOns(array $payload): array
     {
         $input = $payload['addons'] ?? [];
