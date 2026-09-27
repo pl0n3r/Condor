@@ -24,6 +24,7 @@ final readonly class FunctionalSignalReport
         FunctionalSignal::LOGIN_FAILURE,
         FunctionalSignal::AUTHORIZATION_DENIED,
         FunctionalSignal::ROLE_MODIFIED,
+        FunctionalSignal::CONFIGURATOR_FUNNEL,
     ];
 
     public function __construct(private EntityManagerInterface $entityManager)

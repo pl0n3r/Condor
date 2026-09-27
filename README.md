@@ -1,25 +1,30 @@
-# Condor App — Snapshot operativo · Plan Configurator D V 0.1.62
+# Condor App — Snapshot operativo · Plan Configurator E V 0.1.63
 
-> **Candidato:** Issue #290 · consumidores comerciales canónicos.
+> **Candidato:** Issue #291 · backend de telemetría privacy-safe.
 
-Condor continúa en construcción. V0.1.62 conecta las superficies comerciales visibles con una sola fuente: `CommercialCatalogReader`. La página pública de precios, el configurador y el Control Center comparten la identidad/versiones del catálogo vigente sin duplicar importes ni reglas en Twig o React.
+Condor continúa en construcción. V0.1.63 añade el contrato backend del funnel del configurador sin introducir tracking identificable: endpoint público cerrado, limiter independiente y señal funcional agregable reutilizando la infraestructura existente.
 
 ## Alcance
-- nueva superficie SSR pública `/precios` alimentada por el catálogo comercial canónico;
-- navegación pública desde inicio y configurador hacia precios;
-- `/adminpl0n3r/api/context` expone `commercial_catalog` desde el mismo reader;
-- Control Center presenta planes vigentes en modo solo lectura, sin convertirse en fuente de pricing;
-- `/configurar-condor` conserva sus APIs canónicas de catálogo, opciones y quote;
-- identidad `plan key + PlanVersion` compartida entre `/precios`, configurador y platform owner;
-- Enterprise/proposal permanece sin importe inventado en las tres superficies;
-- regresiones estáticas contra precios/reglas duplicados y WebTestCase runtime con catálogo seed real;
-- versión candidata `0.1.62`.
+- endpoint `POST /api/public/configurator/events`;
+- tipo funcional `configurator_funnel` sin tabla ni migración nueva;
+- eventos documentados: start, plan selected/changed, vertical, add-on, abandonment, completion y proposal;
+- contexto allowlisted exclusivamente a `event/plan/vertical/cycle/addon/step`;
+- plan, vertical y add-on validados contra el catálogo comercial canónico;
+- `tenant_id = null` y ausencia de correo, nombre, IP, sesión, user-agent, cantidades, cookies, fingerprint e identificadores cross-session;
+- limiter `plan_configurator_events` independiente del limiter de quote;
+- `configurator_funnel` incorporado al reporte funcional agregado;
+- contrato de finalidad, explotación y retención documentado en `docs/telemetria-configurador.md`;
+- regresiones runtime y wrapper Factory para privacidad + independencia de rate limits.
 
-## Seguridad y reversión
-No se modifican PlanVersion, precios, compatibilidades, migraciones ni datos persistentes del catálogo. El frontend únicamente presenta datos server-side. Enterprise sigue requiriendo propuesta y no recibe un total sintético. Reversión: revert del slice restaura las superficies anteriores sin migración ni restauración de datos.
+## Privacidad, seguridad y reversión
+La IP solo puede intervenir transitoriamente como clave del limiter y no se persiste como señal funcional. El endpoint reconstruye el contexto server-side y rechaza campos extra o claves comerciales inexistentes. `datos.yml` permanece intacto porque #291 no incorpora tratamiento de dato personal.
+
+La explotación operativa usa la ventana móvil de 30 días del reporte funcional. La tabla existente no tiene purga automática; este slice no ejecuta borrados destructivos y documenta esa limitación antes de una política de retención definitiva.
+
+Reversión: retirar controller, limiter y tipo `configurator_funnel`; no hay cambios de Commercial Catalog, Quote ni migraciones.
 
 ## Evidencia base
-- `main@45e54912107e8b4c080072d6ce405db5f9ebda15` · V0.1.61 como base del candidato.
-- Reserva #290: `8722e296-a73a-49f7-a6fe-f0110c5feeee`.
-- PR #293 valida AC-01..AC-04 para el cierre de consumidores de #280B.
-- #280 permanece como parent hasta integrar también la telemetría privacy-safe restante.
+- `main@fc2d5365401af69396a87f2e6bf4e416119d6ee5` · V0.1.62 GREEN.
+- Reserva #291: `10c40351-5466-4e70-a215-fcb5e9268592`.
+- #292 permanece fuera de alcance y conectará la instrumentación de navegador cuando #291 esté integrado.
+- #280 permanece como parent hasta cerrar también la instrumentación frontend.

@@ -22,6 +22,7 @@ class FunctionalSignal
     public const LOGIN_FAILURE = 'login_failure';
     public const AUTHORIZATION_DENIED = 'authorization_denied';
     public const ROLE_MODIFIED = 'role_modified';
+    public const CONFIGURATOR_FUNNEL = 'configurator_funnel';
 
     /** @var list<string> */
     private const TYPES = [
@@ -30,6 +31,7 @@ class FunctionalSignal
         self::LOGIN_FAILURE,
         self::AUTHORIZATION_DENIED,
         self::ROLE_MODIFIED,
+        self::CONFIGURATOR_FUNNEL,
     ];
 
     #[ORM\Id]

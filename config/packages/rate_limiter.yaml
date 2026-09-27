@@ -20,6 +20,11 @@ framework:
       limit: 240
       interval: '1 minute'
 
+    plan_configurator_events:
+      policy: sliding_window
+      limit: 120
+      interval: '1 minute'
+
     control_bot_api:
       policy: sliding_window
       limit: 60
