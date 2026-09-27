@@ -1,30 +1,29 @@
-# Condor App — Snapshot operativo · Commercial Catalog V 0.1.53
+# Condor App — Snapshot operativo · Commercial Catalog Persistence V 0.1.54
 
-> **Candidato:** Issue #268 · modelo de dominio Plan, PlanVersion y Vertical.
+> **Candidato:** Issue #270 · persistencia Doctrine y migración del Commercial Catalog.
 
-Condor continúa en **construcción**. V0.1.53 inicia el Commercial Catalog SaaS como bounded context separado del catálogo de productos de los tenants. Este slice fija identidad estable, historial de versiones, vigencia temporal y compatibilidad PlanVersion↔Vertical sin persistencia ni UI.
+Condor continúa en **construcción**. V0.1.54 persiste el contrato de dominio integrado en #268 sin ampliar producto: Plan, PlanVersion y Vertical quedan mapeados en tablas comerciales globales, separados del catálogo tenant-scoped.
 
 ## Alcance
-- nuevo `App\Domain\Commercial`, separado de `Domain\Catalog` de productos/SKU;
-- Plan y Vertical con keys estables;
-- PlanVersion con moneda, precio versionado, límites y vigencia half-open;
-- timeline fail-closed ante versiones solapadas;
-- compatibilidad entre una PlanVersion y múltiples verticales;
-- Enterprise conserva precio desconocido/cotizable como `null`, nunca COP 0;
-- aceptación ejecutable Factory mediante `tests/test_commercial_catalog_model.py`.
+- atributos Doctrine sobre `App\Domain\Commercial`;
+- tablas globales para Plan, Vertical, PlanVersion y relación N:M;
+- claves únicas para identidad estable y plan+version;
+- índice temporal por plan/vigencia;
+- migración expand-only, sin seed ni datos comerciales;
+- regresión SchemaTool↔schema migrado;
+- aceptación Factory en `tests/test_commercial_catalog_persistence.py`.
 
 ## Seguridad, datos y reversión
-El candidato es dominio puro: no agrega PII, proveedores, DB, migraciones ni efectos externos. `datos.yml` no cambia. Revertir el PR elimina el modelo sin tocar producción.
+No se agregan PII, proveedores ni formularios; `datos.yml` no cambia. El `up()` solo crea estructuras. En construcción aplica D-054: dry-run/allowlist, backup, migrate y recheck antes de considerar schema productivo. El `down()` no se ejecuta automáticamente en producción.
 
 ## Evidencia base
-- `main@c797055cab0a53905acb6f3193bfc4b36e469115` · V0.1.52 · PRODUCCIÓN EN VERDE.
-- Reserva v2 #268 renovada: `3d592618-7484-526e-9ff2-09b877640050`.
-- #270 queda detrás de este slice para persistencia Doctrine/migración.
-- #269 queda después de #270 para Capability/AddOn, seed y reader.
+- `main@3dd1d61a79ca0507df55d56f0c30e370406106fb` · V0.1.53.
+- Reserva #270: `f83096cc-5353-4503-9221-112fbc1645a6`.
+- #269 permanece bloqueado hasta integrar este slice.
 
 ## Fuentes de verdad
 - [AGENTES.md](./AGENTES.md)
 - Roadmap: Issue #1
 - Épico comercial: #265
 - Commercial Catalog parent: #266
-- Slice actual: #268
+- Slice actual: #270
