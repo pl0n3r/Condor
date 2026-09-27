@@ -1,29 +1,30 @@
-# Condor App — Snapshot operativo · Commercial Catalog Persistence V 0.1.54
+# Condor App — Snapshot operativo · Commercial Catalog V1 V 0.1.55
 
-> **Candidato:** Issue #270 · persistencia Doctrine y migración del Commercial Catalog.
+> **Candidato:** Issue #269 · capabilities, add-ons, seed y reader del Commercial Catalog.
 
-Condor continúa en **construcción**. V0.1.54 persiste el contrato de dominio integrado en #268 sin ampliar producto: Plan, PlanVersion y Vertical quedan mapeados en tablas comerciales globales, separados del catálogo tenant-scoped.
+Condor continúa en **construcción**. V0.1.55 completa el catálogo comercial base iniciado en #268/#270 sin activar todavía entitlements, suscripciones ni UI.
 
 ## Alcance
-- atributos Doctrine sobre `App\Domain\Commercial`;
-- tablas globales para Plan, Vertical, PlanVersion y relación N:M;
-- claves únicas para identidad estable y plan+version;
-- índice temporal por plan/vigencia;
-- migración expand-only, sin seed ni datos comerciales;
-- regresión SchemaTool↔schema migrado;
-- aceptación Factory en `tests/test_commercial_catalog_persistence.py`.
+- `Capability` y `AddOn` con claves comerciales estables, separados de RBAC;
+- compatibilidad PlanVersion↔Capability/AddOn por relaciones persistentes;
+- seed idempotente de Básico, Negocio, Pro y Enterprise con las hipótesis aprobadas en #265;
+- verticales iniciales compartidas, incluido Legal/Abogados sin fork;
+- Producción Lite como add-on de Negocio por COP 99.900/mes;
+- reader vigente por fecha que consume el catálogo persistido y no conoce nombres de planes;
+- migración expand-only para nuevas tablas y relaciones;
+- aceptación Factory en `tests/test_commercial_catalog_seed.py`.
 
 ## Seguridad, datos y reversión
-No se agregan PII, proveedores ni formularios; `datos.yml` no cambia. El `up()` solo crea estructuras. En construcción aplica D-054: dry-run/allowlist, backup, migrate y recheck antes de considerar schema productivo. El `down()` no se ejecuta automáticamente en producción.
+No se agregan PII ni proveedores; `datos.yml` no cambia. No hay enforcement comercial ni cambios de permisos. La migración solo crea estructuras y relaciones. En construcción sigue aplicando D-054 antes de cualquier migrate real.
 
 ## Evidencia base
-- `main@3dd1d61a79ca0507df55d56f0c30e370406106fb` · V0.1.53.
-- Reserva #270: `f83096cc-5353-4503-9221-112fbc1645a6`.
-- #269 permanece bloqueado hasta integrar este slice.
+- `main@5ca6081680581b235ca34223fc1c1fb50af6f597` · V0.1.54.
+- Reserva #269: `5d560e99-073a-472c-80cd-07ab2fae550f`.
+- #267 permanece dependiente del cierre del Commercial Catalog V1.
 
 ## Fuentes de verdad
 - [AGENTES.md](./AGENTES.md)
 - Roadmap: Issue #1
 - Épico comercial: #265
 - Commercial Catalog parent: #266
-- Slice actual: #270
+- Slice actual: #269
