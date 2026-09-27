@@ -134,9 +134,9 @@ class FactoryAdoptionTests(unittest.TestCase):
     def test_coordination_wrapper_candidate_version(self) -> None:
         version = self.read("config/version.php")
         readme = self.read("README.md")
-        self.assertIn("'version' => '0.1.58'", version)
-        self.assertIn("V 0.1.58", readme)
-        self.assertIn("Issue #278", readme)
+        self.assertIn("'version' => '0.1.59'", version)
+        self.assertIn("V 0.1.59", readme)
+        self.assertIn("Issue #283", readme)
 
     def test_condor_ci_requires_factory_without_dropping_specific_gates(self) -> None:
         ci = self.read(".github/workflows/ci.yml")

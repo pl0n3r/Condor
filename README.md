@@ -1,23 +1,23 @@
-# Condor App — Snapshot operativo · Plan Configurator B V 0.1.58
+# Condor App — Snapshot operativo · Plan Configurator Public API V 0.1.59
 
-> **Candidato:** Issue #278 · quote autoritativo y trazable.
+> **Candidato:** Issue #283 · API pública canónica y preview no persistente.
 
-Condor continúa en construcción. V0.1.58 añade cotización server-side sobre el Commercial Catalog vigente: revalida plan/vertical/add-ons/cantidades, ignora totales enviados por cliente, persiste PlanVersion/composición exacta y deriva a propuesta cuando no existe precio cerrado.
+Condor continúa en construcción. V0.1.59 expone el contrato público que consumirá la experiencia visual del configurador sin convertir el frontend en fuente de precios o compatibilidad.
 
 ## Alcance
-- `PlanQuoteService` consume `PlanConfiguratorCatalogReader`;
-- cantidades de usuarios/sedes/empresas se recalculan con límites y add-ons canónicos;
-- add-ons incompatibles fallan cerrado;
-- mensual calcula total cerrado; anual con extras queda en proposal hasta política comercial explícita;
-- Enterprise/unpriced nunca inventa total;
-- `Quote` persiste PlanVersion, vertical, cantidades, add-ons, vigencia y estado;
-- tax policy/amount permanecen null mientras no exista política fiscal configurada;
-- aceptación Factory: `tests/test_plan_quote.py`.
+- host público `/configurar-condor` preparado para el entry React del siguiente slice;
+- catálogo y opciones públicas derivadas de Commercial Catalog + compatibilidad canónica;
+- preview server-side de quote que ignora totales cliente y no persiste filas `Quote`;
+- extras de escala derivados únicamente de cantidades y marcados no seleccionables;
+- payload allowlisted y errores fail-closed;
+- rate limit anónimo por IP sobre preview;
+- Legal conserva filtrado canónico; Enterprise/proposal nunca inventa precio;
+- aceptación Factory: `tests/test_plan_configurator_public_api.py`.
 
 ## Seguridad y reversión
-No se confía en precio/total del frontend. No cambia RBAC, PII, secretos ni `datos.yml`. La migración es expand-only.
+No agrega PII, cookies nuevas, permisos, checkout ni telemetría. El preview no escribe base de datos. Las rutas pueden retirarse por revert sin migraciones ni pérdida de datos.
 
 ## Evidencia base
-- `main@0852d3bf42513ddf21ba7cfabc571130c78e42ac` · V0.1.57 GREEN.
-- Reserva #278: `b06dba8c-1c4a-40b2-b63e-d3420d913ce6`.
-- #279 permanece bloqueado hasta integrar este quote autoritativo.
+- `main@2e928ae157b29513fb16652af6140444a190a8da` · V0.1.58 GREEN.
+- Reserva #283: `cbc2e643-d249-4e5d-9a9f-8f4e15111e78`.
+- #284 permanece bloqueado hasta integrar y validar este contrato público.
