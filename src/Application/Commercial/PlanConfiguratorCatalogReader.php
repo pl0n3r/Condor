@@ -46,9 +46,6 @@ final readonly class PlanConfiguratorCatalogReader
 
         $capabilities = [];
         foreach ($relations as $relation) {
-            if (!$relation instanceof VerticalCapability) {
-                continue;
-            }
             $capability = $relation->capability();
             if (!$capability->isActive() || !isset($allowedCapabilities[$capability->key()])) {
                 continue;
