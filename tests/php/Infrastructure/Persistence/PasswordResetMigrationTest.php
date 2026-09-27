@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 
 namespace App\Tests\Infrastructure\Persistence;
@@ -21,35 +20,26 @@ final class PasswordResetMigrationTest extends KernelTestCase
         self::bootKernel();
         $connection = static::getContainer()->get(Connection::class);
         self::assertInstanceOf(Connection::class, $connection);
-
         $table = $connection->createSchemaManager()->introspectTable('condor_password_reset');
         $indexes = array_map('strtolower', array_keys($table->getIndexes()));
         self::assertContains('uniq_password_reset_user', $indexes);
         self::assertContains('uniq_password_reset_token_hash', $indexes);
-        $references = array_map(
-            static fn ($foreignKey): string => strtolower($foreignKey->getReferencedTableName()->toString()),
+        self::assertContains('condor_user', array_map(
+            static fn ($fk): string => strtolower($fk->getReferencedTableName()->toString()),
             $table->getForeignKeys(),
-        );
-        self::assertContains('condor_user', $references);
+        ));
 
         $user = new User('migration-reset@example.test', 'Migration Reset');
         $manager = static::getContainer()->get('doctrine.orm.entity_manager');
         $manager->persist($user);
         $manager->flush();
-
         try {
-            $now = '2026-09-27 15:00:00';
             $connection->insert('condor_password_reset', [
-                'id' => '01K60RESETMIGRATION000001',
-                'user_id' => $user->id(),
-                'token_hash' => str_repeat('d', 64),
-                'expires_at' => '2026-09-27 16:00:00',
-                'consumed_at' => null,
-                'revoked_at' => null,
-                'created_at' => $now,
-                'updated_at' => $now,
+                'id' => '01K60RESETMIGRATION000001', 'user_id' => $user->id(),
+                'token_hash' => str_repeat('d', 64), 'expires_at' => '2026-09-27 16:00:00',
+                'consumed_at' => null, 'revoked_at' => null,
+                'created_at' => '2026-09-27 15:00:00', 'updated_at' => '2026-09-27 15:00:00',
             ]);
-
             $blocked = new Version20260925040000($connection, new NullLogger());
             try {
                 $blocked->down(new Schema());
@@ -57,32 +47,26 @@ final class PasswordResetMigrationTest extends KernelTestCase
             } catch (AbortMigration) {
                 self::assertContains('condor_password_reset', $connection->createSchemaManager()->listTableNames());
             }
-
             $connection->delete('condor_password_reset', ['user_id' => $user->id()]);
             $down = new Version20260925040000($connection, new NullLogger());
             $down->down(new Schema());
-            $this->executeMigrationSql($connection, $down->getSql());
+            $this->executeSql($connection, $down->getSql());
             self::assertNotContains('condor_password_reset', $connection->createSchemaManager()->listTableNames());
         } finally {
             if (!in_array('condor_password_reset', $connection->createSchemaManager()->listTableNames(), true)) {
                 $up = new Version20260925040000($connection, new NullLogger());
                 $up->up(new Schema());
-                $this->executeMigrationSql($connection, $up->getSql());
+                $this->executeSql($connection, $up->getSql());
             }
             $connection->delete('condor_password_reset', ['user_id' => $user->id()]);
             $connection->delete('condor_user', ['id' => $user->id()]);
         }
     }
 
-    /** @param list<\Doctrine\Migrations\Query\Query> $queries */
-    private function executeMigrationSql(Connection $connection, array $queries): void
+    private function executeSql(Connection $connection, array $queries): void
     {
         foreach ($queries as $query) {
-            $connection->executeStatement(
-                $query->getStatement(),
-                $query->getParameters(),
-                $query->getTypes(),
-            );
+            $connection->executeStatement($query->getStatement(), $query->getParameters(), $query->getTypes());
         }
     }
 }

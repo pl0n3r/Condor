@@ -51,35 +51,12 @@ class PasswordResetToken
         $this->updatedAt = $this->createdAt;
     }
 
-    public function id(): string
-    {
-        return $this->id;
-    }
-
-    public function user(): User
-    {
-        return $this->user;
-    }
-
-    public function tokenHash(): string
-    {
-        return $this->tokenHash;
-    }
-
-    public function expiresAt(): DateTimeImmutable
-    {
-        return $this->expiresAt;
-    }
-
-    public function consumedAt(): ?DateTimeImmutable
-    {
-        return $this->consumedAt;
-    }
-
-    public function revokedAt(): ?DateTimeImmutable
-    {
-        return $this->revokedAt;
-    }
+    public function id(): string { return $this->id; }
+    public function user(): User { return $this->user; }
+    public function tokenHash(): string { return $this->tokenHash; }
+    public function expiresAt(): DateTimeImmutable { return $this->expiresAt; }
+    public function consumedAt(): ?DateTimeImmutable { return $this->consumedAt; }
+    public function revokedAt(): ?DateTimeImmutable { return $this->revokedAt; }
 
     public function isUsableAt(DateTimeImmutable $now): bool
     {
@@ -90,10 +67,8 @@ class PasswordResetToken
 
     /**
      * Reemplaza deliberadamente el estado consumido/revocado con un token nuevo.
-     *
-     * El caso de uso que invoque esta operación debe mantener una transacción y
-     * un lock pesimista de escritura sobre el registro de recuperación del usuario,
-     * para que un consume()/revoke() concurrente no pueda quedar sobrescrito.
+     * El caller debe mantener transacción + lock pesimista de escritura sobre el
+     * registro del usuario para no sobrescribir un consume()/revoke() concurrente.
      */
     public function reissue(string $tokenHash, DateTimeImmutable $expiresAt, DateTimeImmutable $now): void
     {
@@ -109,7 +84,6 @@ class PasswordResetToken
         if (!$this->isUsableAt($now)) {
             throw new DomainException('El enlace de recuperación ya no está disponible.');
         }
-
         $this->consumedAt = $now;
         $this->updatedAt = $now;
     }
@@ -119,7 +93,6 @@ class PasswordResetToken
         if ($this->consumedAt !== null) {
             throw new DomainException('Un enlace consumido no puede revocarse.');
         }
-
         $this->revokedAt = $now;
         $this->updatedAt = $now;
     }
@@ -130,7 +103,6 @@ class PasswordResetToken
         if (preg_match('/^[a-f0-9]{64}$/D', $tokenHash) !== 1) {
             throw new DomainException('El hash de recuperación no es válido.');
         }
-
         return $tokenHash;
     }
 }

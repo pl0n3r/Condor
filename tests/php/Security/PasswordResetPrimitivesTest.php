@@ -17,11 +17,7 @@ final class PasswordResetPrimitivesTest extends TestCase
     public function testResetTokenIsHashedSingleUseRevocableAndReissuable(): void
     {
         $now = new DateTimeImmutable('2026-09-27T15:00:00+00:00');
-        $token = new PasswordResetToken(
-            new User('admin@example.test', 'Admin'),
-            str_repeat('a', 64),
-            $now->modify('+60 minutes'),
-        );
+        $token = new PasswordResetToken(new User('admin@example.test', 'Admin'), str_repeat('a', 64), $now->modify('+60 minutes'));
         self::assertTrue($token->isUsableAt($now));
         $token->revoke($now->modify('+1 minute'));
         self::assertFalse($token->isUsableAt($now->modify('+1 minute')));
@@ -31,29 +27,20 @@ final class PasswordResetPrimitivesTest extends TestCase
         $token->consume($now->modify('+3 minutes'));
         self::assertFalse($token->isUsableAt($now->modify('+4 minutes')));
         $this->expectException(DomainException::class);
-        $token->consume($now->modify('+3 minutes'));
+        $token->consume($now->modify('+5 minutes'));
     }
 
     public function testResetTokenRejectsRawMaterial(): void
     {
         $this->expectException(DomainException::class);
-        new PasswordResetToken(
-            new User('admin@example.test', 'Admin'),
-            'raw-token',
-            new DateTimeImmutable('+1 hour'),
-        );
+        new PasswordResetToken(new User('admin@example.test', 'Admin'), 'raw-token', new DateTimeImmutable('+1 hour'));
     }
 
     public function testResetTokenRejectsExpiryBoundaryAndExpiredConsume(): void
     {
         $now = new DateTimeImmutable('2026-09-27T15:00:00+00:00');
-        $token = new PasswordResetToken(
-            new User('expired@example.test', 'Expired'),
-            str_repeat('c', 64),
-            $now,
-        );
+        $token = new PasswordResetToken(new User('expired@example.test', 'Expired'), str_repeat('c', 64), $now);
         self::assertFalse($token->isUsableAt($now));
-
         $this->expectException(DomainException::class);
         $token->consume($now->modify('+1 second'));
     }
@@ -70,7 +57,7 @@ final class PasswordResetPrimitivesTest extends TestCase
         self::assertNull($security->hashRawToken('invalid'));
     }
 
-    public function testPasswordPolicyRejectsCommonIdentityReuseAndCurrentPassword(): void
+    public function testPasswordPolicyRejectsWeakIdentityAndReusedPasswords(): void
     {
         $hasher = $this->createMock(UserPasswordHasherInterface::class);
         $hasher->method('isPasswordValid')->willReturnCallback(
@@ -80,14 +67,7 @@ final class PasswordResetPrimitivesTest extends TestCase
         $user = new User('marcela@example.test', 'Marcela');
         $user->setPasswordHash('existing-hash');
 
-        foreach ([
-            'password1234',
-            'password123456',
-            '            ',
-            'áááááá',
-            'Marcela-super-segura-2026',
-            'Current-secure-password-123!',
-        ] as $candidate) {
+        foreach (['password1234', 'password123456', '            ', 'áááááá', 'Marcela-super-segura-2026', 'Current-secure-password-123!'] as $candidate) {
             try {
                 $policy->assertAcceptable($user, $candidate);
                 self::fail('La política debe rechazar la contraseña.');
@@ -96,6 +76,5 @@ final class PasswordResetPrimitivesTest extends TestCase
             }
         }
         $policy->assertAcceptable($user, 'Otra-frase-segura-456!');
-        self::assertTrue(true);
     }
 }
