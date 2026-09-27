@@ -38,6 +38,38 @@ class FactoryAdoptionTests(unittest.TestCase):
         self.assertIn("CONDOR_AUTO_MIGRATE=0", manual)
         self.assertIn("Issue #1", manual)
 
+    def test_factory_v1_is_only_label_catalog(self) -> None:
+        self.assertFalse((ROOT / ".github/labels.json").exists())
+        workflow = self.read(".github/workflows/sincronizar-gobierno.yml")
+        self.assertIn(
+            "pl0n3r/factory/.github/workflows/etiquetas.yml@v1",
+            workflow,
+        )
+        self.assertNotIn(".github/labels.json", workflow)
+
+    def test_agents_require_classification_at_creation(self) -> None:
+        manual = self.read("AGENTES.md")
+        for token in (
+            "clasificado en el mismo acto de creación",
+            "exactamente una etiqueta de tipo",
+            "una de prioridad",
+            "una de estado",
+            "roles profesionales",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, manual)
+
+    def test_factory_label_gate_remains_delegated_to_v1(self) -> None:
+        workflow = self.read(".github/workflows/sincronizar-gobierno.yml")
+        reference = "pl0n3r/factory/.github/workflows/etiquetas.yml@v1"
+        self.assertEqual(workflow.count(reference), 4)
+        for mode in ("mode: sync", "mode: validate", "mode: sweep"):
+            with self.subTest(mode=mode):
+                self.assertIn(mode, workflow)
+        self.assertNotIn("@main", workflow)
+        self.assertNotIn("secrets: inherit", workflow)
+        self.assertNotIn("\n        run:", workflow)
+
     def test_common_workflows_delegate_to_factory_v1(self) -> None:
         expected = {
             ".github/workflows/sincronizar-gobierno.yml":
