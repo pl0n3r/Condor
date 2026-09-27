@@ -89,9 +89,13 @@ final class Quote
     public function quantities(): array { return $this->quantities; }
     /** @return list<string> */
     public function addOns(): array { return $this->addOns; }
+    public function cycle(): string { return $this->cycle; }
+    public function baseAmount(): ?int { return $this->baseAmount; }
+    public function addOnAmount(): ?int { return $this->addOnAmount; }
     public function totalAmount(): ?int { return $this->totalAmount; }
     public function proposalRequired(): bool { return $this->proposalRequired; }
     public function status(): string { return $this->status; }
+    public function validUntil(): DateTimeImmutable { return $this->validUntil; }
     public function convert(): void { $this->status = 'converted'; }
     public function expire(): void { $this->status = 'expired'; }
 }
