@@ -95,7 +95,7 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
         self.assertIn("'version' => '0.1.60'", version)
         self.assertIn("V 0.1.60", readme)
         self.assertIn("Issue #286", readme)
-        self.assertIn("Plan Configurator Public API V 0.1.60", readme)
+        self.assertIn("Runtime Cache Hotfix V 0.1.60", readme)
 
 
 if __name__ == "__main__":
