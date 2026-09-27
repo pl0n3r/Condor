@@ -24,7 +24,10 @@ final readonly class PlanQuoteService
         private EntityManagerInterface $entityManager,
     ) {}
 
-    /** @param array<string,int> $quantities @param list<string> $addOnKeys */
+    /**
+     * @param array<string,int> $quantities
+     * @param list<string> $addOnKeys
+     */
     public function quote(
         string $planKey,
         string $verticalKey,
@@ -92,7 +95,11 @@ final readonly class PlanQuoteService
         );
     }
 
-    /** @param array<string,int> $input @param array<string,mixed> $limits @return array<string,int> */
+    /**
+     * @param array<string,int> $input
+     * @param array<string,mixed> $limits
+     * @return array<string,int>
+     */
     private function normalizeQuantities(array $input, array $limits): array
     {
         foreach ($input as $key => $_) {
