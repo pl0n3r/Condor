@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Commercial\CommercialCatalogReader;
+use App\Application\Commercial\PlanConfigurationRules;
 use App\Application\Commercial\PlanConfiguratorCatalogReader;
 use App\Application\Commercial\PlanQuoteService;
 use App\Domain\Commercial\Entity\Vertical;
@@ -77,11 +78,21 @@ final class PlanConfiguratorController extends AbstractController
     public function options(Request $request): JsonResponse
     {
         try {
-            return $this->json($this->configurator->options(
+            $options = $this->configurator->options(
                 self::queryString($request, 'plan'),
                 self::queryString($request, 'vertical'),
                 self::now(),
-            ));
+            );
+            $options['addons'] = array_map(
+                static fn (array $addOn): array => $addOn + [
+                    'selectable' => PlanConfigurationRules::isSelectableAddOn(
+                        (string) $addOn['key'],
+                    ),
+                ],
+                $options['addons'],
+            );
+
+            return $this->json($options);
         } catch (DomainException $exception) {
             throw new UnprocessableEntityHttpException(
                 $exception->getMessage(),
