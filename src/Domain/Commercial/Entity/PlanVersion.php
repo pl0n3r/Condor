@@ -18,7 +18,7 @@ final class PlanVersion
     private array $verticals = [];
 
     /**
-     * @param array<string, bool|int|string|null> $limits
+     * @param array<array-key, mixed> $limits
      */
     public function __construct(
         private readonly Plan $plan,
@@ -91,7 +91,7 @@ final class PlanVersion
     }
 
     /**
-     * @param array<string, bool|int|string|null> $limits
+     * @param array<array-key, mixed> $limits
      * @return array<string, bool|int|string|null>
      */
     private static function normalizeLimits(array $limits): array
