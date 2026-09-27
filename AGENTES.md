@@ -32,7 +32,7 @@ Además del arranque definido por Factory:
 
 La coordinación canónica se consume desde Factory v1. Las ramas normales siguen siendo `trabajo/issue-N` y una reserva stale se recupera sobre el mismo Issue/rama.
 
-Todo Issue y todo PR que cree un agente debe nacer **clasificado en el mismo acto de creación** con exactamente una etiqueta de tipo, una de prioridad y una de estado; añade también todos los roles profesionales que apliquen. No crees el ítem primero para etiquetarlo después.
+Todo Issue y todo PR que cree un agente debe nacer **clasificado en el mismo acto de creación** con exactamente una etiqueta de tipo, una de prioridad y una de estado; añade también todos los roles profesionales que apliquen. Incluye las etiquetas en el propio comando de creación (`--label` cuando uses `gh`); no crees el ítem primero para etiquetarlo después.
 
 ## 3. Contexto técnico
 
