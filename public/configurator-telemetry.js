@@ -44,11 +44,14 @@
 
   function requestMeta(input, init) {
     try {
-      const rawUrl = typeof input === 'string'
-        ? input
-        : input instanceof Request
-          ? input.url
-          : String(input);
+      let rawUrl;
+      if (typeof input === 'string') {
+        rawUrl = input;
+      } else if (input instanceof Request) {
+        rawUrl = input.url;
+      } else {
+        rawUrl = String(input);
+      }
       const url = new URL(rawUrl, window.location.origin);
       const method = String(
         init?.method ?? (input instanceof Request ? input.method : 'GET'),
@@ -81,11 +84,12 @@
 
   function updateSelection(plan, vertical) {
     if (typeof plan === 'string' && plan !== '') {
-      const event = state.plan === null
-        ? 'plan_selected'
-        : state.plan !== plan
-          ? 'plan_changed'
-          : null;
+      let event = null;
+      if (state.plan === null) {
+        event = 'plan_selected';
+      } else if (state.plan !== plan) {
+        event = 'plan_changed';
+      }
       if (event !== null) {
         emit(event, {
           plan,
@@ -99,7 +103,7 @@
     if (
       typeof vertical === 'string'
       && vertical !== ''
-      && state.vertical !== vertical
+      && !Object.is(state.vertical, vertical)
     ) {
       state.vertical = vertical;
       emit('vertical', {
@@ -178,10 +182,10 @@
         state.plan ?? '',
         state.vertical ?? '',
         state.cycle,
-        [...state.addons].sort().join(','),
+        [...state.addons].sort((left, right) => left.localeCompare(right)).join(','),
       ].join('|');
 
-      if (state.lastOutcome !== signature) {
+      if (!Object.is(state.lastOutcome, signature)) {
         state.lastOutcome = signature;
         state.step = 'summary';
         emit(event, {
