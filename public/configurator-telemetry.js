@@ -29,7 +29,7 @@
       const body = JSON.stringify(context(event, extra));
       void originalFetch(endpoint, {
         method: 'POST',
-        credentials: 'same-origin',
+        credentials: 'omit',
         keepalive: true,
         headers: {
           Accept: 'application/json',
