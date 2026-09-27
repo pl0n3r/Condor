@@ -24,14 +24,12 @@ final readonly class CommercialCatalogReader
     /** @return list<array<string,mixed>> */
     public function current(DateTimeImmutable $at): array
     {
-        $versions = array_values(array_filter(
-            $this->entityManager->getRepository(PlanVersion::class)->findAll(),
-            static fn (mixed $item): bool => $item instanceof PlanVersion,
-        ));
-        $plans = array_values(array_filter(
-            $this->entityManager->getRepository(Plan::class)->findBy(['active' => true]),
-            static fn (mixed $item): bool => $item instanceof Plan,
-        ));
+        $versions = $this->entityManager
+            ->getRepository(PlanVersion::class)
+            ->findAll();
+        $plans = $this->entityManager
+            ->getRepository(Plan::class)
+            ->findBy(['active' => true]);
 
         $result = [];
         foreach ($plans as $plan) {
