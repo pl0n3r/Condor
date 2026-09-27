@@ -6,92 +6,29 @@ namespace App\Domain\Commercial\Entity;
 
 use App\Shared\Id\UlidFactory;
 use DateTimeImmutable;
-use DateTimeZone;
-use Doctrine\Common\Collections\ArrayCollection;
-use Doctrine\Common\Collections\Collection;
-use Doctrine\ORM\Mapping as ORM;
 use DomainException;
 
-#[ORM\Entity]
-#[ORM\Table(name: 'condor_commercial_plan_version')]
-#[ORM\UniqueConstraint(
-    name: 'uniq_commercial_plan_version',
-    columns: ['plan_id', 'version_number'],
-)]
-#[ORM\Index(
-    name: 'idx_commercial_plan_effective',
-    columns: ['plan_id', 'effective_from', 'effective_until'],
-)]
-class PlanVersion
+final class PlanVersion
 {
-    #[ORM\Id]
-    #[ORM\Column(type: 'string', length: 26)]
     private string $id;
-
-    #[ORM\ManyToOne(targetEntity: Plan::class)]
-    #[ORM\JoinColumn(
-        name: 'plan_id',
-        referencedColumnName: 'id',
-        nullable: false,
-        onDelete: 'CASCADE',
-    )]
-    private Plan $plan;
-
-    #[ORM\Column(name: 'version_number', type: 'integer', options: ['unsigned' => true])]
-    private int $version;
-
-    #[ORM\Column(type: 'string', length: 3)]
     private string $currency;
-
-    #[ORM\Column(name: 'monthly_amount', type: 'integer', nullable: true, options: ['unsigned' => true])]
-    private ?int $monthlyAmount;
-
-    #[ORM\Column(name: 'annual_amount', type: 'integer', nullable: true, options: ['unsigned' => true])]
-    private ?int $annualAmount;
-
-    #[ORM\Column(name: 'quote_required', type: 'boolean')]
-    private bool $quoteRequired;
-
     /** @var array<string, bool|int|string|null> */
-    #[ORM\Column(type: 'json')]
     private array $limits;
-
-    #[ORM\Column(name: 'effective_from', type: 'datetime_immutable')]
-    private DateTimeImmutable $effectiveFrom;
-
-    #[ORM\Column(name: 'effective_until', type: 'datetime_immutable', nullable: true)]
-    private ?DateTimeImmutable $effectiveUntil;
-
-    /** @var Collection<int, Vertical> */
-    #[ORM\ManyToMany(targetEntity: Vertical::class)]
-    #[ORM\JoinTable(name: 'condor_commercial_plan_version_vertical')]
-    #[ORM\JoinColumn(
-        name: 'plan_version_id',
-        referencedColumnName: 'id',
-        onDelete: 'CASCADE',
-    )]
-    #[ORM\InverseJoinColumn(
-        name: 'vertical_id',
-        referencedColumnName: 'id',
-        onDelete: 'CASCADE',
-    )]
-    private Collection $verticals;
-
-    #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
-    private DateTimeImmutable $createdAt;
+    /** @var array<string, Vertical> */
+    private array $verticals = [];
 
     /**
      * @param array<string, bool|int|string|null> $limits
      */
     public function __construct(
-        Plan $plan,
-        int $version,
-        ?int $monthlyAmount,
-        ?int $annualAmount,
-        bool $quoteRequired,
+        private readonly Plan $plan,
+        private readonly int $version,
+        private readonly ?int $monthlyAmount,
+        private readonly ?int $annualAmount,
+        private readonly bool $quoteRequired,
         array $limits,
-        DateTimeImmutable $effectiveFrom,
-        ?DateTimeImmutable $effectiveUntil = null,
+        private readonly DateTimeImmutable $effectiveFrom,
+        private readonly ?DateTimeImmutable $effectiveUntil = null,
         string $currency = 'COP',
     ) {
         if ($version < 1) {
@@ -100,98 +37,41 @@ class PlanVersion
 
         $currency = strtoupper(trim($currency));
         if (preg_match('/^[A-Z]{3}$/D', $currency) !== 1) {
-            throw new DomainException('La moneda comercial debe ser ISO-4217.');
+            throw new DomainException('Moneda comercial inválida.');
         }
 
         if ($quoteRequired) {
             if ($monthlyAmount !== null || $annualAmount !== null) {
-                throw new DomainException(
-                    'Una versión cotizable no puede inventar un precio.',
-                );
+                throw new DomainException('Una versión cotizable no define precio.');
             }
         } elseif (
             $monthlyAmount === null
             || $monthlyAmount < 1
             || ($annualAmount !== null && $annualAmount < 1)
         ) {
-            throw new DomainException(
-                'Una versión con precio requiere un mensual positivo y anual positivo o nulo.',
-            );
+            throw new DomainException('El precio mensual debe ser positivo.');
         }
 
-        if (
-            $effectiveUntil !== null
-            && $effectiveUntil <= $effectiveFrom
-        ) {
-            throw new DomainException(
-                'La vigencia comercial debe terminar después de su inicio.',
-            );
+        if ($effectiveUntil !== null && $effectiveUntil <= $effectiveFrom) {
+            throw new DomainException('Vigencia comercial inválida.');
         }
 
         $this->id = UlidFactory::new();
-        $this->plan = $plan;
-        $this->version = $version;
         $this->currency = $currency;
-        $this->monthlyAmount = $monthlyAmount;
-        $this->annualAmount = $annualAmount;
-        $this->quoteRequired = $quoteRequired;
         $this->limits = self::normalizeLimits($limits);
-        $this->effectiveFrom = $effectiveFrom;
-        $this->effectiveUntil = $effectiveUntil;
-        $this->verticals = new ArrayCollection();
-        $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
-    public function id(): string
-    {
-        return $this->id;
-    }
-
-    public function plan(): Plan
-    {
-        return $this->plan;
-    }
-
-    public function version(): int
-    {
-        return $this->version;
-    }
-
-    public function currency(): string
-    {
-        return $this->currency;
-    }
-
-    public function monthlyAmount(): ?int
-    {
-        return $this->monthlyAmount;
-    }
-
-    public function annualAmount(): ?int
-    {
-        return $this->annualAmount;
-    }
-
-    public function quoteRequired(): bool
-    {
-        return $this->quoteRequired;
-    }
-
+    public function id(): string { return $this->id; }
+    public function plan(): Plan { return $this->plan; }
+    public function version(): int { return $this->version; }
+    public function currency(): string { return $this->currency; }
+    public function monthlyAmount(): ?int { return $this->monthlyAmount; }
+    public function annualAmount(): ?int { return $this->annualAmount; }
+    public function quoteRequired(): bool { return $this->quoteRequired; }
     /** @return array<string, bool|int|string|null> */
-    public function limits(): array
-    {
-        return $this->limits;
-    }
-
-    public function effectiveFrom(): DateTimeImmutable
-    {
-        return $this->effectiveFrom;
-    }
-
-    public function effectiveUntil(): ?DateTimeImmutable
-    {
-        return $this->effectiveUntil;
-    }
+    public function limits(): array { return $this->limits; }
+    public function effectiveFrom(): DateTimeImmutable { return $this->effectiveFrom; }
+    public function effectiveUntil(): ?DateTimeImmutable { return $this->effectiveUntil; }
 
     public function isEffectiveAt(DateTimeImmutable $at): bool
     {
@@ -201,19 +81,13 @@ class PlanVersion
 
     public function addVertical(Vertical $vertical): void
     {
-        foreach ($this->verticals as $current) {
-            if ($current->key() === $vertical->key()) {
-                return;
-            }
-        }
-
-        $this->verticals->add($vertical);
+        $this->verticals[$vertical->key()] = $vertical;
     }
 
     /** @return list<Vertical> */
     public function verticals(): array
     {
-        return array_values($this->verticals->toArray());
+        return array_values($this->verticals);
     }
 
     /**
@@ -223,22 +97,21 @@ class PlanVersion
     private static function normalizeLimits(array $limits): array
     {
         if (count($limits) > 50 || ($limits !== [] && array_is_list($limits))) {
-            throw new DomainException('Los límites comerciales deben ser un mapa acotado.');
+            throw new DomainException('Mapa de límites comerciales inválido.');
         }
 
-        $normalized = [];
         foreach ($limits as $key => $value) {
             if (
-                preg_match('/^[a-z][a-z0-9_]{1,63}$/D', $key) !== 1
+                !is_string($key)
+                || preg_match('/^[a-z][a-z0-9_]{1,63}$/D', $key) !== 1
                 || (is_int($value) && $value < 0)
                 || (is_string($value) && mb_strlen($value, 'UTF-8') > 120)
             ) {
                 throw new DomainException('Límite comercial inválido.');
             }
-            $normalized[$key] = $value;
         }
-        ksort($normalized);
+        ksort($limits);
 
-        return $normalized;
+        return $limits;
     }
 }

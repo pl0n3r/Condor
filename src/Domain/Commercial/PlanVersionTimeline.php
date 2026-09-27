@@ -11,33 +11,25 @@ use DomainException;
 
 final class PlanVersionTimeline
 {
-    /**
-     * @param iterable<PlanVersion> $existing
-     */
-    public function assertCanAdd(
-        iterable $existing,
-        PlanVersion $candidate,
-    ): void {
+    /** @param iterable<PlanVersion> $existing */
+    public function assertCanAdd(iterable $existing, PlanVersion $candidate): void
+    {
         foreach ($existing as $version) {
             if ($version->plan()->id() !== $candidate->plan()->id()) {
                 continue;
             }
-            if ($version->version() === $candidate->version()) {
+            if (
+                $version->version() === $candidate->version()
+                || $this->overlaps($version, $candidate)
+            ) {
                 throw new DomainException(
-                    'La versión comercial ya existe para este plan.',
-                );
-            }
-            if ($this->overlaps($version, $candidate)) {
-                throw new DomainException(
-                    'Las vigencias de un mismo plan no pueden solaparse.',
+                    'Versión duplicada o vigencia comercial solapada.',
                 );
             }
         }
     }
 
-    /**
-     * @param iterable<PlanVersion> $versions
-     */
+    /** @param iterable<PlanVersion> $versions */
     public function effectiveAt(
         iterable $versions,
         Plan $plan,
@@ -52,9 +44,7 @@ final class PlanVersionTimeline
                 continue;
             }
             if ($match !== null) {
-                throw new DomainException(
-                    'El catálogo contiene más de una versión vigente para el plan.',
-                );
+                throw new DomainException('Más de una versión vigente.');
             }
             $match = $version;
         }
@@ -62,15 +52,11 @@ final class PlanVersionTimeline
         return $match;
     }
 
-    private function overlaps(
-        PlanVersion $left,
-        PlanVersion $right,
-    ): bool {
-        $leftEndsAfterRightStarts = $left->effectiveUntil() === null
-            || $right->effectiveFrom() < $left->effectiveUntil();
-        $rightEndsAfterLeftStarts = $right->effectiveUntil() === null
-            || $left->effectiveFrom() < $right->effectiveUntil();
-
-        return $leftEndsAfterRightStarts && $rightEndsAfterLeftStarts;
+    private function overlaps(PlanVersion $a, PlanVersion $b): bool
+    {
+        return ($a->effectiveUntil() === null
+                || $b->effectiveFrom() < $a->effectiveUntil())
+            && ($b->effectiveUntil() === null
+                || $a->effectiveFrom() < $b->effectiveUntil());
     }
 }
