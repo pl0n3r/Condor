@@ -47,7 +47,7 @@ test.describe('Plan Configurator público', () => {
 
     await page.goto('/configurar-condor');
     await expect(page.getByRole('heading',{name:'Encuentra una configuración que se adapte a tu operación.'})).toBeVisible();
-    await expect(page.getByRole('region',{name:'Resumen de configuración'})).toBeVisible();
+    await expect(page.getByRole('complementary',{name:'Resumen de configuración'})).toBeVisible();
 
     await page.getByLabel('Vertical').selectOption('legal');
     await expect(page.getByText('Casos / expedientes')).toBeVisible();
@@ -75,7 +75,7 @@ test.describe('Plan Configurator público', () => {
     }}}));
     await page.setViewportSize({width:390,height:844});
     await page.goto('/configurar-condor');
-    const summary=page.getByRole('region',{name:'Resumen de configuración'});
+    const summary=page.getByRole('complementary',{name:'Resumen de configuración'});
     await expect(summary).toBeVisible();
     await expect(summary).toHaveCSS('position','sticky');
   });
