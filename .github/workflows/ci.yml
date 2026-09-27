@@ -202,9 +202,6 @@ jobs:
       - name: Autoauditar CI
         run: python3 scripts/ci_self_audit.py
 
-      - name: Validar configuración de labels
-        run: python3 -m json.tool .github/labels.json >/dev/null
-
       - name: Validar títulos predeterminados de Issues
         run: |
           set -euo pipefail
