@@ -17,7 +17,11 @@ final class PasswordResetPrimitivesTest extends TestCase
     public function testResetTokenIsHashedSingleUseRevocableAndReissuable(): void
     {
         $now = new DateTimeImmutable('2026-09-27T15:00:00+00:00');
-        $token = new PasswordResetToken(new User('admin@example.test', 'Admin'), str_repeat('a', 64), $now->modify('+60 minutes'));
+        $token = new PasswordResetToken(
+            new User('admin@example.test', 'Admin'),
+            str_repeat('a', 64),
+            $now->modify('+60 minutes'),
+        );
         self::assertTrue($token->isUsableAt($now));
         $token->revoke($now->modify('+1 minute'));
         self::assertFalse($token->isUsableAt($now->modify('+1 minute')));
@@ -67,7 +71,15 @@ final class PasswordResetPrimitivesTest extends TestCase
         $user = new User('marcela@example.test', 'Marcela');
         $user->setPasswordHash('existing-hash');
 
-        foreach (['password1234', 'password123456', '            ', 'áááááá', 'Marcela-super-segura-2026', 'Current-secure-password-123!'] as $candidate) {
+        $rejected = [
+            'password1234',
+            'password123456',
+            '            ',
+            'áááááá',
+            'Marcela-super-segura-2026',
+            'Current-secure-password-123!',
+        ];
+        foreach ($rejected as $candidate) {
             try {
                 $policy->assertAcceptable($user, $candidate);
                 self::fail('La política debe rechazar la contraseña.');

@@ -24,10 +24,11 @@ final class PasswordResetMigrationTest extends KernelTestCase
         $indexes = array_map('strtolower', array_keys($table->getIndexes()));
         self::assertContains('uniq_password_reset_user', $indexes);
         self::assertContains('uniq_password_reset_token_hash', $indexes);
-        self::assertContains('condor_user', array_map(
+        $foreignTables = array_map(
             static fn ($fk): string => strtolower($fk->getReferencedTableName()->toString()),
             $table->getForeignKeys(),
-        ));
+        );
+        self::assertContains('condor_user', $foreignTables);
 
         $user = new User('migration-reset@example.test', 'Migration Reset');
         $manager = static::getContainer()->get('doctrine.orm.entity_manager');

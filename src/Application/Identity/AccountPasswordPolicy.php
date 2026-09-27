@@ -34,7 +34,9 @@ final readonly class AccountPasswordPolicy
             || mb_strlen($meaningful, 'UTF-8') < 12
             || strlen($plainPassword) > 4096
         ) {
-            throw new DomainException('La contraseña debe tener al menos 12 caracteres significativos y máximo 4096 bytes.');
+            throw new DomainException(
+                'La contraseña debe tener al menos 12 caracteres significativos y máximo 4096 bytes.',
+            );
         }
 
         $normalized = mb_strtolower($meaningful, 'UTF-8');

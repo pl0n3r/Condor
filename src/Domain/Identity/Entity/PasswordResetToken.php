@@ -51,12 +51,30 @@ class PasswordResetToken
         $this->updatedAt = $this->createdAt;
     }
 
-    public function id(): string { return $this->id; }
-    public function user(): User { return $this->user; }
-    public function tokenHash(): string { return $this->tokenHash; }
-    public function expiresAt(): DateTimeImmutable { return $this->expiresAt; }
-    public function consumedAt(): ?DateTimeImmutable { return $this->consumedAt; }
-    public function revokedAt(): ?DateTimeImmutable { return $this->revokedAt; }
+    public function id(): string
+    {
+        return $this->id;
+    }
+    public function user(): User
+    {
+        return $this->user;
+    }
+    public function tokenHash(): string
+    {
+        return $this->tokenHash;
+    }
+    public function expiresAt(): DateTimeImmutable
+    {
+        return $this->expiresAt;
+    }
+    public function consumedAt(): ?DateTimeImmutable
+    {
+        return $this->consumedAt;
+    }
+    public function revokedAt(): ?DateTimeImmutable
+    {
+        return $this->revokedAt;
+    }
 
     public function isUsableAt(DateTimeImmutable $now): bool
     {
