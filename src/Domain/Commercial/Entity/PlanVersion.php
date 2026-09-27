@@ -57,6 +57,20 @@ final class PlanVersion
     #[ORM\InverseJoinColumn(name: 'vertical_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private Collection $verticals;
 
+    /** @var Collection<int, Capability> */
+    #[ORM\ManyToMany(targetEntity: Capability::class)]
+    #[ORM\JoinTable(name: 'condor_commercial_plan_version_capability')]
+    #[ORM\JoinColumn(name: 'plan_version_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    #[ORM\InverseJoinColumn(name: 'capability_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    private Collection $capabilities;
+
+    /** @var Collection<int, AddOn> */
+    #[ORM\ManyToMany(targetEntity: AddOn::class)]
+    #[ORM\JoinTable(name: 'condor_commercial_plan_version_addon')]
+    #[ORM\JoinColumn(name: 'plan_version_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    #[ORM\InverseJoinColumn(name: 'addon_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    private Collection $addOns;
+
     /**
      * @param array<array-key, mixed> $limits
      */
@@ -107,6 +121,8 @@ final class PlanVersion
         $this->effectiveUntil = $effectiveUntil;
         $this->currency = $currency;
         $this->verticals = new ArrayCollection();
+        $this->capabilities = new ArrayCollection();
+        $this->addOns = new ArrayCollection();
     }
 
     public function id(): string { return $this->id; }
@@ -141,6 +157,34 @@ final class PlanVersion
     public function verticals(): array
     {
         return array_values($this->verticals->toArray());
+    }
+
+    public function addCapability(Capability $capability): void
+    {
+        foreach ($this->capabilities as $current) {
+            if ($current->key() === $capability->key()) return;
+        }
+        $this->capabilities->add($capability);
+    }
+
+    /** @return list<Capability> */
+    public function capabilities(): array
+    {
+        return array_values($this->capabilities->toArray());
+    }
+
+    public function addAddOn(AddOn $addOn): void
+    {
+        foreach ($this->addOns as $current) {
+            if ($current->key() === $addOn->key()) return;
+        }
+        $this->addOns->add($addOn);
+    }
+
+    /** @return list<AddOn> */
+    public function addOns(): array
+    {
+        return array_values($this->addOns->toArray());
     }
 
     /**
