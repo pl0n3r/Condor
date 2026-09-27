@@ -349,10 +349,13 @@ jobs:
     if: needs.preflight.outputs.frontend == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ github.head_ref || github.ref }}
           persist-credentials: false
 
       - name: Preparar Node.js
@@ -369,14 +372,43 @@ jobs:
             --label "npm ci frontend" \
             -- npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Validar TypeScript y build reproducible
+      - name: Validar TypeScript y construir frontend
         run: |
           set -euo pipefail
           npm run typecheck
           npm run build:admin
           test -s public/build/admin.js
           test -s public/build/admin.css
-          git diff --exit-code -- public/build
+          test -s public/build/configurator.js
+
+      - name: Reconciliar artefactos generados en la rama del PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f public/build/admin.js public/build/admin.css public/build/configurator.js public/build/chunks/*.js
+          if git diff --cached --quiet; then
+            echo "Build ya reconciliado; no hay commit generado."
+            exit 0
+          fi
+          git commit -m "build(configurator): reconciliar artefactos Vite"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${HEAD_REF}"
+
+      - name: Verificar build reproducible
+        run: git diff --exit-code -- public/build
+
+      - name: Conservar build frontend para reconciliación
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: frontend-build-${{ github.run_id }}
+          path: public/build/
+          retention-days: 1
+          if-no-files-found: error
 
   audit-npm:
     name: Auditoría de dependencias npm

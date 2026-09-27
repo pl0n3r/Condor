@@ -1,23 +1,25 @@
-# Condor App — Snapshot operativo · Runtime Cache Hotfix V 0.1.60
+# Condor App — Snapshot operativo · Plan Configurator C V 0.1.61
 
-> **Candidato:** Issue #286 · rutas nuevas 404 tras post-deploy V0.1.59.
+> **Candidato:** Issue #284 · experiencia pública responsive.
 
-Condor continúa en construcción. V0.1.60 corrige el aislamiento de cache Symfony entre releases en Hostinger shared hosting: el cache no efímero incorpora la versión canónica para que PHP-FPM cargue un matcher/router nuevo en cada release en vez de reutilizar el mismo path compilado.
+Condor continúa en construcción. V0.1.61 monta la UI React pública del configurador sobre las APIs canónicas de V0.1.59, sin duplicar precios ni reglas comerciales en TypeScript.
 
 ## Alcance
-- cache prod versionado como `var/cache/prod-v<version>`;
-- la versión se lee de `config/version.php` y se normaliza a un componente filesystem-safe;
-- `CONDOR_EPHEMERAL_CACHE=1` conserva el contrato previo de aislamiento por PID/perfil;
-- no se borra ningún cache de releases anteriores;
-- no se usa `opcache_reset()`, restart de PHP-FPM, SSH ni endpoint de mantenimiento;
-- regresión ejecutable en `tests/test_versioned_runtime_cache.py`;
-- aceptación productiva exige que las rutas #283 dejen de responder 404.
+- entry Vite independiente `configurator.js`, separado del bundle admin;
+- flujo plan → vertical → escala → add-ons → ciclo → resumen;
+- catálogo, opciones y preview consumidos desde APIs públicas canónicas;
+- preview con debounce + AbortController;
+- Legal renderiza únicamente capabilities recibidas del backend;
+- proposal/Enterprise nunca muestra total ficticio;
+- resumen sticky desktop y móvil, foco visible y estados loading/error/empty;
+- ayuda “¿Necesito esto?” únicamente presentacional;
+- CSS público dedicado `/configurator.css`;
+- regresiones en `tests/test_plan_configurator_ui.py` y Playwright `configurator.spec.mjs`.
 
 ## Seguridad y reversión
-No hay DB, PII, secretos ni permisos nuevos. El cambio solo altera la ubicación del cache compilado de Symfony para releases normales. Revertir restaura el path estándar; los caches versionados antiguos quedan inertes y no se eliminan durante este incidente.
+El frontend no persiste cotizaciones ni acepta precio como autoridad. No añade PII, telemetría, checkout, trial ni CRM. Revertir el entry/Twig/CSS restaura el host público sin alterar catálogo o quotes.
 
 ## Evidencia base
-- `main@dcd48c302433f1ba388042bc9781aa168db7b5fc` · V0.1.59.
-- Health exact-SHA y schema estaban sanos, pero `/configurar-condor` y `/api/public/configurator/catalog` seguían 404 incluso después de post-deploy V0.1.59 `complete/success`.
-- Reserva #286: `dd6198a4-22b0-440a-9746-f08605e7ed8c`.
-- #284 permanece bloqueado hasta recuperar PRODUCCIÓN EN VERDE.
+- `main@f86585acd66d24bc3f9b0ca32e89b184ae57ced4` · V0.1.60 GREEN.
+- Reserva #284: `ee5e1f73-2205-426d-8134-7339ff6702c8`.
+- #280 permanece bloqueado hasta integrar y validar esta UI.

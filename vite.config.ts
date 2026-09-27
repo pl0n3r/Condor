@@ -9,10 +9,11 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       input: {
-        admin: 'frontend/admin/main.tsx'
+        admin: 'frontend/admin/main.tsx',
+        configurator: 'frontend/configurator/main.tsx'
       },
       output: {
-        entryFileNames: 'admin.js',
+        entryFileNames: '[name].js',
         chunkFileNames: 'chunks/[name]-[hash].js',
         assetFileNames: (assetInfo) => (
           assetInfo.name?.endsWith('.css')
