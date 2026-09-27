@@ -1,25 +1,25 @@
-# Condor App — Snapshot operativo · Plan Configurator C V 0.1.61
+# Condor App — Snapshot operativo · Plan Configurator D V 0.1.62
 
-> **Candidato:** Issue #284 · experiencia pública responsive.
+> **Candidato:** Issue #290 · consumidores comerciales canónicos.
 
-Condor continúa en construcción. V0.1.61 monta la UI React pública del configurador sobre las APIs canónicas de V0.1.59, sin duplicar precios ni reglas comerciales en TypeScript.
+Condor continúa en construcción. V0.1.62 conecta las superficies comerciales visibles con una sola fuente: `CommercialCatalogReader`. La página pública de precios, el configurador y el Control Center comparten la identidad/versiones del catálogo vigente sin duplicar importes ni reglas en Twig o React.
 
 ## Alcance
-- entry Vite independiente `configurator.js`, separado del bundle admin;
-- flujo plan → vertical → escala → add-ons → ciclo → resumen;
-- catálogo, opciones y preview consumidos desde APIs públicas canónicas;
-- preview con debounce + AbortController;
-- Legal renderiza únicamente capabilities recibidas del backend;
-- proposal/Enterprise nunca muestra total ficticio;
-- resumen sticky desktop y móvil, foco visible y estados loading/error/empty;
-- ayuda “¿Necesito esto?” únicamente presentacional;
-- CSS público dedicado `/configurator.css`;
-- regresiones en `tests/test_plan_configurator_ui.py` y Playwright `configurator.spec.mjs`.
+- nueva superficie SSR pública `/precios` alimentada por el catálogo comercial canónico;
+- navegación pública desde inicio y configurador hacia precios;
+- `/adminpl0n3r/api/context` expone `commercial_catalog` desde el mismo reader;
+- Control Center presenta planes vigentes en modo solo lectura, sin convertirse en fuente de pricing;
+- `/configurar-condor` conserva sus APIs canónicas de catálogo, opciones y quote;
+- identidad `plan key + PlanVersion` compartida entre `/precios`, configurador y platform owner;
+- Enterprise/proposal permanece sin importe inventado en las tres superficies;
+- regresiones estáticas contra precios/reglas duplicados y WebTestCase runtime con catálogo seed real;
+- versión candidata `0.1.62`.
 
 ## Seguridad y reversión
-El frontend no persiste cotizaciones ni acepta precio como autoridad. No añade PII, telemetría, checkout, trial ni CRM. Revertir el entry/Twig/CSS restaura el host público sin alterar catálogo o quotes.
+No se modifican PlanVersion, precios, compatibilidades, migraciones ni datos persistentes del catálogo. El frontend únicamente presenta datos server-side. Enterprise sigue requiriendo propuesta y no recibe un total sintético. Reversión: revert del slice restaura las superficies anteriores sin migración ni restauración de datos.
 
 ## Evidencia base
-- `main@f86585acd66d24bc3f9b0ca32e89b184ae57ced4` · V0.1.60 GREEN.
-- Reserva #284: `ee5e1f73-2205-426d-8134-7339ff6702c8`.
-- #280 permanece bloqueado hasta integrar y validar esta UI.
+- `main@45e54912107e8b4c080072d6ce405db5f9ebda15` · V0.1.61 como base del candidato.
+- Reserva #290: `8722e296-a73a-49f7-a6fe-f0110c5feeee`.
+- PR #293 valida AC-01..AC-04 para el cierre de consumidores de #280B.
+- #280 permanece como parent hasta integrar también la telemetría privacy-safe restante.
