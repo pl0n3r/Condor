@@ -2,17 +2,22 @@
 
 {% block title %}Configura tu Cóndor{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="/configurator.css">
+{% endblock %}
+
 {% block body %}
 <header class="public-nav">
     <a class="wordmark" href="{{ path('app_home') }}" aria-label="Condor App, inicio">Condor App</a>
     <a class="nav-link" href="{{ path('app_login') }}">Ingresar</a>
 </header>
-<section class="hero" aria-labelledby="configurator-title">
-    <div>
-        <span class="eyebrow">Configura tu Cóndor</span>
-        <h1 id="configurator-title">Encuentra una configuración que se adapte a tu operación.</h1>
-        <p class="muted">El configurador interactivo se monta en el siguiente slice sobre este contrato público.</p>
-        <div id="condor-configurator-root" data-version="{{ app_version }}"></div>
+<section class="configurator-page" aria-labelledby="configurator-title">
+    <span class="eyebrow">Configura tu Cóndor</span>
+    <h1 id="configurator-title">Encuentra una configuración que se adapte a tu operación.</h1>
+    <p class="muted">Elige plan, operación y escala. El precio se recalcula siempre con el catálogo vigente del servidor.</p>
+    <div id="condor-configurator-root" data-version="{{ app_version }}">
+        <output>Cargando configurador…</output>
     </div>
 </section>
+<script type="module" src="/build/configurator.js"></script>
 {% endblock %}
