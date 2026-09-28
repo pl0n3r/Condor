@@ -85,83 +85,73 @@ final class KnowledgeController extends AbstractController
     public static function canonicalArticles(): array
     {
         return [
-            KnowledgeArticle::fromArray([
+            self::article([
                 'id' => 'account-access',
-                'version' => 1,
-                'state' => 'published',
-                'visibility' => 'public',
-                'audience' => 'public',
-                'locale' => 'es-CO',
-                'scope' => 'global',
                 'title' => 'Recuperar acceso a Condor',
                 'body' => 'Usa la recuperación de acceso desde el inicio de sesión. Si no reconoces la cuenta o el enlace dejó de ser válido, solicita uno nuevo.',
-                'owner_ref' => 'team:support',
                 'source_ref' => 'spec:identity-recovery',
                 'tags' => ['account', 'security'],
                 'modules' => ['help'],
-                'product_version_refs' => [],
-                'capability_refs' => [],
-                'reviewed_at' => '2026-09-01T00:00:00Z',
-                'stale_after' => '2099-12-31T23:59:59Z',
             ]),
-            KnowledgeArticle::fromArray([
+            self::article([
                 'id' => 'admin-context',
-                'version' => 1,
-                'state' => 'published',
                 'visibility' => 'customer',
                 'audience' => 'customer',
-                'locale' => 'es-CO',
-                'scope' => 'global',
                 'title' => 'Ayuda contextual del administrador',
                 'body' => 'La ayuda del administrador usa únicamente conocimiento publicado y autorizado para el contexto activo de la empresa.',
-                'owner_ref' => 'team:support',
                 'source_ref' => 'spec:knowledge-contextual-help',
                 'tags' => ['admin', 'support'],
                 'modules' => ['admin'],
-                'product_version_refs' => [],
-                'capability_refs' => [],
-                'reviewed_at' => '2026-09-01T00:00:00Z',
-                'stale_after' => '2099-12-31T23:59:59Z',
             ]),
-            KnowledgeArticle::fromArray([
+            self::article([
                 'id' => 'staff-operations',
-                'version' => 1,
-                'state' => 'published',
                 'visibility' => 'staff',
                 'audience' => 'staff',
-                'locale' => 'es-CO',
-                'scope' => 'global',
                 'title' => 'Checklist operativo de soporte',
                 'body' => 'Referencia interna de soporte pendiente de nueva revisión antes de reutilizarse.',
-                'owner_ref' => 'team:support',
                 'source_ref' => 'spec:support-operations',
                 'tags' => ['operations', 'support'],
                 'modules' => ['operations'],
-                'product_version_refs' => [],
-                'capability_refs' => [],
                 'reviewed_at' => '2024-01-01T00:00:00Z',
                 'stale_after' => '2025-01-01T00:00:00Z',
             ]),
-            KnowledgeArticle::fromArray([
+            self::article([
                 'id' => 'onboarding-draft',
-                'version' => 1,
                 'state' => 'draft',
-                'visibility' => 'public',
-                'audience' => 'public',
-                'locale' => 'es-CO',
-                'scope' => 'global',
                 'title' => 'Primeros pasos',
                 'body' => 'Borrador todavía no publicado.',
                 'owner_ref' => 'team:product',
                 'source_ref' => 'spec:onboarding',
                 'tags' => ['onboarding'],
                 'modules' => ['help'],
-                'product_version_refs' => [],
-                'capability_refs' => [],
                 'reviewed_at' => null,
                 'stale_after' => null,
             ]),
         ];
+    }
+
+    /** @param array<string, mixed> $overrides */
+    private static function article(array $overrides): KnowledgeArticle
+    {
+        return KnowledgeArticle::fromArray(array_replace([
+            'id' => 'knowledge',
+            'version' => 1,
+            'state' => 'published',
+            'visibility' => 'public',
+            'audience' => 'public',
+            'locale' => 'es-CO',
+            'scope' => 'global',
+            'title' => 'Knowledge',
+            'body' => 'Knowledge',
+            'owner_ref' => 'team:support',
+            'source_ref' => 'spec:knowledge',
+            'tags' => [],
+            'modules' => [],
+            'product_version_refs' => [],
+            'capability_refs' => [],
+            'reviewed_at' => '2026-09-01T00:00:00Z',
+            'stale_after' => '2099-12-31T23:59:59Z',
+        ], $overrides));
     }
 
     private static function module(mixed $value): string
