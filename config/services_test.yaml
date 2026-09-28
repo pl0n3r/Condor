@@ -1,0 +1,5 @@
+services:
+  App\Infrastructure\Notification\E2eFileTransactionalEmailGateway: ~
+
+  App\Application\Notification\TransactionalEmailGateway:
+    alias: App\Infrastructure\Notification\E2eFileTransactionalEmailGateway

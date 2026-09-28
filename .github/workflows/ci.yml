@@ -612,6 +612,8 @@ jobs:
       PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
       E2E_EMAIL: owner-e2e@example.test
       E2E_PLATFORM_EMAIL: owner-e2e-platform@example.test
+      E2E_RECOVERY_EMAIL: recovery-e2e@example.test
+      CONDOR_E2E_MAILBOX_PATH: /tmp/condor-e2e-mailbox.jsonl
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -636,10 +638,19 @@ jobs:
           set -euo pipefail
           app_secret="$(openssl rand -hex 32)"
           e2e_password="$(openssl rand -base64 32)"
+          e2e_recovery_password="$(openssl rand -base64 32)"
+          e2e_recovery_new_password="$(openssl rand -base64 32)"
+          e2e_recovery_changed_password="$(openssl rand -base64 32)"
           echo "::add-mask::$app_secret"
           echo "::add-mask::$e2e_password"
+          echo "::add-mask::$e2e_recovery_password"
+          echo "::add-mask::$e2e_recovery_new_password"
+          echo "::add-mask::$e2e_recovery_changed_password"
           echo "APP_SECRET=$app_secret" >> "$GITHUB_ENV"
           echo "E2E_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
+          echo "E2E_RECOVERY_PASSWORD=$e2e_recovery_password" >> "$GITHUB_ENV"
+          echo "E2E_RECOVERY_NEW_PASSWORD=$e2e_recovery_new_password" >> "$GITHUB_ENV"
+          echo "E2E_RECOVERY_CHANGED_PASSWORD=$e2e_recovery_changed_password" >> "$GITHUB_ENV"
           echo "CONDOR_OWNER_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
           echo "CONDOR_PLATFORM_OWNER_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
 
@@ -683,6 +694,14 @@ jobs:
             --branch="Principal" \
             --email="$E2E_EMAIL" \
             --owner-name="Propietario E2E"
+          php bin/console app:onboarding:create \
+            --name="Empresa Recovery E2E" \
+            --slug="empresa-recovery-e2e" \
+            --legal-name="Empresa Recovery E2E SAS" \
+            --branch="Principal" \
+            --email="$E2E_RECOVERY_EMAIL" \
+            --owner-name="Recovery E2E" \
+            --password-env=E2E_RECOVERY_PASSWORD
           php bin/console app:platform-owner:provision \
             --email="$E2E_PLATFORM_EMAIL" \
             --name="Propietario Plataforma E2E" \
@@ -691,6 +710,7 @@ jobs:
       - name: Iniciar aplicación
         run: |
           set -euo pipefail
+          rm -f "$CONDOR_E2E_MAILBOX_PATH"
           php -S 127.0.0.1:8080 -t public public/router.php >/tmp/condor-e2e-http.log 2>&1 &
           echo "$!" > /tmp/condor-e2e-http.pid
           for intento in {1..30}; do
