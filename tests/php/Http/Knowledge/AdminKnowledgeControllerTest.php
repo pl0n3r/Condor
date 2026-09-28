@@ -48,7 +48,7 @@ final class AdminKnowledgeControllerTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h1', 'Estado de la fuente canónica');
-        self::assertSame('2', $crawler->filter('[data-lifecycle="published"]')->text());
+        self::assertSame('3', $crawler->filter('[data-lifecycle="published"]')->text());
         self::assertSame('1', $crawler->filter('[data-lifecycle="draft"]')->text());
         self::assertSame('2', $crawler->filter('[data-testid="knowledge-stale-count"]')->text());
         self::assertSame('0', $crawler->filter('[data-testid="knowledge-gap-count"]')->text());
