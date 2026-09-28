@@ -95,7 +95,7 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
         self.assertIn("'version' => '0.1.68'", version)
         self.assertIn("V 0.1.68", readme)
         self.assertIn("Issue #298", readme)
-        self.assertIn("Release identity hotfix V 0.1.68", readme)
+        self.assertIn("Password Recovery C V 0.1.68", readme)
 
 
 if __name__ == "__main__":
