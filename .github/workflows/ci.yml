@@ -756,6 +756,7 @@ jobs:
             playwright-report/
             test-results/
             /tmp/condor-e2e-http.log
+            var/log/test.log
           retention-days: 14
           if-no-files-found: ignore
 
