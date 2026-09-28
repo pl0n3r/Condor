@@ -62,17 +62,17 @@ final class MarketTest extends TestCase
 
     public function testMarketsRemainIsolatedByTenantAndVenture(): void
     {
-        $a = Market::fromArray($this->marketPayload([
+        $a = Market::fromArray(MarketFixture::market([
             'market_id' => 'market-co-a',
             'tenant_id' => 'tenant-a',
             'venture_id' => 'condor',
         ]));
-        $b = Market::fromArray($this->marketPayload([
+        $b = Market::fromArray(MarketFixture::market([
             'market_id' => 'market-co-b',
             'tenant_id' => 'tenant-b',
             'venture_id' => 'condor',
         ]));
-        $c = Market::fromArray($this->marketPayload([
+        $c = Market::fromArray(MarketFixture::market([
             'market_id' => 'market-co-c',
             'tenant_id' => 'tenant-a',
             'venture_id' => 'other-venture',
