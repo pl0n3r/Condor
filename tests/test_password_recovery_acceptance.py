@@ -31,10 +31,16 @@ class PasswordRecoveryAcceptanceTests(unittest.TestCase):
         gateway = (
             ROOT / "src/Infrastructure/Notification/E2eFileTransactionalEmailGateway.php"
         ).read_text(encoding="utf-8")
+        gateway_test = (
+            ROOT
+            / "tests/php/Infrastructure/Notification/E2eFileTransactionalEmailGatewayTest.php"
+        ).read_text(encoding="utf-8")
 
         self.assertNotIn("E2eFileTransactionalEmailGateway", prod_services)
         self.assertIn("E2eFileTransactionalEmailGateway", test_services)
-        self.assertIn("getenv('APP_ENV') === 'test'", gateway)
+        self.assertIn("$environment: '%kernel.environment%'", test_services)
+        self.assertIn("new E2eFileTransactionalEmailGateway('prod')", gateway_test)
+        self.assertIn("assertFalse($gateway->isAvailable())", gateway_test)
         self.assertIn("CONDOR_E2E_MAILBOX_PATH", gateway)
         self.assertIn("sys_get_temp_dir()", gateway)
 
