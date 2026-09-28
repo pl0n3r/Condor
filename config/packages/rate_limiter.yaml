@@ -32,7 +32,7 @@ framework:
 
     password_reset_request_ip:
       policy: sliding_window
-      limit: 10
+      limit: 5
       interval: '1 hour'
 
     password_reset_request_account:
