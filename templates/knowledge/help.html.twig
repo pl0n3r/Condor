@@ -1,0 +1,76 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Ayuda · Condor App{% endblock %}
+
+{% block head %}
+<meta name="description" content="Ayuda oficial de Condor App basada en conocimiento publicado y vigente.">
+{% if contextual %}
+<meta name="robots" content="noindex,nofollow">
+{% else %}
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="/ayuda">
+{% endif %}
+{% endblock %}
+
+{% block body %}
+<nav class="public-nav" aria-label="Navegación principal">
+    <a class="wordmark" href="{{ path('app_home') }}">Condor App</a>
+    <div>
+        <a class="nav-link" href="{{ path('app_knowledge_help') }}"{% if not contextual %} aria-current="page"{% endif %}>Ayuda</a>
+        {% if contextual %}
+            <a class="nav-link" href="{{ path('app_admin') }}">Volver al admin</a>
+        {% endif %}
+    </div>
+</nav>
+
+<section
+    class="pricing-page"
+    data-knowledge-status="{{ knowledge.status }}"
+    data-knowledge-scope="{{ knowledge.scope }}"
+    data-knowledge-module="{{ module }}"
+>
+    <header class="pricing-heading">
+        <span class="eyebrow">{{ contextual ? 'Ayuda contextual' : 'Help Center' }}</span>
+        <h1>{{ contextual ? 'Ayuda para tu administración' : 'Preguntas y respuestas' }}</h1>
+        <p>
+            {% if contextual %}
+                Contexto: {{ tenant_name }}. Solo se muestra conocimiento autorizado para este canal.
+            {% else %}
+                Respuestas públicas desde la fuente canónica de conocimiento de Condor.
+            {% endif %}
+        </p>
+    </header>
+
+    {% if knowledge.status == 'ready' %}
+        <section class="pricing-grid" itemscope itemtype="https://schema.org/FAQPage" aria-label="Preguntas frecuentes">
+            {% for article in knowledge.evidence %}
+                <article
+                    class="pricing-card"
+                    data-knowledge-id="{{ article.knowledge_id }}"
+                    itemscope
+                    itemprop="mainEntity"
+                    itemtype="https://schema.org/Question"
+                >
+                    <h2 itemprop="name">{{ article.title }}</h2>
+                    <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+                        <p itemprop="text">{{ article.body }}</p>
+                    </div>
+                    <p class="muted">
+                        Fuente: {{ article.source_ref }} · revisado {{ article.reviewed_at }}
+                    </p>
+                </article>
+            {% endfor %}
+        </section>
+    {% else %}
+        <section class="auth-card" role="status" aria-live="polite" data-testid="knowledge-handoff">
+            <span class="eyebrow">Handoff</span>
+            <h2>No tenemos evidencia suficiente</h2>
+            <p>
+                La ayuda automática no va a inventar una respuesta.
+                Escala el caso a soporte humano con el contexto mínimo necesario.
+            </p>
+            <a class="button" href="{{ path('app_home') }}">Volver a Condor</a>
+        </section>
+    {% endif %}
+</section>
+{% endblock %}

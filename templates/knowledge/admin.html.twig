@@ -1,0 +1,78 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Knowledge · Propietario · Condor App{% endblock %}
+
+{% block head %}
+<meta name="robots" content="noindex,nofollow">
+{% endblock %}
+
+{% block body %}
+<section class="admin-shell" aria-label="Observabilidad de conocimiento">
+    <aside class="sidebar">
+        <div class="brand-block">
+            <strong>Condor App</strong>
+            <span>V {{ app_version }}</span>
+        </div>
+        <nav aria-label="Navegación de plataforma">
+            <a href="{{ path('app_platform_owner') }}">Centro de control</a>
+            <a href="{{ path('app_admin_knowledge') }}" aria-current="page">Knowledge</a>
+            <a href="{{ path('app_knowledge_help') }}">Help Center público</a>
+        </nav>
+        <form method="post" action="{{ path('app_logout') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('logout') }}">
+            <button class="button button-secondary" type="submit">Cerrar sesión</button>
+        </form>
+    </aside>
+
+    <div class="workspace" data-testid="knowledge-admin">
+        <span class="eyebrow">Knowledge observability</span>
+        <h1>Estado de la fuente canónica</h1>
+        <p class="muted">
+            Vista read-only. No publica artículos, no crea tickets y no inventa métricas de uso.
+        </p>
+
+        <section class="pricing-grid" aria-label="Resumen de conocimiento">
+            <article class="pricing-card">
+                <h2>Lifecycle</h2>
+                <dl>
+                    {% for state, count in lifecycle %}
+                        <div><dt>{{ state }}</dt><dd data-lifecycle="{{ state }}">{{ count }}</dd></div>
+                    {% endfor %}
+                </dl>
+            </article>
+
+            <article class="pricing-card">
+                <h2>Freshness</h2>
+                <p><strong data-testid="knowledge-stale-count">{{ stale_count }}</strong> artículos stale o sin freshness vigente.</p>
+            </article>
+
+            <article class="pricing-card">
+                <h2>Gaps</h2>
+                <p><strong data-testid="knowledge-gap-count">{{ gap_count }}</strong> gaps persistidos.</p>
+                <p><strong data-testid="knowledge-unanswered-count">{{ unanswered_count }}</strong> unanswered observados.</p>
+                {% if gap_count == 0 %}
+                    <p class="muted" data-state="empty">Sin gaps persistidos en este slice.</p>
+                {% endif %}
+            </article>
+        </section>
+
+        <section aria-labelledby="usage-heading">
+            <h2 id="usage-heading">Usage por canal</h2>
+            <div class="pricing-grid">
+                {% for usage in usage_by_channel %}
+                    <article class="pricing-card" data-channel="{{ usage.channel }}">
+                        <h3>{{ usage.channel }}</h3>
+                        {% if usage.count is null %}
+                            <p class="muted" data-state="{{ usage.status }}">
+                                {{ usage.status == 'not_enabled' ? 'Canal no habilitado.' : 'Sin telemetría observada.' }}
+                            </p>
+                        {% else %}
+                            <p>{{ usage.count }}</p>
+                        {% endif %}
+                    </article>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</section>
+{% endblock %}
