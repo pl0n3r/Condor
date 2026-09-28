@@ -22,6 +22,16 @@ services:
     arguments:
       $environment: '%kernel.environment%'
 
+  App\Infrastructure\Notification\MailerFactory:
+    alias: App\Infrastructure\Notification\SymfonyMailerFactory
+
+  App\Application\Notification\TransactionalEmailGateway:
+    alias: App\Infrastructure\Notification\SymfonyMailerTransactionalEmailGateway
+
+  App\Infrastructure\Notification\SymfonyMailerTransactionalEmailGateway:
+    arguments:
+      $projectDir: '%kernel.project_dir%'
+
   App\Http\Controller\StorefrontCheckoutController:
     arguments:
       $storefrontCheckoutLimiter: '@limiter.storefront_checkout'
