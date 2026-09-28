@@ -14,7 +14,7 @@ final class KnowledgeGap
         'question', 'locale', 'module', 'scope', 'source_ref',
         'evidence_refs', 'observed_at', 'outcome',
     ];
-    private const SENSITIVE = '/(?:password|passwd|secret|token|cookie|authorization|bearer|private[_ -]?key|api[_ -]?key|iban|account[_ -]?number)/i';
+    private const SECRET_VALUE = '/(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\\bBearer\\s+[A-Za-z0-9._~+\\/=\\-]{10,}|\\b(?:api[_ -]?key|token|password|passwd|secret)\\s*[:=]\\s*\\S+|\\bgithub_pat_[A-Za-z0-9_]{10,}|\\bgh[pousr]_[A-Za-z0-9]{20,}|\\bsk-[A-Za-z0-9]{20,})/i';
 
     /**
      * @param list<string> $evidenceRefs
@@ -185,7 +185,7 @@ final class KnowledgeGap
 
     private static function containsSensitiveData(string $value): bool
     {
-        if (preg_match(self::SENSITIVE, $value) === 1) return true;
+        if (preg_match(self::SECRET_VALUE, $value) === 1) return true;
         if (str_contains($value, '@')) return true;
         if (preg_match('/\b\+?\d[\d\s().-]{8,}\d\b/u', $value) === 1) return true;
 
@@ -264,7 +264,9 @@ final class KnowledgeGap
         return $result;
     }
 
-    /** @param mixed $value @param list<string> $allowed */
+    /**
+     * @param list<string> $allowed
+     */
     private static function closedString(mixed $value, array $allowed, string $message): string
     {
         if (!is_string($value) || !in_array($value, $allowed, true)) {
