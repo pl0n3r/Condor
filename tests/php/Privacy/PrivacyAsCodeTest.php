@@ -24,6 +24,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'account_invitation',
                 'account_password',
                 'audit_events',
+                'condor_password_reset',
                 'controlbot_staff_operations',
                 'customer_contact',
                 'diagnostic_shares',
@@ -35,6 +36,7 @@ final class PrivacyAsCodeTest extends TestCase
         );
         self::assertSame([self::PLACEHOLDER], array_values(array_unique($data['controller'])));
         self::assertContains('password_hash', $this->treatment($data, 'account_password')['fields']);
+        self::assertContains('token_hash', $this->treatment($data, 'condor_password_reset')['fields']);
         self::assertContains('phone', $this->treatment($data, 'customer_contact')['fields']);
         self::assertContains('payload', $this->treatment($data, 'notification_delivery')['fields']);
         self::assertContains('context', $this->treatment($data, 'audit_events')['fields']);
@@ -98,7 +100,7 @@ final class PrivacyAsCodeTest extends TestCase
     {
         $data = $this->data();
         self::assertSame('construccion', $data['phase']);
-        foreach (['account_invitation', 'account_password', 'diagnostic_shares'] as $id) {
+        foreach (['account_invitation', 'account_password', 'condor_password_reset', 'diagnostic_shares'] as $id) {
             $treatment = $this->treatment($data, $id);
             self::assertSame('authentication', $treatment['category']);
             self::assertSame('review_required', $treatment['consent']);
