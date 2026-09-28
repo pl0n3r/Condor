@@ -1,0 +1,86 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Application\Identity;
+
+use App\Domain\Audit\Entity\PlatformAuditEvent;
+use App\Domain\Identity\Entity\PasswordResetToken;
+use App\Domain\Identity\Entity\User;
+use Doctrine\ORM\EntityManagerInterface;
+use DomainException;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+
+final readonly class CompletePasswordReset
+{
+    public function __construct(
+        private EntityManagerInterface $entityManager,
+        private PasswordResetSecurity $security,
+        private AccountPasswordPolicy $passwordPolicy,
+        private UserPasswordHasherInterface $passwordHasher,
+        private AccountPasswordNotifier $notifier,
+        private PasswordCredentialLock $lock,
+    ) {
+    }
+
+    public function complete(string $rawToken, string $plainPassword): User
+    {
+        $hash = $this->security->hashRawToken($rawToken);
+        if ($hash === null) {
+            throw new DomainException('El enlace de recuperación no es válido o expiró.');
+        }
+
+        // Resolve identity before the transaction so REPEATABLE READ does not
+        // pin an older snapshot before the pessimistic locks are acquired.
+        $reset = $this->entityManager
+            ->getRepository(PasswordResetToken::class)
+            ->findOneBy(['tokenHash' => $hash]);
+        if (!$reset instanceof PasswordResetToken) {
+            throw new DomainException('El enlace de recuperación no es válido o expiró.');
+        }
+
+        $user = $reset->user();
+        $user->id();
+
+        $user = $this->entityManager->wrapInTransaction(function () use (
+            $user,
+            $reset,
+            $hash,
+            $plainPassword,
+        ): User {
+            $this->lock->user($user);
+            $this->lock->reset($reset);
+
+            $now = $this->security->now();
+            if ($reset->tokenHash() !== $hash || !$reset->isUsableAt($now)) {
+                throw new DomainException('El enlace de recuperación no es válido o expiró.');
+            }
+
+            if (!$user->isActive()) {
+                throw new DomainException('La cuenta no está disponible.');
+            }
+
+            $this->passwordPolicy->assertAcceptable($user, $plainPassword);
+            $user->setPasswordHash(
+                $this->passwordHasher->hashPassword($user, $plainPassword),
+            );
+            $reset->consume($now);
+
+            $this->entityManager->persist(new PlatformAuditEvent(
+                $user->id(),
+                null,
+                'account.password_reset_completed',
+                User::class,
+                $user->id(),
+                ['reset_id' => $reset->id()],
+            ));
+            $this->entityManager->flush();
+
+            return $user;
+        });
+
+        $this->notifier->passwordChanged($user, 'recovery');
+
+        return $user;
+    }
+}
