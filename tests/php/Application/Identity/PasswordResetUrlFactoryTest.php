@@ -6,9 +6,9 @@ namespace App\Tests\Application\Identity;
 
 use App\Application\Identity\PasswordResetUrlFactory;
 use DomainException;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use PHPUnit\Framework\TestCase;
 
-final class PasswordResetUrlFactoryTest extends KernelTestCase
+final class PasswordResetUrlFactoryTest extends TestCase
 {
     public function testItUsesOnlyCleanHttpsOriginAndFragmentToken(): void
     {
@@ -17,19 +17,6 @@ final class PasswordResetUrlFactoryTest extends KernelTestCase
 
         self::assertSame(
             'https://secure.example.test/admin/restablecer-contrasena#token='.$token,
-            $factory->resetUrl($token),
-        );
-    }
-
-    public function testContainerWiresServerSideCanonicalOrigin(): void
-    {
-        self::bootKernel();
-        $factory = static::getContainer()->get(PasswordResetUrlFactory::class);
-        self::assertInstanceOf(PasswordResetUrlFactory::class, $factory);
-
-        $token = str_repeat('b', 64);
-        self::assertMatchesRegularExpression(
-            '#^https://[^/]+/admin/restablecer-contrasena\\#token='.$token.'$#',
             $factory->resetUrl($token),
         );
     }

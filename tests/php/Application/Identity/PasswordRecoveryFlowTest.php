@@ -68,6 +68,13 @@ final class PasswordRecoveryFlowTest extends KernelTestCase
                 $entityManager->getRepository(PasswordResetToken::class)
                     ->findOneBy(['tokenHash' => hash('sha256', $firstToken)]),
             );
+            try {
+                $completeReset->complete($firstToken, 'Ignored-secure-password-789!');
+                self::fail('El token anterior debe quedar invalidado al reenviar.');
+            } catch (DomainException) {
+                self::assertTrue(true);
+            }
+            self::assertSame([], $queue->drain());
 
             $completeReset->complete($secondToken, 'New-secure-password-456!');
             self::assertTrue($hasher->isPasswordValid($user, 'New-secure-password-456!'));
@@ -79,6 +86,13 @@ final class PasswordRecoveryFlowTest extends KernelTestCase
             self::assertCount(1, $messages);
             self::assertSame('account_password_changed', $messages[0]->templateKey);
             self::assertSame('recovery', $messages[0]->templateData['source']);
+
+            try {
+                $completeReset->complete($secondToken, 'Another-secure-password-789!');
+                self::fail('Un token consumido no puede reutilizarse.');
+            } catch (DomainException) {
+                self::assertTrue(true);
+            }
         } finally {
             $this->cleanupUser($connection, $user->id());
         }
