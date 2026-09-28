@@ -24,11 +24,10 @@ final class KnowledgeControllerTest extends WebTestCase
         );
         self::assertSelectorTextContains('h1', 'Preguntas y respuestas');
         self::assertSelectorExists('link[rel="canonical"][href="/ayuda"]');
-        self::assertSelectorTextNotContains('body', 'Ayuda contextual del administrador');
-        self::assertSelectorTextNotContains('body', 'Checklist operativo de soporte');
-        self::assertSelectorTextNotContains('body', 'Borrador todavía no publicado');
-
         $publicContent = (string) $client->getResponse()->getContent();
+        self::assertStringNotContainsString('Ayuda contextual del administrador', $publicContent);
+        self::assertStringNotContainsString('Checklist operativo de soporte', $publicContent);
+        self::assertStringNotContainsString('Borrador todavía no publicado', $publicContent);
         self::assertStringNotContainsString('COP', $publicContent);
         self::assertStringNotContainsString('capability:', $publicContent);
         self::assertStringNotContainsString('plan-version:', $publicContent);
@@ -71,8 +70,9 @@ final class KnowledgeControllerTest extends WebTestCase
             $crawler->filter('[data-knowledge-id]')->attr('data-knowledge-id'),
         );
         self::assertSelectorTextContains('body', 'Ayuda contextual del administrador');
-        self::assertSelectorTextNotContains('body', 'Recuperar acceso a Condor');
-        self::assertSelectorTextNotContains('body', 'Checklist operativo de soporte');
+        $contextualContent = (string) $client->getResponse()->getContent();
+        self::assertStringNotContainsString('Recuperar acceso a Condor', $contextualContent);
+        self::assertStringNotContainsString('Checklist operativo de soporte', $contextualContent);
         self::assertSelectorExists('meta[name="robots"][content="noindex,nofollow"]');
     }
 
