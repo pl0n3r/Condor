@@ -96,7 +96,9 @@ final readonly class E2eFileTransactionalEmailGateway implements TransactionalEm
         $pathStat = @lstat($path);
 
         if (
-            !$this->isSecureOwnedRegularFile($handleStat)
+            !is_array($handleStat)
+            || !is_array($pathStat)
+            || !$this->isSecureOwnedRegularFile($handleStat)
             || !$this->isSecureOwnedRegularFile($pathStat)
             || $handleStat[0] !== $pathStat[0]
             || $handleStat[1] !== $pathStat[1]
