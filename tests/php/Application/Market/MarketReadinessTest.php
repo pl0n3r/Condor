@@ -40,7 +40,7 @@ final class MarketReadinessTest extends TestCase
 
     public function testUnknownStaleOrMissingEvidenceBlocksLaunch(): void
     {
-        $market = Market::fromArray($this->marketPayload());
+        $market = Market::fromArray(MarketFixture::market());
         $result = MarketReadiness::evaluate($market, MarketFixture::gates([
             'lex' => MarketFixture::gate('UNKNOWN', ['lex:pending']),
             'security' => MarketFixture::gate('SATISFIED', ['security:audit'], 'STALE'),
@@ -57,7 +57,7 @@ final class MarketReadinessTest extends TestCase
 
     public function testReadinessGapsMapToFactoryWorkItemsWithoutParallelQueue(): void
     {
-        $market = Market::fromArray($this->marketPayload());
+        $market = Market::fromArray(MarketFixture::market());
         $result = MarketReadiness::evaluate($market, MarketFixture::gates([
             'lex' => MarketFixture::gate('GAP', ['lex:gap-country-pack']),
             'localization' => MarketFixture::gate('UNKNOWN', ['i18n:review-pending']),
