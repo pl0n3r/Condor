@@ -6,15 +6,16 @@ namespace App\Tests\Application\Market;
 
 use App\Application\Market\MarketReadiness;
 use App\Domain\Market\Market;
+use App\Tests\Domain\Market\MarketFixture;
 use PHPUnit\Framework\TestCase;
 
 final class MarketReadinessTest extends TestCase
 {
     public function testReadinessReturnsConcreteEvidenceBackedGatesWithoutOpaqueScore(): void
     {
-        $market = Market::fromArray($this->marketPayload());
-        $gates = $this->gates([
-            'payments_billing' => $this->gate(
+        $market = Market::fromArray(MarketFixture::market());
+        $gates = MarketFixture::gates([
+            'payments_billing' => MarketFixture::gate(
                 'NOT_APPLICABLE',
                 ['decision:payments-not-required'],
             ),
@@ -40,10 +41,10 @@ final class MarketReadinessTest extends TestCase
     public function testUnknownStaleOrMissingEvidenceBlocksLaunch(): void
     {
         $market = Market::fromArray($this->marketPayload());
-        $result = MarketReadiness::evaluate($market, $this->gates([
-            'lex' => $this->gate('UNKNOWN', ['lex:pending']),
-            'security' => $this->gate('SATISFIED', ['security:audit'], 'STALE'),
-            'analytics' => $this->gate('SATISFIED', []),
+        $result = MarketReadiness::evaluate($market, MarketFixture::gates([
+            'lex' => MarketFixture::gate('UNKNOWN', ['lex:pending']),
+            'security' => MarketFixture::gate('SATISFIED', ['security:audit'], 'STALE'),
+            'analytics' => MarketFixture::gate('SATISFIED', []),
         ]));
 
         self::assertFalse($result['launch_allowed']);
@@ -57,10 +58,10 @@ final class MarketReadinessTest extends TestCase
     public function testReadinessGapsMapToFactoryWorkItemsWithoutParallelQueue(): void
     {
         $market = Market::fromArray($this->marketPayload());
-        $result = MarketReadiness::evaluate($market, $this->gates([
-            'lex' => $this->gate('GAP', ['lex:gap-country-pack']),
-            'localization' => $this->gate('UNKNOWN', ['i18n:review-pending']),
-            'security' => $this->gate('SATISFIED', ['security:audit'], 'STALE'),
+        $result = MarketReadiness::evaluate($market, MarketFixture::gates([
+            'lex' => MarketFixture::gate('GAP', ['lex:gap-country-pack']),
+            'localization' => MarketFixture::gate('UNKNOWN', ['i18n:review-pending']),
+            'security' => MarketFixture::gate('SATISFIED', ['security:audit'], 'STALE'),
         ]));
 
         $items = MarketReadiness::toFactoryWorkItems($result, [
@@ -88,62 +89,4 @@ final class MarketReadinessTest extends TestCase
         }
     }
 
-    /** @return array<string, mixed> */
-    private function marketPayload(): array
-    {
-        return [
-            'market_id' => 'market-co',
-            'tenant_id' => 'tenant-condor',
-            'venture_id' => 'condor',
-            'country_code' => 'CO',
-            'status' => 'preparing',
-            'priority' => 'primary',
-            'locales' => ['es-CO'],
-            'currencies' => ['COP'],
-            'legal_entity_ref' => 'legal-entity:condor-co',
-            'lex_assessment_ref' => 'lex:assessment-co-v1',
-            'infrastructure_ref' => 'infra:region-primary',
-            'timezone' => 'America/Bogota',
-            'source_ref' => 'condor:market/co',
-            'observed_at' => 1790614800,
-            'freshness' => 'fresh',
-        ];
-    }
-
-    /**
-     * @param array<string, array<string, mixed>> $overrides
-     * @return array<string, array<string, mixed>>
-     */
-    private function gates(array $overrides = []): array
-    {
-        $names = [
-            'product',
-            'lex',
-            'privacy',
-            'localization',
-            'currency_pricing',
-            'payments_billing',
-            'support_knowledge',
-            'infrastructure',
-            'security',
-            'analytics',
-            'capital',
-        ];
-        $gates = [];
-        foreach ($names as $name) {
-            $gates[$name] = $this->gate('SATISFIED', ['evidence:'.$name]);
-        }
-
-        return array_replace($gates, $overrides);
-    }
-
-    /** @param list<string> $evidence */
-    private function gate(string $status, array $evidence, string $freshness = 'FRESH'): array
-    {
-        return [
-            'status' => $status,
-            'evidence_refs' => $evidence,
-            'freshness' => $freshness,
-        ];
-    }
 }

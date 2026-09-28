@@ -352,23 +352,25 @@ final class MarketReadiness
             throw new DomainException('Contexto Factory incompleto o con campos no soportados.');
         }
 
-        $normalized = [];
-        foreach ($required as $field) {
-            $value = $context[$field] ?? null;
-            if (!is_string($value) || trim($value) === '' || strlen($value) > 200) {
-                throw new DomainException('Contexto Factory inválido.');
-            }
-            $normalized[$field] = $value;
+        return [
+            'group_id' => self::contextValue($context, 'group_id'),
+            'project_id' => self::contextValue($context, 'project_id'),
+            'repository_ref' => self::contextValue($context, 'repository_ref'),
+            'producer_ref' => self::contextValue($context, 'producer_ref'),
+            'authority_level' => self::contextValue($context, 'authority_level'),
+            'policy_ref' => self::contextValue($context, 'policy_ref'),
+        ];
+    }
+
+    /** @param array<string, mixed> $context */
+    private static function contextValue(array $context, string $field): string
+    {
+        $value = $context[$field] ?? null;
+        if (!is_string($value) || trim($value) === '' || strlen($value) > 200) {
+            throw new DomainException('Contexto Factory inválido.');
         }
 
-        return [
-            'group_id' => $normalized['group_id'],
-            'project_id' => $normalized['project_id'],
-            'repository_ref' => $normalized['repository_ref'],
-            'producer_ref' => $normalized['producer_ref'],
-            'authority_level' => $normalized['authority_level'],
-            'policy_ref' => $normalized['policy_ref'],
-        ];
+        return $value;
     }
 
     private static function workType(string $gate): string

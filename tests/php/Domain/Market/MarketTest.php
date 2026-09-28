@@ -13,7 +13,7 @@ final class MarketTest extends TestCase
 {
     public function testMarketKeepsBusinessAndJurisdictionDimensionsSeparate(): void
     {
-        $market = Market::fromArray($this->marketPayload());
+        $market = Market::fromArray(MarketFixture::market(['status' => 'validating']));
         $snapshot = $market->snapshot();
 
         self::assertSame('CO', $snapshot['country_code']);
@@ -27,7 +27,7 @@ final class MarketTest extends TestCase
 
     public function testLaunchStatesRequireExplicitReadinessAndLexGates(): void
     {
-        $preparing = Market::fromArray($this->marketPayload(['status' => 'preparing']));
+        $preparing = Market::fromArray(MarketFixture::market());
 
         try {
             $preparing->transitionTo('launch_ready');
@@ -38,7 +38,7 @@ final class MarketTest extends TestCase
 
         $blocked = MarketReadiness::evaluate(
             $preparing,
-            $this->gates(['lex' => $this->gate('UNKNOWN', ['lex:pending'])]),
+            MarketFixture::gates(['lex' => MarketFixture::gate('UNKNOWN', ['lex:pending'])]),
         );
         self::assertFalse($blocked['launch_allowed']);
 
@@ -48,14 +48,14 @@ final class MarketTest extends TestCase
 
     public function testLaunchReadyAndLiveRequireFreshEvidence(): void
     {
-        $preparing = Market::fromArray($this->marketPayload(['status' => 'preparing']));
-        $ready = MarketReadiness::evaluate($preparing, $this->gates());
+        $preparing = Market::fromArray(MarketFixture::market(['status' => 'preparing']));
+        $ready = MarketReadiness::evaluate($preparing, MarketFixture::gates());
         self::assertTrue($ready['launch_allowed']);
 
         $launchReady = $preparing->transitionTo('launch_ready', $ready);
         self::assertSame('launch_ready', $launchReady->status());
 
-        $liveEvidence = MarketReadiness::evaluate($launchReady, $this->gates());
+        $liveEvidence = MarketReadiness::evaluate($launchReady, MarketFixture::gates());
         $live = $launchReady->transitionTo('live', $liveEvidence);
         self::assertSame('live', $live->status());
     }
@@ -82,62 +82,4 @@ final class MarketTest extends TestCase
         self::assertNotSame($a->contextKey(), $c->contextKey());
     }
 
-    /** @param array<string, mixed> $overrides @return array<string, mixed> */
-    private function marketPayload(array $overrides = []): array
-    {
-        return array_replace([
-            'market_id' => 'market-co',
-            'tenant_id' => 'tenant-condor',
-            'venture_id' => 'condor',
-            'country_code' => 'CO',
-            'status' => 'validating',
-            'priority' => 'primary',
-            'locales' => ['es-CO'],
-            'currencies' => ['COP'],
-            'legal_entity_ref' => 'legal-entity:condor-co',
-            'lex_assessment_ref' => 'lex:assessment-co-v1',
-            'infrastructure_ref' => 'infra:region-primary',
-            'timezone' => 'America/Bogota',
-            'source_ref' => 'condor:market/co',
-            'observed_at' => 1790614800,
-            'freshness' => 'fresh',
-        ], $overrides);
-    }
-
-    /**
-     * @param array<string, array<string, mixed>> $overrides
-     * @return array<string, array<string, mixed>>
-     */
-    private function gates(array $overrides = []): array
-    {
-        $names = [
-            'product',
-            'lex',
-            'privacy',
-            'localization',
-            'currency_pricing',
-            'payments_billing',
-            'support_knowledge',
-            'infrastructure',
-            'security',
-            'analytics',
-            'capital',
-        ];
-        $gates = [];
-        foreach ($names as $name) {
-            $gates[$name] = $this->gate('SATISFIED', ['evidence:'.$name]);
-        }
-
-        return array_replace($gates, $overrides);
-    }
-
-    /** @param list<string> $evidence */
-    private function gate(string $status, array $evidence, string $freshness = 'FRESH'): array
-    {
-        return [
-            'status' => $status,
-            'evidence_refs' => $evidence,
-            'freshness' => $freshness,
-        ];
-    }
 }
