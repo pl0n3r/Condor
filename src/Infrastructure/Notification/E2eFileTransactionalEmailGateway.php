@@ -8,11 +8,16 @@ use App\Application\Notification\TransactionalEmailGateway;
 use App\Application\Notification\TransactionalEmailMessage;
 use RuntimeException;
 
-final class E2eFileTransactionalEmailGateway implements TransactionalEmailGateway
+final readonly class E2eFileTransactionalEmailGateway implements TransactionalEmailGateway
 {
+    public function __construct(
+        private string $environment,
+    ) {
+    }
+
     public function isAvailable(): bool
     {
-        return getenv('APP_ENV') === 'test' && $this->mailboxPath() !== null;
+        return $this->environment === 'test' && $this->mailboxPath() !== null;
     }
 
     public function deliver(TransactionalEmailMessage $message): void
@@ -55,7 +60,10 @@ final class E2eFileTransactionalEmailGateway implements TransactionalEmailGatewa
 
     private function mailboxPath(): ?string
     {
-        $raw = getenv('CONDOR_E2E_MAILBOX_PATH');
+        $raw = $_SERVER['CONDOR_E2E_MAILBOX_PATH']
+            ?? $_ENV['CONDOR_E2E_MAILBOX_PATH']
+            ?? getenv('CONDOR_E2E_MAILBOX_PATH');
+
         if (!is_string($raw) || trim($raw) === '') {
             return null;
         }
