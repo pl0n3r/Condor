@@ -1,24 +1,24 @@
-# Condor App — Snapshot operativo · Password Recovery E V 0.1.70
+# Condor App — Snapshot operativo · Password Recovery F V 0.1.71
 
-> **Candidato objetivo:** V0.1.70 · Issue #300 · casos de uso reset y cambio autenticado.
+> **Candidato objetivo:** V0.1.71 · Issue #301 · HTTP/UI segura para recuperación y cambio de contraseña.
 >
-> **Producción validada:** V0.1.69 · `main@3045546cfa324a70fecf6421b9e3f1f7ac1415b2` · release, observer y `/health` exact-main verdes.
+> **Producción validada:** V0.1.70 · `main@c7020fcfb89631aab4fe8709117459c2fe5efe09` · release, observer y `/health` exact-main verdes.
 
-Condor continúa en construcción. V0.1.70 implementa el quinto slice serial de #191: casos de uso de recuperación y cambio autenticado sobre las primitivas y notificaciones ya integradas.
+Condor continúa en construcción. V0.1.71 implementa el sexto slice serial de #191: expone por HTTP los casos de uso de recuperación/cambio sin relajar seguridad ni 2FA.
 
 ## Alcance
-- `PasswordResetUrlFactory` usa únicamente un origen HTTPS canónico server-side y coloca el token en fragmento;
-- solicitud de reset con respuesta de aplicación uniforme, reemisión que sustituye el hash anterior y lock por usuario;
-- finalización one-shot con lock pesimista, política de contraseña, rotación de hash y auditoría sin secretos;
-- cambio autenticado exige contraseña actual, revoca reset pendiente y audita la rotación;
-- notificaciones se encolan después del commit y reutilizan la cola deferred de #299;
-- regresiones MariaDB/Kernel para reemisión, consumo, cambio válido y credencial actual inválida.
+- request y canje anónimos con CSRF, rate limiting por IP + identidad/token y respuesta anti-enumeración;
+- cambio autenticado detrás de `ROLE_USER`, con CSRF y rate limit por usuario;
+- respuestas sensibles con `Referrer-Policy: no-referrer` y `Cache-Control: no-store, private`;
+- vistas Twig para solicitar, restablecer y cambiar contraseña, más enlace desde login;
+- el token llega al navegador solo por fragmento, se copia a un campo POST y el fragmento se elimina del historial visible;
+- regresiones HTTP y Playwright para navegación/renderizado sin 5xx.
 
-## Seguridad y datos
-El token crudo nunca se persiste: `condor_password_reset` conserva únicamente SHA-256 y lifecycle. La URL no deriva host/origen del request y el token no entra en path ni query. Estos casos de uso no desactivan 2FA, no eligen proveedor SMTP y no añaden rutas HTTP o UI.
+## Seguridad
+Las únicas rutas públicas nuevas son `/admin/recuperar-contrasena` y `/admin/restablecer-contrasena`. `/admin/seguridad/contrasena` sigue protegido por la regla general `^/admin`. Este slice no modifica 2FA, SMTP, secretos, checkout ni persistencia.
 
 ## Evidencia base
-- #296–#299 completados en `main`;
-- V0.1.69 / `main@3045546cfa324a70fecf6421b9e3f1f7ac1415b2` validada en producción antes de iniciar #300;
-- `AccountPasswordNotifier` recibe reset URL preparada y no token crudo;
-- fuente histórica #232 reutilizada selectivamente contra los contratos actuales.
+- #296–#300 completados en `main`;
+- V0.1.70 / `main@c7020fcfb89631aab4fe8709117459c2fe5efe09` validada en producción antes de iniciar #301;
+- `PasswordResetUrlFactory` ya garantiza origen HTTPS server-side + token en fragmento;
+- fuente histórica #232 reutilizada selectivamente contra el wiring y UI actuales.

@@ -38,6 +38,14 @@ services:
     arguments:
       $projectDir: '%kernel.project_dir%'
 
+  App\Http\Controller\PasswordSecurityController:
+    arguments:
+      $passwordResetRequestIpLimiter: '@limiter.password_reset_request_ip'
+      $passwordResetRequestAccountLimiter: '@limiter.password_reset_request_account'
+      $passwordResetConsumeIpLimiter: '@limiter.password_reset_consume_ip'
+      $passwordResetConsumeTokenLimiter: '@limiter.password_reset_consume_token'
+      $passwordChangeLimiter: '@limiter.password_change'
+
   App\Http\Controller\StorefrontCheckoutController:
     arguments:
       $storefrontCheckoutLimiter: '@limiter.storefront_checkout'
