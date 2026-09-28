@@ -144,7 +144,25 @@ final readonly class Market
         );
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array{
+     *   market_id:string,
+     *   tenant_id:string,
+     *   venture_id:string,
+     *   country_code:string,
+     *   status:string,
+     *   priority:string,
+     *   locales:list<string>,
+     *   currencies:list<string>,
+     *   legal_entity_ref:?string,
+     *   lex_assessment_ref:?string,
+     *   infrastructure_ref:?string,
+     *   timezone:string,
+     *   source_ref:string,
+     *   observed_at:int,
+     *   freshness:string
+     * }
+     */
     public function snapshot(): array
     {
         return [
@@ -198,6 +216,13 @@ final readonly class Market
         $refs = $authorization['evidence_refs'] ?? null;
         if (!is_array($refs) || !array_is_list($refs) || $refs === []) {
             throw new DomainException('Launch authorization requiere evidencia.');
+        }
+        foreach ($refs as $ref) {
+            if (!is_string($ref)
+                || strlen($ref) > 200
+                || preg_match('/^[A-Za-z0-9][A-Za-z0-9._:\\/@#-]*$/D', $ref) !== 1) {
+                throw new DomainException('Launch authorization contiene evidencia inválida.');
+            }
         }
     }
 

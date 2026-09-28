@@ -115,7 +115,18 @@ final readonly class MarketScope
         return in_array(self::country($countryCode), $this->targetCountries, true);
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array{
+     *   mode:string,
+     *   primary_country:?string,
+     *   target_countries:list<string>,
+     *   excluded_countries:list<string>,
+     *   launch_countries:list<string>,
+     *   expansion_candidates:list<string>,
+     *   default_currency:string,
+     *   default_locale:string
+     * }
+     */
     public function snapshot(): array
     {
         return [

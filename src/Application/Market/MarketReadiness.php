@@ -33,8 +33,11 @@ final class MarketReadiness
     {
         self::assertGateNames($gates);
 
+        /** @var array<string, array{status:string,evidence_refs:list<string>,freshness:string}> $normalized */
         $normalized = [];
+        /** @var list<array{gate:string,status:string,freshness:string,reason:string,evidence_refs:list<string>}> $blockers */
         $blockers = [];
+        /** @var array<string, true> $allEvidence */
         $allEvidence = [];
         $freshness = 'FRESH';
 
@@ -110,52 +113,61 @@ final class MarketReadiness
      */
     public static function toFactoryWorkItems(array $result, array $context): array
     {
-        self::assertResult($result);
-        self::assertFactoryContext($context);
+        $marketId = self::resultString($result, 'market_id');
+        $tenantId = self::resultString($result, 'tenant_id');
+        $ventureId = self::resultString($result, 'venture_id');
+        $sourceRef = self::resultString($result, 'source_ref');
+        $observedAt = $result['observed_at'] ?? null;
+        if (!is_int($observedAt) || $observedAt < 1) {
+            throw new DomainException('observed_at de Market Readiness inválido.');
+        }
+
+        $blockers = self::normalizeBlockers($result['blockers'] ?? null);
+        $factory = self::normalizeFactoryContext($context);
 
         $items = [];
-        foreach ($result['blockers'] as $blocker) {
+        foreach ($blockers as $blocker) {
             $gate = $blocker['gate'];
             $evidence = array_values(array_unique(array_merge(
                 $blocker['evidence_refs'],
-                [$result['source_ref']],
+                [$sourceRef],
             )));
             sort($evidence, SORT_STRING);
 
             $items[] = [
                 'work_id' => sprintf(
                     'market-readiness:%s:%s',
-                    $result['market_id'],
+                    $marketId,
                     $gate,
                 ),
                 'origin_mode' => 'automatic',
                 'origin_system' => 'product',
-                'group_id' => $context['group_id'],
-                'venture_id' => $result['venture_id'],
-                'project_id' => $context['project_id'],
-                'repository_ref' => $context['repository_ref'],
+                'group_id' => $factory['group_id'],
+                'venture_id' => $ventureId,
+                'project_id' => $factory['project_id'],
+                'repository_ref' => $factory['repository_ref'],
                 'work_type' => self::workType($gate),
                 'requested_capabilities' => ['market_readiness'],
                 'required_roles' => [self::role($gate)],
-                'authority_level' => $context['authority_level'],
-                'producer_ref' => $context['producer_ref'],
+                'authority_level' => $factory['authority_level'],
+                'producer_ref' => $factory['producer_ref'],
                 'priority_class' => 'high',
                 'depends_on' => [],
                 'claims' => [
                     sprintf(
                         'market:%s:%s:%s',
-                        $result['tenant_id'],
-                        $result['market_id'],
+                        $tenantId,
+                        $marketId,
                         $gate,
                     ),
                 ],
-                'policy_ref' => $context['policy_ref'],
+                'policy_ref' => $factory['policy_ref'],
                 'evidence_refs' => $evidence,
-                'observed_at' => gmdate('Y-m-d\TH:i:s\Z', $result['observed_at']),
+                'observed_at' => gmdate('Y-m-d\TH:i:s\Z', $observedAt),
                 'idempotency_key' => sprintf(
                     'market-readiness:%s:%s:%s',
-                    $result['tenant_id'],
-                    $result['market_id'],
+                    $tenantId,
+                    $marketId,
                     $gate,
                 ),
             ];
@@ -176,7 +188,10 @@ final class MarketReadiness
         }
     }
 
-    /** @param array<string, mixed> $gate @return array<string, mixed> */
+    /**
+     * @param array<string, mixed> $gate
+     * @return array{status:string,evidence_refs:list<string>,freshness:string}
+     */
     private static function normalizeGate(string $name, array $gate): array
     {
         $keys = array_keys($gate);
@@ -205,7 +220,9 @@ final class MarketReadiness
         ];
     }
 
-    /** @param array<string, mixed> $gate */
+    /**
+     * @param array{status:string,evidence_refs:list<string>,freshness:string} $gate
+     */
     private static function blockerReason(string $name, array $gate): string
     {
         if ($name === 'lex' && $gate['status'] !== 'SATISFIED') {
@@ -251,31 +268,74 @@ final class MarketReadiness
     }
 
     /** @param array<string, mixed> $result */
-    private static function assertResult(array $result): void
+    private static function resultString(array $result, string $field): string
     {
-        foreach ([
-            'market_id',
-            'tenant_id',
-            'venture_id',
-            'source_ref',
-            'observed_at',
-            'blockers',
-        ] as $field) {
-            if (!array_key_exists($field, $result)) {
-                throw new DomainException('Resultado de Market Readiness incompleto.');
-            }
+        $value = $result[$field] ?? null;
+        if (!is_string($value) || trim($value) === '' || strlen($value) > 200) {
+            throw new DomainException($field.' de Market Readiness inválido.');
         }
 
-        if (!is_array($result['blockers']) || !array_is_list($result['blockers'])) {
-            throw new DomainException('Blockers de Market Readiness inválidos.');
-        }
-        if (!is_int($result['observed_at']) || $result['observed_at'] < 1) {
-            throw new DomainException('observed_at de Market Readiness inválido.');
-        }
+        return $value;
     }
 
-    /** @param array<string, mixed> $context */
-    private static function assertFactoryContext(array $context): void
+    /**
+     * @return list<array{gate:string,status:string,freshness:string,reason:string,evidence_refs:list<string>}>
+     */
+    private static function normalizeBlockers(mixed $value): array
+    {
+        if (!is_array($value) || !array_is_list($value) || count($value) > count(self::GATES)) {
+            throw new DomainException('Blockers de Market Readiness inválidos.');
+        }
+
+        $result = [];
+        foreach ($value as $blocker) {
+            if (!is_array($blocker) || array_is_list($blocker)) {
+                throw new DomainException('Blocker de Market Readiness inválido.');
+            }
+
+            $keys = array_keys($blocker);
+            sort($keys, SORT_STRING);
+            $expected = ['gate', 'status', 'freshness', 'reason', 'evidence_refs'];
+            sort($expected, SORT_STRING);
+            if ($keys !== $expected) {
+                throw new DomainException('Blocker de Market Readiness fuera de contrato.');
+            }
+
+            $gate = $blocker['gate'] ?? null;
+            $status = $blocker['status'] ?? null;
+            $freshness = $blocker['freshness'] ?? null;
+            $reason = $blocker['reason'] ?? null;
+            if (!is_string($gate) || !in_array($gate, self::GATES, true)
+                || !is_string($status) || !in_array($status, self::STATUSES, true)
+                || !is_string($freshness) || !in_array($freshness, self::FRESHNESS, true)
+                || !is_string($reason) || $reason === '') {
+                throw new DomainException('Blocker de Market Readiness inválido.');
+            }
+
+            $result[] = [
+                'gate' => $gate,
+                'status' => $status,
+                'freshness' => $freshness,
+                'reason' => $reason,
+                'evidence_refs' => self::references($blocker['evidence_refs'] ?? null),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array{
+     *   group_id:string,
+     *   project_id:string,
+     *   repository_ref:string,
+     *   producer_ref:string,
+     *   authority_level:string,
+     *   policy_ref:string
+     * }
+     */
+    private static function normalizeFactoryContext(array $context): array
     {
         $required = [
             'group_id',
@@ -292,11 +352,23 @@ final class MarketReadiness
             throw new DomainException('Contexto Factory incompleto o con campos no soportados.');
         }
 
-        foreach ($context as $value) {
+        $normalized = [];
+        foreach ($required as $field) {
+            $value = $context[$field] ?? null;
             if (!is_string($value) || trim($value) === '' || strlen($value) > 200) {
                 throw new DomainException('Contexto Factory inválido.');
             }
+            $normalized[$field] = $value;
         }
+
+        return [
+            'group_id' => $normalized['group_id'],
+            'project_id' => $normalized['project_id'],
+            'repository_ref' => $normalized['repository_ref'],
+            'producer_ref' => $normalized['producer_ref'],
+            'authority_level' => $normalized['authority_level'],
+            'policy_ref' => $normalized['policy_ref'],
+        ];
     }
 
     private static function workType(string $gate): string
