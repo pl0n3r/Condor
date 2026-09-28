@@ -98,8 +98,8 @@ final readonly class E2eFileTransactionalEmailGateway implements TransactionalEm
         if (
             !$this->isSecureOwnedRegularFile($handleStat)
             || !$this->isSecureOwnedRegularFile($pathStat)
-            || $handleStat['dev'] !== $pathStat['dev']
-            || $handleStat['ino'] !== $pathStat['ino']
+            || $handleStat[0] !== $pathStat[0]
+            || $handleStat[1] !== $pathStat[1]
         ) {
             throw new RuntimeException('El mailbox transaccional E2E cambió o no es seguro.');
         }
