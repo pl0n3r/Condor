@@ -34,10 +34,6 @@ final class KnowledgeRetrieval
 
         $selected = [];
         foreach ($articles as $article) {
-            if (!$article instanceof KnowledgeArticle) {
-                throw new DomainException('Retrieval requiere KnowledgeArticle normalizado.');
-            }
-
             $snapshot = $article->snapshot();
             if (!self::eligible($article, $snapshot, $visibility, $locale, $module, $scope, $at)) {
                 continue;
