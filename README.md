@@ -1,24 +1,24 @@
-# Condor App — Snapshot operativo · Password Recovery D V 0.1.69
+# Condor App — Snapshot operativo · Password Recovery E V 0.1.70
 
-> **Candidato objetivo:** V0.1.69 · Issue #299 · cola deferred y notificaciones de contraseña.
+> **Candidato objetivo:** V0.1.70 · Issue #300 · casos de uso reset y cambio autenticado.
 >
-> **Producción validada:** V0.1.68 · `main@d4d586a6dfb7712acc9e07ebfd28e176ebc85d2c` · release, observer, CI y `/health` exact-main verdes.
+> **Producción validada:** V0.1.69 · `main@3045546cfa324a70fecf6421b9e3f1f7ac1415b2` · release, observer y `/health` exact-main verdes.
 
-Condor continúa en construcción. V0.1.69 implementa el cuarto slice serial de #191: cola transaccional en memoria y notificaciones de recuperación/cambio desacopladas del commit de credenciales.
+Condor continúa en construcción. V0.1.70 implementa el quinto slice serial de #191: casos de uso de recuperación y cambio autenticado sobre las primitivas y notificaciones ya integradas.
 
 ## Alcance
-- `DeferredTransactionalEmailQueue` in-memory con `drain()` one-shot;
-- entrega best-effort en `kernel.terminate` mediante `TransactionalEmailGateway`;
-- gateway indisponible o fallo de transporte no rompe el request ni la transacción de credenciales;
-- `AccountPasswordNotifier` emite `account_password_reset` y `account_password_changed` sin construir URLs;
-- `condor_password_reset` documentado como tratamiento técnico sin proveedor externo declarado;
-- regresiones de queue, sanitización de logging y templates.
+- `PasswordResetUrlFactory` usa únicamente un origen HTTPS canónico server-side y coloca el token en fragmento;
+- solicitud de reset con respuesta de aplicación uniforme, reemisión que sustituye el hash anterior y lock por usuario;
+- finalización one-shot con lock pesimista, política de contraseña, rotación de hash y auditoría sin secretos;
+- cambio autenticado exige contraseña actual, revoca reset pendiente y audita la rotación;
+- notificaciones se encolan después del commit y reutilizan la cola deferred de #299;
+- regresiones MariaDB/Kernel para reemisión, consumo, cambio válido y credencial actual inválida.
 
 ## Seguridad y datos
-Este slice no persiste payloads de correo ni tokens en claro y no selecciona proveedor SMTP. El subscriber registra únicamente `template` de una lista cerrada y `reason`; recipient, reset URL, token, templateData y excepciones del transporte se descartan. `providers: []` mantiene el gateway real fail-closed hasta documentación explícita de un tercero.
+El token crudo nunca se persiste: `condor_password_reset` conserva únicamente SHA-256 y lifecycle. La URL no deriva host/origen del request y el token no entra en path ni query. Estos casos de uso no desactivan 2FA, no eligen proveedor SMTP y no añaden rutas HTTP o UI.
 
 ## Evidencia base
-- #296, #297 y #298 completados en `main`;
-- V0.1.68 / `main@d4d586a6dfb7712acc9e07ebfd28e176ebc85d2c` exact-main GREEN antes de iniciar #299;
-- `TransactionalEmailGateway::isAvailable()` y redacción SMTP integrados por PR #317;
-- fuente revisada reutilizada selectivamente: PR histórico #232 / `618f57c0…`.
+- #296–#299 completados en `main`;
+- V0.1.69 / `main@3045546cfa324a70fecf6421b9e3f1f7ac1415b2` validada en producción antes de iniciar #300;
+- `AccountPasswordNotifier` recibe reset URL preparada y no token crudo;
+- fuente histórica #232 reutilizada selectivamente contra los contratos actuales.
