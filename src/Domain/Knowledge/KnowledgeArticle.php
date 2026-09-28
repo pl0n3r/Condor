@@ -186,7 +186,10 @@ final class KnowledgeArticle
         }
     }
 
-    /** @param mixed $value @param list<string> $allowed */
+    /**
+     * @param mixed $value
+     * @param list<string> $allowed
+     */
     private static function closedString(mixed $value, array $allowed, string $message): string
     {
         if (!is_string($value) || !in_array($value, $allowed, true)) throw new DomainException($message);
