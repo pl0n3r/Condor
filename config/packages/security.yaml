@@ -35,6 +35,10 @@ security:
   access_control:
     - path: ^/admin/login$
       roles: PUBLIC_ACCESS
+    - path: ^/admin/recuperar-contrasena$
+      roles: PUBLIC_ACCESS
+    - path: ^/admin/restablecer-contrasena$
+      roles: PUBLIC_ACCESS
     - path: '^/support/diagnostics/[a-f0-9]{64}$'
       roles: PUBLIC_ACCESS
     - path: '^/adminpl0n3r(?:/|$)'
