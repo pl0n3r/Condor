@@ -63,7 +63,7 @@ final class FactoryWorkItemAdapterTest extends TestCase
             'question' => 'no encuentro cómo cambiar la contraseña',
             'source_ref' => 'support:another-channel',
             'evidence_refs' => ['retrieval:handoff-002'],
-            'observed_at' => 1_759_075_300,
+            'observed_at' => 1_790_611_300,
             'outcome' => 'unanswered',
         ]));
         $second = KnowledgeGap::aggregate([
@@ -72,7 +72,7 @@ final class FactoryWorkItemAdapterTest extends TestCase
                 'question' => 'no encuentro cómo cambiar la contraseña.',
                 'source_ref' => 'support:human-escalation',
                 'evidence_refs' => ['retrieval:handoff-001'],
-                'observed_at' => 1_759_075_200,
+                'observed_at' => 1_790_611_200,
                 'outcome' => 'escalated',
             ])),
             $extra,
@@ -124,7 +124,7 @@ final class FactoryWorkItemAdapterTest extends TestCase
             'question' => 'no encuentro cómo cambiar la contraseña.',
             'source_ref' => 'support:human-escalation',
             'evidence_refs' => ['retrieval:handoff-001'],
-            'observed_at' => 1_759_075_200,
+            'observed_at' => 1_790_611_200,
             'outcome' => 'escalated',
         ]));
 
@@ -141,7 +141,7 @@ final class FactoryWorkItemAdapterTest extends TestCase
             'scope' => 'tenant:acme',
             'source_ref' => 'support:chat-aggregate',
             'evidence_refs' => ['knowledge:password-reset'],
-            'observed_at' => 1_759_075_000,
+            'observed_at' => 1_790_611_000,
             'outcome' => 'unanswered',
         ], $overrides);
     }
