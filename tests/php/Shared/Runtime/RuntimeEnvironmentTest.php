@@ -177,6 +177,19 @@ final class RuntimeEnvironmentTest extends TestCase
         );
     }
 
+    public function testMirrorsProcessOnlyBootstrapFlagsIntoSuperglobals(): void
+    {
+        putenv('APP_ENV=test');
+        putenv('APP_DEBUG=1');
+
+        RuntimeEnvironment::prepare($this->projectDir);
+
+        self::assertSame('test', $_ENV['APP_ENV'] ?? null);
+        self::assertSame('test', $_SERVER['APP_ENV'] ?? null);
+        self::assertSame('1', $_ENV['APP_DEBUG'] ?? null);
+        self::assertSame('1', $_SERVER['APP_DEBUG'] ?? null);
+    }
+
     public function testRespectsRealEnvironmentConfiguration(): void
     {
         foreach ([

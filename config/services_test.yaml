@@ -1,0 +1,7 @@
+services:
+  App\Infrastructure\Notification\E2eFileTransactionalEmailGateway:
+    arguments:
+      $environment: '%kernel.environment%'
+
+  App\Application\Notification\TransactionalEmailGateway:
+    alias: App\Infrastructure\Notification\E2eFileTransactionalEmailGateway

@@ -184,9 +184,7 @@ final class RuntimeEnvironment
 
     private static function defineIfMissing(string $name, string $value): void
     {
-        if (self::read($name) === null) {
-            self::define($name, $value);
-        }
+        self::define($name, self::read($name) ?? $value);
     }
 
     private static function read(string $name): ?string

@@ -1,24 +1,24 @@
-# Condor App — Snapshot operativo · Password Recovery F V 0.1.71
+# Condor App — Snapshot operativo · Password Recovery G V 0.1.72
 
-> **Candidato objetivo:** V0.1.71 · Issue #301 · HTTP/UI segura para recuperación y cambio de contraseña.
+> **Candidato objetivo:** V0.1.72 · Issue #302 · E2E final y cierre privacy-as-code de recuperación.
 >
-> **Producción validada:** V0.1.70 · `main@c7020fcfb89631aab4fe8709117459c2fe5efe09` · release, observer y `/health` exact-main verdes.
+> **Producción validada:** V0.1.71 · `main@581c9ac1731d3669c077f934c1cd19e846aa0c3f` · `/health` exact-main y esquema al día.
 
-Condor continúa en construcción. V0.1.71 implementa el sexto slice serial de #191: expone por HTTP los casos de uso de recuperación/cambio sin relajar seguridad ni 2FA.
+Condor continúa en construcción. V0.1.72 cierra la evidencia funcional del parent #191 sin seleccionar ni simular un proveedor SMTP de producción.
 
 ## Alcance
-- request y canje anónimos con CSRF, rate limiting por IP + identidad/token y respuesta anti-enumeración;
-- cambio autenticado detrás de `ROLE_USER`, con CSRF y rate limit por usuario;
-- respuestas sensibles con `Referrer-Policy: no-referrer` y `Cache-Control: no-store, private`;
-- vistas Twig para solicitar, restablecer y cambiar contraseña, más enlace desde login;
-- el token llega al navegador solo por fragmento, se copia a un campo POST y el fragmento se elimina del historial visible;
-- regresiones HTTP y Playwright para navegación/renderizado sin 5xx.
+- gateway de captura disponible únicamente en `APP_ENV=test` y únicamente cuando existe un mailbox efímero bajo `/tmp`;
+- usuario tenant dedicado para recovery E2E, aislado de los owners usados por otras suites;
+- navegador real: solicitud → captura del mensaje de prueba → reset → login con la nueva contraseña;
+- navegador real: cambio autenticado → la contraseña anterior deja de autenticar → la nueva sí autentica;
+- aceptación final confirma `condor_password_reset`, minimización, lifecycle y `providers: []`;
+- runbook documenta la frontera entre captura E2E y gateway SMTP real fail-closed.
 
-## Seguridad
-Las únicas rutas públicas nuevas son `/admin/recuperar-contrasena` y `/admin/restablecer-contrasena`. `/admin/seguridad/contrasena` sigue protegido por la regla general `^/admin`. Este slice no modifica 2FA, SMTP, secretos, checkout ni persistencia.
+## Privacidad y seguridad
+El mailbox E2E contiene secretos sintéticos solo durante el job descartable, vive fuera del document root, no se sube como artefacto y se elimina antes de iniciar cada ejecución. Producción no carga `services_test.yaml`, por lo que el gateway real continúa sujeto a proveedor documentado y configuración SMTP completa.
 
 ## Evidencia base
-- #296–#300 completados en `main`;
-- V0.1.70 / `main@c7020fcfb89631aab4fe8709117459c2fe5efe09` validada en producción antes de iniciar #301;
-- `PasswordResetUrlFactory` ya garantiza origen HTTPS server-side + token en fragmento;
-- fuente histórica #232 reutilizada selectivamente contra el wiring y UI actuales.
+- #296–#301 completados;
+- V0.1.71 / `main@581c9ac1731d3669c077f934c1cd19e846aa0c3f` exact-main antes de iniciar #302;
+- `datos.yml` ya declara `condor_password_reset` con token hash/lifecycle y `providers: []`;
+- #302 no añade proveedor externo, DNS, secreto real ni ruta HTTP de testing.
