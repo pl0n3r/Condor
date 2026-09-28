@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace App\Tests\Application\Identity;
 
+use App\Application\Identity\AccountPasswordNotifier;
+use App\Application\Identity\AccountPasswordPolicy;
 use App\Application\Identity\ChangeOwnPassword;
 use App\Application\Identity\CompletePasswordReset;
+use App\Application\Identity\PasswordCredentialLock;
+use App\Application\Identity\PasswordResetSecurity;
+use App\Application\Identity\PasswordResetUrlFactory;
 use App\Application\Identity\RequestPasswordReset;
 use App\Application\Notification\DeferredTransactionalEmailQueue;
 use App\Domain\Identity\Entity\PasswordResetToken;
@@ -20,19 +25,13 @@ final class PasswordRecoveryFlowTest extends KernelTestCase
 {
     public function testRequestReissuesHashedTokenAndCompleteRotatesPassword(): void
     {
-        self::bootKernel();
-        $container = static::getContainer();
-        $entityManager = $container->get(EntityManagerInterface::class);
-        $hasher = $container->get(UserPasswordHasherInterface::class);
-        $requestReset = $container->get(RequestPasswordReset::class);
-        $completeReset = $container->get(CompletePasswordReset::class);
-        $queue = $container->get(DeferredTransactionalEmailQueue::class);
-
-        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
-        self::assertInstanceOf(UserPasswordHasherInterface::class, $hasher);
-        self::assertInstanceOf(RequestPasswordReset::class, $requestReset);
-        self::assertInstanceOf(CompletePasswordReset::class, $completeReset);
-        self::assertInstanceOf(DeferredTransactionalEmailQueue::class, $queue);
+        [
+            $entityManager,
+            $hasher,
+            $queue,
+            $requestReset,
+            $completeReset,
+        ] = $this->flowContext();
 
         $connection = $entityManager->getConnection();
         $user = $this->persistUser(
@@ -68,6 +67,7 @@ final class PasswordRecoveryFlowTest extends KernelTestCase
                 $entityManager->getRepository(PasswordResetToken::class)
                     ->findOneBy(['tokenHash' => hash('sha256', $firstToken)]),
             );
+
             try {
                 $completeReset->complete($firstToken, 'Ignored-secure-password-789!');
                 self::fail('El token anterior debe quedar invalidado al reenviar.');
@@ -100,13 +100,14 @@ final class PasswordRecoveryFlowTest extends KernelTestCase
 
     public function testAuthenticatedChangeRevokesPendingResetAndQueuesConfirmation(): void
     {
-        self::bootKernel();
-        $container = static::getContainer();
-        $entityManager = $container->get(EntityManagerInterface::class);
-        $hasher = $container->get(UserPasswordHasherInterface::class);
-        $requestReset = $container->get(RequestPasswordReset::class);
-        $changePassword = $container->get(ChangeOwnPassword::class);
-        $queue = $container->get(DeferredTransactionalEmailQueue::class);
+        [
+            $entityManager,
+            $hasher,
+            $queue,
+            $requestReset,
+            ,
+            $changePassword,
+        ] = $this->flowContext();
 
         $connection = $entityManager->getConnection();
         $user = $this->persistUser(
@@ -143,13 +144,14 @@ final class PasswordRecoveryFlowTest extends KernelTestCase
 
     public function testInvalidCurrentPasswordDoesNotMutateCredentialOrPendingReset(): void
     {
-        self::bootKernel();
-        $container = static::getContainer();
-        $entityManager = $container->get(EntityManagerInterface::class);
-        $hasher = $container->get(UserPasswordHasherInterface::class);
-        $requestReset = $container->get(RequestPasswordReset::class);
-        $changePassword = $container->get(ChangeOwnPassword::class);
-        $queue = $container->get(DeferredTransactionalEmailQueue::class);
+        [
+            $entityManager,
+            $hasher,
+            $queue,
+            $requestReset,
+            ,
+            $changePassword,
+        ] = $this->flowContext();
 
         $connection = $entityManager->getConnection();
         $user = $this->persistUser(
@@ -187,6 +189,62 @@ final class PasswordRecoveryFlowTest extends KernelTestCase
         } finally {
             $this->cleanupUser($connection, $user->id());
         }
+    }
+
+    /**
+     * @return array{
+     *   EntityManagerInterface,
+     *   UserPasswordHasherInterface,
+     *   DeferredTransactionalEmailQueue,
+     *   RequestPasswordReset,
+     *   CompletePasswordReset,
+     *   ChangeOwnPassword
+     * }
+     */
+    private function flowContext(): array
+    {
+        self::bootKernel();
+        $container = static::getContainer();
+        $entityManager = $container->get(EntityManagerInterface::class);
+        $hasher = $container->get(UserPasswordHasherInterface::class);
+
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        self::assertInstanceOf(UserPasswordHasherInterface::class, $hasher);
+
+        $queue = new DeferredTransactionalEmailQueue();
+        $security = new PasswordResetSecurity();
+        $notifier = new AccountPasswordNotifier($queue);
+        $policy = new AccountPasswordPolicy($hasher);
+        $lock = new PasswordCredentialLock($entityManager);
+
+        return [
+            $entityManager,
+            $hasher,
+            $queue,
+            new RequestPasswordReset(
+                $entityManager,
+                $security,
+                new PasswordResetUrlFactory('https://secure.example.test'),
+                $notifier,
+                $lock,
+            ),
+            new CompletePasswordReset(
+                $entityManager,
+                $security,
+                $policy,
+                $hasher,
+                $notifier,
+                $lock,
+            ),
+            new ChangeOwnPassword(
+                $entityManager,
+                $policy,
+                $hasher,
+                $security,
+                $notifier,
+                $lock,
+            ),
+        ];
     }
 
     private function persistUser(

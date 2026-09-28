@@ -19,6 +19,7 @@ final readonly class CompletePasswordReset
         private AccountPasswordPolicy $passwordPolicy,
         private UserPasswordHasherInterface $passwordHasher,
         private AccountPasswordNotifier $notifier,
+        private PasswordCredentialLock $lock,
     ) {
     }
 
@@ -47,8 +48,8 @@ final readonly class CompletePasswordReset
             $hash,
             $plainPassword,
         ): User {
-            $this->lockUser($user);
-            $this->lockReset($reset);
+            $this->lock->user($user);
+            $this->lock->reset($reset);
 
             $now = $this->security->now();
             if ($reset->tokenHash() !== $hash || !$reset->isUsableAt($now)) {
@@ -81,23 +82,5 @@ final readonly class CompletePasswordReset
         $this->notifier->passwordChanged($user, 'recovery');
 
         return $user;
-    }
-
-    private function lockUser(User $user): void
-    {
-        $this->entityManager->getConnection()->executeQuery(
-            'SELECT id FROM condor_user WHERE id = :id FOR UPDATE',
-            ['id' => $user->id()],
-        )->fetchOne();
-        $this->entityManager->refresh($user);
-    }
-
-    private function lockReset(PasswordResetToken $reset): void
-    {
-        $this->entityManager->getConnection()->executeQuery(
-            'SELECT id FROM condor_password_reset WHERE id = :id FOR UPDATE',
-            ['id' => $reset->id()],
-        )->fetchOne();
-        $this->entityManager->refresh($reset);
     }
 }

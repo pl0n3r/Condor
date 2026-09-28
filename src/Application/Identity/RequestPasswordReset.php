@@ -15,6 +15,7 @@ final readonly class RequestPasswordReset
         private PasswordResetSecurity $security,
         private PasswordResetUrlFactory $resetUrlFactory,
         private AccountPasswordNotifier $notifier,
+        private PasswordCredentialLock $lock,
     ) {
     }
 
@@ -35,7 +36,7 @@ final readonly class RequestPasswordReset
         }
 
         $rawToken = $this->entityManager->wrapInTransaction(function () use ($user): ?string {
-            $this->lockUser($user);
+            $this->lock->user($user);
             if (!$user->isActive()) {
                 return null;
             }
@@ -48,7 +49,7 @@ final readonly class RequestPasswordReset
                 ->findOneBy(['user' => $user]);
 
             if ($reset instanceof PasswordResetToken) {
-                $this->lockReset($reset);
+                $this->lock->reset($reset);
                 $reset->reissue($tokenHash, $expiresAt, $now);
             } else {
                 $this->entityManager->persist(new PasswordResetToken(
@@ -73,24 +74,6 @@ final readonly class RequestPasswordReset
             $user,
             $this->resetUrlFactory->resetUrl($rawToken),
         );
-    }
-
-    private function lockUser(User $user): void
-    {
-        $this->entityManager->getConnection()->executeQuery(
-            'SELECT id FROM condor_user WHERE id = :id FOR UPDATE',
-            ['id' => $user->id()],
-        )->fetchOne();
-        $this->entityManager->refresh($user);
-    }
-
-    private function lockReset(PasswordResetToken $reset): void
-    {
-        $this->entityManager->getConnection()->executeQuery(
-            'SELECT id FROM condor_password_reset WHERE id = :id FOR UPDATE',
-            ['id' => $reset->id()],
-        )->fetchOne();
-        $this->entityManager->refresh($reset);
     }
 
     private static function dummyWork(): void

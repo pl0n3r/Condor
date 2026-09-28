@@ -19,6 +19,7 @@ final readonly class ChangeOwnPassword
         private UserPasswordHasherInterface $passwordHasher,
         private PasswordResetSecurity $security,
         private AccountPasswordNotifier $notifier,
+        private PasswordCredentialLock $lock,
     ) {
     }
 
@@ -26,7 +27,7 @@ final readonly class ChangeOwnPassword
     {
         $this->entityManager->wrapInTransaction(
             function () use ($user, $currentPassword, $newPassword): void {
-                $this->lockUser($user);
+                $this->lock->user($user);
 
                 if (
                     !$user->isActive()
@@ -44,7 +45,7 @@ final readonly class ChangeOwnPassword
                     ->getRepository(PasswordResetToken::class)
                     ->findOneBy(['user' => $user]);
                 if ($reset instanceof PasswordResetToken) {
-                    $this->lockReset($reset);
+                    $this->lock->reset($reset);
                     if ($reset->consumedAt() === null && $reset->revokedAt() === null) {
                         $reset->revoke($this->security->now());
                     }
@@ -62,23 +63,5 @@ final readonly class ChangeOwnPassword
         );
 
         $this->notifier->passwordChanged($user, 'authenticated_change');
-    }
-
-    private function lockUser(User $user): void
-    {
-        $this->entityManager->getConnection()->executeQuery(
-            'SELECT id FROM condor_user WHERE id = :id FOR UPDATE',
-            ['id' => $user->id()],
-        )->fetchOne();
-        $this->entityManager->refresh($user);
-    }
-
-    private function lockReset(PasswordResetToken $reset): void
-    {
-        $this->entityManager->getConnection()->executeQuery(
-            'SELECT id FROM condor_password_reset WHERE id = :id FOR UPDATE',
-            ['id' => $reset->id()],
-        )->fetchOne();
-        $this->entityManager->refresh($reset);
     }
 }
