@@ -65,7 +65,7 @@ final class FactoryWorkItemAdapter
     private static function assertGap(array $gap): void
     {
         $required = [
-            'fingerprint', 'question_key', 'locale', 'module', 'scope',
+            'fingerprint', 'locale', 'module', 'scope',
             'evidence_refs', 'source_refs', 'first_observed_at', 'last_observed_at',
             'unanswered_count', 'escalated_count',
         ];

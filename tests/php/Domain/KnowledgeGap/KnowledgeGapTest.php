@@ -21,10 +21,11 @@ final class KnowledgeGapTest extends TestCase
         ]));
 
         self::assertSame($first->fingerprint(), $second->fingerprint());
-        self::assertSame('cómo recupero mi acceso', $first->snapshot()['question_key']);
+        self::assertArrayNotHasKey('question_key', $first->snapshot());
 
         $aggregated = KnowledgeGap::aggregate([$second, $first]);
         self::assertCount(1, $aggregated);
+        self::assertArrayNotHasKey('question_key', $aggregated[0]);
         self::assertSame(2, $aggregated[0]['unanswered_count']);
         self::assertSame(0, $aggregated[0]['escalated_count']);
         self::assertSame(1000, $aggregated[0]['first_observed_at']);

@@ -8,8 +8,7 @@ Un gap representa una pregunta que terminó como `unanswered` o `escalated`.
 
 El dominio conserva únicamente:
 
-- `question_key` normalizada;
-- fingerprint estable;
+- fingerprint estable derivado de una normalización transitoria de la pregunta;
 - locale;
 - módulo;
 - scope;
@@ -17,7 +16,7 @@ El dominio conserva únicamente:
 - ventana observada;
 - conteos agregados de unanswered/escalated.
 
-La pregunta se normaliza para deduplicación. Antes de aceptarla se rechazan patrones evidentes de secretos, emails y teléfonos. El payload es cerrado y no admite campos arbitrarios como customer IDs, tokens o blobs de ticket.
+La pregunta se normaliza de forma transitoria para deduplicación y **no se conserva en `snapshot()` ni en el agregado**. Antes de calcular el fingerprint se rechazan patrones evidentes de secretos, emails y teléfonos. El payload es cerrado y no admite campos arbitrarios como customer IDs, tokens o blobs de ticket.
 
 La identidad del gap depende de:
 
@@ -58,7 +57,7 @@ La salida usa:
 
 El adapter no decide readiness, executor, provider, budget ni approval. Tampoco publica artículos. Factory valida el WorkItem y aplica readiness/Dispatcher V2 posteriormente.
 
-La pregunta normalizada **no se copia al WorkItem**; el handoff usa fingerprint y referencias de evidencia. Esto minimiza exposición y evita trasladar texto de soporte a la cola global.
+La pregunta normalizada **no se conserva en el gap agregado ni se copia al WorkItem**; el handoff usa fingerprint y referencias de evidencia. Esto minimiza exposición y evita trasladar texto de soporte a la cola global.
 
 ## Idempotencia
 

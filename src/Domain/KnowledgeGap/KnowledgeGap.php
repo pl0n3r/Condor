@@ -21,7 +21,6 @@ final class KnowledgeGap
      */
     private function __construct(
         private readonly string $fingerprint,
-        private readonly string $questionKey,
         private readonly string $locale,
         private readonly string $module,
         private readonly string $scope,
@@ -56,7 +55,6 @@ final class KnowledgeGap
 
         return new self(
             $fingerprint,
-            $questionKey,
             $locale,
             $module,
             $scope,
@@ -78,7 +76,6 @@ final class KnowledgeGap
     {
         return [
             'fingerprint' => $this->fingerprint,
-            'question_key' => $this->questionKey,
             'locale' => $this->locale,
             'module' => $this->module,
             'scope' => $this->scope,
