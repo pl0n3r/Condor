@@ -36,26 +36,90 @@ final readonly class E2eFileTransactionalEmailGateway implements TransactionalEm
             JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES,
         );
 
-        $handle = fopen($path, 'ab');
-        if ($handle === false) {
-            throw new RuntimeException('No se pudo abrir el mailbox transaccional E2E.');
-        }
+        $handle = $this->openMailbox($path);
 
         try {
             if (!flock($handle, LOCK_EX)) {
                 throw new RuntimeException('No se pudo bloquear el mailbox transaccional E2E.');
             }
 
+            $this->assertSecureHandle($handle, $path);
+
             if (fwrite($handle, $payload.PHP_EOL) === false || !fflush($handle)) {
                 throw new RuntimeException('No se pudo escribir el mailbox transaccional E2E.');
             }
-
-            flock($handle, LOCK_UN);
         } finally {
+            @flock($handle, LOCK_UN);
             fclose($handle);
         }
+    }
 
-        @chmod($path, 0600);
+    /** @return resource */
+    private function openMailbox(string $path)
+    {
+        $previousUmask = umask(0077);
+
+        try {
+            $handle = @fopen($path, 'x+b');
+        } finally {
+            umask($previousUmask);
+        }
+
+        if ($handle !== false) {
+            if (!@chmod($path, 0600)) {
+                fclose($handle);
+                @unlink($path);
+
+                throw new RuntimeException('No se pudo proteger el mailbox transaccional E2E.');
+            }
+
+            return $handle;
+        }
+
+        $stat = @lstat($path);
+        if (!$this->isSecureOwnedRegularFile($stat)) {
+            throw new RuntimeException('El mailbox transaccional E2E existente no es seguro.');
+        }
+
+        $handle = @fopen($path, 'ab');
+        if ($handle === false) {
+            throw new RuntimeException('No se pudo abrir el mailbox transaccional E2E.');
+        }
+
+        return $handle;
+    }
+
+    /** @param resource $handle */
+    private function assertSecureHandle($handle, string $path): void
+    {
+        $handleStat = @fstat($handle);
+        $pathStat = @lstat($path);
+
+        if (
+            !$this->isSecureOwnedRegularFile($handleStat)
+            || !$this->isSecureOwnedRegularFile($pathStat)
+            || $handleStat['dev'] !== $pathStat['dev']
+            || $handleStat['ino'] !== $pathStat['ino']
+        ) {
+            throw new RuntimeException('El mailbox transaccional E2E cambió o no es seguro.');
+        }
+    }
+
+    /** @param array<string|int, int>|false $stat */
+    private function isSecureOwnedRegularFile(array|false $stat): bool
+    {
+        if ($stat === false) {
+            return false;
+        }
+
+        $uid = function_exists('posix_geteuid')
+            ? posix_geteuid()
+            : getmyuid();
+
+        return is_int($uid)
+            && ($stat['mode'] & 0170000) === 0100000
+            && ($stat['mode'] & 0777) === 0600
+            && $stat['uid'] === $uid;
     }
 
     private function mailboxPath(): ?string
