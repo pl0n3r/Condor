@@ -46,7 +46,7 @@ final class KnowledgeGap
         $observedAt = self::positiveInt($payload['observed_at'] ?? null, 'observed_at inválido.');
         $outcome = self::closedString($payload['outcome'] ?? null, self::OUTCOMES, 'Outcome inválido.');
 
-        $fingerprint = self::fingerprint([
+        $fingerprint = self::computeFingerprint([
             'question_key' => $questionKey,
             'locale' => $locale,
             'module' => $module,
@@ -193,7 +193,7 @@ final class KnowledgeGap
     }
 
     /** @param array<string, string> $identity */
-    private static function fingerprint(array $identity): string
+    private static function computeFingerprint(array $identity): string
     {
         try {
             return hash('sha256', json_encode(
