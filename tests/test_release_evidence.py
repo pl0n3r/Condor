@@ -66,6 +66,30 @@ class ReleaseEvidenceTests(unittest.TestCase):
         self.assertFalse(manifest["transition"]["required"])
         self.assertEqual(manifest["public_checks"], list(module.PUBLIC_CHECKS))
 
+    def test_ac07_version_identity_manifest_is_coherent_without_transition(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = self.manifest(tmp, ["config/version.php"])
+
+        self.assertFalse(manifest["transition"]["required"])
+        self.assertTrue(all(
+            item["required"] is False
+            for item in manifest["transition"]["checks"]
+        ))
+        module.validate_manifest(manifest)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = self.manifest(
+                tmp,
+                ["config/version.php", "config/packages/framework.yaml"],
+            )
+
+        checks = {
+            item["id"]: item["required"]
+            for item in runtime["transition"]["checks"]
+        }
+        self.assertTrue(runtime["transition"]["required"])
+        self.assertTrue(checks["configuracion"])
+
     def test_storefront_release_requiere_dos_checks_en_manifiesto(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             manifest = module.build_manifest(
