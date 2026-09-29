@@ -170,6 +170,8 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
                 self.assertNotIn(unsafe_arg,workflow)
         root=self.root/"materialize"; (root/"config").mkdir(parents=True)
         self.write(root,"0.1.78")
+        (root/"README.md").write_text("# Contract README\n",encoding="utf-8")
+        before=(root/"README.md").read_text(encoding="utf-8")
         old_cwd=Path.cwd()
         try:
             import os
@@ -178,8 +180,10 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         finally:
             os.chdir(old_cwd)
         self.assertIn("'version' => '0.1.79'",(root/"config/version.php").read_text(encoding="utf-8"))
-        readme=(root/"README.md").read_text(encoding="utf-8")
-        self.assertIn("Issue #336",readme); self.assertIn("PR automático #309",readme)
+        self.assertEqual(before,(root/"README.md").read_text(encoding="utf-8"))
+        workflow=PROMOTION.read_text(encoding="utf-8")
+        self.assertIn("git add config/version.php",workflow)
+        self.assertNotIn("git add config/version.php README.md",workflow)
 
     def test_promotion_preserves_bot_dependency_diff(self):
         _,files,_,_=self.promotion_fixture()

@@ -169,15 +169,9 @@ class FactoryAdoptionTests(unittest.TestCase):
     def test_coordination_wrapper_candidate_version(self) -> None:
         version = self.read("config/version.php")
         readme = self.read("README.md")
-        match = re.search(r"'version'\s*=>\s*'(\d+\.\d+\.\d+)'", version)
-        self.assertIsNotNone(match)
-        candidate = match.group(1)
-        self.assertIn(f"V {candidate}", readme)
-        self.assertIn(f"V{candidate}", readme)
-        self.assertRegex(
-            readme,
-            r"\*\*Candidato objetivo:\*\* V\d+\.\d+\.\d+ · Issue #\d+",
-        )
+        self.assertRegex(version, r"'version'\s*=>\s*'\d+\.\d+\.\d+'")
+        self.assertIn("## Operational Cockpit", readme)
+        self.assertNotIn("**Candidato objetivo:**", readme)
 
     def test_condor_ci_requires_factory_without_dropping_specific_gates(self) -> None:
         ci = self.read(".github/workflows/ci.yml")

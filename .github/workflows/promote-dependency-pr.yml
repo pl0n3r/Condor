@@ -112,7 +112,7 @@ jobs:
           git apply --3way --index "$PROMOTION_RUNTIME/source.patch"
 
           python3 scripts/dependency_pr_promotion.py materialize
-          git add config/version.php README.md
+          git add config/version.php
           git diff --cached --check
           python3 tests/test_release_identity_guard.py
 
