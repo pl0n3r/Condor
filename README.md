@@ -1,27 +1,27 @@
-# Condor App — Snapshot operativo · Home comercial V 0.1.77
+# Condor App — Snapshot operativo · Release identity guard V 0.1.78
 
-> **Candidato objetivo:** V0.1.77 · Issue #329 · propuesta de valor y narrativa comercial del home.
+> **Candidato objetivo:** V0.1.78 · Issue #332 · bloquear reutilización de versión antes del merge.
 >
-> **Producción validada antes del cambio:** V0.1.76 · `main@1fae3cd913f07727bf8e6dca489214bd6f12d9e7` · release/tag exactos, Deploy Observer y CI exact-main en success; `/health` con esquema al día.
+> **Producción validada antes del cambio:** V0.1.77 · `main@03becea6e84f16b05407d5920d5c4039bd41dfd7` · release/tag exactos, Deploy Observer y CI exact-main en success; `/health` con esquema al día.
 
-Condor continúa en construcción. V0.1.77 convierte la portada pública en una superficie comercial que explica cómo la plataforma conecta la operación real de una empresa sin inventar capacidades ni publicar precios.
+Condor continúa en construcción. V0.1.78 convierte incidentes repetidos de identidad de release en un guardrail pre-merge, read-only y reversible.
 
 ## Alcance
-- hero “Tu empresa, conectada” y CTA principal “Solicitar una demo”;
-- narrativa SSR/Twig de inventario, ventas, producción, compras, clientes, e-commerce y reportes;
-- flujo operativo, multiempresa, B2B/B2C, Colombia-first/global-ready, Factory y seguridad con claims acotados;
-- sistema visual sobrio/premium, responsive 360 px+, foco visible, semántica y navegación por teclado;
-- metadata, canonical y versión visible;
-- regresión automatizada del contrato comercial del home.
+- leer la versión canónica desde `config/version.php`;
+- exigir título terminal `(V X.Y.Z)` igual a la versión canónica;
+- rechazar tags consumidos y versiones no monotónicas antes del merge;
+- permitir saltos SemVer hacia adelante sin crear ni mover tags;
+- ejecutar el guard en Preflight antes de gates costosos;
+- cubrir los patrones históricos #233, #307, #315 y #330.
 
 ## Límites
-- no se añaden formularios, proveedores, trackers, datos personales ni un canal comercial ficticio;
-- no se publican precios;
-- no se modifican esquema, dependencias, tenant/storefront routing, autenticación ni APIs;
-- visuales del home son estructura y tipografía del producto; no se publica un dashboard ficticio ni datos reales de clientes.
+- no crea, mueve ni borra tags/releases;
+- no autoedita `config/version.php`;
+- Release Factory v1 sigue siendo la autoridad final;
+- no toca producción, dependencias, esquema, datos, DNS ni secretos.
 
 ## Evidencia base
-- #330 cerró la identidad V0.1.76 y dejó producción exact-main GREEN.
-- #329 conserva el contrato de #65 y formaliza la siguiente evolución comercial crítica.
-- `tests/test_home_commercial_narrative.py` fija AC-01..AC-05.
-- El gate `Pruebas de contrato e integración` cubre AC-06.
+- #233, #307, #315 y #330 documentan reutilización de identidad.
+- `scripts/release_identity_guard.py` usa solo metadata/refs Git locales.
+- `tests/test_release_identity_guard.py` fija AC-01..AC-06.
+

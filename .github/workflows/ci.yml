@@ -59,16 +59,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Validar título de Pull Request
+      - name: Validar identidad candidata de release
         if: github.event_name == 'pull_request'
         env:
           TITULO_PR: ${{ github.event.pull_request.title }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          if [[ ! "$TITULO_PR" =~ \(V\ [0-9]+\.[0-9]+\.[0-9]+\)$ ]]; then
-            echo "::error::El título del PR debe terminar con el formato exacto (V X.Y.Z)."
-            exit 1
-          fi
+          python3 scripts/release_identity_guard.py \\
+            --pr-title "$TITULO_PR" \\
+            --candidate-sha "$CANDIDATE_SHA"
 
       - name: Clasificar cambios
         id: cambios
