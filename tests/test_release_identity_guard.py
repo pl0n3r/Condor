@@ -48,7 +48,7 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
             ("audit-composer","Auditoría de dependencias Composer"),
         ):
             with self.subTest(job=job):
-                self.assertIn(f"  {job}:\\n    name: {name}\\n    needs: preflight",w)
+                self.assertIn(f"  {job}:\n    name: {name}\n    needs: preflight",w)
     def test_historical_reuse_incidents_are_rejected_by_guard(self):
         for version,issue in [("0.1.40","#233"),("0.1.65","#307"),("0.1.66","#315"),("0.1.72","#330")]:
             with self.subTest(issue=issue):
