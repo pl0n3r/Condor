@@ -32,6 +32,8 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+    env:
+      PROMOTION_RUNTIME: ${{ github.workspace }}/.condor-runtime/dependency-promotion
     steps:
       - name: Checkout de rama reservada
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -39,6 +41,15 @@ jobs:
           ref: trabajo/issue-${{ inputs.issue_number }}
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Preparar runtime privado
+        run: |
+          set -euo pipefail
+          runtime="$(python3 scripts/dependency_pr_promotion.py prepare-runtime)"
+          [[ "$runtime" == "$PROMOTION_RUNTIME" ]] || {
+            echo "::error::Runtime de promoción fuera del workspace esperado."
+            exit 1
+          }
 
       - name: Validar reserva, bot e identidad
         id: plan
@@ -53,11 +64,11 @@ jobs:
           [[ "$SOURCE_PR" =~ ^[1-9][0-9]*$ ]] || { echo "::error::source_pr inválido"; exit 1; }
           [[ "$ISSUE_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::issue_number inválido"; exit 1; }
 
-          gh api "repos/$GITHUB_REPOSITORY/pulls/$SOURCE_PR" > /tmp/source-pr.json
-          gh api "repos/$GITHUB_REPOSITORY/pulls/$SOURCE_PR/files?per_page=100" > /tmp/source-files.json
-          gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" > /tmp/promotion-issue.json
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$SOURCE_PR" > "$PROMOTION_RUNTIME/source-pr.json"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$SOURCE_PR/files?per_page=100" > "$PROMOTION_RUNTIME/source-files.json"
+          gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" > "$PROMOTION_RUNTIME/promotion-issue.json"
           gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments?per_page=100" --slurp \
-            | jq 'add // []' > /tmp/promotion-comments.json
+            | jq 'add // []' > "$PROMOTION_RUNTIME/promotion-comments.json"
 
           git fetch origin main --tags
           [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || {
@@ -82,7 +93,6 @@ jobs:
           BASE_SHA: ${{ steps.plan.outputs.base_sha }}
           VERSION: ${{ steps.plan.outputs.version }}
           ISSUE_NUMBER: ${{ steps.plan.outputs.issue_number }}
-          SOURCE_TITLE: ${{ steps.plan.outputs.source_title }}
         run: |
           set -euo pipefail
           git fetch origin "pull/$SOURCE_PR/head:refs/remotes/source-pr-$SOURCE_PR"
@@ -91,19 +101,15 @@ jobs:
             exit 1
           }
           git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || git fetch origin "$BASE_SHA"
-          git diff --binary "$BASE_SHA" "$SOURCE_SHA" > /tmp/source.patch
-          test -s /tmp/source.patch
-          git diff --name-only "$BASE_SHA" "$SOURCE_SHA" > /tmp/source-files.txt
+          git diff --binary "$BASE_SHA" "$SOURCE_SHA" > "$PROMOTION_RUNTIME/source.patch"
+          test -s "$PROMOTION_RUNTIME/source.patch"
+          git diff --name-only "$BASE_SHA" "$SOURCE_SHA" > "$PROMOTION_RUNTIME/source-files.txt"
           python3 scripts/dependency_pr_promotion.py verify-files
-          git apply --3way --index /tmp/source.patch
+          git apply --3way --index "$PROMOTION_RUNTIME/source.patch"
 
           python3 scripts/dependency_pr_promotion.py materialize \
             --version "$VERSION" \
-            --issue-number "$ISSUE_NUMBER" \
-            --source-pr "$SOURCE_PR" \
-            --source-title "$SOURCE_TITLE" \
-            --source-sha "$SOURCE_SHA" \
-            --main-sha "$(git rev-parse origin/main)"
+            --issue-number "$ISSUE_NUMBER"
           git add config/version.php README.md
           git diff --cached --check
           python3 tests/test_release_identity_guard.py
@@ -123,7 +129,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore(deps): promote bot PR #$SOURCE_PR (V $VERSION)"
           gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments?per_page=100" --slurp \
-            | jq 'add // []' > /tmp/promotion-comments.json
+            | jq 'add // []' > "$PROMOTION_RUNTIME/promotion-comments.json"
           python3 scripts/dependency_pr_promotion.py validate-reservation \
             --reservation-id "$RESERVATION_ID" \
             --branch "$TARGET_BRANCH" \
@@ -167,7 +173,7 @@ jobs:
           }
           trap rollback EXIT
 
-          cat > /tmp/body.md <<EOF
+          cat > "$PROMOTION_RUNTIME/body.md" <<EOF
           ## Qué y por qué
 
           Promoción canónica del PR automático #$SOURCE_PR sobre una rama reservada por Factory. El PR bot original permanece sin edición ni merge directo.
@@ -192,7 +198,7 @@ jobs:
           EOF
 
           gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments?per_page=100" --slurp \
-            | jq 'add // []' > /tmp/promotion-comments.json
+            | jq 'add // []' > "$PROMOTION_RUNTIME/promotion-comments.json"
           python3 scripts/dependency_pr_promotion.py validate-reservation \
             --reservation-id "$RESERVATION_ID" \
             --branch "$TARGET_BRANCH" \
@@ -206,7 +212,7 @@ jobs:
             --base main \
             --head "$TARGET_BRANCH" \
             --title "$PR_TITLE" \
-            --body-file /tmp/body.md \
+            --body-file "$PROMOTION_RUNTIME/body.md" \
             --label "tipo: mejora" \
             --label "prioridad: media" \
             --label "estado: en revisión" \

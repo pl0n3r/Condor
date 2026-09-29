@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import uuid
 from pathlib import Path
 
@@ -19,13 +20,21 @@ ALLOWED_EXACT = {
 WORKFLOW_RE = re.compile(r"^\.github/workflows/[^/]+\.(?:yml|yaml)$")
 REPO_NAME_KEY = "full" + "_name"
 
-SOURCE_PR_JSON = Path("/tmp/source-pr.json")
-SOURCE_FILES_JSON = Path("/tmp/source-files.json")
-PROMOTION_ISSUE_JSON = Path("/tmp/promotion-issue.json")
-PROMOTION_COMMENTS_JSON = Path("/tmp/promotion-comments.json")
-ACTUAL_FILES = Path("/tmp/source-files.txt")
+ROOT = Path(__file__).resolve().parents[1]
+RUNTIME_DIR = ROOT / ".condor-runtime" / "dependency-promotion"
+SOURCE_PR_JSON = RUNTIME_DIR / "source-pr.json"
+SOURCE_FILES_JSON = RUNTIME_DIR / "source-files.json"
+PROMOTION_ISSUE_JSON = RUNTIME_DIR / "promotion-issue.json"
+PROMOTION_COMMENTS_JSON = RUNTIME_DIR / "promotion-comments.json"
+ACTUAL_FILES = RUNTIME_DIR / "source-files.txt"
 VERSION_FILE = Path("config/version.php")
 README_FILE = Path("README.md")
+SESSION_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+    r"[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+)
+BRANCH_RE = re.compile(r"^trabajo/issue-([1-9][0-9]*)$")
+FINGERPRINT_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 class PromotionError(RuntimeError):
@@ -69,19 +78,105 @@ def source_files(files: list[dict]) -> list[str]:
     return sorted(names)
 
 
+def ensure_private_runtime(path: Path = RUNTIME_DIR) -> Path:
+    """Crea el runtime fijo con permisos privados y sin atravesar symlinks."""
+    parent = path.parent
+    for candidate in (parent, path):
+        if candidate.is_symlink():
+            raise PromotionError("promotion runtime must not be a symlink")
+    parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.mkdir(exist_ok=True, mode=0o700)
+    for candidate in (parent, path):
+        if candidate.is_symlink() or not candidate.is_dir():
+            raise PromotionError("promotion runtime must be a private directory")
+        candidate.chmod(0o700)
+        if candidate.stat().st_mode & 0o077:
+            raise PromotionError("promotion runtime permissions are not private")
+    return path
+
+
+def valid_reservation_payload(value: object) -> bool:
+    """Replica el schema cerrado de reservas Factory v1/v2/v3."""
+    if not isinstance(value, dict):
+        return False
+    base = {"version", "owner", "reservation_id", "branch", "active", "reason"}
+    version = value.get("version")
+    if version == 1:
+        if set(value) != base:
+            return False
+    elif version == 2:
+        if set(value) != base | {"acceptance_sha256"}:
+            return False
+    elif version == 3:
+        if set(value) != base | {
+            "acceptance_sha256",
+            "task_marker_sha256",
+            "task_paths",
+            "task_depends_on",
+        }:
+            return False
+        marker_fingerprint = value.get("task_marker_sha256")
+        paths = value.get("task_paths")
+        dependencies = value.get("task_depends_on")
+        if (
+            not isinstance(marker_fingerprint, str)
+            or FINGERPRINT_RE.fullmatch(marker_fingerprint) is None
+            or not isinstance(paths, list)
+            or not paths
+            or not all(isinstance(item, str) and item for item in paths)
+            or not isinstance(dependencies, list)
+            or not all(
+                isinstance(number, int)
+                and not isinstance(number, bool)
+                and number > 0
+                for number in dependencies
+            )
+        ):
+            return False
+    else:
+        return False
+
+    if version in (2, 3):
+        fingerprint = value.get("acceptance_sha256")
+        if (
+            not isinstance(fingerprint, str)
+            or FINGERPRINT_RE.fullmatch(fingerprint) is None
+        ):
+            return False
+    if not isinstance(value.get("owner"), str) or not value["owner"]:
+        return False
+    reservation_id = value.get("reservation_id")
+    if (
+        not isinstance(reservation_id, str)
+        or SESSION_RE.fullmatch(reservation_id.lower()) is None
+    ):
+        return False
+    branch = value.get("branch")
+    if not isinstance(branch, str) or BRANCH_RE.fullmatch(branch) is None:
+        return False
+    if not isinstance(value.get("active"), bool):
+        return False
+    return isinstance(value.get("reason"), str) and bool(value["reason"])
+
+
+def _reservation_from_text(body: str) -> dict | None:
+    latest = None
+    for match in RESERVATION_RE.finditer(body):
+        try:
+            payload = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            continue
+        if valid_reservation_payload(payload):
+            latest = payload
+    return latest
+
+
 def _trusted_reservation_marker(comment: dict) -> dict | None:
     actor = ((comment.get("user") or {}).get("login"))
     body = comment.get("body")
     if actor != "github-actions[bot]" or not isinstance(body, str):
         return None
-    match = RESERVATION_RE.search(body)
-    if match is None:
-        return None
-    try:
-        payload = json.loads(match.group(1))
-    except json.JSONDecodeError:
-        return None
-    return payload if isinstance(payload, dict) else None
+    return _reservation_from_text(body)
 
 
 def active_reservation(
@@ -219,6 +314,27 @@ def materialize(
     source_sha: str,
     main_sha: str,
 ) -> None:
+    if (
+        not isinstance(issue_number, int)
+        or isinstance(issue_number, bool)
+        or issue_number < 1
+        or not isinstance(source_pr, int)
+        or isinstance(source_pr, bool)
+        or source_pr < 1
+    ):
+        raise PromotionError("materialize issue/source PR identity invalid")
+    if not isinstance(source_sha, str) or SHA_RE.fullmatch(source_sha) is None:
+        raise PromotionError("materialize source SHA invalid")
+    if not isinstance(main_sha, str) or SHA_RE.fullmatch(main_sha) is None:
+        raise PromotionError("materialize main SHA invalid")
+    if (
+        not isinstance(source_title, str)
+        or not source_title
+        or len(source_title) > 240
+        or any(ord(ch) < 32 or ord(ch) == 127 for ch in source_title)
+    ):
+        raise PromotionError("materialize source title invalid")
+
     previous = read_version()
     if version != next_patch(previous):
         raise PromotionError("promotion version must be the next patch version")
@@ -282,6 +398,33 @@ def _plan_from_fixed_inputs(args: argparse.Namespace) -> dict:
     )
 
 
+def _git_main_sha() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "origin/main"],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    sha = result.stdout.strip()
+    if result.returncode != 0 or SHA_RE.fullmatch(sha) is None:
+        raise PromotionError("origin/main SHA unavailable")
+    return sha
+
+
+def _materialize_from_fixed_inputs(args: argparse.Namespace) -> None:
+    pr = load_json(SOURCE_PR_JSON)
+    head = pr.get("head") if isinstance(pr, dict) else None
+    materialize(
+        args.version,
+        args.issue_number,
+        pr.get("number") if isinstance(pr, dict) else None,
+        pr.get("title") if isinstance(pr, dict) else None,
+        head.get("sha") if isinstance(head, dict) else None,
+        _git_main_sha(),
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
@@ -293,6 +436,7 @@ def main() -> int:
     plan.add_argument("--expected-owner", required=True)
 
     sub.add_parser("verify-files")
+    sub.add_parser("prepare-runtime")
 
     reservation = sub.add_parser("validate-reservation")
     reservation.add_argument("--reservation-id", required=True)
@@ -302,10 +446,6 @@ def main() -> int:
     mat = sub.add_parser("materialize")
     mat.add_argument("--version", required=True)
     mat.add_argument("--issue-number", required=True, type=int)
-    mat.add_argument("--source-pr", required=True, type=int)
-    mat.add_argument("--source-title", required=True)
-    mat.add_argument("--source-sha", required=True)
-    mat.add_argument("--main-sha", required=True)
 
     args = parser.parse_args()
     try:
@@ -317,6 +457,8 @@ def main() -> int:
                 ACTUAL_FILES.read_text(encoding="utf-8").splitlines(),
             )
             print("dependency_pr_promotion: source diff verified")
+        elif args.command == "prepare-runtime":
+            print(ensure_private_runtime())
         elif args.command == "validate-reservation":
             active_reservation(
                 load_json(PROMOTION_COMMENTS_JSON),
@@ -326,14 +468,7 @@ def main() -> int:
             )
             print("dependency_pr_promotion: reservation authority verified")
         else:
-            materialize(
-                args.version,
-                args.issue_number,
-                args.source_pr,
-                args.source_title,
-                args.source_sha,
-                args.main_sha,
-            )
+            _materialize_from_fixed_inputs(args)
             print(f"dependency_pr_promotion: materialized V{args.version}")
     except (PromotionError, OSError, json.JSONDecodeError) as exc:
         print(f"::error::dependency_pr_promotion: {exc}")

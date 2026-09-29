@@ -6,7 +6,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0,str(ROOT))
 
 from scripts.dependency_pr_promotion import (
-    PromotionError, build_plan, materialize, verify_files,
+    PromotionError, RUNTIME_DIR, build_plan, ensure_private_runtime, materialize,
+    verify_files,
 )
 GUARD=ROOT/"scripts/release_identity_guard.py"
 CI=ROOT/".github/workflows/ci.yml"
@@ -41,7 +42,11 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         }
         files=[{"filename":"composer.lock"}]
         issue={"number":336,"state":"open","labels":[{"name":"estado: reservado"}]}
-        marker={"active":True,"branch":"trabajo/issue-336","owner":"pl0n3r","reservation_id":RESERVATION_ID,"version":2}
+        marker={
+            "active":True,"branch":"trabajo/issue-336","owner":"pl0n3r",
+            "reservation_id":RESERVATION_ID,"version":2,"reason":"tomar",
+            "acceptance_sha256":"f"*64,
+        }
         comments=[{"user":{"login":"github-actions[bot]"},"body":"<!-- condor-reserva "+json.dumps(marker,separators=(",",":"))+" -->"}]
         return pr,files,issue,comments
     def promotion_plan(self):
@@ -122,6 +127,7 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         for unsafe_arg in (
             "--repo-root","--version-file","--files-json","--actual-files",
             "--github-output","--pr-json","--issue-json","--comments-json",
+            "--source-pr","--source-title","--source-sha","--main-sha",
         ):
             with self.subTest(unsafe_arg=unsafe_arg):
                 self.assertNotIn(unsafe_arg,workflow)
@@ -145,7 +151,7 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
             verify_files(files,["composer.json"])
         workflow=PROMOTION.read_text(encoding="utf-8")
         self.assertIn('git diff --binary "$BASE_SHA" "$SOURCE_SHA"',workflow)
-        self.assertIn("git apply --3way --index /tmp/source.patch",workflow)
+        self.assertIn('git apply --3way --index "$PROMOTION_RUNTIME/source.patch"',workflow)
         self.assertIn("verify-files",workflow)
         self.assertNotIn("@dependabot rebase",workflow)
 
@@ -182,6 +188,8 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
             "owner":"pl0n3r",
             "reservation_id":newer_id,
             "version":2,
+            "reason":"tomar",
+            "acceptance_sha256":"e"*64,
         }
         comments.append({
             "user":{"login":"github-actions[bot]"},
@@ -199,12 +207,128 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         pr,files,issue,comments=self.promotion_fixture()
         comments=[{"user":{"login":"someone"},"body":"noise-comment"} for _ in range(100)]+comments
         newer_id="33333333-3333-4333-8333-333333333333"
-        newer={"active":True,"branch":"trabajo/issue-336","owner":"pl0n3r","reservation_id":newer_id,"version":2}
+        newer={
+            "active":True,"branch":"trabajo/issue-336","owner":"pl0n3r",
+            "reservation_id":newer_id,"version":2,"reason":"tomar",
+            "acceptance_sha256":"d"*64,
+        }
         comments.append({"user":{"login":"github-actions[bot]"},"body":"<!-- condor-reserva "+json.dumps(newer,separators=(",",":"))+" -->"})
         with self.assertRaises(PromotionError):
             build_plan(pr,files,issue,comments,RESERVATION_ID,"0.1.78","v0.1.78","pl0n3r/Condor","pl0n3r")
         latest=build_plan(pr,files,issue,comments,newer_id,"0.1.78","v0.1.78","pl0n3r/Condor","pl0n3r")
         self.assertEqual(latest["reservation_id"],newer_id)
+
+    def test_promotion_rejects_noncanonical_reservation_markers(self):
+        pr,files,issue,_=self.promotion_fixture()
+        base={
+            "active":True,
+            "branch":"trabajo/issue-336",
+            "owner":"pl0n3r",
+            "reservation_id":RESERVATION_ID,
+            "version":2,
+            "reason":"tomar",
+            "acceptance_sha256":"f"*64,
+        }
+        invalid=[]
+        missing=dict(base); missing.pop("acceptance_sha256"); invalid.append(missing)
+        extra=dict(base); extra["unexpected"]="x"; invalid.append(extra)
+        wrong_type=dict(base); wrong_type["active"]="true"; invalid.append(wrong_type)
+        incomplete_v3=dict(base); incomplete_v3["version"]=3; invalid.append(incomplete_v3)
+        for payload in invalid:
+            comments=[{
+                "user":{"login":"github-actions[bot]"},
+                "body":"<!-- condor-reserva "+json.dumps(payload,separators=(",",":"))+" -->",
+            }]
+            with self.subTest(payload=payload):
+                with self.assertRaises(PromotionError):
+                    build_plan(
+                        pr,files,issue,comments,RESERVATION_ID,
+                        "0.1.78","v0.1.78","pl0n3r/Condor","pl0n3r",
+                    )
+
+    def test_promotion_accepts_canonical_reservation_versions(self):
+        pr,files,issue,comments=self.promotion_fixture()
+        self.assertEqual(
+            build_plan(
+                pr,files,issue,comments,RESERVATION_ID,
+                "0.1.78","v0.1.78","pl0n3r/Condor","pl0n3r",
+            )["reservation_id"],
+            RESERVATION_ID,
+        )
+        v3={
+            "active":True,
+            "branch":"trabajo/issue-336",
+            "owner":"pl0n3r",
+            "reservation_id":RESERVATION_ID,
+            "version":3,
+            "reason":"tomar",
+            "acceptance_sha256":"a"*64,
+            "task_marker_sha256":"b"*64,
+            "task_paths":["scripts/dependency_pr_promotion.py"],
+            "task_depends_on":[335],
+        }
+        comments=[{
+            "user":{"login":"github-actions[bot]"},
+            "body":"<!-- condor-reserva "+json.dumps(v3,separators=(",",":"))+" -->",
+        }]
+        self.assertEqual(
+            build_plan(
+                pr,files,issue,comments,RESERVATION_ID,
+                "0.1.78","v0.1.78","pl0n3r/Condor","pl0n3r",
+            )["reservation_id"],
+            RESERVATION_ID,
+        )
+
+    def test_promotion_runtime_is_private_workspace(self):
+        workflow=PROMOTION.read_text(encoding="utf-8")
+        self.assertNotIn("/tmp/",workflow)
+        self.assertIn(".condor-runtime/dependency-promotion",workflow)
+        self.assertFalse(str(RUNTIME_DIR).startswith("/tmp/"))
+        runtime=ensure_private_runtime(self.root/"runtime")
+        self.assertTrue(runtime.is_dir())
+        self.assertFalse(runtime.is_symlink())
+        self.assertEqual(runtime.stat().st_mode & 0o077,0)
+        target=self.root/"target"; target.mkdir()
+        link=self.root/"link"; link.symlink_to(target,target_is_directory=True)
+        with self.assertRaises(PromotionError):
+            ensure_private_runtime(link/"child")
+
+    def test_materialize_rejects_untrusted_identity_fields(self):
+        root=self.root/"materialize-invalid"; (root/"config").mkdir(parents=True)
+        self.write(root,"0.1.79")
+        old_cwd=Path.cwd()
+        try:
+            import os
+            os.chdir(root)
+            with self.assertRaises(PromotionError):
+                materialize("0.1.80",338,309,"valid title","bad-sha","c"*40)
+            with self.assertRaises(PromotionError):
+                materialize("0.1.80",338,309,"valid title","a"*40,"bad-sha")
+            with self.assertRaises(PromotionError):
+                materialize("0.1.80",338,309,"bad\ntitle","a"*40,"c"*40)
+        finally:
+            os.chdir(old_cwd)
+        self.assertIn(
+            "'version' => '0.1.79'",
+            (root/"config/version.php").read_text(encoding="utf-8"),
+        )
+        self.assertFalse((root/"README.md").exists())
+
+    def test_promotion_revalidates_reservation_before_remote_writes(self):
+        workflow=PROMOTION.read_text(encoding="utf-8")
+        push='git push origin "HEAD:$TARGET_BRANCH"'
+        close='gh pr close "$SOURCE_PR"'
+        self.assertGreaterEqual(workflow.count("validate-reservation"),2)
+        self.assertLess(
+            workflow.index("validate-reservation",workflow.index("Commit y push")),
+            workflow.index(push),
+        )
+        self.assertLess(workflow.rindex("validate-reservation"),workflow.index(close))
+        self.assertGreaterEqual(
+            workflow.count('$PROMOTION_RUNTIME/promotion-comments.json'),
+            3,
+        )
+        self.assertNotIn("/tmp/",workflow)
 
 if __name__=="__main__":
     unittest.main()
