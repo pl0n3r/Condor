@@ -93,14 +93,14 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
     def test_release_candidate_version_and_snapshot(self) -> None:
         version = (ROOT / "config/version.php").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        match = re.search(r"'version'\\s*=>\\s*'(\\d+\\.\\d+\\.\\d+)'", version)
+        match = re.search(r"'version'\s*=>\s*'(\d+\.\d+\.\d+)'", version)
         self.assertIsNotNone(match)
         candidate = match.group(1)
         self.assertIn(f"V {candidate}", readme)
         self.assertIn(f"V{candidate}", readme)
         self.assertRegex(
-            readme,
-            r"^# Condor App — Snapshot operativo · .+ V \\d+\\.\\d+\\.\\d+$",
+            readme.splitlines()[0],
+            r"^# Condor App — Snapshot operativo · .+ V \d+\.\d+\.\d+$",
         )
 
 

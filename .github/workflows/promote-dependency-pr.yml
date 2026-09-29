@@ -38,7 +38,7 @@ jobs:
         with:
           ref: trabajo/issue-${{ inputs.issue_number }}
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Validar reserva, bot e identidad
         id: plan
@@ -47,6 +47,7 @@ jobs:
           SOURCE_PR: ${{ inputs.source_pr }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
           RESERVATION_ID: ${{ inputs.reservation_id }}
+          EXPECTED_OWNER: ${{ github.actor }}
         run: |
           set -euo pipefail
           [[ "$SOURCE_PR" =~ ^[1-9][0-9]*$ ]] || { echo "::error::source_pr inválido"; exit 1; }
@@ -55,7 +56,8 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/pulls/$SOURCE_PR" > /tmp/source-pr.json
           gh api "repos/$GITHUB_REPOSITORY/pulls/$SOURCE_PR/files?per_page=100" > /tmp/source-files.json
           gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" > /tmp/promotion-issue.json
-          gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments?per_page=100" > /tmp/promotion-comments.json
+          gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments?per_page=100" --slurp \
+            | jq 'add // []' > /tmp/promotion-comments.json
 
           git fetch origin main --tags
           [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || {
@@ -63,16 +65,15 @@ jobs:
             exit 1
           }
           latest_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)"
-          python3 scripts/dependency_pr_promotion.py plan \
-            --pr-json /tmp/source-pr.json \
-            --files-json /tmp/source-files.json \
-            --issue-json /tmp/promotion-issue.json \
-            --comments-json /tmp/promotion-comments.json \
+          plan_json="$(python3 scripts/dependency_pr_promotion.py plan \
             --reservation-id "$RESERVATION_ID" \
-            --version-file config/version.php \
             --latest-tag "$latest_tag" \
             --repository "$GITHUB_REPOSITORY" \
-            --github-output "$GITHUB_OUTPUT"
+            --expected-owner "$EXPECTED_OWNER")"
+          for key in source_pr source_sha base_sha source_title target_branch version pr_title issue_number reservation_id; do
+            value="$(jq -r --arg key "$key" '.[$key]' <<<"$plan_json")"
+            printf '%s=%s\n' "$key" "$value" >> "$GITHUB_OUTPUT"
+          done
 
       - name: Aplicar diff bot sin ejecutarlo
         env:
@@ -93,13 +94,10 @@ jobs:
           git diff --binary "$BASE_SHA" "$SOURCE_SHA" > /tmp/source.patch
           test -s /tmp/source.patch
           git diff --name-only "$BASE_SHA" "$SOURCE_SHA" > /tmp/source-files.txt
-          python3 scripts/dependency_pr_promotion.py verify-files \
-            --files-json /tmp/source-files.json \
-            --actual-files /tmp/source-files.txt
+          python3 scripts/dependency_pr_promotion.py verify-files
           git apply --3way --index /tmp/source.patch
 
           python3 scripts/dependency_pr_promotion.py materialize \
-            --repo-root . \
             --version "$VERSION" \
             --issue-number "$ISSUE_NUMBER" \
             --source-pr "$SOURCE_PR" \
@@ -112,14 +110,25 @@ jobs:
 
       - name: Commit y push sobre la rama reservada
         env:
+          GH_TOKEN: ${{ github.token }}
           SOURCE_PR: ${{ steps.plan.outputs.source_pr }}
           VERSION: ${{ steps.plan.outputs.version }}
           TARGET_BRANCH: ${{ steps.plan.outputs.target_branch }}
+          ISSUE_NUMBER: ${{ steps.plan.outputs.issue_number }}
+          RESERVATION_ID: ${{ steps.plan.outputs.reservation_id }}
+          EXPECTED_OWNER: ${{ github.actor }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore(deps): promote bot PR #$SOURCE_PR (V $VERSION)"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments?per_page=100" --slurp \
+            | jq 'add // []' > /tmp/promotion-comments.json
+          python3 scripts/dependency_pr_promotion.py validate-reservation \
+            --reservation-id "$RESERVATION_ID" \
+            --branch "$TARGET_BRANCH" \
+            --expected-owner "$EXPECTED_OWNER"
+          gh auth setup-git
           git push origin "HEAD:$TARGET_BRANCH"
 
       - name: Abrir PR gobernado
@@ -132,8 +141,32 @@ jobs:
           TARGET_BRANCH: ${{ steps.plan.outputs.target_branch }}
           ISSUE_NUMBER: ${{ steps.plan.outputs.issue_number }}
           RESERVATION_ID: ${{ steps.plan.outputs.reservation_id }}
+          EXPECTED_OWNER: ${{ github.actor }}
         run: |
           set -euo pipefail
+          gh auth setup-git
+          source_closed=false
+          promotion_created=false
+          candidate_sha="$(git rev-parse HEAD)"
+          main_sha="$(git rev-parse origin/main)"
+
+          rollback() {
+            status=$?
+            trap - EXIT
+            if [[ "$status" -ne 0 && "$promotion_created" != "true" ]]; then
+              echo "::warning::La promoción falló; restaurando rama reservada y PR bot."
+              git push \
+                --force-with-lease="refs/heads/$TARGET_BRANCH:$candidate_sha" \
+                origin \
+                "$main_sha:refs/heads/$TARGET_BRANCH" || true
+              if [[ "$source_closed" == "true" ]]; then
+                gh pr reopen "$SOURCE_PR" || true
+              fi
+            fi
+            exit "$status"
+          }
+          trap rollback EXIT
+
           cat > /tmp/body.md <<EOF
           ## Qué y por qué
 
@@ -143,6 +176,7 @@ jobs:
           Rol primario: infraestructura · Revisión cruzada: QA + SRE
 
           Closes #$ISSUE_NUMBER · Reserva: $RESERVATION_ID
+          <!-- condor-reserva-id: $RESERVATION_ID -->
 
           ## Evidencia
 
@@ -157,13 +191,31 @@ jobs:
           Si el parche bot colisiona con main, la promoción falla cerrada antes del push. Reversión: cerrar este PR y conservar el PR bot original como fuente read-only.
           EOF
 
-          pr_url="$(gh pr create --base main --head "$TARGET_BRANCH" --title "$PR_TITLE" --body-file /tmp/body.md)"
-          gh pr edit "$pr_url" \
-            --add-label "tipo: mejora" \
-            --add-label "prioridad: media" \
-            --add-label "estado: en revisión" \
-            --add-label "rol: ingenieria-software" \
-            --add-label "rol: infraestructura" \
-            --add-label "rol: qa" \
-            --add-label "rol: sre"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments?per_page=100" --slurp \
+            | jq 'add // []' > /tmp/promotion-comments.json
+          python3 scripts/dependency_pr_promotion.py validate-reservation \
+            --reservation-id "$RESERVATION_ID" \
+            --branch "$TARGET_BRANCH" \
+            --expected-owner "$EXPECTED_OWNER"
+
+          gh pr close "$SOURCE_PR" --comment \
+            "Cierre controlado para promoción Factory: el diff y commits fuente quedan intactos. Si la creación del PR promovido falla, este PR se reabre automáticamente."
+          source_closed=true
+
+          pr_url="$(gh pr create \
+            --base main \
+            --head "$TARGET_BRANCH" \
+            --title "$PR_TITLE" \
+            --body-file /tmp/body.md \
+            --label "tipo: mejora" \
+            --label "prioridad: media" \
+            --label "estado: en revisión" \
+            --label "rol: ingenieria-software" \
+            --label "rol: infraestructura" \
+            --label "rol: qa" \
+            --label "rol: sre")"
+          promotion_created=true
+          gh pr comment "$SOURCE_PR" --body \
+            "Promoción Factory creada: $pr_url. El PR bot queda cerrado como fuente preservada para evitar colisión con la entrega versionada."
+          trap - EXIT
           echo "Promoción creada: $pr_url"

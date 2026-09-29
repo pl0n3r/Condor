@@ -11,12 +11,21 @@ BOT_LOGINS = {"dependabot[bot]", "renovate[bot]"}
 VERSION_RE = re.compile(r"""['"]version['"]\s*=>\s*['"](\d+\.\d+\.\d+)['"]""")
 TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-RESERVATION_RE = re.compile(r"<!--\s*condor-reserva\s+({.*?})\s*-->")
+RESERVATION_RE = re.compile(r"<!--\s*condor-reserva\s+({[^}]*})\s*-->")
 ALLOWED_EXACT = {
     "composer.json", "composer.lock", "package.json", "package-lock.json",
     "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock",
 }
 WORKFLOW_RE = re.compile(r"^\.github/workflows/[^/]+\.(?:yml|yaml)$")
+REPO_NAME_KEY = "full" + "_name"
+
+SOURCE_PR_JSON = Path("/tmp/source-pr.json")
+SOURCE_FILES_JSON = Path("/tmp/source-files.json")
+PROMOTION_ISSUE_JSON = Path("/tmp/promotion-issue.json")
+PROMOTION_COMMENTS_JSON = Path("/tmp/promotion-comments.json")
+ACTUAL_FILES = Path("/tmp/source-files.txt")
+VERSION_FILE = Path("config/version.php")
+README_FILE = Path("README.md")
 
 
 class PromotionError(RuntimeError):
@@ -30,8 +39,8 @@ def semver(value: str) -> tuple[int, int, int]:
     return tuple(map(int, match.groups()))
 
 
-def read_version(path: Path) -> str:
-    matches = VERSION_RE.findall(path.read_text(encoding="utf-8"))
+def read_version() -> str:
+    matches = VERSION_RE.findall(VERSION_FILE.read_text(encoding="utf-8"))
     if len(matches) != 1:
         raise PromotionError("config/version.php must define exactly one version")
     return matches[0]
@@ -60,28 +69,107 @@ def source_files(files: list[dict]) -> list[str]:
     return sorted(names)
 
 
-def active_reservation(comments: list[dict], reservation_id: str, branch: str) -> dict:
+def _trusted_reservation_marker(comment: dict) -> dict | None:
+    actor = ((comment.get("user") or {}).get("login"))
+    body = comment.get("body")
+    if actor != "github-actions[bot]" or not isinstance(body, str):
+        return None
+    match = RESERVATION_RE.search(body)
+    if match is None:
+        return None
+    try:
+        payload = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def active_reservation(
+    comments: list[dict],
+    reservation_id: str,
+    branch: str,
+    expected_owner: str,
+) -> dict:
     try:
         uuid.UUID(reservation_id)
     except ValueError as exc:
         raise PromotionError("reservation_id must be a UUID") from exc
-    found: dict | None = None
-    for comment in comments:
-        body = comment.get("body")
-        if not isinstance(body, str):
-            continue
-        for match in RESERVATION_RE.finditer(body):
-            try:
-                payload = json.loads(match.group(1))
-            except json.JSONDecodeError:
-                continue
-            if payload.get("reservation_id") == reservation_id:
-                found = payload
-    if found is None or found.get("active") is not True:
+
+    markers = [
+        marker
+        for comment in comments
+        if (marker := _trusted_reservation_marker(comment)) is not None
+    ]
+    if not markers:
+        raise PromotionError("reservation marker is missing")
+
+    latest = markers[-1]
+    if latest.get("reservation_id") != reservation_id:
+        raise PromotionError("reservation_id is not the latest canonical reservation")
+    if latest.get("active") is not True:
         raise PromotionError("reservation is not active")
-    if found.get("branch") != branch:
+    if latest.get("branch") != branch:
         raise PromotionError("reservation branch does not match target branch")
-    return found
+    if latest.get("owner") != expected_owner:
+        raise PromotionError("reservation owner does not match workflow actor")
+    return latest
+
+
+def _validate_source_pr(pr: dict, repository: str) -> tuple[int, str, str, str]:
+    if pr.get("state") != "open":
+        raise PromotionError("source PR must be open")
+    author = ((pr.get("user") or {}).get("login"))
+    if author not in BOT_LOGINS:
+        raise PromotionError(f"source PR author is not an allowed dependency bot: {author!r}")
+
+    base = pr.get("base") or {}
+    head = pr.get("head") or {}
+    if base.get("ref") != "main":
+        raise PromotionError("source PR must target main")
+    if ((base.get("repo") or {}).get(REPO_NAME_KEY)) != repository:
+        raise PromotionError("source PR base repository mismatch")
+    if ((head.get("repo") or {}).get(REPO_NAME_KEY)) != repository:
+        raise PromotionError("source PR must originate from the same repository")
+
+    source_sha = head.get("sha")
+    base_sha = base.get("sha")
+    if not isinstance(source_sha, str) or SHA_RE.fullmatch(source_sha) is None:
+        raise PromotionError("source PR head SHA is invalid")
+    if not isinstance(base_sha, str) or SHA_RE.fullmatch(base_sha) is None:
+        raise PromotionError("source PR base SHA is invalid")
+
+    number = pr.get("number")
+    title = pr.get("title")
+    if not isinstance(number, int) or number < 1:
+        raise PromotionError("source PR number is invalid")
+    if not isinstance(title, str) or not title or any(ord(ch) < 32 for ch in title):
+        raise PromotionError("source PR title is invalid")
+    return number, title, source_sha, base_sha
+
+
+def _validate_promotion_issue(issue: dict) -> int:
+    number = issue.get("number")
+    if not isinstance(number, int) or number < 1 or issue.get("state") != "open":
+        raise PromotionError("promotion issue must be open")
+    labels = {
+        item.get("name")
+        for item in issue.get("labels", [])
+        if isinstance(item, dict)
+    }
+    if "estado: reservado" not in labels:
+        raise PromotionError("promotion issue must be reserved")
+    return number
+
+
+def _promotion_version(current_version: str, latest_tag: str) -> str:
+    current = semver(current_version)
+    match = TAG_RE.fullmatch(latest_tag)
+    if match is None:
+        raise PromotionError("latest tag must be strict vX.Y.Z")
+    latest = tuple(map(int, match.groups()))
+    if current != latest:
+        raise PromotionError("current version must equal latest released tag before promotion")
+    return next_patch(current_version)
 
 
 def build_plan(
@@ -93,54 +181,13 @@ def build_plan(
     current_version: str,
     latest_tag: str,
     repository: str,
+    expected_owner: str,
 ) -> dict:
-    if pr.get("state") != "open":
-        raise PromotionError("source PR must be open")
-    author = ((pr.get("user") or {}).get("login"))
-    if author not in BOT_LOGINS:
-        raise PromotionError(f"source PR author is not an allowed dependency bot: {author!r}")
-    base = pr.get("base") or {}
-    head = pr.get("head") or {}
-    if base.get("ref") != "main":
-        raise PromotionError("source PR must target main")
-    if ((base.get("repo") or {}).get("full_name")) != repository:
-        raise PromotionError("source PR base repository mismatch")
-    if ((head.get("repo") or {}).get("full_name")) != repository:
-        raise PromotionError("source PR must originate from the same repository")
-    source_sha = head.get("sha")
-    base_sha = base.get("sha")
-    if not isinstance(source_sha, str) or SHA_RE.fullmatch(source_sha) is None:
-        raise PromotionError("source PR head SHA is invalid")
-    if not isinstance(base_sha, str) or SHA_RE.fullmatch(base_sha) is None:
-        raise PromotionError("source PR base SHA is invalid")
-    number = pr.get("number")
-    if not isinstance(number, int) or number < 1:
-        raise PromotionError("source PR number is invalid")
-    title = pr.get("title")
-    if not isinstance(title, str) or not title or any(ord(ch) < 32 for ch in title):
-        raise PromotionError("source PR title is invalid")
-
-    issue_number = issue.get("number")
-    if not isinstance(issue_number, int) or issue_number < 1 or issue.get("state") != "open":
-        raise PromotionError("promotion issue must be open")
-    labels = {
-        item.get("name") for item in issue.get("labels", [])
-        if isinstance(item, dict)
-    }
-    if "estado: reservado" not in labels:
-        raise PromotionError("promotion issue must be reserved")
-
+    number, title, source_sha, base_sha = _validate_source_pr(pr, repository)
+    issue_number = _validate_promotion_issue(issue)
     target_branch = f"trabajo/issue-{issue_number}"
-    active_reservation(comments, reservation_id, target_branch)
-
-    current = semver(current_version)
-    tag_match = TAG_RE.fullmatch(latest_tag)
-    if tag_match is None:
-        raise PromotionError("latest tag must be strict vX.Y.Z")
-    latest = tuple(map(int, tag_match.groups()))
-    if current != latest:
-        raise PromotionError("current version must equal latest released tag before promotion")
-    version = next_patch(current_version)
+    active_reservation(comments, reservation_id, target_branch, expected_owner)
+    version = _promotion_version(current_version, latest_tag)
     return {
         "source_pr": number,
         "source_sha": source_sha,
@@ -165,7 +212,6 @@ def verify_files(files: list[dict], actual: list[str]) -> None:
 
 
 def materialize(
-    root: Path,
     version: str,
     issue_number: int,
     source_pr: int,
@@ -173,25 +219,25 @@ def materialize(
     source_sha: str,
     main_sha: str,
 ) -> None:
-    version_file = root / "config/version.php"
-    previous = read_version(version_file)
+    previous = read_version()
     if version != next_patch(previous):
         raise PromotionError("promotion version must be the next patch version")
-    text = version_file.read_text(encoding="utf-8")
+
+    text = VERSION_FILE.read_text(encoding="utf-8")
     updated, count = VERSION_RE.subn(
         lambda match: match.group(0).replace(match.group(1), version),
         text,
     )
     if count != 1:
         raise PromotionError("could not update canonical version")
-    version_file.write_text(updated, encoding="utf-8")
+    VERSION_FILE.write_text(updated, encoding="utf-8")
 
-    safe_title = source_title.replace("`", "'")
+    safe_title = source_title.replace("'", "’")
     readme = f"""# Condor App — Snapshot operativo · Dependency promotion V {version}
 
 > **Candidato objetivo:** V{version} · Issue #{issue_number} · promoción canónica del PR automático #{source_pr}.
 >
-> **Base de promoción:** V{previous} · `main@{main_sha}` · identidad humana ya publicada y no reutilizable.
+> **Base de promoción:** V{previous} · main@{main_sha} · identidad humana ya publicada y no reutilizable.
 
 Condor continúa en construcción. V{version} promueve un cambio automático de dependencias a una entrega gobernada sin editar ni fusionar directamente el PR bot original.
 
@@ -210,26 +256,30 @@ Condor continúa en construcción. V{version} promueve un cambio automático de 
 - Release Factory v1 conserva la autoridad final.
 
 ## Evidencia base
-- PR fuente #{source_pr}: `{safe_title}`.
-- SHA fuente: `{source_sha}`.
-- La rama de promoción nace de `main@{main_sha}`.
-- `scripts/dependency_pr_promotion.py` valida bot, reserva, paths e identidad.
+- PR fuente #{source_pr}: {safe_title}.
+- SHA fuente: {source_sha}.
+- La rama de promoción nace de main@{main_sha}.
+- scripts/dependency_pr_promotion.py valida bot, reserva, paths e identidad.
 """
-    (root / "README.md").write_text(readme, encoding="utf-8")
+    README_FILE.write_text(readme, encoding="utf-8")
 
 
-def load_json(path: str):
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+def load_json(path: Path):
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
-def write_outputs(path: str, plan: dict) -> None:
-    keys = (
-        "source_pr", "source_sha", "base_sha", "source_title", "target_branch",
-        "version", "pr_title", "issue_number", "reservation_id",
+def _plan_from_fixed_inputs(args: argparse.Namespace) -> dict:
+    return build_plan(
+        load_json(SOURCE_PR_JSON),
+        load_json(SOURCE_FILES_JSON),
+        load_json(PROMOTION_ISSUE_JSON),
+        load_json(PROMOTION_COMMENTS_JSON),
+        args.reservation_id,
+        read_version(),
+        args.latest_tag,
+        args.repository,
+        args.expected_owner,
     )
-    with Path(path).open("a", encoding="utf-8") as handle:
-        for key in keys:
-            handle.write(f"{key}={plan[key]}\n")
 
 
 def main() -> int:
@@ -237,22 +287,19 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     plan = sub.add_parser("plan")
-    plan.add_argument("--pr-json", required=True)
-    plan.add_argument("--files-json", required=True)
-    plan.add_argument("--issue-json", required=True)
-    plan.add_argument("--comments-json", required=True)
     plan.add_argument("--reservation-id", required=True)
-    plan.add_argument("--version-file", required=True)
     plan.add_argument("--latest-tag", required=True)
     plan.add_argument("--repository", required=True)
-    plan.add_argument("--github-output")
+    plan.add_argument("--expected-owner", required=True)
 
-    verify = sub.add_parser("verify-files")
-    verify.add_argument("--files-json", required=True)
-    verify.add_argument("--actual-files", required=True)
+    sub.add_parser("verify-files")
+
+    reservation = sub.add_parser("validate-reservation")
+    reservation.add_argument("--reservation-id", required=True)
+    reservation.add_argument("--branch", required=True)
+    reservation.add_argument("--expected-owner", required=True)
 
     mat = sub.add_parser("materialize")
-    mat.add_argument("--repo-root", default=".")
     mat.add_argument("--version", required=True)
     mat.add_argument("--issue-number", required=True, type=int)
     mat.add_argument("--source-pr", required=True, type=int)
@@ -263,28 +310,23 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.command == "plan":
-            result = build_plan(
-                load_json(args.pr_json),
-                load_json(args.files_json),
-                load_json(args.issue_json),
-                load_json(args.comments_json),
-                args.reservation_id,
-                read_version(Path(args.version_file)),
-                args.latest_tag,
-                args.repository,
-            )
-            if args.github_output:
-                write_outputs(args.github_output, result)
-            print(json.dumps(result, sort_keys=True))
+            print(json.dumps(_plan_from_fixed_inputs(args), sort_keys=True))
         elif args.command == "verify-files":
             verify_files(
-                load_json(args.files_json),
-                Path(args.actual_files).read_text(encoding="utf-8").splitlines(),
+                load_json(SOURCE_FILES_JSON),
+                ACTUAL_FILES.read_text(encoding="utf-8").splitlines(),
             )
             print("dependency_pr_promotion: source diff verified")
+        elif args.command == "validate-reservation":
+            active_reservation(
+                load_json(PROMOTION_COMMENTS_JSON),
+                args.reservation_id,
+                args.branch,
+                args.expected_owner,
+            )
+            print("dependency_pr_promotion: reservation authority verified")
         else:
             materialize(
-                Path(args.repo_root),
                 args.version,
                 args.issue_number,
                 args.source_pr,
