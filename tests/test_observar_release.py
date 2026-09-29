@@ -1263,5 +1263,8 @@ class ReleaseObserverTests(unittest.TestCase):
         }
         self.assertEqual(modulo.codigo_salida_observacion(validado), 0)
 
+# Compatibilidad con el contrato histórico que importa ObserverTests.
+ObserverTests = ReleaseObserverTests
+
 if __name__ == "__main__":
     unittest.main()
