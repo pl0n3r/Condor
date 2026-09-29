@@ -39,6 +39,9 @@ Producción.
 """
     return body + ("\n" + task_marker if task_marker else "")
 
+ISSUE_338_ACCEPTANCE_PIN="7102a58c680bb5a6fd90d5e024e4138d9ad527b5c3cff18e08465199a39e5475"
+ISSUE_338_CONTRACT_BODY="### Contexto\n\nFixture del contrato real #338.\n\n### Alcance\n\nVerificar fingerprint canónico.\n\n### Fuera de alcance\n\nNo ejecuta promoción.\n\n### Criterios de aceptación\n\n- [ ] [AC-01] El marker operativo exige schema/tipos Factory cerrados, `type(version) is int`, versión v2/v3 y `acceptance_sha256` igual al `contract_fingerprint()` canónico del Issue vivo; v3 exige además `task_marker_sha256` igual al fingerprint canónico del task vivo. v1, pins stale, extras o tipos inválidos fallan cerrado.\n- [ ] [AC-02] Una reserva v2/v3 solo autoriza mientras el Issue vivo sigue abierto y reservado y conserva latest-global + active + branch + owner + fingerprints vigentes; el caso sano v2/v3 permanece compatible.\n- [ ] [AC-03] El runtime de promoción no usa rutas públicas `/tmp`; su directorio workspace es privado (0700), fijo, vacío al iniciar y no-symlink.\n- [ ] [AC-04] El plan fija `planned_main_sha`, `planned_source_sha` y `planned_base_sha`; `materialize()` usa exactamente esas identidades y rechaza SHAs/títulos inválidos antes de escribir archivos.\n- [ ] [AC-05] Inmediatamente antes del push y antes de cerrar/crear PR se refrescan Issue + comentarios + `origin/main` + PR fuente y se revalidan autoridad/pins/SHAs/state/repo/base/autor. Cualquier drift antes del push aborta sin write; drift posterior al push provoca rollback de la rama sin cerrar el PR fuente.\n\n### Contrato ejecutable\n\n<!-- factory-acceptance {\"version\":1,\"criteria\":[{\"id\":\"AC-01\",\"kind\":\"test\",\"target\":\"tests/test_release_identity_guard.py::ReleaseIdentityGuardTests::test_promotion_rejects_noncanonical_reservation_markers\"},{\"id\":\"AC-02\",\"kind\":\"test\",\"target\":\"tests/test_release_identity_guard.py::ReleaseIdentityGuardTests::test_promotion_accepts_canonical_reservation_versions\"},{\"id\":\"AC-03\",\"kind\":\"test\",\"target\":\"tests/test_release_identity_guard.py::ReleaseIdentityGuardTests::test_promotion_runtime_is_private_workspace\"},{\"id\":\"AC-04\",\"kind\":\"test\",\"target\":\"tests/test_release_identity_guard.py::ReleaseIdentityGuardTests::test_materialize_rejects_untrusted_identity_fields\"},{\"id\":\"AC-05\",\"kind\":\"test\",\"target\":\"tests/test_release_identity_guard.py::ReleaseIdentityGuardTests::test_promotion_revalidates_reservation_before_remote_writes\"}]} -->\n"
+
 def git(repo,*args):
     return subprocess.run(["git",*args],cwd=repo,text=True,capture_output=True,check=True).stdout.strip()
 
@@ -301,6 +304,10 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
             )
 
     def test_promotion_accepts_canonical_reservation_versions(self):
+        self.assertEqual(
+            contract_fingerprint(ISSUE_338_CONTRACT_BODY),
+            ISSUE_338_ACCEPTANCE_PIN,
+        )
         pr,files,issue,comments=self.promotion_fixture()
         self.assertEqual(
             build_plan(
