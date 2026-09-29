@@ -271,6 +271,9 @@ jobs:
       - name: Probar herramientas internas del CI
         run: python3 -m unittest discover -s tests -p 'test_ci_*.py'
 
+      - name: Probar guard de identidad de release
+        run: python3 tests/test_release_identity_guard.py
+
       - name: Probar adapters Factory del consumer
         run: python3 tests/test_factory_deploy_adapters.py
 
@@ -282,6 +285,7 @@ jobs:
 
   static-analysis:
     name: Análisis estático PHP
+    needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -311,6 +315,7 @@ jobs:
 
   rector-dry-run:
     name: Rector dry-run
+    needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -407,6 +412,7 @@ jobs:
 
   audit-npm:
     name: Auditoría de dependencias npm
+    needs: preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -431,6 +437,7 @@ jobs:
 
   audit-composer:
     name: Auditoría de dependencias Composer
+    needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
