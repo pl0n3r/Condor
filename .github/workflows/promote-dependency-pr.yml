@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dependency-promotion-\${{ github.repository }}-\${{ inputs.issue_number }}
+  group: dependency-promotion-${{ github.repository }}-${{ inputs.issue_number }}
   cancel-in-progress: false
 
 jobs:
@@ -36,17 +36,17 @@ jobs:
       - name: Checkout de rama reservada
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: trabajo/issue-\${{ inputs.issue_number }}
+          ref: trabajo/issue-${{ inputs.issue_number }}
           fetch-depth: 0
           persist-credentials: true
 
       - name: Validar reserva, bot e identidad
         id: plan
         env:
-          GH_TOKEN: \${{ github.token }}
-          SOURCE_PR: \${{ inputs.source_pr }}
-          ISSUE_NUMBER: \${{ inputs.issue_number }}
-          RESERVATION_ID: \${{ inputs.reservation_id }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_PR: ${{ inputs.source_pr }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          RESERVATION_ID: ${{ inputs.reservation_id }}
         run: |
           set -euo pipefail
           [[ "$SOURCE_PR" =~ ^[1-9][0-9]*$ ]] || { echo "::error::source_pr inválido"; exit 1; }
@@ -76,12 +76,12 @@ jobs:
 
       - name: Aplicar diff bot sin ejecutarlo
         env:
-          SOURCE_PR: \${{ steps.plan.outputs.source_pr }}
-          SOURCE_SHA: \${{ steps.plan.outputs.source_sha }}
-          BASE_SHA: \${{ steps.plan.outputs.base_sha }}
-          VERSION: \${{ steps.plan.outputs.version }}
-          ISSUE_NUMBER: \${{ steps.plan.outputs.issue_number }}
-          SOURCE_TITLE: \${{ steps.plan.outputs.source_title }}
+          SOURCE_PR: ${{ steps.plan.outputs.source_pr }}
+          SOURCE_SHA: ${{ steps.plan.outputs.source_sha }}
+          BASE_SHA: ${{ steps.plan.outputs.base_sha }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          ISSUE_NUMBER: ${{ steps.plan.outputs.issue_number }}
+          SOURCE_TITLE: ${{ steps.plan.outputs.source_title }}
         run: |
           set -euo pipefail
           git fetch origin "pull/$SOURCE_PR/head:refs/remotes/source-pr-$SOURCE_PR"
@@ -112,9 +112,9 @@ jobs:
 
       - name: Commit y push sobre la rama reservada
         env:
-          SOURCE_PR: \${{ steps.plan.outputs.source_pr }}
-          VERSION: \${{ steps.plan.outputs.version }}
-          TARGET_BRANCH: \${{ steps.plan.outputs.target_branch }}
+          SOURCE_PR: ${{ steps.plan.outputs.source_pr }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          TARGET_BRANCH: ${{ steps.plan.outputs.target_branch }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -124,14 +124,14 @@ jobs:
 
       - name: Abrir PR gobernado
         env:
-          GH_TOKEN: \${{ github.token }}
-          SOURCE_PR: \${{ steps.plan.outputs.source_pr }}
-          SOURCE_SHA: \${{ steps.plan.outputs.source_sha }}
-          VERSION: \${{ steps.plan.outputs.version }}
-          PR_TITLE: \${{ steps.plan.outputs.pr_title }}
-          TARGET_BRANCH: \${{ steps.plan.outputs.target_branch }}
-          ISSUE_NUMBER: \${{ steps.plan.outputs.issue_number }}
-          RESERVATION_ID: \${{ steps.plan.outputs.reservation_id }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_PR: ${{ steps.plan.outputs.source_pr }}
+          SOURCE_SHA: ${{ steps.plan.outputs.source_sha }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          PR_TITLE: ${{ steps.plan.outputs.pr_title }}
+          TARGET_BRANCH: ${{ steps.plan.outputs.target_branch }}
+          ISSUE_NUMBER: ${{ steps.plan.outputs.issue_number }}
+          RESERVATION_ID: ${{ steps.plan.outputs.reservation_id }}
         run: |
           set -euo pipefail
           cat > /tmp/body.md <<EOF
