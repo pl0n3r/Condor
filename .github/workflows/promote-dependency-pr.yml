@@ -1,0 +1,169 @@
+name: Promover PR automático de dependencias
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_pr:
+        description: "Número del PR Dependabot/Renovate a promover"
+        required: true
+        type: string
+      issue_number:
+        description: "Issue Factory reservado para esta promoción"
+        required: true
+        type: string
+      reservation_id:
+        description: "UUID de reserva activa del Issue"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-promotion-\${{ github.repository }}-\${{ inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Promover diff bot a entrega versionada
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout de rama reservada
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: trabajo/issue-\${{ inputs.issue_number }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Validar reserva, bot e identidad
+        id: plan
+        env:
+          GH_TOKEN: \${{ github.token }}
+          SOURCE_PR: \${{ inputs.source_pr }}
+          ISSUE_NUMBER: \${{ inputs.issue_number }}
+          RESERVATION_ID: \${{ inputs.reservation_id }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_PR" =~ ^[1-9][0-9]*$ ]] || { echo "::error::source_pr inválido"; exit 1; }
+          [[ "$ISSUE_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::issue_number inválido"; exit 1; }
+
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$SOURCE_PR" > /tmp/source-pr.json
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$SOURCE_PR/files?per_page=100" > /tmp/source-files.json
+          gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" > /tmp/promotion-issue.json
+          gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments?per_page=100" > /tmp/promotion-comments.json
+
+          git fetch origin main --tags
+          [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || {
+            echo "::error::La rama reservada debe partir del main exacto antes de promover."
+            exit 1
+          }
+          latest_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)"
+          python3 scripts/dependency_pr_promotion.py plan \
+            --pr-json /tmp/source-pr.json \
+            --files-json /tmp/source-files.json \
+            --issue-json /tmp/promotion-issue.json \
+            --comments-json /tmp/promotion-comments.json \
+            --reservation-id "$RESERVATION_ID" \
+            --version-file config/version.php \
+            --latest-tag "$latest_tag" \
+            --repository "$GITHUB_REPOSITORY" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Aplicar diff bot sin ejecutarlo
+        env:
+          SOURCE_PR: \${{ steps.plan.outputs.source_pr }}
+          SOURCE_SHA: \${{ steps.plan.outputs.source_sha }}
+          BASE_SHA: \${{ steps.plan.outputs.base_sha }}
+          VERSION: \${{ steps.plan.outputs.version }}
+          ISSUE_NUMBER: \${{ steps.plan.outputs.issue_number }}
+          SOURCE_TITLE: \${{ steps.plan.outputs.source_title }}
+        run: |
+          set -euo pipefail
+          git fetch origin "pull/$SOURCE_PR/head:refs/remotes/source-pr-$SOURCE_PR"
+          [[ "$(git rev-parse "refs/remotes/source-pr-$SOURCE_PR")" == "$SOURCE_SHA" ]] || {
+            echo "::error::El SHA del PR fuente cambió durante la promoción."
+            exit 1
+          }
+          git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || git fetch origin "$BASE_SHA"
+          git diff --binary "$BASE_SHA" "$SOURCE_SHA" > /tmp/source.patch
+          test -s /tmp/source.patch
+          git diff --name-only "$BASE_SHA" "$SOURCE_SHA" > /tmp/source-files.txt
+          python3 scripts/dependency_pr_promotion.py verify-files \
+            --files-json /tmp/source-files.json \
+            --actual-files /tmp/source-files.txt
+          git apply --3way --index /tmp/source.patch
+
+          python3 scripts/dependency_pr_promotion.py materialize \
+            --repo-root . \
+            --version "$VERSION" \
+            --issue-number "$ISSUE_NUMBER" \
+            --source-pr "$SOURCE_PR" \
+            --source-title "$SOURCE_TITLE" \
+            --source-sha "$SOURCE_SHA" \
+            --main-sha "$(git rev-parse origin/main)"
+          git add config/version.php README.md
+          git diff --cached --check
+          python3 tests/test_release_identity_guard.py
+
+      - name: Commit y push sobre la rama reservada
+        env:
+          SOURCE_PR: \${{ steps.plan.outputs.source_pr }}
+          VERSION: \${{ steps.plan.outputs.version }}
+          TARGET_BRANCH: \${{ steps.plan.outputs.target_branch }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(deps): promote bot PR #$SOURCE_PR (V $VERSION)"
+          git push origin "HEAD:$TARGET_BRANCH"
+
+      - name: Abrir PR gobernado
+        env:
+          GH_TOKEN: \${{ github.token }}
+          SOURCE_PR: \${{ steps.plan.outputs.source_pr }}
+          SOURCE_SHA: \${{ steps.plan.outputs.source_sha }}
+          VERSION: \${{ steps.plan.outputs.version }}
+          PR_TITLE: \${{ steps.plan.outputs.pr_title }}
+          TARGET_BRANCH: \${{ steps.plan.outputs.target_branch }}
+          ISSUE_NUMBER: \${{ steps.plan.outputs.issue_number }}
+          RESERVATION_ID: \${{ steps.plan.outputs.reservation_id }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/body.md <<EOF
+          ## Qué y por qué
+
+          Promoción canónica del PR automático #$SOURCE_PR sobre una rama reservada por Factory. El PR bot original permanece sin edición ni merge directo.
+
+          Rol(es): ingenieria-software, infraestructura, qa, sre
+          Rol primario: infraestructura · Revisión cruzada: QA + SRE
+
+          Closes #$ISSUE_NUMBER · Reserva: $RESERVATION_ID
+
+          ## Evidencia
+
+          - PR fuente: #$SOURCE_PR
+          - SHA fuente: \`$SOURCE_SHA\`
+          - versión candidata: V$VERSION
+          - diff aplicado con \`git diff --binary\` + \`git apply --3way --index\`
+          - release identity guard permanece obligatorio
+
+          ## Riesgo y reversión
+
+          Si el parche bot colisiona con main, la promoción falla cerrada antes del push. Reversión: cerrar este PR y conservar el PR bot original como fuente read-only.
+          EOF
+
+          pr_url="$(gh pr create --base main --head "$TARGET_BRANCH" --title "$PR_TITLE" --body-file /tmp/body.md)"
+          gh pr edit "$pr_url" \
+            --add-label "tipo: mejora" \
+            --add-label "prioridad: media" \
+            --add-label "estado: en revisión" \
+            --add-label "rol: ingenieria-software" \
+            --add-label "rol: infraestructura" \
+            --add-label "rol: qa" \
+            --add-label "rol: sre"
+          echo "Promoción creada: $pr_url"
