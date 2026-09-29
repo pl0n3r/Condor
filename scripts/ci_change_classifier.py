@@ -87,6 +87,7 @@ RELEASE_ROOT_FILES = {
     ".htaccess",
     "config/version.php",
 }
+# Identidad de release: conserva full-stack CI, pero no implica transición operativa.
 RELEASE_IDENTITY_FILES = {"config/version.php"}
 KNOWN_ROOT_FILES = (
     DEPENDENCY_FILES
