@@ -1,0 +1,8 @@
+{
+  "name": "Condor App",
+  "tagline": "Plataforma SaaS modular para comercio, operación y administración multi-tenant.",
+  "role": "Producto independiente de la fábrica, gobernado por Factory y operado mediante su propio runtime.",
+  "phase": "construction",
+  "roadmap": "https://github.com/pl0n3r/Condor/issues/1",
+  "stack": "PHP 8.5 + Symfony 7.4 LTS + MariaDB + React/TypeScript + Hostinger shared hosting"
+}

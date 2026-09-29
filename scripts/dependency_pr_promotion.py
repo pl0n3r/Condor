@@ -29,7 +29,6 @@ PROMOTION_COMMENTS_JSON = RUNTIME_DIR / "promotion-comments.json"
 ACTUAL_FILES = RUNTIME_DIR / "source-files.txt"
 PLAN_JSON = RUNTIME_DIR / "plan.json"
 VERSION_FILE = Path("config/version.php")
-README_FILE = Path("README.md")
 SESSION_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
     r"[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -694,36 +693,6 @@ def materialize(
         raise PromotionError("could not update canonical version")
     VERSION_FILE.write_text(updated, encoding="utf-8")
 
-    safe_title = source_title.replace("'", "’")
-    readme = f"""# Condor App — Snapshot operativo · Dependency promotion V {version}
-
-> **Candidato objetivo:** V{version} · Issue #{issue_number} · promoción canónica del PR automático #{source_pr}.
->
-> **Base de promoción:** V{previous} · main@{main_sha} · identidad humana ya publicada y no reutilizable.
-
-Condor continúa en construcción. V{version} promueve un cambio automático de dependencias a una entrega gobernada sin editar ni fusionar directamente el PR bot original.
-
-## Alcance
-- preservar exactamente el diff de dependencias de PR #{source_pr};
-- aplicar ese diff sobre una rama reservada por Factory;
-- materializar una versión patch nueva antes de abrir el PR de entrega;
-- conservar el release identity guard de #332 sin excepciones para bots;
-- mantener el PR automático original como fuente read-only.
-
-## Límites
-- no crea, mueve ni borra tags/releases;
-- no fusiona directamente PRs Dependabot/Renovate;
-- no ejecuta código proveniente del PR fuente durante la promoción;
-- conflictos al aplicar el parche fallan cerrado;
-- Release Factory v1 conserva la autoridad final.
-
-## Evidencia base
-- PR fuente #{source_pr}: {safe_title}.
-- SHA fuente: {source_sha}.
-- La rama de promoción nace de main@{main_sha}.
-- scripts/dependency_pr_promotion.py valida bot, reserva, paths e identidad.
-"""
-    README_FILE.write_text(readme, encoding="utf-8")
 
 
 def load_json(path: Path):
