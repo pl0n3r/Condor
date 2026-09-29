@@ -48,15 +48,15 @@ ACCEPTANCE_REQUIRED_HEADINGS = (
     "### Contrato ejecutable",
 )
 ACCEPTANCE_CRITERION_LINE = re.compile(
-    r"^- \\[[ xX]\\] \\[(AC-[0-9]{2})\\] (.{1,500})$"
+    r"^- \[[ xX]\] \[(AC-[0-9]{2})\] (.{1,500})$"
 )
 ACCEPTANCE_TEST_TARGET = re.compile(
     r"^((?:tests|metricas|seguridad|lecciones|producto)/"
-    r"test_[A-Za-z0-9_/-]+\\.py)::"
+    r"test_[A-Za-z0-9_/-]+\.py)::"
     r"([A-Za-z_][A-Za-z0-9_]*)::"
     r"(test_[A-Za-z0-9_]+)$"
 )
-ACCEPTANCE_CHECK_NAME = re.compile(r"^[^\\r\\n]{1,120}$")
+ACCEPTANCE_CHECK_NAME = re.compile(r"^[^\r\n]{1,120}$")
 ACCEPTANCE_FORBIDDEN_CHECKS = {"Validar", "Criterios de aceptación"}
 
 
