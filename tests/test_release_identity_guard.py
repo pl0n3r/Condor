@@ -303,6 +303,31 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
                 "0.1.78","v0.1.78","pl0n3r/Condor","pl0n3r","c"*40,
             )
 
+        task_payload={
+            "version":1,"epic":338,"task_key":"PROMOTION","order":1,
+            "owner":"pl0n3r","roles":["seguridad"],"depends_on":[335],
+            "paths":["scripts/dependency_pr_promotion.py"],
+        }
+        task_marker="<!-- factory-plan-task "+json.dumps(task_payload,separators=(",",":"),sort_keys=True)+" -->"
+        issue["body"]=acceptance_body(task_marker)
+        stale_v3={
+            "active":True,"branch":"trabajo/issue-336","owner":"pl0n3r",
+            "reservation_id":RESERVATION_ID,"version":3,"reason":"tomar",
+            "acceptance_sha256":contract_fingerprint(issue["body"]),
+            "task_marker_sha256":"0"*64,
+            "task_paths":["scripts/dependency_pr_promotion.py"],
+            "task_depends_on":[335],
+        }
+        stale_v3_comments=[{
+            "user":{"login":"github-actions[bot]"},
+            "body":"<!-- condor-reserva "+json.dumps(stale_v3,separators=(",",":"))+" -->",
+        }]
+        with self.assertRaises(PromotionError):
+            build_plan(
+                pr,files,issue,stale_v3_comments,RESERVATION_ID,
+                "0.1.78","v0.1.78","pl0n3r/Condor","pl0n3r","c"*40,
+            )
+
     def test_promotion_accepts_canonical_reservation_versions(self):
         self.assertEqual(
             contract_fingerprint(ISSUE_338_CONTRACT_BODY),
@@ -389,6 +414,15 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
             (root/"config/version.php").read_text(encoding="utf-8"),
         )
         self.assertFalse((root/"README.md").exists())
+        script=(ROOT/"scripts/dependency_pr_promotion.py").read_text(encoding="utf-8")
+        workflow=PROMOTION.read_text(encoding="utf-8")
+        self.assertIn("plan = load_json(PLAN_JSON)",script)
+        self.assertIn('plan.get("planned_source_sha")',script)
+        self.assertIn('plan.get("planned_main_sha")',script)
+        self.assertNotIn("def _git_main_sha",script)
+        materialize_step=workflow.split("python3 scripts/dependency_pr_promotion.py materialize",1)[1].split("git add",1)[0]
+        self.assertNotIn("--version",materialize_step)
+        self.assertNotIn("--main-sha",materialize_step)
 
     def test_promotion_revalidates_reservation_before_remote_writes(self):
         plan=self.promotion_plan()
@@ -408,6 +442,18 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         head_drift=json.loads(json.dumps(pr)); head_drift["head"]["sha"]="d"*40; mutations.append((issue,comments,head_drift,"c"*40))
         base_drift=json.loads(json.dumps(pr)); base_drift["base"]["sha"]="e"*40; mutations.append((issue,comments,base_drift,"c"*40))
         source_closed=json.loads(json.dumps(pr)); source_closed["state"]="closed"; mutations.append((issue,comments,source_closed,"c"*40))
+        author_drift=json.loads(json.dumps(pr)); author_drift["user"]["login"]="human"; mutations.append((issue,comments,author_drift,"c"*40))
+        base_ref_drift=json.loads(json.dumps(pr)); base_ref_drift["base"]["ref"]="develop"; mutations.append((issue,comments,base_ref_drift,"c"*40))
+        repo_drift=json.loads(json.dumps(pr)); repo_drift["head"]["repo"][REPO_NAME_KEY]="other/repo"; mutations.append((issue,comments,repo_drift,"c"*40))
+        latest_comments=json.loads(json.dumps(comments))
+        newer_id="44444444-4444-4444-8444-444444444444"
+        newer_payload=json.loads(latest_comments[-1]["body"].split("condor-reserva ",1)[1].split(" -->",1)[0])
+        newer_payload["reservation_id"]=newer_id
+        latest_comments.append({
+            "user":{"login":"github-actions[bot]"},
+            "body":"<!-- condor-reserva "+json.dumps(newer_payload,separators=(",",":"))+" -->",
+        })
+        mutations.append((issue,latest_comments,pr,"c"*40))
         mutations.append((issue,comments,pr,"f"*40))
         for current_issue,current_comments,current_pr,current_main in mutations:
             with self.subTest(issue=current_issue.get("state"),main=current_main,source=current_pr.get("state")):
@@ -429,6 +475,11 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         self.assertGreaterEqual(workflow.count('$PROMOTION_RUNTIME/promotion-comments.json'),3)
         self.assertIn('planned_main_sha="$(jq -r',workflow)
         self.assertIn('$planned_main_sha:refs/heads/$TARGET_BRANCH',workflow)
+        self.assertIn('--force-with-lease="refs/heads/$TARGET_BRANCH:$candidate_sha"',workflow)
+        rollback=workflow.split("rollback() {",1)[1].split("trap rollback EXIT",1)[0]
+        self.assertNotIn("|| true",rollback)
+        self.assertIn("recovery_failed=true",rollback)
+        self.assertLess(workflow.index("trap rollback EXIT"),workflow.rindex("validate-live"))
         self.assertNotIn('\n          main_sha="$(git rev-parse origin/main)"',workflow)
         self.assertNotIn("/tmp/",workflow)
 
