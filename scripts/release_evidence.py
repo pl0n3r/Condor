@@ -98,7 +98,7 @@ def transition_requirements(paths: list[str], required: bool) -> dict[str, bool]
         for path in paths
     )
     configuration = any(
-        path.startswith("config/")
+        (path.startswith("config/") and path != "config/version.php")
         or path in {".env.example", ".htaccess", "public/index.php"}
         for path in paths
     )
