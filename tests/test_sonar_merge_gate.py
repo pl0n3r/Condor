@@ -2,17 +2,22 @@
 """Contrato del merge gate nativo Validar + SonarQube Cloud."""
 
 import copy
+import sys
 import unittest
 from pathlib import Path
 
-from scripts.verify_sonar_merge_gate import (
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.verify_sonar_merge_gate import (  # noqa: E402
     RULESET_ID,
     SonarMergeGateError,
     validate_ruleset,
 )
 
 
-ROOT = Path(__file__).resolve().parents[1]
 CI = ROOT / ".github/workflows/ci.yml"
 
 
