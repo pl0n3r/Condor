@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
-import subprocess
 import uuid
 from pathlib import Path
 
@@ -27,6 +27,7 @@ SOURCE_FILES_JSON = RUNTIME_DIR / "source-files.json"
 PROMOTION_ISSUE_JSON = RUNTIME_DIR / "promotion-issue.json"
 PROMOTION_COMMENTS_JSON = RUNTIME_DIR / "promotion-comments.json"
 ACTUAL_FILES = RUNTIME_DIR / "source-files.txt"
+PLAN_JSON = RUNTIME_DIR / "plan.json"
 VERSION_FILE = Path("config/version.php")
 README_FILE = Path("README.md")
 SESSION_RE = re.compile(
@@ -35,10 +36,264 @@ SESSION_RE = re.compile(
 )
 BRANCH_RE = re.compile(r"^trabajo/issue-([1-9][0-9]*)$")
 FINGERPRINT_RE = re.compile(r"^[0-9a-f]{64}$")
+ACCEPTANCE_MARKER = "factory-acceptance"
+TASK_MARKER = "factory-plan-task"
+MAX_BODY = 200_000
+MAX_CRITERIA = 20
+ACCEPTANCE_REQUIRED_HEADINGS = (
+    "### Contexto",
+    "### Alcance",
+    "### Fuera de alcance",
+    "### Criterios de aceptación",
+    "### Contrato ejecutable",
+)
+ACCEPTANCE_CRITERION_LINE = re.compile(
+    r"^- \\[[ xX]\\] \\[(AC-[0-9]{2})\\] (.{1,500})$"
+)
+ACCEPTANCE_TEST_TARGET = re.compile(
+    r"^((?:tests|metricas|seguridad|lecciones|producto)/"
+    r"test_[A-Za-z0-9_/-]+\\.py)::"
+    r"([A-Za-z_][A-Za-z0-9_]*)::"
+    r"(test_[A-Za-z0-9_]+)$"
+)
+ACCEPTANCE_CHECK_NAME = re.compile(r"^[^\\r\\n]{1,120}$")
+ACCEPTANCE_FORBIDDEN_CHECKS = {"Validar", "Criterios de aceptación"}
 
 
 class PromotionError(RuntimeError):
     pass
+
+
+def _section(body: str, heading: str) -> str:
+    lines = body.splitlines()
+    indexes = [i for i, line in enumerate(lines) if line.strip() == heading]
+    if len(indexes) != 1:
+        raise PromotionError(f"acceptance section invalid: {heading}")
+    start = indexes[0] + 1
+    end = len(lines)
+    for index in range(start, len(lines)):
+        if lines[index].startswith("### "):
+            end = index
+            break
+    content = "\n".join(lines[start:end]).strip()
+    if not content:
+        raise PromotionError(f"acceptance section empty: {heading}")
+    return content
+
+
+def _human_criteria(body: str) -> dict[str, str]:
+    section = _section(body, "### Criterios de aceptación")
+    criteria: dict[str, str] = {}
+    for line in section.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("- ["):
+            continue
+        match = ACCEPTANCE_CRITERION_LINE.fullmatch(stripped)
+        if match is None:
+            raise PromotionError("acceptance criterion syntax is invalid")
+        criterion_id, description = match.groups()
+        if criterion_id in criteria:
+            raise PromotionError("acceptance criterion IDs must be unique")
+        criteria[criterion_id] = description.strip()
+    if not 1 <= len(criteria) <= MAX_CRITERIA:
+        raise PromotionError("acceptance criteria count is invalid")
+    return criteria
+
+
+def _machine_criteria(body: str) -> list[dict[str, str]]:
+    prefix = f"<!-- {ACCEPTANCE_MARKER} "
+    suffix = " -->"
+    if body.count(prefix) != 1:
+        raise PromotionError("factory-acceptance marker must be unique")
+    start = body.index(prefix) + len(prefix)
+    end = body.find(suffix, start)
+    if end < 0:
+        raise PromotionError("factory-acceptance marker is malformed")
+    try:
+        raw = json.loads(body[start:end].strip())
+    except json.JSONDecodeError as exc:
+        raise PromotionError("factory-acceptance JSON is invalid") from exc
+    if not isinstance(raw, dict) or set(raw) != {"version", "criteria"}:
+        raise PromotionError("factory-acceptance schema is invalid")
+    if type(raw.get("version")) is not int or raw["version"] != 1:
+        raise PromotionError("factory-acceptance version is invalid")
+    rows = raw.get("criteria")
+    if not isinstance(rows, list) or not 1 <= len(rows) <= MAX_CRITERIA:
+        raise PromotionError("factory-acceptance criteria are invalid")
+    result: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != {"id", "kind", "target"}:
+            raise PromotionError("factory-acceptance criterion schema is invalid")
+        criterion_id = row.get("id")
+        kind = row.get("kind")
+        target = row.get("target")
+        if (
+            not isinstance(criterion_id, str)
+            or re.fullmatch(r"AC-[0-9]{2}", criterion_id) is None
+            or criterion_id in seen
+            or not isinstance(kind, str)
+            or kind not in {"test", "check"}
+            or not isinstance(target, str)
+        ):
+            raise PromotionError("factory-acceptance criterion is invalid")
+        if kind == "test":
+            match = ACCEPTANCE_TEST_TARGET.fullmatch(target)
+            if match is None:
+                raise PromotionError("factory-acceptance test target is invalid")
+            path = Path(match.group(1))
+            if (
+                path.is_absolute()
+                or ".." in path.parts
+                or any(part in ("", ".") for part in path.parts)
+            ):
+                raise PromotionError("factory-acceptance test path is invalid")
+        elif (
+            ACCEPTANCE_CHECK_NAME.fullmatch(target) is None
+            or target in ACCEPTANCE_FORBIDDEN_CHECKS
+        ):
+            raise PromotionError("factory-acceptance check target is invalid")
+        seen.add(criterion_id)
+        result.append({"id": criterion_id, "kind": kind, "target": target})
+    return result
+
+
+def contract_fingerprint(body: str) -> str:
+    if not isinstance(body, str) or not 1 <= len(body) <= MAX_BODY:
+        raise PromotionError("promotion issue body is invalid")
+    for heading in ACCEPTANCE_REQUIRED_HEADINGS:
+        _section(body, heading)
+    human = _human_criteria(body)
+    machine = _machine_criteria(body)
+    if set(human) != {item["id"] for item in machine}:
+        raise PromotionError("acceptance human/machine criteria do not match")
+    canonical = {
+        "human": [
+            {"id": criterion_id, "description": human[criterion_id]}
+            for criterion_id in sorted(human)
+        ],
+        "machine": [
+            {"id": item["id"], "kind": item["kind"], "target": item["target"]}
+            for item in sorted(machine, key=lambda item: item["id"])
+        ],
+    }
+    payload = json.dumps(
+        canonical,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _valid_task_key(value: object) -> str:
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= 32
+        or not value.isascii()
+        or not value[0].isalpha()
+        or not value[0].isupper()
+        or any(not (char.isupper() or char.isdigit() or char in "_-") for char in value)
+    ):
+        raise PromotionError("factory-plan-task key is invalid")
+    return value
+
+
+def _valid_task_owner(value: object) -> str:
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= 39
+        or not value.isascii()
+        or value.startswith("-")
+        or value.endswith("-")
+        or "--" in value
+        or any(not (char.isalnum() or char == "-") for char in value)
+    ):
+        raise PromotionError("factory-plan-task owner is invalid")
+    return value
+
+
+def _valid_task_path(value: object) -> str:
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= 240
+        or value.startswith("/")
+        or value.startswith("./")
+        or "\\" in value
+        or any(char in value for char in ("\n", "\r", "\x00", "*", "?", "[", "]", "{", "}"))
+    ):
+        raise PromotionError("factory-plan-task path is invalid")
+    base = value[:-1] if value.endswith("/") else value
+    if not base or any(part in ("", ".", "..") for part in base.split("/")):
+        raise PromotionError("factory-plan-task path is invalid")
+    return value
+
+
+def parse_task_marker(body: str) -> dict | None:
+    prefix = f"<!-- {TASK_MARKER} "
+    suffix = " -->"
+    count = body.count(prefix)
+    if count == 0:
+        return None
+    if count != 1:
+        raise PromotionError("factory-plan-task marker must be unique")
+    start = body.index(prefix) + len(prefix)
+    end = body.find(suffix, start)
+    if end < 0:
+        raise PromotionError("factory-plan-task marker is malformed")
+    try:
+        raw = json.loads(body[start:end].strip())
+    except json.JSONDecodeError as exc:
+        raise PromotionError("factory-plan-task JSON is invalid") from exc
+    required = {
+        "version", "epic", "task_key", "order", "owner",
+        "roles", "depends_on", "paths",
+    }
+    if (
+        not isinstance(raw, dict)
+        or set(raw) != required
+        or type(raw.get("version")) is not int
+        or raw["version"] != 1
+    ):
+        raise PromotionError("factory-plan-task schema is invalid")
+    _valid_task_key(raw["task_key"])
+    _valid_task_owner(raw["owner"])
+    if (
+        isinstance(raw["epic"], bool)
+        or not isinstance(raw["epic"], int)
+        or raw["epic"] < 1
+        or isinstance(raw["order"], bool)
+        or not isinstance(raw["order"], int)
+        or raw["order"] < 1
+    ):
+        raise PromotionError("factory-plan-task epic/order are invalid")
+    if (
+        not isinstance(raw["roles"], list)
+        or not raw["roles"]
+        or not all(isinstance(role, str) and role for role in raw["roles"])
+        or not isinstance(raw["depends_on"], list)
+        or not all(
+            isinstance(number, int) and not isinstance(number, bool) and number > 0
+            for number in raw["depends_on"]
+        )
+        or not isinstance(raw["paths"], list)
+        or not raw["paths"]
+    ):
+        raise PromotionError("factory-plan-task lists are invalid")
+    raw["paths"] = [_valid_task_path(path) for path in raw["paths"]]
+    return raw
+
+
+def task_marker_fingerprint(marker: dict | None) -> str | None:
+    if marker is None:
+        return None
+    payload = json.dumps(
+        marker,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def semver(value: str) -> tuple[int, int, int]:
@@ -92,6 +347,8 @@ def ensure_private_runtime(path: Path = RUNTIME_DIR) -> Path:
         candidate.chmod(0o700)
         if candidate.stat().st_mode & 0o077:
             raise PromotionError("promotion runtime permissions are not private")
+    if any(path.iterdir()):
+        raise PromotionError("promotion runtime must be empty at start")
     return path
 
 
@@ -101,6 +358,8 @@ def valid_reservation_payload(value: object) -> bool:
         return False
     base = {"version", "owner", "reservation_id", "branch", "active", "reason"}
     version = value.get("version")
+    if type(version) is not int:
+        return False
     if version == 1:
         if set(value) != base:
             return False
@@ -210,6 +469,36 @@ def active_reservation(
     return latest
 
 
+def live_reservation_authority(
+    issue: dict,
+    comments: list[dict],
+    reservation_id: str,
+    branch: str,
+    expected_owner: str,
+) -> dict:
+    _validate_promotion_issue(issue)
+    marker = active_reservation(
+        comments,
+        reservation_id,
+        branch,
+        expected_owner,
+    )
+    version = marker.get("version")
+    if version not in (2, 3):
+        raise PromotionError("legacy reservation cannot authorize promotion")
+    body = issue.get("body")
+    if not isinstance(body, str):
+        raise PromotionError("promotion issue body is missing")
+    current_acceptance = contract_fingerprint(body)
+    if marker.get("acceptance_sha256") != current_acceptance:
+        raise PromotionError("reservation acceptance fingerprint is stale")
+    if version == 3:
+        current_task = task_marker_fingerprint(parse_task_marker(body))
+        if current_task is None or marker.get("task_marker_sha256") != current_task:
+            raise PromotionError("reservation task fingerprint is stale")
+    return marker
+
+
 def _validate_source_pr(pr: dict, repository: str) -> tuple[int, str, str, str]:
     if pr.get("state") != "open":
         raise PromotionError("source PR must be open")
@@ -277,16 +566,28 @@ def build_plan(
     latest_tag: str,
     repository: str,
     expected_owner: str,
+    planned_main_sha: str,
 ) -> dict:
+    if not isinstance(planned_main_sha, str) or SHA_RE.fullmatch(planned_main_sha) is None:
+        raise PromotionError("planned main SHA is invalid")
     number, title, source_sha, base_sha = _validate_source_pr(pr, repository)
     issue_number = _validate_promotion_issue(issue)
     target_branch = f"trabajo/issue-{issue_number}"
-    active_reservation(comments, reservation_id, target_branch, expected_owner)
+    live_reservation_authority(
+        issue,
+        comments,
+        reservation_id,
+        target_branch,
+        expected_owner,
+    )
     version = _promotion_version(current_version, latest_tag)
     return {
         "source_pr": number,
         "source_sha": source_sha,
         "base_sha": base_sha,
+        "planned_source_sha": source_sha,
+        "planned_base_sha": base_sha,
+        "planned_main_sha": planned_main_sha,
         "source_title": title,
         "source_files": source_files(files),
         "target_branch": target_branch,
@@ -294,7 +595,52 @@ def build_plan(
         "pr_title": f"chore(deps): promote bot PR #{number} (V {version})",
         "issue_number": issue_number,
         "reservation_id": reservation_id,
+        "repository": repository,
+        "expected_owner": expected_owner,
     }
+
+
+def validate_live_authority(
+    plan: dict,
+    issue: dict,
+    comments: list[dict],
+    source_pr: dict,
+    current_main_sha: str,
+    expected_owner: str,
+    repository: str,
+) -> None:
+    if not isinstance(plan, dict):
+        raise PromotionError("promotion plan is invalid")
+    if plan.get("repository") != repository or plan.get("expected_owner") != expected_owner:
+        raise PromotionError("promotion plan actor/repository identity changed")
+    issue_number = _validate_promotion_issue(issue)
+    if issue_number != plan.get("issue_number"):
+        raise PromotionError("promotion issue identity changed")
+    branch = plan.get("target_branch")
+    reservation_id = plan.get("reservation_id")
+    if not isinstance(branch, str) or not isinstance(reservation_id, str):
+        raise PromotionError("promotion plan reservation identity is invalid")
+    live_reservation_authority(
+        issue,
+        comments,
+        reservation_id,
+        branch,
+        expected_owner,
+    )
+    planned_main_sha = plan.get("planned_main_sha")
+    if (
+        not isinstance(current_main_sha, str)
+        or SHA_RE.fullmatch(current_main_sha) is None
+        or current_main_sha != planned_main_sha
+    ):
+        raise PromotionError("main SHA drifted after promotion plan")
+    number, _title, source_sha, base_sha = _validate_source_pr(source_pr, repository)
+    if number != plan.get("source_pr"):
+        raise PromotionError("source PR number changed")
+    if source_sha != plan.get("planned_source_sha"):
+        raise PromotionError("source PR head SHA drifted after promotion plan")
+    if base_sha != plan.get("planned_base_sha"):
+        raise PromotionError("source PR base SHA drifted after promotion plan")
 
 
 def verify_files(files: list[dict], actual: list[str]) -> None:
@@ -395,33 +741,32 @@ def _plan_from_fixed_inputs(args: argparse.Namespace) -> dict:
         args.latest_tag,
         args.repository,
         args.expected_owner,
+        args.planned_main_sha,
     )
 
 
-def _git_main_sha() -> str:
-    result = subprocess.run(
-        ["git", "rev-parse", "origin/main"],
-        cwd=ROOT,
-        check=False,
-        text=True,
-        capture_output=True,
-    )
-    sha = result.stdout.strip()
-    if result.returncode != 0 or SHA_RE.fullmatch(sha) is None:
-        raise PromotionError("origin/main SHA unavailable")
-    return sha
-
-
-def _materialize_from_fixed_inputs(args: argparse.Namespace) -> None:
-    pr = load_json(SOURCE_PR_JSON)
-    head = pr.get("head") if isinstance(pr, dict) else None
+def _materialize_from_fixed_inputs() -> dict:
+    plan = load_json(PLAN_JSON)
     materialize(
-        args.version,
-        args.issue_number,
-        pr.get("number") if isinstance(pr, dict) else None,
-        pr.get("title") if isinstance(pr, dict) else None,
-        head.get("sha") if isinstance(head, dict) else None,
-        _git_main_sha(),
+        plan.get("version"),
+        plan.get("issue_number"),
+        plan.get("source_pr"),
+        plan.get("source_title"),
+        plan.get("planned_source_sha"),
+        plan.get("planned_main_sha"),
+    )
+    return plan
+
+
+def _validate_live_from_fixed_inputs(args: argparse.Namespace) -> None:
+    validate_live_authority(
+        load_json(PLAN_JSON),
+        load_json(PROMOTION_ISSUE_JSON),
+        load_json(PROMOTION_COMMENTS_JSON),
+        load_json(SOURCE_PR_JSON),
+        args.current_main_sha,
+        args.expected_owner,
+        args.repository,
     )
 
 
@@ -434,6 +779,7 @@ def main() -> int:
     plan.add_argument("--latest-tag", required=True)
     plan.add_argument("--repository", required=True)
     plan.add_argument("--expected-owner", required=True)
+    plan.add_argument("--planned-main-sha", required=True)
 
     sub.add_parser("verify-files")
     sub.add_parser("prepare-runtime")
@@ -443,9 +789,12 @@ def main() -> int:
     reservation.add_argument("--branch", required=True)
     reservation.add_argument("--expected-owner", required=True)
 
-    mat = sub.add_parser("materialize")
-    mat.add_argument("--version", required=True)
-    mat.add_argument("--issue-number", required=True, type=int)
+    live = sub.add_parser("validate-live")
+    live.add_argument("--current-main-sha", required=True)
+    live.add_argument("--repository", required=True)
+    live.add_argument("--expected-owner", required=True)
+
+    sub.add_parser("materialize")
 
     args = parser.parse_args()
     try:
@@ -460,16 +809,20 @@ def main() -> int:
         elif args.command == "prepare-runtime":
             print(ensure_private_runtime())
         elif args.command == "validate-reservation":
-            active_reservation(
+            live_reservation_authority(
+                load_json(PROMOTION_ISSUE_JSON),
                 load_json(PROMOTION_COMMENTS_JSON),
                 args.reservation_id,
                 args.branch,
                 args.expected_owner,
             )
             print("dependency_pr_promotion: reservation authority verified")
+        elif args.command == "validate-live":
+            _validate_live_from_fixed_inputs(args)
+            print("dependency_pr_promotion: live authority and identity verified")
         else:
-            _materialize_from_fixed_inputs(args)
-            print(f"dependency_pr_promotion: materialized V{args.version}")
+            plan = _materialize_from_fixed_inputs()
+            print(f"dependency_pr_promotion: materialized V{plan['version']}")
     except (PromotionError, OSError, json.JSONDecodeError) as exc:
         print(f"::error::dependency_pr_promotion: {exc}")
         return 1
