@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -168,9 +169,15 @@ class FactoryAdoptionTests(unittest.TestCase):
     def test_coordination_wrapper_candidate_version(self) -> None:
         version = self.read("config/version.php")
         readme = self.read("README.md")
-        self.assertIn("'version' => '0.1.78'", version)
-        self.assertIn("V 0.1.78", readme)
-        self.assertIn("Issue #332", readme)
+        match = re.search(r"'version'\s*=>\s*'(\d+\.\d+\.\d+)'", version)
+        self.assertIsNotNone(match)
+        candidate = match.group(1)
+        self.assertIn(f"V {candidate}", readme)
+        self.assertIn(f"V{candidate}", readme)
+        self.assertRegex(
+            readme,
+            r"\*\*Candidato objetivo:\*\* V\d+\.\d+\.\d+ · Issue #\d+",
+        )
 
     def test_condor_ci_requires_factory_without_dropping_specific_gates(self) -> None:
         ci = self.read(".github/workflows/ci.yml")
