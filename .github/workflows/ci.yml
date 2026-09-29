@@ -68,6 +68,19 @@ jobs:
           set -euo pipefail
           python3 scripts/release_identity_guard.py --pr-title "$TITULO_PR" --candidate-sha "$CANDIDATE_SHA"
 
+      - name: Validar línea Symfony 7.4 LTS
+        env:
+          EVENTO: ${{ github.event_name }}
+          BASE_PR: ${{ github.event.pull_request.base.sha }}
+          TITULO_PR: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          args=(--candidate-lock composer.lock)
+          if [[ "$EVENTO" == "pull_request" ]]; then
+            args+=(--base-sha "$BASE_PR" --pr-title "$TITULO_PR")
+          fi
+          python3 scripts/verify_symfony_lts_dependency_guard.py "${args[@]}"
+
       - name: Clasificar cambios
         id: cambios
         env:
@@ -288,6 +301,9 @@ jobs:
 
       - name: Probar guard de identidad de release
         run: python3 tests/test_release_identity_guard.py
+
+      - name: Probar guard Symfony 7.4 LTS
+        run: python3 tests/test_symfony_lts_dependency_guard.py
 
       - name: Probar adapters Factory del consumer
         run: python3 tests/test_factory_deploy_adapters.py
