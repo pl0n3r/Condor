@@ -186,12 +186,12 @@ def materialize(
         raise PromotionError("could not update canonical version")
     version_file.write_text(updated, encoding="utf-8")
 
-    safe_title = source_title.replace("\`", "'")
+    safe_title = source_title.replace("`", "'")
     readme = f"""# Condor App — Snapshot operativo · Dependency promotion V {version}
 
 > **Candidato objetivo:** V{version} · Issue #{issue_number} · promoción canónica del PR automático #{source_pr}.
 >
-> **Base de promoción:** V{previous} · \`main@{main_sha}\` · identidad humana ya publicada y no reutilizable.
+> **Base de promoción:** V{previous} · `main@{main_sha}` · identidad humana ya publicada y no reutilizable.
 
 Condor continúa en construcción. V{version} promueve un cambio automático de dependencias a una entrega gobernada sin editar ni fusionar directamente el PR bot original.
 
@@ -210,10 +210,10 @@ Condor continúa en construcción. V{version} promueve un cambio automático de 
 - Release Factory v1 conserva la autoridad final.
 
 ## Evidencia base
-- PR fuente #{source_pr}: \`{safe_title}\`.
-- SHA fuente: \`{source_sha}\`.
-- La rama de promoción nace de \`main@{main_sha}\`.
-- \`scripts/dependency_pr_promotion.py\` valida bot, reserva, paths e identidad.
+- PR fuente #{source_pr}: `{safe_title}`.
+- SHA fuente: `{source_sha}`.
+- La rama de promoción nace de `main@{main_sha}`.
+- `scripts/dependency_pr_promotion.py` valida bot, reserva, paths e identidad.
 """
     (root / "README.md").write_text(readme, encoding="utf-8")
 
