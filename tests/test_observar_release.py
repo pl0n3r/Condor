@@ -607,6 +607,21 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
         self.assertFalse(resultado["comprobaciones"]["transicion_release"]["ok"])
 
+    def test_ac06_automatic_validation_only_caps_real_transitions(self) -> None:
+        automatic = modulo.observar(
+            self.base, VERSION, SHA, intentos=1,
+            transicion_requerida=False,
+        )
+        self.assertEqual(automatic["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertEqual(modulo.codigo_salida_observacion(automatic), 0)
+
+        sensitive = modulo.observar(
+            self.base, VERSION, SHA, intentos=1,
+            transicion_requerida=True,
+        )
+        self.assertEqual(sensitive["estado"], "DEPLOY_OBSERVED")
+        self.assertEqual(modulo.codigo_salida_observacion(sensitive), 1)
+
     def test_verified_transition_allows_validation(self) -> None:
         resultado = modulo.observar(
             self.base,
