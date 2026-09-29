@@ -87,6 +87,8 @@ RELEASE_ROOT_FILES = {
     ".htaccess",
     "config/version.php",
 }
+# Identidad de release: conserva full-stack CI, pero no implica transición operativa.
+RELEASE_IDENTITY_FILES = {"config/version.php"}
 KNOWN_ROOT_FILES = (
     DEPENDENCY_FILES
     | FRONTEND_CONTROL_FILES
@@ -179,6 +181,8 @@ def script_requires_release_transition(path: str) -> bool:
 def requires_release_transition(path: str) -> bool:
     """Clasifica cambios que requieren verificar transición operativa."""
     if path.endswith(".md") or path.startswith((DOCS_PREFIX, TESTS_PREFIX)):
+        return False
+    if path in RELEASE_IDENTITY_FILES:
         return False
     if path == BIN_CONSOLE or path.startswith(TRANSITION_PREFIXES):
         return True

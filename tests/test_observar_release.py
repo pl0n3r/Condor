@@ -49,7 +49,7 @@ class SitioFalso(BaseHTTPRequestHandler):
         pass
 
 
-class ObserverTests(unittest.TestCase):
+class ReleaseObserverTests(unittest.TestCase):
     def setUp(self) -> None:
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), SitioFalso)
         self.server.visitas = []
@@ -606,6 +606,21 @@ class ObserverTests(unittest.TestCase):
         )
         self.assertEqual(resultado["estado"], "DEPLOY_OBSERVED")
         self.assertFalse(resultado["comprobaciones"]["transicion_release"]["ok"])
+
+    def test_ac06_automatic_validation_only_caps_real_transitions(self) -> None:
+        automatic = modulo.observar(
+            self.base, VERSION, SHA, intentos=1,
+            transicion_requerida=False,
+        )
+        self.assertEqual(automatic["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertEqual(modulo.codigo_salida_observacion(automatic), 0)
+
+        sensitive = modulo.observar(
+            self.base, VERSION, SHA, intentos=1,
+            transicion_requerida=True,
+        )
+        self.assertEqual(sensitive["estado"], "DEPLOY_OBSERVED")
+        self.assertEqual(modulo.codigo_salida_observacion(sensitive), 1)
 
     def test_verified_transition_allows_validation(self) -> None:
         resultado = modulo.observar(
@@ -1247,6 +1262,9 @@ class ObserverTests(unittest.TestCase):
             "comprobaciones": {"health": {"ok": True}},
         }
         self.assertEqual(modulo.codigo_salida_observacion(validado), 0)
+
+# Compatibilidad con el contrato histórico que importa ObserverTests.
+ObserverTests = ReleaseObserverTests
 
 if __name__ == "__main__":
     unittest.main()
