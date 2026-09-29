@@ -66,8 +66,8 @@ jobs:
           CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          python3 scripts/release_identity_guard.py \\
-            --pr-title "$TITULO_PR" \\
+          python3 scripts/release_identity_guard.py \
+            --pr-title "$TITULO_PR" \
             --candidate-sha "$CANDIDATE_SHA"
 
       - name: Clasificar cambios
