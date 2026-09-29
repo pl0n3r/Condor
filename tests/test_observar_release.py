@@ -49,7 +49,7 @@ class SitioFalso(BaseHTTPRequestHandler):
         pass
 
 
-class ObserverTests(unittest.TestCase):
+class ReleaseObserverTests(unittest.TestCase):
     def setUp(self) -> None:
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), SitioFalso)
         self.server.visitas = []
