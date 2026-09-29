@@ -37,6 +37,9 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         self.assertIn("permissions:\n  contents: read",w); self.assertNotIn("contents: write",pre); self.assertIn("fetch-depth: 0",pre)
         self.assertLess(pre.index("Validar identidad candidata de release"),pre.index("Clasificar cambios"))
         self.assertIn("github.event.pull_request.head.sha",pre)
+        command='python3 scripts/release_identity_guard.py --pr-title "$TITULO_PR" --candidate-sha "$CANDIDATE_SHA"'
+        self.assertIn(command,pre)
+        self.assertNotIn("release_identity_guard.py \\\\",pre)
     def test_historical_reuse_incidents_are_rejected_by_guard(self):
         for version,issue in [("0.1.40","#233"),("0.1.65","#307"),("0.1.66","#315"),("0.1.72","#330")]:
             with self.subTest(issue=issue):
