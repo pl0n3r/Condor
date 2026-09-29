@@ -71,7 +71,8 @@ jobs:
             | jq 'add // []' > "$PROMOTION_RUNTIME/promotion-comments.json"
 
           git fetch origin main --tags
-          [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || {
+          planned_main_sha="$(git rev-parse origin/main)"
+          [[ "$(git rev-parse HEAD)" == "$planned_main_sha" ]] || {
             echo "::error::La rama reservada debe partir del main exacto antes de promover."
             exit 1
           }
@@ -80,8 +81,11 @@ jobs:
             --reservation-id "$RESERVATION_ID" \
             --latest-tag "$latest_tag" \
             --repository "$GITHUB_REPOSITORY" \
-            --expected-owner "$EXPECTED_OWNER")"
-          for key in source_pr source_sha base_sha source_title target_branch version pr_title issue_number reservation_id; do
+            --expected-owner "$EXPECTED_OWNER" \
+            --planned-main-sha "$planned_main_sha")"
+          printf '%s\n' "$plan_json" > "$PROMOTION_RUNTIME/plan.json"
+          chmod 400 "$PROMOTION_RUNTIME/plan.json"
+          for key in source_pr source_sha base_sha planned_source_sha planned_base_sha planned_main_sha source_title target_branch version pr_title issue_number reservation_id; do
             value="$(jq -r --arg key "$key" '.[$key]' <<<"$plan_json")"
             printf '%s=%s\n' "$key" "$value" >> "$GITHUB_OUTPUT"
           done
@@ -107,9 +111,7 @@ jobs:
           python3 scripts/dependency_pr_promotion.py verify-files
           git apply --3way --index "$PROMOTION_RUNTIME/source.patch"
 
-          python3 scripts/dependency_pr_promotion.py materialize \
-            --version "$VERSION" \
-            --issue-number "$ISSUE_NUMBER"
+          python3 scripts/dependency_pr_promotion.py materialize
           git add config/version.php README.md
           git diff --cached --check
           python3 tests/test_release_identity_guard.py
@@ -128,13 +130,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore(deps): promote bot PR #$SOURCE_PR (V $VERSION)"
+          gh auth setup-git
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$SOURCE_PR" > "$PROMOTION_RUNTIME/source-pr.json"
+          gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" > "$PROMOTION_RUNTIME/promotion-issue.json"
           gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments?per_page=100" --slurp \
             | jq 'add // []' > "$PROMOTION_RUNTIME/promotion-comments.json"
-          python3 scripts/dependency_pr_promotion.py validate-reservation \
-            --reservation-id "$RESERVATION_ID" \
-            --branch "$TARGET_BRANCH" \
+          git fetch origin main --tags
+          current_main_sha="$(git rev-parse origin/main)"
+          python3 scripts/dependency_pr_promotion.py validate-live \
+            --current-main-sha "$current_main_sha" \
+            --repository "$GITHUB_REPOSITORY" \
             --expected-owner "$EXPECTED_OWNER"
-          gh auth setup-git
           git push origin "HEAD:$TARGET_BRANCH"
 
       - name: Abrir PR gobernado
@@ -154,19 +160,27 @@ jobs:
           source_closed=false
           promotion_created=false
           candidate_sha="$(git rev-parse HEAD)"
-          main_sha="$(git rev-parse origin/main)"
+          planned_main_sha="$(jq -r '.planned_main_sha' "$PROMOTION_RUNTIME/plan.json")"
 
           rollback() {
             status=$?
             trap - EXIT
             if [[ "$status" -ne 0 && "$promotion_created" != "true" ]]; then
-              echo "::warning::La promoción falló; restaurando rama reservada y PR bot."
-              git push \
+              echo "::warning::La promoción falló; intentando restaurar la rama reservada y el PR bot."
+              recovery_failed=false
+              if ! git push \
                 --force-with-lease="refs/heads/$TARGET_BRANCH:$candidate_sha" \
                 origin \
-                "$main_sha:refs/heads/$TARGET_BRANCH" || true
-              if [[ "$source_closed" == "true" ]]; then
-                gh pr reopen "$SOURCE_PR" || true
+                "$planned_main_sha:refs/heads/$TARGET_BRANCH"; then
+                echo "::error::Rollback de rama rechazado; se preserva el drift remoto para recuperación manual."
+                recovery_failed=true
+              fi
+              if [[ "$source_closed" == "true" ]] && ! gh pr reopen "$SOURCE_PR"; then
+                echo "::error::No se pudo reabrir el PR fuente durante rollback."
+                recovery_failed=true
+              fi
+              if [[ "$recovery_failed" == "true" ]]; then
+                echo "::error::Rollback incompleto; el job permanece fallido."
               fi
             fi
             exit "$status"
@@ -197,11 +211,15 @@ jobs:
           Si el parche bot colisiona con main, la promoción falla cerrada antes del push. Reversión: cerrar este PR y conservar el PR bot original como fuente read-only.
           EOF
 
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$SOURCE_PR" > "$PROMOTION_RUNTIME/source-pr.json"
+          gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" > "$PROMOTION_RUNTIME/promotion-issue.json"
           gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments?per_page=100" --slurp \
             | jq 'add // []' > "$PROMOTION_RUNTIME/promotion-comments.json"
-          python3 scripts/dependency_pr_promotion.py validate-reservation \
-            --reservation-id "$RESERVATION_ID" \
-            --branch "$TARGET_BRANCH" \
+          git fetch origin main --tags
+          current_main_sha="$(git rev-parse origin/main)"
+          python3 scripts/dependency_pr_promotion.py validate-live \
+            --current-main-sha "$current_main_sha" \
+            --repository "$GITHUB_REPOSITORY" \
             --expected-owner "$EXPECTED_OWNER"
 
           gh pr close "$SOURCE_PR" --comment \
