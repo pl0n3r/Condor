@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from scripts.ci_change_classifier import classify
 
@@ -104,12 +105,63 @@ class ChangeClassifierTests(unittest.TestCase):
         self.assertTrue(result.transicion_release)
         self.assertIn("seguridad", result.motivo)
 
-    def test_release_change_runs_full_stack(self) -> None:
+    def test_ac01_version_identity_is_release_without_operational_transition(self) -> None:
         result = classify(["config/version.php"], "pull_request")
         self.assertTrue(result.categoria_release)
         self.assertTrue(result.validacion_completa)
-        self.assertTrue(result.transicion_release)
+        self.assertTrue(result.frontend)
+        self.assertTrue(result.backend)
+        self.assertTrue(result.e2e)
+        self.assertFalse(result.transicion_release)
         self.assertIn("release", result.motivo)
+
+    def test_ac02_v0180_governance_diff_needs_no_operational_transition(self) -> None:
+        result = classify([
+            ".github/workflows/promote-dependency-pr.yml",
+            "README.md",
+            "config/version.php",
+            "scripts/dependency_pr_promotion.py",
+            "tests/test_release_identity_guard.py",
+        ], "pull_request")
+        self.assertTrue(result.categoria_release)
+        self.assertTrue(result.categoria_gobierno)
+        self.assertTrue(result.validacion_completa)
+        self.assertFalse(result.transicion_release)
+
+    def test_ac03_sensitive_runtime_changes_still_require_transition(self) -> None:
+        paths = [
+            "migrations/Version20260921010000.php",
+            "config/packages/framework.yaml",
+            "src/Console/ReconcileOwnerCommand.php",
+            "src/Domain/Identity/Entity/Role.php",
+            "src/Application/Billing/InvoiceService.php",
+            "scripts/provision_platform_owner.py",
+            ".env.example",
+            ".htaccess",
+        ]
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertTrue(classify([path], "pull_request").transicion_release)
+
+    def test_ac04_non_operational_changes_do_not_invent_transition(self) -> None:
+        for path in [
+            "README.md",
+            "tests/test_release_identity_guard.py",
+            "src/Application/Catalog/ProductQuery.php",
+            "config/version.php",
+        ]:
+            with self.subTest(path=path):
+                self.assertFalse(classify([path], "pull_request").transicion_release)
+
+    def test_ac05_observer_reuses_canonical_classifier(self) -> None:
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "observar-deploy-automatico.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("python3 scripts/ci_change_classifier.py", workflow)
+        self.assertIn('["transicion_release"]', workflow)
+        for marker in ("migrations/", "config/packages/", "src/Console/", "Service.php"):
+            self.assertNotIn(marker, workflow)
 
     def test_workflow_change_runs_full_stack(self) -> None:
         result = classify([".github/workflows/ci.yml"], "pull_request")
