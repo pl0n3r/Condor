@@ -4,8 +4,6 @@
 
 **Rol en la fábrica:** producto independiente · **Fase:** construcción · **Roadmap:** [Issue #1](https://github.com/pl0n3r/Condor/issues/1)
 
-**Candidato de reparación:** V0.1.88 · Issue #355 · clasificación read-only de Entitlements. Esta identidad candidata no implica validación productiva.
-
 Condor mantiene su código, datos, deploy y operación separados. Factory aporta gobernanza y contratos compartidos; ControlBot es el control plane y FactoryRunner el execution plane.
 
 ## Operational Cockpit
