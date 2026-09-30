@@ -36,6 +36,7 @@ class SubscriptionUsageAcceptanceTests(unittest.TestCase):
         self.phpunit(LEDGER_TEST, "testMetricAggregationSemantics")
 
     def test_ac04_deterministic_snapshot_and_fail_closed_queries(self) -> None:
+        self.phpunit(LEDGER_TEST, "testEquivalentTimezoneWindowsShareTheSameBucket")
         self.phpunit(LEDGER_TEST, "testDeterministicSnapshotAndFailClosedQueries")
 
     def test_ac05_usage_stays_separate_and_payload_free(self) -> None:
