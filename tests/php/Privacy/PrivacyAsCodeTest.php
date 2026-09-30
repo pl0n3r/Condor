@@ -11,6 +11,7 @@ final class PrivacyAsCodeTest extends TestCase
 {
     private const PLACEHOLDER = '[COMPLETAR POR EL DUEÑO]';
     private const FACTORY_SHA = '68eef82e3b21939143a4cbea23b7df2615534e77';
+    private const FACTORY_AUDIT_REF = 'v1';
 
     /** Verifica que el mapa represente únicamente tratamientos observados. */
     public function testDataMapMatchesObservedCondorTreatments(): void
