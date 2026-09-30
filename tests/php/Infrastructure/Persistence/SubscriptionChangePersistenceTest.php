@@ -119,8 +119,8 @@ final class SubscriptionChangePersistenceTest extends KernelTestCase
         );
         self::assertSame(
             [
-                '2026-10-01T16:59:00.000001Z',
                 '2026-10-01T16:58:00.000001Z',
+                '2026-10-01T16:59:00.000001Z',
             ],
             array_map(
                 static fn (EntitlementOverride $override): string =>
