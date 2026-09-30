@@ -13,6 +13,8 @@ use DomainException;
 
 final readonly class EntitlementResolver
 {
+    private const BASE_CONTROLS = ['security', 'privacy', 'backup', 'recovery', 'integrity'];
+
     public function __construct(
         private PlanConfiguratorCatalogReader $catalog,
         private EntityManagerInterface $entityManager,
@@ -65,6 +67,11 @@ final readonly class EntitlementResolver
         }
 
         $limits = $version->limits();
+        foreach (self::BASE_CONTROLS as $key) {
+            if (array_key_exists($key, $capabilities) || array_key_exists($key, $addOns) || array_key_exists($key, $limits)) {
+                throw new DomainException('Control base no puede modelarse como entitlement comercial.');
+            }
+        }
         $provenance = $this->applyOverrides(
             $context,
             $capabilities,

@@ -13,19 +13,21 @@ use DomainException;
 
 final readonly class EntitlementContext
 {
+    private string $tenantId;
     /**
      * @param list<AddOn> $selectedAddOns
      * @param list<EntitlementOverride> $overrides
      */
     public function __construct(
-        private string $tenantId,
+        string $tenantId,
         private PlanVersion $planVersion,
         private Vertical $vertical,
         private array $selectedAddOns,
         private array $overrides,
         private DateTimeImmutable $evaluatedAt,
     ) {
-        if (trim($tenantId) === '') {
+        $tenantId = trim($tenantId);
+        if ($tenantId === '') {
             throw new DomainException('Tenant de entitlement inválido.');
         }
         foreach ($selectedAddOns as $addOn) {
@@ -38,6 +40,7 @@ final readonly class EntitlementContext
                 throw new DomainException('Overrides de entitlement inválidos.');
             }
         }
+        $this->tenantId = $tenantId;
     }
 
     public function tenantId(): string { return $this->tenantId; }
