@@ -1,0 +1,59 @@
+name: Recovery production rollout
+
+on:
+  workflow_dispatch:
+    inputs:
+      offsite_connection_ref:
+        description: "Alias opaco ControlBot para object storage primary offsite"
+        required: true
+        type: string
+      cold_copy_connection_ref:
+        description: "Alias opaco ControlBot para Google Drive cold-copy (opcional)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: condor-recovery-production
+  cancel-in-progress: false
+
+jobs:
+  governed-preflight:
+    name: Recovery governed preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Validar aliases Recovery sin tocar producción
+        env:
+          OFFSITE_CONNECTION_REF: ${{ inputs.offsite_connection_ref }}
+          COLD_COPY_CONNECTION_REF: ${{ inputs.cold_copy_connection_ref }}
+        run: |
+          set -euo pipefail
+          args=(
+            preflight
+            --offsite-connection-ref "$OFFSITE_CONNECTION_REF"
+          )
+          if [[ -n "$COLD_COPY_CONNECTION_REF" ]]; then
+            args+=(--cold-copy-connection-ref "$COLD_COPY_CONNECTION_REF")
+          fi
+          python3 scripts/recovery-production.py "${args[@]}"
+
+      - name: Verificar provisionamiento live del execution plane
+        env:
+          RECOVERY_LIVE_READY: ${{ vars.CONDOR_RECOVERY_LIVE_READY }}
+        run: |
+          set -euo pipefail
+          if [[ "$RECOVERY_LIVE_READY" != "true" ]]; then
+            echo "::error::Recovery primary offsite live no está provisionado; rollout bloqueado antes del backup."
+            exit 1
+          fi
+          echo "::error::El execution plane live de FactoryRunner debe ejecutar el runbook gobernado de docs/recovery-production.md en un entorno confiable y continuo."
+          echo "::error::Este workflow no fabrica recibos ni persiste dumps de producción como artifacts."
+          exit 1
