@@ -12,6 +12,7 @@ from typing import Any
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 STABLE_VERSION_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
 DEPENDABOT_GROUP_RE = re.compile(r"\bcomposer-(?:minor|patch)\b", re.IGNORECASE)
+COMPOSER_JSON_LABEL = "composer.json"
 
 # Symfony packages that intentionally do not follow the Framework release train.
 INDEPENDENT_SYMFONY_PACKAGES = frozenset({"symfony/monolog-bundle"})
@@ -96,15 +97,12 @@ def composer_content_hash(composer: dict[str, Any]) -> str:
     return hashlib.md5(encoded.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
-def static_errors(composer: dict[str, Any], lock: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
-    packages = _packages(lock)
+def _direct_symfony_requirements(composer: dict[str, Any], errors: list[str]) -> set[str]:
     direct: set[str] = set()
-
     for section in ("require", "require-dev"):
         requirements = composer.get(section, {})
         if not isinstance(requirements, dict):
-            errors.append(f"composer.json {section} debe ser un objeto")
+            errors.append(f"{COMPOSER_JSON_LABEL} {section} debe ser un objeto")
             continue
         direct.update(requirements)
         for name, constraint in requirements.items():
@@ -114,10 +112,17 @@ def static_errors(composer: dict[str, Any], lock: dict[str, Any]) -> list[str]:
                 continue
             if constraint != "7.4.*":
                 errors.append(f"{section}:{name} debe permanecer en 7.4.* (actual {constraint!r})")
+    return direct
 
-    transitive_governed: list[str] = []
+
+def _transitive_governed(
+    packages: dict[str, dict[str, Any]],
+    direct: set[str],
+    errors: list[str],
+) -> list[str]:
+    transitive: list[str] = []
     for name, package in packages.items():
-        if not name.startswith("symfony/"):
+        if not name.startswith("symfony/") or _independent_symfony(name):
             continue
         if name == SPECIAL_BRIDGE:
             version = _stable_version(package.get("version"))
@@ -126,27 +131,37 @@ def static_errors(composer: dict[str, Any], lock: dict[str, Any]) -> list[str]:
                     f"{name} solo se exceptúa con versión estable y compatibilidad explícita con http-foundation ^7.4"
                 )
             continue
-        if _independent_symfony(name):
-            continue
         version = _stable_version(package.get("version"))
         if version is None or version[:2] != (7, 4):
             errors.append(f"{name} debe permanecer en Symfony 7.4 LTS (actual {package.get('version')!r})")
             continue
         if name not in direct:
-            transitive_governed.append(name)
+            transitive.append(name)
+    return transitive
 
+
+def _validate_conflicts(composer: dict[str, Any], transitive: list[str], errors: list[str]) -> None:
     conflicts = composer.get("conflict", {})
     if not isinstance(conflicts, dict):
-        errors.append("composer.json conflict debe ser un objeto")
-        conflicts = {}
-    for name in sorted(transitive_governed):
+        errors.append(f"{COMPOSER_JSON_LABEL} conflict debe ser un objeto")
+        return
+    for name in sorted(transitive):
         if conflicts.get(name) != ">=8":
-            errors.append(f"composer.json debe declarar conflict {name}: >=8")
+            errors.append(f"{COMPOSER_JSON_LABEL} debe declarar conflict {name}: >=8")
 
-    expected_hash = composer_content_hash(composer)
-    if lock.get("content-hash") != expected_hash:
-        errors.append("composer.lock no está sincronizado con composer.json (content-hash stale)")
 
+def _validate_content_hash(composer: dict[str, Any], lock: dict[str, Any], errors: list[str]) -> None:
+    if lock.get("content-hash") != composer_content_hash(composer):
+        errors.append(f"composer.lock no está sincronizado con {COMPOSER_JSON_LABEL} (content-hash stale)")
+
+
+def static_errors(composer: dict[str, Any], lock: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    packages = _packages(lock)
+    direct = _direct_symfony_requirements(composer, errors)
+    transitive = _transitive_governed(packages, direct, errors)
+    _validate_conflicts(composer, transitive, errors)
+    _validate_content_hash(composer, lock, errors)
     return sorted(set(errors))
 
 
@@ -182,11 +197,23 @@ def validate_documents(
         raise GuardError("symfony_lts_guard: " + "; ".join(sorted(errors)))
 
 
-def _git_show_lock(repo_root: Path, base_sha: str) -> dict[str, Any]:
-    if SHA_RE.fullmatch(base_sha.lower()) is None:
+def _git_base_lock(repo_root: Path, expected_base_sha: str) -> dict[str, Any]:
+    normalized = expected_base_sha.lower()
+    if SHA_RE.fullmatch(normalized) is None:
         raise GuardError("symfony_lts_guard: base SHA inválido.")
+
+    parent = subprocess.run(
+        ["git", "rev-parse", "HEAD^1"],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if parent.returncode != 0 or parent.stdout.strip().lower() != normalized:
+        raise GuardError("symfony_lts_guard: el primer padre del merge no coincide con el base exacto del PR.")
+
     result = subprocess.run(
-        ["git", "show", f"{base_sha.lower()}:composer.lock"],
+        ["git", "show", "HEAD^1:composer.lock"],
         cwd=repo_root,
         text=True,
         capture_output=True,
@@ -207,7 +234,7 @@ def _inside(root: Path, raw: str, label: str) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", default=".")
-    parser.add_argument("--composer-json", default="composer.json")
+    parser.add_argument("--composer-json", default=COMPOSER_JSON_LABEL)
     parser.add_argument("--candidate-lock", default="composer.lock")
     parser.add_argument("--base-sha")
     parser.add_argument("--pr-title", default="")
@@ -215,15 +242,15 @@ def main() -> int:
 
     try:
         root = Path(args.repo_root).resolve()
-        composer_path = _inside(root, args.composer_json, "composer.json")
+        composer_path = _inside(root, args.composer_json, COMPOSER_JSON_LABEL)
         lock_path = _inside(root, args.candidate_lock, "composer.lock")
-        composer = _load_json(composer_path, "composer.json")
+        composer = _load_json(composer_path, COMPOSER_JSON_LABEL)
         candidate = _load_json(lock_path, "composer.lock candidato")
         base = None
         if DEPENDABOT_GROUP_RE.search(args.pr_title):
             if not args.base_sha:
                 raise GuardError("symfony_lts_guard: PR composer-minor/patch requiere --base-sha.")
-            base = _git_show_lock(root, args.base_sha)
+            base = _git_base_lock(root, args.base_sha)
         validate_documents(composer, candidate, base_lock=base, pr_title=args.pr_title)
     except GuardError as exc:
         print(f"::error::{exc}")
