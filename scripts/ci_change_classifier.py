@@ -193,6 +193,8 @@ def requires_release_transition(path: str) -> bool:
         return False
     if path in RELEASE_IDENTITY_FILES:
         return False
+    if path in READ_ONLY_TRANSITION_EXEMPTIONS:
+        return False
     if path == BIN_CONSOLE or path.startswith(TRANSITION_PREFIXES):
         return True
     if path.startswith(SRC_PREFIX):
