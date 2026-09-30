@@ -164,6 +164,12 @@ function parseInternalErrorPayload(value: unknown): InternalErrorPayload | null 
   };
 }
 
+function subscriptionSubmitLabel(
+  status: 'idle' | 'saving' | 'error',
+): string {
+  return status === 'saving' ? 'Creando…' : 'Crear suscripción';
+}
+
 function commercialMoney(amount: number | null, currency: string): string {
   if (amount === null) {
     return 'Sin precio publicado';
@@ -792,9 +798,9 @@ export function PlatformOwnerApp({
                           || subscriptionCreation.status === 'saving'
                         }
                       >
-                        {subscriptionCreation.status === 'saving'
-                          ? 'Creando…'
-                          : 'Crear suscripción'}
+                        {subscriptionSubmitLabel(
+                          subscriptionCreation.status,
+                        )}
                       </button>
                       {subscriptionCreation.status === 'error' && (
                         <span className="muted" role="alert">
