@@ -17,6 +17,16 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 final class UsagePersistenceTest extends KernelTestCase
 {
+    private const PERSISTED_COLUMNS = [
+        'id',
+        'tenant_id',
+        'metric',
+        'quantity',
+        'window_start',
+        'window_end',
+        'observed_at',
+    ];
+
     public function testSchemaContract(): void
     {
         self::bootKernel();
@@ -29,15 +39,6 @@ final class UsagePersistenceTest extends KernelTestCase
             ->createSchemaManager()
             ->introspectTable('condor_commercial_usage_observation');
 
-        $columns = [
-            'id',
-            'tenant_id',
-            'metric',
-            'quantity',
-            'window_start',
-            'window_end',
-            'observed_at',
-        ];
         $indexes = [
             'idx_commercial_usage_tenant_metric_window' => [
                 'tenant_id',
@@ -52,11 +53,20 @@ final class UsagePersistenceTest extends KernelTestCase
         ];
 
         foreach ([$generatedTable, $databaseTable] as $schemaTable) {
-            self::assertEqualsCanonicalizing(
-                $columns,
-                array_keys($schemaTable->getColumns()),
+            $actualColumns = array_map(
+                static fn ($column): string => $column
+                    ->getObjectName()
+                    ->toString(),
+                $schemaTable->getColumns(),
             );
-            self::assertCount(count($columns), $schemaTable->getColumns());
+            self::assertEqualsCanonicalizing(
+                self::PERSISTED_COLUMNS,
+                $actualColumns,
+            );
+            self::assertCount(
+                count(self::PERSISTED_COLUMNS),
+                $schemaTable->getColumns(),
+            );
             foreach (['window_start', 'window_end', 'observed_at'] as $column) {
                 self::assertSame(32, $schemaTable->getColumn($column)->getLength());
             }
@@ -240,14 +250,28 @@ final class UsagePersistenceTest extends KernelTestCase
 
     public function testPayloadBoundary(): void
     {
-        $source = file_get_contents(
+        self::bootKernel();
+        $metadata = $this->entityManager()->getClassMetadata(UsageObservation::class);
+        $mappedColumns = $metadata->getColumnNames();
+
+        self::assertEqualsCanonicalizing(self::PERSISTED_COLUMNS, $mappedColumns);
+        self::assertCount(count(self::PERSISTED_COLUMNS), $mappedColumns);
+
+        $entitySource = file_get_contents(
             dirname(__DIR__, 4).'/src/Domain/Commercial/Entity/UsageObservation.php',
         );
-        self::assertIsString($source);
+        $migrationSource = file_get_contents(
+            dirname(__DIR__, 4).'/migrations/Version20260930150000.php',
+        );
+        self::assertIsString($entitySource);
+        self::assertIsString($migrationSource);
+        $persistenceSource = $entitySource."\n".$migrationSource;
 
         foreach ([
             'email',
             'phone',
+            'user_id',
+            'customer_id',
             'metadata',
             'payload',
             'billing',
@@ -259,7 +283,7 @@ final class UsagePersistenceTest extends KernelTestCase
             'Payment',
             'Billing',
         ] as $forbidden) {
-            self::assertStringNotContainsString($forbidden, $source);
+            self::assertStringNotContainsString($forbidden, $persistenceSource);
         }
     }
 
