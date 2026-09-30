@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contrato del merge gate nativo Validar + SonarQube Cloud."""
+"""Contrato del merge gate nativo Condor / Validar + SonarQube Cloud."""
 
 import copy
 import sys
@@ -42,7 +42,7 @@ def protected_ruleset(*, include_bypass=True):
                     "strict_required_status_checks_policy": False,
                     "do_not_enforce_on_create": False,
                     "required_status_checks": [
-                        {"context": "Validar", "integration_id": 15368},
+                        {"context": "Condor / Validar", "integration_id": 15368},
                         {
                             "context": "SonarCloud Code Analysis",
                             "integration_id": 12526,
@@ -58,14 +58,20 @@ def protected_ruleset(*, include_bypass=True):
 
 
 class SonarMergeGateTests(unittest.TestCase):
-    def test_ruleset_requires_validar_and_sonar_with_exact_integrations(self):
+    def test_condor_aggregate_check_name_is_unique(self):
+        workflow = CI.read_text(encoding="utf-8")
+        aggregate = workflow.split("\n  validar:\n", 1)[1]
+        self.assertTrue(aggregate.startswith("    name: Condor / Validar\n"))
+        self.assertNotIn("\n    name: Validar\n", aggregate)
+
+    def test_ruleset_requires_unique_condor_gate_and_sonar(self):
         result = validate_ruleset(protected_ruleset())
         self.assertEqual(result["status"], "protected")
         self.assertEqual(result["ruleset_id"], RULESET_ID)
         self.assertEqual(result["required_checks"], 2)
         self.assertEqual(result["bypass_visibility"], "known-empty")
 
-        for context in ("Validar", "SonarCloud Code Analysis"):
+        for context in ("Condor / Validar", "SonarCloud Code Analysis"):
             missing = protected_ruleset()
             checks = missing["rules"][-1]["parameters"]["required_status_checks"]
             missing["rules"][-1]["parameters"]["required_status_checks"] = [
@@ -82,8 +88,23 @@ class SonarMergeGateTests(unittest.TestCase):
         with self.assertRaises(SonarMergeGateError):
             validate_ruleset(wrong)
 
+    def test_generic_validar_collision_is_not_required(self):
+        extra = protected_ruleset()
+        extra["rules"][-1]["parameters"]["required_status_checks"].append(
+            {"context": "Validar", "integration_id": 15368}
+        )
+        with self.assertRaises(SonarMergeGateError):
+            validate_ruleset(extra)
+
+        replacement = protected_ruleset()
+        replacement["rules"][-1]["parameters"]["required_status_checks"][0][
+            "context"
+        ] = "Validar"
+        with self.assertRaises(SonarMergeGateError):
+            validate_ruleset(replacement)
+
     def test_non_success_sonar_is_not_mergeable_contract(self):
-        required = ("Validar", "SonarCloud Code Analysis")
+        required = ("Condor / Validar", "SonarCloud Code Analysis")
         for sonar_state in (
             "pending",
             "failure",
@@ -93,12 +114,12 @@ class SonarMergeGateTests(unittest.TestCase):
             "skipped",
             None,
         ):
-            states = {"Validar": "success", "SonarCloud Code Analysis": sonar_state}
+            states = {"Condor / Validar": "success", "SonarCloud Code Analysis": sonar_state}
             with self.subTest(sonar_state=sonar_state):
                 self.assertFalse(
                     all(states.get(context) == "success" for context in required)
                 )
-        states = {"Validar": "success", "SonarCloud Code Analysis": "success"}
+        states = {"Condor / Validar": "success", "SonarCloud Code Analysis": "success"}
         self.assertTrue(all(states[context] == "success" for context in required))
 
     def test_gate_has_no_duplicate_analysis_or_poll_loop(self):
@@ -115,7 +136,7 @@ class SonarMergeGateTests(unittest.TestCase):
         self.assertNotIn("sleep ", governance)
         self.assertNotIn("while ", governance)
 
-    def test_ruleset_drift_and_bypass_fail_closed(self):
+    def test_ruleset_verifier_fails_closed(self):
         cases = {}
 
         wrong_target = protected_ruleset()
@@ -140,7 +161,7 @@ class SonarMergeGateTests(unittest.TestCase):
 
         duplicate = protected_ruleset()
         duplicate["rules"][-1]["parameters"]["required_status_checks"].append(
-            {"context": "Validar", "integration_id": 15368}
+            {"context": "Condor / Validar", "integration_id": 15368}
         )
         cases["duplicate"] = duplicate
 
