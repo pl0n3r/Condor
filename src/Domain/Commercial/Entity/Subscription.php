@@ -92,18 +92,29 @@ final class Subscription
     public function state(): SubscriptionState { return SubscriptionState::from($this->state); }
     /** @return list<array{state:string,at:string}> */
     public function history(): array { return $this->history; }
-    public function lastChangedAt(): DateTimeImmutable { return $this->lastChangedAt; }
+    public function lastChangedAt(): DateTimeImmutable
+    {
+        return $this->historyLastChangedAt();
+    }
     public function createdAt(): DateTimeImmutable { return $this->createdAt; }
     public function updatedAt(): DateTimeImmutable { return $this->updatedAt; }
     public function lockVersion(): int { return $this->lockVersion; }
 
     public function toLifecycle(): SubscriptionLifecycle
     {
+        $exactLastChangedAt = $this->historyLastChangedAt();
+        if (
+            $this->lastChangedAt->format('Y-m-d H:i:s')
+            !== $exactLastChangedAt->format('Y-m-d H:i:s')
+        ) {
+            throw new DomainException('Timestamp persistido incoherente con su historial.');
+        }
+
         return SubscriptionLifecycle::restore(
             $this->tenantId,
             $this->planVersion,
             $this->state(),
-            $this->lastChangedAt,
+            $exactLastChangedAt,
             $this->history,
         );
     }
@@ -132,5 +143,27 @@ final class Subscription
         $this->history = $lifecycle->history();
         $this->lastChangedAt = $lifecycle->lastChangedAt();
         $this->updatedAt = $updatedAt;
+    }
+
+    private function historyLastChangedAt(): DateTimeImmutable
+    {
+        $last = $this->history[array_key_last($this->history)] ?? null;
+        if (
+            !is_array($last)
+            || !isset($last['at'])
+            || !is_string($last['at'])
+            || preg_match(
+                '/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$/D',
+                $last['at'],
+            ) !== 1
+        ) {
+            throw new DomainException('Historial persistido sin timestamp final válido.');
+        }
+
+        try {
+            return new DateTimeImmutable($last['at']);
+        } catch (\\Throwable) {
+            throw new DomainException('Historial persistido sin timestamp final válido.');
+        }
     }
 }
