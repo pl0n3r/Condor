@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Commercial\CommercialCatalogReader;
+use App\Application\Commercial\PlatformCommercialSubscriptionChangeHistory;
 use App\Application\Commercial\PlatformCommercialTenantSummary;
 use App\Application\Identity\PlatformOwnerTenantContext;
 use App\Domain\Identity\Entity\User;
@@ -29,6 +30,7 @@ final class PlatformOwnerContextController extends AbstractController
         PlatformOwnerTenantContext $context,
         CommercialCatalogReader $catalog,
         PlatformCommercialTenantSummary $commercialSummary,
+        PlatformCommercialSubscriptionChangeHistory $changeHistory,
         AppVersion $version,
     ): JsonResponse {
         $this->denyAccessUnlessGranted(User::ROLE_PLATFORM_OWNER);
@@ -58,6 +60,8 @@ final class PlatformOwnerContextController extends AbstractController
         if ($tenantId !== '') {
             $selectedTenant = $context->tenant($tenantId);
             $selectedTenant['commercial_subscription'] = $commercialSummary
+                ->forTenant($tenantId);
+            $selectedTenant['commercial_subscription_changes'] = $changeHistory
                 ->forTenant($tenantId);
         }
 
