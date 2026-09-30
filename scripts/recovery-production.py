@@ -71,8 +71,14 @@ def evidence(name:str,checksum:str)->dict:
     if not isinstance(raw,dict) or set(raw)!=keys or raw.get("checksum_sha256")!=checksum:
         raise RecoveryError("recovery_evidence_invalid")
     for key in ("descriptor_id","checksum_sha256"):
-        if not SHA.fullmatch(str(raw[key])): raise RecoveryError("recovery_evidence_invalid")
-    for key in ("object_ref","immutable_version_ref","evidence_ref"): safe_ref(str(raw[key]))
+        value=raw[key]
+        if not isinstance(value,str) or not SHA.fullmatch(value):
+            raise RecoveryError("recovery_evidence_invalid")
+    for key in ("object_ref","immutable_version_ref","evidence_ref"):
+        value=raw[key]
+        if not isinstance(value,str):
+            raise RecoveryError("recovery_evidence_invalid")
+        safe_ref(value)
     return raw
 
 def iso8601(epoch:int)->str:

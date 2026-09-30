@@ -74,10 +74,11 @@ jobs:
         run: |
           set -euo pipefail
           root="$HOME/.condor-recovery"
+          created_at="$(date +%s)"
           BACKUP_DIR="$root" sh scripts/backup-database.sh >/dev/null
           plain="$(find "$root" -maxdepth 1 -type f -name 'condor-*.sql.gz' -print | sort | tail -1)"
           [[ -n "$plain" ]] || { echo "::error::Backup ausente"; exit 1; }
-          plain_name="$(basename "$plain")"; created_at="$(stat -c %Y "$plain")"
+          plain_name="$(basename "$plain")"
           python3 scripts/recovery-production.py encrypt --source "$plain_name" --target backup.enc >/dev/null
           rm -f -- "$plain"
           checksum="$(python3 scripts/recovery-production.py checksum --artifact backup.enc | python3 -c 'import json,sys;print(json.load(sys.stdin)["checksum_sha256"])')"
@@ -202,6 +203,34 @@ jobs:
           print(f"- Checks: health={r['checks']['health']}, smoke={r['checks']['smoke']}, integrity={r['checks']['integrity']}")
           print("- Razones: "+(", ".join(r["reasons"]) if r["reasons"] else "ninguna"))
           print("- Evidencia: "+", ".join(r["evidence_refs"]))
-          if r["status"]!="PASSED":
-              raise SystemExit(1)
+          PY
+
+      - name: Preparar evidencia sanitizada del drill
+        run: |
+          set -euo pipefail
+          root="$HOME/.condor-recovery"
+          stage="$GITHUB_WORKSPACE/recovery-evidence"
+          rm -rf -- "$stage"
+          mkdir -p "$stage"
+          install -m 600 "$root/recovery-report.json" "$stage/recovery-report.json"
+          install -m 600 "$root/upload-evidence.json" "$stage/upload-evidence.json"
+          install -m 600 "$root/verify-evidence.json" "$stage/verify-evidence.json"
+          install -m 600 "$root/materialize-evidence.json" "$stage/materialize-evidence.json"
+
+      - name: Conservar evidencia auditada del drill
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: condor-recovery-drill-${{ github.run_id }}
+          path: ${{ github.workspace }}/recovery-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Aplicar gate canónico del drill
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads((Path.home()/".condor-recovery"/"recovery-report.json").read_text(encoding="utf-8"))
+          if report["status"]!="PASSED":
+              raise SystemExit("recovery_drill_breached")
           PY

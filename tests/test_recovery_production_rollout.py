@@ -1,5 +1,5 @@
 """Aceptación ejecutable Condor #350."""
-import importlib.util, json, tempfile, unittest
+import importlib.util, json, re, tempfile, unittest
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -33,6 +33,9 @@ class RecoveryProductionRolloutTests(unittest.TestCase):
         self.assertIn("45f5571ac32fbe07d11e696098f4e5902fac8c7f",w)
         self.assertNotIn("23df010f4e23d466fe5dcd2ceaa76446223501c2",w)
         self.assertIn("FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_OBJECT_LOCK_DAYS",w)
+        self.assertIn('created_at="$(date +%s)"',w)
+        self.assertNotIn('stat -c %Y "$plain"',w)
+        self.assertLess(w.index('created_at="$(date +%s)"'),w.index('BACKUP_DIR="$root" sh scripts/backup-database.sh'))
 
     def test_restore_target_is_disposable_and_source_is_untouched(self):
         w=read(".github/workflows/recovery-production.yml")
@@ -116,6 +119,19 @@ class RecoveryProductionRolloutTests(unittest.TestCase):
                     self.assertRaises(MOD.RecoveryError,MOD.drill_inputs,args)
             finally: MOD.ROOT=old
 
+    def test_evidence_rejects_non_string_references(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); old=MOD.ROOT; MOD.ROOT=root
+            try:
+                for key,bad in (("object_ref",None),("immutable_version_ref",17),("evidence_ref",False)):
+                    row=evidence_row()
+                    row[key]=bad
+                    path=root/(key+".json")
+                    path.write_text(json.dumps(row),encoding="utf-8")
+                    self.assertRaises(MOD.RecoveryError,MOD.evidence,path.name,"b"*64)
+            finally:
+                MOD.ROOT=old
+
     def test_google_drive_is_optional_cold_copy_only(self):
         text=read("docs/recovery-production.md")
         self.assertIn("Google Drive",text); self.assertIn("cold-copy opcional",text)
@@ -123,8 +139,13 @@ class RecoveryProductionRolloutTests(unittest.TestCase):
 
     def test_rollout_has_no_secret_payload_product_deploy_or_destructive_production_sql(self):
         w=read(".github/workflows/recovery-production.yml"); s=read("scripts/recovery-production.py")
-        for forbidden in ("workflow_call:","schedule:","deploy-factory","DROP DATABASE","signed_url","service-account","RECOVERY_ARTIFACT_ROOT"):
+        for forbidden in ("workflow_call:","schedule:","deploy-factory","DROP DATABASE","signed_url","service-account"):
             self.assertNotIn(forbidden,w+s)
+        self.assertIsNone(re.search(r"(?<![A-Z0-9_])RECOVERY_ARTIFACT_ROOT(?![A-Z0-9_])",w+s))
+        self.assertIn("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",w)
+        self.assertIn("retention-days: 30",w)
+        for evidence_name in ("recovery-report.json","upload-evidence.json","verify-evidence.json","materialize-evidence.json"):
+            self.assertIn(evidence_name,w)
         self.assertIn("RECOVERY_PROVIDER_PRIVACY_REF",w)
         self.assertIn("RECOVERY_S3_OBJECT_LOCK_DAYS",w)
         self.assertIn("FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_OBJECT_LOCK_DAYS",w)
