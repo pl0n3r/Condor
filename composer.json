@@ -49,5 +49,34 @@
   "config": {
     "sort-packages": true,
     "allow-plugins": {}
+  },
+  "conflict": {
+    "symfony/cache": ">=8",
+    "symfony/clock": ">=8",
+    "symfony/config": ">=8",
+    "symfony/dependency-injection": ">=8",
+    "symfony/doctrine-bridge": ">=8",
+    "symfony/dom-crawler": ">=8",
+    "symfony/error-handler": ">=8",
+    "symfony/event-dispatcher": ">=8",
+    "symfony/filesystem": ">=8",
+    "symfony/finder": ">=8",
+    "symfony/http-foundation": ">=8",
+    "symfony/http-kernel": ">=8",
+    "symfony/mime": ">=8",
+    "symfony/monolog-bridge": ">=8",
+    "symfony/options-resolver": ">=8",
+    "symfony/password-hasher": ">=8",
+    "symfony/property-access": ">=8",
+    "symfony/property-info": ">=8",
+    "symfony/routing": ">=8",
+    "symfony/security-core": ">=8",
+    "symfony/security-http": ">=8",
+    "symfony/stopwatch": ">=8",
+    "symfony/string": ">=8",
+    "symfony/twig-bridge": ">=8",
+    "symfony/type-info": ">=8",
+    "symfony/var-dumper": ">=8",
+    "symfony/var-exporter": ">=8"
   }
 }
