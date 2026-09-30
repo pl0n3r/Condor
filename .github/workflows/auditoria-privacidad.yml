@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   auditoria:
-    uses: pl0n3r/factory/.github/workflows/auditoria-privacidad.yml@68eef82e3b21939143a4cbea23b7df2615534e77
+    uses: pl0n3r/factory/.github/workflows/auditoria-privacidad.yml@v1
     with:
-      kit_ref: 68eef82e3b21939143a4cbea23b7df2615534e77
+      kit_ref: v1
       label_language: es
