@@ -189,6 +189,10 @@ type State =
 
 type PlatformOwnerSection = 'control' | 'empresas' | 'staff';
 
+function selectedTenantFromState(state: State): SelectedTenant | null {
+  return state.status === 'ready' ? state.data.selected_tenant : null;
+}
+
 type PlatformOwnerAppProps = Readonly<{
   version: string;
   logoutToken: string;
@@ -292,8 +296,7 @@ export function PlatformOwnerApp({
     void loadContext();
   }, []);
 
-  const selected =
-    state.status === 'ready' ? state.data.selected_tenant : null;
+  const selected = selectedTenantFromState(state);
 
   useEffect(() => {
     setSelectedPlanVersionId('');
