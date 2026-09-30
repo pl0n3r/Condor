@@ -116,6 +116,11 @@ TRANSITION_FALLBACK_PREFIXES = (
     "src/Application/",
     "src/Infrastructure/",
 )
+READ_ONLY_TRANSITION_EXEMPTIONS = {
+    "src/Application/Commercial/EntitlementContext.php",
+    "src/Application/Commercial/EntitlementResolver.php",
+    "src/Application/Commercial/EntitlementSnapshot.php",
+}
 
 SECURITY_PREFIXES = (
     "src/Domain/Identity/",
@@ -160,7 +165,9 @@ def starts(path: str, prefixes: tuple[str, ...]) -> bool:
 
 
 def source_requires_release_transition(path: str) -> bool:
-    """Clasifica cambios runtime bajo src/ sin penalizar queries read-only."""
+    """Clasifica cambios runtime bajo src/ sin penalizar read models auditados."""
+    if path in READ_ONLY_TRANSITION_EXEMPTIONS:
+        return False
     if path.endswith("Query.php"):
         return False
     return (
