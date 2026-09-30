@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Commercial\CommercialCatalogReader;
+use App\Application\Commercial\PlatformCommercialTenantSummary;
 use App\Application\Identity\PlatformOwnerTenantContext;
 use App\Domain\Identity\Entity\User;
 use App\Shared\Version\AppVersion;
@@ -27,6 +28,7 @@ final class PlatformOwnerContextController extends AbstractController
         Request $request,
         PlatformOwnerTenantContext $context,
         CommercialCatalogReader $catalog,
+        PlatformCommercialTenantSummary $commercialSummary,
         AppVersion $version,
     ): JsonResponse {
         $this->denyAccessUnlessGranted(User::ROLE_PLATFORM_OWNER);
@@ -52,6 +54,12 @@ final class PlatformOwnerContextController extends AbstractController
         $commercialCatalog = $catalog->current(
             new DateTimeImmutable('now', new DateTimeZone('UTC')),
         );
+        $selectedTenant = null;
+        if ($tenantId !== '') {
+            $selectedTenant = $context->tenant($tenantId);
+            $selectedTenant['commercial_subscription'] = $commercialSummary
+                ->forTenant($tenantId);
+        }
 
         return $this->json([
             'mode' => $tenantId === '' ? 'global' : 'tenant',
@@ -71,9 +79,7 @@ final class PlatformOwnerContextController extends AbstractController
                 'has_previous' => $tenantPage['has_previous'],
                 'has_next' => $tenantPage['has_next'],
             ],
-            'selected_tenant' => $tenantId === ''
-                ? null
-                : $context->tenant($tenantId),
+            'selected_tenant' => $selectedTenant,
             'version' => $version->human(),
         ]);
     }
