@@ -34,7 +34,7 @@ final class UsageObservation
     #[ORM\Column(type: 'string', length: 32)]
     private string $metric;
 
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'bigint')]
     private int $quantity;
 
     #[ORM\Column(name: 'window_start', type: 'string', length: 32)]

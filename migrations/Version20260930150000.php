@@ -21,7 +21,7 @@ final class Version20260930150000 extends AbstractMigration // NOSONAR -- nombre
                 id VARCHAR(26) NOT NULL,
                 tenant_id VARCHAR(120) NOT NULL,
                 metric VARCHAR(32) NOT NULL,
-                quantity INT NOT NULL,
+                quantity BIGINT NOT NULL,
                 window_start VARCHAR(32) NOT NULL,
                 window_end VARCHAR(32) NOT NULL,
                 observed_at VARCHAR(32) NOT NULL,

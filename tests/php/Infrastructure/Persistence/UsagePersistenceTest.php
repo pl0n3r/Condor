@@ -47,11 +47,23 @@ final class UsagePersistenceTest extends KernelTestCase
         }
 
         foreach ([
-            'idx_commercial_usage_tenant_metric_window',
-            'idx_commercial_usage_tenant_observed',
-        ] as $index) {
-            self::assertTrue($table->hasIndex($index), $index);
-            self::assertTrue($migrated->hasIndex($index), $index);
+            'idx_commercial_usage_tenant_metric_window' => [
+                'tenant_id',
+                'metric',
+                'window_start',
+                'window_end',
+            ],
+            'idx_commercial_usage_tenant_observed' => [
+                'tenant_id',
+                'observed_at',
+            ],
+        ] as $index => $columns) {
+            foreach ([$table, $migrated] as $schemaTable) {
+                self::assertTrue($schemaTable->hasIndex($index), $index);
+                $definition = $schemaTable->getIndex($index);
+                self::assertSame($columns, $definition->getColumns(), $index);
+                self::assertFalse($definition->isUnique(), $index);
+            }
         }
 
         $migration = file_get_contents(
@@ -79,7 +91,7 @@ final class UsagePersistenceTest extends KernelTestCase
         $record = new UsageRecord(
             'tenant-round-trip',
             UsageMetric::ApiCalls,
-            17,
+            PHP_INT_MAX,
             new DateTimeImmutable('2026-10-01T00:00:00.000001-05:00'),
             new DateTimeImmutable('2026-10-01T01:00:00.999999-05:00'),
             new DateTimeImmutable('2026-10-01T00:30:00.654321-05:00'),
