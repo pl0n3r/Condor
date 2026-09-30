@@ -28,6 +28,7 @@ if (platformRoot) {
   const logoutToken = platformRoot.dataset.logoutToken ?? '';
   const staffToken = platformRoot.dataset.staffToken ?? '';
   const tenantToken = platformRoot.dataset.tenantToken ?? '';
+  const subscriptionToken = platformRoot.dataset.subscriptionToken ?? '';
   const section = platformRoot.dataset.section === 'empresas'
     || platformRoot.dataset.section === 'staff'
     ? platformRoot.dataset.section
@@ -40,6 +41,7 @@ if (platformRoot) {
         logoutToken={logoutToken}
         staffToken={staffToken}
         tenantToken={tenantToken}
+        subscriptionToken={subscriptionToken}
         section={section}
       />
     </StrictMode>,
