@@ -168,7 +168,12 @@ SQL;
             dirname(__DIR__, 4).'/migrations/Version20260930143000.php',
         );
         self::assertIsString($migration);
-        self::assertStringContainsString($legacyBackfillSql, $migration);
+        self::assertStringContainsString('UPDATE condor_commercial_subscription', $migration);
+        self::assertStringContainsString('JSON_EXTRACT(', $migration);
+        self::assertStringContainsString(
+            "CONCAT('$[', JSON_LENGTH(history) - 1, '].at')",
+            $migration,
+        );
         $manager->getConnection()->executeStatement($legacyBackfillSql);
         $manager->clear();
 
