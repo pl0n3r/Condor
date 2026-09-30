@@ -82,7 +82,7 @@ final class EntitlementResolverTest extends KernelTestCase
         $snapshot = $this->resolver->resolve($this->context('tenant-a', 'business', 'commerce'));
         $this->assertDomainFailure(fn () => $snapshot->capability('unknown-capability'));
 
-        $inactive = $this->addOn('production-lite');
+        $inactive = new AddOn('production-lite', 'Producción Lite', 99900);
         $inactive->deactivate();
         $this->assertDomainFailure(fn () => $this->resolver->resolve(
             $this->context('tenant-a', 'business', 'commerce', [$inactive]),
@@ -91,7 +91,7 @@ final class EntitlementResolverTest extends KernelTestCase
 
     public function testRejectsInactiveAddOnAndStalePlanVersion(): void
     {
-        $addOn = $this->addOn('production-lite');
+        $addOn = new AddOn('production-lite', 'Producción Lite', 99900);
         $addOn->deactivate();
         try {
             $this->resolver->resolve($this->context('tenant-a', 'business', 'commerce', [$addOn]));
@@ -101,7 +101,7 @@ final class EntitlementResolverTest extends KernelTestCase
         }
 
         $stale = new PlanVersion(
-            new Plan('business', 'Negocio stale'), 99, 1, 1, false,
+            $this->planVersion('business')->plan(), 99, 1, 1, false,
             ['users'=>10], new DateTimeImmutable('2026-01-01T00:00:00Z'),
         );
         $this->expectException(DomainException::class);
