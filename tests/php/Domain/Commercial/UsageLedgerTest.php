@@ -51,25 +51,45 @@ final class UsageLedgerTest extends TestCase
 
     public function testEquivalentTimezoneWindowsShareTheSameBucket(): void
     {
-        $ledger = new UsageLedger('tenant-a');
         $utcStart = new DateTimeImmutable('2026-10-01T00:00:00Z');
         $utcEnd = new DateTimeImmutable('2026-11-01T00:00:00Z');
         $offsetStart = new DateTimeImmutable('2026-09-30T19:00:00-05:00');
         $offsetEnd = new DateTimeImmutable('2026-10-31T19:00:00-05:00');
 
-        $ledger->add(new UsageRecord(
-            'tenant-a',
-            UsageMetric::Users,
-            7,
-            $utcStart,
-            $utcEnd,
-            new DateTimeImmutable('2026-10-15T00:00:00Z'),
-        ));
+        $records = [
+            new UsageRecord(
+                'tenant-a',
+                UsageMetric::Users,
+                3,
+                $utcStart,
+                $utcEnd,
+                new DateTimeImmutable('2026-10-15T00:00:00Z'),
+            ),
+            new UsageRecord(
+                'tenant-a',
+                UsageMetric::Users,
+                7,
+                $offsetStart,
+                $offsetEnd,
+                new DateTimeImmutable('2026-10-15T19:00:00-05:00'),
+            ),
+        ];
+
+        $left = new UsageLedger('tenant-a');
+        foreach ($records as $record) {
+            $left->add($record);
+        }
+
+        $right = new UsageLedger('tenant-a');
+        foreach (array_reverse($records) as $record) {
+            $right->add($record);
+        }
 
         self::assertSame(
             7,
-            $ledger->quantity(UsageMetric::Users, $offsetStart, $offsetEnd),
+            $left->quantity(UsageMetric::Users, $offsetStart, $offsetEnd),
         );
+        self::assertSame($left->snapshot(), $right->snapshot());
     }
 
     public function testDeterministicSnapshotAndFailClosedQueries(): void
