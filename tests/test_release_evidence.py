@@ -138,6 +138,25 @@ class ReleaseEvidenceTests(unittest.TestCase):
         )
         module.validate_manifest(manifest)
 
+    def test_v0194_control_center_manifest_has_no_operational_transition(self) -> None:
+        paths = [
+            "config/version.php",
+            "frontend/admin/PlatformOwnerApp.tsx",
+            "public/build/admin.js",
+            "src/Application/Commercial/PlatformCommercialTenantSummary.php",
+            "src/Http/Controller/PlatformOwnerContextController.php",
+            "tests/php/Http/PlatformOwnerCommercialSubscriptionTest.php",
+            "tests/test_saas_control_center_subscription_overview.py",
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = self.manifest(tmp, paths)
+
+        self.assertFalse(manifest["transition"]["required"])
+        self.assertTrue(
+            all(item["required"] is False for item in manifest["transition"]["checks"])
+        )
+        module.validate_manifest(manifest)
+
     def test_manifest_rejects_requested_version_different_from_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             version_file = self.version_file(tmp, "0.1.11")
