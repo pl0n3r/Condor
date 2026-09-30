@@ -74,6 +74,10 @@ class RecoveryProductionRolloutTests(unittest.TestCase):
         w=read(".github/workflows/recovery-production.yml"); s=read("scripts/recovery-production.py")
         for forbidden in ("workflow_call:","schedule:","deploy-factory","DROP DATABASE","signed_url","service-account","RECOVERY_ARTIFACT_ROOT"):
             self.assertNotIn(forbidden,w+s)
-        self.assertIn("RECOVERY_PROVIDER_PRIVACY_REF",w); self.assertIn("23df010f4e23d466fe5dcd2ceaa76446223501c2",w)
+        self.assertIn("RECOVERY_PROVIDER_PRIVACY_REF",w)
+        self.assertIn("45f5571ac32fbe07d11e696098f4e5902fac8c7f",w)
+        self.assertNotIn("23df010f4e23d466fe5dcd2ceaa76446223501c2",w)
+        self.assertIn("RECOVERY_S3_OBJECT_LOCK_DAYS",w)
+        self.assertIn("FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_OBJECT_LOCK_DAYS",w)
 
 if __name__=="__main__": unittest.main()
