@@ -1,0 +1,132 @@
+name: Recovery production drill
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: recovery-production-condor
+  cancel-in-progress: false
+
+jobs:
+  recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      CONNECTION_REF: ${{ vars.RECOVERY_PRIMARY_CONNECTION_REF }}
+      PRIVACY_REF: ${{ vars.RECOVERY_PROVIDER_PRIVACY_REF }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: pl0n3r/FactoryRunner
+          ref: 23df010f4e23d466fe5dcd2ceaa76446223501c2
+          path: _factoryrunner
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+
+      - name: Preflight gobernado
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RECOVERY_S3_ENDPOINT: ${{ secrets.RECOVERY_S3_ENDPOINT }}
+          RECOVERY_S3_BUCKET: ${{ secrets.RECOVERY_S3_BUCKET }}
+          RECOVERY_S3_REGION: ${{ secrets.RECOVERY_S3_REGION }}
+          RECOVERY_S3_PREFIX: ${{ secrets.RECOVERY_S3_PREFIX }}
+          RECOVERY_S3_ACCESS_KEY_ID: ${{ secrets.RECOVERY_S3_ACCESS_KEY_ID }}
+          RECOVERY_S3_SECRET_ACCESS_KEY: ${{ secrets.RECOVERY_S3_SECRET_ACCESS_KEY }}
+          RECOVERY_DISPOSABLE_DATABASE_URL: ${{ secrets.RECOVERY_DISPOSABLE_DATABASE_URL }}
+          CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE: ${{ secrets.CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          root="$HOME/.condor-recovery"; mkdir -p "$root"; chmod 700 "$root"
+          python3 scripts/recovery-production.py preflight --connection-ref "$CONNECTION_REF" --privacy-ref "$PRIVACY_REF" >/dev/null
+          for name in DATABASE_URL RECOVERY_S3_ENDPOINT RECOVERY_S3_BUCKET RECOVERY_S3_REGION RECOVERY_S3_PREFIX RECOVERY_S3_ACCESS_KEY_ID RECOVERY_S3_SECRET_ACCESS_KEY RECOVERY_DISPOSABLE_DATABASE_URL CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE; do
+            [[ -n "${!name:-}" ]] || { echo "::error::Recovery live no provisionado"; exit 1; }
+          done
+
+      - name: Backup y cifrado cliente
+        id: backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE: ${{ secrets.CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          root="$HOME/.condor-recovery"
+          BACKUP_DIR="$root" sh scripts/backup-database.sh >/dev/null
+          plain="$(find "$root" -maxdepth 1 -type f -name 'condor-*.sql.gz' -print | sort | tail -1)"
+          [[ -n "$plain" ]] || { echo "::error::Backup ausente"; exit 1; }
+          plain_name="$(basename "$plain")"; created_at="$(stat -c %Y "$plain")"
+          python3 scripts/recovery-production.py encrypt --source "$plain_name" --target backup.enc >/dev/null
+          rm -f -- "$plain"
+          checksum="$(python3 scripts/recovery-production.py checksum --artifact backup.enc | python3 -c 'import json,sys;print(json.load(sys.stdin)["checksum_sha256"])')"
+          echo "artifact=$root/backup.enc" >> "$GITHUB_OUTPUT"
+          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
+          echo "created_at=$created_at" >> "$GITHUB_OUTPUT"
+
+      - name: Offsite versionado e inmutable
+        id: offsite
+        env:
+          FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_ENDPOINT: ${{ secrets.RECOVERY_S3_ENDPOINT }}
+          FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_BUCKET: ${{ secrets.RECOVERY_S3_BUCKET }}
+          FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_REGION: ${{ secrets.RECOVERY_S3_REGION }}
+          FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_PREFIX: ${{ secrets.RECOVERY_S3_PREFIX }}
+          FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_ACCESS_KEY_ID: ${{ secrets.RECOVERY_S3_ACCESS_KEY_ID }}
+          FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_SECRET_ACCESS_KEY: ${{ secrets.RECOVERY_S3_SECRET_ACCESS_KEY }}
+          FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_AWS_SECURITY_TOKEN: ${{ secrets.RECOVERY_S3_AWS_SECURITY_TOKEN }}
+          BACKUP_CHECKSUM: ${{ steps.backup.outputs.checksum }}
+          BACKUP_ARTIFACT: ${{ steps.backup.outputs.artifact }}
+        run: |
+          set -euo pipefail
+          root="$HOME/.condor-recovery"
+          object_ref="condor:db:${GITHUB_RUN_ID}:${BACKUP_CHECKSUM}"
+          for op in upload verify; do
+            python3 scripts/recovery-production.py descriptor --operation "$op" --checksum "$BACKUP_CHECKSUM" --object-ref "$object_ref" --connection-ref "$CONNECTION_REF" >"$root/$op.json"
+            FACTORYRUNNER_RECOVERY_ARTIFACT_ROOT="$root" FACTORYRUNNER_RECOVERY_ARTIFACT_PATH="$BACKUP_ARTIFACT" node --experimental-strip-types _factoryrunner/scripts/recovery-live-object-storage.ts <"$root/$op.json" >"$root/$op-evidence.json"
+          done
+          target="$root/materialized.enc"; rm -f -- "$target"
+          python3 scripts/recovery-production.py descriptor --operation materialize --checksum "$BACKUP_CHECKSUM" --object-ref "$object_ref" --connection-ref "$CONNECTION_REF" >"$root/materialize.json"
+          FACTORYRUNNER_RECOVERY_ARTIFACT_ROOT="$root" FACTORYRUNNER_RECOVERY_ARTIFACT_PATH="$target" node --experimental-strip-types _factoryrunner/scripts/recovery-live-object-storage.ts <"$root/materialize.json" >"$root/materialize-evidence.json"
+          echo "materialized=$target" >> "$GITHUB_OUTPUT"
+          echo "verified_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore drill descartable
+        id: restore
+        env:
+          RECOVERY_DISPOSABLE_DATABASE_URL: ${{ secrets.RECOVERY_DISPOSABLE_DATABASE_URL }}
+          CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE: ${{ secrets.CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE }}
+          CONDOR_RESTORE_EXPECT_TENANT_SLUG: ${{ vars.RECOVERY_RESTORE_EXPECT_TENANT_SLUG }}
+          CONDOR_RESTORE_EXPECT_USER_EMAIL: ${{ vars.RECOVERY_RESTORE_EXPECT_USER_EMAIL }}
+        run: |
+          set -euo pipefail
+          root="$HOME/.condor-recovery"; echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+          python3 scripts/recovery-production.py decrypt --source materialized.enc --target restored.sql.gz >/dev/null
+          DATABASE_URL="$RECOVERY_DISPOSABLE_DATABASE_URL" CONDOR_ALLOW_DESTRUCTIVE_RESTORE=1 sh scripts/verify-backup-restore.sh "$root/restored.sql.gz"
+          echo "finished_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Evidencia RPO RTO
+        env:
+          BACKUP_CHECKSUM: ${{ steps.backup.outputs.checksum }}
+          BACKUP_CREATED_AT: ${{ steps.backup.outputs.created_at }}
+          OFFSITE_VERIFIED_AT: ${{ steps.offsite.outputs.verified_at }}
+          RESTORE_STARTED_AT: ${{ steps.restore.outputs.started_at }}
+          RESTORE_FINISHED_AT: ${{ steps.restore.outputs.finished_at }}
+        run: |
+          set -euo pipefail
+          root="$HOME/.condor-recovery"
+          python3 scripts/recovery-production.py report --checksum "$BACKUP_CHECKSUM" --upload-evidence upload-evidence.json --verify-evidence verify-evidence.json --materialize-evidence materialize-evidence.json --backup-created-at "$BACKUP_CREATED_AT" --offsite-verified-at "$OFFSITE_VERIFIED_AT" --restore-started-at "$RESTORE_STARTED_AT" --restore-finished-at "$RESTORE_FINISHED_AT" --observed-at "$(date +%s)" --rpo-target 900 --rto-target 3600 --freshness-target 900 >"$root/recovery-report.json"
+          python3 - <<'PY' >>"$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r=json.loads((Path.home()/".condor-recovery/recovery-report.json").read_text(encoding="utf-8"))
+          print("### Condor DR recovery drill")
+          print(f"- Estado: **{r['status']}**")
+          print(f"- Freshness: **{r['freshness']}** ({r['freshness_age_seconds']} s)")
+          print(f"- RPO observado: {r['rpo_observed_seconds']} s")
+          print(f"- RTO demostrado: {r['rto_observed_seconds']} s")
+          print("- Evidencia: "+", ".join(r["evidence_refs"]))
+          PY
