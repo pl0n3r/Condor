@@ -21,15 +21,15 @@ final class UsagePersistenceTest extends KernelTestCase
     {
         self::bootKernel();
         $manager = $this->entityManager();
-        $generated = (new SchemaTool($manager))->getSchemaFromMetadata(
-            $manager->getMetadataFactory()->getAllMetadata(),
-        );
-        $table = $generated->getTable('condor_commercial_usage_observation');
-        $migrated = $manager->getConnection()
+        $metadata = $manager->getClassMetadata(UsageObservation::class);
+        $generatedTable = (new SchemaTool($manager))
+            ->getSchemaFromMetadata([$metadata])
+            ->getTable('condor_commercial_usage_observation');
+        $databaseTable = $manager->getConnection()
             ->createSchemaManager()
             ->introspectTable('condor_commercial_usage_observation');
 
-        foreach ([
+        $columns = [
             'id',
             'tenant_id',
             'metric',
@@ -37,17 +37,8 @@ final class UsagePersistenceTest extends KernelTestCase
             'window_start',
             'window_end',
             'observed_at',
-        ] as $column) {
-            self::assertTrue($table->hasColumn($column), $column);
-            self::assertTrue($migrated->hasColumn($column), $column);
-        }
-
-        foreach (['window_start', 'window_end', 'observed_at'] as $column) {
-            self::assertSame(32, $table->getColumn($column)->getLength());
-            self::assertSame(32, $migrated->getColumn($column)->getLength());
-        }
-
-        foreach ([
+        ];
+        $indexes = [
             'idx_commercial_usage_tenant_metric_window' => [
                 'tenant_id',
                 'metric',
@@ -58,18 +49,26 @@ final class UsagePersistenceTest extends KernelTestCase
                 'tenant_id',
                 'observed_at',
             ],
-        ] as $index => $columns) {
-            foreach ([$table, $migrated] as $schemaTable) {
-                self::assertTrue($schemaTable->hasIndex($index), $index);
-                $definition = $schemaTable->getIndex($index);
+        ];
+
+        foreach ([$generatedTable, $databaseTable] as $schemaTable) {
+            foreach ($columns as $column) {
+                self::assertTrue($schemaTable->hasColumn($column), $column);
+            }
+            foreach (['window_start', 'window_end', 'observed_at'] as $column) {
+                self::assertSame(32, $schemaTable->getColumn($column)->getLength());
+            }
+            foreach ($indexes as $name => $expectedColumns) {
+                self::assertTrue($schemaTable->hasIndex($name), $name);
+                $definition = $schemaTable->getIndex($name);
                 $actualColumns = array_map(
                     static fn ($column): string => $column
                         ->getColumnName()
                         ->toString(),
                     $definition->getIndexedColumns(),
                 );
-                self::assertSame($columns, $actualColumns, $index);
-                self::assertSame(IndexType::REGULAR, $definition->getType(), $index);
+                self::assertSame($expectedColumns, $actualColumns, $name);
+                self::assertSame(IndexType::REGULAR, $definition->getType(), $name);
             }
         }
 
@@ -284,11 +283,17 @@ final class UsagePersistenceTest extends KernelTestCase
     /** @param callable():mixed $operation */
     private function assertRejected(callable $operation): void
     {
+        $caught = null;
         try {
             $operation();
-            self::fail('La observación persistida inválida debía fallar.');
-        } catch (DomainException) {
-            self::assertTrue(true);
+        } catch (DomainException $exception) {
+            $caught = $exception;
         }
+
+        self::assertInstanceOf(
+            DomainException::class,
+            $caught,
+            'La observación persistida inválida debía fallar.',
+        );
     }
 }

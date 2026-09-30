@@ -42,12 +42,10 @@ final class Version20260930150000 extends AbstractMigration // NOSONAR -- nombre
 
     public function down(Schema $schema): void
     {
-        $count = (int) $this->connection->fetchOne(
-            'SELECT COUNT(*) FROM condor_commercial_usage_observation',
-        );
-
         $this->abortIf(
-            $count > 0,
+            (int) $this->connection->fetchOne(
+                'SELECT COUNT(*) FROM condor_commercial_usage_observation',
+            ) > 0,
             'Rollback bloqueado: existen observaciones Usage persistidas.',
         );
 
