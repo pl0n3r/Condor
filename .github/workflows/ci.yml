@@ -1016,7 +1016,7 @@ jobs:
 
 
   validar:
-    name: Validar
+    name: Condor / Validar
     needs: [factory-ci, preflight, documentacion, gobierno, coordinacion, pruebas-base, static-analysis, rector-dry-run, frontend, audit-npm, audit-composer, backend-php, backup-restore, e2e]
     if: always()
     runs-on: ubuntu-latest
