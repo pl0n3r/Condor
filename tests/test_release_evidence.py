@@ -95,9 +95,10 @@ class ReleaseEvidenceTests(unittest.TestCase):
             manifest = module.build_manifest(
                 version_file=self.version_file(tmp, "0.1.13"),
                 sha=SHA,
-                changed_paths=["scripts/observar_release.py"],
+                changed_paths=["config/version.php"],
                 expected_version="0.1.13",
             )
+        self.assertFalse(manifest["transition"]["required"])
         self.assertEqual(
             manifest["public_checks"][-2:],
             ["storefront", "slug_desconocido"],
