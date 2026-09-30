@@ -56,5 +56,24 @@ class PrivacyAuditFactoryPinTests(unittest.TestCase):
         self.assertNotIn("contents: write", text)
 
 
+    def test_ac05_php_contract_distinguishes_historical_privacy_from_stable_audit(self) -> None:
+        php_contract = (
+            ROOT / "tests/php/Privacy/PrivacyAsCodeTest.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "uses: pl0n3r/factory/.github/workflows/privacidad.yml@'.self::FACTORY_SHA",
+            php_contract,
+        )
+        self.assertIn(
+            "uses: pl0n3r/factory/.github/workflows/auditoria-privacidad.yml@v1",
+            php_contract,
+        )
+        self.assertIn("self::assertStringContainsString('kit_ref: v1', $audit)", php_contract)
+        self.assertNotIn(
+            "uses: pl0n3r/factory/.github/workflows/auditoria-privacidad.yml@'.self::FACTORY_SHA",
+            php_contract,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
