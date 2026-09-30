@@ -429,7 +429,7 @@ final class SubscriptionChangePersistenceTest extends KernelTestCase
         self::assertTrue($manager->getConnection()->createSchemaManager()
             ->tablesExist(['condor_commercial_subscription_change_addon']));
 
-        $joinTable = $manager->getConnection()
+        $manager->getConnection()
             ->createSchemaManager()
             ->introspectTable('condor_commercial_subscription_change_addon');
         $foreignKeyRules = $manager->getConnection()->fetchAllAssociative(
