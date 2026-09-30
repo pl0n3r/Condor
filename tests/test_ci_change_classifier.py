@@ -171,6 +171,8 @@ class ChangeClassifierTests(unittest.TestCase):
                 "src/Application/Commercial/EntitlementContext.php",
                 "src/Application/Commercial/EntitlementResolver.php",
                 "src/Application/Commercial/EntitlementSnapshot.php",
+                "src/Application/Commercial/PlatformCommercialTenantSummary.php",
+                "src/Http/Controller/PlatformOwnerContextController.php",
             },
         )
 
@@ -186,8 +188,20 @@ class ChangeClassifierTests(unittest.TestCase):
                 self.assertTrue(result.categoria_backend)
                 self.assertTrue(result.validacion_completa)
 
-    def test_unlisted_application_and_sensitive_paths_still_require_transition(self) -> None:
+    def test_saas_control_center_read_only_paths_do_not_require_transition(self) -> None:
+        for path in [
+            "src/Application/Commercial/PlatformCommercialTenantSummary.php",
+            "src/Http/Controller/PlatformOwnerContextController.php",
+        ]:
+            with self.subTest(path=path):
+                result = classify([path], "pull_request")
+                self.assertFalse(result.transicion_release)
+                self.assertTrue(result.categoria_backend)
+                self.assertTrue(result.validacion_completa)
+
+    def test_unlisted_controller_and_application_still_require_transition(self) -> None:
         paths = [
+            "src/Http/Controller/AnotherController.php",
             "src/Application/Commercial/AnotherResolver.php",
             "src/Application/Billing/InvoiceService.php",
             "src/Application/Identity/RoleResolver.php",
@@ -213,6 +227,22 @@ class ChangeClassifierTests(unittest.TestCase):
         self.assertFalse(result.transicion_release)
         self.assertTrue(result.validacion_completa)
         self.assertTrue(result.backend)
+
+    def test_v0194_control_center_diff_needs_no_operational_transition(self) -> None:
+        paths = [
+            "config/version.php",
+            "frontend/admin/PlatformOwnerApp.tsx",
+            "public/build/admin.js",
+            "src/Application/Commercial/PlatformCommercialTenantSummary.php",
+            "src/Http/Controller/PlatformOwnerContextController.php",
+            "tests/php/Http/PlatformOwnerCommercialSubscriptionTest.php",
+            "tests/test_saas_control_center_subscription_overview.py",
+        ]
+        result = classify(paths, "pull_request")
+        self.assertFalse(result.transicion_release)
+        self.assertTrue(result.validacion_completa)
+        self.assertTrue(result.backend)
+        self.assertTrue(result.frontend)
 
     def test_workflow_change_runs_full_stack(self) -> None:
         result = classify([".github/workflows/ci.yml"], "pull_request")

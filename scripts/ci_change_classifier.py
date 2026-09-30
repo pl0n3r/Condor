@@ -120,6 +120,8 @@ READ_ONLY_TRANSITION_EXEMPTIONS = {
     "src/Application/Commercial/EntitlementContext.php",
     "src/Application/Commercial/EntitlementResolver.php",
     "src/Application/Commercial/EntitlementSnapshot.php",
+    "src/Application/Commercial/PlatformCommercialTenantSummary.php",
+    "src/Http/Controller/PlatformOwnerContextController.php",
 }
 
 SECURITY_PREFIXES = (
@@ -190,6 +192,8 @@ def requires_release_transition(path: str) -> bool:
     if path.endswith(".md") or path.startswith((DOCS_PREFIX, TESTS_PREFIX)):
         return False
     if path in RELEASE_IDENTITY_FILES:
+        return False
+    if path in READ_ONLY_TRANSITION_EXEMPTIONS:
         return False
     if path == BIN_CONSOLE or path.startswith(TRANSITION_PREFIXES):
         return True
