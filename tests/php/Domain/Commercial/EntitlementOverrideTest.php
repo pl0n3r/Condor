@@ -26,14 +26,17 @@ final class EntitlementOverrideTest extends TestCase
         self::assertSame('tenant-a', $override->tenantId());
         self::assertSame('limit', $override->entitlementNamespace());
         self::assertSame(15, $override->value());
-        self::assertSame([
-            'namespace' => 'limit',
-            'key' => 'users',
-            'value' => 15,
-            'reason' => 'Contrato comercial especial',
-            'actor' => 'owner',
-            'created_at' => '2026-09-30T10:00:00+00:00',
-        ], $override->snapshot());
+        self::assertSame(
+            [
+                'namespace' => 'limit',
+                'key' => 'users',
+                'value' => 15,
+                'reason' => 'Contrato comercial especial',
+                'actor' => 'owner',
+                'created_at' => '2026-09-30T10:00:00+00:00',
+            ],
+            $override->snapshot(),
+        );
     }
 
     /** @dataProvider baseControlProvider */
@@ -41,7 +44,12 @@ final class EntitlementOverrideTest extends TestCase
     {
         $this->expectException(DomainException::class);
         new EntitlementOverride(
-            'tenant-a', 'capability', $key, false, 'No permitido', 'owner',
+            'tenant-a',
+            'capability',
+            $key,
+            false,
+            'No permitido',
+            'owner',
             new DateTimeImmutable('2026-09-30T10:00:00Z'),
         );
     }
@@ -49,7 +57,9 @@ final class EntitlementOverrideTest extends TestCase
     /** @return iterable<string,array{string}> */
     public static function baseControlProvider(): iterable
     {
-        foreach (['security','privacy','backup','recovery','integrity'] as $key) {
+        foreach (
+            ['security', 'privacy', 'backup', 'recovery', 'integrity'] as $key
+        ) {
             yield $key => [$key];
         }
     }

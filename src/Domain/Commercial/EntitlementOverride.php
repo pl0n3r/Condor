@@ -10,7 +10,13 @@ use DomainException;
 final readonly class EntitlementOverride
 {
     private const NAMESPACES = ['capability', 'addon', 'limit'];
-    private const BASE_CONTROLS = ['security', 'privacy', 'backup', 'recovery', 'integrity'];
+    private const BASE_CONTROLS = [
+        'security',
+        'privacy',
+        'backup',
+        'recovery',
+        'integrity',
+    ];
 
     private string $tenantId;
     private string $namespace;
@@ -45,7 +51,10 @@ final readonly class EntitlementOverride
         ) {
             throw new DomainException('Key de entitlement no comercial o inválida.');
         }
-        if ((is_int($value) && $value < 0) || (is_string($value) && mb_strlen($value, 'UTF-8') > 120)) {
+        if (
+            (is_int($value) && $value < 0)
+            || (is_string($value) && mb_strlen($value, 'UTF-8') > 120)
+        ) {
             throw new DomainException('Valor de override inválido.');
         }
 
@@ -56,13 +65,41 @@ final readonly class EntitlementOverride
         $this->actor = $actor;
     }
 
-    public function tenantId(): string { return $this->tenantId; }
-    public function entitlementNamespace(): string { return $this->namespace; }
-    public function key(): string { return $this->key; }
-    public function value(): bool|int|string|null { return $this->value; }
-    public function createdAt(): DateTimeImmutable { return $this->createdAt; }
+    public function tenantId(): string
+    {
+        return $this->tenantId;
+    }
 
-    /** @return array{namespace:string,key:string,value:bool|int|string|null,reason:string,actor:string,created_at:string} */
+    public function entitlementNamespace(): string
+    {
+        return $this->namespace;
+    }
+
+    public function key(): string
+    {
+        return $this->key;
+    }
+
+    public function value(): bool|int|string|null
+    {
+        return $this->value;
+    }
+
+    public function createdAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
+    /**
+     * @return array{
+     *     namespace: string,
+     *     key: string,
+     *     value: bool|int|string|null,
+     *     reason: string,
+     *     actor: string,
+     *     created_at: string
+     * }
+     */
     public function snapshot(): array
     {
         return [

@@ -14,8 +14,10 @@ use DomainException;
 final readonly class EntitlementContext
 {
     private string $tenantId;
+
     /** @var list<AddOn> */
     private array $selectedAddOns;
+
     /** @var list<EntitlementOverride> */
     private array $overrides;
 
@@ -57,12 +59,35 @@ final readonly class EntitlementContext
         $this->overrides = $validatedOverrides;
     }
 
-    public function tenantId(): string { return $this->tenantId; }
-    public function planVersion(): PlanVersion { return $this->planVersion; }
-    public function vertical(): Vertical { return $this->vertical; }
+    public function tenantId(): string
+    {
+        return $this->tenantId;
+    }
+
+    public function planVersion(): PlanVersion
+    {
+        return $this->planVersion;
+    }
+
+    public function vertical(): Vertical
+    {
+        return $this->vertical;
+    }
+
     /** @return list<AddOn> */
-    public function selectedAddOns(): array { return $this->selectedAddOns; }
+    public function selectedAddOns(): array
+    {
+        return $this->selectedAddOns;
+    }
+
     /** @return list<EntitlementOverride> */
-    public function overrides(): array { return $this->overrides; }
-    public function evaluatedAt(): DateTimeImmutable { return $this->evaluatedAt; }
+    public function overrides(): array
+    {
+        return $this->overrides;
+    }
+
+    public function evaluatedAt(): DateTimeImmutable
+    {
+        return $this->evaluatedAt;
+    }
 }

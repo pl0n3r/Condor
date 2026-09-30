@@ -32,10 +32,17 @@ final class EntitlementResolverTest extends KernelTestCase
         $manager = static::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $manager);
         $this->manager = $manager;
+
         (new CommercialCatalogSeeder($manager))->seed();
-        $catalog = new CommercialCatalogReader($manager, new PlanVersionTimeline());
+        $catalog = new CommercialCatalogReader(
+            $manager,
+            new PlanVersionTimeline(),
+        );
         $this->resolver = new EntitlementResolver(
-            new PlanConfiguratorCatalogReader($catalog, $manager),
+            new PlanConfiguratorCatalogReader(
+                $catalog,
+                $manager,
+            ),
             $manager,
         );
         $this->at = new DateTimeImmutable('2026-09-30T10:00:00Z');
@@ -44,102 +51,197 @@ final class EntitlementResolverTest extends KernelTestCase
     public function testResolvesEffectiveCapabilitiesAddOnsAndLimitsDeterministically(): void
     {
         $productionLite = $this->addOn('production-lite');
-        $snapshot = $this->resolver->resolve($this->context(
-            'tenant-a', 'business', 'commerce', [$productionLite],
-            [new EntitlementOverride(
-                'tenant-a', 'limit', 'users', 15, 'Upgrade temporal', 'owner',
-                new DateTimeImmutable('2026-09-30T09:00:00Z'),
-            )],
-        ));
+        $override = new EntitlementOverride(
+            'tenant-a',
+            'limit',
+            'users',
+            15,
+            'Upgrade temporal',
+            'owner',
+            new DateTimeImmutable('2026-09-30T09:00:00Z'),
+        );
+        $snapshot = $this->resolver->resolve(
+            $this->context(
+                'tenant-a',
+                'business',
+                'commerce',
+                [$productionLite],
+                [$override],
+            ),
+        );
 
         self::assertTrue($snapshot->capability('inventory'));
         self::assertFalse($snapshot->capability('legal-cases'));
         self::assertTrue($snapshot->addOn('production-lite'));
         self::assertFalse($snapshot->addOn('premium-integration'));
-        self::assertSame(['companies'=>1,'locations'=>3,'users'=>15], $snapshot->limits());
-        self::assertSame(10, $this->planVersion('business')->limits()['users']);
+        self::assertSame(
+            ['companies' => 1, 'locations' => 3, 'users' => 15],
+            $snapshot->limits(),
+        );
+        self::assertSame(
+            10,
+            $this->planVersion('business')->limits()['users'],
+        );
         self::assertSame('tenant-a', $snapshot->tenantId());
     }
 
     public function testKeepsCommercialEntitlementsSeparateFromRbacAndTenantContext(): void
     {
-        $source = file_get_contents(__DIR__.'/../../../../src/Application/Commercial/EntitlementResolver.php');
+        $source = file_get_contents(
+            __DIR__.'/../../../../src/Application/Commercial/EntitlementResolver.php',
+        );
         self::assertIsString($source);
         self::assertStringNotContainsString('PermissionCatalog', $source);
         self::assertStringNotContainsString('TenantContext', $source);
 
-        $legal = $this->resolver->resolve($this->context('tenant-a', 'pro', 'legal'));
+        $legal = $this->resolver->resolve(
+            $this->context('tenant-a', 'pro', 'legal'),
+        );
         self::assertFalse($legal->capability('inventory'));
         self::assertTrue($legal->capability('legal-cases'));
     }
 
     public function testFailsClosedForUnknownInactiveOrIncompatibleCommercialState(): void
     {
-        $this->assertDomainFailure(fn () => $this->resolver->resolve(
-            $this->context('tenant-a', 'pro', 'legal', [$this->addOn('production-lite')]),
-        ));
+        $this->assertDomainFailure(
+            fn () => $this->resolver->resolve(
+                $this->context(
+                    'tenant-a',
+                    'pro',
+                    'legal',
+                    [$this->addOn('production-lite')],
+                ),
+            ),
+        );
 
-        $snapshot = $this->resolver->resolve($this->context('tenant-a', 'business', 'commerce'));
-        $this->assertDomainFailure(fn () => $snapshot->capability('unknown-capability'));
+        $snapshot = $this->resolver->resolve(
+            $this->context('tenant-a', 'business', 'commerce'),
+        );
+        $this->assertDomainFailure(
+            fn () => $snapshot->capability('unknown-capability'),
+        );
 
-        $inactive = new AddOn('production-lite', 'Producción Lite', 99900);
+        $inactive = new AddOn(
+            'production-lite',
+            'Producción Lite',
+            99900,
+        );
         $inactive->deactivate();
-        $this->assertDomainFailure(fn () => $this->resolver->resolve(
-            $this->context('tenant-a', 'business', 'commerce', [$inactive]),
-        ));
+        $this->assertDomainFailure(
+            fn () => $this->resolver->resolve(
+                $this->context(
+                    'tenant-a',
+                    'business',
+                    'commerce',
+                    [$inactive],
+                ),
+            ),
+        );
     }
 
     public function testRejectsInactiveAddOnAndStalePlanVersion(): void
     {
-        $addOn = new AddOn('production-lite', 'Producción Lite', 99900);
+        $addOn = new AddOn(
+            'production-lite',
+            'Producción Lite',
+            99900,
+        );
         $addOn->deactivate();
+
         try {
-            $this->resolver->resolve($this->context('tenant-a', 'business', 'commerce', [$addOn]));
+            $this->resolver->resolve(
+                $this->context(
+                    'tenant-a',
+                    'business',
+                    'commerce',
+                    [$addOn],
+                ),
+            );
             self::fail('Un add-on inactivo no puede resolverse.');
         } catch (DomainException) {
             self::assertTrue(true);
         }
 
         $stale = new PlanVersion(
-            $this->planVersion('business')->plan(), 99, 1, 1, false,
-            ['users'=>10], new DateTimeImmutable('2026-01-01T00:00:00Z'),
+            $this->planVersion('business')->plan(),
+            99,
+            1,
+            1,
+            false,
+            ['users' => 10],
+            new DateTimeImmutable('2026-01-01T00:00:00Z'),
         );
         $this->expectException(DomainException::class);
-        $this->resolver->resolve(new EntitlementContext(
-            'tenant-a', $stale, $this->vertical('commerce'), [], [], $this->at,
-        ));
+        $this->resolver->resolve(
+            new EntitlementContext(
+                'tenant-a',
+                $stale,
+                $this->vertical('commerce'),
+                [],
+                [],
+                $this->at,
+            ),
+        );
     }
 
     public function testCapabilityOverrideMustRemainCanonicalAndVerticalCompatible(): void
     {
         $valid = new EntitlementOverride(
-            'tenant-a', 'capability', 'advanced-analytics', true,
-            'Grant comercial', 'owner', new DateTimeImmutable('2026-09-30T09:00:00Z'),
+            'tenant-a',
+            'capability',
+            'advanced-analytics',
+            true,
+            'Grant comercial',
+            'owner',
+            new DateTimeImmutable('2026-09-30T09:00:00Z'),
         );
-        $snapshot = $this->resolver->resolve($this->context(
-            'tenant-a', 'business', 'commerce', [], [$valid],
-        ));
+        $snapshot = $this->resolver->resolve(
+            $this->context(
+                'tenant-a',
+                'business',
+                'commerce',
+                [],
+                [$valid],
+            ),
+        );
         self::assertTrue($snapshot->capability('advanced-analytics'));
 
         $invalid = new EntitlementOverride(
-            'tenant-a', 'capability', 'manufacturing', true,
-            'Grant incompatible', 'owner', new DateTimeImmutable('2026-09-30T09:01:00Z'),
+            'tenant-a',
+            'capability',
+            'manufacturing',
+            true,
+            'Grant incompatible',
+            'owner',
+            new DateTimeImmutable('2026-09-30T09:01:00Z'),
         );
         $this->expectException(DomainException::class);
-        $this->resolver->resolve($this->context(
-            'tenant-a', 'business', 'legal', [], [$invalid],
-        ));
+        $this->resolver->resolve(
+            $this->context(
+                'tenant-a',
+                'business',
+                'legal',
+                [],
+                [$invalid],
+            ),
+        );
     }
 
     public function testBaseSecurityPrivacyBackupRecoveryAndIntegrityAreNotEntitlements(): void
     {
-        $snapshot = $this->resolver->resolve($this->context('tenant-a', 'business', 'commerce'));
-        $serialized = json_encode([
-            array_keys($snapshot->capabilities()),
-            array_keys($snapshot->addOns()),
-            array_keys($snapshot->limits()),
-        ], JSON_THROW_ON_ERROR);
-        foreach (['security','privacy','backup','recovery','integrity'] as $key) {
+        $snapshot = $this->resolver->resolve(
+            $this->context('tenant-a', 'business', 'commerce'),
+        );
+        $serialized = json_encode(
+            [
+                array_keys($snapshot->capabilities()),
+                array_keys($snapshot->addOns()),
+                array_keys($snapshot->limits()),
+            ],
+            JSON_THROW_ON_ERROR,
+        );
+
+        foreach (['security', 'privacy', 'backup', 'recovery', 'integrity'] as $key) {
             self::assertStringNotContainsString('"'.$key.'"', $serialized);
         }
     }
@@ -147,45 +249,92 @@ final class EntitlementResolverTest extends KernelTestCase
     public function testIsolatesTenantsAndReusesCanonicalCommercialCatalog(): void
     {
         $override = new EntitlementOverride(
-            'tenant-a', 'limit', 'users', 15, 'Tenant A', 'owner',
+            'tenant-a',
+            'limit',
+            'users',
+            15,
+            'Tenant A',
+            'owner',
             new DateTimeImmutable('2026-09-30T09:00:00Z'),
         );
-        $a = $this->resolver->resolve($this->context(
-            'tenant-a', 'business', 'commerce', [], [$override],
-        ));
-        $b = $this->resolver->resolve($this->context('tenant-b', 'business', 'commerce'));
+        $a = $this->resolver->resolve(
+            $this->context(
+                'tenant-a',
+                'business',
+                'commerce',
+                [],
+                [$override],
+            ),
+        );
+        $b = $this->resolver->resolve(
+            $this->context('tenant-b', 'business', 'commerce'),
+        );
 
         self::assertSame(15, $a->limit('users'));
         self::assertSame(10, $b->limit('users'));
 
         $this->expectException(DomainException::class);
-        $this->resolver->resolve($this->context(
-            'tenant-b', 'business', 'commerce', [], [$override],
-        ));
+        $this->resolver->resolve(
+            $this->context(
+                'tenant-b',
+                'business',
+                'commerce',
+                [],
+                [$override],
+            ),
+        );
     }
 
     public function testOverrideOrderIsDeterministicAndTimestampTiesFailClosed(): void
     {
         $early = new EntitlementOverride(
-            'tenant-a', 'limit', 'users', 12, 'Primero', 'owner',
+            'tenant-a',
+            'limit',
+            'users',
+            12,
+            'Primero',
+            'owner',
             new DateTimeImmutable('2026-09-30T08:00:00Z'),
         );
         $late = new EntitlementOverride(
-            'tenant-a', 'limit', 'users', 15, 'Después', 'owner',
+            'tenant-a',
+            'limit',
+            'users',
+            15,
+            'Después',
+            'owner',
             new DateTimeImmutable('2026-09-30T09:00:00Z'),
         );
-        self::assertSame(15, $this->resolver->resolve($this->context(
-            'tenant-a', 'business', 'commerce', [], [$late, $early],
-        ))->limit('users'));
+        $snapshot = $this->resolver->resolve(
+            $this->context(
+                'tenant-a',
+                'business',
+                'commerce',
+                [],
+                [$late, $early],
+            ),
+        );
+        self::assertSame(15, $snapshot->limit('users'));
 
         $tie = new EntitlementOverride(
-            'tenant-a', 'limit', 'users', 20, 'Empate', 'owner',
+            'tenant-a',
+            'limit',
+            'users',
+            20,
+            'Empate',
+            'owner',
             new DateTimeImmutable('2026-09-30T09:00:00Z'),
         );
         $this->expectException(DomainException::class);
-        $this->resolver->resolve($this->context(
-            'tenant-a', 'business', 'commerce', [], [$late, $tie],
-        ));
+        $this->resolver->resolve(
+            $this->context(
+                'tenant-a',
+                'business',
+                'commerce',
+                [],
+                [$late, $tie],
+            ),
+        );
     }
 
     /**
@@ -221,25 +370,35 @@ final class EntitlementResolverTest extends KernelTestCase
 
     private function planVersion(string $key): PlanVersion
     {
-        $plan = $this->manager->getRepository(Plan::class)->findOneBy(['key'=>$key]);
+        $plan = $this->manager->getRepository(Plan::class)
+            ->findOneBy(['key' => $key]);
         self::assertInstanceOf(Plan::class, $plan);
+
         $version = $this->manager->getRepository(PlanVersion::class)
-            ->findOneBy(['plan'=>$plan, 'version'=>1]);
+            ->findOneBy([
+                'plan' => $plan,
+                'version' => 1,
+            ]);
         self::assertInstanceOf(PlanVersion::class, $version);
+
         return $version;
     }
 
     private function vertical(string $key): Vertical
     {
-        $vertical = $this->manager->getRepository(Vertical::class)->findOneBy(['key'=>$key]);
+        $vertical = $this->manager->getRepository(Vertical::class)
+            ->findOneBy(['key' => $key]);
         self::assertInstanceOf(Vertical::class, $vertical);
+
         return $vertical;
     }
 
     private function addOn(string $key): AddOn
     {
-        $addOn = $this->manager->getRepository(AddOn::class)->findOneBy(['key'=>$key]);
+        $addOn = $this->manager->getRepository(AddOn::class)
+            ->findOneBy(['key' => $key]);
         self::assertInstanceOf(AddOn::class, $addOn);
+
         return $addOn;
     }
 }
