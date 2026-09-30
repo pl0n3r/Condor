@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Valida que la ruleset de main exija Validar y SonarQube Cloud."""
+"""Valida que la ruleset de main exija Condor / Validar y SonarQube Cloud."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ MAX_INPUT = 1_000_000
 RULESET_ID = 23709472
 DEFAULT_BRANCH_REF = "~DEFAULT_BRANCH"
 REQUIRED_CHECKS = {
-    "Validar": 15368,
+    "Condor / Validar": 15368,
     "SonarCloud Code Analysis": 12526,
 }
 
@@ -119,6 +119,16 @@ def validate_ruleset(payload: Any) -> dict[str, int | str]:
         if context in seen:
             raise SonarMergeGateError(f"Required check duplicado: {context}.")
         seen[context] = integration_id
+
+    expected_contexts = set(REQUIRED_CHECKS)
+    actual_contexts = set(seen)
+    if actual_contexts != expected_contexts:
+        missing = sorted(expected_contexts - actual_contexts)
+        unexpected = sorted(actual_contexts - expected_contexts)
+        raise SonarMergeGateError(
+            "Required checks no coinciden con el contrato exacto: "
+            f"faltan={missing!r}; inesperados={unexpected!r}."
+        )
 
     for context, expected_integration in REQUIRED_CHECKS.items():
         actual = seen.get(context)
