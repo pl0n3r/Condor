@@ -63,7 +63,7 @@ final class EntitlementResolverTest extends KernelTestCase
 
     public function testKeepsCommercialEntitlementsSeparateFromRbacAndTenantContext(): void
     {
-        $source = file_get_contents(__DIR__.'/../../../src/Application/Commercial/EntitlementResolver.php');
+        $source = file_get_contents(__DIR__.'/../../../../src/Application/Commercial/EntitlementResolver.php');
         self::assertIsString($source);
         self::assertStringNotContainsString('PermissionCatalog', $source);
         self::assertStringNotContainsString('TenantContext', $source);

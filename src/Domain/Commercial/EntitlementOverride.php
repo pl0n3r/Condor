@@ -12,13 +12,19 @@ final readonly class EntitlementOverride
     private const NAMESPACES = ['capability', 'addon', 'limit'];
     private const BASE_CONTROLS = ['security', 'privacy', 'backup', 'recovery', 'integrity'];
 
+    private string $tenantId;
+    private string $namespace;
+    private string $key;
+    private string $reason;
+    private string $actor;
+
     public function __construct(
-        private string $tenantId,
-        private string $namespace,
-        private string $key,
+        string $tenantId,
+        string $namespace,
+        string $key,
         private bool|int|string|null $value,
-        private string $reason,
-        private string $actor,
+        string $reason,
+        string $actor,
         private DateTimeImmutable $createdAt,
     ) {
         $tenantId = trim($tenantId);
