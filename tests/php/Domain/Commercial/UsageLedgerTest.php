@@ -49,6 +49,29 @@ final class UsageLedgerTest extends TestCase
         self::assertSame(14, $ledger->quantity('api_calls', $start, $end));
     }
 
+    public function testEquivalentTimezoneWindowsShareTheSameBucket(): void
+    {
+        $ledger = new UsageLedger('tenant-a');
+        $utcStart = new DateTimeImmutable('2026-10-01T00:00:00Z');
+        $utcEnd = new DateTimeImmutable('2026-11-01T00:00:00Z');
+        $offsetStart = new DateTimeImmutable('2026-09-30T19:00:00-05:00');
+        $offsetEnd = new DateTimeImmutable('2026-10-31T19:00:00-05:00');
+
+        $ledger->add(new UsageRecord(
+            'tenant-a',
+            UsageMetric::Users,
+            7,
+            $utcStart,
+            $utcEnd,
+            new DateTimeImmutable('2026-10-15T00:00:00Z'),
+        ));
+
+        self::assertSame(
+            7,
+            $ledger->quantity(UsageMetric::Users, $offsetStart, $offsetEnd),
+        );
+    }
+
     public function testDeterministicSnapshotAndFailClosedQueries(): void
     {
         [$start, $end] = $this->window();
