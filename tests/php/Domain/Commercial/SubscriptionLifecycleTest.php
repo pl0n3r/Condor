@@ -61,6 +61,74 @@ final class SubscriptionLifecycleTest extends TestCase
         }
     }
 
+    public function testRestoreValidatesHistoryFailClosed(): void
+    {
+        $planVersion = $this->planVersion();
+        $lastChangedAt = new DateTimeImmutable('2026-10-03T00:00:00.123456Z');
+        $valid = [
+            ['state' => 'trialing', 'at' => '2026-10-01T00:00:00.000001+00:00'],
+            ['state' => 'active', 'at' => '2026-10-02T00:00:00.000001+00:00'],
+            ['state' => 'past_due', 'at' => '2026-10-03T00:00:00.123456+00:00'],
+        ];
+
+        $restored = SubscriptionLifecycle::restore(
+            'tenant-a',
+            $planVersion,
+            SubscriptionState::PastDue,
+            $lastChangedAt,
+            $valid,
+        );
+
+        self::assertSame(SubscriptionState::PastDue, $restored->state());
+        self::assertSame(
+            $lastChangedAt->format('U.u'),
+            $restored->lastChangedAt()->format('U.u'),
+        );
+        self::assertSame(
+            ['trialing', 'active', 'past_due'],
+            array_column($restored->history(), 'state'),
+        );
+
+        $invalidHistories = [
+            [],
+            [
+                ['state' => 'active', 'at' => '2026-10-02T00:00:00+00:00'],
+                ['state' => 'past_due', 'at' => '2026-10-01T00:00:00+00:00'],
+            ],
+            [
+                ['state' => 'active', 'at' => '2026-10-01T00:00:00+00:00'],
+                ['state' => 'suspended', 'at' => '2026-10-02T00:00:00+00:00'],
+            ],
+            [
+                ['state' => 'active', 'at' => 'not-a-timestamp'],
+            ],
+        ];
+
+        foreach ($invalidHistories as $history) {
+            try {
+                SubscriptionLifecycle::restore(
+                    'tenant-a',
+                    $planVersion,
+                    SubscriptionState::PastDue,
+                    $lastChangedAt,
+                    $history,
+                );
+                self::fail('Un historial persistido inválido debía fallar.');
+            } catch (DomainException) {
+                self::assertTrue(true);
+            }
+        }
+
+        $this->expectException(DomainException::class);
+        SubscriptionLifecycle::restore(
+            'tenant-a',
+            $planVersion,
+            SubscriptionState::Active,
+            $lastChangedAt,
+            $valid,
+        );
+    }
+
     private function planVersion(): PlanVersion
     {
         return new PlanVersion(
