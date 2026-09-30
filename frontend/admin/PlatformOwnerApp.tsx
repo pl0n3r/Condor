@@ -303,8 +303,7 @@ export function PlatformOwnerApp({
   async function createInitialSubscription() {
     if (
       state.status !== 'ready'
-      || !selected
-      || selected.commercial_subscription.status !== 'not_configured'
+      || selected?.commercial_subscription.status !== 'not_configured'
       || selectedPlanVersionId === ''
     ) {
       return;
@@ -715,8 +714,8 @@ export function PlatformOwnerApp({
                   },
                   {
                     label: 'Modo',
-                    value: 'Solo lectura',
-                    detail: 'primer slice seguro',
+                    value: 'Gestión manual',
+                    detail: 'creación inicial controlada',
                   },
                 ]}
               />
@@ -732,7 +731,7 @@ export function PlatformOwnerApp({
                       Suscripción comercial
                     </h2>
                   </div>
-                  <span className="status-pill">Solo lectura</span>
+                  <span className="status-pill">Gestión manual</span>
                 </div>
 
                 {selected.commercial_subscription.status === 'not_configured' ? (
@@ -942,10 +941,10 @@ export function PlatformOwnerApp({
                 </section>
 
                 <div className="platform-readonly-note" role="note">
-                  Este primer contexto es deliberadamente de solo lectura.
-                  Los módulos compartidos se habilitarán aquí
-                  progresivamente cuando sus contratos server-side estén
-                  listos.
+                  Este contexto sigue siendo mayormente de solo lectura.
+                  La creación inicial de suscripción es la única acción
+                  comercial habilitada; los demás módulos se incorporarán
+                  cuando sus contratos server-side estén listos.
                 </div>
               </section>
             </>
