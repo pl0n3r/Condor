@@ -26,6 +26,12 @@ jobs:
           ref: 45f5571ac32fbe07d11e696098f4e5902fac8c7f
           path: _factoryrunner
           persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: pl0n3r/Factory
+          ref: bb732b0feb2b5f45b9d9f96efe257c289e76bbc9
+          path: _factory
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
@@ -49,6 +55,16 @@ jobs:
           for name in DATABASE_URL RECOVERY_S3_ENDPOINT RECOVERY_S3_BUCKET RECOVERY_S3_REGION RECOVERY_S3_PREFIX RECOVERY_S3_ACCESS_KEY_ID RECOVERY_S3_SECRET_ACCESS_KEY RECOVERY_S3_OBJECT_LOCK_DAYS RECOVERY_DISPOSABLE_DATABASE_URL CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE; do
             [[ -n "${!name:-}" ]] || { echo "::error::Recovery live no provisionado"; exit 1; }
           done
+
+      - name: Preparar PHP 8.5
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Instalar dependencias PHP reproducibles
+        run: |
+          python3 scripts/ci_retry.py             --attempts 3             --base-delay 3             --label "composer install recovery drill"             -- composer install --no-interaction --prefer-dist --no-progress
 
       - name: Backup y cifrado cliente
         id: backup
@@ -93,10 +109,9 @@ jobs:
           target="$root/materialized.enc"; rm -f -- "$target"
           python3 scripts/recovery-production.py descriptor --operation materialize --checksum "$BACKUP_CHECKSUM" --object-ref "$object_ref" --connection-ref "$CONNECTION_REF" >"$root/materialize.json"
           FACTORYRUNNER_RECOVERY_ARTIFACT_ROOT="$root" FACTORYRUNNER_RECOVERY_ARTIFACT_PATH="$target" node --experimental-strip-types _factoryrunner/scripts/recovery-live-object-storage.ts <"$root/materialize.json" >"$root/materialize-evidence.json"
-          echo "materialized=$target" >> "$GITHUB_OUTPUT"
           echo "verified_at=$(date +%s)" >> "$GITHUB_OUTPUT"
 
-      - name: Restore drill descartable
+      - name: Restore, integrity, health y smoke descartables
         id: restore
         env:
           RECOVERY_DISPOSABLE_DATABASE_URL: ${{ secrets.RECOVERY_DISPOSABLE_DATABASE_URL }}
@@ -105,30 +120,88 @@ jobs:
           CONDOR_RESTORE_EXPECT_USER_EMAIL: ${{ vars.RECOVERY_RESTORE_EXPECT_USER_EMAIL }}
         run: |
           set -euo pipefail
-          root="$HOME/.condor-recovery"; echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+          root="$HOME/.condor-recovery"
+          incident_at="$(date +%s)"
+          started_at="$(date +%s)"
           python3 scripts/recovery-production.py decrypt --source materialized.enc --target restored.sql.gz >/dev/null
           DATABASE_URL="$RECOVERY_DISPOSABLE_DATABASE_URL" CONDOR_ALLOW_DESTRUCTIVE_RESTORE=1 sh scripts/verify-backup-restore.sh "$root/restored.sql.gz"
-          echo "finished_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+          integrity_ok=true
 
-      - name: Evidencia RPO RTO
+          app_secret="$(openssl rand -hex 32)"
+          DATABASE_URL="$RECOVERY_DISPOSABLE_DATABASE_URL" APP_SECRET="$app_secret" APP_ENV=prod APP_DEBUG=0 RELEASE_SHA="$GITHUB_SHA"             php -S 127.0.0.1:18080 -t public public/index.php >"$root/app-server.log" 2>&1 &
+          server_pid=$!
+          cleanup_server() { kill "$server_pid" 2>/dev/null || true; }
+          trap cleanup_server EXIT
+
+          health=""
+          for _ in $(seq 1 20); do
+            if health="$(curl --fail --silent --show-error --max-time 5 http://127.0.0.1:18080/health 2>/dev/null)"; then
+              break
+            fi
+            sleep 1
+          done
+          [[ -n "$health" ]] || { cat "$root/app-server.log" >&2; exit 1; }
+          python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok" and d.get("schema_up_to_date") is True' <<<"$health"
+          health_ok=true
+
+          curl --fail --silent --show-error --max-time 5 http://127.0.0.1:18080/ >/dev/null
+          smoke_ok=true
+          kill "$server_pid" 2>/dev/null || true
+          wait "$server_pid" 2>/dev/null || true
+          trap - EXIT
+          completed_at="$(date +%s)"
+
+          echo "incident_at=$incident_at" >> "$GITHUB_OUTPUT"
+          echo "started_at=$started_at" >> "$GITHUB_OUTPUT"
+          echo "completed_at=$completed_at" >> "$GITHUB_OUTPUT"
+          echo "integrity_ok=$integrity_ok" >> "$GITHUB_OUTPUT"
+          echo "health_ok=$health_ok" >> "$GITHUB_OUTPUT"
+          echo "smoke_ok=$smoke_ok" >> "$GITHUB_OUTPUT"
+
+      - name: Evaluar RPO/RTO con Factory #330
         env:
           BACKUP_CHECKSUM: ${{ steps.backup.outputs.checksum }}
           BACKUP_CREATED_AT: ${{ steps.backup.outputs.created_at }}
           OFFSITE_VERIFIED_AT: ${{ steps.offsite.outputs.verified_at }}
+          INCIDENT_AT: ${{ steps.restore.outputs.incident_at }}
           RESTORE_STARTED_AT: ${{ steps.restore.outputs.started_at }}
-          RESTORE_FINISHED_AT: ${{ steps.restore.outputs.finished_at }}
+          RESTORE_COMPLETED_AT: ${{ steps.restore.outputs.completed_at }}
+          HEALTH_OK: ${{ steps.restore.outputs.health_ok }}
+          SMOKE_OK: ${{ steps.restore.outputs.smoke_ok }}
+          INTEGRITY_OK: ${{ steps.restore.outputs.integrity_ok }}
         run: |
           set -euo pipefail
           root="$HOME/.condor-recovery"
-          python3 scripts/recovery-production.py report --checksum "$BACKUP_CHECKSUM" --upload-evidence upload-evidence.json --verify-evidence verify-evidence.json --materialize-evidence materialize-evidence.json --backup-created-at "$BACKUP_CREATED_AT" --offsite-verified-at "$OFFSITE_VERIFIED_AT" --restore-started-at "$RESTORE_STARTED_AT" --restore-finished-at "$RESTORE_FINISHED_AT" --observed-at "$(date +%s)" --rpo-target 900 --rto-target 3600 --freshness-target 900 >"$root/recovery-report.json"
+          python3 scripts/recovery-production.py drill-inputs             --run-id "$GITHUB_RUN_ID"             --checksum "$BACKUP_CHECKSUM"             --upload-evidence upload-evidence.json             --verify-evidence verify-evidence.json             --materialize-evidence materialize-evidence.json             --backup-created-at "$BACKUP_CREATED_AT"             --offsite-verified-at "$OFFSITE_VERIFIED_AT"             --incident-at "$INCIDENT_AT"             --started-at "$RESTORE_STARTED_AT"             --completed-at "$RESTORE_COMPLETED_AT"             --health-ok "$HEALTH_OK"             --smoke-ok "$SMOKE_OK"             --integrity-ok "$INTEGRITY_OK"             --rpo-target 900             --rto-target 3600 >"$root/drill-inputs.json"
+
+          PYTHONPATH="$GITHUB_WORKSPACE/_factory" python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from recovery.drill import build_restore_drill_plan, evaluate_restore_drill
+
+          root=Path.home()/".condor-recovery"
+          payload=json.loads((root/"drill-inputs.json").read_text(encoding="utf-8"))
+          plan=build_restore_drill_plan(payload["manifest"],payload["verified_backup"],payload["target"])
+          result=evaluate_restore_drill(payload["manifest"],plan,payload["verified_backup"],payload["evidence"])
+          (root/"recovery-plan.json").write_text(json.dumps(plan,sort_keys=True,separators=(",",":")),encoding="utf-8")
+          (root/"recovery-report.json").write_text(json.dumps(result,sort_keys=True,separators=(",",":")),encoding="utf-8")
+          (root/"protection-latency.txt").write_text(str(payload["protection_latency_seconds"]),encoding="utf-8")
+          PY
+
           python3 - <<'PY' >>"$GITHUB_STEP_SUMMARY"
           import json
           from pathlib import Path
-          r=json.loads((Path.home()/".condor-recovery/recovery-report.json").read_text(encoding="utf-8"))
-          print("### Condor DR recovery drill")
-          print(f"- Estado: **{r['status']}**")
-          print(f"- Freshness: **{r['freshness']}** ({r['freshness_age_seconds']} s)")
-          print(f"- RPO observado: {r['rpo_observed_seconds']} s")
-          print(f"- RTO demostrado: {r['rto_observed_seconds']} s")
+          root=Path.home()/".condor-recovery"
+          r=json.loads((root/"recovery-report.json").read_text(encoding="utf-8"))
+          latency=(root/"protection-latency.txt").read_text(encoding="utf-8")
+          print("### Condor DR recovery drill · Factory #330")
+          print(f"- Estado canónico: **{r['status']}**")
+          print(f"- RPO observado: {r['observed']['rpo_seconds']} s / target {r['observed']['rpo_target_seconds']} s")
+          print(f"- RTO observado: {r['observed']['rto_seconds']} s / target {r['observed']['rto_target_seconds']} s")
+          print(f"- Latencia de protección (no RPO): {latency} s")
+          print(f"- Checks: health={r['checks']['health']}, smoke={r['checks']['smoke']}, integrity={r['checks']['integrity']}")
+          print("- Razones: "+(", ".join(r["reasons"]) if r["reasons"] else "ninguna"))
           print("- Evidencia: "+", ".join(r["evidence_refs"]))
+          if r["status"]!="PASSED":
+              raise SystemExit(1)
           PY
