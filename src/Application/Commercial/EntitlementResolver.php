@@ -135,12 +135,19 @@ final readonly class EntitlementResolver
             }
             $seen[$identity] = $stamp;
 
-            match ($override->entitlementNamespace()) {
-                'capability' => $this->applyCapability($context, $override, $capabilities),
-                'addon' => $this->applyAddOn($override, $addOns, $planAddOns),
-                'limit' => $this->applyLimit($override, $limits),
-                default => throw new DomainException('Namespace de entitlement inválido.'),
-            };
+            switch ($override->entitlementNamespace()) {
+                case 'capability':
+                    $this->applyCapability($context, $override, $capabilities);
+                    break;
+                case 'addon':
+                    $this->applyAddOn($override, $addOns, $planAddOns);
+                    break;
+                case 'limit':
+                    $this->applyLimit($override, $limits);
+                    break;
+                default:
+                    throw new DomainException('Namespace de entitlement inválido.');
+            }
             $provenance[] = $override->snapshot();
         }
         return $provenance;
