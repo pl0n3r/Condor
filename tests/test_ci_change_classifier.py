@@ -4,7 +4,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from scripts.ci_change_classifier import classify
+from scripts.ci_change_classifier import READ_ONLY_TRANSITION_EXEMPTIONS, classify
 
 
 class ChangeClassifierTests(unittest.TestCase):
@@ -163,6 +163,16 @@ class ChangeClassifierTests(unittest.TestCase):
         for marker in ("migrations/", "config/packages/", "src/Console/", "Service.php"):
             self.assertNotIn(marker, workflow)
 
+
+    def test_entitlement_transition_allowlist_is_exact(self) -> None:
+        self.assertEqual(
+            READ_ONLY_TRANSITION_EXEMPTIONS,
+            {
+                "src/Application/Commercial/EntitlementContext.php",
+                "src/Application/Commercial/EntitlementResolver.php",
+                "src/Application/Commercial/EntitlementSnapshot.php",
+            },
+        )
 
     def test_entitlement_read_models_do_not_require_operational_transition(self) -> None:
         for path in [
