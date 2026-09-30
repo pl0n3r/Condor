@@ -147,22 +147,24 @@ final class Subscription
 
     private function historyLastChangedAt(): DateTimeImmutable
     {
-        $last = $this->history[array_key_last($this->history)] ?? null;
+        $key = array_key_last($this->history);
+        if ($key === null) {
+            throw new DomainException('Historial persistido sin timestamp final válido.');
+        }
+
+        $value = $this->history[$key]['at'];
         if (
-            !is_array($last)
-            || !isset($last['at'])
-            || !is_string($last['at'])
-            || preg_match(
+            preg_match(
                 '/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$/D',
-                $last['at'],
+                $value,
             ) !== 1
         ) {
             throw new DomainException('Historial persistido sin timestamp final válido.');
         }
 
         try {
-            return new DateTimeImmutable($last['at']);
-        } catch (\\Throwable) {
+            return new DateTimeImmutable($value);
+        } catch (\Throwable) {
             throw new DomainException('Historial persistido sin timestamp final válido.');
         }
     }
