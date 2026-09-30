@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
+use App\Application\Commercial\PlatformCommercialSubscriptionCreator;
 use App\Application\Commercial\PlatformCommercialSubscriptionStateManager;
 use App\Application\Identity\PlatformOwnerTenantContext;
 use DomainException;
@@ -15,9 +16,55 @@ use Symfony\Component\Routing\Attribute\Route;
 final class PlatformCommercialSubscriptionController extends PlatformOwnerApiController
 {
     public function __construct(
+        private readonly PlatformCommercialSubscriptionCreator $creator,
         private readonly PlatformCommercialSubscriptionStateManager $manager,
         private readonly PlatformOwnerTenantContext $tenantContext,
     ) {
+    }
+
+    #[Route(
+        '/adminpl0n3r/api/tenants/{tenantId}/commercial-subscription',
+        name: 'platform_commercial_subscription_create',
+        methods: ['POST'],
+    )]
+    public function create(string $tenantId, Request $request): JsonResponse
+    {
+        $this->platformOwner();
+        $this->requireManagementCsrf(
+            $request,
+            'platform_commercial_subscription_management',
+        );
+
+        // Preserve the canonical tenant 404 before consulting Commercial data.
+        $this->tenantContext->tenant($tenantId);
+
+        $payload = $this->jsonPayload($request);
+        $keys = array_keys($payload);
+        sort($keys);
+        if (
+            $keys !== ['plan_version_id']
+            || !is_string($payload['plan_version_id'])
+            || trim($payload['plan_version_id']) === ''
+        ) {
+            throw new UnprocessableEntityHttpException(
+                'Solo se permite plan_version_id como PlanVersion canónica.',
+            );
+        }
+
+        try {
+            return $this->json(
+                $this->creator->create(
+                    $tenantId,
+                    $payload['plan_version_id'],
+                ),
+                JsonResponse::HTTP_CREATED,
+            );
+        } catch (DomainException $exception) {
+            throw new UnprocessableEntityHttpException(
+                $exception->getMessage(),
+                $exception,
+            );
+        }
     }
 
     #[Route(

@@ -10,6 +10,7 @@ import { PlatformTenantCreationPanel } from './PlatformTenantCreationPanel';
 import { platformOwnerContextPath } from './api';
 
 type CommercialPlan = {
+  plan_version_id: string;
   key: string;
   name: string;
   version: number;
@@ -163,6 +164,12 @@ function parseInternalErrorPayload(value: unknown): InternalErrorPayload | null 
   };
 }
 
+function subscriptionSubmitLabel(
+  status: 'idle' | 'saving' | 'error',
+): string {
+  return status === 'saving' ? 'Creando…' : 'Crear suscripción';
+}
+
 function commercialMoney(amount: number | null, currency: string): string {
   if (amount === null) {
     return 'Sin precio publicado';
@@ -188,11 +195,16 @@ type State =
 
 type PlatformOwnerSection = 'control' | 'empresas' | 'staff';
 
+function selectedTenantFromState(state: State): SelectedTenant | null {
+  return state.status === 'ready' ? state.data.selected_tenant : null;
+}
+
 type PlatformOwnerAppProps = Readonly<{
   version: string;
   logoutToken: string;
   staffToken: string;
   tenantToken: string;
+  subscriptionToken: string;
   section: PlatformOwnerSection;
 }>;
 
@@ -201,10 +213,15 @@ export function PlatformOwnerApp({
   logoutToken,
   staffToken,
   tenantToken,
+  subscriptionToken,
   section,
 }: PlatformOwnerAppProps) {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [platformRevision, setPlatformRevision] = useState(0);
+  const [selectedPlanVersionId, setSelectedPlanVersionId] = useState('');
+  const [subscriptionCreation, setSubscriptionCreation] = useState<
+    { status: 'idle' | 'saving' } | { status: 'error'; message: string }
+  >({ status: 'idle' });
   const requestSequence = useRef(0);
   const globalPage = useRef(1);
 
@@ -285,8 +302,66 @@ export function PlatformOwnerApp({
     void loadContext();
   }, []);
 
-  const selected =
-    state.status === 'ready' ? state.data.selected_tenant : null;
+  const selected = selectedTenantFromState(state);
+
+  useEffect(() => {
+    setSelectedPlanVersionId('');
+    setSubscriptionCreation({ status: 'idle' });
+  }, [selected?.id]);
+
+  async function createInitialSubscription() {
+    if (
+      state.status !== 'ready'
+      || selected?.commercial_subscription.status !== 'not_configured'
+      || selectedPlanVersionId === ''
+    ) {
+      return;
+    }
+
+    setSubscriptionCreation({ status: 'saving' });
+    try {
+      const response = await fetch(
+        '/adminpl0n3r/api/tenants/'
+          + encodeURIComponent(selected.id)
+          + '/commercial-subscription',
+        {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': subscriptionToken,
+          },
+          body: JSON.stringify({
+            plan_version_id: selectedPlanVersionId,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        setSubscriptionCreation({
+          status: 'error',
+          message: response.status === 403
+            ? 'Tu sesión no puede crear esta suscripción.'
+            : 'No fue posible crear la suscripción con ese plan vigente.',
+        });
+        return;
+      }
+
+      setSelectedPlanVersionId('');
+      setSubscriptionCreation({ status: 'idle' });
+      await loadContext(
+        selected.id,
+        state.data.tenant_pagination.page,
+        false,
+      );
+    } catch {
+      setSubscriptionCreation({
+        status: 'error',
+        message: 'No fue posible completar la creación.',
+      });
+    }
+  }
 
   return (
     <AdminShell
@@ -648,8 +723,8 @@ export function PlatformOwnerApp({
                   },
                   {
                     label: 'Modo',
-                    value: 'Solo lectura',
-                    detail: 'primer slice seguro',
+                    value: 'Gestión manual',
+                    detail: 'creación inicial controlada',
                   },
                 ]}
               />
@@ -665,14 +740,75 @@ export function PlatformOwnerApp({
                       Suscripción comercial
                     </h2>
                   </div>
-                  <span className="status-pill">Solo lectura</span>
+                  <span className="status-pill">Gestión manual</span>
                 </div>
 
                 {selected.commercial_subscription.status === 'not_configured' ? (
-                  <div className="platform-empty">
-                    Sin suscripción configurada. No se asigna un plan ni precio
-                    implícito.
-                  </div>
+                  <form
+                    className="platform-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void createInitialSubscription();
+                    }}
+                  >
+                    <div>
+                      <strong>Crear suscripción inicial</strong>
+                      <p className="muted">
+                        Sin suscripción configurada. Selecciona una PlanVersion
+                        vigente. El tenant, estado
+                        inicial y timestamp los define el servidor.
+                      </p>
+                    </div>
+
+                    {state.data.commercial_catalog.length === 0 ? (
+                      <div className="platform-empty">
+                        No hay PlanVersion vigentes disponibles.
+                      </div>
+                    ) : (
+                      <label className="field">
+                        <span>Plan vigente</span>
+                        <select
+                          value={selectedPlanVersionId}
+                          onChange={(event) => {
+                            setSelectedPlanVersionId(event.target.value);
+                            setSubscriptionCreation({ status: 'idle' });
+                          }}
+                          disabled={subscriptionCreation.status === 'saving'}
+                          required
+                        >
+                          <option value="">Selecciona un plan</option>
+                          {state.data.commercial_catalog.map((plan) => (
+                            <option
+                              key={plan.plan_version_id}
+                              value={plan.plan_version_id}
+                            >
+                              {plan.name} · v{plan.version}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+
+                    <div className="platform-form-actions">
+                      <button
+                        className="button"
+                        type="submit"
+                        disabled={
+                          selectedPlanVersionId === ''
+                          || subscriptionCreation.status === 'saving'
+                        }
+                      >
+                        {subscriptionSubmitLabel(
+                          subscriptionCreation.status,
+                        )}
+                      </button>
+                      {subscriptionCreation.status === 'error' && (
+                        <span className="muted" role="alert">
+                          {subscriptionCreation.message}
+                        </span>
+                      )}
+                    </div>
+                  </form>
                 ) : (
                   <div className="tenant-grid">
                     <article className="tenant-card">
@@ -814,10 +950,10 @@ export function PlatformOwnerApp({
                 </section>
 
                 <div className="platform-readonly-note" role="note">
-                  Este primer contexto es deliberadamente de solo lectura.
-                  Los módulos compartidos se habilitarán aquí
-                  progresivamente cuando sus contratos server-side estén
-                  listos.
+                  Este contexto sigue siendo mayormente de solo lectura.
+                  La creación inicial de suscripción es la única acción
+                  comercial habilitada; los demás módulos se incorporarán
+                  cuando sus contratos server-side estén listos.
                 </div>
               </section>
             </>

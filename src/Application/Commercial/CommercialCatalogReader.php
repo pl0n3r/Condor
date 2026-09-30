@@ -38,6 +38,7 @@ final readonly class CommercialCatalogReader
                 continue;
             }
             $result[] = [
+                'plan_version_id' => $version->id(),
                 'key' => $plan->key(),
                 'name' => $plan->name(),
                 'version' => $version->version(),
