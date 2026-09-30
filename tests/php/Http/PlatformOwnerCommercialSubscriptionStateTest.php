@@ -50,7 +50,12 @@ final class PlatformOwnerCommercialSubscriptionStateTest extends WebTestCase
         [$owner] = $this->fixture('unknown', null);
         $client->loginUser($owner);
         $token = $this->token($client);
-        $client->jsonRequest('POST', '/adminpl0n3r/api/tenants/00000000000000000000000000/commercial-subscription/state', ['target_state' => 'active'], ['HTTP_X_CSRF_TOKEN' => $token]);
+        $client->jsonRequest(
+            'POST',
+            '/adminpl0n3r/api/tenants/00000000000000000000000000/commercial-subscription/state',
+            ['target_state' => 'active'],
+            ['HTTP_X_CSRF_TOKEN' => $token],
+        );
         self::assertResponseStatusCodeSame(404);
 
         $tenant = new Tenant('Sin suscripción', 'sin-suscripcion-'.bin2hex(random_bytes(3)));
@@ -124,11 +129,27 @@ final class PlatformOwnerCommercialSubscriptionStateTest extends WebTestCase
         $this->em()->persist($tenant);
         if ($state !== null) {
             $plan = new Plan("plan-$suffix-$id", "Plan $suffix");
-            $version = new PlanVersion($plan, 1, 149900, 1499000, false, ['users' => 5], new DateTimeImmutable('2025-01-01T00:00:00Z'));
-            $lifecycle = new SubscriptionLifecycle($tenant->id(), $version, $state, new DateTimeImmutable('2026-01-01T00:00:00.000001Z'));
+            $version = new PlanVersion(
+                $plan,
+                1,
+                149900,
+                1499000,
+                false,
+                ['users' => 5],
+                new DateTimeImmutable('2025-01-01T00:00:00Z'),
+            );
+            $lifecycle = new SubscriptionLifecycle(
+                $tenant->id(),
+                $version,
+                $state,
+                new DateTimeImmutable('2026-01-01T00:00:00.000001Z'),
+            );
             $this->em()->persist($plan);
             $this->em()->persist($version);
-            $this->em()->persist(Subscription::fromLifecycle($lifecycle, new DateTimeImmutable('2026-01-01T00:00:01.000001Z')));
+            $this->em()->persist(Subscription::fromLifecycle(
+                $lifecycle,
+                new DateTimeImmutable('2026-01-01T00:00:01.000001Z'),
+            ));
         }
         $this->em()->flush();
 
