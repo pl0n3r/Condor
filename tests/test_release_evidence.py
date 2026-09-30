@@ -117,6 +117,27 @@ class ReleaseEvidenceTests(unittest.TestCase):
         evidence = module.finalize(manifest, observation, [])
         self.assertEqual(evidence["estado"], "VALIDATED_IN_PRODUCTION")
 
+
+    def test_v0187_entitlements_manifest_has_no_operational_transition(self) -> None:
+        paths = [
+            "config/version.php",
+            "src/Application/Commercial/EntitlementContext.php",
+            "src/Application/Commercial/EntitlementResolver.php",
+            "src/Application/Commercial/EntitlementSnapshot.php",
+            "src/Domain/Commercial/EntitlementOverride.php",
+            "tests/php/Application/Commercial/EntitlementResolverTest.php",
+            "tests/php/Domain/Commercial/EntitlementOverrideTest.php",
+            "tests/test_entitlements_acceptance.py",
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = self.manifest(tmp, paths)
+
+        self.assertFalse(manifest["transition"]["required"])
+        self.assertTrue(
+            all(item["required"] is False for item in manifest["transition"]["checks"])
+        )
+        module.validate_manifest(manifest)
+
     def test_manifest_rejects_requested_version_different_from_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             version_file = self.version_file(tmp, "0.1.11")
