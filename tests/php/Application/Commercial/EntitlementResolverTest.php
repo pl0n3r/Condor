@@ -75,9 +75,18 @@ final class EntitlementResolverTest extends KernelTestCase
 
     public function testFailsClosedForUnknownInactiveOrIncompatibleCommercialState(): void
     {
-        $foreign = $this->addOn('production-lite');
-        $this->expectException(DomainException::class);
-        $this->resolver->resolve($this->context('tenant-a', 'pro', 'legal', [$foreign]));
+        $this->assertDomainFailure(fn () => $this->resolver->resolve(
+            $this->context('tenant-a', 'pro', 'legal', [$this->addOn('production-lite')]),
+        ));
+
+        $snapshot = $this->resolver->resolve($this->context('tenant-a', 'business', 'commerce'));
+        $this->assertDomainFailure(fn () => $snapshot->capability('unknown-capability'));
+
+        $inactive = $this->addOn('production-lite');
+        $inactive->deactivate();
+        $this->assertDomainFailure(fn () => $this->resolver->resolve(
+            $this->context('tenant-a', 'business', 'commerce', [$inactive]),
+        ));
     }
 
     public function testRejectsInactiveAddOnAndStalePlanVersion(): void
@@ -198,6 +207,16 @@ final class EntitlementResolverTest extends KernelTestCase
             $overrides,
             $this->at,
         );
+    }
+
+    private function assertDomainFailure(callable $operation): void
+    {
+        try {
+            $operation();
+            self::fail('La operación debía fallar cerrado.');
+        } catch (DomainException) {
+            self::assertTrue(true);
+        }
     }
 
     private function planVersion(string $key): PlanVersion

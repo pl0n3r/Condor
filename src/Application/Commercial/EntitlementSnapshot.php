@@ -15,14 +15,14 @@ final readonly class EntitlementSnapshot
     private array $addOns;
     /** @var array<string,bool|int|string|null> */
     private array $limits;
-    /** @var list<array<string,mixed>> */
+    /** @var list<array{namespace:string,key:string,value:bool|int|string|null,reason:string,actor:string,created_at:string}> */
     private array $overrideProvenance;
 
     /**
      * @param array<string,bool> $capabilities
      * @param array<string,bool> $addOns
      * @param array<string,bool|int|string|null> $limits
-     * @param list<array<string,mixed>> $overrideProvenance
+     * @param list<array{namespace:string,key:string,value:bool|int|string|null,reason:string,actor:string,created_at:string}> $overrideProvenance
      */
     public function __construct(
         private string $tenantId,
@@ -87,6 +87,6 @@ final readonly class EntitlementSnapshot
     public function addOns(): array { return $this->addOns; }
     /** @return array<string,bool|int|string|null> */
     public function limits(): array { return $this->limits; }
-    /** @return list<array<string,mixed>> */
+    /** @return list<array{namespace:string,key:string,value:bool|int|string|null,reason:string,actor:string,created_at:string}> */
     public function overrideProvenance(): array { return $this->overrideProvenance; }
 }

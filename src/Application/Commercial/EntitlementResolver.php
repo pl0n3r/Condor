@@ -33,18 +33,27 @@ final readonly class EntitlementResolver
             $vertical->key(),
             $context->evaluatedAt(),
         );
+        $resolvedPlan = $options['plan'] ?? null;
+        $resolvedVertical = $options['vertical'] ?? null;
+        $resolvedCapabilities = $options['capabilities'] ?? null;
         if (
-            ($options['plan']['version'] ?? null) !== $version->version()
-            || ($options['vertical']['key'] ?? null) !== $vertical->key()
+            !is_array($resolvedPlan)
+            || !is_array($resolvedVertical)
+            || !is_array($resolvedCapabilities)
+            || ($resolvedPlan['version'] ?? null) !== $version->version()
+            || ($resolvedVertical['key'] ?? null) !== $vertical->key()
         ) {
-            throw new DomainException('Contexto comercial stale.');
+            throw new DomainException('Contexto comercial stale o inválido.');
         }
 
         $capabilities = [];
         foreach ($version->capabilities() as $capability) {
             $capabilities[$capability->key()] = false;
         }
-        foreach ($options['capabilities'] as $capability) {
+        foreach ($resolvedCapabilities as $capability) {
+            if (!is_array($capability)) {
+                throw new DomainException('Catálogo de capabilities inconsistente.');
+            }
             $key = $capability['key'] ?? null;
             if (!is_string($key) || !array_key_exists($key, $capabilities)) {
                 throw new DomainException('Catálogo de capabilities inconsistente.');
@@ -98,7 +107,7 @@ final readonly class EntitlementResolver
      * @param array<string,bool> $addOns
      * @param array<string,bool|int|string|null> $limits
      * @param array<string,AddOn> $planAddOns
-     * @return list<array<string,mixed>>
+     * @return list<array{namespace:string,key:string,value:bool|int|string|null,reason:string,actor:string,created_at:string}>
      */
     private function applyOverrides(
         EntitlementContext $context,
