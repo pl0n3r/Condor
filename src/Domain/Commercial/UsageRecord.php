@@ -66,7 +66,16 @@ final readonly class UsageRecord
         return $this->observedAt;
     }
 
-    /** @return array{tenant_id:string,metric:string,quantity:int,window_start:string,window_end:string,observed_at:string} */
+    /**
+     * @return array{
+     *     tenant_id:string,
+     *     metric:string,
+     *     quantity:int,
+     *     window_start:string,
+     *     window_end:string,
+     *     observed_at:string
+     * }
+     */
     public function snapshot(): array
     {
         return [
