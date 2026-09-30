@@ -64,11 +64,15 @@ class PrivacyAuditFactoryPinTests(unittest.TestCase):
             "uses: pl0n3r/factory/.github/workflows/privacidad.yml@'.self::FACTORY_SHA",
             php_contract,
         )
+        self.assertIn("private const FACTORY_AUDIT_REF = 'v1';", php_contract)
         self.assertIn(
-            "uses: pl0n3r/factory/.github/workflows/auditoria-privacidad.yml@v1",
+            "uses: pl0n3r/factory/.github/workflows/auditoria-privacidad.yml@'.self::FACTORY_AUDIT_REF",
             php_contract,
         )
-        self.assertIn("self::assertStringContainsString('kit_ref: v1', $audit)", php_contract)
+        self.assertIn(
+            "self::assertStringContainsString('kit_ref: '.self::FACTORY_AUDIT_REF, $audit)",
+            php_contract,
+        )
         self.assertNotIn(
             "uses: pl0n3r/factory/.github/workflows/auditoria-privacidad.yml@'.self::FACTORY_SHA",
             php_contract,
