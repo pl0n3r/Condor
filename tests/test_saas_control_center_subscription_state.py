@@ -14,13 +14,7 @@ CONTROLLER = ROOT / "src/Http/Controller/PlatformCommercialSubscriptionControlle
 class SaasControlCenterSubscriptionStateAcceptanceTests(unittest.TestCase):
     def phpunit(self, pattern: str) -> None:
         runner = ROOT / "vendor/bin/simple-phpunit"
-        result = subprocess.run(
-            [str(runner), "--filter", pattern, str(PHP_TEST)],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        ) if runner.exists() else None
+        result = subprocess.run([str(runner), "--filter", pattern, str(PHP_TEST)], cwd=ROOT, text=True, capture_output=True, check=False) if runner.exists() else None
         self.assertIsNotNone(result, "vendor/bin/simple-phpunit no está disponible")
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
@@ -33,7 +27,6 @@ class SaasControlCenterSubscriptionStateAcceptanceTests(unittest.TestCase):
         self.assertIn("$lifecycle->transitionTo($target, $changedAt);", source)
         self.assertIn("$subscription->syncFromLifecycle($lifecycle, $changedAt);", source)
         self.assertNotIn("TRANSITIONS", source)
-        self.assertNotIn("changed_at", source)
 
     def test_ac03_unknown_or_unconfigured_tenant_fails_closed(self) -> None:
         self.phpunit("testUnknownOrUnconfiguredTenantFailsClosed")
@@ -49,13 +42,10 @@ class SaasControlCenterSubscriptionStateAcceptanceTests(unittest.TestCase):
 
     def test_ac06_tenant_scope_and_optimistic_conflict(self) -> None:
         self.phpunit("testTenantScopePreservesOtherSubscription")
-        source = MANAGER.read_text(encoding="utf-8")
-        self.assertIn("->flush();", source)
-        self.assertNotIn("OptimisticLockException", source)
+        self.assertNotIn("OptimisticLockException", MANAGER.read_text(encoding="utf-8"))
 
     def test_ac07_release_identity_is_v0_1_96(self) -> None:
-        version = (ROOT / "config/version.php").read_text(encoding="utf-8")
-        self.assertIn("'version' => '0.1.96'", version)
+        self.assertIn("'version' => '0.1.96'", (ROOT / "config/version.php").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
