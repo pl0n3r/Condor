@@ -97,6 +97,7 @@ final class UsageLedger
             return $total;
         }
 
+        /** @var UsageRecord|null $latest */
         $latest = null;
         foreach ($matches as $record) {
             if ($latest === null || $record->observedAt() > $latest->observedAt()) {
