@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Commercial;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use DomainException;
 
 final class UsageLedger
@@ -158,6 +159,8 @@ final class UsageLedger
 
     private static function formatTime(DateTimeImmutable $value): string
     {
-        return $value->format('Y-m-d\TH:i:s.uP');
+        return $value
+            ->setTimezone(new DateTimeZone('UTC'))
+            ->format('Y-m-d\TH:i:s.u\Z');
     }
 }
