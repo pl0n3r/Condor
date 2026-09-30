@@ -151,8 +151,8 @@ final class UsageLedger
     ): string {
         return implode('|', [
             $metric->value,
-            self::formatTime($windowStart),
-            self::formatTime($windowEnd),
+            $windowStart->format('U.u'),
+            $windowEnd->format('U.u'),
         ]);
     }
 
