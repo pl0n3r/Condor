@@ -8,6 +8,7 @@ use App\Domain\Commercial\SubscriptionLifecycle;
 use App\Domain\Commercial\SubscriptionState;
 use App\Shared\Id\UlidFactory;
 use DateTimeImmutable;
+use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
 use DomainException;
 
@@ -43,23 +44,32 @@ final class Subscription
     #[ORM\Column(
         name: 'last_changed_at',
         type: 'datetime_immutable',
-        columnDefinition: "DATETIME(6) NOT NULL COMMENT '(DC2Type:datetime_immutable)'",
+        columnDefinition: 'DATETIME(6) NOT NULL',
     )]
     private DateTimeImmutable $lastChangedAt;
 
     #[ORM\Column(
         name: 'created_at',
         type: 'datetime_immutable',
-        columnDefinition: "DATETIME(6) NOT NULL COMMENT '(DC2Type:datetime_immutable)'",
+        columnDefinition: 'DATETIME(6) NOT NULL',
     )]
     private DateTimeImmutable $createdAt;
 
     #[ORM\Column(
         name: 'updated_at',
         type: 'datetime_immutable',
-        columnDefinition: "DATETIME(6) NOT NULL COMMENT '(DC2Type:datetime_immutable)'",
+        columnDefinition: 'DATETIME(6) NOT NULL',
     )]
     private DateTimeImmutable $updatedAt;
+
+    #[ORM\Column(name: 'last_changed_at_exact', type: 'string', length: 32, nullable: true)]
+    private ?string $lastChangedAtExact = null;
+
+    #[ORM\Column(name: 'created_at_exact', type: 'string', length: 32, nullable: true)]
+    private ?string $createdAtExact = null;
+
+    #[ORM\Column(name: 'updated_at_exact', type: 'string', length: 32, nullable: true)]
+    private ?string $updatedAtExact = null;
 
     #[ORM\Version]
     #[ORM\Column(name: 'lock_version', type: 'integer', options: ['unsigned' => true, 'default' => 1])]
@@ -73,6 +83,10 @@ final class Subscription
         SubscriptionLifecycle $lifecycle,
         DateTimeImmutable $recordedAt,
     ): self {
+        if ($recordedAt < $lifecycle->lastChangedAt()) {
+            throw new DomainException('Timestamp técnico anterior al cambio de suscripción.');
+        }
+
         $subscription = new self();
         $subscription->id = UlidFactory::new();
         $subscription->tenantId = $lifecycle->tenantId();
@@ -82,39 +96,79 @@ final class Subscription
         $subscription->lastChangedAt = $lifecycle->lastChangedAt();
         $subscription->createdAt = $recordedAt;
         $subscription->updatedAt = $recordedAt;
+        $subscription->lastChangedAtExact = self::formatExact($lifecycle->lastChangedAt());
+        $subscription->createdAtExact = self::formatExact($recordedAt);
+        $subscription->updatedAtExact = self::formatExact($recordedAt);
 
         return $subscription;
     }
 
-    public function id(): string { return $this->id; }
-    public function tenantId(): string { return $this->tenantId; }
-    public function planVersion(): PlanVersion { return $this->planVersion; }
-    public function state(): SubscriptionState { return SubscriptionState::from($this->state); }
+    public function id(): string
+    {
+        return $this->id;
+    }
+
+    public function tenantId(): string
+    {
+        return $this->tenantId;
+    }
+
+    public function planVersion(): PlanVersion
+    {
+        return $this->planVersion;
+    }
+
+    public function state(): SubscriptionState
+    {
+        return SubscriptionState::from($this->state);
+    }
+
     /** @return list<array{state:string,at:string}> */
-    public function history(): array { return $this->history; }
+    public function history(): array
+    {
+        return $this->history;
+    }
+
     public function lastChangedAt(): DateTimeImmutable
     {
-        return $this->historyLastChangedAt();
+        if ($this->lastChangedAtExact !== null) {
+            return self::parseExact($this->lastChangedAtExact);
+        }
+
+        $key = array_key_last($this->history);
+        if ($key === null || !isset($this->history[$key]['at'])) {
+            throw new DomainException('Historial persistido sin timestamp final válido.');
+        }
+
+        return self::parseHistoryTime($this->history[$key]['at']);
     }
-    public function createdAt(): DateTimeImmutable { return $this->createdAt; }
-    public function updatedAt(): DateTimeImmutable { return $this->updatedAt; }
-    public function lockVersion(): int { return $this->lockVersion; }
+
+    public function createdAt(): DateTimeImmutable
+    {
+        return $this->createdAtExact === null
+            ? $this->createdAt
+            : self::parseExact($this->createdAtExact);
+    }
+
+    public function updatedAt(): DateTimeImmutable
+    {
+        return $this->updatedAtExact === null
+            ? $this->updatedAt
+            : self::parseExact($this->updatedAtExact);
+    }
+
+    public function lockVersion(): int
+    {
+        return $this->lockVersion;
+    }
 
     public function toLifecycle(): SubscriptionLifecycle
     {
-        $exactLastChangedAt = $this->historyLastChangedAt();
-        if (
-            $this->lastChangedAt->format('Y-m-d H:i:s')
-            !== $exactLastChangedAt->format('Y-m-d H:i:s')
-        ) {
-            throw new DomainException('Timestamp persistido incoherente con su historial.');
-        }
-
         return SubscriptionLifecycle::restore(
             $this->tenantId,
             $this->planVersion,
             $this->state(),
-            $exactLastChangedAt,
+            $this->lastChangedAt(),
             $this->history,
         );
     }
@@ -131,8 +185,9 @@ final class Subscription
         }
 
         if (
-            $updatedAt < $this->updatedAt
-            || $lifecycle->lastChangedAt() < $this->lastChangedAt
+            $updatedAt < $lifecycle->lastChangedAt()
+            || $updatedAt < $this->updatedAt()
+            || $lifecycle->lastChangedAt() < $this->lastChangedAt()
             || count($lifecycle->history()) < count($this->history)
             || array_slice($lifecycle->history(), 0, count($this->history)) !== $this->history
         ) {
@@ -143,29 +198,48 @@ final class Subscription
         $this->history = $lifecycle->history();
         $this->lastChangedAt = $lifecycle->lastChangedAt();
         $this->updatedAt = $updatedAt;
+        $this->lastChangedAtExact = self::formatExact($lifecycle->lastChangedAt());
+        $this->updatedAtExact = self::formatExact($updatedAt);
     }
 
-    private function historyLastChangedAt(): DateTimeImmutable
+    private static function formatExact(DateTimeImmutable $value): string
     {
-        $key = array_key_last($this->history);
-        if ($key === null) {
-            throw new DomainException('Historial persistido sin timestamp final válido.');
-        }
+        return $value
+            ->setTimezone(new DateTimeZone('UTC'))
+            ->format('Y-m-d\\TH:i:s.u\\Z');
+    }
 
-        $value = $this->history[$key]['at'];
+    private static function parseHistoryTime(string $value): DateTimeImmutable
+    {
         if (
             preg_match(
-                '/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$/D',
-                $value,
+                '/^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(?:\\.(\\d{1,6}))?(Z|[+-]\\d{2}:\\d{2})$/D',
+                trim($value),
+                $matches,
             ) !== 1
         ) {
             throw new DomainException('Historial persistido sin timestamp final válido.');
         }
 
-        try {
-            return new DateTimeImmutable($value);
-        } catch (\Throwable) {
+        $fraction = str_pad($matches[2] ?? '', 6, '0');
+        $offset = $matches[3] === 'Z' ? '+00:00' : $matches[3];
+        $normalized = $matches[1].'.'.$fraction.$offset;
+        $parsed = DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i:s.uP', $normalized);
+        $errors = DateTimeImmutable::getLastErrors();
+
+        if (
+            $parsed === false
+            || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))
+            || $parsed->format('Y-m-d\\TH:i:s.uP') !== $normalized
+        ) {
             throw new DomainException('Historial persistido sin timestamp final válido.');
         }
+
+        return $parsed;
+    }
+
+    private static function parseExact(string $value): DateTimeImmutable
+    {
+        return self::parseHistoryTime($value);
     }
 }

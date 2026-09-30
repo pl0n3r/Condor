@@ -45,7 +45,7 @@ class SubscriptionPersistenceAcceptanceTests(unittest.TestCase):
 
     def test_ac07_release_identity(self) -> None:
         contents = VERSION.read_text(encoding="utf-8")
-        self.assertIn("'version' => '0.1.91'", contents)
+        self.assertIn("'version' => '0.1.92'", contents)
 
 
 if __name__ == "__main__":

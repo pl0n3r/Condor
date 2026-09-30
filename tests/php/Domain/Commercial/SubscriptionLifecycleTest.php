@@ -102,6 +102,28 @@ final class SubscriptionLifecycleTest extends TestCase
             [
                 ['state' => 'active', 'at' => 'not-a-timestamp'],
             ],
+            [
+                1 => ['state' => 'active', 'at' => '2026-10-01T00:00:00.000000Z'],
+            ],
+            [
+                [
+                    'state' => 'active',
+                    'at' => '2026-10-01T00:00:00.000000Z',
+                    'email' => 'should-not-be-accepted@example.test',
+                ],
+            ],
+            [
+                ['state' => 'active', 'at' => '2026-02-30T12:00:00.123456Z'],
+            ],
+            [
+                1 => ['state' => 'active', 'at' => '2026-10-01T00:00:00+00:00'],
+            ],
+            [
+                ['state' => 'active', 'at' => '2026-10-01T00:00:00+00:00', 'payload' => 'forbidden'],
+            ],
+            [
+                ['state' => 'active', 'at' => '2026-02-30T00:00:00+00:00'],
+            ],
         ];
 
         foreach ($invalidHistories as $history) {

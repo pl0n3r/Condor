@@ -6,8 +6,8 @@ namespace App\Domain\Commercial;
 
 use App\Domain\Commercial\Entity\PlanVersion;
 use DateTimeImmutable;
+use DateTimeZone;
 use DomainException;
-use Throwable;
 
 final class SubscriptionLifecycle
 {
@@ -61,17 +61,22 @@ final class SubscriptionLifecycle
         DateTimeImmutable $lastChangedAt,
         array $history,
     ): self {
-        if ($history === []) {
-            throw new DomainException('Historial de suscripción vacío.');
+        if ($history === [] || !array_is_list($history)) {
+            throw new DomainException('Historial de suscripción vacío o no canónico.');
         }
 
         $restored = null;
         foreach ($history as $entry) {
+            if (!is_array($entry)) {
+                throw new DomainException('Historial de suscripción inválido.');
+            }
+
+            $keys = array_keys($entry);
+            sort($keys);
             if (
-                !is_array($entry)
-                || !isset($entry['state'], $entry['at'])
-                || !is_string($entry['state'])
-                || !is_string($entry['at'])
+                $keys !== ['at', 'state']
+                || !is_string($entry['state'] ?? null)
+                || !is_string($entry['at'] ?? null)
             ) {
                 throw new DomainException('Historial de suscripción inválido.');
             }
@@ -100,10 +105,25 @@ final class SubscriptionLifecycle
         return $restored;
     }
 
-    public function tenantId(): string { return $this->tenantId; }
-    public function planVersion(): PlanVersion { return $this->planVersion; }
-    public function state(): SubscriptionState { return $this->state; }
-    public function lastChangedAt(): DateTimeImmutable { return $this->lastChangedAt; }
+    public function tenantId(): string
+    {
+        return $this->tenantId;
+    }
+
+    public function planVersion(): PlanVersion
+    {
+        return $this->planVersion;
+    }
+
+    public function state(): SubscriptionState
+    {
+        return $this->state;
+    }
+
+    public function lastChangedAt(): DateTimeImmutable
+    {
+        return $this->lastChangedAt;
+    }
 
     /** @return list<array{state:string,at:string}> */
     public function history(): array
@@ -133,23 +153,36 @@ final class SubscriptionLifecycle
         $value = trim($value);
         if (
             preg_match(
-                '/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$/D',
+                '/^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(?:\\.(\\d{1,6}))?(Z|[+-]\\d{2}:\\d{2})$/D',
                 $value,
+                $matches,
             ) !== 1
         ) {
             throw new DomainException('Timestamp histórico de suscripción inválido.');
         }
 
-        try {
-            return new DateTimeImmutable($value);
-        } catch (Throwable) {
+        $fraction = str_pad($matches[2] ?? '', 6, '0');
+        $offset = $matches[3] === 'Z' ? '+00:00' : $matches[3];
+        $normalized = $matches[1].'.'.$fraction.$offset;
+        $parsed = DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i:s.uP', $normalized);
+        $errors = DateTimeImmutable::getLastErrors();
+
+        if (
+            $parsed === false
+            || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))
+            || $parsed->format('Y-m-d\\TH:i:s.uP') !== $normalized
+        ) {
             throw new DomainException('Timestamp histórico de suscripción inválido.');
         }
+
+        return $parsed;
     }
 
     private static function formatTime(DateTimeImmutable $value): string
     {
-        return $value->format('Y-m-d\\TH:i:s.uP');
+        return $value
+            ->setTimezone(new DateTimeZone('UTC'))
+            ->format('Y-m-d\\TH:i:s.u\\Z');
     }
 
     private static function instant(DateTimeImmutable $value): string
