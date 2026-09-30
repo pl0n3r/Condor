@@ -86,7 +86,7 @@ final class SubscriptionLifecycle
                 throw new DomainException('Estado histórico de suscripción inválido.');
             }
 
-            $entryAt = self::parseTime($entry['at']);
+            $entryAt = self::parseHistoricalTime($entry['at']);
             if ($restored === null) {
                 $restored = new self($tenantId, $planVersion, $entryState, $entryAt);
                 continue;
@@ -148,8 +148,12 @@ final class SubscriptionLifecycle
         ];
     }
 
-    private static function parseTime(string $value): DateTimeImmutable
+    public static function parseHistoricalTime(mixed $value): DateTimeImmutable
     {
+        if (!is_string($value)) {
+            throw new DomainException('Timestamp histórico de suscripción inválido.');
+        }
+
         $value = trim($value);
         if (
             preg_match(

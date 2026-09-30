@@ -195,6 +195,17 @@ SQL;
                 [$id],
             ),
         );
+
+        $manager->getConnection()->executeStatement(
+            'UPDATE condor_commercial_subscription '
+            .'SET history = ?, last_changed_at_exact = NULL WHERE id = ?',
+            [json_encode([['state' => 'active', 'at' => 123]], JSON_THROW_ON_ERROR), $id],
+        );
+        $manager->clear();
+
+        $corrupt = $manager->find(Subscription::class, $id);
+        self::assertInstanceOf(Subscription::class, $corrupt);
+        $this->assertRejected(fn () => $corrupt->lastChangedAt());
     }
 
     public function testIdentityIsolation(): void

@@ -132,29 +132,39 @@ final class Subscription
     public function lastChangedAt(): DateTimeImmutable
     {
         if ($this->lastChangedAtExact !== null) {
-            return self::parseExact($this->lastChangedAtExact);
+            return SubscriptionLifecycle::parseHistoricalTime($this->lastChangedAtExact);
         }
 
         $key = array_key_last($this->history);
-        if ($key === null || !isset($this->history[$key]['at'])) {
+        $last = $key === null ? null : $this->history[$key];
+        if (!is_array($last)) {
             throw new DomainException('Historial persistido sin timestamp final válido.');
         }
 
-        return self::parseHistoryTime($this->history[$key]['at']);
+        $keys = array_keys($last);
+        sort($keys);
+        if (
+            $keys !== ['at', 'state']
+            || !is_string($last['state'] ?? null)
+        ) {
+            throw new DomainException('Historial persistido sin timestamp final válido.');
+        }
+
+        return SubscriptionLifecycle::parseHistoricalTime($last['at'] ?? null);
     }
 
     public function createdAt(): DateTimeImmutable
     {
         return $this->createdAtExact === null
             ? $this->createdAt
-            : self::parseExact($this->createdAtExact);
+            : SubscriptionLifecycle::parseHistoricalTime($this->createdAtExact);
     }
 
     public function updatedAt(): DateTimeImmutable
     {
         return $this->updatedAtExact === null
             ? $this->updatedAt
-            : self::parseExact($this->updatedAtExact);
+            : SubscriptionLifecycle::parseHistoricalTime($this->updatedAtExact);
     }
 
     public function lockVersion(): int
@@ -209,37 +219,5 @@ final class Subscription
             ->format('Y-m-d\\TH:i:s.u\\Z');
     }
 
-    private static function parseHistoryTime(string $value): DateTimeImmutable
-    {
-        if (
-            preg_match(
-                '/^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(?:\\.(\\d{1,6}))?(Z|[+-]\\d{2}:\\d{2})$/D',
-                trim($value),
-                $matches,
-            ) !== 1
-        ) {
-            throw new DomainException('Historial persistido sin timestamp final válido.');
-        }
 
-        $fraction = str_pad($matches[2] ?? '', 6, '0');
-        $offset = $matches[3] === 'Z' ? '+00:00' : $matches[3];
-        $normalized = $matches[1].'.'.$fraction.$offset;
-        $parsed = DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i:s.uP', $normalized);
-        $errors = DateTimeImmutable::getLastErrors();
-
-        if (
-            $parsed === false
-            || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))
-            || $parsed->format('Y-m-d\\TH:i:s.uP') !== $normalized
-        ) {
-            throw new DomainException('Historial persistido sin timestamp final válido.');
-        }
-
-        return $parsed;
-    }
-
-    private static function parseExact(string $value): DateTimeImmutable
-    {
-        return self::parseHistoryTime($value);
-    }
 }
