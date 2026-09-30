@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/verify_symfony_lts_dependency_guard.py"
@@ -13,7 +15,8 @@ CI = ROOT / ".github/workflows/ci.yml"
 PROMOTION = ROOT / ".github/workflows/promote-dependency-pr.yml"
 
 spec = importlib.util.spec_from_file_location("symfony_lts_guard", SCRIPT)
-assert spec and spec.loader
+if spec is None or spec.loader is None:
+    raise RuntimeError("No fue posible cargar symfony_lts_guard.")
 m = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = m
 spec.loader.exec_module(m)
@@ -148,12 +151,40 @@ class SymfonyLtsDependencyGuardTests(unittest.TestCase):
         for forbidden in ("curl ", "gh api", "composer update", "composer audit", "while ", "sleep "):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, guard_block)
+
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('["git", "rev-parse", "HEAD^1"]', script)
+        self.assertIn('["git", "show", "HEAD^1:composer.lock"]', script)
+        self.assertNotIn('f"{base_sha.lower()}:composer.lock"', script)
+
         pruebas = workflow.split("\n  pruebas-base:\n", 1)[1].split("\n  static-analysis:\n", 1)[0]
         self.assertEqual(1, pruebas.count("run: python3 tests/test_symfony_lts_dependency_guard.py"))
         self.assertLess(
             pruebas.index("Probar guard de identidad de release"),
             pruebas.index("Probar guard Symfony 7.4 LTS"),
         )
+
+    def test_base_lock_uses_fixed_git_arguments_and_verifies_parent(self) -> None:
+        base_sha = "a" * 40
+        base_lock = {"content-hash": "fixture", "packages": [], "packages-dev": []}
+        completed = [
+            subprocess.CompletedProcess([], 0, stdout=base_sha + "\n", stderr=""),
+            subprocess.CompletedProcess([], 0, stdout=json.dumps(base_lock), stderr=""),
+        ]
+        with mock.patch.object(m.subprocess, "run", side_effect=completed) as run:
+            self.assertEqual(base_lock, m._git_base_lock(ROOT, base_sha))
+
+        self.assertEqual(["git", "rev-parse", "HEAD^1"], run.call_args_list[0].args[0])
+        self.assertEqual(["git", "show", "HEAD^1:composer.lock"], run.call_args_list[1].args[0])
+
+    def test_base_lock_rejects_merge_parent_mismatch(self) -> None:
+        expected = "a" * 40
+        actual = "b" * 40
+        completed = subprocess.CompletedProcess([], 0, stdout=actual + "\n", stderr="")
+        with mock.patch.object(m.subprocess, "run", return_value=completed) as run:
+            with self.assertRaisesRegex(m.GuardError, "primer padre"):
+                m._git_base_lock(ROOT, expected)
+        self.assertEqual(1, run.call_count)
 
     def test_ac06_promotion_contract_requires_regenerated_lock(self) -> None:
         workflow = PROMOTION.read_text(encoding="utf-8")
