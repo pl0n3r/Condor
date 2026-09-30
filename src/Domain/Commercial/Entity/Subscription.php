@@ -37,7 +37,7 @@ final class Subscription
     #[ORM\Column(type: 'string', length: 32)]
     private string $state;
 
-    /** @var list<array{state:string,at:string}> */
+    /** @var array<array-key,mixed> */
     #[ORM\Column(type: 'json')]
     private array $history;
 
@@ -126,7 +126,7 @@ final class Subscription
     /** @return list<array{state:string,at:string}> */
     public function history(): array
     {
-        return $this->history;
+        return $this->toLifecycle()->history();
     }
 
     public function lastChangedAt(): DateTimeImmutable
@@ -143,9 +143,11 @@ final class Subscription
 
         $keys = array_keys($last);
         sort($keys);
+        $state = $last['state'] ?? null;
         if (
             $keys !== ['at', 'state']
-            || !is_string($last['state'] ?? null)
+            || !is_string($state)
+            || SubscriptionState::tryFrom($state) === null
         ) {
             throw new DomainException('Historial persistido sin timestamp final válido.');
         }
@@ -194,18 +196,20 @@ final class Subscription
             throw new DomainException('Identidad comercial de suscripción incompatible.');
         }
 
+        $currentHistory = $this->history();
+        $nextHistory = $lifecycle->history();
         if (
             $updatedAt < $lifecycle->lastChangedAt()
             || $updatedAt < $this->updatedAt()
             || $lifecycle->lastChangedAt() < $this->lastChangedAt()
-            || count($lifecycle->history()) < count($this->history)
-            || array_slice($lifecycle->history(), 0, count($this->history)) !== $this->history
+            || count($nextHistory) < count($currentHistory)
+            || array_slice($nextHistory, 0, count($currentHistory)) !== $currentHistory
         ) {
             throw new DomainException('Sincronización regresiva de suscripción.');
         }
 
         $this->state = $lifecycle->state()->value;
-        $this->history = $lifecycle->history();
+        $this->history = $nextHistory;
         $this->lastChangedAt = $lifecycle->lastChangedAt();
         $this->updatedAt = $updatedAt;
         $this->lastChangedAtExact = self::formatExact($lifecycle->lastChangedAt());

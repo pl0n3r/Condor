@@ -11,7 +11,7 @@ final class Version20260930143000 extends AbstractMigration // NOSONAR -- nombre
 {
     public function getDescription(): string
     {
-        return 'Añade timestamps exactos ISO-8601 para Subscription Persistence V1 y repara filas V0.1.91.';
+        return 'Añade shadow timestamps exactos para nuevas escrituras; filas V0.1.91 usan fallback desde history.';
     }
 
     public function up(Schema $schema): void
@@ -23,27 +23,7 @@ final class Version20260930143000 extends AbstractMigration // NOSONAR -- nombre
                 ADD updated_at_exact VARCHAR(32) DEFAULT NULL
             SQL);
 
-        $this->addSql(<<<'SQL'
-            UPDATE condor_commercial_subscription
-            SET last_changed_at_exact = JSON_UNQUOTE(
-                    JSON_EXTRACT(
-                        history,
-                        CONCAT('$[', JSON_LENGTH(history) - 1, '].at')
-                    )
-                ),
-                created_at_exact = CONCAT(
-                    DATE_FORMAT(created_at, '%Y-%m-%dT%H:%i:%s.'),
-                    LPAD(MICROSECOND(created_at), 6, '0'),
-                    'Z'
-                ),
-                updated_at_exact = CONCAT(
-                    DATE_FORMAT(updated_at, '%Y-%m-%dT%H:%i:%s.'),
-                    LPAD(MICROSECOND(updated_at), 6, '0'),
-                    'Z'
-                )
-            WHERE JSON_LENGTH(history) > 0
-              AND last_changed_at_exact IS NULL
-            SQL);
+
     }
 
     public function down(Schema $schema): void

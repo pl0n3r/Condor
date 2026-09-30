@@ -77,6 +77,9 @@ final class SubscriptionPersistenceTest extends KernelTestCase
             foreach (['DROP TABLE', 'DROP COLUMN', 'DELETE FROM', 'TRUNCATE', 'RENAME TABLE'] as $destructive) {
                 self::assertStringNotContainsString($destructive, $up);
             }
+            if ($migrationName === 'Version20260930143000.php') {
+                self::assertStringNotContainsString('UPDATE condor_commercial_subscription', $up);
+            }
         }
     }
 
@@ -128,74 +131,24 @@ final class SubscriptionPersistenceTest extends KernelTestCase
             $loaded->updatedAt()->format('Y-m-d\\TH:i:s.uP'),
         );
 
-        // Simula una fila V0.1.91 y ejecuta exactamente el backfill del repair.
-        $legacyHistory = array_map(
-            static fn (array $entry): array => [
-                'state' => $entry['state'],
-                'at' => str_replace('Z', '+00:00', $entry['at']),
-            ],
-            $expectedHistory,
-        );
+        // Simula una fila V0.1.91: no tiene shadow exactos; history conserva lastChangedAt.
         $manager->getConnection()->executeStatement(
             'UPDATE condor_commercial_subscription '
-            .'SET history = ?, last_changed_at_exact = NULL, '
-            .'created_at_exact = NULL, updated_at_exact = NULL WHERE id = ?',
-            [json_encode($legacyHistory, JSON_THROW_ON_ERROR), $id],
+            .'SET last_changed_at_exact = NULL, created_at_exact = NULL, '
+            .'updated_at_exact = NULL WHERE id = ?',
+            [$id],
         );
-
-        $legacyBackfillSql = <<<'SQL'
-UPDATE condor_commercial_subscription
-SET last_changed_at_exact = JSON_UNQUOTE(
-        JSON_EXTRACT(
-            history,
-            CONCAT('$[', JSON_LENGTH(history) - 1, '].at')
-        )
-    ),
-    created_at_exact = CONCAT(
-        DATE_FORMAT(created_at, '%Y-%m-%dT%H:%i:%s.'),
-        LPAD(MICROSECOND(created_at), 6, '0'),
-        'Z'
-    ),
-    updated_at_exact = CONCAT(
-        DATE_FORMAT(updated_at, '%Y-%m-%dT%H:%i:%s.'),
-        LPAD(MICROSECOND(updated_at), 6, '0'),
-        'Z'
-    )
-WHERE JSON_LENGTH(history) > 0
-  AND last_changed_at_exact IS NULL
-SQL;
-        $migration = file_get_contents(
-            dirname(__DIR__, 4).'/migrations/Version20260930143000.php',
-        );
-        self::assertIsString($migration);
-        self::assertStringContainsString('UPDATE condor_commercial_subscription', $migration);
-        self::assertStringContainsString('JSON_EXTRACT(', $migration);
-        self::assertStringContainsString(
-            "CONCAT('$[', JSON_LENGTH(history) - 1, '].at')",
-            $migration,
-        );
-        $manager->getConnection()->executeStatement($legacyBackfillSql);
         $manager->clear();
 
         $legacy = $manager->find(Subscription::class, $id);
         self::assertInstanceOf(Subscription::class, $legacy);
-        self::assertSame(
-            $expectedLastChanged,
-            $legacy->lastChangedAt()->format('U.u'),
-        );
+        self::assertSame($expectedLastChanged, $legacy->lastChangedAt()->format('U.u'));
         self::assertSame(
             $expectedLastChanged,
             $legacy->toLifecycle()->lastChangedAt()->format('U.u'),
         );
-        self::assertSame(
-            '2026-10-02T12:00:00.123456+00:00',
-            $manager->getConnection()->fetchOne(
-                'SELECT last_changed_at_exact '
-                .'FROM condor_commercial_subscription WHERE id = ?',
-                [$id],
-            ),
-        );
 
+        // Corrupción persistida debe fallar como DomainException, nunca TypeError.
         $manager->getConnection()->executeStatement(
             'UPDATE condor_commercial_subscription '
             .'SET history = ?, last_changed_at_exact = NULL WHERE id = ?',

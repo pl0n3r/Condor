@@ -52,7 +52,7 @@ final class SubscriptionLifecycle
     }
 
     /**
-     * @param list<mixed> $history
+     * @param array<array-key,mixed> $history
      */
     public static function restore(
         string $tenantId,
@@ -165,7 +165,7 @@ final class SubscriptionLifecycle
             throw new DomainException('Timestamp histórico de suscripción inválido.');
         }
 
-        $fraction = str_pad($matches[2] ?? '', 6, '0');
+        $fraction = str_pad($matches[2], 6, '0');
         $offset = $matches[3] === 'Z' ? '+00:00' : $matches[3];
         $normalized = $matches[1].'.'.$fraction.$offset;
         $parsed = DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i:s.uP', $normalized);
