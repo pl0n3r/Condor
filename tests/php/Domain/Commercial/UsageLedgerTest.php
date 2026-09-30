@@ -116,9 +116,12 @@ final class UsageLedgerTest extends TestCase
             __DIR__.'/../../../../src/Domain/Commercial/UsageLedger.php',
         ] as $path) {
             $source = file_get_contents($path);
-            self::assertIsString($source);
-            foreach (['Doctrine\\', 'ORM\\', 'metadata', 'payload', 'billing', 'rbac'] as $forbidden) {
-                self::assertStringNotContainsString($forbidden, strtolower($source));
+            if ($source === false) {
+                self::fail('No fue posible leer el contrato de usage.');
+            }
+            $normalized = strtolower($source);
+            foreach (['doctrine\\', 'orm\\', 'metadata', 'payload', 'billing', 'rbac'] as $forbidden) {
+                self::assertStringNotContainsString($forbidden, $normalized);
             }
         }
     }
