@@ -163,6 +163,47 @@ class ChangeClassifierTests(unittest.TestCase):
         for marker in ("migrations/", "config/packages/", "src/Console/", "Service.php"):
             self.assertNotIn(marker, workflow)
 
+
+    def test_entitlement_read_models_do_not_require_operational_transition(self) -> None:
+        for path in [
+            "src/Application/Commercial/EntitlementContext.php",
+            "src/Application/Commercial/EntitlementResolver.php",
+            "src/Application/Commercial/EntitlementSnapshot.php",
+        ]:
+            with self.subTest(path=path):
+                result = classify([path], "pull_request")
+                self.assertFalse(result.transicion_release)
+                self.assertTrue(result.categoria_backend)
+                self.assertTrue(result.validacion_completa)
+
+    def test_unlisted_application_and_sensitive_paths_still_require_transition(self) -> None:
+        paths = [
+            "src/Application/Commercial/AnotherResolver.php",
+            "src/Application/Billing/InvoiceService.php",
+            "src/Application/Identity/RoleResolver.php",
+            "migrations/Version20260921010000.php",
+            "config/packages/framework.yaml",
+        ]
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertTrue(classify([path], "pull_request").transicion_release)
+
+    def test_v0187_entitlements_diff_needs_no_operational_transition(self) -> None:
+        paths = [
+            "config/version.php",
+            "src/Application/Commercial/EntitlementContext.php",
+            "src/Application/Commercial/EntitlementResolver.php",
+            "src/Application/Commercial/EntitlementSnapshot.php",
+            "src/Domain/Commercial/EntitlementOverride.php",
+            "tests/php/Application/Commercial/EntitlementResolverTest.php",
+            "tests/php/Domain/Commercial/EntitlementOverrideTest.php",
+            "tests/test_entitlements_acceptance.py",
+        ]
+        result = classify(paths, "pull_request")
+        self.assertFalse(result.transicion_release)
+        self.assertTrue(result.validacion_completa)
+        self.assertTrue(result.backend)
+
     def test_workflow_change_runs_full_stack(self) -> None:
         result = classify([".github/workflows/ci.yml"], "pull_request")
         self.assertTrue(result.categoria_gobierno)
