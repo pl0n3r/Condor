@@ -9,6 +9,7 @@ use App\Domain\Commercial\UsageLedger;
 use App\Domain\Commercial\UsageMetric;
 use App\Domain\Commercial\UsageRecord;
 use DateTimeImmutable;
+use Doctrine\DBAL\Schema\Index\IndexType;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use DomainException;
@@ -61,8 +62,14 @@ final class UsagePersistenceTest extends KernelTestCase
             foreach ([$table, $migrated] as $schemaTable) {
                 self::assertTrue($schemaTable->hasIndex($index), $index);
                 $definition = $schemaTable->getIndex($index);
-                self::assertSame($columns, $definition->getColumns(), $index);
-                self::assertFalse($definition->isUnique(), $index);
+                $actualColumns = array_map(
+                    static fn ($column): string => $column
+                        ->getColumnName()
+                        ->toString(),
+                    $definition->getIndexedColumns(),
+                );
+                self::assertSame($columns, $actualColumns, $index);
+                self::assertSame(IndexType::REGULAR, $definition->getType(), $index);
             }
         }
 
