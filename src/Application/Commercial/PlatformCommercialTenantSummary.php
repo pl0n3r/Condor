@@ -14,24 +14,7 @@ final readonly class PlatformCommercialTenantSummary
     {
     }
 
-    /**
-     * @return array{
-     *   status: 'configured',
-     *   subscription: array{
-     *     state: string,
-     *     plan: array{
-     *       key: string,
-     *       name: string,
-     *       version: int,
-     *       currency: string,
-     *       monthly_amount: int|null,
-     *       annual_amount: int|null,
-     *       quote_required: bool
-     *     },
-     *     last_changed_at: string
-     *   }
-     * }|array{status: 'not_configured', subscription: null}
-     */
+    /** @return array{status:string, subscription:array<string,mixed>|null} */
     public function forTenant(string $tenantId): array
     {
         $subscription = $this->entityManager
@@ -39,27 +22,23 @@ final readonly class PlatformCommercialTenantSummary
             ->findOneBy(['tenantId' => $tenantId]);
 
         if (!$subscription instanceof Subscription) {
-            return [
-                'status' => 'not_configured',
-                'subscription' => null,
-            ];
+            return ['status' => 'not_configured', 'subscription' => null];
         }
 
-        $planVersion = $subscription->planVersion();
-        $plan = $planVersion->plan();
+        $version = $subscription->planVersion();
 
         return [
             'status' => 'configured',
             'subscription' => [
                 'state' => $subscription->state()->value,
                 'plan' => [
-                    'key' => $plan->key(),
-                    'name' => $plan->name(),
-                    'version' => $planVersion->version(),
-                    'currency' => $planVersion->currency(),
-                    'monthly_amount' => $planVersion->monthlyAmount(),
-                    'annual_amount' => $planVersion->annualAmount(),
-                    'quote_required' => $planVersion->quoteRequired(),
+                    'key' => $version->plan()->key(),
+                    'name' => $version->plan()->name(),
+                    'version' => $version->version(),
+                    'currency' => $version->currency(),
+                    'monthly_amount' => $version->monthlyAmount(),
+                    'annual_amount' => $version->annualAmount(),
+                    'quote_required' => $version->quoteRequired(),
                 ],
                 'last_changed_at' => $subscription
                     ->lastChangedAt()

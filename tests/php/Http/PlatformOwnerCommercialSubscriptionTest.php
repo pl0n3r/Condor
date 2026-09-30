@@ -20,31 +20,14 @@ final class PlatformOwnerCommercialSubscriptionTest extends WebTestCase
     public function testOwnerReadsPersistedSubscriptionSummary(): void
     {
         $client = static::createClient();
-        $manager = $this->entityManager();
-        $suffix = bin2hex(random_bytes(4));
-        $owner = $this->owner($suffix);
-        $tenant = $this->tenant($suffix);
-        $subscription = $this->subscription($tenant, $suffix);
-
-        foreach ([$owner, $tenant, $subscription['plan'], $subscription['plan_version'], $subscription['entity']] as $entity) {
-            $manager->persist($entity);
-        }
-        $manager->flush();
-
+        [$owner, $tenant] = $this->fixture('configured', true);
         $client->loginUser($owner);
-        $client->request(
-            'GET',
-            '/adminpl0n3r/api/context?tenant='.urlencode($tenant->id()),
-        );
-        self::assertResponseIsSuccessful();
-
-        $payload = $this->payload($client->getResponse()->getContent());
-        $commercial = $payload['selected_tenant']['commercial_subscription'];
+        $commercial = $this->commercial($client, $tenant);
 
         self::assertSame('configured', $commercial['status']);
         self::assertSame('active', $commercial['subscription']['state']);
-        self::assertSame('negocio-'.$suffix, $commercial['subscription']['plan']['key']);
-        self::assertSame('Negocio '.$suffix, $commercial['subscription']['plan']['name']);
+        self::assertSame('negocio-configured', $commercial['subscription']['plan']['key']);
+        self::assertSame('Negocio configured', $commercial['subscription']['plan']['name']);
         self::assertSame(3, $commercial['subscription']['plan']['version']);
         self::assertSame('COP', $commercial['subscription']['plan']['currency']);
         self::assertSame(199900, $commercial['subscription']['plan']['monthly_amount']);
@@ -59,57 +42,27 @@ final class PlatformOwnerCommercialSubscriptionTest extends WebTestCase
     public function testMissingSubscriptionIsExplicit(): void
     {
         $client = static::createClient();
-        $manager = $this->entityManager();
-        $suffix = bin2hex(random_bytes(4));
-        $owner = $this->owner('missing-'.$suffix);
-        $tenant = $this->tenant('missing-'.$suffix);
-        $manager->persist($owner);
-        $manager->persist($tenant);
-        $manager->flush();
-
+        [$owner, $tenant] = $this->fixture('missing');
         $client->loginUser($owner);
-        $client->request(
-            'GET',
-            '/adminpl0n3r/api/context?tenant='.urlencode($tenant->id()),
-        );
-        self::assertResponseIsSuccessful();
-
-        $commercial = $this->payload(
-            $client->getResponse()->getContent(),
-        )['selected_tenant']['commercial_subscription'];
 
         self::assertSame(
             ['status' => 'not_configured', 'subscription' => null],
-            $commercial,
+            $this->commercial($client, $tenant),
         );
     }
 
     public function testTenantScopeAndUnknownTenant(): void
     {
         $client = static::createClient();
+        [$owner, $first] = $this->fixture('scope-a');
         $manager = $this->entityManager();
-        $suffix = bin2hex(random_bytes(4));
-        $owner = $this->owner('scope-'.$suffix);
-        $first = $this->tenant('scope-a-'.$suffix);
-        $second = $this->tenant('scope-b-'.$suffix);
-        $subscription = $this->subscription($second, 'scope-'.$suffix);
-
-        foreach ([$owner, $first, $second, $subscription['plan'], $subscription['plan_version'], $subscription['entity']] as $entity) {
-            $manager->persist($entity);
-        }
+        $second = new Tenant('Empresa B', 'empresa-scope-b');
+        $manager->persist($second);
+        $this->persistSubscription($manager, $second, 'scope-b');
         $manager->flush();
 
         $client->loginUser($owner);
-        $client->request(
-            'GET',
-            '/adminpl0n3r/api/context?tenant='.urlencode($first->id()),
-        );
-        self::assertResponseIsSuccessful();
-        $firstPayload = $this->payload($client->getResponse()->getContent());
-        self::assertSame(
-            'not_configured',
-            $firstPayload['selected_tenant']['commercial_subscription']['status'],
-        );
+        self::assertSame('not_configured', $this->commercial($client, $first)['status']);
 
         $client->request(
             'GET',
@@ -121,25 +74,14 @@ final class PlatformOwnerCommercialSubscriptionTest extends WebTestCase
     public function testOwnerOnlyAndReadOnly(): void
     {
         $client = static::createClient();
+        [$owner, $tenant] = $this->fixture('readonly');
         $manager = $this->entityManager();
-        $suffix = bin2hex(random_bytes(4));
-        $tenantUser = new User(
-            'tenant-commercial-'.$suffix.'@example.test',
-            'Usuario tenant',
-        );
-        $owner = $this->owner('readonly-'.$suffix);
-        $tenant = $this->tenant('readonly-'.$suffix);
-
-        foreach ([$tenantUser, $owner, $tenant] as $entity) {
-            $manager->persist($entity);
-        }
+        $tenantUser = new User('tenant-readonly@example.test', 'Usuario tenant');
+        $manager->persist($tenantUser);
         $manager->flush();
 
         $client->loginUser($tenantUser);
-        $client->request(
-            'GET',
-            '/adminpl0n3r/api/context?tenant='.urlencode($tenant->id()),
-        );
+        $client->request('GET', $this->path($tenant));
         self::assertResponseStatusCodeSame(403);
 
         $client->loginUser($owner);
@@ -150,98 +92,53 @@ final class PlatformOwnerCommercialSubscriptionTest extends WebTestCase
     public function testPayloadBoundaryOmitsCommercialInternals(): void
     {
         $client = static::createClient();
-        $manager = $this->entityManager();
-        $suffix = bin2hex(random_bytes(4));
-        $owner = $this->owner('boundary-'.$suffix);
-        $tenant = $this->tenant('boundary-'.$suffix);
-        $subscription = $this->subscription($tenant, 'boundary-'.$suffix);
-
-        foreach ([$owner, $tenant, $subscription['plan'], $subscription['plan_version'], $subscription['entity']] as $entity) {
-            $manager->persist($entity);
-        }
-        $manager->flush();
-
+        [$owner, $tenant] = $this->fixture('boundary', true);
         $client->loginUser($owner);
-        $client->request(
-            'GET',
-            '/adminpl0n3r/api/context?tenant='.urlencode($tenant->id()),
-        );
-        self::assertResponseIsSuccessful();
+        $commercial = $this->commercial($client, $tenant);
 
-        $commercial = $this->payload(
-            $client->getResponse()->getContent(),
-        )['selected_tenant']['commercial_subscription'];
         self::assertSame(['status', 'subscription'], array_keys($commercial));
         self::assertSame(
             ['state', 'plan', 'last_changed_at'],
             array_keys($commercial['subscription']),
         );
         self::assertSame(
-            [
-                'key',
-                'name',
-                'version',
-                'currency',
-                'monthly_amount',
-                'annual_amount',
-                'quote_required',
-            ],
+            ['key', 'name', 'version', 'currency', 'monthly_amount', 'annual_amount', 'quote_required'],
             array_keys($commercial['subscription']['plan']),
         );
 
         $encoded = strtolower(json_encode($commercial, JSON_THROW_ON_ERROR));
-        foreach ([
-            'history',
-            'lock_version',
-            'usage',
-            'billing',
-            'add_on',
-            'override',
-            'email',
-            'phone',
-            'password',
-            'secret',
-        ] as $forbidden) {
+        foreach (['history', 'lock_version', 'usage', 'billing', 'add_on', 'override', 'email', 'phone', 'password', 'secret'] as $forbidden) {
             self::assertStringNotContainsString($forbidden, $encoded);
         }
     }
 
-    private function entityManager(): EntityManagerInterface
+    /** @return array{User,Tenant} */
+    private function fixture(string $suffix, bool $subscribed = false): array
     {
-        $manager = static::getContainer()->get(EntityManagerInterface::class);
-        self::assertInstanceOf(EntityManagerInterface::class, $manager);
-
-        return $manager;
-    }
-
-    private function owner(string $suffix): User
-    {
-        return new User(
-            'owner-commercial-'.$suffix.'@example.test',
+        $manager = $this->entityManager();
+        $owner = new User(
+            'owner-'.$suffix.'@example.test',
             'Propietario comercial',
             [User::ROLE_PLATFORM_OWNER],
         );
+        $tenant = new Tenant('Empresa '.$suffix, 'empresa-'.$suffix);
+        $manager->persist($owner);
+        $manager->persist($tenant);
+        if ($subscribed) {
+            $this->persistSubscription($manager, $tenant, $suffix);
+        }
+        $manager->flush();
+
+        return [$owner, $tenant];
     }
 
-    private function tenant(string $suffix): Tenant
-    {
-        return new Tenant(
-            'Empresa comercial '.$suffix,
-            'empresa-comercial-'.$suffix,
-        );
-    }
-
-    /**
-     * @return array{
-     *   plan: Plan,
-     *   plan_version: PlanVersion,
-     *   entity: Subscription
-     * }
-     */
-    private function subscription(Tenant $tenant, string $suffix): array
-    {
+    private function persistSubscription(
+        EntityManagerInterface $manager,
+        Tenant $tenant,
+        string $suffix,
+    ): void {
         $plan = new Plan('negocio-'.$suffix, 'Negocio '.$suffix);
-        $planVersion = new PlanVersion(
+        $version = new PlanVersion(
             $plan,
             3,
             199900,
@@ -252,28 +149,44 @@ final class PlatformOwnerCommercialSubscriptionTest extends WebTestCase
         );
         $lifecycle = new SubscriptionLifecycle(
             $tenant->id(),
-            $planVersion,
+            $version,
             SubscriptionState::Active,
             new DateTimeImmutable('2026-09-30T12:34:56.123456Z'),
         );
-
-        return [
-            'plan' => $plan,
-            'plan_version' => $planVersion,
-            'entity' => Subscription::fromLifecycle(
-                $lifecycle,
-                new DateTimeImmutable('2026-09-30T12:35:00.000001Z'),
-            ),
-        ];
+        $manager->persist($plan);
+        $manager->persist($version);
+        $manager->persist(Subscription::fromLifecycle(
+            $lifecycle,
+            new DateTimeImmutable('2026-09-30T12:35:00.000001Z'),
+        ));
     }
 
-    /** @return array<string, mixed> */
-    private function payload(string|false $content): array
+    /** @return array<string,mixed> */
+    private function commercial($client, Tenant $tenant): array
     {
-        self::assertIsString($content);
-        $payload = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
+        $client->request('GET', $this->path($tenant));
+        self::assertResponseIsSuccessful();
+        $payload = json_decode(
+            (string) $client->getResponse()->getContent(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
         self::assertIsArray($payload);
 
-        return $payload;
+        return $payload['selected_tenant']['commercial_subscription'];
+    }
+
+    private function path(Tenant $tenant): string
+    {
+        return '/adminpl0n3r/api/context?tenant='.urlencode($tenant->id());
+    }
+
+    private function entityManager(): EntityManagerInterface
+    {
+        $manager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+
+        return $manager;
     }
 }

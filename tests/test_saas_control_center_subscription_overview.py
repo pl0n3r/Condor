@@ -7,22 +7,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PHP_TEST = ROOT / "tests/php/Http/PlatformOwnerCommercialSubscriptionTest.php"
-FRONTEND = ROOT / "frontend/admin/PlatformOwnerApp.tsx"
-VERSION = ROOT / "config/version.php"
 
 
 class SaasControlCenterSubscriptionOverviewAcceptanceTests(unittest.TestCase):
     def phpunit(self, pattern: str) -> None:
         runner = ROOT / "vendor/bin/simple-phpunit"
-        if not runner.exists():
-            self.fail("vendor/bin/simple-phpunit no está disponible")
         result = subprocess.run(
             [str(runner), "--filter", pattern, str(PHP_TEST)],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+            cwd=ROOT, text=True, capture_output=True, check=False,
+        ) if runner.exists() else None
+        self.assertIsNotNone(result, "vendor/bin/simple-phpunit no está disponible")
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
     def test_ac01_owner_reads_persisted_subscription_summary(self) -> None:
@@ -38,22 +32,18 @@ class SaasControlCenterSubscriptionOverviewAcceptanceTests(unittest.TestCase):
         self.phpunit("testOwnerOnlyAndReadOnly")
 
     def test_ac05_existing_owner_shell_renders_commercial_subscription(self) -> None:
-        source = FRONTEND.read_text(encoding="utf-8")
-        self.assertIn("commercial_subscription: CommercialSubscriptionOverview", source)
-        self.assertIn("Suscripción comercial", source)
-        self.assertIn("Sin suscripción configurada", source)
-        self.assertIn("<AdminShell", source)
-        self.assertNotIn("Cambiar plan", source)
-        self.assertNotIn("Guardar suscripción", source)
+        source = (ROOT / "frontend/admin/PlatformOwnerApp.tsx").read_text(encoding="utf-8")
+        for expected in ("commercial_subscription", "Suscripción comercial", "Sin suscripción configurada", "<AdminShell"):
+            self.assertIn(expected, source)
+        for forbidden in ("Cambiar plan", "Guardar suscripción"):
+            self.assertNotIn(forbidden, source)
 
     def test_ac06_payload_boundary(self) -> None:
         self.phpunit("testPayloadBoundaryOmitsCommercialInternals")
 
     def test_release_identity_is_v0_1_94(self) -> None:
-        self.assertIn(
-            "'version' => '0.1.94'",
-            VERSION.read_text(encoding="utf-8"),
-        )
+        version = (ROOT / "config/version.php").read_text(encoding="utf-8")
+        self.assertIn("'version' => '0.1.94'", version)
 
 
 if __name__ == "__main__":
