@@ -120,6 +120,8 @@ READ_ONLY_TRANSITION_EXEMPTIONS = {
     "src/Application/Commercial/EntitlementContext.php",
     "src/Application/Commercial/EntitlementResolver.php",
     "src/Application/Commercial/EntitlementSnapshot.php",
+    "src/Application/Commercial/PlatformCommercialTenantSummary.php",
+    "src/Http/Controller/PlatformOwnerContextController.php",
 }
 
 SECURITY_PREFIXES = (
