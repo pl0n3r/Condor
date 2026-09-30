@@ -19,6 +19,28 @@ type CommercialPlan = {
   quote_required: boolean;
 };
 
+type CommercialSubscriptionOverview =
+  | {
+      status: 'not_configured';
+      subscription: null;
+    }
+  | {
+      status: 'configured';
+      subscription: {
+        state: string;
+        plan: {
+          key: string;
+          name: string;
+          version: number;
+          currency: string;
+          monthly_amount: number | null;
+          annual_amount: number | null;
+          quote_required: boolean;
+        };
+        last_changed_at: string;
+      };
+    };
+
 type TenantSummary = {
   id: string;
   name: string;
@@ -45,6 +67,7 @@ type SelectedTenant = TenantSummary & {
       name: string;
     }>;
   }>;
+  commercial_subscription: CommercialSubscriptionOverview;
 };
 
 type PlatformContextResponse = {
@@ -630,6 +653,82 @@ export function PlatformOwnerApp({
                   },
                 ]}
               />
+
+              <section
+                className="platform-section"
+                aria-labelledby="commercial-subscription-title"
+              >
+                <div className="section-heading compact">
+                  <div>
+                    <span className="eyebrow">SaaS Control Center</span>
+                    <h2 id="commercial-subscription-title">
+                      Suscripción comercial
+                    </h2>
+                  </div>
+                  <span className="status-pill">Solo lectura</span>
+                </div>
+
+                {selected.commercial_subscription.status === 'not_configured' ? (
+                  <div className="platform-empty">
+                    Sin suscripción configurada. No se asigna un plan ni precio
+                    implícito.
+                  </div>
+                ) : (
+                  <div className="tenant-grid">
+                    <article className="tenant-card">
+                      <div>
+                        <span className="tenant-slug">
+                          {selected.commercial_subscription.subscription.plan.key}
+                          {' · v'}
+                          {selected.commercial_subscription.subscription.plan.version}
+                        </span>
+                        <h3>
+                          {selected.commercial_subscription.subscription.plan.name}
+                        </h3>
+                      </div>
+                      <dl>
+                        <div>
+                          <dt>Estado</dt>
+                          <dd>
+                            {selected.commercial_subscription.subscription.state
+                              .replaceAll('_', ' ')}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Mensual</dt>
+                          <dd>
+                            {selected.commercial_subscription.subscription.plan.quote_required
+                              ? 'Propuesta personalizada'
+                              : commercialMoney(
+                                  selected.commercial_subscription.subscription.plan.monthly_amount,
+                                  selected.commercial_subscription.subscription.plan.currency,
+                                )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Anual</dt>
+                          <dd>
+                            {selected.commercial_subscription.subscription.plan.quote_required
+                              ? 'Propuesta personalizada'
+                              : commercialMoney(
+                                  selected.commercial_subscription.subscription.plan.annual_amount,
+                                  selected.commercial_subscription.subscription.plan.currency,
+                                )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Último cambio</dt>
+                          <dd>
+                            <code>
+                              {selected.commercial_subscription.subscription.last_changed_at}
+                            </code>
+                          </dd>
+                        </div>
+                      </dl>
+                    </article>
+                  </div>
+                )}
+              </section>
 
               <section className="platform-section" aria-labelledby="branch-list-title">
                 <div className="section-heading compact">
