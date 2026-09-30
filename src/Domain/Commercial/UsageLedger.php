@@ -105,7 +105,7 @@ final class UsageLedger
             }
         }
 
-        return $latest?->quantity();
+        return $latest->quantity();
     }
 
     /**
