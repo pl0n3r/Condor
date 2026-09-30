@@ -45,7 +45,7 @@ final readonly class EntitlementSnapshot
         $this->capabilities = $capabilities;
         $this->addOns = $addOns;
         $this->limits = $limits;
-        $this->overrideProvenance = array_values($overrideProvenance);
+        $this->overrideProvenance = $overrideProvenance;
     }
 
     public function tenantId(): string { return $this->tenantId; }
