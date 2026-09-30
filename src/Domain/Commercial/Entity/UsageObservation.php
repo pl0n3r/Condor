@@ -69,11 +69,6 @@ final class UsageObservation
         return $this->id;
     }
 
-    public function tenantId(): string
-    {
-        return $this->tenantId;
-    }
-
     public function toRecord(): UsageRecord
     {
         $metric = UsageMetric::tryFrom($this->metric);

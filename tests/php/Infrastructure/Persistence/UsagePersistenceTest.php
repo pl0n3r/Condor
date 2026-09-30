@@ -52,9 +52,11 @@ final class UsagePersistenceTest extends KernelTestCase
         ];
 
         foreach ([$generatedTable, $databaseTable] as $schemaTable) {
-            foreach ($columns as $column) {
-                self::assertTrue($schemaTable->hasColumn($column), $column);
-            }
+            self::assertEqualsCanonicalizing(
+                $columns,
+                array_keys($schemaTable->getColumns()),
+            );
+            self::assertCount(count($columns), $schemaTable->getColumns());
             foreach (['window_start', 'window_end', 'observed_at'] as $column) {
                 self::assertSame(32, $schemaTable->getColumn($column)->getLength());
             }
@@ -238,30 +240,19 @@ final class UsagePersistenceTest extends KernelTestCase
 
     public function testPayloadBoundary(): void
     {
-        self::bootKernel();
-        $table = $this->entityManager()
-            ->getConnection()
-            ->createSchemaManager()
-            ->introspectTable('condor_commercial_usage_observation');
-
-        foreach ([
-            'email',
-            'phone',
-            'name',
-            'metadata',
-            'payload',
-            'billing',
-            'user_id',
-            'customer_id',
-        ] as $forbidden) {
-            self::assertFalse($table->hasColumn($forbidden), $forbidden);
-        }
-
         $source = file_get_contents(
             dirname(__DIR__, 4).'/src/Domain/Commercial/Entity/UsageObservation.php',
         );
         self::assertIsString($source);
+
         foreach ([
+            'email',
+            'phone',
+            'metadata',
+            'payload',
+            'billing',
+            'RBAC',
+            'UsageLedger',
             'EntitlementResolver',
             'PermissionCatalog',
             'Invoice',
