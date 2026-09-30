@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: pl0n3r/FactoryRunner
-          ref: 23df010f4e23d466fe5dcd2ceaa76446223501c2
+          ref: 45f5571ac32fbe07d11e696098f4e5902fac8c7f
           path: _factoryrunner
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -39,13 +39,14 @@ jobs:
           RECOVERY_S3_PREFIX: ${{ secrets.RECOVERY_S3_PREFIX }}
           RECOVERY_S3_ACCESS_KEY_ID: ${{ secrets.RECOVERY_S3_ACCESS_KEY_ID }}
           RECOVERY_S3_SECRET_ACCESS_KEY: ${{ secrets.RECOVERY_S3_SECRET_ACCESS_KEY }}
+          RECOVERY_S3_OBJECT_LOCK_DAYS: ${{ secrets.RECOVERY_S3_OBJECT_LOCK_DAYS }}
           RECOVERY_DISPOSABLE_DATABASE_URL: ${{ secrets.RECOVERY_DISPOSABLE_DATABASE_URL }}
           CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE: ${{ secrets.CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE }}
         run: |
           set -euo pipefail
           root="$HOME/.condor-recovery"; mkdir -p "$root"; chmod 700 "$root"
           python3 scripts/recovery-production.py preflight --connection-ref "$CONNECTION_REF" --privacy-ref "$PRIVACY_REF" >/dev/null
-          for name in DATABASE_URL RECOVERY_S3_ENDPOINT RECOVERY_S3_BUCKET RECOVERY_S3_REGION RECOVERY_S3_PREFIX RECOVERY_S3_ACCESS_KEY_ID RECOVERY_S3_SECRET_ACCESS_KEY RECOVERY_DISPOSABLE_DATABASE_URL CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE; do
+          for name in DATABASE_URL RECOVERY_S3_ENDPOINT RECOVERY_S3_BUCKET RECOVERY_S3_REGION RECOVERY_S3_PREFIX RECOVERY_S3_ACCESS_KEY_ID RECOVERY_S3_SECRET_ACCESS_KEY RECOVERY_S3_OBJECT_LOCK_DAYS RECOVERY_DISPOSABLE_DATABASE_URL CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE; do
             [[ -n "${!name:-}" ]] || { echo "::error::Recovery live no provisionado"; exit 1; }
           done
 
@@ -77,6 +78,7 @@ jobs:
           FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_PREFIX: ${{ secrets.RECOVERY_S3_PREFIX }}
           FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_ACCESS_KEY_ID: ${{ secrets.RECOVERY_S3_ACCESS_KEY_ID }}
           FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_SECRET_ACCESS_KEY: ${{ secrets.RECOVERY_S3_SECRET_ACCESS_KEY }}
+          FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_OBJECT_LOCK_DAYS: ${{ secrets.RECOVERY_S3_OBJECT_LOCK_DAYS }}
           FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_AWS_SECURITY_TOKEN: ${{ secrets.RECOVERY_S3_AWS_SECURITY_TOKEN }}
           BACKUP_CHECKSUM: ${{ steps.backup.outputs.checksum }}
           BACKUP_ARTIFACT: ${{ steps.backup.outputs.artifact }}
