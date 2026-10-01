@@ -70,10 +70,21 @@ final class PlatformOwnerCommercialTrialTest extends WebTestCase
         $client->loginUser($owner);
         $token = $this->token($client);
 
-        $this->post($client, $tenant, [], $token);
+        $client->jsonRequest(
+            'POST',
+            '/adminpl0n3r/api/tenants/'.urlencode($tenant->id()).'/commercial-subscription/trial',
+            [],
+            ['HTTP_X_CSRF_TOKEN' => $token],
+        );
 
         self::assertResponseStatusCodeSame(201);
-        $payload = $this->payload($client);
+        $payload = json_decode(
+            (string) $client->getResponse()->getContent(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertIsArray($payload);
         self::assertSame('configured', $payload['status']);
         self::assertSame('trialing', $payload['subscription']['state']);
         self::assertSame('business', $payload['subscription']['plan']['key']);
@@ -88,11 +99,20 @@ final class PlatformOwnerCommercialTrialTest extends WebTestCase
             $startedAt->add(new DateInterval('P14D'))->format('U.u'),
             $endsAt->format('U.u'),
         );
-        self::assertSame(1, $this->subscriptionCount($tenant));
+        self::assertSame(1, $this->em()->getRepository(Subscription::class)->count([
+            'tenantId' => $tenant->id(),
+        ]));
 
-        $this->post($client, $tenant, [], $token);
+        $client->jsonRequest(
+            'POST',
+            '/adminpl0n3r/api/tenants/'.urlencode($tenant->id()).'/commercial-subscription/trial',
+            [],
+            ['HTTP_X_CSRF_TOKEN' => $token],
+        );
         self::assertResponseStatusCodeSame(422);
-        self::assertSame(1, $this->subscriptionCount($tenant));
+        self::assertSame(1, $this->em()->getRepository(Subscription::class)->count([
+            'tenantId' => $tenant->id(),
+        ]));
     }
 
     public function testTrialEndpointIsOwnerCsrfAndServerAuthoritative(): void
@@ -107,14 +127,26 @@ final class PlatformOwnerCommercialTrialTest extends WebTestCase
         $this->em()->flush();
 
         $client->loginUser($normal);
-        $this->post($client, $tenant, [], 'invalid');
+        $client->jsonRequest(
+            'POST',
+            '/adminpl0n3r/api/tenants/'.urlencode($tenant->id()).'/commercial-subscription/trial',
+            [],
+            ['HTTP_X_CSRF_TOKEN' => 'invalid'],
+        );
         self::assertResponseStatusCodeSame(403);
 
         $client->loginUser($owner);
-        $this->post($client, $tenant, []);
+        $client->jsonRequest(
+            'POST',
+            '/adminpl0n3r/api/tenants/'.urlencode($tenant->id()).'/commercial-subscription/trial',
+            [],
+        );
         self::assertResponseStatusCodeSame(403);
 
-        $client->request('GET', $this->path($tenant));
+        $client->request(
+            'GET',
+            '/adminpl0n3r/api/tenants/'.urlencode($tenant->id()).'/commercial-subscription/trial',
+        );
         self::assertResponseStatusCodeSame(405);
 
         $token = $this->token($client);
@@ -123,9 +155,16 @@ final class PlatformOwnerCommercialTrialTest extends WebTestCase
             ['duration_days' => 30],
             ['state' => 'active'],
         ] as $payload) {
-            $this->post($client, $tenant, $payload, $token);
+            $client->jsonRequest(
+                'POST',
+                '/adminpl0n3r/api/tenants/'.urlencode($tenant->id()).'/commercial-subscription/trial',
+                $payload,
+                ['HTTP_X_CSRF_TOKEN' => $token],
+            );
             self::assertResponseStatusCodeSame(422);
-            self::assertSame(0, $this->subscriptionCount($tenant));
+            self::assertSame(0, $this->em()->getRepository(Subscription::class)->count([
+            'tenantId' => $tenant->id(),
+        ]));
         }
 
         $client->jsonRequest(
@@ -142,14 +181,30 @@ final class PlatformOwnerCommercialTrialTest extends WebTestCase
         $client = self::createClient();
         [$owner, $tenant] = $this->fixture('summary');
         $client->loginUser($owner);
-        $this->post($client, $tenant, [], $this->token($client));
+        $trialToken = $this->token($client);
+        $client->jsonRequest(
+            'POST',
+            '/adminpl0n3r/api/tenants/'.urlencode($tenant->id()).'/commercial-subscription/trial',
+            [],
+            ['HTTP_X_CSRF_TOKEN' => $trialToken],
+        );
         self::assertResponseStatusCodeSame(201);
 
-        $trialPayload = $this->payload($client)['subscription'];
+        $trialResponse = json_decode(
+            (string) $client->getResponse()->getContent(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertIsArray($trialResponse);
+        $trialPayload = $trialResponse['subscription'];
         self::assertArrayHasKey('trial_started_at', $trialPayload);
         self::assertArrayHasKey('trial_ends_at', $trialPayload);
 
-        $subscription = $this->subscription($tenant);
+        $subscription = $this->em()
+            ->getRepository(Subscription::class)
+            ->findOneBy(['tenantId' => $tenant->id()]);
+        self::assertInstanceOf(Subscription::class, $subscription);
         $lifecycle = $subscription->toLifecycle();
         $changedAt = $subscription->lastChangedAt()->modify('+1 second');
         $lifecycle->transitionTo(SubscriptionState::Active, $changedAt);
@@ -161,7 +216,13 @@ final class PlatformOwnerCommercialTrialTest extends WebTestCase
             '/adminpl0n3r/api/context?tenant='.urlencode($tenant->id()),
         );
         self::assertResponseIsSuccessful();
-        $context = $this->payload($client);
+        $context = json_decode(
+            (string) $client->getResponse()->getContent(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertIsArray($context);
         $summary = $context['selected_tenant']['commercial_subscription'];
         self::assertSame('active', $summary['subscription']['state']);
         self::assertArrayNotHasKey('trial_started_at', $summary['subscription']);
@@ -217,17 +278,6 @@ final class PlatformOwnerCommercialTrialTest extends WebTestCase
         self::fail('PlanVersion vigente de business no encontrada.');
     }
 
-    /** @param array<string,mixed> $payload */
-    private function post(
-        $client,
-        Tenant $tenant,
-        array $payload,
-        ?string $token = null,
-    ): void {
-        $headers = $token === null ? [] : ['HTTP_X_CSRF_TOKEN' => $token];
-        $client->jsonRequest('POST', $this->path($tenant), $payload, $headers);
-    }
-
     private function token($client): string
     {
         $client->request('GET', '/adminpl0n3r');
@@ -237,44 +287,6 @@ final class PlatformOwnerCommercialTrialTest extends WebTestCase
             $client,
             'platform_commercial_subscription_management',
         );
-    }
-
-    /** @return array<string,mixed> */
-    private function payload($client): array
-    {
-        $payload = json_decode(
-            (string) $client->getResponse()->getContent(),
-            true,
-            512,
-            JSON_THROW_ON_ERROR,
-        );
-        self::assertIsArray($payload);
-
-        return $payload;
-    }
-
-    private function subscriptionCount(Tenant $tenant): int
-    {
-        return $this->em()->getRepository(Subscription::class)->count([
-            'tenantId' => $tenant->id(),
-        ]);
-    }
-
-    private function subscription(Tenant $tenant): Subscription
-    {
-        $subscription = $this->em()
-            ->getRepository(Subscription::class)
-            ->findOneBy(['tenantId' => $tenant->id()]);
-        self::assertInstanceOf(Subscription::class, $subscription);
-
-        return $subscription;
-    }
-
-    private function path(Tenant $tenant): string
-    {
-        return '/adminpl0n3r/api/tenants/'
-            .urlencode($tenant->id())
-            .'/commercial-subscription/trial';
     }
 
     private function em(): EntityManagerInterface
