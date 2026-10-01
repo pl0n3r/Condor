@@ -1,0 +1,44 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ page.title }} · {{ tenant.name }}{% endblock %}
+
+{% block head %}
+<link rel="canonical" href="{{ canonical }}">
+<meta name="robots" content="index,follow">
+{% if description %}
+<meta name="description" content="{{ description }}">
+{% endif %}
+{% endblock %}
+
+{% block body %}
+<main class="cms-public-page" data-tenant-slug="{{ tenant.slug }}" data-page-slug="{{ page.slug }}">
+    <header class="hero cms-public-header">
+        <span class="eyebrow">{{ tenant.name }}</span>
+        <h1>{{ page.title }}</h1>
+    </header>
+
+    {% for block in blocks %}
+        <section class="cms-block cms-block-{{ block.type }}" data-block-type="{{ block.type }}">
+            {% if block.type == 'hero' %}
+                {% if block.headline is defined %}<h2>{{ block.headline }}</h2>{% endif %}
+                {% if block.subheadline is defined %}<p>{{ block.subheadline }}</p>{% endif %}
+                {% if block.cta_href is defined and block.cta_label is defined %}
+                    <p><a href="{{ block.cta_href }}">{{ block.cta_label }}</a></p>
+                {% endif %}
+            {% elseif block.type == 'text' %}
+                {% if block.text is defined %}<p>{{ block.text }}</p>{% endif %}
+            {% elseif block.type == 'image' %}
+                {% if block.src is defined %}
+                    <figure><img src="{{ block.src }}" alt="{{ block.alt|default('') }}"></figure>
+                {% endif %}
+            {% elseif block.type == 'cta' %}
+                {% if block.href is defined and block.label is defined %}
+                    <p><a href="{{ block.href }}">{{ block.label }}</a></p>
+                {% endif %}
+            {% elseif block.type == 'divider' %}
+                <hr>
+            {% endif %}
+        </section>
+    {% endfor %}
+</main>
+{% endblock %}
