@@ -55,7 +55,13 @@ final class CmsAdminControllerTest extends WebTestCase
                 '/blocks/'.$fixture['block']->id(),
             [
                 'type' => 'hero',
-                'payload' => ['headline' => 'Nueva portada'],
+                'payload' => [
+                    'headline' => 'Nueva portada',
+                    'cta' => [
+                        'label' => 'Comprar',
+                        'href' => '/catalogo',
+                    ],
+                ],
                 'sort_order' => 2,
             ],
             ['HTTP_X_CSRF_TOKEN' => $token],
@@ -63,7 +69,16 @@ final class CmsAdminControllerTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $block = $this->json($client)['block'];
         self::assertSame('hero', $block['type']);
-        self::assertSame(['headline' => 'Nueva portada'], $block['payload']);
+        self::assertSame(
+            [
+                'headline' => 'Nueva portada',
+                'cta' => [
+                    'label' => 'Comprar',
+                    'href' => '/catalogo',
+                ],
+            ],
+            $block['payload'],
+        );
         self::assertSame(2, $block['sort_order']);
 
         $client->request(

@@ -322,7 +322,34 @@ final class CmsAdminController extends AbstractController
             );
         }
 
-        return get_object_vars($value);
+        return self::normalizeJsonObject($value);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function normalizeJsonObject(object $value): array
+    {
+        return array_map(
+            static fn (mixed $item): mixed => self::normalizeJsonValue($item),
+            get_object_vars($value),
+        );
+    }
+
+    private static function normalizeJsonValue(mixed $value): mixed
+    {
+        if (is_object($value)) {
+            return self::normalizeJsonObject($value);
+        }
+
+        if (is_array($value)) {
+            return array_map(
+                static fn (mixed $item): mixed => self::normalizeJsonValue($item),
+                $value,
+            );
+        }
+
+        return $value;
     }
 
     private function flushUnique(string $message): void
