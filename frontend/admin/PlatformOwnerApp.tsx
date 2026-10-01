@@ -55,6 +55,26 @@ type CommercialSubscriptionChange = {
   blockers: string[];
 };
 
+type CommercialUsageRow = {
+  tenant_id: string;
+  metric: string;
+  aggregation: string;
+  quantity: number;
+  window_start: string;
+  window_end: string;
+  observed_at: string;
+};
+
+type CommercialPortfolioItem = {
+  tenant: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  commercial_subscription: CommercialSubscriptionOverview;
+  usage: CommercialUsageRow[];
+};
+
 type TenantSummary = {
   id: string;
   name: string;
@@ -100,6 +120,7 @@ type PlatformContextResponse = {
   };
   signals_last_30_days: FunctionalSignalCounts;
   commercial_catalog: CommercialPlan[];
+  commercial_portfolio: CommercialPortfolioItem[];
   tenants: TenantSummary[];
   tenant_pagination: {
     page: number;
@@ -782,6 +803,101 @@ export function PlatformOwnerApp({
               <FunctionalSignalsPanel
                 signals={state.data.signals_last_30_days}
               />
+
+              <section
+                className="platform-section"
+                aria-labelledby="commercial-portfolio-title"
+              >
+                <div className="section-heading compact">
+                  <div>
+                    <span className="eyebrow">SaaS Control Center</span>
+                    <h2 id="commercial-portfolio-title">Cartera comercial</h2>
+                  </div>
+                  <span className="status-pill">Owner only · Solo lectura</span>
+                </div>
+
+                {state.data.commercial_portfolio.length === 0 ? (
+                  <div className="platform-empty">
+                    Aún no hay empresas en la cartera comercial.
+                  </div>
+                ) : (
+                  <div className="tenant-grid">
+                    {state.data.commercial_portfolio.map((entry) => (
+                      <article className="tenant-card" key={entry.tenant.id}>
+                        <div>
+                          <span className="tenant-slug">{entry.tenant.slug}</span>
+                          <h3>{entry.tenant.name}</h3>
+                        </div>
+
+                        {entry.commercial_subscription.status === 'configured' ? (
+                          <dl>
+                            <div>
+                              <dt>Plan</dt>
+                              <dd>
+                                {entry.commercial_subscription.subscription.plan.name}
+                                {' · v'}
+                                {entry.commercial_subscription.subscription.plan.version}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Suscripción</dt>
+                              <dd>
+                                {entry.commercial_subscription.subscription.state
+                                  .replaceAll('_', ' ')}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Usage</dt>
+                              <dd>
+                                {entry.usage.length === 0
+                                  ? 'Sin observaciones'
+                                  : `${entry.usage.length} métricas observadas`}
+                              </dd>
+                            </div>
+                          </dl>
+                        ) : (
+                          <dl>
+                            <div>
+                              <dt>Suscripción</dt>
+                              <dd>Sin suscripción configurada</dd>
+                            </div>
+                            <div>
+                              <dt>Usage</dt>
+                              <dd>
+                                {entry.usage.length === 0
+                                  ? 'Sin observaciones'
+                                  : `${entry.usage.length} métricas observadas`}
+                              </dd>
+                            </div>
+                          </dl>
+                        )}
+
+                        {entry.usage.length > 0 && (
+                          <div className="platform-catalog-variants">
+                            {entry.usage.map((usage) => (
+                              <span
+                                key={
+                                  usage.metric
+                                  + '|'
+                                  + usage.window_start
+                                  + '|'
+                                  + usage.window_end
+                                }
+                              >
+                                <code>{usage.metric}</code>
+                                {' · '}
+                                {usage.quantity}
+                                {' · '}
+                                {usage.aggregation}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
 
               <section
                 className="platform-section"
