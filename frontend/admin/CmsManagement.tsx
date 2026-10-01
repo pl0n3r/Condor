@@ -370,7 +370,7 @@ function CmsPageEditor({
             </label>
           </div>
           <div className="catalog-actions">
-            <button className="button" disabled={busy}>Guardar borrador</button>
+            <button className="button" type="submit" disabled={busy}>Guardar borrador</button>
           </div>
         </form>
       )}
@@ -438,7 +438,7 @@ function CmsPageEditor({
             </label>
           </div>
           <div className="catalog-actions">
-            <button className="button" disabled={busy}>Añadir bloque</button>
+            <button className="button" type="submit" disabled={busy}>Añadir bloque</button>
           </div>
         </form>
       )}
@@ -557,7 +557,7 @@ function CmsBlockEditor({
         </label>
       </div>
       <div className="catalog-actions">
-        <button className="button button-secondary" disabled={busy}>
+        <button className="button button-secondary" type="submit" disabled={busy}>
           Guardar bloque
         </button>
       </div>
