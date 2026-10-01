@@ -43,12 +43,13 @@ final readonly class PlatformCommercialTrialCreator
         $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $planVersionId = null;
         foreach ($this->catalog->current($now) as $candidate) {
+            $candidatePlanVersionId = $candidate['plan_version_id'] ?? null;
             if (
                 ($candidate['key'] ?? null) === 'business'
-                && is_string($candidate['plan_version_id'] ?? null)
-                && trim($candidate['plan_version_id']) !== ''
+                && is_string($candidatePlanVersionId)
+                && trim($candidatePlanVersionId) !== ''
             ) {
-                $planVersionId = $candidate['plan_version_id'];
+                $planVersionId = $candidatePlanVersionId;
                 break;
             }
         }
