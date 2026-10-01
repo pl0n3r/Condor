@@ -6,6 +6,7 @@ namespace App\Http\Controller;
 
 use App\Application\Commercial\PlatformCommercialSubscriptionCreator;
 use App\Application\Commercial\PlatformCommercialSubscriptionStateManager;
+use App\Application\Commercial\PlatformCommercialTrialCreator;
 use App\Application\Identity\PlatformOwnerTenantContext;
 use DomainException;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -18,6 +19,7 @@ final class PlatformCommercialSubscriptionController extends PlatformOwnerApiCon
     public function __construct(
         private readonly PlatformCommercialSubscriptionCreator $creator,
         private readonly PlatformCommercialSubscriptionStateManager $manager,
+        private readonly PlatformCommercialTrialCreator $trialCreator,
         private readonly PlatformOwnerTenantContext $tenantContext,
     ) {
     }
@@ -57,6 +59,42 @@ final class PlatformCommercialSubscriptionController extends PlatformOwnerApiCon
                     $tenantId,
                     $payload['plan_version_id'],
                 ),
+                JsonResponse::HTTP_CREATED,
+            );
+        } catch (DomainException $exception) {
+            throw new UnprocessableEntityHttpException(
+                $exception->getMessage(),
+                $exception,
+            );
+        }
+    }
+
+    #[Route(
+        '/adminpl0n3r/api/tenants/{tenantId}/commercial-subscription/trial',
+        name: 'platform_commercial_trial_create',
+        methods: ['POST'],
+    )]
+    public function startTrial(string $tenantId, Request $request): JsonResponse
+    {
+        $this->platformOwner();
+        $this->requireManagementCsrf(
+            $request,
+            'platform_commercial_subscription_management',
+        );
+
+        // Preserve the canonical tenant 404 before consulting Commercial data.
+        $this->tenantContext->tenant($tenantId);
+
+        $payload = $this->jsonPayload($request);
+        if ($payload !== []) {
+            throw new UnprocessableEntityHttpException(
+                'El inicio de trial no acepta plan, duración ni estado.',
+            );
+        }
+
+        try {
+            return $this->json(
+                $this->trialCreator->create($tenantId),
                 JsonResponse::HTTP_CREATED,
             );
         } catch (DomainException $exception) {
