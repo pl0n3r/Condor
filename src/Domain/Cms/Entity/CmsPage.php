@@ -12,12 +12,8 @@ use Doctrine\ORM\Mapping as ORM;
 use DomainException;
 
 #[ORM\Entity]
-#[ORM\Table(
-    name: 'condor_cms_page',
-    uniqueConstraints: [
-        new ORM\UniqueConstraint(name: 'uniq_cms_page_tenant_slug', columns: ['tenant_id', 'slug']),
-    ],
-)]
+#[ORM\Table(name: 'condor_cms_page')]
+#[ORM\UniqueConstraint(name: 'uniq_cms_page_tenant_slug', columns: ['tenant_id', 'slug'])]
 final class CmsPage
 {
     #[ORM\Id]
