@@ -31,7 +31,19 @@ final class CmsPublicControllerTest extends WebTestCase
         self::assertSelectorExists('link[rel="canonical"]');
         self::assertSelectorExists('meta[name="description"]');
         self::assertResponseHeaderSame('cache-control', 'max-age=60, public');
-        self::assertNotSame('', (string) $client->getResponse()->headers->get('etag'));
+        $etag = (string) $client->getResponse()->headers->get('etag');
+        self::assertNotSame('', $etag);
+        self::assertNotSame('', (string) $client->getResponse()->headers->get('last-modified'));
+
+        $client->request(
+            'GET',
+            '/'.$fixture['tenant']->slug().'/inicio',
+            server: [
+                'HTTP_HOST' => 'www.condorapp.com.co',
+                'HTTP_IF_NONE_MATCH' => $etag,
+            ],
+        );
+        self::assertResponseStatusCodeSame(304);
     }
 
     public function testDraftCrossTenantAndUnsafeContentNeverRender(): void

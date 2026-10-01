@@ -82,7 +82,14 @@ final class CmsPublicController extends AbstractController
 
         $response->setPublic();
         $response->setMaxAge(60);
-        $response->setEtag($this->etag($page, $blocks));
+        $response->setEtag($this->etag(
+            $tenant->id(),
+            $tenant->slug(),
+            $tenant->name(),
+            $version->human(),
+            $page,
+            $blocks,
+        ));
         if ($page->publishedAt() instanceof \DateTimeImmutable) {
             $response->setLastModified($page->publishedAt());
         }
@@ -185,9 +192,17 @@ final class CmsPublicController extends AbstractController
     }
 
     /** @param list<CmsBlock> $blocks */
-    private function etag(CmsPage $page, array $blocks): string
-    {
+    private function etag(
+        string $tenantId,
+        string $tenantSlug,
+        string $tenantName,
+        string $appVersion,
+        CmsPage $page,
+        array $blocks,
+    ): string {
         $fingerprint = [
+            'tenant' => [$tenantId, $tenantSlug, $tenantName],
+            'app_version' => $appVersion,
             'page' => [
                 $page->id(),
                 $page->slug(),
