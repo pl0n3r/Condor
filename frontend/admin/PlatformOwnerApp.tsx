@@ -42,6 +42,17 @@ type CommercialSubscriptionOverview =
       };
     };
 
+type CommercialSubscriptionChange = {
+  id: string;
+  direction: 'upgrade' | 'downgrade';
+  status: 'effective' | 'scheduled' | 'pending_resolution';
+  current_plan: { key: string; name: string; version: number };
+  target_plan: { key: string; name: string; version: number };
+  requested_at: string;
+  effective_at: string | null;
+  blockers: string[];
+};
+
 type TenantSummary = {
   id: string;
   name: string;
@@ -69,6 +80,7 @@ type SelectedTenant = TenantSummary & {
     }>;
   }>;
   commercial_subscription: CommercialSubscriptionOverview;
+  commercial_subscription_changes: CommercialSubscriptionChange[];
 };
 
 type PlatformContextResponse = {
@@ -862,6 +874,54 @@ export function PlatformOwnerApp({
                         </div>
                       </dl>
                     </article>
+                  </div>
+                )}
+              </section>
+
+              <section
+                className="platform-section"
+                aria-labelledby="commercial-change-history-title"
+              >
+                <div className="section-heading compact">
+                  <div>
+                    <span className="eyebrow">Auditoría comercial</span>
+                    <h2 id="commercial-change-history-title">Historial de cambios</h2>
+                  </div>
+                  <span className="status-pill">Solo lectura</span>
+                </div>
+
+                {selected.commercial_subscription_changes.length === 0 ? (
+                  <div className="platform-empty">
+                    Sin cambios comerciales registrados.
+                  </div>
+                ) : (
+                  <div className="tenant-grid">
+                    {selected.commercial_subscription_changes.map((change) => (
+                      <article className="tenant-card" key={change.id}>
+                        <div>
+                          <span className="tenant-slug">
+                            {change.direction.replaceAll('_', ' ')} · {change.status.replaceAll('_', ' ')}
+                          </span>
+                          <h3>
+                            {change.current_plan.name} → {change.target_plan.name}
+                          </h3>
+                        </div>
+                        <dl>
+                          <div>
+                            <dt>Solicitado</dt>
+                            <dd><code>{change.requested_at}</code></dd>
+                          </div>
+                          <div>
+                            <dt>Efectivo</dt>
+                            <dd>{change.effective_at ? <code>{change.effective_at}</code> : 'Pendiente'}</dd>
+                          </div>
+                          <div>
+                            <dt>Bloqueos</dt>
+                            <dd>{change.blockers.length > 0 ? change.blockers.join(', ') : 'Ninguno'}</dd>
+                          </div>
+                        </dl>
+                      </article>
+                    ))}
                   </div>
                 )}
               </section>
