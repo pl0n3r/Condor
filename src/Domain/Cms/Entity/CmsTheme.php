@@ -11,12 +11,8 @@ use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity]
-#[ORM\Table(
-    name: 'condor_cms_theme',
-    uniqueConstraints: [
-        new ORM\UniqueConstraint(name: 'uniq_cms_theme_tenant_key', columns: ['tenant_id', 'theme_key']),
-    ],
-)]
+#[ORM\Table(name: 'condor_cms_theme')]
+#[ORM\UniqueConstraint(name: 'uniq_cms_theme_tenant_key', columns: ['tenant_id', 'theme_key'])]
 final class CmsTheme
 {
     #[ORM\Id]
