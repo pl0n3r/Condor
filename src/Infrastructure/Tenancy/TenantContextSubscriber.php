@@ -12,6 +12,11 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[AsEventListener(event: KernelEvents::REQUEST, priority: 24)]
 final readonly class TenantContextSubscriber
 {
+    private const CUSTOM_DOMAIN_ROUTES = [
+        'app_home',
+        'app_tenant_public',
+    ];
+
     public function __construct(
         private TenantResolver $resolver,
         private TenantContext $context,
@@ -30,7 +35,11 @@ final readonly class TenantContextSubscriber
         $tenant = $this->resolver->resolve($request);
         if (!TenantResolver::isPlatformHost($request->getHost())) {
             $route = $request->attributes->get('_route');
-            if ($tenant === null || $route !== 'app_home') {
+            if (
+                $tenant === null
+                || !is_string($route)
+                || !in_array($route, self::CUSTOM_DOMAIN_ROUTES, true)
+            ) {
                 throw new NotFoundHttpException('El sitio solicitado no está disponible.');
             }
         }

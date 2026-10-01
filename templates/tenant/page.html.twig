@@ -1,0 +1,50 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ page.title }} · {{ storefront.name }}{% endblock %}
+
+{% block head %}
+<link rel="canonical" href="{{ canonical }}">
+{% if storefront.description %}
+<meta name="description" content="{{ storefront.description }}">
+{% endif %}
+{% endblock %}
+
+{% block body %}
+<article class="cms-page" data-page-slug="{{ page.slug }}" data-theme="{{ page.theme }}">
+    <header class="hero cms-page-hero">
+        <span class="eyebrow">{{ storefront.name }}</span>
+        <h1>{{ page.title }}</h1>
+    </header>
+
+    {% for block in page.blocks %}
+        {% if block.type == 'text' %}
+            <section class="cms-block cms-block-text" data-cms-block="text">
+                <p>{{ block.text }}</p>
+            </section>
+        {% elseif block.type == 'image' %}
+            <figure class="cms-block cms-block-image" data-cms-block="image">
+                <img src="{{ block.src }}" alt="{{ block.alt }}" loading="lazy">
+                {% if block.caption %}<figcaption>{{ block.caption }}</figcaption>{% endif %}
+            </figure>
+        {% elseif block.type == 'hero' %}
+            <section class="cms-block cms-block-hero" data-cms-block="hero">
+                {% if block.headline %}<h2>{{ block.headline }}</h2>{% endif %}
+                {% if block.text %}<p>{{ block.text }}</p>{% endif %}
+                {% if block.cta %}<a class="button" href="{{ block.cta.href }}">{{ block.cta.label }}</a>{% endif %}
+            </section>
+        {% elseif block.type == 'cta' %}
+            <section class="cms-block cms-block-cta" data-cms-block="cta">
+                <a class="button" href="{{ block.href }}">{{ block.label }}</a>
+            </section>
+        {% elseif block.type == 'gallery' %}
+            <section class="cms-block cms-block-gallery" data-cms-block="gallery" aria-label="Galería">
+                {% for image in block.images %}
+                    <img src="{{ image.src }}" alt="{{ image.alt }}" loading="lazy">
+                {% endfor %}
+            </section>
+        {% elseif block.type == 'divider' %}
+            <hr class="cms-block cms-block-divider" data-cms-block="divider">
+        {% endif %}
+    {% endfor %}
+</article>
+{% endblock %}
