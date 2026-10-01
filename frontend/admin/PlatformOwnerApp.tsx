@@ -196,6 +196,152 @@ function trialCreationErrorMessage(status: number): string {
   return 'No fue posible iniciar el trial.';
 }
 
+const SUBSCRIPTION_STATES = [
+  'trialing',
+  'active',
+  'past_due',
+  'grace_period',
+  'suspended',
+  'cancelled',
+] as const;
+
+type SubscriptionStateName = (typeof SUBSCRIPTION_STATES)[number];
+
+function subscriptionStateErrorMessage(status: number): string {
+  if (status === 403) {
+    return 'Tu sesión no puede cambiar este estado.';
+  }
+
+  if (status === 422) {
+    return 'El servidor rechazó esta transición de estado.';
+  }
+
+  return 'No fue posible cambiar el estado.';
+}
+
+type SubscriptionStateTransitionControlProps = Readonly<{
+  tenantId: string;
+  page: number;
+  csrfToken: string;
+  onRefresh: (
+    tenantId: string,
+    page: number,
+    showLoading: boolean,
+  ) => Promise<void>;
+}>;
+
+function SubscriptionStateTransitionControl({
+  tenantId,
+  page,
+  csrfToken,
+  onRefresh,
+}: SubscriptionStateTransitionControlProps) {
+  const [targetState, setTargetState] = useState<SubscriptionStateName | ''>('');
+  const [transition, setTransition] = useState<
+    { status: 'idle' | 'saving' } | { status: 'error'; message: string }
+  >({ status: 'idle' });
+  const inFlight = useRef(false);
+
+  async function transitionSubscriptionState() {
+    if (targetState === '' || inFlight.current) {
+      return;
+    }
+
+    inFlight.current = true;
+    setTransition({ status: 'saving' });
+    try {
+      const response = await fetch(
+        '/adminpl0n3r/api/tenants/'
+          + encodeURIComponent(tenantId)
+          + '/commercial-subscription/state',
+        {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken,
+          },
+          body: JSON.stringify({
+            target_state: targetState,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        setTransition({
+          status: 'error',
+          message: subscriptionStateErrorMessage(response.status),
+        });
+        return;
+      }
+
+      setTargetState('');
+      setTransition({ status: 'idle' });
+      await onRefresh(tenantId, page, false);
+    } catch {
+      setTransition({
+        status: 'error',
+        message: 'No fue posible completar el cambio de estado.',
+      });
+    } finally {
+      inFlight.current = false;
+    }
+  }
+
+  return (
+    <form
+      className="platform-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void transitionSubscriptionState();
+      }}
+    >
+      <div>
+        <strong>Cambiar estado</strong>
+        <p className="muted">
+          El servidor valida si la transición solicitada es válida.
+        </p>
+      </div>
+
+      <label className="field">
+        <span>Estado objetivo</span>
+        <select
+          value={targetState}
+          onChange={(event) => {
+            setTargetState(event.target.value as SubscriptionStateName | '');
+            setTransition({ status: 'idle' });
+          }}
+          disabled={transition.status === 'saving'}
+          required
+        >
+          <option value="">Selecciona un estado</option>
+          {SUBSCRIPTION_STATES.map((subscriptionState) => (
+            <option key={subscriptionState} value={subscriptionState}>
+              {subscriptionState.replaceAll('_', ' ')}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="platform-form-actions">
+        <button
+          className="button"
+          type="submit"
+          disabled={targetState === '' || transition.status === 'saving'}
+        >
+          {transition.status === 'saving' ? 'Cambiando…' : 'Cambiar estado'}
+        </button>
+        {transition.status === 'error' && (
+          <span className="muted" role="alert">
+            {transition.message}
+          </span>
+        )}
+      </div>
+    </form>
+  );
+}
+
 function commercialMoney(amount: number | null, currency: string): string {
   if (amount === null) {
     return 'Sin precio publicado';
@@ -454,6 +600,7 @@ export function PlatformOwnerApp({
       commercialCreationInFlight.current = false;
     }
   }
+
 
   return (
     <AdminShell
@@ -924,8 +1071,9 @@ export function PlatformOwnerApp({
                     </div>
                   </form>
                 ) : (
-                  <div className="tenant-grid">
-                    <article className="tenant-card">
+                  <>
+                    <div className="tenant-grid">
+                      <article className="tenant-card">
                       <div>
                         <span className="tenant-slug">
                           {selected.commercial_subscription.subscription.plan.key}
@@ -997,8 +1145,17 @@ export function PlatformOwnerApp({
                           </dd>
                         </div>
                       </dl>
-                    </article>
-                  </div>
+                      </article>
+                    </div>
+
+                    <SubscriptionStateTransitionControl
+                      key={selected.id}
+                      tenantId={selected.id}
+                      page={state.data.tenant_pagination.page}
+                      csrfToken={subscriptionToken}
+                      onRefresh={loadContext}
+                    />
+                  </>
                 )}
               </section>
 
