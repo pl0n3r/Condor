@@ -40,20 +40,12 @@ final readonly class PlatformCommercialPortfolio
 
         $portfolio = [];
         foreach ($tenants as $tenant) {
-            if (!$tenant instanceof Tenant) {
-                continue;
-            }
-
             $ledger = new UsageLedger($tenant->id());
             $observations = $this->entityManager
                 ->getRepository(UsageObservation::class)
                 ->findBy(['tenantId' => $tenant->id()]);
 
             foreach ($observations as $observation) {
-                if (!$observation instanceof UsageObservation) {
-                    continue;
-                }
-
                 $ledger->add($observation->toRecord());
             }
 
