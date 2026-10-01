@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace App\Domain\Commercial;
 
 use App\Domain\Commercial\Entity\PlanVersion;
+use DateInterval;
 use DateTimeImmutable;
 use DateTimeZone;
 use DomainException;
 
 final class SubscriptionLifecycle
 {
+    public const TRIAL_DURATION_DAYS = 14;
+
     /** @var array<string,list<SubscriptionState>> */
     private const TRANSITIONS = [
         'trialing' => [SubscriptionState::Active, SubscriptionState::Cancelled],
@@ -123,6 +126,31 @@ final class SubscriptionLifecycle
     public function lastChangedAt(): DateTimeImmutable
     {
         return $this->lastChangedAt;
+    }
+
+    public function trialStartedAt(): ?DateTimeImmutable
+    {
+        $first = $this->history[0] ?? null;
+        if (
+            !is_array($first)
+            || ($first['state'] ?? null) !== SubscriptionState::Trialing->value
+        ) {
+            return null;
+        }
+
+        return self::parseHistoricalTime($first['at'] ?? null);
+    }
+
+    public function trialEndsAt(): ?DateTimeImmutable
+    {
+        $startedAt = $this->trialStartedAt();
+        if ($startedAt === null) {
+            return null;
+        }
+
+        return $startedAt->add(
+            new DateInterval('P'.self::TRIAL_DURATION_DAYS.'D'),
+        );
     }
 
     /** @return list<array{state:string,at:string}> */
