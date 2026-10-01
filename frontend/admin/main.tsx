@@ -11,6 +11,7 @@ if (adminRoot) {
   const version = adminRoot.dataset.version ?? '0.1.0';
   const logoutToken = adminRoot.dataset.logoutToken ?? '';
   const accessToken = adminRoot.dataset.accessToken ?? '';
+  const section = adminRoot.dataset.section === 'site' ? 'site' : 'home';
 
   createRoot(adminRoot).render(
     <StrictMode>
@@ -18,6 +19,7 @@ if (adminRoot) {
         version={version}
         logoutToken={logoutToken}
         accessToken={accessToken}
+        section={section}
       />
     </StrictMode>,
   );

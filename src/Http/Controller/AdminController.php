@@ -19,6 +19,22 @@ final class AdminController extends AbstractController
         AppVersion $version,
         CurrentTenantForUser $currentTenantForUser,
     ): Response {
+        return $this->adminResponse($version, $currentTenantForUser, 'home');
+    }
+
+    #[Route('/admin/sitio', name: 'app_admin_site', methods: ['GET'])]
+    public function site(
+        AppVersion $version,
+        CurrentTenantForUser $currentTenantForUser,
+    ): Response {
+        return $this->adminResponse($version, $currentTenantForUser, 'site');
+    }
+
+    private function adminResponse(
+        AppVersion $version,
+        CurrentTenantForUser $currentTenantForUser,
+        string $section,
+    ): Response {
         $user = $this->getUser();
         if (!$user instanceof User) {
             throw new AccessDeniedException();
@@ -33,6 +49,7 @@ final class AdminController extends AbstractController
         return $this->render('admin/index.html.twig', [
             'app_version' => $version->human(),
             'tenant_name' => $tenant->name(),
+            'section' => $section,
         ]);
     }
 }
