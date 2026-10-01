@@ -24,6 +24,7 @@ final class Version20261001171500 extends AbstractMigration // NOSONAR -- nombre
                 name VARCHAR(160) NOT NULL,
                 created_at DATETIME(6) NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 UNIQUE INDEX uniq_cms_theme_tenant_key (tenant_id, theme_key),
+                UNIQUE INDEX uniq_cms_theme_tenant_id (tenant_id, id),
                 INDEX IDX_CMS_THEME_TENANT (tenant_id),
                 PRIMARY KEY(id),
                 CONSTRAINT FK_CMS_THEME_TENANT FOREIGN KEY (tenant_id)
@@ -40,13 +41,16 @@ final class Version20261001171500 extends AbstractMigration // NOSONAR -- nombre
                 title VARCHAR(200) NOT NULL,
                 created_at DATETIME(6) NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 UNIQUE INDEX uniq_cms_page_tenant_slug (tenant_id, slug),
+                UNIQUE INDEX uniq_cms_page_tenant_id (tenant_id, id),
                 INDEX IDX_CMS_PAGE_TENANT (tenant_id),
                 INDEX IDX_CMS_PAGE_THEME (theme_id),
                 PRIMARY KEY(id),
                 CONSTRAINT FK_CMS_PAGE_TENANT FOREIGN KEY (tenant_id)
                     REFERENCES condor_tenant (id) ON DELETE CASCADE,
                 CONSTRAINT FK_CMS_PAGE_THEME FOREIGN KEY (theme_id)
-                    REFERENCES condor_cms_theme (id) ON DELETE RESTRICT
+                    REFERENCES condor_cms_theme (id) ON DELETE RESTRICT,
+                CONSTRAINT FK_CMS_PAGE_THEME_TENANT FOREIGN KEY (tenant_id, theme_id)
+                    REFERENCES condor_cms_theme (tenant_id, id) ON DELETE RESTRICT
             ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
             SQL);
 
@@ -66,7 +70,9 @@ final class Version20261001171500 extends AbstractMigration // NOSONAR -- nombre
                 CONSTRAINT FK_CMS_BLOCK_TENANT FOREIGN KEY (tenant_id)
                     REFERENCES condor_tenant (id) ON DELETE CASCADE,
                 CONSTRAINT FK_CMS_BLOCK_PAGE FOREIGN KEY (page_id)
-                    REFERENCES condor_cms_page (id) ON DELETE CASCADE
+                    REFERENCES condor_cms_page (id) ON DELETE CASCADE,
+                CONSTRAINT FK_CMS_BLOCK_PAGE_TENANT FOREIGN KEY (tenant_id, page_id)
+                    REFERENCES condor_cms_page (tenant_id, id) ON DELETE CASCADE
             ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
             SQL);
     }

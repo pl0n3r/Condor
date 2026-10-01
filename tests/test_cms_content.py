@@ -27,6 +27,19 @@ class CmsContentTests(unittest.TestCase):
 
     def test_tenant_scoped_pages_themes_and_blocks_are_isolated(self) -> None:
         self.phpunit("testTenantScopedPagesThemesAndBlocksAreIsolated")
+        migration = (
+            ROOT / "migrations/Version20261001171500.php"
+        ).read_text(encoding="utf-8")
+        for expected in (
+            "uniq_cms_theme_tenant_id (tenant_id, id)",
+            "uniq_cms_page_tenant_id (tenant_id, id)",
+            "FK_CMS_PAGE_THEME_TENANT FOREIGN KEY (tenant_id, theme_id)",
+            "REFERENCES condor_cms_theme (tenant_id, id)",
+            "FK_CMS_BLOCK_PAGE_TENANT FOREIGN KEY (tenant_id, page_id)",
+            "REFERENCES condor_cms_page (tenant_id, id)",
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, migration)
 
     def test_unknown_or_executable_block_types_fail_closed(self) -> None:
         self.phpunit("testUnknownOrExecutableBlockTypesFailClosed")
