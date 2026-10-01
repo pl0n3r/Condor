@@ -130,15 +130,12 @@ final class SubscriptionLifecycle
 
     public function trialStartedAt(): ?DateTimeImmutable
     {
-        $first = $this->history[0] ?? null;
-        if (
-            !is_array($first)
-            || ($first['state'] ?? null) !== SubscriptionState::Trialing->value
-        ) {
+        $first = $this->history[0];
+        if ($first['state'] !== SubscriptionState::Trialing->value) {
             return null;
         }
 
-        return self::parseHistoricalTime($first['at'] ?? null);
+        return self::parseHistoricalTime($first['at']);
     }
 
     public function trialEndsAt(): ?DateTimeImmutable
