@@ -184,6 +184,18 @@ function subscriptionSubmitLabel(
   return status === 'saving' ? 'Creando…' : 'Crear suscripción';
 }
 
+function trialCreationErrorMessage(status: number): string {
+  if (status === 403) {
+    return 'Tu sesión no puede iniciar este trial.';
+  }
+
+  if (status === 422) {
+    return 'No fue posible iniciar el trial para esta empresa.';
+  }
+
+  return 'No fue posible iniciar el trial.';
+}
+
 function commercialMoney(amount: number | null, currency: string): string {
   if (amount === null) {
     return 'Sin precio publicado';
@@ -421,11 +433,7 @@ export function PlatformOwnerApp({
       if (!response.ok) {
         setTrialCreation({
           status: 'error',
-          message: response.status === 403
-            ? 'Tu sesión no puede iniciar este trial.'
-            : response.status === 422
-              ? 'No fue posible iniciar el trial para esta empresa.'
-              : 'No fue posible iniciar el trial.',
+          message: trialCreationErrorMessage(response.status),
         });
         return;
       }
