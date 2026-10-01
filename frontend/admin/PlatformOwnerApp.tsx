@@ -39,6 +39,8 @@ type CommercialSubscriptionOverview =
           quote_required: boolean;
         };
         last_changed_at: string;
+        trial_started_at?: string;
+        trial_ends_at?: string;
       };
     };
 
@@ -234,6 +236,10 @@ export function PlatformOwnerApp({
   const [subscriptionCreation, setSubscriptionCreation] = useState<
     { status: 'idle' | 'saving' } | { status: 'error'; message: string }
   >({ status: 'idle' });
+  const [trialCreation, setTrialCreation] = useState<
+    { status: 'idle' | 'saving' } | { status: 'error'; message: string }
+  >({ status: 'idle' });
+  const commercialCreationInFlight = useRef(false);
   const requestSequence = useRef(0);
   const globalPage = useRef(1);
 
@@ -319,6 +325,7 @@ export function PlatformOwnerApp({
   useEffect(() => {
     setSelectedPlanVersionId('');
     setSubscriptionCreation({ status: 'idle' });
+    setTrialCreation({ status: 'idle' });
   }, [selected?.id]);
 
   async function createInitialSubscription() {
@@ -326,10 +333,14 @@ export function PlatformOwnerApp({
       state.status !== 'ready'
       || selected?.commercial_subscription.status !== 'not_configured'
       || selectedPlanVersionId === ''
+      || trialCreation.status === 'saving'
+      || commercialCreationInFlight.current
     ) {
       return;
     }
 
+    commercialCreationInFlight.current = true;
+    setTrialCreation({ status: 'idle' });
     setSubscriptionCreation({ status: 'saving' });
     try {
       const response = await fetch(
@@ -372,6 +383,67 @@ export function PlatformOwnerApp({
         status: 'error',
         message: 'No fue posible completar la creación.',
       });
+    } finally {
+      commercialCreationInFlight.current = false;
+    }
+  }
+
+  async function startBusinessTrial() {
+    if (
+      state.status !== 'ready'
+      || selected?.commercial_subscription.status !== 'not_configured'
+      || subscriptionCreation.status === 'saving'
+      || commercialCreationInFlight.current
+    ) {
+      return;
+    }
+
+    commercialCreationInFlight.current = true;
+    setSubscriptionCreation({ status: 'idle' });
+    setTrialCreation({ status: 'saving' });
+    try {
+      const response = await fetch(
+        '/adminpl0n3r/api/tenants/'
+          + encodeURIComponent(selected.id)
+          + '/commercial-subscription/trial',
+        {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': subscriptionToken,
+          },
+          body: JSON.stringify({}),
+        },
+      );
+
+      if (!response.ok) {
+        setTrialCreation({
+          status: 'error',
+          message: response.status === 403
+            ? 'Tu sesión no puede iniciar este trial.'
+            : response.status === 422
+              ? 'No fue posible iniciar el trial para esta empresa.'
+              : 'No fue posible iniciar el trial.',
+        });
+        return;
+      }
+
+      setSelectedPlanVersionId('');
+      setTrialCreation({ status: 'idle' });
+      await loadContext(
+        selected.id,
+        state.data.tenant_pagination.page,
+        false,
+      );
+    } catch {
+      setTrialCreation({
+        status: 'error',
+        message: 'No fue posible completar el inicio del trial.',
+      });
+    } finally {
+      commercialCreationInFlight.current = false;
     }
   }
 
@@ -767,8 +839,8 @@ export function PlatformOwnerApp({
                       <strong>Crear suscripción inicial</strong>
                       <p className="muted">
                         Sin suscripción configurada. Selecciona una PlanVersion
-                        vigente. El tenant, estado
-                        inicial y timestamp los define el servidor.
+                        para activación manual o inicia el Trial Negocio.
+                        El servidor define tenant, estado y timestamps.
                       </p>
                     </div>
 
@@ -785,7 +857,10 @@ export function PlatformOwnerApp({
                             setSelectedPlanVersionId(event.target.value);
                             setSubscriptionCreation({ status: 'idle' });
                           }}
-                          disabled={subscriptionCreation.status === 'saving'}
+                          disabled={
+                            subscriptionCreation.status === 'saving'
+                            || trialCreation.status === 'saving'
+                          }
                           required
                         >
                           <option value="">Selecciona un plan</option>
@@ -808,15 +883,34 @@ export function PlatformOwnerApp({
                         disabled={
                           selectedPlanVersionId === ''
                           || subscriptionCreation.status === 'saving'
+                          || trialCreation.status === 'saving'
                         }
                       >
                         {subscriptionSubmitLabel(
                           subscriptionCreation.status,
                         )}
                       </button>
+                      <button
+                        className="button button-secondary"
+                        type="button"
+                        disabled={
+                          subscriptionCreation.status === 'saving'
+                          || trialCreation.status === 'saving'
+                        }
+                        onClick={() => void startBusinessTrial()}
+                      >
+                        {trialCreation.status === 'saving'
+                          ? 'Iniciando trial…'
+                          : 'Iniciar trial Negocio · 14 días'}
+                      </button>
                       {subscriptionCreation.status === 'error' && (
                         <span className="muted" role="alert">
                           {subscriptionCreation.message}
+                        </span>
+                      )}
+                      {trialCreation.status === 'error' && (
+                        <span className="muted" role="alert">
+                          {trialCreation.message}
                         </span>
                       )}
                     </div>
@@ -864,6 +958,28 @@ export function PlatformOwnerApp({
                                 )}
                           </dd>
                         </div>
+                        {selected.commercial_subscription.subscription.state === 'trialing'
+                          && selected.commercial_subscription.subscription.trial_started_at
+                          && selected.commercial_subscription.subscription.trial_ends_at && (
+                            <>
+                              <div>
+                                <dt>Inicio trial</dt>
+                                <dd>
+                                  <code>
+                                    {selected.commercial_subscription.subscription.trial_started_at}
+                                  </code>
+                                </dd>
+                              </div>
+                              <div>
+                                <dt>Fin trial</dt>
+                                <dd>
+                                  <code>
+                                    {selected.commercial_subscription.subscription.trial_ends_at}
+                                  </code>
+                                </dd>
+                              </div>
+                            </>
+                          )}
                         <div>
                           <dt>Último cambio</dt>
                           <dd>
