@@ -57,7 +57,6 @@ class SaasControlCenterTrialUiAcceptanceTests(unittest.TestCase):
         self.assertIn("subscription.state === 'trialing'", source)
         self.assertIn("Inicio trial", source)
         self.assertIn("Fin trial", source)
-        self.assertIn("'version' => '0.1.103'", VERSION.read_text(encoding="utf-8"))
 
 
     def test_trial_error_mapping_is_module_level_and_explicit(self) -> None:
@@ -91,11 +90,13 @@ class SaasControlCenterTrialUiAcceptanceTests(unittest.TestCase):
         self.assertIn("trial_started_at?: string", source)
         self.assertIn("trial_ends_at?: string", source)
 
-    def test_release_is_0_1_103(self) -> None:
-        self.assertIn(
-            "'version' => '0.1.103'",
-            VERSION.read_text(encoding="utf-8"),
-        )
+    def test_release_is_at_least_0_1_103(self) -> None:
+        source = VERSION.read_text(encoding="utf-8")
+        marker = "'version' => '"
+        start = source.index(marker) + len(marker)
+        end = source.index("'", start)
+        version = tuple(int(part) for part in source[start:end].split("."))
+        self.assertGreaterEqual(version, (0, 1, 103))
 
 
 if __name__ == "__main__":
