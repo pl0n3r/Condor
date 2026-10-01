@@ -16,6 +16,9 @@ use DomainException;
 #[ORM\UniqueConstraint(name: 'uniq_cms_page_tenant_slug', columns: ['tenant_id', 'slug'])]
 final class CmsPage
 {
+    public const STATUS_DRAFT = 'draft';
+    public const STATUS_PUBLISHED = 'published';
+
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 26)]
     private string $id;
@@ -34,6 +37,12 @@ final class CmsPage
     #[ORM\Column(type: 'string', length: 200)]
     private string $title;
 
+    #[ORM\Column(type: 'string', length: 16)]
+    private string $status = self::STATUS_DRAFT;
+
+    #[ORM\Column(name: 'published_at', type: 'datetime_immutable', nullable: true)]
+    private ?DateTimeImmutable $publishedAt = null;
+
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
     private DateTimeImmutable $createdAt;
 
@@ -41,21 +50,11 @@ final class CmsPage
     {
         self::assertSameTenant($tenant, $theme->tenant());
 
-        $normalizedSlug = strtolower(trim($slug));
-        if ($normalizedSlug === '' || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $normalizedSlug) !== 1) {
-            throw new DomainException('El slug de la página CMS no es válido.');
-        }
-
-        $normalizedTitle = trim($title);
-        if ($normalizedTitle === '') {
-            throw new DomainException('El título de la página CMS es obligatorio.');
-        }
-
         $this->id = UlidFactory::new();
         $this->tenant = $tenant;
         $this->theme = $theme;
-        $this->slug = $normalizedSlug;
-        $this->title = $normalizedTitle;
+        $this->slug = self::normalizeSlug($slug);
+        $this->title = self::normalizeTitle($title);
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
@@ -82,6 +81,73 @@ final class CmsPage
     public function title(): string
     {
         return $this->title;
+    }
+
+    public function status(): string
+    {
+        return $this->status;
+    }
+
+    public function publishedAt(): ?DateTimeImmutable
+    {
+        return $this->publishedAt;
+    }
+
+    public function isPublished(): bool
+    {
+        return $this->status === self::STATUS_PUBLISHED;
+    }
+
+    public function updateDraft(
+        CmsTheme $theme,
+        string $slug,
+        string $title,
+    ): void {
+        if ($this->isPublished()) {
+            throw new DomainException(
+                'Una página publicada no se edita directamente; crea una nueva revisión.',
+            );
+        }
+
+        self::assertSameTenant($this->tenant, $theme->tenant());
+        $this->theme = $theme;
+        $this->slug = self::normalizeSlug($slug);
+        $this->title = self::normalizeTitle($title);
+    }
+
+    public function publish(): void
+    {
+        if ($this->isPublished()) {
+            return;
+        }
+
+        $this->status = self::STATUS_PUBLISHED;
+        $this->publishedAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    }
+
+    private static function normalizeSlug(string $slug): string
+    {
+        $slug = strtolower(trim($slug));
+        if (
+            $slug === ''
+            || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $slug) !== 1
+        ) {
+            throw new DomainException('El slug de la página CMS no es válido.');
+        }
+
+        return $slug;
+    }
+
+    private static function normalizeTitle(string $title): string
+    {
+        $title = trim($title);
+        if ($title === '' || mb_strlen($title, 'UTF-8') > 200) {
+            throw new DomainException(
+                'El título de la página CMS es obligatorio y admite máximo 200 caracteres.',
+            );
+        }
+
+        return $title;
     }
 
     private static function assertSameTenant(Tenant $left, Tenant $right): void

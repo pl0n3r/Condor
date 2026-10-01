@@ -3,6 +3,7 @@ import { AccessManagement } from './AccessManagement';
 import { CatalogManagement } from './CatalogManagement';
 import { InventoryManagement } from './InventoryManagement';
 import { CommerceManagement } from './CommerceManagement';
+import { CmsManagement } from './CmsManagement';
 import { OrdersManagement } from './OrdersManagement';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
@@ -12,6 +13,7 @@ type AdminAppProps = Readonly<{
   version: string;
   logoutToken: string;
   accessToken: string;
+  section: 'home' | 'site';
 }>;
 
 type LegalEntityContext = {
@@ -55,6 +57,7 @@ export function AdminApp({
   version,
   logoutToken,
   accessToken,
+  section,
 }: AdminAppProps) {
   const [context, setContext] = useState<ContextState>({
     status: 'loading',
@@ -133,12 +136,13 @@ export function AdminApp({
       ariaLabel="Administrador de Condor"
       navLabel="Navegación principal"
       navItems={[
-        { href: '/admin', label: 'Inicio', current: true },
-        { href: '#catalog', label: 'Catálogo' },
-        { href: '#inventory', label: 'Inventario' },
-        { href: '#commerce', label: 'Comercial' },
-        { href: '#orders', label: 'Pedidos' },
-        { href: '#roles', label: 'Roles y permisos' },
+        { href: '/admin', label: 'Inicio', current: section === 'home' },
+        { href: '/admin/sitio', label: 'Sitio', current: section === 'site' },
+        { href: '/admin#catalog', label: 'Catálogo' },
+        { href: '/admin#inventory', label: 'Inventario' },
+        { href: '/admin#commerce', label: 'Comercial' },
+        { href: '/admin#orders', label: 'Pedidos' },
+        { href: '/admin#roles', label: 'Roles y permisos' },
       ]}
     >
       <span className="eyebrow">Administrador</span>
@@ -242,6 +246,8 @@ export function AdminApp({
             </div>
           </div>
 
+          {section === 'home' && (
+            <>
           <OverviewGrid
             ariaLabel="Estado de la empresa"
             items={[
@@ -296,6 +302,17 @@ export function AdminApp({
             permissions={context.data.permissions}
             csrfToken={accessToken}
           />
+            </>
+          )}
+
+          {section === 'site' && (
+            <CmsManagement
+              key={'cms-' + context.data.active_branch.id}
+              branchId={context.data.active_branch.id}
+              permissions={context.data.permissions}
+              csrfToken={accessToken}
+            />
+          )}
         </>
       )}
     </AdminShell>

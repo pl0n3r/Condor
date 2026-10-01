@@ -54,6 +54,9 @@ final class CmsBlock
         if ($tenant->id() !== $page->tenant()->id()) {
             throw new DomainException('Un bloque CMS no puede pertenecer a una página de otro tenant.');
         }
+        if ($page->isPublished()) {
+            throw new DomainException('No se pueden añadir bloques a una página publicada.');
+        }
 
         $normalizedType = strtolower(trim($type));
         if (!in_array($normalizedType, self::ALLOWED_TYPES, true)) {
@@ -72,6 +75,11 @@ final class CmsBlock
         $this->payload = $payload;
         $this->sortOrder = $sortOrder;
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    }
+
+    public function id(): string
+    {
+        return $this->id;
     }
 
     public function tenant(): Tenant
@@ -98,6 +106,27 @@ final class CmsBlock
     public function sortOrder(): int
     {
         return $this->sortOrder;
+    }
+
+    /** @param array<string, mixed> $payload */
+    public function update(string $type, array $payload, int $sortOrder): void
+    {
+        if ($this->page->isPublished()) {
+            throw new DomainException('No se puede editar un bloque de una página publicada.');
+        }
+
+        $normalizedType = strtolower(trim($type));
+        if (!in_array($normalizedType, self::ALLOWED_TYPES, true)) {
+            throw new DomainException('Tipo de bloque CMS no permitido.');
+        }
+        if ($sortOrder < 0) {
+            throw new DomainException('El orden del bloque CMS no puede ser negativo.');
+        }
+
+        self::assertJsonSafe($payload);
+        $this->type = $normalizedType;
+        $this->payload = $payload;
+        $this->sortOrder = $sortOrder;
     }
 
     /** @param array<array-key, mixed> $payload */

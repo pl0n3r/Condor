@@ -250,3 +250,30 @@ export function orderConsumePath(
 ): string {
   return ordersPath(branchId) + '/' + safeUlid(orderId) + '/consume';
 }
+
+export function cmsPagesPath(branchId: string): string {
+  return '/api/v1/branches/' + safeUlid(branchId) + '/cms/pages';
+}
+
+export function cmsPagePath(branchId: string, pageId: string): string {
+  return cmsPagesPath(branchId) + '/' + safeUlid(pageId);
+}
+
+export function cmsPagePublishPath(
+  branchId: string,
+  pageId: string,
+): string {
+  return cmsPagePath(branchId, pageId) + '/publish';
+}
+
+export function cmsBlocksPath(branchId: string, pageId: string): string {
+  return cmsPagePath(branchId, pageId) + '/blocks';
+}
+
+export function cmsBlockPath(
+  branchId: string,
+  pageId: string,
+  blockId: string,
+): string {
+  return cmsBlocksPath(branchId, pageId) + '/' + safeUlid(blockId);
+}
