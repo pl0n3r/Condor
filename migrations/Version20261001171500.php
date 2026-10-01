@@ -61,8 +61,6 @@ final class Version20261001171500 extends AbstractMigration // NOSONAR -- nombre
                 page_id VARCHAR(26) NOT NULL,
                 block_type VARCHAR(32) NOT NULL,
                 payload JSON NOT NULL,
-                CONSTRAINT chk_cms_block_type
-                    CHECK (block_type IN ('text', 'image', 'hero', 'cta', 'gallery', 'divider')),
                 sort_order INT UNSIGNED NOT NULL,
                 created_at DATETIME(6) NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 INDEX idx_cms_block_tenant_page_order (tenant_id, page_id, sort_order),
@@ -74,7 +72,10 @@ final class Version20261001171500 extends AbstractMigration // NOSONAR -- nombre
                 CONSTRAINT FK_CMS_BLOCK_PAGE FOREIGN KEY (page_id)
                     REFERENCES condor_cms_page (id) ON DELETE CASCADE,
                 CONSTRAINT FK_CMS_BLOCK_PAGE_TENANT FOREIGN KEY (tenant_id, page_id)
-                    REFERENCES condor_cms_page (tenant_id, id) ON DELETE CASCADE
+                    REFERENCES condor_cms_page (tenant_id, id) ON DELETE CASCADE,
+                CONSTRAINT CHK_CMS_BLOCK_TYPE CHECK (
+                    block_type IN ('text', 'image', 'hero', 'cta', 'gallery', 'divider')
+                )
             ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
             SQL);
     }

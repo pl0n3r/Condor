@@ -37,14 +37,20 @@ class CmsContentTests(unittest.TestCase):
             "REFERENCES condor_cms_theme (tenant_id, id)",
             "FK_CMS_BLOCK_PAGE_TENANT FOREIGN KEY (tenant_id, page_id)",
             "REFERENCES condor_cms_page (tenant_id, id)",
-            "CONSTRAINT chk_cms_block_type",
-            "CHECK (block_type IN ('text', 'image', 'hero', 'cta', 'gallery', 'divider'))",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, migration)
 
     def test_unknown_or_executable_block_types_fail_closed(self) -> None:
         self.phpunit("testUnknownOrExecutableBlockTypesFailClosed")
+        migration = (
+            ROOT / "migrations/Version20261001171500.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn("CHK_CMS_BLOCK_TYPE CHECK", migration)
+        self.assertIn(
+            "block_type IN ('text', 'image', 'hero', 'cta', 'gallery', 'divider')",
+            migration,
+        )
 
 
 if __name__ == "__main__":
