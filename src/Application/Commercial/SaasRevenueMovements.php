@@ -83,19 +83,11 @@ final class SaasRevenueMovements
      */
     private static function deriveCanonical(array $subscriptions, array $changes): array
     {
-        if (!array_is_list($subscriptions) || !array_is_list($changes)) {
-            throw new DomainException('Colecciones comerciales no canónicas.');
-        }
-
         /** @var array<string,TenantState> $tenants */
         $tenants = [];
         $currency = null;
 
         foreach ($subscriptions as $subscription) {
-            if (!$subscription instanceof Subscription) {
-                throw new DomainException('Suscripción comercial inválida.');
-            }
-
             $tenantId = trim($subscription->tenantId());
             if ($tenantId === '' || isset($tenants[$tenantId])) {
                 throw new DomainException('Identidad de suscripción ambigua.');
@@ -135,10 +127,6 @@ final class SaasRevenueMovements
         }
 
         foreach ($changes as $change) {
-            if (!$change instanceof SubscriptionChange) {
-                throw new DomainException('Cambio comercial inválido.');
-            }
-
             $tenantId = trim($change->tenantId());
             if (!isset($tenants[$tenantId])) {
                 throw new DomainException('Cambio sin suscripción canónica.');
@@ -154,25 +142,18 @@ final class SaasRevenueMovements
             }
             $currency = self::sameCurrency($currency, $current['currency']);
 
-            /** @var 'effective'|'scheduled'|null $recognition */
-            $recognition = null;
-            $eventAt = null;
-            if ($change->status() === 'effective') {
-                $recognition = 'effective';
-                $eventAt = $change->effectiveAt();
-            } elseif ($change->status() === 'scheduled') {
-                $recognition = 'scheduled';
-                $eventAt = $change->effectiveAt();
-            } elseif ($change->status() === 'pending_resolution') {
-                if ($change->effectiveAt() !== null) {
-                    throw new DomainException('Cambio bloqueado con fecha efectiva.');
-                }
-                continue;
-            } else {
+            $status = $change->status();
+            if ($status === 'pending_resolution') {
+                throw new DomainException('Cambio pendiente sin resolución canónica.');
+            }
+            if (!in_array($status, ['effective', 'scheduled'], true)) {
                 throw new DomainException('Estado de cambio no soportado.');
             }
 
-            if ($recognition === null || !$eventAt instanceof DateTimeImmutable) {
+            /** @var 'effective'|'scheduled' $recognition */
+            $recognition = $status;
+            $eventAt = $change->effectiveAt();
+            if (!$eventAt instanceof DateTimeImmutable) {
                 throw new DomainException('Cambio sin fecha efectiva.');
             }
 
