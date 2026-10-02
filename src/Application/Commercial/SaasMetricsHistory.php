@@ -26,6 +26,7 @@ final class SaasMetricsHistory
      *   window_end:string,
      *   observed_at:string
      * }> $windows
+     * @phpstan-param array<array-key,array{baseline_snapshot:array<string,mixed>,ending_snapshot:array<string,mixed>,revenue_movements:array<string,mixed>,window_start:string,window_end:string,observed_at:string}> $windows
      * @return array{
      *   status:'valid'|'unavailable',
      *   reason:string|null,
@@ -56,9 +57,6 @@ final class SaasMetricsHistory
             $points = [];
 
             foreach ($windows as $raw) {
-                if (!is_array($raw)) {
-                    throw new DomainException('invalid_history_point');
-                }
                 self::exactPointKeys($raw);
 
                 $start = self::canonicalTime($raw['window_start']);
@@ -82,11 +80,11 @@ final class SaasMetricsHistory
                     $start,
                     $end,
                 );
-                if (($metrics['status'] ?? null) !== 'valid') {
+                if ($metrics['status'] !== 'valid') {
                     throw new DomainException('invalid_window_metrics');
                 }
 
-                $pointCurrency = $metrics['currency'] ?? null;
+                $pointCurrency = $metrics['currency'];
                 if (!is_string($pointCurrency)) {
                     throw new DomainException('invalid_window_metrics');
                 }
@@ -125,10 +123,17 @@ final class SaasMetricsHistory
                 'currency' => $currency,
                 'points' => $points,
             ];
-        } catch (DomainException $exception) {
-            return self::unavailable($exception->getMessage());
-        } catch (Throwable) {
-            return self::unavailable('invalid_or_ambiguous_history_evidence');
+        } catch (Throwable $exception) {
+            $reason = $exception instanceof DomainException
+                ? $exception->getMessage()
+                : 'invalid_or_ambiguous_history_evidence';
+
+            return [
+                'status' => 'unavailable',
+                'reason' => $reason,
+                'currency' => null,
+                'points' => null,
+            ];
         }
     }
 
@@ -173,9 +178,4 @@ final class SaasMetricsHistory
         return $canonical;
     }
 
-    /** @return array{status:'unavailable',reason:string,currency:null,points:null} */
-    private static function unavailable(string $reason): array
-    {
-        return ['status' => 'unavailable', 'reason' => $reason, 'currency' => null, 'points' => null];
-    }
 }
