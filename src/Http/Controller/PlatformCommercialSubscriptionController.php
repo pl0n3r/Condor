@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
+use App\Application\Commercial\PlatformCommercialAdjustmentManager;
 use App\Application\Commercial\PlatformCommercialSubscriptionCreator;
 use App\Application\Commercial\PlatformCommercialSubscriptionStateManager;
 use App\Application\Commercial\PlatformCommercialTrialCreator;
@@ -18,6 +19,7 @@ final class PlatformCommercialSubscriptionController extends PlatformOwnerApiCon
 {
     public function __construct(
         private readonly PlatformCommercialSubscriptionCreator $creator,
+        private readonly PlatformCommercialAdjustmentManager $adjustments,
         private readonly PlatformCommercialSubscriptionStateManager $manager,
         private readonly PlatformCommercialTrialCreator $trialCreator,
         private readonly PlatformOwnerTenantContext $tenantContext,
@@ -58,6 +60,66 @@ final class PlatformCommercialSubscriptionController extends PlatformOwnerApiCon
                 $this->creator->create(
                     $tenantId,
                     $payload['plan_version_id'],
+                ),
+                JsonResponse::HTTP_CREATED,
+            );
+        } catch (DomainException $exception) {
+            throw new UnprocessableEntityHttpException(
+                $exception->getMessage(),
+                $exception,
+            );
+        }
+    }
+
+
+    #[Route(
+        '/adminpl0n3r/api/tenants/{tenantId}/commercial-subscription/adjustments',
+        name: 'platform_commercial_subscription_adjustment',
+        methods: ['POST'],
+    )]
+    public function adjust(string $tenantId, Request $request): JsonResponse
+    {
+        $owner = $this->platformOwner();
+        $this->requireManagementCsrf(
+            $request,
+            'platform_commercial_subscription_management',
+        );
+
+        $this->tenantContext->tenant($tenantId);
+
+        $payload = $this->jsonPayload($request);
+        $keys = array_keys($payload);
+        sort($keys);
+        if (
+            $keys !== [
+                'add_on_ids',
+                'reason',
+                'renews_at',
+                'target_plan_version_id',
+            ]
+            || !is_array($payload['add_on_ids'])
+            || !array_is_list($payload['add_on_ids'])
+            || !is_string($payload['reason'])
+            || (
+                $payload['renews_at'] !== null
+                && !is_string($payload['renews_at'])
+            )
+            || !is_string($payload['target_plan_version_id'])
+        ) {
+            throw new UnprocessableEntityHttpException(
+                'Payload de ajuste comercial inválido.',
+            );
+        }
+
+        try {
+            return $this->json(
+                $this->adjustments->apply(
+                    $tenantId,
+                    $payload['target_plan_version_id'],
+                    $payload['add_on_ids'],
+                    $payload['renews_at'],
+                    $payload['reason'],
+                    $owner->id(),
                 ),
                 JsonResponse::HTTP_CREATED,
             );
