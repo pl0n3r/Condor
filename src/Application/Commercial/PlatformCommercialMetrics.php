@@ -57,10 +57,6 @@ final readonly class PlatformCommercialMetrics
 
         try {
             foreach ($subscriptions as $subscription) {
-                if (!$subscription instanceof Subscription) {
-                    return self::unavailable('invalid_subscription');
-                }
-
                 $tenantId = trim($subscription->tenantId());
                 if ($tenantId === '' || isset($seenTenants[$tenantId])) {
                     return self::unavailable('invalid_subscription_identity');
