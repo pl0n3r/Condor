@@ -62,7 +62,9 @@
         "email",
         "phone",
         "notes",
-        "commercial_category_id"
+        "commercial_category_id",
+        "trial_quote_id",
+        "trial_consent_recorded_at"
       ],
       "purpose": "customer_management",
       "basis": "review_required",
