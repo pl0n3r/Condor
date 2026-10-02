@@ -72,6 +72,12 @@ final class SubscriptionChangeRecord
     #[ORM\Column(name: 'override_snapshots', type: 'json')]
     private array $overrideSnapshots;
 
+    #[ORM\Column(name: 'requested_by', type: 'string', length: 26, nullable: true)]
+    private ?string $requestedBy = null;
+
+    #[ORM\Column(name: 'audit_reason', type: 'string', length: 500, nullable: true)]
+    private ?string $auditReason = null;
+
     /** @var Collection<int, AddOn> */
     #[ORM\ManyToMany(targetEntity: AddOn::class)]
     #[ORM\JoinTable(name: 'condor_commercial_subscription_change_addon')]
@@ -126,6 +132,28 @@ final class SubscriptionChangeRecord
         return $record;
     }
 
+    public static function fromManualAdjustment(
+        SubscriptionChange $change,
+        string $requestedBy,
+        string $reason,
+    ): self {
+        $requestedBy = trim($requestedBy);
+        $reason = trim($reason);
+        if (
+            strlen($requestedBy) !== 26
+            || $reason === ''
+            || mb_strlen($reason, 'UTF-8') > 500
+        ) {
+            throw new DomainException('Auditoría de ajuste comercial inválida.');
+        }
+
+        $record = self::fromChange($change);
+        $record->requestedBy = $requestedBy;
+        $record->auditReason = $reason;
+
+        return $record;
+    }
+
     public function id(): string
     {
         return $this->id;
@@ -154,6 +182,28 @@ final class SubscriptionChangeRecord
     public function effectiveAt(): ?DateTimeImmutable
     {
         return $this->effectiveAt === null ? null : $this->parseExact($this->effectiveAt);
+    }
+
+    /** @return array{requested_by:string,reason:string}|null */
+    public function audit(): ?array
+    {
+        if ($this->requestedBy === null && $this->auditReason === null) {
+            return null;
+        }
+        if (
+            $this->requestedBy === null
+            || strlen($this->requestedBy) !== 26
+            || $this->auditReason === null
+            || trim($this->auditReason) === ''
+            || mb_strlen($this->auditReason, 'UTF-8') > 500
+        ) {
+            throw new DomainException('Auditoría persistida de ajuste comercial inválida.');
+        }
+
+        return [
+            'requested_by' => $this->requestedBy,
+            'reason' => $this->auditReason,
+        ];
     }
 
     public function toChange(): SubscriptionChange
