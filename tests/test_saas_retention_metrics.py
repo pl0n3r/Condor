@@ -80,6 +80,47 @@ print json_encode(SaasRetentionMetrics::derive(
         self.assertEqual(130000, observed["arpa"])
         self.assertEqual(130, observed["nrr"])
 
+    def test_total_churn_yields_zero_nrr_and_null_arpa(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Application\Commercial\SaasRetentionMetrics;
+
+$baseline = ['status' => 'valid', 'currency' => 'COP', 'mrr' => 200000, 'active_customers' => 2];
+$ending = ['status' => 'valid', 'currency' => null, 'mrr' => 0, 'active_customers' => 0];
+$movements = [
+    'status' => 'valid',
+    'currency' => 'COP',
+    'movements' => [
+        [
+            'tenant_id' => 'tenant-a',
+            'type' => 'churn',
+            'amount' => 200000,
+            'mrr_delta' => -200000,
+            'occurred_at' => '2026-10-15T12:00:00.000000Z',
+            'recognition' => 'effective',
+        ],
+    ],
+];
+
+print json_encode(SaasRetentionMetrics::derive(
+    $baseline,
+    $ending,
+    $movements,
+    new DateTimeImmutable('2026-10-01T00:00:00Z'),
+    new DateTimeImmutable('2026-11-01T00:00:00Z'),
+), JSON_THROW_ON_ERROR);
+"""
+        )
+
+        self.assertEqual("valid", observed["status"])
+        self.assertEqual("COP", observed["currency"])
+        self.assertEqual(200000, observed["baseline_mrr"])
+        self.assertEqual(0, observed["ending_mrr"])
+        self.assertIsNone(observed["arpa"])
+        self.assertEqual(0, observed["nrr"])
+
     def test_invalid_window_or_missing_baseline_is_unknown_not_zero(self) -> None:
         observed = run_php(
             r"""

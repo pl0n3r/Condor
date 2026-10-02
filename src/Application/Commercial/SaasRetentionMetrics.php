@@ -44,7 +44,7 @@ final class SaasRetentionMetrics
             }
 
             $baseline = self::snapshot($baselineSnapshot, true);
-            $ending = self::snapshot($endingSnapshot, false);
+            $ending = self::snapshot($endingSnapshot, false, $baseline['currency']);
             if ($baseline['currency'] !== $ending['currency']) {
                 throw new DomainException('mixed_snapshot_currencies');
             }
@@ -117,7 +117,9 @@ final class SaasRetentionMetrics
                 'currency' => $baseline['currency'],
                 'baseline_mrr' => $baseline['mrr'],
                 'ending_mrr' => $ending['mrr'],
-                'arpa' => $ending['mrr'] / $ending['active_customers'],
+                'arpa' => $ending['active_customers'] === 0
+                    ? null
+                    : $ending['mrr'] / $ending['active_customers'],
                 'nrr' => ($retainedMrr / $baseline['mrr']) * 100,
             ];
         } catch (DomainException $exception) {
@@ -131,20 +133,24 @@ final class SaasRetentionMetrics
      * @param array<string,mixed> $raw
      * @return array{currency:string,mrr:int,active_customers:int}
      */
-    private static function snapshot(array $raw, bool $baseline): array
+    private static function snapshot(array $raw, bool $baseline, ?string $fallbackCurrency = null): array
     {
         $reason = $baseline ? 'missing_baseline' : 'invalid_ending_snapshot';
         $currency = $raw['currency'] ?? null;
         $mrr = $raw['mrr'] ?? null;
         $activeCustomers = $raw['active_customers'] ?? null;
+        if (!$baseline && $mrr === 0 && $activeCustomers === 0 && $currency === null) {
+            $currency = $fallbackCurrency;
+        }
         if (
             ($raw['status'] ?? null) !== 'valid'
             || !is_string($currency)
             || preg_match('/^[A-Z]{3}$/D', $currency) !== 1
             || !is_int($mrr)
-            || $mrr < 1
+            || $mrr < ($baseline ? 1 : 0)
             || !is_int($activeCustomers)
-            || $activeCustomers < 1
+            || $activeCustomers < ($baseline ? 1 : 0)
+            || (($mrr === 0) !== ($activeCustomers === 0))
         ) {
             throw new DomainException($reason);
         }
