@@ -214,15 +214,27 @@ $incomplete = SubscriptionChange::upgrade(
     $quote,
     new DateTimeImmutable('2026-10-02T11:00:00Z'),
 );
+$pending = SubscriptionChange::downgrade(
+    'tenant-a',
+    $basic,
+    $other,
+    new DateTimeImmutable('2026-10-02T12:00:00Z'),
+    new DateTimeImmutable('2026-11-01T00:00:00Z'),
+    false,
+    [],
+    [],
+    ['users'],
+);
 
 print json_encode([
     'ambiguous' => SaasRevenueMovements::derive([$subscription], [$ambiguous]),
     'incomplete' => SaasRevenueMovements::derive([$subscription], [$incomplete]),
+    'pending' => SaasRevenueMovements::derive([$subscription], [$pending]),
 ], JSON_THROW_ON_ERROR);
 '''
         )
 
-        for case in ("ambiguous", "incomplete"):
+        for case in ("ambiguous", "incomplete", "pending"):
             result = observed[case]
             self.assertEqual("unavailable", result["status"])
             self.assertEqual(
