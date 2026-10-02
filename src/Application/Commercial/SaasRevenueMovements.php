@@ -14,6 +14,42 @@ use DateTimeZone;
 use DomainException;
 use Throwable;
 
+/**
+ * @phpstan-type StateEvent array{
+ *   kind:'state',
+ *   at:DateTimeImmutable,
+ *   state:SubscriptionState,
+ *   initial:bool
+ * }
+ * @phpstan-type PlanEvent array{
+ *   kind:'plan',
+ *   at:DateTimeImmutable,
+ *   recognition:'effective'|'scheduled',
+ *   current_plan_id:string,
+ *   target_plan_id:string,
+ *   current_amount:int,
+ *   target_amount:int,
+ *   currency:string
+ * }
+ * @phpstan-type RevenueEvent StateEvent|PlanEvent
+ * @phpstan-type TenantState array{
+ *   events:list<RevenueEvent>,
+ *   current_plan_id:string,
+ *   current_amount:int,
+ *   currency:string,
+ *   state:SubscriptionState|null,
+ *   ever_active:bool,
+ *   scheduled_seen:bool
+ * }
+ * @phpstan-type Movement array{
+ *   tenant_id:string,
+ *   type:'new'|'expansion'|'contraction'|'churn',
+ *   amount:int,
+ *   mrr_delta:int,
+ *   occurred_at:string,
+ *   recognition:'effective'|'scheduled'
+ * }
+ */
 final class SaasRevenueMovements
 {
     /**
@@ -23,14 +59,7 @@ final class SaasRevenueMovements
      *   status:'valid'|'unavailable',
      *   reason:string|null,
      *   currency:string|null,
-     *   movements:list<array{
-     *     tenant_id:string,
-     *     type:'new'|'expansion'|'contraction'|'churn',
-     *     amount:int,
-     *     mrr_delta:int,
-     *     occurred_at:string,
-     *     recognition:'effective'|'scheduled'
-     *   }>|null
+     *   movements:list<Movement>|null
      * }
      */
     public static function derive(array $subscriptions, array $changes): array
@@ -49,14 +78,7 @@ final class SaasRevenueMovements
      *   status:'valid',
      *   reason:null,
      *   currency:string|null,
-     *   movements:list<array{
-     *     tenant_id:string,
-     *     type:'new'|'expansion'|'contraction'|'churn',
-     *     amount:int,
-     *     mrr_delta:int,
-     *     occurred_at:string,
-     *     recognition:'effective'|'scheduled'
-     *   }>
+     *   movements:list<Movement>
      * }
      */
     private static function deriveCanonical(array $subscriptions, array $changes): array
@@ -65,7 +87,7 @@ final class SaasRevenueMovements
             throw new DomainException('Colecciones comerciales no canónicas.');
         }
 
-        /** @var array<string,array<string,mixed>> $tenants */
+        /** @var array<string,TenantState> $tenants */
         $tenants = [];
         $currency = null;
 
@@ -86,16 +108,16 @@ final class SaasRevenueMovements
                 throw new DomainException('Historial de suscripción vacío.');
             }
 
+            /** @var list<RevenueEvent> $events */
             $events = [];
             foreach ($history as $index => $entry) {
-                $state = SubscriptionState::tryFrom($entry['state'] ?? '');
+                $state = SubscriptionState::tryFrom($entry['state']);
                 if ($state === null) {
                     throw new DomainException('Estado histórico inválido.');
                 }
-                $at = SubscriptionLifecycle::parseHistoricalTime($entry['at'] ?? null);
                 $events[] = [
                     'kind' => 'state',
-                    'at' => $at,
+                    'at' => SubscriptionLifecycle::parseHistoricalTime($entry['at']),
                     'state' => $state,
                     'initial' => $index === 0,
                 ];
@@ -132,6 +154,7 @@ final class SaasRevenueMovements
             }
             $currency = self::sameCurrency($currency, $current['currency']);
 
+            /** @var 'effective'|'scheduled'|null $recognition */
             $recognition = null;
             $eventAt = null;
             if ($change->status() === 'effective') {
@@ -149,7 +172,7 @@ final class SaasRevenueMovements
                 throw new DomainException('Estado de cambio no soportado.');
             }
 
-            if (!$eventAt instanceof DateTimeImmutable) {
+            if ($recognition === null || !$eventAt instanceof DateTimeImmutable) {
                 throw new DomainException('Cambio sin fecha efectiva.');
             }
 
@@ -165,12 +188,13 @@ final class SaasRevenueMovements
             ];
         }
 
+        /** @var list<Movement> $movements */
         $movements = [];
         foreach ($tenants as $tenantId => &$tenant) {
             usort(
                 $tenant['events'],
                 static fn (array $left, array $right): int =>
-                    self::instant($left['at']) <=> self::instant($right['at']),
+                    strcmp(self::instant($left['at']), self::instant($right['at'])),
             );
 
             $previousInstant = null;
@@ -183,10 +207,9 @@ final class SaasRevenueMovements
 
                 if ($event['kind'] === 'state') {
                     self::applyStateEvent($tenantId, $tenant, $event, $movements);
-                    continue;
+                } else {
+                    self::applyPlanEvent($tenantId, $tenant, $event, $movements);
                 }
-
-                self::applyPlanEvent($tenantId, $tenant, $event, $movements);
             }
         }
         unset($tenant);
@@ -206,9 +229,10 @@ final class SaasRevenueMovements
         ];
     }
 
-    /** @param array<string,mixed> $tenant
-     *  @param array<string,mixed> $event
-     *  @param list<array<string,mixed>> $movements
+    /**
+     * @param TenantState $tenant
+     * @param StateEvent $event
+     * @param list<Movement> $movements
      */
     private static function applyStateEvent(
         string $tenantId,
@@ -216,7 +240,6 @@ final class SaasRevenueMovements
         array $event,
         array &$movements,
     ): void {
-        /** @var SubscriptionState $next */
         $next = $event['state'];
         $current = $tenant['state'];
 
@@ -270,9 +293,10 @@ final class SaasRevenueMovements
         $tenant['state'] = $next;
     }
 
-    /** @param array<string,mixed> $tenant
-     *  @param array<string,mixed> $event
-     *  @param list<array<string,mixed>> $movements
+    /**
+     * @param TenantState $tenant
+     * @param PlanEvent $event
+     * @param list<Movement> $movements
      */
     private static function applyPlanEvent(
         string $tenantId,
@@ -308,9 +332,6 @@ final class SaasRevenueMovements
             return;
         }
 
-        if ($event['recognition'] !== 'effective') {
-            throw new DomainException('Reconocimiento comercial inválido.');
-        }
         if ($delta !== 0 && $tenant['state'] === SubscriptionState::Active) {
             self::appendMovement(
                 $movements,
@@ -353,7 +374,11 @@ final class SaasRevenueMovements
         return $next;
     }
 
-    /** @param list<array<string,mixed>> $movements */
+    /**
+     * @param list<Movement> $movements
+     * @param 'new'|'expansion'|'contraction'|'churn' $type
+     * @param 'effective'|'scheduled' $recognition
+     */
     private static function appendMovement(
         array &$movements,
         string $tenantId,
