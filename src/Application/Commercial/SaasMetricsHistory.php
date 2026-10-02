@@ -99,11 +99,11 @@ final class SaasMetricsHistory
                 $points[] = [
                     'source' => self::SOURCE,
                     'source_window' => [
-                        'start' => self::time($start),
-                        'end' => self::time($end),
+                        'start' => $start->format('Y-m-d\\TH:i:s.u\\Z'),
+                        'end' => $end->format('Y-m-d\\TH:i:s.u\\Z'),
                     ],
                     'freshness' => [
-                        'observed_at' => self::time($observedAt),
+                        'observed_at' => $observedAt->format('Y-m-d\\TH:i:s.u\\Z'),
                         'age_seconds' => $ageSeconds,
                         'status' => $ageSeconds <= $freshForSeconds ? 'fresh' : 'stale',
                     ],
@@ -152,37 +152,30 @@ final class SaasMetricsHistory
 
     private static function canonicalTime(mixed $value): DateTimeImmutable
     {
-        if (!is_string($value)) {
+        if (
+            !is_string($value)
+            || preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/D', $value) !== 1
+        ) {
             throw new DomainException('invalid_history_time');
         }
 
-        $parsed = DateTimeImmutable::createFromFormat(
-            '!Y-m-d\\TH:i:s.u\\Z',
-            $value,
-            new DateTimeZone('UTC'),
-        );
-        if (!$parsed instanceof DateTimeImmutable || $parsed->format('Y-m-d\\TH:i:s.u\\Z') !== $value) {
+        try {
+            $parsed = new DateTimeImmutable($value, new DateTimeZone('UTC'));
+        } catch (Throwable) {
             throw new DomainException('invalid_history_time');
         }
 
-        return $parsed;
-    }
+        $canonical = $parsed->setTimezone(new DateTimeZone('UTC'));
+        if ($canonical->format('Y-m-d\\TH:i:s.u\\Z') !== $value) {
+            throw new DomainException('invalid_history_time');
+        }
 
-    private static function time(DateTimeImmutable $value): string
-    {
-        return $value
-            ->setTimezone(new DateTimeZone('UTC'))
-            ->format('Y-m-d\\TH:i:s.u\\Z');
+        return $canonical;
     }
 
     /** @return array{status:'unavailable',reason:string,currency:null,points:null} */
     private static function unavailable(string $reason): array
     {
-        return [
-            'status' => 'unavailable',
-            'reason' => $reason,
-            'currency' => null,
-            'points' => null,
-        ];
+        return ['status' => 'unavailable', 'reason' => $reason, 'currency' => null, 'points' => null];
     }
 }
