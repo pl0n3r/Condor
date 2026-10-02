@@ -28,15 +28,15 @@ class SaasRetentionMetricsTests(unittest.TestCase):
             r"""
 require 'vendor/autoload.php';
 
-use App\\Application\\Commercial\\PlatformCommercialMetrics;
-use App\\Application\\Commercial\\SaasRetentionMetrics;
-use App\\Application\\Commercial\\SaasRevenueMovements;
-use App\\Domain\\Commercial\\Entity\\Plan;
-use App\\Domain\\Commercial\\Entity\\PlanVersion;
-use App\\Domain\\Commercial\\Entity\\Subscription;
-use App\\Domain\\Commercial\\SubscriptionChange;
-use App\\Domain\\Commercial\\SubscriptionLifecycle;
-use App\\Domain\\Commercial\\SubscriptionState;
+use App\Application\Commercial\PlatformCommercialMetrics;
+use App\Application\Commercial\SaasRetentionMetrics;
+use App\Application\Commercial\SaasRevenueMovements;
+use App\Domain\Commercial\Entity\Plan;
+use App\Domain\Commercial\Entity\PlanVersion;
+use App\Domain\Commercial\Entity\Subscription;
+use App\Domain\Commercial\SubscriptionChange;
+use App\Domain\Commercial\SubscriptionLifecycle;
+use App\Domain\Commercial\SubscriptionState;
 
 $basic = new PlanVersion(
     new Plan('basic', 'Básico'),
@@ -167,7 +167,7 @@ print json_encode(
             r"""
 require 'vendor/autoload.php';
 
-use App\\Application\\Commercial\\SaasRetentionMetrics;
+use App\Application\Commercial\SaasRetentionMetrics;
 
 $baseline = [
     'status' => 'valid',
