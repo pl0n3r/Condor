@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Commercial\CommercialCatalogReader;
+use App\Application\Commercial\PlatformCommercialMetrics;
 use App\Application\Commercial\PlatformCommercialPortfolio;
 use App\Application\Commercial\PlatformCommercialSubscriptionChangeHistory;
 use App\Application\Commercial\PlatformCommercialTenantSummary;
@@ -31,6 +32,7 @@ final class PlatformOwnerContextController extends AbstractController
         PlatformOwnerTenantContext $context,
         CommercialCatalogReader $catalog,
         PlatformCommercialPortfolio $commercialPortfolio,
+        PlatformCommercialMetrics $commercialMetrics,
         PlatformCommercialTenantSummary $commercialSummary,
         PlatformCommercialSubscriptionChangeHistory $changeHistory,
         AppVersion $version,
@@ -78,6 +80,7 @@ final class PlatformOwnerContextController extends AbstractController
             'signals_last_30_days' => $context->functionalSignals(),
             'commercial_catalog' => $commercialCatalog,
             'commercial_portfolio' => $commercialPortfolio->all(),
+            'commercial_metrics' => $commercialMetrics->snapshot(),
             'tenants' => $tenantPage['items'],
             'tenant_pagination' => [
                 'page' => $tenantPage['page'],
