@@ -19,11 +19,11 @@ class SelfServiceTrialApplicationTests(unittest.TestCase):
     def data(self) -> dict:
         return json.loads(DATA.read_text(encoding="utf-8"))
 
-    def customer_contact(self) -> dict:
+    def trial_application_treatment(self) -> dict:
         return next(
             treatment
             for treatment in self.data()["treatments"]
-            if treatment["id"] == "customer_contact"
+            if treatment["id"] == "self_service_trial_application"
         )
 
     def test_application_binds_canonical_quote_and_explicit_consent_without_creating_subscription(self) -> None:
@@ -39,14 +39,25 @@ class SelfServiceTrialApplicationTests(unittest.TestCase):
         for forbidden in ("plan_key", "plan_version_id", "duration_days", "target_state"):
             self.assertNotIn(forbidden, source)
 
-        treatment = self.customer_contact()
-        self.assertIn("email", treatment["fields"])
-        self.assertIn("trial_quote_id", treatment["fields"])
-        self.assertIn("trial_consent_recorded_at", treatment["fields"])
-        self.assertEqual([], treatment["providers"])
+        treatment = self.trial_application_treatment()
         self.assertEqual(
-            "review_required",
-            treatment["retention"],
+            ["email", "trial_quote_id", "trial_consent_recorded_at"],
+            treatment["fields"],
+        )
+        self.assertEqual("self_service_trial_application", treatment["purpose"])
+        self.assertEqual("review_required", treatment["consent"])
+        self.assertEqual([], treatment["providers"])
+        self.assertEqual("review_required", treatment["retention"])
+
+        customer_contact = next(
+            treatment
+            for treatment in self.data()["treatments"]
+            if treatment["id"] == "customer_contact"
+        )
+        self.assertNotIn("trial_quote_id", customer_contact["fields"])
+        self.assertNotIn(
+            "trial_consent_recorded_at",
+            customer_contact["fields"],
         )
         self.assertIn(
             "'version' => '0.1.116'",
