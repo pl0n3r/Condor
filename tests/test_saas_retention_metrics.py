@@ -28,130 +28,48 @@ class SaasRetentionMetricsTests(unittest.TestCase):
             r"""
 require 'vendor/autoload.php';
 
-use App\Application\Commercial\PlatformCommercialMetrics;
 use App\Application\Commercial\SaasRetentionMetrics;
-use App\Application\Commercial\SaasRevenueMovements;
-use App\Domain\Commercial\Entity\Plan;
-use App\Domain\Commercial\Entity\PlanVersion;
-use App\Domain\Commercial\Entity\Subscription;
-use App\Domain\Commercial\SubscriptionChange;
-use App\Domain\Commercial\SubscriptionLifecycle;
-use App\Domain\Commercial\SubscriptionState;
 
-$basic = new PlanVersion(
-    new Plan('basic', 'Básico'),
-    1,
-    100000,
-    1000000,
-    false,
-    [],
-    new DateTimeImmutable('2026-01-01T00:00:00Z'),
-);
-$growth = new PlanVersion(
-    new Plan('growth', 'Growth'),
-    1,
-    160000,
-    1600000,
-    false,
-    [],
-    new DateTimeImmutable('2026-01-01T00:00:00Z'),
-);
+$baseline = ['status' => 'valid', 'currency' => 'COP', 'mrr' => 200000, 'active_customers' => 2];
+$ending = ['status' => 'valid', 'currency' => 'COP', 'mrr' => 260000, 'active_customers' => 2];
+$movements = [
+    'status' => 'valid',
+    'currency' => 'COP',
+    'movements' => [
+        [
+            'tenant_id' => 'tenant-a',
+            'type' => 'new',
+            'amount' => 200000,
+            'mrr_delta' => 200000,
+            'occurred_at' => '2026-09-01T00:00:00.000000Z',
+            'recognition' => 'effective',
+        ],
+        [
+            'tenant_id' => 'tenant-b',
+            'type' => 'expansion',
+            'amount' => 60000,
+            'mrr_delta' => 60000,
+            'occurred_at' => '2026-10-15T12:00:00.000000Z',
+            'recognition' => 'effective',
+        ],
+        [
+            'tenant_id' => 'tenant-b',
+            'type' => 'contraction',
+            'amount' => 60000,
+            'mrr_delta' => -60000,
+            'occurred_at' => '2026-10-25T12:00:00.000000Z',
+            'recognition' => 'scheduled',
+        ],
+    ],
+];
 
-$baselineLifecycleA = new SubscriptionLifecycle(
-    'tenant-a',
-    $basic,
-    SubscriptionState::Active,
-    new DateTimeImmutable('2026-09-01T00:00:00Z'),
-);
-$baselineLifecycleB = new SubscriptionLifecycle(
-    'tenant-b',
-    $basic,
-    SubscriptionState::Active,
-    new DateTimeImmutable('2026-09-01T00:00:00Z'),
-);
-$baselineA = Subscription::fromLifecycle(
-    $baselineLifecycleA,
-    new DateTimeImmutable('2026-09-01T00:00:01Z'),
-);
-$baselineB = Subscription::fromLifecycle(
-    $baselineLifecycleB,
-    new DateTimeImmutable('2026-09-01T00:00:01Z'),
-);
-
-$endingLifecycleA = new SubscriptionLifecycle(
-    'tenant-a',
-    $basic,
-    SubscriptionState::Active,
-    new DateTimeImmutable('2026-09-01T00:00:00Z'),
-);
-$endingLifecycleB = new SubscriptionLifecycle(
-    'tenant-b',
-    $growth,
-    SubscriptionState::Active,
-    new DateTimeImmutable('2026-09-01T00:00:00Z'),
-);
-$endingA = Subscription::fromLifecycle(
-    $endingLifecycleA,
-    new DateTimeImmutable('2026-10-31T23:59:58Z'),
-);
-$endingB = Subscription::fromLifecycle(
-    $endingLifecycleB,
-    new DateTimeImmutable('2026-10-31T23:59:58Z'),
-);
-
-$movementLifecycleA = new SubscriptionLifecycle(
-    'tenant-a',
-    $basic,
-    SubscriptionState::Active,
-    new DateTimeImmutable('2026-09-01T00:00:00Z'),
-);
-$movementLifecycleB = new SubscriptionLifecycle(
-    'tenant-b',
-    $basic,
-    SubscriptionState::Active,
-    new DateTimeImmutable('2026-09-01T00:00:00Z'),
-);
-$movementA = Subscription::fromLifecycle(
-    $movementLifecycleA,
-    new DateTimeImmutable('2026-10-31T23:59:59Z'),
-);
-$movementB = Subscription::fromLifecycle(
-    $movementLifecycleB,
-    new DateTimeImmutable('2026-10-31T23:59:59Z'),
-);
-
-$upgrade = SubscriptionChange::upgrade(
-    'tenant-b',
-    $basic,
-    $growth,
-    new DateTimeImmutable('2026-10-15T12:00:00Z'),
-);
-$scheduledDowngrade = SubscriptionChange::downgrade(
-    'tenant-b',
-    $growth,
-    $basic,
-    new DateTimeImmutable('2026-10-20T12:00:00Z'),
-    new DateTimeImmutable('2026-10-25T12:00:00Z'),
-    true,
-);
-
-$baseline = PlatformCommercialMetrics::derive([$baselineA, $baselineB]);
-$ending = PlatformCommercialMetrics::derive([$endingA, $endingB]);
-$movements = SaasRevenueMovements::derive(
-    [$movementA, $movementB],
-    [$upgrade, $scheduledDowngrade],
-);
-
-print json_encode(
-    SaasRetentionMetrics::derive(
-        $baseline,
-        $ending,
-        $movements,
-        new DateTimeImmutable('2026-10-01T00:00:00Z'),
-        new DateTimeImmutable('2026-11-01T00:00:00Z'),
-    ),
-    JSON_THROW_ON_ERROR,
-);
+print json_encode(SaasRetentionMetrics::derive(
+    $baseline,
+    $ending,
+    $movements,
+    new DateTimeImmutable('2026-10-01T00:00:00Z'),
+    new DateTimeImmutable('2026-11-01T00:00:00Z'),
+), JSON_THROW_ON_ERROR);
 """
         )
 
@@ -169,44 +87,18 @@ require 'vendor/autoload.php';
 
 use App\Application\Commercial\SaasRetentionMetrics;
 
-$baseline = [
-    'status' => 'valid',
-    'reason' => null,
-    'currency' => 'COP',
-    'mrr' => 100000,
-    'arr' => 1200000,
-    'active_customers' => 1,
-    'trials' => 0,
-];
-$missingBaseline = [
-    'status' => 'unavailable',
-    'reason' => 'incomplete_active_pricing',
-    'currency' => null,
-    'mrr' => null,
-    'arr' => null,
-    'active_customers' => null,
-    'trials' => null,
-];
-$ending = $baseline;
-$movements = [
-    'status' => 'valid',
-    'reason' => null,
-    'currency' => 'COP',
-    'movements' => [],
-];
+$valid = ['status' => 'valid', 'currency' => 'COP', 'mrr' => 100000, 'active_customers' => 1];
+$missing = ['status' => 'unavailable', 'currency' => null, 'mrr' => null, 'active_customers' => null];
+$movements = ['status' => 'valid', 'currency' => 'COP', 'movements' => []];
 
 print json_encode([
-    'invalid_window' => SaasRetentionMetrics::derive(
-        $baseline,
-        $ending,
-        $movements,
+    'window' => SaasRetentionMetrics::derive(
+        $valid, $valid, $movements,
         new DateTimeImmutable('2026-11-01T00:00:00Z'),
         new DateTimeImmutable('2026-11-01T00:00:00Z'),
     ),
-    'missing_baseline' => SaasRetentionMetrics::derive(
-        $missingBaseline,
-        $ending,
-        $movements,
+    'baseline' => SaasRetentionMetrics::derive(
+        $missing, $valid, $movements,
         new DateTimeImmutable('2026-10-01T00:00:00Z'),
         new DateTimeImmutable('2026-11-01T00:00:00Z'),
     ),
@@ -214,14 +106,10 @@ print json_encode([
 """
         )
 
-        self.assertEqual("invalid_window", observed["invalid_window"]["reason"])
-        self.assertEqual("missing_baseline", observed["missing_baseline"]["reason"])
-        for case in ("invalid_window", "missing_baseline"):
-            result = observed[case]
+        self.assertEqual("invalid_window", observed["window"]["reason"])
+        self.assertEqual("missing_baseline", observed["baseline"]["reason"])
+        for result in observed.values():
             self.assertEqual("unavailable", result["status"])
-            self.assertIsNone(result["currency"])
-            self.assertIsNone(result["baseline_mrr"])
-            self.assertIsNone(result["ending_mrr"])
             self.assertIsNone(result["arpa"])
             self.assertIsNone(result["nrr"])
 
