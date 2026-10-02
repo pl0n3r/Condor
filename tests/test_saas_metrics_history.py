@@ -161,6 +161,7 @@ $now = new DateTimeImmutable('2026-10-03T00:00:00Z');
 
 print json_encode([
     'non_owner' => SaasMetricsHistory::derive(false, [$base], $now),
+    'non_list' => SaasMetricsHistory::derive(true, ['window' => $base], $now),
     'overlap' => SaasMetricsHistory::derive(true, [$base, $overlap], $now),
     'broken' => SaasMetricsHistory::derive(true, [$broken], $now),
 ], JSON_THROW_ON_ERROR);
@@ -168,6 +169,7 @@ print json_encode([
         )
 
         self.assertEqual("owner_required", observed["non_owner"]["reason"])
+        self.assertEqual("invalid_history_series", observed["non_list"]["reason"])
         self.assertEqual("overlapping_source_windows", observed["overlap"]["reason"])
         self.assertEqual("invalid_window_metrics", observed["broken"]["reason"])
         for result in observed.values():
