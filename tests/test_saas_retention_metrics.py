@@ -10,16 +10,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run_php(script: str) -> dict[str, object]:
-    result = subprocess.run(
-        ["php", "-r", script],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise AssertionError(result.stdout + result.stderr)
-    return json.loads(result.stdout.strip())
+    try:
+        output = subprocess.check_output(
+            ["php", "-r", script],
+            cwd=ROOT,
+            text=True,
+            stderr=subprocess.STDOUT,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise AssertionError(exc.output) from exc
+    return json.loads(output.strip())
 
 
 class SaasRetentionMetricsTests(unittest.TestCase):
