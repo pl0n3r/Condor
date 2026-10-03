@@ -125,7 +125,10 @@ final readonly class BillingRequest
         return $this->idempotencyKey;
     }
 
-    /** @param array<string,mixed> $input @param list<string> $expected */
+    /**
+     * @param array<string,mixed> $input
+     * @param list<string> $expected
+     */
     private static function assertExactKeys(array $input, array $expected): void
     {
         $actual = array_keys($input);
