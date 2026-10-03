@@ -47,7 +47,7 @@ on:
 
 permissions:
   contents: read
-  issues: read
+  issues: write
 
 concurrency:
   group: observer-release-${{ github.repository }}
@@ -225,6 +225,7 @@ jobs:
           echo "estado_cli=$estado_observador" >> "$GITHUB_OUTPUT"
 
       - name: Consolidar evidencia y checklist de transición
+        id: evidencia
         env:
           MIGRACIONES: ${{ inputs.migraciones_verificadas }}
           ROLES: ${{ inputs.roles_verificados }}
@@ -263,3 +264,96 @@ jobs:
           if (( estados[2] != 0 )); then
             exit "${estados[2]}"
           fi
+
+          if (( estados[1] == 0 )); then
+            echo "validada=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "validada=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Reconciliar una sola hoja D-043
+        if: ${{ steps.evidencia.outputs.validada == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues?state=all&per_page=100" \
+            > /tmp/d043-issues.json
+
+          jq -n \
+            --slurpfile manifest /tmp/release-manifest.json \
+            --slurpfile issues /tmp/d043-issues.json \
+            '{manifest:$manifest[0], issues:$issues[0]}' \
+            | python3 scripts/d043_reconcile_issue.py \
+            > /tmp/d043-action.json
+
+          issue_number="$(jq -r '.action.issue // empty' /tmp/d043-action.json)"
+          if [[ -z "$issue_number" ]]; then
+            echo "No hay hoja D-043 elegible para reconciliar." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          expected_action="$(jq -c '.action' /tmp/d043-action.json)"
+          marker="$(jq -r '.action.marker' /tmp/d043-action.json)"
+          comment="$(jq -r '.action.comment' /tmp/d043-action.json)"
+
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues?state=all&per_page=100" \
+            > /tmp/d043-issues-refetch.json
+
+          jq -n \
+            --slurpfile manifest /tmp/release-manifest.json \
+            --slurpfile issues /tmp/d043-issues-refetch.json \
+            '{manifest:$manifest[0], issues:$issues[0]}' \
+            | python3 scripts/d043_reconcile_issue.py \
+            > /tmp/d043-action-refetch.json
+
+          current_action="$(jq -c '.action' /tmp/d043-action-refetch.json)"
+          if [[ "$current_action" != "$expected_action" ]]; then
+            echo "La hoja D-043 cambió durante la reconciliación; no se muta." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${issue_number}" \
+            > /tmp/d043-selected.json
+
+          jq -e '
+            .state == "open"
+            and ([.labels[].name] | index("estado: bloqueado")) != null
+            and ([.labels[].name] | index("estado: reservado")) == null
+            and ([.labels[].name] | index("estado: en revisión")) == null
+            and ([.labels[].name] | index("estado: completado")) == null
+          ' /tmp/d043-selected.json >/dev/null || {
+            echo "La hoja seleccionada ya no es mutable; no se toca." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          }
+
+          existing_comment="$(
+            gh api --paginate --slurp \
+              "repos/${GITHUB_REPOSITORY}/issues/${issue_number}/comments?per_page=100" \
+            | jq -r --arg marker "$marker" \
+              '.[][] | select(.body | contains($marker)) | .id' \
+            | sed -n '1p'
+          )"
+
+          if [[ -z "$existing_comment" ]]; then
+            jq -n --arg body "$comment" '{body:$body}' \
+              | gh api --method POST \
+                "repos/${GITHUB_REPOSITORY}/issues/${issue_number}/comments" \
+                --input - >/dev/null
+          fi
+
+          jq '
+            [.labels[].name]
+            | map(select(. != "estado: bloqueado"))
+            | if index("estado: disponible") == null then . + ["estado: disponible"] else . end
+            | {labels:.}
+          ' /tmp/d043-selected.json \
+            | gh api --method PUT \
+              "repos/${GITHUB_REPOSITORY}/issues/${issue_number}/labels" \
+              --input - >/dev/null
+
+          echo "Reconciliada una sola hoja D-043: #${issue_number}." >> "$GITHUB_STEP_SUMMARY"
+
