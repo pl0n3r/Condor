@@ -123,6 +123,67 @@ print json_encode([
             self.assertEqual("denied", result["audit"]["outcome"], name)
             self.assertEqual("evidence:denied-check", result["evidence_ref"], name)
 
+    def test_invalid_audit_metadata_fails_before_authorized_tool_execution(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Application\AI\AiToolInvocation;
+use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolPolicy;
+use DomainException;
+
+$policy = new AiToolPolicy();
+$context = AiTenantContext::fromArray([
+    'tenant_id' => 'tenant-a',
+    'tool' => 'catalog.read',
+    'knowledge_refs' => [],
+], $policy);
+
+$cases = [
+    ['invalid-evidence-ref', '2026-10-03T10:07:00+00:00'],
+    ['evidence:catalog-check', 'not-a-timestamp'],
+];
+
+$out = [];
+foreach ($cases as [$evidenceRef, $timestamp]) {
+    $executions = 0;
+    $failedClosed = false;
+
+    try {
+        AiToolInvocation::invoke(
+            $context,
+            $policy,
+            'tenant-a',
+            'catalog.read',
+            $evidenceRef,
+            $timestamp,
+            static function () use (&$executions): void {
+                ++$executions;
+            },
+        );
+    } catch (DomainException) {
+        $failedClosed = true;
+    }
+
+    $out[] = [
+        'failed_closed' => $failedClosed,
+        'executions' => $executions,
+    ];
+}
+
+print json_encode($out, JSON_THROW_ON_ERROR);
+"""
+        )
+
+        self.assertEqual(
+            [
+                {"failed_closed": True, "executions": 0},
+                {"failed_closed": True, "executions": 0},
+            ],
+            observed,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
