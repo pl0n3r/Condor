@@ -142,8 +142,12 @@ class D043ValidationCardTests(unittest.TestCase):
         )
         self.assertLess(manifest_step, smoke_step)
         self.assertIn("scripts/release_evidence.py manifest", workflow)
-        self.assertIn("continue-on-error: true", workflow)
-        self.assertIn("steps.manifiesto.outcome == 'success'", workflow)
+        self.assertNotIn("continue-on-error: true", workflow)
+        self.assertIn('echo "disponible=false" >> "$GITHUB_OUTPUT"', workflow)
+        self.assertIn(
+            "steps.manifiesto.outputs.disponible == 'true'",
+            workflow,
+        )
         self.assertIn("scripts/d043_validation_card.py", workflow)
         self.assertIn(
             "steps.smoke.outputs.estado == 'DEPLOY_OBSERVED'",
