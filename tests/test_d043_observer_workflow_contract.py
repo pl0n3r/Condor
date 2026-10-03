@@ -20,5 +20,11 @@ class D043ObserverWorkflowContractTests(unittest.TestCase):
         self.assertIn("--minimum-version 0.1.122", workflow)
 
 
+    def test_manual_observer_scopes_pending_reducer_to_0_1_122_baseline(self) -> None:
+        workflow = self.workflow(MANUAL)
+        self.assertIn("scripts/d043_pending_releases.py", workflow)
+        self.assertIn("--minimum-version 0.1.122", workflow)
+
+
 if __name__ == "__main__":
     unittest.main()
