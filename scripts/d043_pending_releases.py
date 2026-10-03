@@ -9,15 +9,15 @@ import sys
 from typing import Any, Iterable
 
 BOT_LOGIN = "github-actions[bot]"
-VERSION_PATTERN = r"(?P<version>\\d+\\.\\d+\\.\\d+)"
+VERSION_PATTERN = r"(?P<version>\d+\.\d+\.\d+)"
 SHA_PATTERN = r"(?P<sha>[0-9a-f]{40})"
 DEPLOY_PATTERN = re.compile(
     rf"^🚧 DEPLOY_OBSERVED automático: producción sirve V {VERSION_PATTERN} "
-    rf"\\({SHA_PATTERN}\\),"
+    rf"\({SHA_PATTERN}\),"
 )
 VALIDATED_PATTERN = re.compile(
     rf"^✅ VALIDATED_IN_PRODUCTION automático: producción sirve V {VERSION_PATTERN} "
-    rf"\\({SHA_PATTERN}\\)(?:\\s|$)"
+    rf"\({SHA_PATTERN}\)(?:\s|$)"
 )
 
 
