@@ -48,8 +48,8 @@ final class SaasUnitEconomics
     {
         try {
             $costSnapshot = CostAttributionSnapshot::derive($costEvidence);
-            if (($costSnapshot['status'] ?? null) !== 'valid') {
-                $costReason = $costSnapshot['reason'] ?? null;
+            if ($costSnapshot['status'] !== 'valid') {
+                $costReason = $costSnapshot['reason'];
                 throw new DomainException(
                     is_string($costReason) && $costReason !== ''
                         ? 'cost_' . $costReason
@@ -57,22 +57,20 @@ final class SaasUnitEconomics
                 );
             }
 
-            $tenantRef = $costSnapshot['tenant_ref'] ?? null;
-            $costCurrency = $costSnapshot['currency'] ?? null;
-            $sourceWindow = $costSnapshot['source_window'] ?? null;
-            $observedAtRaw = $costSnapshot['observed_at'] ?? null;
-            $costRows = $costSnapshot['costs'] ?? null;
-            $totalCost = $costSnapshot['total_cost'] ?? null;
+            $tenantRef = $costSnapshot['tenant_ref'];
+            $costCurrency = $costSnapshot['currency'];
+            $sourceWindow = $costSnapshot['source_window'];
+            $observedAtRaw = $costSnapshot['observed_at'];
+            $costRows = $costSnapshot['costs'];
+            $totalCost = $costSnapshot['total_cost'];
 
             if (
                 !is_string($tenantRef)
                 || !is_string($costCurrency)
                 || preg_match('/^[A-Z]{3}$/D', $costCurrency) !== 1
                 || !is_array($sourceWindow)
-                || array_keys($sourceWindow) !== ['start', 'end']
                 || !is_string($observedAtRaw)
                 || !is_array($costRows)
-                || !array_is_list($costRows)
                 || !is_int($totalCost)
                 || $totalCost < 0
             ) {
@@ -124,19 +122,13 @@ final class SaasUnitEconomics
             /** @var list<array{category:string,source_ref:string}> $costProvenance */
             $costProvenance = [];
             foreach ($costRows as $row) {
-                if (!is_array($row)) {
-                    throw new DomainException('invalid_cost_evidence');
-                }
-                $category = $row['category'] ?? null;
-                $amount = $row['amount'] ?? null;
-                $currency = $row['currency'] ?? null;
-                $sourceRef = $row['source_ref'] ?? null;
+                $category = $row['category'];
+                $amount = $row['amount'];
+                $currency = $row['currency'];
+                $sourceRef = $row['source_ref'];
                 if (
-                    !is_string($category)
-                    || !is_int($amount)
-                    || $amount < 0
+                    $amount < 0
                     || $currency !== $costCurrency
-                    || !is_string($sourceRef)
                     || isset($amountByCategory[$category])
                 ) {
                     throw new DomainException('invalid_cost_evidence');
@@ -211,25 +203,12 @@ final class SaasUnitEconomics
         $previous = null;
 
         foreach ($subscription->history() as $entry) {
-            if (!is_array($entry)) {
-                throw new DomainException('ambiguous_revenue_window');
-            }
-            $keys = array_keys($entry);
-            sort($keys);
-            if ($keys !== ['at', 'state']) {
-                throw new DomainException('ambiguous_revenue_window');
-            }
-
-            $stateValue = $entry['state'] ?? null;
-            if (!is_string($stateValue)) {
-                throw new DomainException('ambiguous_revenue_window');
-            }
-            $state = SubscriptionState::tryFrom($stateValue);
+            $state = SubscriptionState::tryFrom($entry['state']);
             if (!$state instanceof SubscriptionState) {
                 throw new DomainException('ambiguous_revenue_window');
             }
 
-            $at = SubscriptionLifecycle::parseHistoricalTime($entry['at'] ?? null);
+            $at = SubscriptionLifecycle::parseHistoricalTime($entry['at']);
             if ($previous instanceof DateTimeImmutable && $at <= $previous) {
                 throw new DomainException('ambiguous_revenue_window');
             }
