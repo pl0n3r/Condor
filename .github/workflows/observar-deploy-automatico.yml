@@ -64,6 +64,26 @@ jobs:
           )"
           echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
 
+      - name: Construir manifiesto canónico para tarjeta D-043
+        id: manifiesto
+        if: ${{ steps.transicion.outputs.requerida == 'true' }}
+        env:
+          VERSION_ESPERADA: ${{ steps.version.outputs.version }}
+          SHA_ESPERADO: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if python3 scripts/release_evidence.py manifest \
+            --sha "$SHA_ESPERADO" \
+            --expected-version "$VERSION_ESPERADA" \
+            < /tmp/cambios-release.txt \
+            > /tmp/release-manifest.json; then
+            echo "disponible=true" >> "$GITHUB_OUTPUT"
+          else
+            rm -f /tmp/release-manifest.json
+            echo "disponible=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No fue posible construir el manifiesto D-043; la observación de producción continúa sin publicar tarjeta."
+          fi
+
       - name: Observar producción en modo solo lectura
         id: smoke
         env:
@@ -131,6 +151,47 @@ jobs:
           if (( estado_cli > 1 )); then
             echo "::error::La observación automática terminó sin validar producción; revise la evidencia publicada."
             exit "$estado_cli"
+          fi
+
+      - name: Publicar tarjeta humana D-043 pendiente
+        if: ${{ steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.transicion.outputs.requerida == 'true' && steps.manifiesto.outputs.disponible == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STOREFRONT_SLUG: ${{ vars.STOREFRONT_SLUG }}
+        run: |
+          set -euo pipefail
+          args=(--repo "$GITHUB_REPOSITORY")
+          [[ -n "$STOREFRONT_SLUG" ]] &&
+            args+=(--tenant-slug "$STOREFRONT_SLUG")
+
+          python3 scripts/d043_validation_card.py "${args[@]}" \
+            < /tmp/release-manifest.json \
+            > /tmp/d043-card.md
+
+          marker="$(grep -m1 '^<!-- condor-d043-validation-card ' /tmp/d043-card.md)"
+          if [[ -z "$marker" ]]; then
+            echo "::error::La tarjeta D-043 no contiene marker canónico."
+            exit 1
+          fi
+
+          comment_id="$(
+            gh api --paginate --slurp \
+              "repos/${GITHUB_REPOSITORY}/issues/1/comments?per_page=100" \
+            | jq -r --arg marker "$marker" \
+              '.[][] | select(.user.login == "github-actions[bot]" and (.body | contains($marker))) | .id' \
+            | sed -n '1p'
+          )"
+
+          if [[ -n "$comment_id" ]]; then
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
+              -F body=@/tmp/d043-card.md \
+              >/dev/null
+          else
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/issues/1/comments" \
+              -F body=@/tmp/d043-card.md \
+              >/dev/null
           fi
 
       - name: Registrar estado observado en el roadmap
