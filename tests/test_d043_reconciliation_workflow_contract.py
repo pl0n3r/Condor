@@ -17,6 +17,10 @@ class D043ReconciliationWorkflowContractTests(unittest.TestCase):
         self.assertIn("issues: write", workflow)
         self.assertIn("scripts/d043_reconcile_issue.py", workflow)
         self.assertIn("Reconciliar una sola hoja D-043", workflow)
+        self.assertIn("id: evidencia", workflow)
+        self.assertIn("validada=true", workflow)
+        self.assertIn("validada=false", workflow)
+        self.assertIn("steps.evidencia.outputs.validada == 'true'", workflow)
         self.assertLess(
             workflow.index("Consolidar evidencia y checklist de transición"),
             workflow.index("Reconciliar una sola hoja D-043"),

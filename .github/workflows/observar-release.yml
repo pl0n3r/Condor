@@ -225,6 +225,7 @@ jobs:
           echo "estado_cli=$estado_observador" >> "$GITHUB_OUTPUT"
 
       - name: Consolidar evidencia y checklist de transición
+        id: evidencia
         env:
           MIGRACIONES: ${{ inputs.migraciones_verificadas }}
           ROLES: ${{ inputs.roles_verificados }}
@@ -264,7 +265,14 @@ jobs:
             exit "${estados[2]}"
           fi
 
+          if (( estados[1] == 0 )); then
+            echo "validada=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "validada=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Reconciliar una sola hoja D-043
+        if: ${{ steps.evidencia.outputs.validada == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
