@@ -92,6 +92,22 @@ class D043ValidationCardTests(unittest.TestCase):
                 tenant_slug="demo;echo-pwned",
             )
 
+    def test_command_rejects_tainted_release_identity_before_rendering(self):
+        bad_sha = manifest("cache", sha="a" * 39 + ";")
+        bad_version = manifest("cache")
+        bad_version["version"] = "0.1.123;echo-pwned"
+
+        with self.assertRaises(release_evidence.EvidenceError):
+            card.workflow_command(
+                bad_sha,
+                repository="pl0n3r/Condor",
+            )
+        with self.assertRaises(release_evidence.EvidenceError):
+            card.workflow_command(
+                bad_version,
+                repository="pl0n3r/Condor",
+            )
+
     def test_marker_is_stable_per_sha_and_changes_for_new_release(self):
         first = card.validation_marker(manifest("cache"))
         second = card.validation_marker(manifest("cache"))
