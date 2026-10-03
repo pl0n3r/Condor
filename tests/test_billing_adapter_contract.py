@@ -103,6 +103,8 @@ $cases = [
     'token' => $valid + ['token' => 'secret'],
     'provider' => $valid + ['provider' => 'vendor-a'],
     'card' => $valid + ['card_number' => '4111111111111111'],
+    'sensitive_ref' => [...$valid, 'tenant_ref' => 'token:secret'],
+    'provider_specific_key' => [...$valid, 'idempotency_key' => 'provider:vendor-a'],
     'currency' => [...$valid, 'currency' => 'cop'],
     'amount' => [...$valid, 'amount_minor' => 0],
 ];
@@ -119,8 +121,8 @@ foreach ($cases as $name => $payload) {
 
 foreach ([
     'outcome' => ['outcome' => 'paid', 'provider_ref' => null, 'evidence_ref' => 'billing:evidence:test'],
-    'provider_ref' => ['outcome' => 'unknown', 'provider_ref' => 'vendor@example.com', 'evidence_ref' => 'billing:evidence:test'],
-    'evidence_ref' => ['outcome' => 'accepted', 'provider_ref' => null, 'evidence_ref' => 'token=secret'],
+    'provider_ref' => ['outcome' => 'unknown', 'provider_ref' => 'token:providersecret', 'evidence_ref' => 'billing:evidence:test'],
+    'evidence_ref' => ['outcome' => 'accepted', 'provider_ref' => null, 'evidence_ref' => 'token:secret'],
 ] as $name => $payload) {
     try {
         BillingResult::fromArray($payload);
@@ -140,6 +142,8 @@ print json_encode($out, JSON_THROW_ON_ERROR);
                 "token",
                 "provider",
                 "card",
+                "sensitive_ref",
+                "provider_specific_key",
                 "currency",
                 "amount",
                 "result_outcome",
