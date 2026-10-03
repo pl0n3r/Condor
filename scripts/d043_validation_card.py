@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import shlex
 import sys
 from typing import Any
 
@@ -69,11 +68,16 @@ def workflow_command(
     repository: str,
     tenant_slug: str | None = None,
 ) -> str:
-    """Construye el comando que el dueño puede ejecutar para confirmar D-043."""
+    """Construye un comando de texto con valores previamente validados."""
+    validate_manifest(manifest)
     if REPO_PATTERN.fullmatch(repository) is None:
         raise EvidenceError("repository debe usar owner/name.")
     if tenant_slug is not None and TENANT_PATTERN.fullmatch(tenant_slug) is None:
         raise EvidenceError("tenant_slug inválido.")
+
+    checks = required_checks(manifest)
+    version = manifest["version"]
+    sha = manifest["sha"]
 
     parts = [
         "gh",
@@ -83,17 +87,19 @@ def workflow_command(
         "--repo",
         repository,
         "-f",
-        f"version={manifest['version']}",
+        f"version={version}",
         "-f",
-        f"sha={manifest['sha']}",
+        f"sha={sha}",
     ]
     if tenant_slug:
         parts.extend(["-f", f"tenant_slug={tenant_slug}"])
 
-    for check_id in required_checks(manifest):
+    for check_id in checks:
         parts.extend(["-f", f"{INPUT_BY_CHECK[check_id]}=true"])
 
-    return " ".join(shlex.quote(part) for part in parts)
+    # Todos los valores variables usan alfabetos cerrados validados arriba.
+    # La salida es únicamente texto mostrado al dueño; este módulo no ejecuta comandos.
+    return " ".join(parts)
 
 
 def build_card(
