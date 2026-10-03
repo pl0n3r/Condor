@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import sys
@@ -72,10 +73,22 @@ def canonical_event(
     return None
 
 
+def minimum_version_key(minimum_version: str | None) -> tuple[int, int, int] | None:
+    """Valida el límite inferior explícito del horizonte D-043."""
+    if minimum_version is None:
+        return None
+    if re.fullmatch(r"\d+\.\d+\.\d+", minimum_version) is None:
+        raise PendingReleaseError("La versión mínima D-043 es inválida.")
+    return version_key(minimum_version)
+
+
 def reduce_pending_releases(
     comments: Iterable[dict[str, Any]],
+    *,
+    minimum_version: str | None = None,
 ) -> list[dict[str, str]]:
     """Reduce eventos exactos sin inferir cobertura entre versiones."""
+    lower_bound = minimum_version_key(minimum_version)
     version_to_sha: dict[str, str] = {}
     sha_to_version: dict[str, str] = {}
     pending: set[tuple[str, str]] = set()
@@ -87,6 +100,9 @@ def reduce_pending_releases(
             continue
 
         state, version, sha = event
+        if lower_bound is not None and version_key(version) < lower_bound:
+            continue
+
         known_sha = version_to_sha.get(version)
         if known_sha is not None and known_sha != sha:
             raise PendingReleaseError(
@@ -117,12 +133,19 @@ def reduce_pending_releases(
     ]
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     """CLI stdin→stdout sin red ni mutaciones."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--minimum-version")
+    args = parser.parse_args(argv)
+
     try:
         payload = json.load(sys.stdin)
         comments = flatten_comments(payload)
-        pending = reduce_pending_releases(comments)
+        pending = reduce_pending_releases(
+            comments,
+            minimum_version=args.minimum_version,
+        )
     except (ValueError, PendingReleaseError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
