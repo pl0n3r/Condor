@@ -10,6 +10,19 @@ final readonly class BillingRequest
 {
     private const REF_PATTERN = '/^[a-z][a-z0-9:_-]{2,159}$/D';
     private const CURRENCY_PATTERN = '/^[A-Z]{3}$/D';
+    private const FORBIDDEN_REF_PREFIXES = [
+        'card:',
+        'credential:',
+        'cvv:',
+        'email:',
+        'name:',
+        'pan:',
+        'password:',
+        'phone:',
+        'provider:',
+        'secret:',
+        'token:',
+    ];
 
     public function __construct(
         private string $tenantRef,
@@ -127,6 +140,13 @@ final readonly class BillingRequest
     {
         if (preg_match(self::REF_PATTERN, $value) !== 1) {
             throw new DomainException('invalid_' . $field);
+        }
+
+        $normalized = strtolower($value);
+        foreach (self::FORBIDDEN_REF_PREFIXES as $prefix) {
+            if (str_starts_with($normalized, $prefix)) {
+                throw new DomainException('sensitive_or_provider_specific_' . $field);
+            }
         }
     }
 }
