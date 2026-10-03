@@ -51,9 +51,6 @@ jobs:
 
       - name: Detectar si la release exige transición operativa
         id: transicion
-        env:
-          VERSION_ESPERADA: ${{ steps.version.outputs.version }}
-          SHA_ESPERADO: ${{ github.sha }}
         run: |
           set -euo pipefail
           git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" > /tmp/cambios-release.txt
@@ -67,6 +64,15 @@ jobs:
           )"
           echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
 
+      - name: Construir manifiesto canónico para tarjeta D-043
+        id: manifiesto
+        if: ${{ steps.transicion.outputs.requerida == 'true' }}
+        continue-on-error: true
+        env:
+          VERSION_ESPERADA: ${{ steps.version.outputs.version }}
+          SHA_ESPERADO: ${{ github.sha }}
+        run: |
+          set -euo pipefail
           python3 scripts/release_evidence.py manifest \
             --sha "$SHA_ESPERADO" \
             --expected-version "$VERSION_ESPERADA" \
@@ -143,7 +149,7 @@ jobs:
           fi
 
       - name: Publicar tarjeta humana D-043 pendiente
-        if: ${{ steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.transicion.outputs.requerida == 'true' }}
+        if: ${{ steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.transicion.outputs.requerida == 'true' && steps.manifiesto.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ github.token }}
           STOREFRONT_SLUG: ${{ vars.STOREFRONT_SLUG }}
@@ -167,20 +173,19 @@ jobs:
             gh api --paginate --slurp \
               "repos/${GITHUB_REPOSITORY}/issues/1/comments?per_page=100" \
             | jq -r --arg marker "$marker" \
-              '.[][] | select(.body | contains($marker)) | .id' \
+              '.[][] | select(.user.login == "github-actions[bot]" and (.body | contains($marker))) | .id' \
             | sed -n '1p'
           )"
-          cuerpo="$(cat /tmp/d043-card.md)"
 
           if [[ -n "$comment_id" ]]; then
             gh api --method PATCH \
               "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
-              -f body="$cuerpo" \
+              -F body=@/tmp/d043-card.md \
               >/dev/null
           else
             gh api --method POST \
               "repos/${GITHUB_REPOSITORY}/issues/1/comments" \
-              -f body="$cuerpo" \
+              -F body=@/tmp/d043-card.md \
               >/dev/null
           fi
 
