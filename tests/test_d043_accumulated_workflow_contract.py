@@ -29,13 +29,32 @@ class D043AccumulatedWorkflowContractTests(unittest.TestCase):
     def test_manual_observer_accumulates_pending_manifests_before_finalize(self) -> None:
         workflow = self.read(MANUAL)
         self.assertIn("issues: read", workflow)
+        self.assertIn("ref: main", workflow)
         self.assertIn("fetch-depth: 0", workflow)
+        self.assertNotIn("ref: ${{ inputs.sha }}", workflow)
+        self.assertIn('git merge-base --is-ancestor "$SHA_ESPERADO" HEAD', workflow)
+        self.assertIn('git show "${SHA_ESPERADO}:config/version.php"', workflow)
+        self.assertIn("manifest-explicit", workflow)
         self.assertIn("scripts/d043_pending_releases.py", workflow)
         self.assertIn("manifest-explicit", workflow)
         self.assertIn("release_evidence.py accumulate", workflow)
         self.assertLess(
             workflow.index("release_evidence.py accumulate"),
             workflow.index("finalize"),
+        )
+
+    def test_manual_observer_never_executes_code_from_user_supplied_sha(self) -> None:
+        workflow = self.read(MANUAL)
+        checkout = workflow[
+            workflow.index("- name: Descargar código confiable de main"):
+            workflow.index("- name: Probar evidencia sin tocar producción")
+        ]
+        self.assertIn("ref: main", checkout)
+        self.assertNotIn("inputs.sha", checkout)
+        self.assertIn('git merge-base --is-ancestor "$SHA_ESPERADO" HEAD', workflow)
+        self.assertLess(
+            workflow.index('git merge-base --is-ancestor "$SHA_ESPERADO" HEAD'),
+            workflow.index("python3 -m unittest"),
         )
 
     def test_workflows_fail_closed_on_missing_or_mismatched_historical_identity(self) -> None:

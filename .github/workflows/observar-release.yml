@@ -59,12 +59,45 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Descargar repositorio
+      - name: Descargar código confiable de main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ inputs.sha }}
+          ref: main
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Validar identidad solicitada contra historial confiable
+        env:
+          VERSION_ESPERADA: ${{ inputs.version }}
+          SHA_ESPERADO: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA_ESPERADO" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::sha debe ser un SHA completo de 40 hexadecimales minúsculos."
+            exit 1
+          }
+          [[ "$VERSION_ESPERADA" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::version debe usar formato X.Y.Z."
+            exit 1
+          }
+
+          git cat-file -e "${SHA_ESPERADO}^{commit}" || {
+            echo "::error::El SHA solicitado no existe en el historial local."
+            exit 1
+          }
+          git merge-base --is-ancestor "$SHA_ESPERADO" HEAD || {
+            echo "::error::El SHA solicitado no pertenece al historial confiable de main."
+            exit 1
+          }
+
+          historical_version="$(
+            git show "${SHA_ESPERADO}:config/version.php" \
+              | grep -oP "'version'\\s*=>\\s*'\\K[^']+"
+          )"
+          if [[ "$historical_version" != "$VERSION_ESPERADA" ]]; then
+            echo "::error::version no coincide con config/version.php del SHA solicitado."
+            exit 1
+          fi
 
       - name: Probar evidencia sin tocar producción
         run: |
@@ -92,9 +125,9 @@ jobs:
           )"
           echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
 
-          python3 scripts/release_evidence.py manifest \
+          python3 scripts/release_evidence.py manifest-explicit \
+            --version "$VERSION_ESPERADA" \
             --sha "$SHA_ESPERADO" \
-            --expected-version "$VERSION_ESPERADA" \
             < /tmp/cambios-release.txt \
             > /tmp/release-current-manifest.json
 
