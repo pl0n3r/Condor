@@ -7,30 +7,102 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+UNAVAILABLE_VALUE_KEYS = (
+    "tenant_ref",
+    "currency",
+    "source_window",
+    "observed_at",
+    "revenue_mrr",
+    "cogs",
+    "support_cost",
+    "gross_margin_amount",
+    "gross_margin_percent",
+    "contribution_margin_amount",
+    "contribution_margin_percent",
+    "provenance",
+)
+
+PHP_BOOTSTRAP = r"""
+require 'vendor/autoload.php';
+
+use App\Application\Commercial\SaasUnitEconomics;
+use App\Domain\Commercial\Entity\Plan;
+use App\Domain\Commercial\Entity\PlanVersion;
+use App\Domain\Commercial\Entity\Subscription;
+use App\Domain\Commercial\SubscriptionLifecycle;
+use App\Domain\Commercial\SubscriptionState;
+
+function pricedPlan(): PlanVersion {
+    return new PlanVersion(
+        new Plan('unit', 'Unit'),
+        1,
+        200000,
+        2000000,
+        false,
+        [],
+        new DateTimeImmutable('2026-01-01T00:00:00Z'),
+    );
+}
+
+function quotePlan(): PlanVersion {
+    return new PlanVersion(
+        new Plan('quote', 'Quote'),
+        1,
+        null,
+        null,
+        true,
+        [],
+        new DateTimeImmutable('2026-01-01T00:00:00Z'),
+    );
+}
+
+function subscriptionFor(
+    string $tenant,
+    PlanVersion $version,
+    SubscriptionState $state,
+    string $at,
+): Subscription {
+    $lifecycle = new SubscriptionLifecycle(
+        $tenant,
+        $version,
+        $state,
+        new DateTimeImmutable($at),
+    );
+    return Subscription::fromLifecycle(
+        $lifecycle,
+        new DateTimeImmutable($at)->modify('+1 second'),
+    );
+}
+"""
 
 
 def run_php(script: str) -> dict[str, object]:
-    completed = subprocess.run(
-        ("php", "-r", script),
+    raw = subprocess.check_output(
+        ["php", "-r", script],
         cwd=ROOT,
         text=True,
-        stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        check=False,
     )
-    if completed.returncode:
-        raise AssertionError(completed.stdout)
-    return json.loads(completed.stdout)
+    return json.loads(raw)
 
 
 def canonical_costs(currency: str = "COP") -> list[dict[str, object]]:
+    amounts = {
+        "support": 20000,
+        "storage": 10000,
+        "ai_compute": 20000,
+        "integration": 20000,
+        "infrastructure": 40000,
+        "messaging": 10000,
+    }
     return [
-        {"category": "support", "amount": 20000, "currency": currency, "source_ref": "cost:support:202610"},
-        {"category": "storage", "amount": 10000, "currency": currency, "source_ref": "cost:storage:202610"},
-        {"category": "ai_compute", "amount": 20000, "currency": currency, "source_ref": "cost:ai:202610"},
-        {"category": "integration", "amount": 20000, "currency": currency, "source_ref": "cost:integration:202610"},
-        {"category": "infrastructure", "amount": 40000, "currency": currency, "source_ref": "cost:infra:202610"},
-        {"category": "messaging", "amount": 10000, "currency": currency, "source_ref": "cost:messaging:202610"},
+        {
+            "category": category,
+            "amount": amount,
+            "currency": currency,
+            "source_ref": f"cost:{category}:202610",
+        }
+        for category, amount in amounts.items()
     ]
 
 
@@ -55,43 +127,36 @@ class UnitEconomicsTests(unittest.TestCase):
         payload = json.dumps(cost_snapshot(), separators=(",", ":"))
         observed = run_php(
             f"""
-require 'vendor/autoload.php';
-
-use App\\Application\\Commercial\\SaasUnitEconomics;
-use App\\Domain\\Commercial\\Entity\\Plan;
-use App\\Domain\\Commercial\\Entity\\PlanVersion;
-use App\\Domain\\Commercial\\Entity\\Subscription;
-use App\\Domain\\Commercial\\SubscriptionLifecycle;
-use App\\Domain\\Commercial\\SubscriptionState;
-
-$version = new PlanVersion(
-    new Plan('unit', 'Unit'),
-    1,
-    200000,
-    2000000,
-    false,
-    [],
-    new DateTimeImmutable('2026-01-01T00:00:00Z'),
-);
-$lifecycle = new SubscriptionLifecycle(
+{PHP_BOOTSTRAP}
+$subscription = subscriptionFor(
     'tenant:unit-a',
-    $version,
+    pricedPlan(),
     SubscriptionState::Active,
-    new DateTimeImmutable('2026-09-01T00:00:00Z'),
-);
-$subscription = Subscription::fromLifecycle(
-    $lifecycle,
-    new DateTimeImmutable('2026-09-01T00:00:01Z'),
+    '2026-09-01T00:00:00Z',
 );
 $costs = json_decode({json.dumps(payload)}, true, 512, JSON_THROW_ON_ERROR);
 print json_encode(SaasUnitEconomics::derive($subscription, $costs), JSON_THROW_ON_ERROR);
 """
         )
 
-        self.assertEqual("valid", observed["status"])
-        self.assertIsNone(observed["reason"])
-        self.assertEqual("tenant:unit-a", observed["tenant_ref"])
-        self.assertEqual("COP", observed["currency"])
+        expected_scalars = {
+            "status": "valid",
+            "reason": None,
+            "tenant_ref": "tenant:unit-a",
+            "currency": "COP",
+            "observed_at": "2026-11-01T00:05:00.000000Z",
+            "revenue_mrr": 200000,
+            "cogs": 100000,
+            "support_cost": 20000,
+            "gross_margin_amount": 100000,
+            "gross_margin_percent": 50.0,
+            "contribution_margin_amount": 80000,
+            "contribution_margin_percent": 40.0,
+        }
+        self.assertEqual(
+            expected_scalars,
+            {key: observed[key] for key in expected_scalars},
+        )
         self.assertEqual(
             {
                 "start": "2026-10-01T00:00:00.000000Z",
@@ -99,28 +164,13 @@ print json_encode(SaasUnitEconomics::derive($subscription, $costs), JSON_THROW_O
             },
             observed["source_window"],
         )
-        self.assertEqual("2026-11-01T00:05:00.000000Z", observed["observed_at"])
-        self.assertEqual(200000, observed["revenue_mrr"])
-        self.assertEqual(100000, observed["cogs"])
-        self.assertEqual(20000, observed["support_cost"])
-        self.assertEqual(100000, observed["gross_margin_amount"])
-        self.assertEqual(50.0, observed["gross_margin_percent"])
-        self.assertEqual(80000, observed["contribution_margin_amount"])
-        self.assertEqual(40.0, observed["contribution_margin_percent"])
 
         provenance = observed["provenance"]
         self.assertEqual("subscription_plan_version", provenance["revenue"]["kind"])
-        self.assertRegex(provenance["revenue"]["subscription_ref"], r"^[0-9A-HJKMNP-TV-Z]{26}$")
-        self.assertRegex(provenance["revenue"]["plan_version_ref"], r"^[0-9A-HJKMNP-TV-Z]{26}$")
+        for key in ("subscription_ref", "plan_version_ref"):
+            self.assertRegex(provenance["revenue"][key], r"^[0-9A-HJKMNP-TV-Z]{26}$")
         self.assertEqual(
-            [
-                "ai_compute",
-                "infrastructure",
-                "integration",
-                "messaging",
-                "storage",
-                "support",
-            ],
+            sorted(row["category"] for row in canonical_costs()),
             [entry["category"] for entry in provenance["costs"]],
         )
         self.assertTrue(
@@ -139,53 +189,19 @@ print json_encode(SaasUnitEconomics::derive($subscription, $costs), JSON_THROW_O
         )
         observed = run_php(
             f"""
-require 'vendor/autoload.php';
-
-use App\\Application\\Commercial\\SaasUnitEconomics;
-use App\\Domain\\Commercial\\Entity\\Plan;
-use App\\Domain\\Commercial\\Entity\\PlanVersion;
-use App\\Domain\\Commercial\\Entity\\Subscription;
-use App\\Domain\\Commercial\\SubscriptionLifecycle;
-use App\\Domain\\Commercial\\SubscriptionState;
-
-$priced = new PlanVersion(
-    new Plan('unit', 'Unit'),
-    1,
-    200000,
-    2000000,
-    false,
-    [],
-    new DateTimeImmutable('2026-01-01T00:00:00Z'),
-);
-$activeLifecycle = new SubscriptionLifecycle(
+{PHP_BOOTSTRAP}
+$priced = pricedPlan();
+$active = subscriptionFor(
     'tenant:unit-a',
     $priced,
     SubscriptionState::Active,
-    new DateTimeImmutable('2026-09-01T00:00:00Z'),
+    '2026-09-01T00:00:00Z',
 );
-$active = Subscription::fromLifecycle(
-    $activeLifecycle,
-    new DateTimeImmutable('2026-09-01T00:00:01Z'),
-);
-
-$quote = new PlanVersion(
-    new Plan('quote', 'Quote'),
-    1,
-    null,
-    null,
-    true,
-    [],
-    new DateTimeImmutable('2026-01-01T00:00:00Z'),
-);
-$quoteLifecycle = new SubscriptionLifecycle(
+$ambiguousRevenue = subscriptionFor(
     'tenant:unit-a',
-    $quote,
+    quotePlan(),
     SubscriptionState::Active,
-    new DateTimeImmutable('2026-09-01T00:00:00Z'),
-);
-$ambiguousRevenue = Subscription::fromLifecycle(
-    $quoteLifecycle,
-    new DateTimeImmutable('2026-09-01T00:00:01Z'),
+    '2026-09-01T00:00:00Z',
 );
 
 $partialLifecycle = new SubscriptionLifecycle(
@@ -214,26 +230,20 @@ print json_encode([
 """
         )
 
-        self.assertEqual("cost_incomplete_cost_coverage", observed["missing"]["reason"])
-        self.assertEqual("mixed_revenue_cost_currency", observed["mixed"]["reason"])
-        self.assertEqual("tenant_mismatch", observed["tenant"]["reason"])
-        self.assertEqual("ambiguous_revenue", observed["quote"]["reason"])
-        self.assertEqual("ambiguous_revenue_window", observed["partial_window"]["reason"])
-
+        expected_reasons = {
+            "missing": "cost_incomplete_cost_coverage",
+            "mixed": "mixed_revenue_cost_currency",
+            "tenant": "tenant_mismatch",
+            "quote": "ambiguous_revenue",
+            "partial_window": "ambiguous_revenue_window",
+        }
+        self.assertEqual(
+            expected_reasons,
+            {key: result["reason"] for key, result in observed.items()},
+        )
         for result in observed.values():
             self.assertEqual("unavailable", result["status"])
-            self.assertIsNone(result["tenant_ref"])
-            self.assertIsNone(result["currency"])
-            self.assertIsNone(result["source_window"])
-            self.assertIsNone(result["observed_at"])
-            self.assertIsNone(result["revenue_mrr"])
-            self.assertIsNone(result["cogs"])
-            self.assertIsNone(result["support_cost"])
-            self.assertIsNone(result["gross_margin_amount"])
-            self.assertIsNone(result["gross_margin_percent"])
-            self.assertIsNone(result["contribution_margin_amount"])
-            self.assertIsNone(result["contribution_margin_percent"])
-            self.assertIsNone(result["provenance"])
+            self.assertTrue(all(result[key] is None for key in UNAVAILABLE_VALUE_KEYS))
 
 
 if __name__ == "__main__":
