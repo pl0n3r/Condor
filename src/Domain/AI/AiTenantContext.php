@@ -13,6 +13,7 @@ final readonly class AiTenantContext
     /** @var list<string> */
     private array $knowledgeRefs;
 
+    /** @param list<string> $knowledgeRefs */
     private function __construct(
         private string $tenantId,
         private string $tool,
