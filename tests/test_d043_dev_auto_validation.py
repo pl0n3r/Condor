@@ -197,5 +197,59 @@ class D043DevAutoValidationTests(unittest.TestCase):
         self.assertIn('bootstrap_previous=true', workflow)
 
 
+    def test_observer_workflow_python_heredocs_stay_inside_run_blocks(self) -> None:
+        lines = WORKFLOW.read_text(encoding="utf-8").splitlines()
+        heredoc_count = 0
+
+        for index, line in enumerate(lines):
+            if "<<'PY'" not in line:
+                continue
+            heredoc_count += 1
+
+            run_index = next(
+                (
+                    candidate
+                    for candidate in range(index - 1, -1, -1)
+                    if lines[candidate].lstrip().startswith("run: |")
+                ),
+                None,
+            )
+            self.assertIsNotNone(run_index, f"heredoc sin run: | en línea {index + 1}")
+            assert run_index is not None
+
+            run_indent = len(lines[run_index]) - len(lines[run_index].lstrip(" "))
+            content_indent = run_indent + 2
+            terminator = None
+
+            for candidate in range(index + 1, len(lines)):
+                current = lines[candidate]
+                if current.strip() == "PY":
+                    terminator = candidate
+                    break
+                if current.strip():
+                    indentation = len(current) - len(current.lstrip(" "))
+                    self.assertGreaterEqual(
+                        indentation,
+                        content_indent,
+                        f"body heredoc fuera de run: | en línea {candidate + 1}",
+                    )
+
+            self.assertIsNotNone(
+                terminator,
+                f"heredoc sin terminador PY desde línea {index + 1}",
+            )
+            assert terminator is not None
+            terminator_indent = len(lines[terminator]) - len(
+                lines[terminator].lstrip(" ")
+            )
+            self.assertEqual(
+                terminator_indent,
+                content_indent,
+                f"terminador PY fuera del bloque run: | en línea {terminator + 1}",
+            )
+
+        self.assertGreaterEqual(heredoc_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
