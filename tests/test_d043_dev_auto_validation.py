@@ -189,6 +189,12 @@ class D043DevAutoValidationTests(unittest.TestCase):
         self.assertNotIn("FASE_CONDOR: construccion", workflow)
         self.assertIn("for issue_number in 1 389", workflow)
         self.assertIn("steps.version.outputs.bootstrap_only", workflow)
+        self.assertIn("steps.version.outputs.bootstrap_previous", workflow)
+        self.assertIn(
+            "bootstrap_only == 'true' || steps.version.outputs.bootstrap_previous == 'true'",
+            workflow,
+        )
+        self.assertIn('bootstrap_previous=true', workflow)
 
 
 if __name__ == "__main__":

@@ -20,20 +20,22 @@ Una release solo puede pasar a `VALIDATED_IN_PRODUCTION` automáticamente si tod
 
 Las transiciones candidatas están acotadas a `migraciones`, `comandos` y `cache`, pero además se exige procedencia. Las migraciones se consideran **ambiguas por defecto** y permanecen en camino humano hasta existir un clasificador determinista de destructividad. `comandos` solo se auto-resuelve cuando todos los paths que originan ese flag pertenecen a la allowlist mínima de tooling observacional (`scripts/release_evidence.py` y `scripts/d043_pending_releases.py`); cualquier `bin/console`, `src/Console/` o script de backfill/deploy/migrate/provision/release no allowlisted falla cerrado. `roles` y `configuracion` siempre mantienen el camino humano.
 
-## Bootstrap de V0.1.137
+## Bootstrap de la baseline previa y V0.1.138
 
-El cambio que introduce esta política no incrementa `config/version.php` porque #494 conserva el claim de versión para V0.1.138. Por eso el observer intenta primero validar la **baseline previa** todavía desplegada (`github.event.before`) antes de esperar un nuevo deploy.
+Esta política entra como **V0.1.138**. Condor mantiene identidades SemVer de un solo uso, así que el cambio lleva su propio bump y no reutiliza el tag V0.1.137.
 
-Ese bootstrap:
+En cada bump, el observer intenta primero reconciliar la **baseline previa** indicada por `github.event.before` cuando esa identidad sigue pendiente en D-043. Para este cambio, la baseline es V0.1.137. La reconciliación previa y la observación de la release nueva son pasos distintos: validar la anterior nunca omite el smoke/observer normal de V0.1.138.
 
-- solo corre si el push sin bump modifica exclusivamente los cuatro archivos de #502;
-- exige que la identidad previa figure realmente pendiente en D-043;
+Ese bootstrap previo:
+
+- solo actúa cuando la versión anterior es distinta de la nueva y la identidad anterior figura realmente pendiente en D-043;
 - reconstruye el manifiesto acumulado de las versiones anteriores;
 - observa la baseline previa sin mutar producción;
 - publica evidencia solo si todos los gates automáticos pasan;
-- si producción ya cambió de SHA o la evidencia no es concluyente, no publica una validación falsa.
+- si producción ya cambió de SHA o la evidencia no es concluyente, no publica una validación falsa;
+- después continúa con la observación normal de la versión nueva.
 
-El push bootstrap no se registra como una segunda release con la misma versión, evitando crear dos identidades canónicas V0.1.137 con SHAs distintos.
+Se conserva el modo `bootstrap_only` histórico para compatibilidad fail-closed, pero un bump usa `bootstrap_previous` y **no** salta los pasos de la release actual.
 
 ## Registro e idempotencia
 

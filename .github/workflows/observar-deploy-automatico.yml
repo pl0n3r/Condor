@@ -58,6 +58,12 @@ jobs:
           fi
           echo "previous_version=$previous_version" >> "$GITHUB_OUTPUT"
 
+          bootstrap_previous=false
+          if [[ -n "$previous_version" && "$previous_version" != "$version" ]]; then
+            bootstrap_previous=true
+          fi
+          echo "bootstrap_previous=$bootstrap_previous" >> "$GITHUB_OUTPUT"
+
           bootstrap_only=false
           if [[ -n "$previous_version" && "$previous_version" == "$version" ]]; then
             git diff --name-only "$previous_sha" "${{ github.sha }}" > /tmp/current-push-paths.txt
@@ -102,7 +108,7 @@ PY
           echo "Fase D-043 resuelta desde #389: $phase" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Auto-validar baseline D-043 previa en construcción
-        if: ${{ steps.version.outputs.bootstrap_only == 'true' }}
+        if: ${{ steps.version.outputs.bootstrap_only == 'true' || steps.version.outputs.bootstrap_previous == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           FASE_CONDOR: ${{ steps.fase.outputs.value }}
