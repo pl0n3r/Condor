@@ -32,6 +32,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'error_incidents',
                 'notification_delivery',
                 'notification_preferences',
+                'self_service_trial_application',
             ],
             $this->treatmentIds($data),
         );
