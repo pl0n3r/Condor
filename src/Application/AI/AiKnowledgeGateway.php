@@ -61,10 +61,6 @@ final class AiKnowledgeGateway
         $permitted = [];
 
         foreach ($articles as $article) {
-            if (!$article instanceof KnowledgeArticle) {
-                return self::handoff('invalid_knowledge_input');
-            }
-
             $snapshot = $article->snapshot();
             $knowledgeRef = 'knowledge:' . $snapshot['id'];
             if (!isset($allowlist[$knowledgeRef])) {
