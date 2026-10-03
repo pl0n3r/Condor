@@ -49,7 +49,7 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Detectar si la release exige transición operativa
+      - name: Detectar cambios de la release
         id: transicion
         run: |
           set -euo pipefail
@@ -64,25 +64,81 @@ jobs:
           )"
           echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
 
-      - name: Construir manifiesto canónico para tarjeta D-043
+      - name: Construir manifiesto canónico actual
         id: manifiesto
-        if: ${{ steps.transicion.outputs.requerida == 'true' }}
         env:
           VERSION_ESPERADA: ${{ steps.version.outputs.version }}
           SHA_ESPERADO: ${{ github.sha }}
         run: |
           set -euo pipefail
-          if python3 scripts/release_evidence.py manifest \
+          python3 scripts/release_evidence.py manifest \
             --sha "$SHA_ESPERADO" \
             --expected-version "$VERSION_ESPERADA" \
             < /tmp/cambios-release.txt \
-            > /tmp/release-manifest.json; then
-            echo "disponible=true" >> "$GITHUB_OUTPUT"
-          else
-            rm -f /tmp/release-manifest.json
-            echo "disponible=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::No fue posible construir el manifiesto D-043; la observación de producción continúa sin publicar tarjeta."
-          fi
+            > /tmp/release-current-manifest.json
+
+      - name: Acumular transiciones D-043 pendientes
+        id: acumulado
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_ESPERADA: ${{ steps.version.outputs.version }}
+          SHA_ESPERADO: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues/1/comments?per_page=100" \
+            > /tmp/roadmap-comments.json
+
+          python3 scripts/d043_pending_releases.py \
+            < /tmp/roadmap-comments.json \
+            > /tmp/pending-identities.json
+
+          printf '[]\n' > /tmp/pending-manifests.json
+          while IFS= read -r identity; do
+            version="$(jq -r '.version' <<<"$identity")"
+            sha="$(jq -r '.sha' <<<"$identity")"
+
+            if [[ "$version" == "$VERSION_ESPERADA" && "$sha" == "$SHA_ESPERADO" ]]; then
+              continue
+            fi
+
+            git cat-file -e "${sha}^{commit}" || {
+              echo "::error::La release pendiente $version / $sha no existe en Git."
+              exit 1
+            }
+
+            historical_version="$(
+              git show "${sha}:config/version.php" \
+                | grep -oP "'version'\\s*=>\\s*'\\K[^']+"
+            )"
+            if [[ "$historical_version" != "$version" ]]; then
+              echo "::error::La identidad histórica $version / $sha no coincide con config/version.php."
+              exit 1
+            fi
+
+            git diff --name-only "${sha}^" "$sha" > /tmp/historical-changes.txt
+            python3 scripts/release_evidence.py manifest-explicit \
+              --version "$version" \
+              --sha "$sha" \
+              < /tmp/historical-changes.txt \
+              > /tmp/historical-manifest.json
+
+            jq --slurpfile item /tmp/historical-manifest.json \
+              '. + [$item[0]]' \
+              /tmp/pending-manifests.json \
+              > /tmp/pending-manifests.next.json
+            mv /tmp/pending-manifests.next.json /tmp/pending-manifests.json
+          done < <(jq -c '.[]' /tmp/pending-identities.json)
+
+          jq -n \
+            --slurpfile current /tmp/release-current-manifest.json \
+            --slurpfile pending /tmp/pending-manifests.json \
+            '{current_manifest:$current[0], pending_manifests:$pending[0]}' \
+            | python3 scripts/release_evidence.py accumulate \
+            > /tmp/release-manifest.json
+
+          requerida="$(jq -r '.transition.required' /tmp/release-manifest.json)"
+          echo "requerida=$requerida" >> "$GITHUB_OUTPUT"
 
       - name: Observar producción en modo solo lectura
         id: smoke
@@ -91,7 +147,7 @@ jobs:
           SHA_ESPERADO: ${{ github.sha }}
           STOREFRONT_SLUG: ${{ vars.STOREFRONT_SLUG }}
           STOREFRONT_CANONICAL: ${{ vars.STOREFRONT_CANONICAL }}
-          TRANSICION_REQUERIDA: ${{ steps.transicion.outputs.requerida }}
+          TRANSICION_REQUERIDA: ${{ steps.acumulado.outputs.requerida }}
         run: |
           set -euo pipefail
           args=(
@@ -154,7 +210,7 @@ jobs:
           fi
 
       - name: Publicar tarjeta humana D-043 pendiente
-        if: ${{ steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.transicion.outputs.requerida == 'true' && steps.manifiesto.outputs.disponible == 'true' }}
+        if: ${{ steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.acumulado.outputs.requerida == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           STOREFRONT_SLUG: ${{ vars.STOREFRONT_SLUG }}
