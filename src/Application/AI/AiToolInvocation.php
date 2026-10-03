@@ -36,6 +36,8 @@ final class AiToolInvocation
         string $timestamp,
         callable $executor,
     ): array {
+        self::assertAuditMetadataValid($context, $policy, $evidenceRef, $timestamp);
+
         if (!self::tenantMatches($context, $requestedTenantId)) {
             return self::result($context, $policy, 'denied', false, $evidenceRef, $timestamp);
         }
@@ -51,6 +53,24 @@ final class AiToolInvocation
         }
 
         return self::result($context, $policy, 'success', true, $evidenceRef, $timestamp);
+    }
+
+    private static function assertAuditMetadataValid(
+        AiTenantContext $context,
+        AiToolPolicy $policy,
+        string $evidenceRef,
+        string $timestamp,
+    ): void {
+        AiAuditEnvelope::fromArray(
+            [
+                'tenant_ref' => 'tenant:' . $context->tenantId(),
+                'tool_ref' => $context->tool(),
+                'outcome' => 'denied',
+                'evidence_ref' => $evidenceRef,
+                'timestamp' => $timestamp,
+            ],
+            $policy,
+        );
     }
 
     private static function tenantMatches(
