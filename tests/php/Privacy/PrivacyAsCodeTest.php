@@ -32,6 +32,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'error_incidents',
                 'notification_delivery',
                 'notification_preferences',
+                'self_service_trial_application',
             ],
             $this->treatmentIds($data),
         );
@@ -42,6 +43,10 @@ final class PrivacyAsCodeTest extends TestCase
         self::assertContains('payload', $this->treatment($data, 'notification_delivery')['fields']);
         self::assertContains('context', $this->treatment($data, 'audit_events')['fields']);
         self::assertContains('trace', $this->treatment($data, 'error_incidents')['fields']);
+        self::assertSame(
+            'review_required',
+            $this->treatment($data, 'self_service_trial_application')['basis'],
+        );
     }
 
     /** Verifica derivación byte-a-byte desde datos.yml según el contrato Factory fijado. */

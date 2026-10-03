@@ -113,3 +113,13 @@ Producto: `pl0n3r/Condor`
 - Consentimiento: `review_required`
 - Proveedores: ninguno_declarado
 - Retención: `account_lifecycle`
+
+## self_service_trial_application
+
+- Categoría: `contact`
+- Campos de software: `email`, `trial_quote_id`, `trial_consent_recorded_at`
+- Finalidad: `self_service_trial_application`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`

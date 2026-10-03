@@ -198,6 +198,20 @@
       "retention": "review_required",
       "consent": "review_required",
       "providers": []
+    },
+    {
+      "id": "self_service_trial_application",
+      "category": "contact",
+      "fields": [
+        "email",
+        "trial_quote_id",
+        "trial_consent_recorded_at"
+      ],
+      "purpose": "self_service_trial_application",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
     }
   ]
 }

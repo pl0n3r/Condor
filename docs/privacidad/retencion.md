@@ -17,3 +17,4 @@ Producto: `pl0n3r/Condor`
 | error_incidents | usage | review_required | review_required |
 | notification_delivery | usage | review_required | review_required |
 | notification_preferences | usage | account_lifecycle | review_required |
+| self_service_trial_application | contact | review_required | review_required |
