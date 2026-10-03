@@ -67,6 +67,9 @@ switch ($argv[1]) {
     case 'expired_quote':
         $quote = makeQuote($submittedAt->modify('-1 second'));
         break;
+    case 'missing_consent':
+        unset($payload['consent']);
+        break;
     case 'false_consent':
         $payload['consent'] = false;
         break;
@@ -168,6 +171,7 @@ try {
         expected = {
             "unknown_quote": "Quote comercial no disponible para solicitud de trial.",
             "expired_quote": "Quote comercial no disponible para solicitud de trial.",
+            "missing_consent": "Consentimiento explícito requerido.",
             "false_consent": "Consentimiento explícito requerido.",
             "extra_fields": "Campos de solicitud de trial no permitidos.",
         }
