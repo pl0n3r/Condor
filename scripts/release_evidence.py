@@ -186,6 +186,68 @@ def validate_transition(transition: object) -> None:
         raise EvidenceError("Una transición requerida debe exigir verificación de caché.")
 
 
+def validated_release_identity(value: object) -> tuple[str, str]:
+    """Valida una identidad mínima de release sin aceptar campos implícitos."""
+    if not isinstance(value, dict):
+        raise EvidenceError("La identidad de release debe ser un objeto.")
+
+    version = value.get("version")
+    sha = value.get("sha")
+    if not isinstance(version, str) or VERSION_PATTERN.fullmatch(version) is None:
+        raise EvidenceError("La identidad de release contiene una versión inválida.")
+    if not isinstance(sha, str) or SHA_PATTERN.fullmatch(sha) is None:
+        raise EvidenceError("La identidad de release contiene un SHA inválido.")
+    return version, sha
+
+
+def version_key(version: str) -> tuple[int, int, int]:
+    """Convierte X.Y.Z en una clave comparable sin inferir saltos válidos."""
+    major, minor, patch = map(int, version.split("."))
+    return major, minor, patch
+
+
+def validate_covered_releases(manifest: dict[str, Any]) -> None:
+    """Valida cobertura explícita de releases anteriores sin inferirla por versión."""
+    covered = manifest.get("covered_releases", [])
+    if not isinstance(covered, list):
+        raise EvidenceError("covered_releases debe ser una lista.")
+
+    current_version, current_sha = validated_release_identity(manifest)
+    current_key = version_key(current_version)
+    seen_versions: dict[str, str] = {current_version: current_sha}
+    seen_shas: dict[str, str] = {current_sha: current_version}
+    previous_key: tuple[int, int, int] | None = None
+
+    for item in covered:
+        version, sha = validated_release_identity(item)
+        key = version_key(version)
+        if key >= current_key:
+            raise EvidenceError(
+                "Las releases cubiertas deben ser anteriores a la release actual."
+            )
+
+        known_sha = seen_versions.get(version)
+        if known_sha is not None:
+            if known_sha != sha:
+                raise EvidenceError(
+                    "Una versión cubierta no puede apuntar a dos SHAs distintos."
+                )
+            raise EvidenceError("covered_releases contiene una identidad duplicada.")
+
+        known_version = seen_shas.get(sha)
+        if known_version is not None:
+            raise EvidenceError(
+                "Un SHA cubierto no puede pertenecer a dos versiones distintas."
+            )
+
+        if previous_key is not None and key <= previous_key:
+            raise EvidenceError("covered_releases no está en orden canónico.")
+
+        seen_versions[version] = sha
+        seen_shas[sha] = version
+        previous_key = key
+
+
 def validate_manifest(manifest: dict[str, Any]) -> None:
     """Valida identidad y checklist antes de permitir cualquier promoción de estado."""
     if manifest.get("schema") != SCHEMA:
@@ -203,6 +265,91 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
         raise EvidenceError("El manifiesto no contiene el contrato público esperado.")
 
     validate_transition(manifest.get("transition"))
+    validate_covered_releases(manifest)
+
+
+def accumulate_pending_manifests(
+    current_manifest: dict[str, Any],
+    pending_manifests: object,
+) -> dict[str, Any]:
+    """Acumula checks pendientes explícitos sin mutar los manifiestos de entrada."""
+    validate_manifest(current_manifest)
+    if not isinstance(pending_manifests, list):
+        raise EvidenceError("pending_manifests debe ser una lista.")
+
+    current_version, current_sha = validated_release_identity(current_manifest)
+    current_key = version_key(current_version)
+    requirements = {
+        item["id"]: item["required"] is True
+        for item in current_manifest["transition"]["checks"]
+    }
+    coverage: dict[tuple[str, str], dict[str, str]] = {}
+    version_to_sha: dict[str, str] = {}
+    sha_to_version: dict[str, str] = {}
+
+    def add_coverage(version: str, sha: str) -> None:
+        identity = (version, sha)
+        if identity == (current_version, current_sha):
+            raise EvidenceError(
+                "La release actual no puede aparecer como release pendiente cubierta."
+            )
+        if version_key(version) >= current_key:
+            raise EvidenceError(
+                "Una release pendiente debe ser anterior a la release actual."
+            )
+
+        known_sha = version_to_sha.get(version)
+        if known_sha is not None and known_sha != sha:
+            raise EvidenceError(
+                "Una versión pendiente no puede apuntar a dos SHAs distintos."
+            )
+        known_version = sha_to_version.get(sha)
+        if known_version is not None and known_version != version:
+            raise EvidenceError(
+                "Un SHA pendiente no puede pertenecer a dos versiones distintas."
+            )
+        if identity in coverage:
+            return
+
+        version_to_sha[version] = sha
+        sha_to_version[sha] = version
+        coverage[identity] = {"version": version, "sha": sha}
+
+    for item in current_manifest.get("covered_releases", []):
+        version, sha = validated_release_identity(item)
+        add_coverage(version, sha)
+
+    for pending in pending_manifests:
+        if not isinstance(pending, dict):
+            raise EvidenceError("Cada manifiesto pendiente debe ser un objeto.")
+        validate_manifest(pending)
+
+        version, sha = validated_release_identity(pending)
+        add_coverage(version, sha)
+        for item in pending.get("covered_releases", []):
+            covered_version, covered_sha = validated_release_identity(item)
+            add_coverage(covered_version, covered_sha)
+
+        for item in pending["transition"]["checks"]:
+            check_id = item["id"]
+            requirements[check_id] = (
+                requirements[check_id] or item["required"] is True
+            )
+
+    result = dict(current_manifest)
+    result["covered_releases"] = sorted(
+        coverage.values(),
+        key=lambda item: (version_key(item["version"]), item["sha"]),
+    )
+    result["transition"] = {
+        "required": any(requirements.values()),
+        "checks": [
+            {"id": check_id, "required": requirements[check_id]}
+            for check_id in CHECK_IDS
+        ],
+    }
+    validate_manifest(result)
+    return result
 
 
 def public_evidence(
