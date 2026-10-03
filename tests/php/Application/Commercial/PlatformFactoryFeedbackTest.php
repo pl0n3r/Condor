@@ -43,7 +43,7 @@ final class PlatformFactoryFeedbackTest extends TestCase
         );
         self::assertSame('fresh', $first['freshness']['status']);
         self::assertSame(
-            'aggregate:usage:inventory:2026-10',
+            'aggregate:usage:capability-inventory:2026-10',
             $first['provenance']['usage'],
         );
     }
