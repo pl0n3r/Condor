@@ -7,6 +7,7 @@ namespace App\Tests\Application\AI;
 use App\Application\AI\AiToolInvocation;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolPolicy;
+use DomainException;
 use PHPUnit\Framework\TestCase;
 
 final class AiToolInvocationTest extends TestCase
@@ -91,6 +92,39 @@ final class AiToolInvocationTest extends TestCase
         }
 
         self::assertSame(0, $executions);
+    }
+
+    public function testInvalidAuditMetadataFailsBeforeExecutor(): void
+    {
+        $policy = new AiToolPolicy();
+        $context = self::context($policy, 'tenant-a', 'catalog.read');
+
+        foreach (
+            [
+                ['invalid-evidence-ref', '2026-10-03T10:07:00+00:00'],
+                ['evidence:catalog-check', 'not-a-timestamp'],
+            ] as [$evidenceRef, $timestamp]
+        ) {
+            $executions = 0;
+
+            try {
+                AiToolInvocation::invoke(
+                    $context,
+                    $policy,
+                    'tenant-a',
+                    'catalog.read',
+                    $evidenceRef,
+                    $timestamp,
+                    static function () use (&$executions): void {
+                        ++$executions;
+                    },
+                );
+
+                self::fail('Invalid audit metadata must fail closed.');
+            } catch (DomainException) {
+                self::assertSame(0, $executions);
+            }
+        }
     }
 
     private static function context(
