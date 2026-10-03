@@ -50,7 +50,17 @@ final class FactoryFeedbackSignalTest extends TestCase
         }
     }
 
-    /** @return array{subject_ref:string,signal_type:string,window_start:string,window_end:string,sample_count:int,direction:string,evidence_ref:string} */
+    /**
+     * @return array{
+     *     subject_ref:string,
+     *     signal_type:string,
+     *     window_start:string,
+     *     window_end:string,
+     *     sample_count:int,
+     *     direction:string,
+     *     evidence_ref:string
+     * }
+     */
     private static function validPayload(): array
     {
         return [
