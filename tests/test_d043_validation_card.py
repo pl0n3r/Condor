@@ -18,6 +18,7 @@ VERSION = "0.1.123"
 
 
 def manifest(*required: str, sha: str = SHA) -> dict[str, object]:
+    """Construye un manifiesto D-043 canónico para las pruebas de aceptación."""
     required_set = set(required)
     return {
         "schema": release_evidence.SCHEMA,
@@ -43,7 +44,10 @@ def manifest(*required: str, sha: str = SHA) -> dict[str, object]:
 
 
 class D043ValidationCardTests(unittest.TestCase):
+    """Verifica identidad, seguridad e idempotencia de la tarjeta humana D-043."""
+
     def test_card_contains_exact_identity_required_transition_table_and_prefilled_command(self):
+        """Incluye identidad exacta, flags requeridos y comando humano prellenado."""
         payload = manifest("migraciones", "cache")
         output = card.build_card(
             payload,
@@ -63,6 +67,7 @@ class D043ValidationCardTests(unittest.TestCase):
         self.assertIn(f"sha={SHA}", output)
 
     def test_card_never_marks_human_flags_and_omits_unrequired_flags(self):
+        """No confirma flags automáticamente y omite transiciones no requeridas."""
         output = card.build_card(
             manifest("cache"),
             repository="pl0n3r/Condor",
@@ -78,6 +83,7 @@ class D043ValidationCardTests(unittest.TestCase):
         self.assertIn("únicamente si el dueño ejecuta el comando", output)
 
     def test_command_rejects_shell_metacharacters_in_external_inputs(self):
+        """Rechaza metacaracteres en repo y tenant antes de renderizar el comando."""
         payload = manifest("cache")
 
         with self.assertRaises(release_evidence.EvidenceError):
@@ -93,6 +99,7 @@ class D043ValidationCardTests(unittest.TestCase):
             )
 
     def test_command_rejects_tainted_release_identity_before_rendering(self):
+        """Rechaza SHA o versión contaminados antes de construir texto ejecutable."""
         bad_sha = manifest("cache", sha="a" * 39 + ";")
         bad_version = manifest("cache")
         bad_version["version"] = "0.1.123;echo-pwned"
@@ -109,6 +116,7 @@ class D043ValidationCardTests(unittest.TestCase):
             )
 
     def test_marker_is_stable_per_sha_and_changes_for_new_release(self):
+        """Mantiene un marker estable por SHA y distinto entre releases."""
         first = card.validation_marker(manifest("cache"))
         second = card.validation_marker(manifest("cache"))
         next_release = card.validation_marker(
@@ -121,11 +129,21 @@ class D043ValidationCardTests(unittest.TestCase):
         self.assertIn("b" * 40, next_release)
 
     def test_workflow_contract_updates_one_card_only_for_pending_transition(self):
+        """Publica una tarjeta propia solo con deploy observado y manifiesto válido."""
         workflow = (
             ROOT / ".github" / "workflows" / "observar-deploy-automatico.yml"
         ).read_text(encoding="utf-8")
 
+        manifest_step = workflow.index(
+            "- name: Construir manifiesto canónico para tarjeta D-043"
+        )
+        smoke_step = workflow.index(
+            "- name: Observar producción en modo solo lectura"
+        )
+        self.assertLess(manifest_step, smoke_step)
         self.assertIn("scripts/release_evidence.py manifest", workflow)
+        self.assertIn("continue-on-error: true", workflow)
+        self.assertIn("steps.manifiesto.outcome == 'success'", workflow)
         self.assertIn("scripts/d043_validation_card.py", workflow)
         self.assertIn(
             "steps.smoke.outputs.estado == 'DEPLOY_OBSERVED'",
@@ -138,6 +156,9 @@ class D043ValidationCardTests(unittest.TestCase):
         self.assertIn("condor-d043-validation-card", workflow)
         self.assertIn("issues/1/comments?per_page=100", workflow)
         self.assertIn("--paginate --slurp", workflow)
+        self.assertIn('.user.login == "github-actions[bot]"', workflow)
+        self.assertIn("-F body=@/tmp/d043-card.md", workflow)
+        self.assertNotIn('cuerpo="$(cat /tmp/d043-card.md)"', workflow)
         self.assertIn("--method PATCH", workflow)
         self.assertIn("--method POST", workflow)
         self.assertNotIn(
