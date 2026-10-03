@@ -59,6 +59,8 @@ final class BillingAdapterContractTest extends TestCase
             $valid + ['token' => 'secret'],
             $valid + ['provider' => 'vendor-a'],
             $valid + ['card_number' => '4111111111111111'],
+            [...$valid, 'tenant_ref' => 'token:secret'],
+            [...$valid, 'idempotency_key' => 'provider:vendor-a'],
         ] as $payload) {
             try {
                 BillingRequest::fromArray($payload);
@@ -70,8 +72,8 @@ final class BillingAdapterContractTest extends TestCase
 
         foreach ([
             ['outcome' => 'paid', 'provider_ref' => null, 'evidence_ref' => 'billing:evidence:test'],
-            ['outcome' => 'unknown', 'provider_ref' => 'vendor@example.com', 'evidence_ref' => 'billing:evidence:test'],
-            ['outcome' => 'accepted', 'provider_ref' => null, 'evidence_ref' => 'token=secret'],
+            ['outcome' => 'unknown', 'provider_ref' => 'token:providersecret', 'evidence_ref' => 'billing:evidence:test'],
+            ['outcome' => 'accepted', 'provider_ref' => null, 'evidence_ref' => 'token:secret'],
         ] as $payload) {
             try {
                 BillingResult::fromArray($payload);
