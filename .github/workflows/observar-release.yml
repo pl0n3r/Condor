@@ -47,6 +47,7 @@ on:
 
 permissions:
   contents: read
+  issues: read
 
 concurrency:
   group: observer-release-${{ github.repository }}
@@ -58,12 +59,45 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Descargar repositorio
+      - name: Descargar código confiable de main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ inputs.sha }}
-          fetch-depth: 2
+          ref: main
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Validar identidad solicitada contra historial confiable
+        env:
+          VERSION_ESPERADA: ${{ inputs.version }}
+          SHA_ESPERADO: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA_ESPERADO" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::sha debe ser un SHA completo de 40 hexadecimales minúsculos."
+            exit 1
+          }
+          [[ "$VERSION_ESPERADA" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::version debe usar formato X.Y.Z."
+            exit 1
+          }
+
+          git cat-file -e "${SHA_ESPERADO}^{commit}" || {
+            echo "::error::El SHA solicitado no existe en el historial local."
+            exit 1
+          }
+          git merge-base --is-ancestor "$SHA_ESPERADO" HEAD || {
+            echo "::error::El SHA solicitado no pertenece al historial confiable de main."
+            exit 1
+          }
+
+          historical_version="$(
+            git show "${SHA_ESPERADO}:config/version.php" \
+              | grep -oP "'version'\\s*=>\\s*'\\K[^']+"
+          )"
+          if [[ "$historical_version" != "$VERSION_ESPERADA" ]]; then
+            echo "::error::version no coincide con config/version.php del SHA solicitado."
+            exit 1
+          fi
 
       - name: Probar evidencia sin tocar producción
         run: |
@@ -73,7 +107,7 @@ jobs:
             tests/contract/test_release_evidence_contract.py \
             tests/integration/test_release_evidence_integration.py
 
-      - name: Detectar transición y generar manifiesto
+      - name: Detectar transición y generar manifiesto actual
         id: transicion
         env:
           VERSION_ESPERADA: ${{ inputs.version }}
@@ -91,13 +125,74 @@ jobs:
           )"
           echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
 
-          python3 scripts/release_evidence.py manifest \
+          python3 scripts/release_evidence.py manifest-explicit \
+            --version "$VERSION_ESPERADA" \
             --sha "$SHA_ESPERADO" \
-            --expected-version "$VERSION_ESPERADA" \
             < /tmp/cambios-release.txt \
+            > /tmp/release-current-manifest.json
+
+      - name: Acumular transiciones D-043 pendientes
+        id: acumulado
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_ESPERADA: ${{ inputs.version }}
+          SHA_ESPERADO: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues/1/comments?per_page=100" \
+            > /tmp/roadmap-comments.json
+
+          python3 scripts/d043_pending_releases.py \
+            < /tmp/roadmap-comments.json \
+            > /tmp/pending-identities.json
+
+          printf '[]\n' > /tmp/pending-manifests.json
+          while IFS= read -r identity; do
+            version="$(jq -r '.version' <<<"$identity")"
+            sha="$(jq -r '.sha' <<<"$identity")"
+
+            if [[ "$version" == "$VERSION_ESPERADA" && "$sha" == "$SHA_ESPERADO" ]]; then
+              continue
+            fi
+
+            git cat-file -e "${sha}^{commit}" || {
+              echo "::error::La release pendiente $version / $sha no existe en Git."
+              exit 1
+            }
+
+            historical_version="$(
+              git show "${sha}:config/version.php" \
+                | grep -oP "'version'\\s*=>\\s*'\\K[^']+"
+            )"
+            if [[ "$historical_version" != "$version" ]]; then
+              echo "::error::La identidad histórica $version / $sha no coincide con config/version.php."
+              exit 1
+            fi
+
+            git diff --name-only "${sha}^" "$sha" > /tmp/historical-changes.txt
+            python3 scripts/release_evidence.py manifest-explicit \
+              --version "$version" \
+              --sha "$sha" \
+              < /tmp/historical-changes.txt \
+              > /tmp/historical-manifest.json
+
+            jq --slurpfile item /tmp/historical-manifest.json \
+              '. + [$item[0]]' \
+              /tmp/pending-manifests.json \
+              > /tmp/pending-manifests.next.json
+            mv /tmp/pending-manifests.next.json /tmp/pending-manifests.json
+          done < <(jq -c '.[]' /tmp/pending-identities.json)
+
+          jq -n \
+            --slurpfile current /tmp/release-current-manifest.json \
+            --slurpfile pending /tmp/pending-manifests.json \
+            '{current_manifest:$current[0], pending_manifests:$pending[0]}' \
+            | python3 scripts/release_evidence.py accumulate \
             > /tmp/release-manifest.json
 
-          echo "Transición operativa requerida: $requiere" >> "$GITHUB_STEP_SUMMARY"
+          requerida="$(jq -r '.transition.required' /tmp/release-manifest.json)"
+          echo "Transición operativa acumulada requerida: $requerida" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Observar producción en modo solo lectura
         id: smoke

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "release_evidence.py"
@@ -244,6 +246,75 @@ class ReleaseEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(evidence["estado"], "VALIDATED_IN_PRODUCTION")
         self.assertEqual(evidence["transition"]["pending"], [])
+
+    def test_explicit_manifest_matches_canonical_builder_for_same_version_sha_and_paths(self) -> None:
+        paths = ["scripts/release_evidence.py", "config/version.php"]
+        with tempfile.TemporaryDirectory() as tmp:
+            canonical = module.build_manifest(
+                version_file=self.version_file(tmp, VERSION),
+                sha=SHA,
+                changed_paths=paths,
+                expected_version=VERSION,
+            )
+
+        explicit = module.build_manifest_explicit(
+            version=VERSION,
+            sha=SHA,
+            changed_paths=paths,
+        )
+
+        self.assertEqual(explicit, canonical)
+
+    def test_explicit_manifest_rejects_invalid_identity_and_accumulate_cli_unions_pending_checks(self) -> None:
+        with self.assertRaises(module.EvidenceError):
+            module.build_manifest_explicit(
+                version="v0.1.12",
+                sha=SHA,
+                changed_paths=["README.md"],
+            )
+        with self.assertRaises(module.EvidenceError):
+            module.build_manifest_explicit(
+                version=VERSION,
+                sha="not-a-sha",
+                changed_paths=["README.md"],
+            )
+
+        current = module.build_manifest_explicit(
+            version=VERSION,
+            sha=SHA,
+            changed_paths=["README.md"],
+        )
+        pending = module.build_manifest_explicit(
+            version="0.1.11",
+            sha="b" * 40,
+            changed_paths=["migrations/Version20260921010000.php"],
+        )
+        envelope = {
+            "current_manifest": current,
+            "pending_manifests": [pending],
+        }
+
+        original_stdin = sys.stdin
+        output = io.StringIO()
+        try:
+            sys.stdin = io.StringIO(json.dumps(envelope))
+            with redirect_stdout(output):
+                result = module.main(["accumulate"])
+        finally:
+            sys.stdin = original_stdin
+
+        self.assertEqual(result, 0)
+        accumulated = json.loads(output.getvalue())
+        required = {
+            item["id"]: item["required"]
+            for item in accumulated["transition"]["checks"]
+        }
+        self.assertEqual(
+            accumulated["covered_releases"],
+            [{"version": "0.1.11", "sha": "b" * 40}],
+        )
+        self.assertTrue(required["migraciones"])
+        self.assertTrue(required["cache"])
 
     def test_accumulate_pending_manifests_unions_required_transition_checks_and_records_exact_coverage(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

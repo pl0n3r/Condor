@@ -112,20 +112,17 @@ def transition_requirements(paths: list[str], required: bool) -> dict[str, bool]
     }
 
 
-def build_manifest(
+def build_manifest_explicit(
     *,
-    version_file: Path,
+    version: str,
     sha: str,
     changed_paths: Iterable[str],
-    expected_version: str | None = None,
 ) -> dict[str, Any]:
-    """Construye la identidad y el checklist verificable de una release."""
+    """Construye un manifiesto desde identidad exacta ya validada por el caller."""
+    if VERSION_PATTERN.fullmatch(version) is None:
+        raise EvidenceError("La versión de release debe tener formato X.Y.Z.")
     if SHA_PATTERN.fullmatch(sha) is None:
         raise EvidenceError("El SHA de release debe tener 40 hexadecimales minúsculos.")
-
-    version = read_version(version_file)
-    if expected_version is not None and version != expected_version:
-        raise EvidenceError("La versión solicitada no coincide con config/version.php.")
 
     paths = normalized_paths(changed_paths)
     selection = classify(paths, "pull_request")
@@ -149,6 +146,25 @@ def build_manifest(
             ],
         },
     }
+
+
+def build_manifest(
+    *,
+    version_file: Path,
+    sha: str,
+    changed_paths: Iterable[str],
+    expected_version: str | None = None,
+) -> dict[str, Any]:
+    """Construye la identidad y el checklist verificable de una release."""
+    version = read_version(version_file)
+    if expected_version is not None and version != expected_version:
+        raise EvidenceError("La versión solicitada no coincide con config/version.php.")
+
+    return build_manifest_explicit(
+        version=version,
+        sha=sha,
+        changed_paths=changed_paths,
+    )
 
 
 def validated_transition_check(item: object) -> tuple[object, bool]:
@@ -544,6 +560,26 @@ def load_envelope() -> tuple[dict[str, Any], dict[str, Any]]:
     return manifest, observation
 
 
+def load_accumulation_envelope() -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Lee el manifiesto actual y la lista explícita de manifiestos pendientes."""
+    try:
+        payload = json.load(sys.stdin)
+    except ValueError as error:
+        raise EvidenceError("La entrada de acumulación no es JSON válido.") from error
+    if not isinstance(payload, dict):
+        raise EvidenceError("La entrada de acumulación debe ser un objeto JSON.")
+
+    current = payload.get("current_manifest")
+    pending = payload.get("pending_manifests")
+    if not isinstance(current, dict) or not isinstance(pending, list):
+        raise EvidenceError(
+            "La entrada debe contener current_manifest y pending_manifests[]."
+        )
+    if not all(isinstance(item, dict) for item in pending):
+        raise EvidenceError("Cada pending_manifests[*] debe ser un objeto.")
+    return current, pending
+
+
 def main(argv: list[str] | None = None) -> int:
     """Expone generación y consolidación como CLI determinista."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -552,6 +588,12 @@ def main(argv: list[str] | None = None) -> int:
     manifest_parser = subparsers.add_parser("manifest")
     manifest_parser.add_argument("--sha", required=True)
     manifest_parser.add_argument("--expected-version")
+
+    explicit_parser = subparsers.add_parser("manifest-explicit")
+    explicit_parser.add_argument("--version", required=True)
+    explicit_parser.add_argument("--sha", required=True)
+
+    subparsers.add_parser("accumulate")
 
     finalize_parser = subparsers.add_parser("finalize")
     finalize_parser.add_argument(
@@ -571,6 +613,21 @@ def main(argv: list[str] | None = None) -> int:
                 changed_paths=sys.stdin.read().splitlines(),
                 expected_version=args.expected_version,
             )
+            print(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+
+        if args.command == "manifest-explicit":
+            manifest = build_manifest_explicit(
+                version=args.version,
+                sha=args.sha,
+                changed_paths=sys.stdin.read().splitlines(),
+            )
+            print(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+
+        if args.command == "accumulate":
+            current, pending = load_accumulation_envelope()
+            manifest = accumulate_pending_manifests(current, pending)
             print(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
 
