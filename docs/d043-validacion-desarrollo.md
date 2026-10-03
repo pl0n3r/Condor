@@ -4,7 +4,7 @@
 
 Durante la fase `construccion`, la decisión del propietario permite sustituir la confirmación humana por versión por **auto-validación con evidencia**. Esta excepción no autoriza el go-live: antes de live sigue siendo obligatoria una revisión consolidada del propietario en Condor#389.
 
-La fase se declara de forma explícita en el workflow como `construccion`. Cualquier otro valor desactiva la promoción automática.
+La fase se deriva de la puerta canónica Condor#389: solo `open` + `estado: bloqueado` (go-live aún no autorizado) resuelve `construccion`. Cualquier otro estado resuelve `desconocida` y desactiva la promoción automática.
 
 ## Evidencia mínima
 
@@ -18,7 +18,7 @@ Una release solo puede pasar a `VALIDATED_IN_PRODUCTION` automáticamente si tod
 6. no existe migración destructiva o ambigua;
 7. la fase sigue siendo `construccion`.
 
-Las transiciones auto-verificables están acotadas a `migraciones`, `comandos` y `cache`. `roles` o `configuracion` mantienen el camino humano. Cuando el acumulado histórico contiene migraciones cuya seguridad no puede demostrarse desde el checkout actual, se consideran ambiguas y la auto-validación falla cerrado.
+Las transiciones candidatas están acotadas a `migraciones`, `comandos` y `cache`, pero además se exige procedencia. Las migraciones se consideran **ambiguas por defecto** y permanecen en camino humano hasta existir un clasificador determinista de destructividad. `comandos` solo se auto-resuelve cuando todos los paths que originan ese flag pertenecen a la allowlist mínima de tooling observacional (`scripts/release_evidence.py` y `scripts/d043_pending_releases.py`); cualquier `bin/console`, `src/Console/` o script de backfill/deploy/migrate/provision/release no allowlisted falla cerrado. `roles` y `configuracion` siempre mantienen el camino humano.
 
 ## Bootstrap de V0.1.137
 
@@ -48,6 +48,6 @@ La etiqueta visible es **validación automática de desarrollo**, para no confun
 
 ## Fail-closed y reversión
 
-Si falta identidad exacta, schema, smoke, post-deploy completo, fase válida o seguridad de la migración, el estado permanece `DEPLOY_OBSERVED` y se conserva la tarjeta humana existente. El mecanismo no escribe en producción, no ejecuta migraciones y no cambia secretos.
+Si falta identidad exacta, schema, smoke, post-deploy completo, fase válida o procedencia segura de la transición, el estado permanece `DEPLOY_OBSERVED` y se conserva la tarjeta humana existente. El mecanismo no escribe en producción, no ejecuta migraciones y no cambia secretos.
 
 Revertir este cambio restaura el comportamiento D-043 anterior.

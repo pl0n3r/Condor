@@ -73,7 +73,10 @@ def observation() -> dict:
 class D043DevAutoValidationTests(unittest.TestCase):
     def test_auto_validation_requires_exact_sha_health_schema_smoke_and_manifest_evidence(self) -> None:
         evidence = module.development_auto_validation(
-            manifest(), observation(), phase="construccion"
+            manifest(),
+            observation(),
+            phase="construccion",
+            transition_safety={"comandos": True, "migraciones": True},
         )
         self.assertEqual(evidence["estado"], "VALIDATED_IN_PRODUCTION")
         self.assertTrue(evidence["development_auto_validation"]["eligible"])
@@ -104,14 +107,20 @@ class D043DevAutoValidationTests(unittest.TestCase):
         for payload in cases:
             with self.subTest(payload=payload):
                 evidence = module.development_auto_validation(
-                    manifest(), payload, phase="construccion"
+                    manifest(),
+                    payload,
+                    phase="construccion",
+                    transition_safety={"comandos": True, "migraciones": True},
                 )
                 self.assertNotEqual(evidence["estado"], "VALIDATED_IN_PRODUCTION")
                 self.assertFalse(evidence["development_auto_validation"]["eligible"])
 
     def test_disabled_outside_construction_phase_and_for_destructive_migrations(self) -> None:
         outside = module.development_auto_validation(
-            manifest(), observation(), phase="live"
+            manifest(),
+            observation(),
+            phase="live",
+            transition_safety={"comandos": True, "migraciones": True},
         )
         destructive_manifest = manifest()
         for item in destructive_manifest["transition"]["checks"]:
@@ -121,7 +130,7 @@ class D043DevAutoValidationTests(unittest.TestCase):
             destructive_manifest,
             observation(),
             phase="construccion",
-            destructive_migrations=True,
+            transition_safety={"comandos": True, "migraciones": False},
         )
         self.assertFalse(outside["development_auto_validation"]["eligible"])
         self.assertEqual(
@@ -130,12 +139,42 @@ class D043DevAutoValidationTests(unittest.TestCase):
         self.assertFalse(destructive["development_auto_validation"]["eligible"])
         self.assertEqual(
             destructive["development_auto_validation"]["reason"],
-            "destructive_migration",
+            "migration_not_proven_safe",
+        )
+
+
+    def test_transition_provenance_is_fail_closed_for_migrations_and_unknown_commands(self) -> None:
+        safe = module.development_transition_safety([
+            "scripts/release_evidence.py",
+            "scripts/d043_pending_releases.py",
+            "config/version.php",
+        ])
+        unsafe_command = module.development_transition_safety([
+            "scripts/provision-production.php",
+        ])
+        migration = module.development_transition_safety([
+            "migrations/Version20261003000100.php",
+        ])
+
+        self.assertTrue(safe["comandos"])
+        self.assertTrue(safe["migraciones"])
+        self.assertFalse(unsafe_command["comandos"])
+        self.assertEqual(
+            unsafe_command["unsafe_command_paths"],
+            ["scripts/provision-production.php"],
+        )
+        self.assertFalse(migration["migraciones"])
+        self.assertEqual(
+            migration["migration_paths"],
+            ["migrations/Version20261003000100.php"],
         )
 
     def test_auto_validation_is_recorded_distinguishable_and_idempotent(self) -> None:
         evidence = module.development_auto_validation(
-            manifest(), observation(), phase="construccion"
+            manifest(),
+            observation(),
+            phase="construccion",
+            transition_safety={"comandos": True, "migraciones": True},
         )
         first = module.development_validation_comment(evidence)
         second = module.development_validation_comment(evidence)
@@ -145,7 +184,9 @@ class D043DevAutoValidationTests(unittest.TestCase):
         self.assertIn("#389", first)
 
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("FASE_CONDOR: construccion", workflow)
+        self.assertIn("issues/389", workflow)
+        self.assertIn("steps.fase.outputs.value", workflow)
+        self.assertNotIn("FASE_CONDOR: construccion", workflow)
         self.assertIn("for issue_number in 1 389", workflow)
         self.assertIn("steps.version.outputs.bootstrap_only", workflow)
 

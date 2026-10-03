@@ -56,6 +56,10 @@ OBSERVATION_STATES = {
 
 DEVELOPMENT_PHASE = "construccion"
 DEVELOPMENT_AUTO_TRANSITIONS = frozenset({"migraciones", "comandos", "cache"})
+DEVELOPMENT_SAFE_COMMAND_SCRIPTS = frozenset({
+    "scripts/release_evidence.py",
+    "scripts/d043_pending_releases.py",
+})
 DEVELOPMENT_AUTO_MARKER = "condor-d043-dev-auto"
 
 
@@ -489,12 +493,44 @@ def finalize(
         },
     }
 
+def development_transition_safety(changed_paths: Iterable[str]) -> dict[str, Any]:
+    """Clasifica procedencia operativa sin inferir ejecución de comandos."""
+    paths = normalized_paths(changed_paths)
+    migration_paths = [
+        path for path in paths if path.startswith("migrations/")
+    ]
+    command_paths = [
+        path
+        for path in paths
+        if (
+            path == "bin/console"
+            or path.startswith("src/Console/")
+            or (
+                path.startswith("scripts/")
+                and script_requires_release_transition(path)
+            )
+        )
+    ]
+    unsafe_commands = sorted(
+        path
+        for path in command_paths
+        if path not in DEVELOPMENT_SAFE_COMMAND_SCRIPTS
+    )
+    return {
+        "migraciones": not migration_paths,
+        "comandos": not unsafe_commands,
+        "migration_paths": migration_paths,
+        "command_paths": command_paths,
+        "unsafe_command_paths": unsafe_commands,
+    }
+
+
 def development_auto_validation(
     manifest: dict[str, Any],
     observation: dict[str, Any],
     *,
     phase: str,
-    destructive_migrations: bool = False,
+    transition_safety: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Promueve D-043 solo con evidencia exacta y acotada durante construcción."""
     validate_manifest(manifest)
@@ -516,6 +552,7 @@ def development_auto_validation(
         if item.get("required") is True
     }
     unsupported = sorted(required.difference(DEVELOPMENT_AUTO_TRANSITIONS))
+    safety = transition_safety if isinstance(transition_safety, dict) else {}
 
     reasons: list[str] = []
     if phase != DEVELOPMENT_PHASE:
@@ -532,8 +569,10 @@ def development_auto_validation(
         reasons.append("schema_not_verified")
     if unsupported:
         reasons.append("unsupported_transition:" + ",".join(unsupported))
-    if "migraciones" in required and destructive_migrations:
-        reasons.append("destructive_migration")
+    if "migraciones" in required and safety.get("migraciones") is not True:
+        reasons.append("migration_not_proven_safe")
+    if "comandos" in required and safety.get("comandos") is not True:
+        reasons.append("commands_not_proven_safe")
     if (
         not isinstance(post_deploy, dict)
         or post_deploy.get("ok") is not True
@@ -719,9 +758,13 @@ def main(argv: list[str] | None = None) -> int:
 
     subparsers.add_parser("accumulate")
 
+    safety_parser = subparsers.add_parser("development-safety")
+    safety_parser.set_defaults(_development_safety=True)
+
     development_parser = subparsers.add_parser("development-auto")
     development_parser.add_argument("--phase", required=True)
-    development_parser.add_argument("--destructive-migrations", action="store_true")
+    development_parser.add_argument("--commands-safe", action="store_true")
+    development_parser.add_argument("--migrations-safe", action="store_true")
 
     subparsers.add_parser("development-comment")
 
@@ -761,6 +804,11 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
 
+        if args.command == "development-safety":
+            result = development_transition_safety(sys.stdin.read().splitlines())
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+
         if args.command == "development-comment":
             payload = json.load(sys.stdin)
             if not isinstance(payload, dict):
@@ -774,7 +822,10 @@ def main(argv: list[str] | None = None) -> int:
                 manifest,
                 observation,
                 phase=args.phase,
-                destructive_migrations=args.destructive_migrations,
+                transition_safety={
+                    "comandos": args.commands_safe,
+                    "migraciones": args.migrations_safe,
+                },
             )
             print(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True))
             dev = evidence.get("development_auto_validation", {})

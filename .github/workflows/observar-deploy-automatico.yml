@@ -82,11 +82,30 @@ PY
           fi
           echo "bootstrap_only=$bootstrap_only" >> "$GITHUB_OUTPUT"
 
+      - name: Resolver fase D-043 desde la puerta canónica
+        id: fase
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/issues/389" > /tmp/d043-phase-gate.json
+          phase="$(
+            jq -r '
+              if .state == "open"
+                 and ([.labels[].name] | index("estado: bloqueado")) != null
+              then "construccion"
+              else "desconocida"
+              end
+            ' /tmp/d043-phase-gate.json
+          )"
+          echo "value=$phase" >> "$GITHUB_OUTPUT"
+          echo "Fase D-043 resuelta desde #389: $phase" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Auto-validar baseline D-043 previa en construcción
         if: ${{ steps.version.outputs.bootstrap_only == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          FASE_CONDOR: construccion
+          FASE_CONDOR: ${{ steps.fase.outputs.value }}
           PREVIOUS_VERSION: ${{ steps.version.outputs.previous_version }}
           PREVIOUS_SHA: ${{ github.event.before }}
           STOREFRONT_SLUG: ${{ vars.STOREFRONT_SLUG }}
@@ -104,6 +123,7 @@ PY
           fi
 
           git diff --name-only "${PREVIOUS_SHA}^" "$PREVIOUS_SHA" > /tmp/d043-bootstrap-current-paths.txt
+          cp /tmp/d043-bootstrap-current-paths.txt /tmp/d043-bootstrap-all-paths.txt
           python3 scripts/release_evidence.py manifest-explicit             --version "$PREVIOUS_VERSION"             --sha "$PREVIOUS_SHA"             < /tmp/d043-bootstrap-current-paths.txt             > /tmp/d043-bootstrap-current-manifest.json
 
           printf '[]\n' > /tmp/d043-bootstrap-older-manifests.json
@@ -128,6 +148,7 @@ PY
             )"
             [[ "$historical_version" == "$version" ]] || exit 0
             git diff --name-only "${sha}^" "$sha" > /tmp/d043-bootstrap-historical-paths.txt
+            cat /tmp/d043-bootstrap-historical-paths.txt >> /tmp/d043-bootstrap-all-paths.txt
             python3 scripts/release_evidence.py manifest-explicit               --version "$version"               --sha "$sha"               < /tmp/d043-bootstrap-historical-paths.txt               > /tmp/d043-bootstrap-historical-manifest.json
             jq --slurpfile item /tmp/d043-bootstrap-historical-manifest.json               '. + [$item[0]]' /tmp/d043-bootstrap-older-manifests.json               > /tmp/d043-bootstrap-next.json
             mv /tmp/d043-bootstrap-next.json /tmp/d043-bootstrap-older-manifests.json
@@ -195,13 +216,11 @@ PY
 
           jq --slurpfile post /tmp/d043-bootstrap-post.json             '.comprobaciones.post_deploy_status=$post[0]'             /tmp/d043-bootstrap-observation.json             > /tmp/d043-bootstrap-observation-dev.json
 
-          destructive=false
-          if jq -e '.transition.checks[] | select(.id=="migraciones" and .required==true)'             /tmp/d043-bootstrap-manifest.json >/dev/null; then
-            destructive=true
-          fi
+          python3 scripts/release_evidence.py development-safety             < /tmp/d043-bootstrap-all-paths.txt             > /tmp/d043-bootstrap-safety.json
 
           dev_args=(development-auto --phase "$FASE_CONDOR")
-          [[ "$destructive" == "true" ]] && dev_args+=(--destructive-migrations)
+          [[ "$(jq -r '.comandos' /tmp/d043-bootstrap-safety.json)" == "true" ]]             && dev_args+=(--commands-safe)
+          [[ "$(jq -r '.migraciones' /tmp/d043-bootstrap-safety.json)" == "true" ]]             && dev_args+=(--migrations-safe)
 
           set +e
           jq -n             --slurpfile manifest /tmp/d043-bootstrap-manifest.json             --slurpfile observation /tmp/d043-bootstrap-observation-dev.json             '{manifest:$manifest[0],observation:$observation[0]}'             | python3 scripts/release_evidence.py "${dev_args[@]}"             > /tmp/d043-bootstrap-dev-evidence.json
@@ -277,6 +296,7 @@ PY
             > /tmp/pending-identities.json
 
           printf '[]\n' > /tmp/pending-manifests.json
+          cp /tmp/cambios-release.txt /tmp/d043-all-paths.txt
           while IFS= read -r identity; do
             version="$(jq -r '.version' <<<"$identity")"
             sha="$(jq -r '.sha' <<<"$identity")"
@@ -300,6 +320,7 @@ PY
             fi
 
             git diff --name-only "${sha}^" "$sha" > /tmp/historical-changes.txt
+            cat /tmp/historical-changes.txt >> /tmp/d043-all-paths.txt
             python3 scripts/release_evidence.py manifest-explicit \
               --version "$version" \
               --sha "$sha" \
@@ -441,17 +462,16 @@ PY
         id: auto_dev
         if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.acumulado.outputs.requerida == 'true' }}
         env:
-          FASE_CONDOR: construccion
+          FASE_CONDOR: ${{ steps.fase.outputs.value }}
         run: |
           set -euo pipefail
           jq --slurpfile post /tmp/d043-dev-post.json             '.comprobaciones.post_deploy_status=$post[0]'             /tmp/release-observation.json             > /tmp/d043-dev-observation.json
 
-          destructive=false
-          if jq -e '.transition.checks[] | select(.id=="migraciones" and .required==true)'             /tmp/release-manifest.json >/dev/null; then
-            destructive=true
-          fi
+          python3 scripts/release_evidence.py development-safety             < /tmp/d043-all-paths.txt             > /tmp/d043-dev-safety.json
+
           args=(development-auto --phase "$FASE_CONDOR")
-          [[ "$destructive" == "true" ]] && args+=(--destructive-migrations)
+          [[ "$(jq -r '.comandos' /tmp/d043-dev-safety.json)" == "true" ]]             && args+=(--commands-safe)
+          [[ "$(jq -r '.migraciones' /tmp/d043-dev-safety.json)" == "true" ]]             && args+=(--migrations-safe)
 
           set +e
           jq -n             --slurpfile manifest /tmp/release-manifest.json             --slurpfile observation /tmp/d043-dev-observation.json             '{manifest:$manifest[0],observation:$observation[0]}'             | python3 scripts/release_evidence.py "${args[@]}"             > /tmp/d043-dev-evidence.json
