@@ -247,7 +247,7 @@ final class SaasUnitEconomics
             $carry = intdiv($carry, 10);
         }
 
-        return strrev($result === '' ? '0' : $result);
+        return strrev($result);
     }
 
     private static function activeForWindow(
