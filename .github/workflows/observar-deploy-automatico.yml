@@ -51,6 +51,9 @@ jobs:
 
       - name: Detectar si la release exige transición operativa
         id: transicion
+        env:
+          VERSION_ESPERADA: ${{ steps.version.outputs.version }}
+          SHA_ESPERADO: ${{ github.sha }}
         run: |
           set -euo pipefail
           git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" > /tmp/cambios-release.txt
@@ -63,6 +66,12 @@ jobs:
             | python3 -c 'import json, sys; print(str(json.load(sys.stdin)["transicion_release"]).lower())'
           )"
           echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
+
+          python3 scripts/release_evidence.py manifest \
+            --sha "$SHA_ESPERADO" \
+            --expected-version "$VERSION_ESPERADA" \
+            < /tmp/cambios-release.txt \
+            > /tmp/release-manifest.json
 
       - name: Observar producción en modo solo lectura
         id: smoke
@@ -131,6 +140,48 @@ jobs:
           if (( estado_cli > 1 )); then
             echo "::error::La observación automática terminó sin validar producción; revise la evidencia publicada."
             exit "$estado_cli"
+          fi
+
+      - name: Publicar tarjeta humana D-043 pendiente
+        if: ${{ steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.transicion.outputs.requerida == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STOREFRONT_SLUG: ${{ vars.STOREFRONT_SLUG }}
+        run: |
+          set -euo pipefail
+          args=(--repo "$GITHUB_REPOSITORY")
+          [[ -n "$STOREFRONT_SLUG" ]] &&
+            args+=(--tenant-slug "$STOREFRONT_SLUG")
+
+          python3 scripts/d043_validation_card.py "${args[@]}" \
+            < /tmp/release-manifest.json \
+            > /tmp/d043-card.md
+
+          marker="$(grep -m1 '^<!-- condor-d043-validation-card ' /tmp/d043-card.md)"
+          if [[ -z "$marker" ]]; then
+            echo "::error::La tarjeta D-043 no contiene marker canónico."
+            exit 1
+          fi
+
+          comment_id="$(
+            gh api --paginate --slurp \
+              "repos/${GITHUB_REPOSITORY}/issues/1/comments?per_page=100" \
+            | jq -r --arg marker "$marker" \
+              '.[][] | select(.body | contains($marker)) | .id' \
+            | sed -n '1p'
+          )"
+          cuerpo="$(cat /tmp/d043-card.md)"
+
+          if [[ -n "$comment_id" ]]; then
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
+              -f body="$cuerpo" \
+              >/dev/null
+          else
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/issues/1/comments" \
+              -f body="$cuerpo" \
+              >/dev/null
           fi
 
       - name: Registrar estado observado en el roadmap
