@@ -11,6 +11,15 @@ final readonly class FactoryFeedbackSignal
 {
     private const SIGNAL_TYPES = ['usage', 'cost', 'demand'];
     private const DIRECTIONS = ['up', 'flat', 'down', 'unknown'];
+    private const EXPECTED_FIELDS = [
+        'subject_ref',
+        'signal_type',
+        'window_start',
+        'window_end',
+        'sample_count',
+        'direction',
+        'evidence_ref',
+    ];
     private const SUBJECT_PATTERN = '/^(?:capability|product):[a-z0-9][a-z0-9:_-]{1,149}$/D';
     private const EVIDENCE_PATTERN = '/^aggregate:[a-z0-9][a-z0-9:_-]{1,149}$/D';
 
@@ -54,47 +63,30 @@ final readonly class FactoryFeedbackSignal
     /** @param array<string,mixed> $input */
     public static function fromArray(array $input): self
     {
-        $actual = array_keys($input);
-        sort($actual);
-        $expected = [
-            'direction',
-            'evidence_ref',
-            'sample_count',
-            'signal_type',
-            'subject_ref',
-            'window_end',
-            'window_start',
-        ];
-
-        if ($actual !== $expected) {
-            throw new DomainException('invalid_factory_feedback_signal_shape');
-        }
-
-        if (
-            !is_string($input['subject_ref'])
-            || !is_string($input['signal_type'])
-            || !is_string($input['window_start'])
-            || !is_string($input['window_end'])
-            || is_bool($input['sample_count'])
-            || !is_int($input['sample_count'])
-            || !is_string($input['direction'])
-            || !is_string($input['evidence_ref'])
-        ) {
-            throw new DomainException('invalid_factory_feedback_signal_shape');
-        }
+        self::assertShape($input);
 
         return new self(
-            $input['subject_ref'],
-            $input['signal_type'],
-            $input['window_start'],
-            $input['window_end'],
-            $input['sample_count'],
-            $input['direction'],
-            $input['evidence_ref'],
+            subjectRef: self::stringField($input, 'subject_ref'),
+            signalType: self::stringField($input, 'signal_type'),
+            windowStart: self::stringField($input, 'window_start'),
+            windowEnd: self::stringField($input, 'window_end'),
+            sampleCount: self::integerField($input, 'sample_count'),
+            direction: self::stringField($input, 'direction'),
+            evidenceRef: self::stringField($input, 'evidence_ref'),
         );
     }
 
-    /** @return array{subject_ref:string,signal_type:string,window_start:string,window_end:string,sample_count:int,direction:string,evidence_ref:string} */
+    /**
+     * @return array{
+     *     subject_ref:string,
+     *     signal_type:string,
+     *     window_start:string,
+     *     window_end:string,
+     *     sample_count:int,
+     *     direction:string,
+     *     evidence_ref:string
+     * }
+     */
     public function toArray(): array
     {
         return [
@@ -141,6 +133,41 @@ final readonly class FactoryFeedbackSignal
     public function evidenceRef(): string
     {
         return $this->evidenceRef;
+    }
+
+    /** @param array<string,mixed> $input */
+    private static function assertShape(array $input): void
+    {
+        if (
+            count($input) !== count(self::EXPECTED_FIELDS)
+            || array_diff(self::EXPECTED_FIELDS, array_keys($input)) !== []
+        ) {
+            throw new DomainException('invalid_factory_feedback_signal_shape');
+        }
+    }
+
+    /** @param array<string,mixed> $input */
+    private static function stringField(array $input, string $field): string
+    {
+        $value = $input[$field];
+
+        if (!is_string($value)) {
+            throw new DomainException('invalid_factory_feedback_signal_shape');
+        }
+
+        return $value;
+    }
+
+    /** @param array<string,mixed> $input */
+    private static function integerField(array $input, string $field): int
+    {
+        $value = $input[$field];
+
+        if (!is_int($value)) {
+            throw new DomainException('invalid_factory_feedback_signal_shape');
+        }
+
+        return $value;
     }
 
     private static function assertUtcTimestamp(string $value, string $field): void
