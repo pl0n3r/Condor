@@ -41,9 +41,9 @@ final class SaasUnitEconomics
      *   cogs:int|null,
      *   support_cost:int|null,
      *   gross_margin_amount:int|null,
-     *   gross_margin_percent:float|null,
+     *   gross_margin_percent:string|null,
      *   contribution_margin_amount:int|null,
-     *   contribution_margin_percent:float|null,
+     *   contribution_margin_percent:string|null,
      *   provenance:array{
      *     revenue:array{kind:string,subscription_ref:string,plan_version_ref:string},
      *     costs:list<array{category:string,source_ref:string}>
@@ -157,9 +157,9 @@ final class SaasUnitEconomics
                 'cogs' => $cogs,
                 'support_cost' => $supportCost,
                 'gross_margin_amount' => $grossMargin,
-                'gross_margin_percent' => ($grossMargin / $revenueMrr) * 100,
+                'gross_margin_percent' => self::exactPercent($grossMargin, $revenueMrr),
                 'contribution_margin_amount' => $contributionMargin,
-                'contribution_margin_percent' => ($contributionMargin / $revenueMrr) * 100,
+                'contribution_margin_percent' => self::exactPercent($contributionMargin, $revenueMrr),
                 'provenance' => [
                     'revenue' => [
                         'kind' => 'subscription_plan_version',
@@ -176,6 +176,78 @@ final class SaasUnitEconomics
                     : 'invalid_or_ambiguous_unit_economics_evidence',
             );
         }
+    }
+
+    /**
+     * Return an exact reduced rational in percent units.
+     *
+     * Examples: 50% => "50", one third => "100/3", negative one third => "-100/3".
+     * No rounding is performed; negative values keep their sign before reduction.
+     */
+    private static function exactPercent(int $margin, int $revenue): string
+    {
+        if ($revenue < 1) {
+            throw new DomainException('ambiguous_revenue');
+        }
+        if ($margin === 0) {
+            return '0';
+        }
+
+        $negative = $margin < 0;
+        $absoluteMargin = abs($margin);
+        $common = self::greatestCommonDivisor($absoluteMargin, $revenue);
+        $numeratorBase = intdiv($absoluteMargin, $common);
+        $denominator = intdiv($revenue, $common);
+
+        $scaleCommon = self::greatestCommonDivisor(100, $denominator);
+        $scale = intdiv(100, $scaleCommon);
+        $denominator = intdiv($denominator, $scaleCommon);
+        $numerator = self::multiplyDecimalBySmall($numeratorBase, $scale);
+
+        if ($negative) {
+            $numerator = '-' . $numerator;
+        }
+
+        return $denominator === 1 ? $numerator : $numerator . '/' . $denominator;
+    }
+
+    private static function greatestCommonDivisor(int $left, int $right): int
+    {
+        while ($right !== 0) {
+            $remainder = $left % $right;
+            $left = $right;
+            $right = $remainder;
+        }
+
+        return $left;
+    }
+
+    /**
+     * Multiply a non-negative integer by a factor <= 100 using decimal digits,
+     * so the intermediate product never depends on platform integer headroom.
+     */
+    private static function multiplyDecimalBySmall(int $value, int $factor): string
+    {
+        if ($value < 0 || $factor < 0 || $factor > 100) {
+            throw new DomainException('invalid_percentage_scale');
+        }
+
+        $digits = strrev((string) $value);
+        $carry = 0;
+        $result = '';
+
+        for ($index = 0, $length = strlen($digits); $index < $length; $index++) {
+            $product = ((int) $digits[$index] * $factor) + $carry;
+            $result .= (string) ($product % 10);
+            $carry = intdiv($product, 10);
+        }
+
+        while ($carry > 0) {
+            $result .= (string) ($carry % 10);
+            $carry = intdiv($carry, 10);
+        }
+
+        return strrev($result === '' ? '0' : $result);
     }
 
     private static function activeForWindow(

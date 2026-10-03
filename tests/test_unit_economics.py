@@ -149,9 +149,9 @@ print json_encode(SaasUnitEconomics::derive($subscription, $costs), JSON_THROW_O
             "cogs": 100000,
             "support_cost": 20000,
             "gross_margin_amount": 100000,
-            "gross_margin_percent": 50.0,
+            "gross_margin_percent": "50",
             "contribution_margin_amount": 80000,
-            "contribution_margin_percent": 40.0,
+            "contribution_margin_percent": "40",
         }
         self.assertEqual(
             expected_scalars,
@@ -176,6 +176,55 @@ print json_encode(SaasUnitEconomics::derive($subscription, $costs), JSON_THROW_O
         self.assertTrue(
             all(entry["source_ref"].startswith("cost:") for entry in provenance["costs"])
         )
+
+    def test_percentages_are_exact_reduced_rationals_without_rounding(self) -> None:
+        costs_positive = [
+            {"category": "support", "amount": 0, "currency": "COP", "source_ref": "cost:support:exact"},
+            {"category": "storage", "amount": 0, "currency": "COP", "source_ref": "cost:storage:exact"},
+            {"category": "ai_compute", "amount": 0, "currency": "COP", "source_ref": "cost:ai:exact"},
+            {"category": "integration", "amount": 0, "currency": "COP", "source_ref": "cost:integration:exact"},
+            {"category": "infrastructure", "amount": 2, "currency": "COP", "source_ref": "cost:infra:exact"},
+            {"category": "messaging", "amount": 0, "currency": "COP", "source_ref": "cost:messaging:exact"},
+        ]
+        costs_negative = [dict(row) for row in costs_positive]
+        costs_negative[4]["amount"] = 4
+        payloads = json.dumps(
+            {
+                "positive": cost_snapshot(costs=costs_positive),
+                "negative": cost_snapshot(costs=costs_negative),
+            },
+            separators=(",", ":"),
+        )
+        observed = run_php(
+            f"""
+{PHP_BOOTSTRAP}
+$plan = new PlanVersion(
+    new Plan('exact', 'Exact'),
+    1,
+    3,
+    30,
+    false,
+    [],
+    new DateTimeImmutable('2026-01-01T00:00:00Z'),
+);
+$subscription = subscriptionFor(
+    'tenant:unit-a',
+    $plan,
+    SubscriptionState::Active,
+    '2026-09-01T00:00:00Z',
+);
+$payloads = json_decode({json.dumps(payloads)}, true, 512, JSON_THROW_ON_ERROR);
+print json_encode([
+    'positive' => SaasUnitEconomics::derive($subscription, $payloads['positive']),
+    'negative' => SaasUnitEconomics::derive($subscription, $payloads['negative']),
+], JSON_THROW_ON_ERROR);
+"""
+        )
+
+        self.assertEqual("100/3", observed["positive"]["gross_margin_percent"])
+        self.assertEqual("100/3", observed["positive"]["contribution_margin_percent"])
+        self.assertEqual("-100/3", observed["negative"]["gross_margin_percent"])
+        self.assertEqual("-100/3", observed["negative"]["contribution_margin_percent"])
 
     def test_missing_cost_coverage_mixed_currency_or_ambiguous_revenue_is_unavailable(self) -> None:
         payloads = json.dumps(
