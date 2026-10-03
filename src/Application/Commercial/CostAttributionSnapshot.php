@@ -150,7 +150,10 @@ final class CostAttributionSnapshot
         }
     }
 
-    /** @param array<string,mixed> $value @param list<string> $expected */
+    /**
+     * @param array<string,mixed> $value
+     * @param list<string> $expected
+     */
     private static function exactKeys(array $value, array $expected, string $scope): void
     {
         $actual = array_keys($value);
