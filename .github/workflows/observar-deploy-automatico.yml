@@ -49,7 +49,187 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+          previous_sha="${{ github.event.before }}"
+          previous_version=""
+          if [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]] && [[ "$previous_sha" != "0000000000000000000000000000000000000000" ]]; then
+            previous_version="$(
+              git show "${previous_sha}:config/version.php" 2>/dev/null                 | grep -oP "'version'\s*=>\s*'\K[^']+"                 || true
+            )"
+          fi
+          echo "previous_version=$previous_version" >> "$GITHUB_OUTPUT"
+
+          bootstrap_only=false
+          if [[ -n "$previous_version" && "$previous_version" == "$version" ]]; then
+            git diff --name-only "$previous_sha" "${{ github.sha }}" > /tmp/current-push-paths.txt
+            if python3 - <<'PY'
+from pathlib import Path
+allowed = {
+    ".github/workflows/observar-deploy-automatico.yml",
+    "scripts/release_evidence.py",
+    "tests/test_d043_dev_auto_validation.py",
+    "docs/d043-validacion-desarrollo.md",
+}
+paths = {
+    line.strip()
+    for line in Path("/tmp/current-push-paths.txt").read_text(encoding="utf-8").splitlines()
+    if line.strip()
+}
+raise SystemExit(0 if paths and paths.issubset(allowed) else 1)
+PY
+            then
+              bootstrap_only=true
+            fi
+          fi
+          echo "bootstrap_only=$bootstrap_only" >> "$GITHUB_OUTPUT"
+
+      - name: Auto-validar baseline D-043 previa en construcción
+        if: ${{ steps.version.outputs.bootstrap_only == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FASE_CONDOR: construccion
+          PREVIOUS_VERSION: ${{ steps.version.outputs.previous_version }}
+          PREVIOUS_SHA: ${{ github.event.before }}
+          STOREFRONT_SLUG: ${{ vars.STOREFRONT_SLUG }}
+          STOREFRONT_CANONICAL: ${{ vars.STOREFRONT_CANONICAL }}
+        run: |
+          set -euo pipefail
+
+          gh api --paginate --slurp             "repos/${GITHUB_REPOSITORY}/issues/1/comments?per_page=100"             > /tmp/d043-bootstrap-comments.json
+
+          python3 scripts/d043_pending_releases.py             --minimum-version 0.1.122             < /tmp/d043-bootstrap-comments.json             > /tmp/d043-bootstrap-pending.json
+
+          if ! jq -e             --arg version "$PREVIOUS_VERSION"             --arg sha "$PREVIOUS_SHA"             '.[] | select(.version == $version and .sha == $sha)'             /tmp/d043-bootstrap-pending.json >/dev/null; then
+            echo "La baseline previa no está pendiente en D-043; no se auto-valida." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git diff --name-only "${PREVIOUS_SHA}^" "$PREVIOUS_SHA" > /tmp/d043-bootstrap-current-paths.txt
+          python3 scripts/release_evidence.py manifest-explicit             --version "$PREVIOUS_VERSION"             --sha "$PREVIOUS_SHA"             < /tmp/d043-bootstrap-current-paths.txt             > /tmp/d043-bootstrap-current-manifest.json
+
+          printf '[]\n' > /tmp/d043-bootstrap-older-manifests.json
+          while IFS= read -r identity; do
+            version="$(jq -r '.version' <<<"$identity")"
+            sha="$(jq -r '.sha' <<<"$identity")"
+            if [[ "$version" == "$PREVIOUS_VERSION" && "$sha" == "$PREVIOUS_SHA" ]]; then
+              continue
+            fi
+            if ! python3 - "$version" "$PREVIOUS_VERSION" <<'PY'
+import sys
+def key(value): return tuple(map(int, value.split(".")))
+raise SystemExit(0 if key(sys.argv[1]) < key(sys.argv[2]) else 1)
+PY
+            then
+              echo "Baseline D-043 ambigua por identidad no anterior; se mantiene fail-closed." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            git cat-file -e "${sha}^{commit}" || exit 0
+            historical_version="$(
+              git show "${sha}:config/version.php"                 | grep -oP "'version'\\s*=>\\s*'\\K[^']+"
+            )"
+            [[ "$historical_version" == "$version" ]] || exit 0
+            git diff --name-only "${sha}^" "$sha" > /tmp/d043-bootstrap-historical-paths.txt
+            python3 scripts/release_evidence.py manifest-explicit               --version "$version"               --sha "$sha"               < /tmp/d043-bootstrap-historical-paths.txt               > /tmp/d043-bootstrap-historical-manifest.json
+            jq --slurpfile item /tmp/d043-bootstrap-historical-manifest.json               '. + [$item[0]]' /tmp/d043-bootstrap-older-manifests.json               > /tmp/d043-bootstrap-next.json
+            mv /tmp/d043-bootstrap-next.json /tmp/d043-bootstrap-older-manifests.json
+          done < <(jq -c '.[]' /tmp/d043-bootstrap-pending.json)
+
+          jq -n             --slurpfile current /tmp/d043-bootstrap-current-manifest.json             --slurpfile pending /tmp/d043-bootstrap-older-manifests.json             '{current_manifest:$current[0],pending_manifests:$pending[0]}'             | python3 scripts/release_evidence.py accumulate             > /tmp/d043-bootstrap-manifest.json
+
+          args=(
+            --version "$PREVIOUS_VERSION"
+            --sha "$PREVIOUS_SHA"
+            --intentos 2
+            --intervalo 2
+            --timeout 5
+          )
+          [[ -n "$STOREFRONT_SLUG" ]] && args+=(--tenant-slug "$STOREFRONT_SLUG")
+          [[ -n "$STOREFRONT_CANONICAL" ]] && args+=(--canonical-storefront "$STOREFRONT_CANONICAL")
+          if [[ "$(jq -r '.transition.required' /tmp/d043-bootstrap-manifest.json)" == "true" ]]; then
+            args+=(--transicion-requerida)
+          fi
+
+          set +e
+          python3 scripts/observar_release.py "${args[@]}" > /tmp/d043-bootstrap-observation.json
+          observer_rc=$?
+          set -e
+          if (( observer_rc > 1 )); then
+            echo "Baseline previa ya no es observable con evidencia suficiente; fail-closed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          PREVIOUS_VERSION="$PREVIOUS_VERSION" PREVIOUS_SHA="$PREVIOUS_SHA" python3 - <<'PY'
+import json
+import os
+import sys
+sys.path.insert(0, "scripts")
+from observar_release import (
+    DOMINIO_PRODUCCION,
+    ObservacionError,
+    obtener,
+    validar_post_deploy_status,
+)
+result = {
+    "ok": False,
+    "phase": "unknown",
+    "result": "unknown",
+    "detalle": "Evidencia post-deploy no concluyente.",
+}
+try:
+    tipo, cuerpo = obtener(DOMINIO_PRODUCCION, "/post-deploy-status.php", 5)
+    detalle = validar_post_deploy_status(
+        tipo, cuerpo, os.environ["PREVIOUS_VERSION"], os.environ["PREVIOUS_SHA"]
+    )
+    payload = json.loads(cuerpo.decode("utf-8"))
+    post = payload.get("post_deploy", {})
+    result = {
+        "ok": post.get("phase") == "complete" and post.get("result") == "success",
+        "phase": post.get("phase", "unknown"),
+        "result": post.get("result", "unknown"),
+        "detalle": detalle,
+    }
+except (ObservacionError, OSError, ValueError):
+    pass
+with open("/tmp/d043-bootstrap-post.json", "w", encoding="utf-8") as handle:
+    json.dump(result, handle, ensure_ascii=False, sort_keys=True)
+PY
+
+          jq --slurpfile post /tmp/d043-bootstrap-post.json             '.comprobaciones.post_deploy_status=$post[0]'             /tmp/d043-bootstrap-observation.json             > /tmp/d043-bootstrap-observation-dev.json
+
+          destructive=false
+          if jq -e '.transition.checks[] | select(.id=="migraciones" and .required==true)'             /tmp/d043-bootstrap-manifest.json >/dev/null; then
+            destructive=true
+          fi
+
+          dev_args=(development-auto --phase "$FASE_CONDOR")
+          [[ "$destructive" == "true" ]] && dev_args+=(--destructive-migrations)
+
+          set +e
+          jq -n             --slurpfile manifest /tmp/d043-bootstrap-manifest.json             --slurpfile observation /tmp/d043-bootstrap-observation-dev.json             '{manifest:$manifest[0],observation:$observation[0]}'             | python3 scripts/release_evidence.py "${dev_args[@]}"             > /tmp/d043-bootstrap-dev-evidence.json
+          dev_rc=$?
+          set -e
+          if (( dev_rc != 0 )); then
+            echo "Baseline previa no cumple auto-validación de desarrollo; permanece pendiente." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          python3 scripts/release_evidence.py development-comment             < /tmp/d043-bootstrap-dev-evidence.json             > /tmp/d043-bootstrap-comment.md
+          marker="$(head -n1 /tmp/d043-bootstrap-comment.md)"
+
+          for issue_number in 1 389; do
+            comment_id="$(
+              gh api --paginate --slurp                 "repos/${GITHUB_REPOSITORY}/issues/${issue_number}/comments?per_page=100"               | jq -r --arg marker "$marker"                 '.[][] | select(.user.login=="github-actions[bot]" and (.body|contains($marker))) | .id'               | sed -n '1p'
+            )"
+            if [[ -n "$comment_id" ]]; then
+              gh api --method PATCH                 "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}"                 -F body=@/tmp/d043-bootstrap-comment.md >/dev/null
+            else
+              gh api --method POST                 "repos/${GITHUB_REPOSITORY}/issues/${issue_number}/comments"                 -F body=@/tmp/d043-bootstrap-comment.md >/dev/null
+            fi
+          done
+
+          echo "Baseline D-043 previa auto-validada con evidencia exacta; registrada también en #389." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Detectar cambios de la release
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' }}
         id: transicion
         run: |
           set -euo pipefail
@@ -65,6 +245,7 @@ jobs:
           echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
 
       - name: Construir manifiesto canónico actual
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' }}
         id: manifiesto
         env:
           VERSION_ESPERADA: ${{ steps.version.outputs.version }}
@@ -78,6 +259,7 @@ jobs:
             > /tmp/release-current-manifest.json
 
       - name: Acumular transiciones D-043 pendientes
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' }}
         id: acumulado
         env:
           GH_TOKEN: ${{ github.token }}
@@ -142,6 +324,7 @@ jobs:
           echo "requerida=$requerida" >> "$GITHUB_OUTPUT"
 
       - name: Observar producción en modo solo lectura
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' }}
         id: smoke
         env:
           VERSION_ESPERADA: ${{ steps.version.outputs.version }}
@@ -210,8 +393,99 @@ jobs:
             exit "$estado_cli"
           fi
 
+      - name: Capturar evidencia post-deploy para D-043 desarrollo
+        id: post_deploy_dev
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.acumulado.outputs.requerida == 'true' }}
+        env:
+          VERSION_ESPERADA: ${{ steps.version.outputs.version }}
+          SHA_ESPERADO: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+import json
+import os
+import sys
+sys.path.insert(0, "scripts")
+from observar_release import (
+    DOMINIO_PRODUCCION,
+    ObservacionError,
+    obtener,
+    validar_post_deploy_status,
+)
+result = {
+    "ok": False,
+    "phase": "unknown",
+    "result": "unknown",
+    "detalle": "Evidencia post-deploy no concluyente.",
+}
+try:
+    tipo, cuerpo = obtener(DOMINIO_PRODUCCION, "/post-deploy-status.php", 5)
+    detalle = validar_post_deploy_status(
+        tipo, cuerpo, os.environ["VERSION_ESPERADA"], os.environ["SHA_ESPERADO"]
+    )
+    payload = json.loads(cuerpo.decode("utf-8"))
+    post = payload.get("post_deploy", {})
+    result = {
+        "ok": post.get("phase") == "complete" and post.get("result") == "success",
+        "phase": post.get("phase", "unknown"),
+        "result": post.get("result", "unknown"),
+        "detalle": detalle,
+    }
+except (ObservacionError, OSError, ValueError):
+    pass
+with open("/tmp/d043-dev-post.json", "w", encoding="utf-8") as handle:
+    json.dump(result, handle, ensure_ascii=False, sort_keys=True)
+PY
+
+      - name: Evaluar auto-validación D-043 de desarrollo
+        id: auto_dev
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.acumulado.outputs.requerida == 'true' }}
+        env:
+          FASE_CONDOR: construccion
+        run: |
+          set -euo pipefail
+          jq --slurpfile post /tmp/d043-dev-post.json             '.comprobaciones.post_deploy_status=$post[0]'             /tmp/release-observation.json             > /tmp/d043-dev-observation.json
+
+          destructive=false
+          if jq -e '.transition.checks[] | select(.id=="migraciones" and .required==true)'             /tmp/release-manifest.json >/dev/null; then
+            destructive=true
+          fi
+          args=(development-auto --phase "$FASE_CONDOR")
+          [[ "$destructive" == "true" ]] && args+=(--destructive-migrations)
+
+          set +e
+          jq -n             --slurpfile manifest /tmp/release-manifest.json             --slurpfile observation /tmp/d043-dev-observation.json             '{manifest:$manifest[0],observation:$observation[0]}'             | python3 scripts/release_evidence.py "${args[@]}"             > /tmp/d043-dev-evidence.json
+          rc=$?
+          set -e
+          if (( rc == 0 )); then
+            echo "validada=true" >> "$GITHUB_OUTPUT"
+          elif (( rc == 1 )); then
+            echo "validada=false" >> "$GITHUB_OUTPUT"
+          else
+            exit "$rc"
+          fi
+
+      - name: Registrar auto-validación D-043 de desarrollo
+        if: ${{ steps.auto_dev.outputs.validada == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release_evidence.py development-comment             < /tmp/d043-dev-evidence.json             > /tmp/d043-dev-comment.md
+          marker="$(head -n1 /tmp/d043-dev-comment.md)"
+          for issue_number in 1 389; do
+            comment_id="$(
+              gh api --paginate --slurp                 "repos/${GITHUB_REPOSITORY}/issues/${issue_number}/comments?per_page=100"               | jq -r --arg marker "$marker"                 '.[][] | select(.user.login=="github-actions[bot]" and (.body|contains($marker))) | .id'               | sed -n '1p'
+            )"
+            if [[ -n "$comment_id" ]]; then
+              gh api --method PATCH                 "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}"                 -F body=@/tmp/d043-dev-comment.md >/dev/null
+            else
+              gh api --method POST                 "repos/${GITHUB_REPOSITORY}/issues/${issue_number}/comments"                 -F body=@/tmp/d043-dev-comment.md >/dev/null
+            fi
+          done
+
       - name: Publicar tarjeta humana D-043 pendiente
-        if: ${{ steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.acumulado.outputs.requerida == 'true' }}
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.acumulado.outputs.requerida == 'true' && steps.auto_dev.outputs.validada != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           STOREFRONT_SLUG: ${{ vars.STOREFRONT_SLUG }}
@@ -252,7 +526,7 @@ jobs:
           fi
 
       - name: Registrar estado observado en el roadmap
-        if: ${{ always() && steps.smoke.outputs.estado != '' }}
+        if: ${{ always() && steps.version.outputs.bootstrap_only != 'true' && steps.smoke.outputs.estado != '' && steps.auto_dev.outputs.validada != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION_ESPERADA: ${{ steps.version.outputs.version }}

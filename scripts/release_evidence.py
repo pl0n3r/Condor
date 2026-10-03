@@ -54,6 +54,10 @@ OBSERVATION_STATES = {
     "VALIDATED_IN_PRODUCTION",
 }
 
+DEVELOPMENT_PHASE = "construccion"
+DEVELOPMENT_AUTO_TRANSITIONS = frozenset({"migraciones", "comandos", "cache"})
+DEVELOPMENT_AUTO_MARKER = "condor-d043-dev-auto"
+
 
 class EvidenceError(ValueError):
     """Error determinista presentable sin datos sensibles."""
@@ -485,6 +489,126 @@ def finalize(
         },
     }
 
+def development_auto_validation(
+    manifest: dict[str, Any],
+    observation: dict[str, Any],
+    *,
+    phase: str,
+    destructive_migrations: bool = False,
+) -> dict[str, Any]:
+    """Promueve D-043 solo con evidencia exacta y acotada durante construcción."""
+    validate_manifest(manifest)
+    if not isinstance(observation, dict):
+        raise EvidenceError("La observación de desarrollo debe ser un objeto.")
+
+    checks = observation.get("comprobaciones")
+    checks = checks if isinstance(checks, dict) else {}
+    same_identity = (
+        observation.get("version_esperada") == manifest["version"]
+        and observation.get("sha_esperado") == manifest["sha"]
+    )
+    public = public_evidence(observation, manifest["public_checks"])
+    schema = checks.get("schema")
+    post_deploy = checks.get("post_deploy_status")
+    required = {
+        item["id"]
+        for item in manifest["transition"]["checks"]
+        if item.get("required") is True
+    }
+    unsupported = sorted(required.difference(DEVELOPMENT_AUTO_TRANSITIONS))
+
+    reasons: list[str] = []
+    if phase != DEVELOPMENT_PHASE:
+        reasons.append("phase_disabled")
+    if not same_identity:
+        reasons.append("identity_mismatch")
+    if observation.get("estado") not in {
+        "DEPLOY_OBSERVED", "VALIDATED_IN_PRODUCTION"
+    }:
+        reasons.append("deploy_not_observed")
+    if not all(item["ok"] for item in public.values()):
+        reasons.append("public_smoke_incomplete")
+    if not isinstance(schema, dict) or schema.get("ok") is not True:
+        reasons.append("schema_not_verified")
+    if unsupported:
+        reasons.append("unsupported_transition:" + ",".join(unsupported))
+    if "migraciones" in required and destructive_migrations:
+        reasons.append("destructive_migration")
+    if (
+        not isinstance(post_deploy, dict)
+        or post_deploy.get("ok") is not True
+        or post_deploy.get("phase") != "complete"
+        or post_deploy.get("result") != "success"
+    ):
+        reasons.append("post_deploy_not_complete")
+
+    observed = dict(observation)
+    if reasons:
+        observed["estado"] = (
+            "DEPLOY_OBSERVED" if same_identity else "NO_OBSERVADO"
+        )
+        evidence = finalize(manifest, observed, [])
+        evidence["development_auto_validation"] = {
+            "eligible": False,
+            "mode": "validación automática de desarrollo",
+            "phase": phase,
+            "reason": reasons[0],
+            "required": sorted(required),
+            "auto_verified": [],
+        }
+        return evidence
+
+    observed["estado"] = "VALIDATED_IN_PRODUCTION"
+    evidence = finalize(manifest, observed, sorted(required))
+    evidence["development_auto_validation"] = {
+        "eligible": True,
+        "mode": "validación automática de desarrollo",
+        "phase": phase,
+        "reason": "exact_evidence_complete",
+        "required": sorted(required),
+        "auto_verified": sorted(required),
+    }
+    return evidence
+
+
+def development_validation_comment(evidence: dict[str, Any]) -> str:
+    """Comentario idempotente y distinguible para roadmap/revisión pre-live."""
+    dev = evidence.get("development_auto_validation")
+    if (
+        evidence.get("estado") != "VALIDATED_IN_PRODUCTION"
+        or not isinstance(dev, dict)
+        or dev.get("eligible") is not True
+    ):
+        raise EvidenceError(
+            "Solo una auto-validación de desarrollo elegible puede publicarse."
+        )
+    payload = {
+        "mode": "construccion",
+        "sha": evidence["sha"],
+        "version": evidence["version"],
+        "version_marker": 1,
+    }
+    marker = "<!-- " + DEVELOPMENT_AUTO_MARKER + " " + json.dumps(
+        payload, sort_keys=True, separators=(",", ":")
+    ) + " -->"
+    verified = ", ".join(
+        f'`{item}`' for item in dev.get("auto_verified", [])
+    ) or "ninguna transición adicional"
+    return (
+        marker + "\n"
+        "✅ VALIDATED_IN_PRODUCTION · **validación automática de desarrollo**\n\n"
+        f"- Versión: `V{evidence['version']}`\n"
+        f"- SHA exacto: `{evidence['sha']}`\n"
+        "- Fase: `construccion` (fuera de esta fase el mecanismo falla cerrado).\n"
+        f"- Transiciones verificadas por evidencia: {verified}.\n"
+        "- Evidencia requerida: identidad exacta, smoke público, schema al día y "
+        "`post-deploy phase=complete/result=success`.\n"
+        "- Migraciones destructivas/ambiguas y transiciones no soportadas no se "
+        "auto-validan.\n"
+        "- Esta evidencia se acumula para la revisión consolidada pre-live en #389.\n"
+    )
+
+
 def markdown(evidence: dict[str, Any]) -> str:
     """Renderiza la misma evidencia estructurada como resumen humano."""
     lines = [
@@ -595,6 +719,12 @@ def main(argv: list[str] | None = None) -> int:
 
     subparsers.add_parser("accumulate")
 
+    development_parser = subparsers.add_parser("development-auto")
+    development_parser.add_argument("--phase", required=True)
+    development_parser.add_argument("--destructive-migrations", action="store_true")
+
+    subparsers.add_parser("development-comment")
+
     finalize_parser = subparsers.add_parser("finalize")
     finalize_parser.add_argument(
         "--verified",
@@ -630,6 +760,29 @@ def main(argv: list[str] | None = None) -> int:
             manifest = accumulate_pending_manifests(current, pending)
             print(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
+
+        if args.command == "development-comment":
+            payload = json.load(sys.stdin)
+            if not isinstance(payload, dict):
+                raise EvidenceError("La evidencia de desarrollo debe ser un objeto JSON.")
+            print(development_validation_comment(payload), end="")
+            return 0
+
+        if args.command == "development-auto":
+            manifest, observation = load_envelope()
+            evidence = development_auto_validation(
+                manifest,
+                observation,
+                phase=args.phase,
+                destructive_migrations=args.destructive_migrations,
+            )
+            print(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True))
+            dev = evidence.get("development_auto_validation", {})
+            return 0 if (
+                evidence["estado"] == "VALIDATED_IN_PRODUCTION"
+                and isinstance(dev, dict)
+                and dev.get("eligible") is True
+            ) else 1
 
         manifest, observation = load_envelope()
         evidence = finalize(manifest, observation, args.verified)
