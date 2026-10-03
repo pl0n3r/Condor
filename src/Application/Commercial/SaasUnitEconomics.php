@@ -8,7 +8,6 @@ use App\Domain\Commercial\Entity\Subscription;
 use App\Domain\Commercial\SubscriptionLifecycle;
 use App\Domain\Commercial\SubscriptionState;
 use DateTimeImmutable;
-use DateTimeZone;
 use DomainException;
 use Throwable;
 
@@ -20,6 +19,21 @@ final class SaasUnitEconomics
         'integration',
         'messaging',
         'storage',
+    ];
+
+    private const EMPTY_METRICS = [
+        'provenance' => null,
+        'contribution_margin_percent' => null,
+        'gross_margin_percent' => null,
+        'contribution_margin_amount' => null,
+        'gross_margin_amount' => null,
+        'support_cost' => null,
+        'cogs' => null,
+        'revenue_mrr' => null,
+        'observed_at' => null,
+        'source_window' => null,
+        'currency' => null,
+        'tenant_ref' => null,
     ];
 
     /**
@@ -82,13 +96,13 @@ final class SaasUnitEconomics
                 throw new DomainException('tenant_mismatch');
             }
 
-            $windowStart = self::canonicalTime($sourceWindow['start']);
-            $windowEnd = self::canonicalTime($sourceWindow['end']);
-            $observedAt = self::canonicalTime($observedAtRaw);
+            $windowStart = SubscriptionLifecycle::parseHistoricalTime($sourceWindow['start']);
+            $windowEnd = SubscriptionLifecycle::parseHistoricalTime($sourceWindow['end']);
+            $observedAt = SubscriptionLifecycle::parseHistoricalTime($observedAtRaw);
             if (
                 $windowEnd <= $windowStart
                 || $observedAt < $windowEnd
-                || self::instant($windowStart->modify('+1 month')) !== self::instant($windowEnd)
+                || $windowStart->modify('+1 month')->format('U.u') !== $windowEnd->format('U.u')
             ) {
                 throw new DomainException('invalid_revenue_window');
             }
@@ -166,11 +180,8 @@ final class SaasUnitEconomics
                 'reason' => null,
                 'tenant_ref' => $tenantRef,
                 'currency' => $revenueCurrency,
-                'source_window' => [
-                    'start' => self::formatTime($windowStart),
-                    'end' => self::formatTime($windowEnd),
-                ],
-                'observed_at' => self::formatTime($observedAt),
+                'source_window' => $sourceWindow,
+                'observed_at' => $observedAtRaw,
                 'revenue_mrr' => $revenueMrr,
                 'cogs' => $cogs,
                 'support_cost' => $supportCost,
@@ -229,53 +240,6 @@ final class SaasUnitEconomics
         return $stateAtStart === SubscriptionState::Active;
     }
 
-    private static function canonicalTime(mixed $value): DateTimeImmutable
-    {
-        if (
-            !is_string($value)
-            || preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/D', $value) !== 1
-        ) {
-            throw new DomainException('invalid_source_time');
-        }
-
-        $parsed = DateTimeImmutable::createFromFormat(
-            '!Y-m-d\TH:i:s.u\Z',
-            $value,
-            new DateTimeZone('UTC'),
-        );
-        $errors = DateTimeImmutable::getLastErrors();
-        if (
-            !$parsed instanceof DateTimeImmutable
-            || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))
-            || self::formatTime($parsed) !== $value
-        ) {
-            throw new DomainException('invalid_source_time');
-        }
-
-        return $parsed;
-    }
-
-    private static function safeAdd(int $left, int $right): int
-    {
-        if ($right < 0 || $left > PHP_INT_MAX - $right) {
-            throw new DomainException('cost_overflow');
-        }
-
-        return $left + $right;
-    }
-
-    private static function instant(DateTimeImmutable $value): string
-    {
-        return $value->setTimezone(new DateTimeZone('UTC'))->format('U.u');
-    }
-
-    private static function formatTime(DateTimeImmutable $value): string
-    {
-        return $value
-            ->setTimezone(new DateTimeZone('UTC'))
-            ->format('Y-m-d\TH:i:s.u\Z');
-    }
-
     /**
      * @return array{
      *   status:'unavailable',
@@ -296,21 +260,6 @@ final class SaasUnitEconomics
      */
     private static function unavailable(string $reason): array
     {
-        return [
-            'status' => 'unavailable',
-            'reason' => $reason,
-            'tenant_ref' => null,
-            'currency' => null,
-            'source_window' => null,
-            'observed_at' => null,
-            'revenue_mrr' => null,
-            'cogs' => null,
-            'support_cost' => null,
-            'gross_margin_amount' => null,
-            'gross_margin_percent' => null,
-            'contribution_margin_amount' => null,
-            'contribution_margin_percent' => null,
-            'provenance' => null,
-        ];
+        return ['status' => 'unavailable', 'reason' => $reason] + self::EMPTY_METRICS;
     }
 }
