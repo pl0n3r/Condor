@@ -13,27 +13,19 @@ use Throwable;
 
 final class SaasUnitEconomics
 {
-    private const COGS_CATEGORIES = [
-        'ai_compute',
-        'infrastructure',
-        'integration',
-        'messaging',
-        'storage',
-    ];
-
-    private const EMPTY_METRICS = [
-        'provenance' => null,
-        'contribution_margin_percent' => null,
-        'gross_margin_percent' => null,
-        'contribution_margin_amount' => null,
-        'gross_margin_amount' => null,
-        'support_cost' => null,
-        'cogs' => null,
-        'revenue_mrr' => null,
-        'observed_at' => null,
-        'source_window' => null,
-        'currency' => null,
-        'tenant_ref' => null,
+    private const NULL_RESULT_KEYS = [
+        'provenance',
+        'gross_margin_percent',
+        'support_cost',
+        'tenant_ref',
+        'contribution_margin_amount',
+        'observed_at',
+        'cogs',
+        'currency',
+        'gross_margin_amount',
+        'source_window',
+        'revenue_mrr',
+        'contribution_margin_percent',
     ];
 
     /**
@@ -131,49 +123,28 @@ final class SaasUnitEconomics
                 throw new DomainException('ambiguous_revenue_window');
             }
 
-            /** @var array<string,int> $amountByCategory */
-            $amountByCategory = [];
+            $supportCost = null;
             /** @var list<array{category:string,source_ref:string}> $costProvenance */
             $costProvenance = [];
             foreach ($costRows as $row) {
-                $category = $row['category'];
-                $amount = $row['amount'];
-                $currency = $row['currency'];
-                $sourceRef = $row['source_ref'];
-                if (
-                    $amount < 0
-                    || $currency !== $costCurrency
-                    || isset($amountByCategory[$category])
-                ) {
+                if ($row['currency'] !== $costCurrency) {
                     throw new DomainException('invalid_cost_evidence');
                 }
-
-                $amountByCategory[$category] = $amount;
+                if ($row['category'] === 'support') {
+                    $supportCost = $row['amount'];
+                }
                 $costProvenance[] = [
-                    'category' => $category,
-                    'source_ref' => $sourceRef,
+                    'category' => $row['category'],
+                    'source_ref' => $row['source_ref'],
                 ];
             }
-
-            $cogs = 0;
-            foreach (self::COGS_CATEGORIES as $category) {
-                if (!isset($amountByCategory[$category])) {
-                    throw new DomainException('incomplete_cost_coverage');
-                }
-                $cogs = self::safeAdd($cogs, $amountByCategory[$category]);
-            }
-            if (!isset($amountByCategory['support']) || count($amountByCategory) !== 6) {
+            if ($supportCost === null || count($costRows) !== 6 || $supportCost > $totalCost) {
                 throw new DomainException('incomplete_cost_coverage');
             }
 
-            $supportCost = $amountByCategory['support'];
-            $computedTotalCost = self::safeAdd($cogs, $supportCost);
-            if ($computedTotalCost !== $totalCost) {
-                throw new DomainException('invalid_cost_evidence');
-            }
-
+            $cogs = $totalCost - $supportCost;
             $grossMargin = $revenueMrr - $cogs;
-            $contributionMargin = $revenueMrr - $computedTotalCost;
+            $contributionMargin = $revenueMrr - $totalCost;
 
             return [
                 'status' => 'valid',
@@ -198,10 +169,12 @@ final class SaasUnitEconomics
                     'costs' => $costProvenance,
                 ],
             ];
-        } catch (DomainException $exception) {
-            return self::unavailable($exception->getMessage());
-        } catch (Throwable) {
-            return self::unavailable('invalid_or_ambiguous_unit_economics_evidence');
+        } catch (Throwable $exception) {
+            return self::unavailable(
+                $exception instanceof DomainException
+                    ? $exception->getMessage()
+                    : 'invalid_or_ambiguous_unit_economics_evidence',
+            );
         }
     }
 
@@ -260,6 +233,6 @@ final class SaasUnitEconomics
      */
     private static function unavailable(string $reason): array
     {
-        return ['status' => 'unavailable', 'reason' => $reason] + self::EMPTY_METRICS;
+        return ['status' => 'unavailable', 'reason' => $reason] + array_fill_keys(self::NULL_RESULT_KEYS, null);
     }
 }
