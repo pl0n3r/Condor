@@ -77,6 +77,21 @@ class D043ValidationCardTests(unittest.TestCase):
         self.assertIn("no marca ningún flag", output)
         self.assertIn("únicamente si el dueño ejecuta el comando", output)
 
+    def test_command_rejects_shell_metacharacters_in_external_inputs(self):
+        payload = manifest("cache")
+
+        with self.assertRaises(release_evidence.EvidenceError):
+            card.workflow_command(
+                payload,
+                repository="pl0n3r/Condor;echo-pwned",
+            )
+        with self.assertRaises(release_evidence.EvidenceError):
+            card.workflow_command(
+                payload,
+                repository="pl0n3r/Condor",
+                tenant_slug="demo;echo-pwned",
+            )
+
     def test_marker_is_stable_per_sha_and_changes_for_new_release(self):
         first = card.validation_marker(manifest("cache"))
         second = card.validation_marker(manifest("cache"))
