@@ -132,5 +132,61 @@ class D043PendingReleasesTests(unittest.TestCase):
         self.assertNotIn("secret", serialized)
 
 
+    def test_minimum_version_ignores_legacy_conflicts_before_current_accumulation_horizon(self) -> None:
+        comments = [
+            comment("github-actions[bot]", deploy("0.1.72", "4" * 40)),
+            comment("github-actions[bot]", deploy("0.1.72", "5" * 40)),
+            comment("github-actions[bot]", deploy("0.1.122", SHA_122)),
+            comment("github-actions[bot]", validated("0.1.123", SHA_123)),
+        ]
+
+        self.assertEqual(
+            module.reduce_pending_releases(
+                comments,
+                minimum_version="0.1.122",
+            ),
+            [{"version": "0.1.122", "sha": SHA_122}],
+        )
+
+    def test_minimum_version_keeps_current_horizon_identity_conflicts_fail_closed(self) -> None:
+        comments = [
+            comment("github-actions[bot]", deploy("0.1.122", SHA_122)),
+            comment("github-actions[bot]", deploy("0.1.122", SHA_123)),
+        ]
+
+        with self.assertRaises(module.PendingReleaseError):
+            module.reduce_pending_releases(
+                comments,
+                minimum_version="0.1.122",
+            )
+
+    def test_minimum_version_preserves_exact_pending_and_validation_semantics(self) -> None:
+        comments = [
+            comment("github-actions[bot]", deploy("0.1.121", "0" * 40)),
+            comment("github-actions[bot]", deploy("0.1.122", SHA_122)),
+            comment("github-actions[bot]", deploy("0.1.123", SHA_123)),
+            comment("github-actions[bot]", validated("0.1.123", SHA_123)),
+            comment("github-actions[bot]", deploy("0.1.124", SHA_124)),
+        ]
+
+        self.assertEqual(
+            module.reduce_pending_releases(
+                comments,
+                minimum_version="0.1.122",
+            ),
+            [
+                {"version": "0.1.122", "sha": SHA_122},
+                {"version": "0.1.124", "sha": SHA_124},
+            ],
+        )
+
+    def test_invalid_minimum_version_fails_closed(self) -> None:
+        with self.assertRaises(module.PendingReleaseError):
+            module.reduce_pending_releases(
+                [],
+                minimum_version="0.1",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

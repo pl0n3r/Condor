@@ -90,6 +90,7 @@ jobs:
             > /tmp/roadmap-comments.json
 
           python3 scripts/d043_pending_releases.py \
+            --minimum-version 0.1.122 \
             < /tmp/roadmap-comments.json \
             > /tmp/pending-identities.json
 
