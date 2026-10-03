@@ -87,6 +87,7 @@ final class AiToolInvocation
     }
 
     /**
+     * @param 'success'|'denied'|'failure' $outcome
      * @return array{
      *     outcome:'success'|'denied'|'failure',
      *     executed:bool,
