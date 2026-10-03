@@ -33,7 +33,7 @@ final readonly class FactoryFeedbackBundle
     }
 
     /**
-     * @param list<FactoryFeedbackSignal> $signals
+     * @param list<mixed> $signals
      */
     public static function fromSignals(
         array $signals,
@@ -49,7 +49,7 @@ final readonly class FactoryFeedbackBundle
             throw new DomainException('invalid_factory_feedback_freshness_seconds');
         }
 
-        $first = $signals[0] ?? null;
+        $first = $signals[0];
         if (!$first instanceof FactoryFeedbackSignal) {
             throw new DomainException('invalid_factory_feedback_bundle_signal');
         }
