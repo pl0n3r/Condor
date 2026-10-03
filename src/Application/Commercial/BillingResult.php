@@ -10,6 +10,18 @@ final readonly class BillingResult
 {
     private const OUTCOMES = ['prepared', 'accepted', 'rejected', 'unknown'];
     private const REF_PATTERN = '/^[a-z][a-z0-9:_-]{2,159}$/D';
+    private const FORBIDDEN_REF_PREFIXES = [
+        'card:',
+        'credential:',
+        'cvv:',
+        'email:',
+        'name:',
+        'pan:',
+        'password:',
+        'phone:',
+        'secret:',
+        'token:',
+    ];
 
     public function __construct(
         private string $outcome,
@@ -79,6 +91,13 @@ final readonly class BillingResult
     {
         if (preg_match(self::REF_PATTERN, $value) !== 1) {
             throw new DomainException('invalid_' . $field);
+        }
+
+        $normalized = strtolower($value);
+        foreach (self::FORBIDDEN_REF_PREFIXES as $prefix) {
+            if (str_starts_with($normalized, $prefix)) {
+                throw new DomainException('sensitive_' . $field);
+            }
         }
     }
 }
