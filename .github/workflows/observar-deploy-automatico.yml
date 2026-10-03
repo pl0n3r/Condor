@@ -68,20 +68,20 @@ jobs:
           if [[ -n "$previous_version" && "$previous_version" == "$version" ]]; then
             git diff --name-only "$previous_sha" "${{ github.sha }}" > /tmp/current-push-paths.txt
             if python3 - <<'PY'
-from pathlib import Path
-allowed = {
-    ".github/workflows/observar-deploy-automatico.yml",
-    "scripts/release_evidence.py",
-    "tests/test_d043_dev_auto_validation.py",
-    "docs/d043-validacion-desarrollo.md",
-}
-paths = {
-    line.strip()
-    for line in Path("/tmp/current-push-paths.txt").read_text(encoding="utf-8").splitlines()
-    if line.strip()
-}
-raise SystemExit(0 if paths and paths.issubset(allowed) else 1)
-PY
+          from pathlib import Path
+          allowed = {
+              ".github/workflows/observar-deploy-automatico.yml",
+              "scripts/release_evidence.py",
+              "tests/test_d043_dev_auto_validation.py",
+              "docs/d043-validacion-desarrollo.md",
+          }
+          paths = {
+              line.strip()
+              for line in Path("/tmp/current-push-paths.txt").read_text(encoding="utf-8").splitlines()
+              if line.strip()
+          }
+          raise SystemExit(0 if paths and paths.issubset(allowed) else 1)
+          PY
             then
               bootstrap_only=true
             fi
@@ -140,10 +140,10 @@ PY
               continue
             fi
             if ! python3 - "$version" "$PREVIOUS_VERSION" <<'PY'
-import sys
-def key(value): return tuple(map(int, value.split(".")))
-raise SystemExit(0 if key(sys.argv[1]) < key(sys.argv[2]) else 1)
-PY
+          import sys
+          def key(value): return tuple(map(int, value.split(".")))
+          raise SystemExit(0 if key(sys.argv[1]) < key(sys.argv[2]) else 1)
+          PY
             then
               echo "Baseline D-043 ambigua por identidad no anterior; se mantiene fail-closed." >> "$GITHUB_STEP_SUMMARY"
               exit 0
@@ -185,40 +185,40 @@ PY
           fi
 
           PREVIOUS_VERSION="$PREVIOUS_VERSION" PREVIOUS_SHA="$PREVIOUS_SHA" python3 - <<'PY'
-import json
-import os
-import sys
-sys.path.insert(0, "scripts")
-from observar_release import (
-    DOMINIO_PRODUCCION,
-    ObservacionError,
-    obtener,
-    validar_post_deploy_status,
-)
-result = {
-    "ok": False,
-    "phase": "unknown",
-    "result": "unknown",
-    "detalle": "Evidencia post-deploy no concluyente.",
-}
-try:
-    tipo, cuerpo = obtener(DOMINIO_PRODUCCION, "/post-deploy-status.php", 5)
-    detalle = validar_post_deploy_status(
-        tipo, cuerpo, os.environ["PREVIOUS_VERSION"], os.environ["PREVIOUS_SHA"]
-    )
-    payload = json.loads(cuerpo.decode("utf-8"))
-    post = payload.get("post_deploy", {})
-    result = {
-        "ok": post.get("phase") == "complete" and post.get("result") == "success",
-        "phase": post.get("phase", "unknown"),
-        "result": post.get("result", "unknown"),
-        "detalle": detalle,
-    }
-except (ObservacionError, OSError, ValueError):
-    pass
-with open("/tmp/d043-bootstrap-post.json", "w", encoding="utf-8") as handle:
-    json.dump(result, handle, ensure_ascii=False, sort_keys=True)
-PY
+          import json
+          import os
+          import sys
+          sys.path.insert(0, "scripts")
+          from observar_release import (
+              DOMINIO_PRODUCCION,
+              ObservacionError,
+              obtener,
+              validar_post_deploy_status,
+          )
+          result = {
+              "ok": False,
+              "phase": "unknown",
+              "result": "unknown",
+              "detalle": "Evidencia post-deploy no concluyente.",
+          }
+          try:
+              tipo, cuerpo = obtener(DOMINIO_PRODUCCION, "/post-deploy-status.php", 5)
+              detalle = validar_post_deploy_status(
+                  tipo, cuerpo, os.environ["PREVIOUS_VERSION"], os.environ["PREVIOUS_SHA"]
+              )
+              payload = json.loads(cuerpo.decode("utf-8"))
+              post = payload.get("post_deploy", {})
+              result = {
+                  "ok": post.get("phase") == "complete" and post.get("result") == "success",
+                  "phase": post.get("phase", "unknown"),
+                  "result": post.get("result", "unknown"),
+                  "detalle": detalle,
+              }
+          except (ObservacionError, OSError, ValueError):
+              pass
+          with open("/tmp/d043-bootstrap-post.json", "w", encoding="utf-8") as handle:
+              json.dump(result, handle, ensure_ascii=False, sort_keys=True)
+          PY
 
           jq --slurpfile post /tmp/d043-bootstrap-post.json             '.comprobaciones.post_deploy_status=$post[0]'             /tmp/d043-bootstrap-observation.json             > /tmp/d043-bootstrap-observation-dev.json
 
@@ -429,40 +429,40 @@ PY
         run: |
           set -euo pipefail
           python3 - <<'PY'
-import json
-import os
-import sys
-sys.path.insert(0, "scripts")
-from observar_release import (
-    DOMINIO_PRODUCCION,
-    ObservacionError,
-    obtener,
-    validar_post_deploy_status,
-)
-result = {
-    "ok": False,
-    "phase": "unknown",
-    "result": "unknown",
-    "detalle": "Evidencia post-deploy no concluyente.",
-}
-try:
-    tipo, cuerpo = obtener(DOMINIO_PRODUCCION, "/post-deploy-status.php", 5)
-    detalle = validar_post_deploy_status(
-        tipo, cuerpo, os.environ["VERSION_ESPERADA"], os.environ["SHA_ESPERADO"]
-    )
-    payload = json.loads(cuerpo.decode("utf-8"))
-    post = payload.get("post_deploy", {})
-    result = {
-        "ok": post.get("phase") == "complete" and post.get("result") == "success",
-        "phase": post.get("phase", "unknown"),
-        "result": post.get("result", "unknown"),
-        "detalle": detalle,
-    }
-except (ObservacionError, OSError, ValueError):
-    pass
-with open("/tmp/d043-dev-post.json", "w", encoding="utf-8") as handle:
-    json.dump(result, handle, ensure_ascii=False, sort_keys=True)
-PY
+          import json
+          import os
+          import sys
+          sys.path.insert(0, "scripts")
+          from observar_release import (
+              DOMINIO_PRODUCCION,
+              ObservacionError,
+              obtener,
+              validar_post_deploy_status,
+          )
+          result = {
+              "ok": False,
+              "phase": "unknown",
+              "result": "unknown",
+              "detalle": "Evidencia post-deploy no concluyente.",
+          }
+          try:
+              tipo, cuerpo = obtener(DOMINIO_PRODUCCION, "/post-deploy-status.php", 5)
+              detalle = validar_post_deploy_status(
+                  tipo, cuerpo, os.environ["VERSION_ESPERADA"], os.environ["SHA_ESPERADO"]
+              )
+              payload = json.loads(cuerpo.decode("utf-8"))
+              post = payload.get("post_deploy", {})
+              result = {
+                  "ok": post.get("phase") == "complete" and post.get("result") == "success",
+                  "phase": post.get("phase", "unknown"),
+                  "result": post.get("result", "unknown"),
+                  "detalle": detalle,
+              }
+          except (ObservacionError, OSError, ValueError):
+              pass
+          with open("/tmp/d043-dev-post.json", "w", encoding="utf-8") as handle:
+              json.dump(result, handle, ensure_ascii=False, sort_keys=True)
+          PY
 
       - name: Evaluar auto-validación D-043 de desarrollo
         id: auto_dev
