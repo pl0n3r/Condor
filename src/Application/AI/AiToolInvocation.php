@@ -37,7 +37,7 @@ final class AiToolInvocation
         string $evidenceRef,
         string $timestamp,
         callable $executor,
-        ?AiToolDescriptor $descriptor = null,
+        AiToolDescriptor $descriptor,
         array $inputs = [],
     ): array {
         self::assertAuditMetadataValid($context, $policy, $evidenceRef, $timestamp);
@@ -59,11 +59,7 @@ final class AiToolInvocation
         );
 
         try {
-            if ($descriptor === null) {
-                $executor();
-            } else {
-                $executor($inputs);
-            }
+            $executor($inputs);
         } catch (Throwable) {
             return self::result($context, $policy, 'failure', true, $evidenceRef, $timestamp);
         }
@@ -78,17 +74,9 @@ final class AiToolInvocation
         AiTenantContext $context,
         AiToolPolicy $policy,
         string $requestedTool,
-        ?AiToolDescriptor $descriptor,
+        AiToolDescriptor $descriptor,
         array $inputs,
     ): void {
-        if ($descriptor === null) {
-            if ($inputs !== []) {
-                throw new DomainException('Inputs de tool IA requieren descriptor.');
-            }
-
-            return;
-        }
-
         $canonicalTool = strtolower(trim($requestedTool));
         if (
             $descriptor->tool() !== $canonicalTool
