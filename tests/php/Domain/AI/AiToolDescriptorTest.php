@@ -31,6 +31,8 @@ final class AiToolDescriptorTest extends TestCase
             $descriptor->inputNames(),
         );
         self::assertSame(['draft_id'], $descriptor->requiredInputs());
+        self::assertSame([], $descriptor->outputNames());
+        self::assertSame([], $descriptor->requiredOutputs());
         self::assertSame(
             [
                 'tool_ref' => 'content.draft.update',
@@ -46,6 +48,88 @@ final class AiToolDescriptorTest extends TestCase
             'content_ref' => 'content:7',
         ]);
         self::addToAssertionCount(1);
+    }
+
+    public function testDescriptorBindsCanonicalMinimizedOutputContract(): void
+    {
+        $policy = new AiToolPolicy();
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => ['category_ref'],
+                'required_inputs' => [],
+                'output_names' => ['label', 'product_ref', 'price_ref'],
+                'required_outputs' => ['product_ref'],
+            ],
+        );
+
+        self::assertSame(
+            ['label', 'price_ref', 'product_ref'],
+            $descriptor->outputNames(),
+        );
+        self::assertSame(['product_ref'], $descriptor->requiredOutputs());
+
+        $descriptor->validateOutputs([
+            'product_ref' => 'product:42',
+            'label' => 'Industrial',
+        ]);
+        self::addToAssertionCount(1);
+    }
+
+    public function testInvalidOutputContractOrValueFailsClosed(): void
+    {
+        $policy = new AiToolPolicy();
+        $base = [
+            'tool' => 'catalog.read',
+            'risk' => AiToolPolicy::READ_ONLY,
+            'input_names' => [],
+            'required_inputs' => [],
+            'output_names' => ['label', 'product_ref'],
+            'required_outputs' => ['product_ref'],
+        ];
+
+        $invalidDescriptors = [
+            array_replace($base, ['output_names' => ['label', 'label']]),
+            array_replace($base, ['output_names' => ['raw']]),
+            array_replace($base, ['output_names' => ['Invalid-Key']]),
+            array_replace($base, ['required_outputs' => ['missing_ref']]),
+        ];
+
+        foreach ($invalidDescriptors as $case) {
+            try {
+                AiToolDescriptor::fromArray($policy, $case);
+                self::fail('El contrato de output inválido debía fallar cerrado.');
+            } catch (DomainException) {
+                self::addToAssertionCount(1);
+            }
+        }
+
+        $missingPair = $base;
+        unset($missingPair['required_outputs']);
+        try {
+            AiToolDescriptor::fromArray($policy, $missingPair);
+            self::fail('Un output contract parcial debía fallar cerrado.');
+        } catch (DomainException) {
+            self::addToAssertionCount(1);
+        }
+
+        $descriptor = AiToolDescriptor::fromArray($policy, $base);
+        foreach (
+            [
+                [],
+                ['product_ref' => 'product:42', 'unknown' => 'x'],
+                ['product_ref' => 'product:42', 'raw' => 'opaque'],
+            ] as $outputs
+        ) {
+            try {
+                $descriptor->validateOutputs($outputs);
+                self::fail('El output fuera del contrato debía fallar cerrado.');
+            } catch (DomainException) {
+                self::addToAssertionCount(1);
+            }
+        }
     }
 
     public function testUnknownRiskMismatchOrNoncanonicalDescriptorFailsClosed(): void
