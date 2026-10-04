@@ -32,7 +32,6 @@ use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
 $context = AiTenantContext::fromArray([
@@ -75,7 +74,7 @@ $result = AiConversationCore::turn(
         'timestamp' => '2026-10-04T07:00:00+00:00',
     ],
     [],
-    new DateTimeImmutable('2026-10-04T07:00:00Z'),
+    new \DateTimeImmutable('2026-10-04T07:00:00Z'),
     $registry,
 );
 
@@ -117,7 +116,6 @@ use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
 $context = AiTenantContext::fromArray([
@@ -133,7 +131,7 @@ $turn = [
     'evidence_ref' => 'evidence:unregistered',
     'timestamp' => '2026-10-04T07:00:00+00:00',
 ];
-$at = new DateTimeImmutable('2026-10-04T07:00:00Z');
+$at = new \DateTimeImmutable('2026-10-04T07:00:00Z');
 
 $unregistered = AiConversationCore::turn(
     $context,
