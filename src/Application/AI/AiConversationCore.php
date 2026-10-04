@@ -82,7 +82,7 @@ final class AiConversationCore
     ): array {
         if (!self::hasExactKeys($turn, self::KNOWLEDGE_KEYS)
             || !is_array($turn['knowledge_request'])) {
-            return self::handoff($context, 'turn_not_canonical', 'knowledge');
+            return self::knowledgeHandoff($context, 'turn_not_canonical');
         }
 
         try {
@@ -94,14 +94,13 @@ final class AiConversationCore
                 $at,
             );
         } catch (DomainException) {
-            return self::handoff($context, 'knowledge_request_invalid', 'knowledge');
+            return self::knowledgeHandoff($context, 'knowledge_request_invalid');
         }
 
         if ($result['status'] !== 'ready') {
-            return self::handoff(
+            return self::knowledgeHandoff(
                 $context,
                 $result['reason'],
-                'knowledge',
                 $result['evidence_refs'],
                 $result['sources'],
             );
@@ -256,6 +255,48 @@ final class AiConversationCore
             'sources' => [],
             'audit' => $result['audit'],
             'receipt' => $receipt,
+        ];
+    }
+
+    /**
+     * @param list<string> $evidenceRefs
+     * @param list<array<string, mixed>> $sources
+     * @return array{
+     *     status:'handoff',
+     *     route:'knowledge',
+     *     reason:string,
+     *     executed:false,
+     *     evidence_refs:list<string>,
+     *     sources:list<array<string, mixed>>,
+     *     audit:null,
+     *     handoff:array{tenant_ref:string,route:'knowledge',reason:string,evidence_refs:list<string>}
+     * }
+     */
+    private static function knowledgeHandoff(
+        AiTenantContext $context,
+        string $reason,
+        array $evidenceRefs = [],
+        array $sources = [],
+    ): array {
+        $handoff = AiHandoffEnvelope::fromArray(
+            $context,
+            [
+                'tenant_ref' => 'tenant:' . $context->tenantId(),
+                'route' => 'knowledge',
+                'reason' => $reason,
+                'evidence_refs' => $evidenceRefs,
+            ],
+        )->snapshot();
+
+        return [
+            'status' => 'handoff',
+            'route' => 'knowledge',
+            'reason' => $reason,
+            'executed' => false,
+            'evidence_refs' => $evidenceRefs,
+            'sources' => $sources,
+            'audit' => null,
+            'handoff' => $handoff,
         ];
     }
 
