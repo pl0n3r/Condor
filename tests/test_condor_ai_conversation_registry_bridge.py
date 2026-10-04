@@ -101,6 +101,16 @@ print json_encode([
         self.assertFalse(observed["opaque_exposed"])
 
         source = CORE.read_text(encoding="utf-8")
+        self.assertIn("AiToolRegistry $toolRegistry", source)
+        self.assertIn("$toolRegistry->resolveWithInputs(", source)
+        self.assertNotIn("$toolExecutor", source)
+
+    def test_unregistered_or_mismatched_tool_handoffs_without_arbitrary_executor(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Application\AI\AiConversationCore;
 use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolDescriptor;
