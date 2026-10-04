@@ -57,6 +57,7 @@ class CondorAiCiContractsTests(unittest.TestCase):
         for fixture in fixtures:
             source = fixture.read_text(encoding="utf-8")
             with self.subTest(fixture=fixture.name):
+                compile(source, fixture.name, "exec")
                 self.assertNotIn('VERSION = ROOT / "config/version.php"', source)
                 self.assertNotIn("VERSION.read_text", source)
                 self.assertNotRegex(source, release_pin)
