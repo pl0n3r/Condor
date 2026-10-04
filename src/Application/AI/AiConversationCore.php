@@ -69,7 +69,8 @@ final class AiConversationCore
      *     executed:false,
      *     evidence_refs:list<string>,
      *     sources:list<array<string, mixed>>,
-     *     audit:null
+     *     audit:null,
+     *     handoff?:array{tenant_ref:string,route:'knowledge'|'tool'|'none',reason:string,evidence_refs:list<string>}
      * }
      */
     private static function knowledgeTurn(
@@ -143,7 +144,7 @@ final class AiConversationCore
             || !is_string($turn['request_ref'])
             || !is_string($turn['evidence_ref'])
             || !is_string($turn['timestamp'])) {
-            return self::handoff('turn_not_canonical', 'tool');
+            return self::handoff($context, 'turn_not_canonical', 'tool');
         }
 
         $decision = AiToolDecision::decide(
