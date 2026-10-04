@@ -48,7 +48,7 @@ $registry = AiToolRegistry::fromArray(
     [[
         'tool' => 'content.draft.update',
         'descriptor' => $descriptor,
-        'handler' => static function () use (&$executions): array {
+        'handler' => static function (array $inputs) use (&$executions): array {
             ++$executions;
             return ['opaque' => 'not-exposed'];
         },
@@ -132,7 +132,7 @@ $registry = AiToolRegistry::fromArray(
     [[
         'tool' => 'catalog.read',
         'descriptor' => $descriptor,
-        'handler' => static fn (): array => [
+        'handler' => static fn (array $inputs): array => [
             'opaque_input' => ['value' => 'internal'],
             'opaque_output' => ['result' => 'internal'],
             'metadata' => ['marker' => 'internal'],

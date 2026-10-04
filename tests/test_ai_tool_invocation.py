@@ -27,6 +27,7 @@ require 'vendor/autoload.php';
 
 use App\Application\AI\AiToolInvocation;
 use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 
 $policy = new AiToolPolicy();
@@ -35,6 +36,15 @@ $context = AiTenantContext::fromArray([
     'tool' => 'catalog.read',
     'knowledge_refs' => [],
 ], $policy);
+$descriptor = AiToolDescriptor::fromArray(
+    $policy,
+    [
+        'tool' => 'catalog.read',
+        'risk' => AiToolPolicy::READ_ONLY,
+        'input_names' => [],
+        'required_inputs' => [],
+    ],
+);
 
 $executions = 0;
 $result = AiToolInvocation::invoke(
@@ -44,10 +54,11 @@ $result = AiToolInvocation::invoke(
     'catalog.read',
     'evidence:catalog-check',
     '2026-10-03T10:07:00+00:00',
-    static function () use (&$executions): array {
+    static function (array $inputs) use (&$executions): array {
         ++$executions;
         return ['raw' => 'must-not-leak'];
     },
+    $descriptor,
 );
 
 print json_encode([
@@ -74,6 +85,7 @@ require 'vendor/autoload.php';
 
 use App\Application\AI\AiToolInvocation;
 use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 
 $policy = new AiToolPolicy();
@@ -84,20 +96,46 @@ $context = static function (string $tool) use ($policy): AiTenantContext {
         'knowledge_refs' => [],
     ], $policy);
 };
+$descriptor = static function (string $tool) use ($policy): AiToolDescriptor {
+    return AiToolDescriptor::fromArray(
+        $policy,
+        [
+            'tool' => $tool,
+            'risk' => $policy->risk($tool),
+            'input_names' => [],
+            'required_inputs' => [],
+        ],
+    );
+};
 
 $executions = 0;
-$executor = static function () use (&$executions): void {
+$executor = static function (array $inputs = []) use (&$executions): void {
     ++$executions;
 };
 
 $cases = [
-    'sensitive' => [$context('identity.permission.change'), 'tenant-a', 'identity.permission.change'],
-    'unknown' => [$context('catalog.read'), 'tenant-a', 'unknown.read'],
-    'cross_tenant' => [$context('catalog.read'), 'tenant-b', 'catalog.read'],
+    'sensitive' => [
+        $context('identity.permission.change'),
+        'tenant-a',
+        'identity.permission.change',
+        $descriptor('identity.permission.change'),
+    ],
+    'unknown' => [
+        $context('catalog.read'),
+        'tenant-a',
+        'unknown.read',
+        $descriptor('catalog.read'),
+    ],
+    'cross_tenant' => [
+        $context('catalog.read'),
+        'tenant-b',
+        'catalog.read',
+        $descriptor('catalog.read'),
+    ],
 ];
 
 $out = [];
-foreach ($cases as $name => [$tenantContext, $tenantId, $tool]) {
+foreach ($cases as $name => [$tenantContext, $tenantId, $tool, $toolDescriptor]) {
     $out[$name] = AiToolInvocation::invoke(
         $tenantContext,
         $policy,
@@ -106,6 +144,7 @@ foreach ($cases as $name => [$tenantContext, $tenantId, $tool]) {
         'evidence:denied-check',
         '2026-10-03T10:07:00+00:00',
         $executor,
+        $toolDescriptor,
     );
 }
 
@@ -130,6 +169,7 @@ require 'vendor/autoload.php';
 
 use App\Application\AI\AiToolInvocation;
 use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 use DomainException;
 
@@ -139,6 +179,15 @@ $context = AiTenantContext::fromArray([
     'tool' => 'catalog.read',
     'knowledge_refs' => [],
 ], $policy);
+$descriptor = AiToolDescriptor::fromArray(
+    $policy,
+    [
+        'tool' => 'catalog.read',
+        'risk' => AiToolPolicy::READ_ONLY,
+        'input_names' => [],
+        'required_inputs' => [],
+    ],
+);
 
 $cases = [
     ['invalid-evidence-ref', '2026-10-03T10:07:00+00:00'],
@@ -158,9 +207,10 @@ foreach ($cases as [$evidenceRef, $timestamp]) {
             'catalog.read',
             $evidenceRef,
             $timestamp,
-            static function () use (&$executions): void {
+            static function (array $inputs = []) use (&$executions): void {
                 ++$executions;
             },
+            $descriptor,
         );
     } catch (DomainException) {
         $failedClosed = true;

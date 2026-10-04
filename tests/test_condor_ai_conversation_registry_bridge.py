@@ -54,7 +54,7 @@ $registry = AiToolRegistry::fromArray(
     [[
         'tool' => 'catalog.read',
         'descriptor' => $descriptor,
-        'handler' => static function () use (&$executions): array {
+        'handler' => static function (array $inputs) use (&$executions): array {
             ++$executions;
 
             return ['opaque' => 'not-exposed'];
@@ -159,7 +159,7 @@ $mismatchedRegistry = AiToolRegistry::fromArray(
     [[
         'tool' => 'inventory.read',
         'descriptor' => $inventoryDescriptor,
-        'handler' => static function () use (&$executions): void {
+        'handler' => static function (array $inputs) use (&$executions): void {
             ++$executions;
         },
     ]],

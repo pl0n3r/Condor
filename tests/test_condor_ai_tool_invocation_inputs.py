@@ -87,7 +87,7 @@ print json_encode([
         source = SOURCE.read_text(encoding="utf-8")
         self.assertIn("AiToolDescriptor $descriptor", source)
         self.assertIn("$descriptor->validateInputs($inputs)", source)
-        self.assertIn("'version' => '0.1.156'", VERSION.read_text(encoding="utf-8"))
+        self.assertIn("'version' => '0.1.158'", VERSION.read_text(encoding="utf-8"))
 
     def test_unknown_or_missing_inputs_fail_closed_before_execution(self) -> None:
         observed = run_php(
@@ -129,7 +129,6 @@ $cases = [
     'missing_required' => [$catalog, []],
     'unknown_input' => [$catalog, ['category_ref' => 'category:a', 'unknown' => true]],
     'descriptor_mismatch' => [$inventory, []],
-    'inputs_without_descriptor' => [null, ['category_ref' => 'category:a']],
 ];
 
 $out = [];
@@ -164,6 +163,53 @@ print json_encode($out, JSON_THROW_ON_ERROR);
                 assert isinstance(result, dict)
                 self.assertTrue(result["failed_closed"])
                 self.assertEqual(0, result["executions"])
+
+    def test_descriptor_is_mandatory_after_conversation_bridge(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Application\AI\AiToolInvocation;
+use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolPolicy;
+
+$policy = new AiToolPolicy();
+$context = AiTenantContext::fromArray([
+    'tenant_id' => 'tenant-a',
+    'tool' => 'catalog.read',
+    'knowledge_refs' => [],
+], $policy);
+$executions = 0;
+$failedClosed = false;
+
+try {
+    AiToolInvocation::invoke(
+        $context,
+        $policy,
+        'tenant-a',
+        'catalog.read',
+        'evidence:descriptor-required',
+        '2026-10-04T08:30:00+00:00',
+        static function (array $inputs = []) use (&$executions): void {
+            ++$executions;
+        },
+    );
+} catch (\ArgumentCountError) {
+    $failedClosed = true;
+}
+
+print json_encode([
+    'failed_closed' => $failedClosed,
+    'executions' => $executions,
+], JSON_THROW_ON_ERROR);
+"""
+        )
+
+        self.assertTrue(observed["failed_closed"])
+        self.assertEqual(0, observed["executions"])
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertNotIn("?AiToolDescriptor $descriptor", source)
+        self.assertNotIn("AiToolDescriptor $descriptor = null", source)
 
 
 if __name__ == "__main__":

@@ -93,7 +93,7 @@ $registry = AiToolRegistry::fromArray(
     [[
         'tool' => 'catalog.read',
         'descriptor' => $descriptor,
-        'handler' => static function () use (&$executions): array {
+        'handler' => static function (array $inputs) use (&$executions): array {
             ++$executions;
             return ['opaque' => 'not-exposed'];
         },

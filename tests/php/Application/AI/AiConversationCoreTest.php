@@ -59,7 +59,7 @@ final class AiConversationCoreTest extends TestCase
             [[
                 'tool' => 'catalog.read',
                 'descriptor' => $descriptor,
-                'handler' => static function () use (&$executions): array {
+                'handler' => static function (array $inputs) use (&$executions): array {
                     ++$executions;
 
                     return ['raw' => 'must-not-leak'];
@@ -108,7 +108,7 @@ final class AiConversationCoreTest extends TestCase
         $policy = new AiToolPolicy();
         $at = new DateTimeImmutable('2026-10-03T12:00:00Z');
         $executions = 0;
-        $executor = static function () use (&$executions): void {
+        $executor = static function (array $inputs) use (&$executions): void {
             ++$executions;
         };
         $descriptor = AiToolDescriptor::fromArray(
