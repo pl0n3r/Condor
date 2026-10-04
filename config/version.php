@@ -3,5 +3,5 @@
 declare(strict_types=1);
 
 return [
-    'version' => '0.1.156',
+    'version' => '0.1.157',
 ];
