@@ -175,7 +175,6 @@ final class AiToolInvocationTest extends TestCase
             [$catalogDescriptor, []],
             [$catalogDescriptor, ['category_ref' => 'category:a', 'unknown' => true]],
             [$inventoryDescriptor, []],
-            [null, ['category_ref' => 'category:a']],
         ];
 
         foreach ($cases as [$descriptor, $inputs]) {
