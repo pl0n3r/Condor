@@ -79,6 +79,16 @@ print json_encode([
         self.assertEqual("catalog.read", snapshot["tool_ref"])
 
         source = DESCRIPTOR.read_text(encoding="utf-8")
+        self.assertIn("public function outputNames(): array", source)
+        self.assertIn("public function requiredOutputs(): array", source)
+        self.assertIn("public function validateOutputs(array $outputs): void", source)
+
+    def test_output_values_accept_only_scalar_or_null_contract(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 
 $descriptor = AiToolDescriptor::fromArray(
