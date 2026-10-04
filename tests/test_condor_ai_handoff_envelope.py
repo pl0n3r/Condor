@@ -26,10 +26,10 @@ class CondorAiHandoffEnvelopeTests(unittest.TestCase):
 require 'vendor/autoload.php';
 
 use App\Application\AI\AiConversationCore;
+use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolPolicy;
 use App\Domain\Knowledge\KnowledgeArticle;
-use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
 $context = AiTenantContext::fromArray([
@@ -73,7 +73,7 @@ $result = AiConversationCore::turn(
     ],
     [$article],
     new DateTimeImmutable('2026-10-04T03:00:00Z'),
-    static fn (): never => throw new RuntimeException('must not execute'),
+    AiToolRegistry::fromArray($policy, []),
 );
 
 print json_encode($result, JSON_THROW_ON_ERROR);
@@ -100,7 +100,6 @@ require 'vendor/autoload.php';
 use App\Application\AI\AiConversationCore;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolPolicy;
-use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
 $readContext = AiTenantContext::fromArray([
@@ -114,9 +113,7 @@ $sensitiveContext = AiTenantContext::fromArray([
     'knowledge_refs' => [],
 ], $policy);
 $executions = 0;
-$executor = static function () use (&$executions): void {
-    ++$executions;
-};
+$registry = AiToolRegistry::fromArray($policy, []);
 $at = new DateTimeImmutable('2026-10-04T03:00:00Z');
 
 $crossTenant = AiConversationCore::turn(
@@ -132,7 +129,7 @@ $crossTenant = AiConversationCore::turn(
     ],
     [],
     $at,
-    $executor,
+    $registry,
 );
 
 $unknown = AiConversationCore::turn(
@@ -141,7 +138,7 @@ $unknown = AiConversationCore::turn(
     ['intent' => 'unknown', 'tenant_id' => 'tenant-a'],
     [],
     $at,
-    $executor,
+    $registry,
 );
 
 $sensitive = AiConversationCore::turn(
@@ -157,7 +154,7 @@ $sensitive = AiConversationCore::turn(
     ],
     [],
     $at,
-    $executor,
+    $registry,
 );
 
 print json_encode([
