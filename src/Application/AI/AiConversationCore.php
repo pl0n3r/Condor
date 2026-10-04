@@ -181,6 +181,20 @@ final class AiConversationCore
             return self::handoff('tool_request_invalid', 'tool');
         }
 
+        try {
+            $receipt = AiToolReceipt::fromArray(
+                $context,
+                $policy,
+                [
+                    'request' => $decision['request'],
+                    'decision' => $decision,
+                    'audit' => $result['audit'],
+                ],
+            )->snapshot();
+        } catch (DomainException) {
+            return self::handoff('tool_receipt_invalid', 'tool');
+        }
+
         $status = match ($result['outcome']) {
             'success' => 'completed',
             'denied' => 'denied',
@@ -200,6 +214,7 @@ final class AiConversationCore
             'evidence_refs' => [$result['evidence_ref']],
             'sources' => [],
             'audit' => $result['audit'],
+            'receipt' => $receipt,
         ];
     }
 
