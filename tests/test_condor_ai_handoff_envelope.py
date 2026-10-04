@@ -98,6 +98,7 @@ print json_encode($result, JSON_THROW_ON_ERROR);
 require 'vendor/autoload.php';
 
 use App\Application\AI\AiConversationCore;
+use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolPolicy;
 
