@@ -77,7 +77,7 @@ final readonly class MaterialService
         $existing = $this->entityManager
             ->getRepository(Material::class)
             ->findOneBy([
-                'organization' => $tenant,
+                'tenant' => $tenant,
                 'code' => $code,
             ]);
 
@@ -86,7 +86,7 @@ final readonly class MaterialService
             && (!$current instanceof Material || $existing->id() !== $current->id())
         ) {
             throw new DomainException(
-                'Ya existe un material con ese código en la organización.',
+                'Ya existe un material con ese código en el tenant.',
             );
         }
     }
@@ -101,12 +101,17 @@ final readonly class MaterialService
             );
         }
 
-        $capabilities = $entitlements->capabilities();
-        $addOns = $entitlements->addOns();
-        $hasFullManufacturing = ($capabilities['manufacturing'] ?? false) === true;
-        $hasProductionLite = ($addOns['production-lite'] ?? false) === true;
+        try {
+            $productionLite = $entitlements->addOn('production-lite');
+        } catch (DomainException $exception) {
+            throw new DomainException(
+                'Producción Lite no está habilitada para este tenant.',
+                0,
+                $exception,
+            );
+        }
 
-        if (!$hasFullManufacturing && !$hasProductionLite) {
+        if ($productionLite !== true) {
             throw new DomainException(
                 'Producción Lite no está habilitada para este tenant.',
             );

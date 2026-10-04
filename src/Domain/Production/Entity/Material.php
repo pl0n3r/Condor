@@ -15,12 +15,12 @@ use DomainException;
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_production_material')]
 #[ORM\UniqueConstraint(
-    name: 'uniq_production_material_organization_code',
-    columns: ['organization_id', 'code'],
+    name: 'uniq_production_material_tenant_code',
+    columns: ['tenant_id', 'code'],
 )]
 #[ORM\UniqueConstraint(
-    name: 'uniq_production_material_organization_id',
-    columns: ['organization_id', 'id'],
+    name: 'uniq_production_material_tenant_id',
+    columns: ['tenant_id', 'id'],
 )]
 class Material
 {
@@ -30,12 +30,12 @@ class Material
 
     #[ORM\ManyToOne(targetEntity: Tenant::class)]
     #[ORM\JoinColumn(
-        name: 'organization_id',
+        name: 'tenant_id',
         referencedColumnName: 'id',
         nullable: false,
         onDelete: 'CASCADE',
     )]
-    private Tenant $organization;
+    private Tenant $tenant;
 
     #[ORM\Column(type: 'string', length: 64)]
     private string $code;
@@ -56,13 +56,13 @@ class Material
     private DateTimeImmutable $updatedAt;
 
     public function __construct(
-        Tenant $organization,
+        Tenant $tenant,
         string $code,
         string $name,
         UnitOfMeasure $unitOfMeasure,
     ) {
         $this->id = UlidFactory::new();
-        $this->organization = $organization;
+        $this->tenant = $tenant;
         $this->code = self::canonicalCode($code);
         $this->name = self::canonicalName($name);
         $this->unitOfMeasure = $unitOfMeasure->key();
@@ -77,12 +77,7 @@ class Material
 
     public function tenant(): Tenant
     {
-        return $this->organization;
-    }
-
-    public function organizationId(): string
-    {
-        return $this->organization->id();
+        return $this->tenant;
     }
 
     public function code(): string

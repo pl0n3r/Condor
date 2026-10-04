@@ -25,7 +25,6 @@ final class MaterialDomainTest extends TestCase
             UnitOfMeasure::from('m'),
         );
 
-        self::assertSame($tenant->id(), $material->organizationId());
         self::assertSame($tenant->id(), $material->tenant()->id());
         self::assertSame('TELA-CRUDA_01', $material->code());
         self::assertSame('m', $material->unitOfMeasure()->key());

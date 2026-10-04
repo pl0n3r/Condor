@@ -19,19 +19,19 @@ final class Version20261004120000 extends AbstractMigration // NOSONAR -- nombre
         $this->addSql(<<<'SQL'
             CREATE TABLE condor_production_material (
                 id VARCHAR(26) NOT NULL,
-                organization_id VARCHAR(26) NOT NULL,
+                tenant_id VARCHAR(26) NOT NULL,
                 code VARCHAR(64) NOT NULL,
                 name VARCHAR(160) NOT NULL,
                 unit_of_measure VARCHAR(16) NOT NULL,
                 active TINYINT(1) NOT NULL DEFAULT 1,
                 created_at DATETIME NOT NULL,
                 updated_at DATETIME NOT NULL,
-                INDEX IDX_PRODUCTION_MATERIAL_ORGANIZATION (organization_id),
-                UNIQUE INDEX uniq_production_material_organization_code (organization_id, code),
-                UNIQUE INDEX uniq_production_material_organization_id (organization_id, id),
+                INDEX IDX_PRODUCTION_MATERIAL_TENANT (tenant_id),
+                UNIQUE INDEX uniq_production_material_tenant_code (tenant_id, code),
+                UNIQUE INDEX uniq_production_material_tenant_id (tenant_id, id),
                 PRIMARY KEY(id),
-                CONSTRAINT FK_PRODUCTION_MATERIAL_ORGANIZATION
-                    FOREIGN KEY (organization_id) REFERENCES condor_tenant (id)
+                CONSTRAINT FK_PRODUCTION_MATERIAL_TENANT
+                    FOREIGN KEY (tenant_id) REFERENCES condor_tenant (id)
                     ON DELETE CASCADE,
                 CONSTRAINT CHK_PRODUCTION_MATERIAL_UNIT
                     CHECK (unit_of_measure IN ('unit', 'kg', 'g', 'l', 'ml', 'm'))

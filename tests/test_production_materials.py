@@ -33,10 +33,10 @@ class ProductionMaterialsTests(unittest.TestCase):
 
     def test_material_is_tenant_scoped_with_unique_code_and_canonical_unit(self) -> None:
         material = MATERIAL.read_text(encoding="utf-8")
-        self.assertIn("organization_id", material)
-        self.assertIn("uniq_production_material_organization_code", material)
+        self.assertIn("tenant_id", material)
+        self.assertIn("uniq_production_material_tenant_code", material)
         self.assertIn("UnitOfMeasure", material)
-        self.assertIn("Tenant $organization", material)
+        self.assertIn("Tenant $tenant", material)
         self.phpunit("testMaterialNormalizesCodeAndKeepsTenantScope")
 
     def test_unit_conversion_rejects_incompatible_magnitudes_and_negative_quantities(self) -> None:
@@ -49,11 +49,11 @@ class ProductionMaterialsTests(unittest.TestCase):
         self.phpunit("testUnitConversionIsExactAcrossSameMagnitude")
         self.phpunit("testUnitRejectsNegativeIncompatibleAndUnknownValues")
 
-    def test_service_requires_production_lite_capability_and_rejects_cross_tenant_access(self) -> None:
+    def test_service_requires_production_lite_add_on_and_rejects_cross_tenant_access(self) -> None:
         service = SERVICE.read_text(encoding="utf-8")
         self.assertIn("$entitlements->tenantId() !== $tenant->id()", service)
-        self.assertIn("$capabilities['manufacturing']", service)
-        self.assertIn("$addOns['production-lite']", service)
+        self.assertIn("$entitlements->addOn('production-lite')", service)
+        self.assertNotIn("$capabilities['manufacturing']", service)
         self.assertIn("$material->tenant()->id() !== $tenant->id()", service)
         self.assertIn("assertCodeAvailable", service)
         self.assertIn("deactivate(", service)
@@ -76,7 +76,7 @@ class ProductionMaterialsTests(unittest.TestCase):
             with self.subTest(pattern=pattern):
                 self.assertIsNone(re.search(pattern, up, flags=re.IGNORECASE))
 
-        self.assertIn("organization_id", up)
+        self.assertIn("tenant_id", up)
         self.assertIn("REFERENCES condor_tenant (id)", up)
         self.assertIn("CHK_PRODUCTION_MATERIAL_UNIT", up)
         self.assertIn("'version' => '0.1.169'", VERSION.read_text(encoding="utf-8"))
