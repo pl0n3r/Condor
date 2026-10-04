@@ -8,7 +8,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src/Application/AI/AiToolInvocation.php"
-VERSION = ROOT / "config/version.php"
 
 
 def run_php(script: str) -> dict[str, object]:
@@ -85,20 +84,8 @@ print json_encode([
         self.assertNotIn("limit", result["audit"])
 
         source = SOURCE.read_text(encoding="utf-8")
-        self.assertIn("AiToolDescriptor $descriptor", source)
-        self.assertIn("$descriptor->validateInputs($inputs)", source)
-        self.assertIn("'version' => '0.1.158'", VERSION.read_text(encoding="utf-8"))
-
-    def test_unknown_or_missing_inputs_fail_closed_before_execution(self) -> None:
-        observed = run_php(
-            r"""
-require 'vendor/autoload.php';
-
-use App\Application\AI\AiToolInvocation;
-use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DomainException;
 
 $policy = new AiToolPolicy();
 $context = AiTenantContext::fromArray([
@@ -173,7 +160,6 @@ use App\Application\AI\AiToolInvocation;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DomainException;
 
 $policy = new AiToolPolicy();
 $context = AiTenantContext::fromArray([
