@@ -100,7 +100,132 @@ final class AiConversationCoreTest extends TestCase
         self::assertSame('success', $tool['receipt']['outcome']);
         self::assertSame('evidence:catalog-turn', $tool['receipt']['evidence_ref']);
         self::assertArrayNotHasKey('raw', $tool);
+        self::assertArrayNotHasKey('tool_result', $tool);
         self::assertArrayNotHasKey('raw_output', $tool['receipt']);
+    }
+
+    public function testToolTurnReturnsOnlyDescriptorValidatedResult(): void
+    {
+        $policy = new AiToolPolicy();
+        $at = new DateTimeImmutable('2026-10-04T10:00:00Z');
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => [],
+                'required_inputs' => [],
+                'output_names' => ['label', 'product_ref'],
+                'required_outputs' => ['product_ref'],
+            ],
+        );
+        $registry = AiToolRegistry::fromArray(
+            $policy,
+            [[
+                'tool' => 'catalog.read',
+                'descriptor' => $descriptor,
+                'handler' => static fn (array $inputs): array => [
+                    'product_ref' => 'product:42',
+                    'label' => 'Industrial',
+                ],
+            ]],
+        );
+
+        $result = AiConversationCore::turn(
+            AiTenantContext::fromArray([
+                'tenant_id' => 'tenant-a',
+                'tool' => 'catalog.read',
+                'knowledge_refs' => [],
+            ], $policy),
+            $policy,
+            [
+                'intent' => 'tool',
+                'tenant_id' => 'tenant-a',
+                'tool' => 'catalog.read',
+                'inputs' => [],
+                'request_ref' => 'request:validated-result',
+                'evidence_ref' => 'evidence:validated-result',
+                'timestamp' => '2026-10-04T10:00:00+00:00',
+            ],
+            [],
+            $at,
+            $registry,
+        );
+
+        self::assertSame('completed', $result['status']);
+        self::assertTrue($result['executed']);
+        self::assertSame(
+            [
+                'product_ref' => 'product:42',
+                'label' => 'Industrial',
+            ],
+            $result['tool_result'],
+        );
+        self::assertSame('success', $result['receipt']['outcome']);
+        self::assertArrayNotHasKey('tool_result', $result['receipt']);
+        self::assertArrayNotHasKey('product_ref', $result['receipt']);
+        self::assertArrayNotHasKey('label', $result['receipt']);
+        self::assertArrayNotHasKey('product_ref', $result['audit']);
+        self::assertArrayNotHasKey('label', $result['audit']);
+    }
+
+    public function testInvalidHandlerOutputHandoffsWithoutRawLeak(): void
+    {
+        $policy = new AiToolPolicy();
+        $at = new DateTimeImmutable('2026-10-04T10:00:00Z');
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => [],
+                'required_inputs' => [],
+                'output_names' => ['product_ref'],
+                'required_outputs' => ['product_ref'],
+            ],
+        );
+        $registry = AiToolRegistry::fromArray(
+            $policy,
+            [[
+                'tool' => 'catalog.read',
+                'descriptor' => $descriptor,
+                'handler' => static fn (array $inputs): array => [
+                    'product_ref' => ['raw' => 'opaque'],
+                ],
+            ]],
+        );
+
+        $result = AiConversationCore::turn(
+            AiTenantContext::fromArray([
+                'tenant_id' => 'tenant-a',
+                'tool' => 'catalog.read',
+                'knowledge_refs' => [],
+            ], $policy),
+            $policy,
+            [
+                'intent' => 'tool',
+                'tenant_id' => 'tenant-a',
+                'tool' => 'catalog.read',
+                'inputs' => [],
+                'request_ref' => 'request:invalid-result',
+                'evidence_ref' => 'evidence:invalid-result',
+                'timestamp' => '2026-10-04T10:00:00+00:00',
+            ],
+            [],
+            $at,
+            $registry,
+        );
+
+        self::assertSame('handoff', $result['status']);
+        self::assertSame('tool_failed', $result['reason']);
+        self::assertTrue($result['executed']);
+        self::assertSame('failure', $result['receipt']['outcome']);
+        self::assertArrayNotHasKey('tool_result', $result);
+        self::assertArrayNotHasKey('tool_result', $result['receipt']);
+
+        $serialized = json_encode($result, JSON_THROW_ON_ERROR);
+        self::assertStringNotContainsString('opaque', $serialized);
+        self::assertStringNotContainsString('"raw"', $serialized);
     }
 
     public function testSensitiveUnknownOrEvidenceGapHandoffsWithoutSideEffects(): void
