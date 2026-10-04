@@ -81,7 +81,6 @@ use App\Application\AI\AiToolReplayKey;
 use App\Application\AI\AiToolRequest;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolPolicy;
-use DomainException;
 
 $policy = new AiToolPolicy();
 $context = AiTenantContext::fromArray([
