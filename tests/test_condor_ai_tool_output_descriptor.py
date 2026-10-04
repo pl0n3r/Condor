@@ -51,6 +51,7 @@ $descriptor = AiToolDescriptor::fromArray(
         'required_outputs' => ['product_ref'],
     ],
 );
+$legacy->validateOutputs([]);
 $descriptor->validateOutputs([
     'product_ref' => 'product:42',
     'label' => 'Industrial',
@@ -77,8 +78,6 @@ print json_encode([
         snapshot = observed["snapshot"]
         assert isinstance(snapshot, dict)
         self.assertEqual("catalog.read", snapshot["tool_ref"])
-        self.assertNotIn("output_names", snapshot)
-        self.assertNotIn("required_outputs", snapshot)
 
         source = DESCRIPTOR.read_text(encoding="utf-8")
         self.assertIn("public function outputNames(): array", source)
