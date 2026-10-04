@@ -18,7 +18,6 @@ final class AiConversationCore
     /**
      * @param array<string, mixed> $turn
      * @param list<KnowledgeArticle> $articles
-     * @param callable():mixed $toolExecutor
      * @return array{
      *     status:'ready'|'completed'|'denied'|'handoff',
      *     route:'knowledge'|'tool'|'none',
@@ -37,7 +36,7 @@ final class AiConversationCore
         array $turn,
         array $articles,
         DateTimeImmutable $at,
-        callable $toolExecutor,
+        AiToolRegistry $toolRegistry,
     ): array {
         $intent = $turn['intent'] ?? null;
         $tenantId = $turn['tenant_id'] ?? null;
@@ -54,7 +53,7 @@ final class AiConversationCore
 
         return match ($intent) {
             'knowledge' => self::knowledgeTurn($context, $policy, $turn, $articles, $at),
-            'tool' => self::toolTurn($context, $policy, $turn, $toolExecutor),
+            'tool' => self::toolTurn($context, $policy, $turn, $toolRegistry),
             default => self::handoff($context, 'intent_not_supported'),
         };
     }
@@ -119,7 +118,6 @@ final class AiConversationCore
 
     /**
      * @param array<string, mixed> $turn
-     * @param callable():mixed $toolExecutor
      * @return array{
      *     status:'completed'|'denied'|'handoff',
      *     route:'knowledge'|'tool'|'none',
@@ -136,7 +134,7 @@ final class AiConversationCore
         AiTenantContext $context,
         AiToolPolicy $policy,
         array $turn,
-        callable $toolExecutor,
+        AiToolRegistry $toolRegistry,
     ): array {
         if (!self::hasExactKeys($turn, self::TOOL_KEYS)
             || !is_string($turn['tool'])
@@ -176,6 +174,12 @@ final class AiConversationCore
         }
 
         try {
+            $registration = $toolRegistry->resolve($turn['tool']);
+        } catch (DomainException) {
+            return self::handoff($context, 'tool_handler_unavailable', 'tool');
+        }
+
+        try {
             $result = AiToolInvocation::invoke(
                 $context,
                 $policy,
@@ -183,7 +187,7 @@ final class AiConversationCore
                 $turn['tool'],
                 $turn['evidence_ref'],
                 $turn['timestamp'],
-                $toolExecutor,
+                $registration['handler'],
             );
         } catch (DomainException) {
             return self::handoff($context, 'tool_request_invalid', 'tool');
