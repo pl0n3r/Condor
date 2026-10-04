@@ -557,6 +557,186 @@ final class AiConversationCoreTest extends TestCase
         self::assertFalse($sensitive['executed']);
     }
 
+    public function testReversibleWriteRequiresGuardAndDuplicateNeverReexecutesHandler(): void
+    {
+        $policy = new AiToolPolicy();
+        $context = AiTenantContext::fromArray([
+            'tenant_id' => 'tenant-a',
+            'tool' => 'content.draft.update',
+            'knowledge_refs' => [],
+        ], $policy);
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'content.draft.update',
+                'risk' => AiToolPolicy::REVERSIBLE_WRITE,
+                'input_names' => [],
+                'required_inputs' => [],
+            ],
+        );
+        $executions = 0;
+        $registry = AiToolRegistry::fromArray(
+            $policy,
+            [[
+                'tool' => 'content.draft.update',
+                'descriptor' => $descriptor,
+                'handler' => static function (array $inputs) use (&$executions): void {
+                    ++$executions;
+                },
+            ]],
+        );
+        $turn = [
+            'intent' => 'tool',
+            'tenant_id' => 'tenant-a',
+            'tool' => 'content.draft.update',
+            'inputs' => [],
+            'request_ref' => 'request:replay-bridge-001',
+            'evidence_ref' => 'evidence:replay-bridge-001',
+            'timestamp' => '2026-10-04T11:00:00+00:00',
+        ];
+        $at = new DateTimeImmutable('2026-10-04T11:00:00Z');
+
+        $withoutGuard = AiConversationCore::turn(
+            $context,
+            $policy,
+            $turn,
+            [],
+            $at,
+            $registry,
+        );
+        self::assertSame('handoff', $withoutGuard['status']);
+        self::assertSame('tool_replay_guard_required', $withoutGuard['reason']);
+        self::assertFalse($withoutGuard['executed']);
+        self::assertSame(0, $executions);
+
+        $guard = new \App\Application\AI\AiToolReplayGuard();
+        $first = AiConversationCore::turn(
+            $context,
+            $policy,
+            $turn,
+            [],
+            $at,
+            $registry,
+            $guard,
+        );
+        $duplicate = AiConversationCore::turn(
+            $context,
+            $policy,
+            $turn,
+            [],
+            $at,
+            $registry,
+            $guard,
+        );
+
+        self::assertSame('completed', $first['status']);
+        self::assertTrue($first['executed']);
+        self::assertSame('handoff', $duplicate['status']);
+        self::assertSame('tool_replay_detected', $duplicate['reason']);
+        self::assertFalse($duplicate['executed']);
+        self::assertSame(1, $executions);
+
+        $serialized = json_encode(
+            [$withoutGuard, $first, $duplicate],
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertStringNotContainsString('replay:', $serialized);
+        self::assertStringNotContainsString('replay_key', $serialized);
+    }
+
+    public function testReadOnlyAndSensitivePathsPreserveExistingSemanticsWithReplayGuard(): void
+    {
+        $policy = new AiToolPolicy();
+        $at = new DateTimeImmutable('2026-10-04T11:00:00Z');
+        $guard = new \App\Application\AI\AiToolReplayGuard();
+
+        $readContext = AiTenantContext::fromArray([
+            'tenant_id' => 'tenant-a',
+            'tool' => 'catalog.read',
+            'knowledge_refs' => [],
+        ], $policy);
+        $readDescriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => [],
+                'required_inputs' => [],
+            ],
+        );
+        $readExecutions = 0;
+        $registry = AiToolRegistry::fromArray(
+            $policy,
+            [[
+                'tool' => 'catalog.read',
+                'descriptor' => $readDescriptor,
+                'handler' => static function (array $inputs) use (&$readExecutions): void {
+                    ++$readExecutions;
+                },
+            ]],
+        );
+        $readTurn = [
+            'intent' => 'tool',
+            'tenant_id' => 'tenant-a',
+            'tool' => 'catalog.read',
+            'inputs' => [],
+            'request_ref' => 'request:read-repeat',
+            'evidence_ref' => 'evidence:read-repeat',
+            'timestamp' => '2026-10-04T11:00:00+00:00',
+        ];
+
+        $firstRead = AiConversationCore::turn(
+            $readContext,
+            $policy,
+            $readTurn,
+            [],
+            $at,
+            $registry,
+            $guard,
+        );
+        $secondRead = AiConversationCore::turn(
+            $readContext,
+            $policy,
+            $readTurn,
+            [],
+            $at,
+            $registry,
+            $guard,
+        );
+
+        self::assertSame('completed', $firstRead['status']);
+        self::assertSame('completed', $secondRead['status']);
+        self::assertSame(2, $readExecutions);
+
+        $sensitiveContext = AiTenantContext::fromArray([
+            'tenant_id' => 'tenant-a',
+            'tool' => 'identity.permission.change',
+            'knowledge_refs' => [],
+        ], $policy);
+        $sensitive = AiConversationCore::turn(
+            $sensitiveContext,
+            $policy,
+            [
+                'intent' => 'tool',
+                'tenant_id' => 'tenant-a',
+                'tool' => 'identity.permission.change',
+                'inputs' => [],
+                'request_ref' => 'request:sensitive-replay',
+                'evidence_ref' => 'evidence:sensitive-replay',
+                'timestamp' => '2026-10-04T11:00:00+00:00',
+            ],
+            [],
+            $at,
+            $registry,
+            $guard,
+        );
+
+        self::assertSame('handoff', $sensitive['status']);
+        self::assertSame('tool_sensitive_requires_human', $sensitive['reason']);
+        self::assertFalse($sensitive['executed']);
+        self::assertSame(2, $readExecutions);
+    }
+
     private function article(): KnowledgeArticle
     {
         return KnowledgeArticle::fromArray([
