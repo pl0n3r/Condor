@@ -27,6 +27,7 @@ require 'vendor/autoload.php';
 
 use App\Application\AI\AiConversationCore;
 use App\Application\AI\AiToolRegistry;
+use App\Application\AI\AiToolReplayGuard;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
@@ -73,6 +74,7 @@ $result = AiConversationCore::turn(
     [],
     new DateTimeImmutable('2026-10-04T07:00:00Z'),
     $registry,
+    new AiToolReplayGuard(),
 );
 
 print json_encode([
@@ -111,6 +113,7 @@ require 'vendor/autoload.php';
 
 use App\Application\AI\AiConversationCore;
 use App\Application\AI\AiToolRegistry;
+use App\Application\AI\AiToolReplayGuard;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
@@ -157,6 +160,7 @@ $result = AiConversationCore::turn(
     [],
     new DateTimeImmutable('2026-10-04T07:00:00Z'),
     $registry,
+    new AiToolReplayGuard(),
 );
 
 print json_encode($result, JSON_THROW_ON_ERROR);
