@@ -110,18 +110,9 @@ class BillOfMaterials
 
         $seen = [];
         foreach ($components as $component) {
-            $material = $component['material'] ?? null;
-            $quantity = $component['quantity'] ?? null;
-            $unit = $component['unit'] ?? null;
-            if (
-                !$material instanceof Material
-                || !is_string($quantity)
-                || !$unit instanceof UnitOfMeasure
-            ) {
-                throw new DomainException(
-                    'Cada línea de BOM requiere material, cantidad y unidad canónicas.',
-                );
-            }
+            $material = $component['material'];
+            $quantity = $component['quantity'];
+            $unit = $component['unit'];
 
             if (isset($seen[$material->id()])) {
                 throw new DomainException(
