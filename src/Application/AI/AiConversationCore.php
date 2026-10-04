@@ -26,7 +26,8 @@ final class AiConversationCore
      *     executed:bool,
      *     evidence_refs:list<string>,
      *     sources:list<array<string, mixed>>,
-     *     audit:array<string, string>|null
+     *     audit:array<string, string>|null,
+     *     receipt?:array{tenant_ref:string,tool_ref:string,request_ref:string,decision:'authorized',risk:'read_only'|'reversible_write',outcome:'success'|'denied'|'failure',evidence_ref:string,timestamp:string}
      * }
      */
     public static function turn(
@@ -127,7 +128,8 @@ final class AiConversationCore
      *     executed:bool,
      *     evidence_refs:list<string>,
      *     sources:list<array<string, mixed>>,
-     *     audit:array<string, string>|null
+     *     audit:array<string, string>|null,
+     *     receipt?:array{tenant_ref:string,tool_ref:string,request_ref:string,decision:'authorized',risk:'read_only'|'reversible_write',outcome:'success'|'denied'|'failure',evidence_ref:string,timestamp:string}
      * }
      */
     private static function toolTurn(
