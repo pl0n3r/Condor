@@ -46,9 +46,9 @@ final class MaterialDomainTest extends TestCase
         );
         self::assertSame(
             '1.25',
-            UnitOfMeasure::from('l')->convert(
+            UnitOfMeasure::from('ml')->convert(
                 '1250',
-                UnitOfMeasure::from('ml'),
+                UnitOfMeasure::from('l'),
             ),
         );
         self::assertSame(
