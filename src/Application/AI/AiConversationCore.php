@@ -13,7 +13,7 @@ use DomainException;
 final class AiConversationCore
 {
     private const KNOWLEDGE_KEYS = ['intent', 'knowledge_request', 'tenant_id'];
-    private const TOOL_KEYS = ['evidence_ref', 'intent', 'tenant_id', 'timestamp', 'tool'];
+    private const TOOL_KEYS = ['evidence_ref', 'intent', 'request_ref', 'tenant_id', 'timestamp', 'tool'];
 
     /**
      * @param array<string, mixed> $turn
@@ -138,9 +138,33 @@ final class AiConversationCore
     ): array {
         if (!self::hasExactKeys($turn, self::TOOL_KEYS)
             || !is_string($turn['tool'])
+            || !is_string($turn['request_ref'])
             || !is_string($turn['evidence_ref'])
             || !is_string($turn['timestamp'])) {
             return self::handoff('turn_not_canonical', 'tool');
+        }
+
+        $decision = AiToolDecision::decide(
+            $context,
+            $policy,
+            [
+                'tenant_id' => $turn['tenant_id'],
+                'tool' => $turn['tool'],
+                'request_ref' => $turn['request_ref'],
+            ],
+        );
+        if ($decision['status'] !== 'authorized') {
+            return [
+                'status' => 'denied',
+                'route' => 'tool',
+                'reason' => $decision['reason'] === 'sensitive_requires_human'
+                    ? 'tool_sensitive_requires_human'
+                    : 'tool_request_denied',
+                'executed' => false,
+                'evidence_refs' => [],
+                'sources' => [],
+                'audit' => null,
+            ];
         }
 
         try {
