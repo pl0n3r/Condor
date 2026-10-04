@@ -48,7 +48,7 @@ $registry = AiToolRegistry::fromArray(
     [[
         'tool' => 'content.draft.update',
         'descriptor' => $descriptor,
-        'handler' => static function () use (&$executions): array {
+        'handler' => static function (array $inputs) use (&$executions): array {
             ++$executions;
             return ['opaque' => 'not-exposed'];
         },
@@ -66,6 +66,7 @@ $result = AiConversationCore::turn(
         'intent' => 'tool',
         'tenant_id' => 'tenant-a',
         'tool' => 'content.draft.update',
+        'inputs' => [],
         'request_ref' => 'request:receipt-001',
         'evidence_ref' => 'evidence:receipt-001',
         'timestamp' => '2026-10-04T07:00:00+00:00',
@@ -131,7 +132,7 @@ $registry = AiToolRegistry::fromArray(
     [[
         'tool' => 'catalog.read',
         'descriptor' => $descriptor,
-        'handler' => static fn (): array => [
+        'handler' => static fn (array $inputs): array => [
             'opaque_input' => ['value' => 'internal'],
             'opaque_output' => ['result' => 'internal'],
             'metadata' => ['marker' => 'internal'],
@@ -150,6 +151,7 @@ $result = AiConversationCore::turn(
         'intent' => 'tool',
         'tenant_id' => 'tenant-a',
         'tool' => 'catalog.read',
+        'inputs' => [],
         'request_ref' => 'request:receipt-002',
         'evidence_ref' => 'evidence:receipt-002',
         'timestamp' => '2026-10-04T07:00:00+00:00',

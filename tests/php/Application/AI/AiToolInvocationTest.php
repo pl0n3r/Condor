@@ -17,6 +17,7 @@ final class AiToolInvocationTest extends TestCase
     {
         $policy = new AiToolPolicy();
         $context = self::context($policy, 'tenant-a', 'catalog.read');
+        $descriptor = self::descriptor($policy, 'catalog.read');
         $executions = 0;
 
         $result = AiToolInvocation::invoke(
@@ -26,11 +27,12 @@ final class AiToolInvocationTest extends TestCase
             'catalog.read',
             'evidence:catalog-check',
             '2026-10-03T10:07:00+00:00',
-            static function () use (&$executions): array {
+            static function (array $inputs) use (&$executions): array {
                 ++$executions;
 
                 return ['raw' => 'must-not-leak'];
             },
+            $descriptor,
         );
 
         self::assertSame(1, $executions);
@@ -54,29 +56,34 @@ final class AiToolInvocationTest extends TestCase
     {
         $policy = new AiToolPolicy();
         $executions = 0;
-        $executor = static function () use (&$executions): void {
+        $executor = static function (array $inputs = []) use (&$executions): void {
             ++$executions;
         };
+        $catalogDescriptor = self::descriptor($policy, 'catalog.read');
+        $sensitiveDescriptor = self::descriptor($policy, 'identity.permission.change');
 
         $cases = [
             [
                 self::context($policy, 'tenant-a', 'identity.permission.change'),
                 'tenant-a',
                 'identity.permission.change',
+                $sensitiveDescriptor,
             ],
             [
                 self::context($policy, 'tenant-a', 'catalog.read'),
                 'tenant-a',
                 'unknown.read',
+                $catalogDescriptor,
             ],
             [
                 self::context($policy, 'tenant-a', 'catalog.read'),
                 'tenant-b',
                 'catalog.read',
+                $catalogDescriptor,
             ],
         ];
 
-        foreach ($cases as [$context, $tenantId, $tool]) {
+        foreach ($cases as [$context, $tenantId, $tool, $descriptor]) {
             $result = AiToolInvocation::invoke(
                 $context,
                 $policy,
@@ -85,6 +92,7 @@ final class AiToolInvocationTest extends TestCase
                 'evidence:denied-check',
                 '2026-10-03T10:07:00+00:00',
                 $executor,
+                $descriptor,
             );
 
             self::assertSame('denied', $result['outcome']);
@@ -167,7 +175,6 @@ final class AiToolInvocationTest extends TestCase
             [$catalogDescriptor, []],
             [$catalogDescriptor, ['category_ref' => 'category:a', 'unknown' => true]],
             [$inventoryDescriptor, []],
-            [null, ['category_ref' => 'category:a']],
         ];
 
         foreach ($cases as [$descriptor, $inputs]) {
@@ -199,6 +206,7 @@ final class AiToolInvocationTest extends TestCase
     {
         $policy = new AiToolPolicy();
         $context = self::context($policy, 'tenant-a', 'catalog.read');
+        $descriptor = self::descriptor($policy, 'catalog.read');
 
         foreach (
             [
@@ -216,9 +224,10 @@ final class AiToolInvocationTest extends TestCase
                     'catalog.read',
                     $evidenceRef,
                     $timestamp,
-                    static function () use (&$executions): void {
+                    static function (array $inputs = []) use (&$executions): void {
                         ++$executions;
                     },
+                    $descriptor,
                 );
 
                 self::fail('Invalid audit metadata must fail closed.');
@@ -226,6 +235,21 @@ final class AiToolInvocationTest extends TestCase
                 self::assertSame(0, $executions);
             }
         }
+    }
+
+    private static function descriptor(
+        AiToolPolicy $policy,
+        string $tool,
+    ): AiToolDescriptor {
+        return AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => $tool,
+                'risk' => $policy->risk($tool),
+                'input_names' => [],
+                'required_inputs' => [],
+            ],
+        );
     }
 
     private static function context(

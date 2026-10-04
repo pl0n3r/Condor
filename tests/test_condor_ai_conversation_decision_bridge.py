@@ -53,7 +53,7 @@ $registry = AiToolRegistry::fromArray(
     [[
         'tool' => 'catalog.read',
         'descriptor' => $descriptor,
-        'handler' => static function () use (&$executions): array {
+        'handler' => static function (array $inputs) use (&$executions): array {
             ++$executions;
             return ['opaque' => 'not-exposed'];
         },
@@ -68,6 +68,7 @@ $valid = AiConversationCore::turn(
         'intent' => 'tool',
         'tenant_id' => 'tenant-a',
         'tool' => 'catalog.read',
+        'inputs' => [],
         'request_ref' => 'request:decision-001',
         'evidence_ref' => 'evidence:decision-001',
         'timestamp' => '2026-10-04T07:00:00+00:00',
@@ -148,7 +149,7 @@ $registry = AiToolRegistry::fromArray(
     [[
         'tool' => 'catalog.read',
         'descriptor' => $descriptor,
-        'handler' => static function () use (&$executions): void {
+        'handler' => static function (array $inputs) use (&$executions): void {
             ++$executions;
         },
     ]],
@@ -158,6 +159,7 @@ $base = [
     'intent' => 'tool',
     'tenant_id' => 'tenant-a',
     'tool' => 'catalog.read',
+    'inputs' => [],
     'request_ref' => 'request:base',
     'evidence_ref' => 'evidence:base',
     'timestamp' => '2026-10-04T07:00:00+00:00',
