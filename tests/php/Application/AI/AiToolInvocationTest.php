@@ -50,6 +50,7 @@ final class AiToolInvocationTest extends TestCase
             $result['audit'],
         );
         self::assertArrayNotHasKey('raw', $result);
+        self::assertArrayNotHasKey('tool_result', $result);
     }
 
     public function testSensitiveUnknownAndCrossTenantNeverExecute(): void
@@ -199,6 +200,98 @@ final class AiToolInvocationTest extends TestCase
             } catch (DomainException) {
                 self::assertSame(0, $executions);
             }
+        }
+    }
+
+    public function testDescriptorValidatedOutputIsReturnedWithoutLeakingIntoAudit(): void
+    {
+        $policy = new AiToolPolicy();
+        $context = self::context($policy, 'tenant-a', 'catalog.read');
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => [],
+                'required_inputs' => [],
+                'output_names' => ['label', 'product_ref'],
+                'required_outputs' => ['product_ref'],
+            ],
+        );
+
+        $result = AiToolInvocation::invoke(
+            $context,
+            $policy,
+            'tenant-a',
+            'catalog.read',
+            'evidence:catalog-result',
+            '2026-10-04T09:30:00+00:00',
+            static fn (array $inputs): array => [
+                'product_ref' => 'product:42',
+                'label' => 'Industrial',
+            ],
+            $descriptor,
+        );
+
+        self::assertSame('success', $result['outcome']);
+        self::assertTrue($result['executed']);
+        self::assertSame(
+            [
+                'product_ref' => 'product:42',
+                'label' => 'Industrial',
+            ],
+            $result['tool_result'],
+        );
+        self::assertArrayNotHasKey('product_ref', $result['audit']);
+        self::assertArrayNotHasKey('label', $result['audit']);
+    }
+
+    public function testInvalidOrNonArrayOutputFailsAfterExecutionWithoutRawLeak(): void
+    {
+        $policy = new AiToolPolicy();
+        $context = self::context($policy, 'tenant-a', 'catalog.read');
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => [],
+                'required_inputs' => [],
+                'output_names' => ['product_ref'],
+                'required_outputs' => ['product_ref'],
+            ],
+        );
+
+        $cases = [
+            ['product_ref' => ['raw' => 'opaque']],
+            ['product_ref' => 'product:42', 'unknown' => 'must-not-leak'],
+            'raw-handler-result',
+        ];
+
+        foreach ($cases as $handlerResult) {
+            $executions = 0;
+            $result = AiToolInvocation::invoke(
+                $context,
+                $policy,
+                'tenant-a',
+                'catalog.read',
+                'evidence:invalid-result',
+                '2026-10-04T09:30:00+00:00',
+                static function (array $inputs) use (&$executions, $handlerResult): mixed {
+                    ++$executions;
+
+                    return $handlerResult;
+                },
+                $descriptor,
+            );
+
+            self::assertSame(1, $executions);
+            self::assertSame('failure', $result['outcome']);
+            self::assertTrue($result['executed']);
+            self::assertArrayNotHasKey('tool_result', $result);
+            self::assertArrayNotHasKey('product_ref', $result['audit']);
+            self::assertArrayNotHasKey('unknown', $result['audit']);
+            self::assertArrayNotHasKey('raw', $result['audit']);
         }
     }
 
