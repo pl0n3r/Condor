@@ -31,44 +31,43 @@ class ProductionBomTests(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
-    def test_versioned_bom_is_tenant_scoped_immutable_and_quantity_safe(self) -> None:
+    def test_versions_are_monotonic_single_active_and_lines_are_normalized(self) -> None:
         bom = BOM.read_text(encoding="utf-8")
         line = LINE.read_text(encoding="utf-8")
+        service = SERVICE.read_text(encoding="utf-8")
+
         self.assertIn("uniq_production_bom_tenant_variant_version", bom)
         self.assertIn("ProductVariant", bom)
         self.assertIn("new BillOfMaterialsLine(", bom)
         self.assertNotIn("public function update(", bom)
         self.assertIn("$sourceUnit->convert($quantity, $targetUnit)", line)
         self.assertIn("$normalized === '0'", line)
-        self.assertIn("!$material->isActive()", line)
-        self.phpunit(
-            "testBomVersionNormalizesQuantitiesAndKeepsPreviousVersionAuditable"
-        )
-
-    def test_bom_rejects_cross_tenant_duplicate_inactive_zero_and_incompatible_lines(self) -> None:
-        bom = BOM.read_text(encoding="utf-8")
-        line = LINE.read_text(encoding="utf-8")
-        self.assertIn("$variant->tenant()->id() !== $tenant->id()", bom)
-        self.assertIn("isset($seen[$material->id()])", bom)
-        self.assertIn("$material->tenant()->id() !== $tenant->id()", line)
-        self.phpunit(
-            "testBomRejectsCrossTenantInactiveDuplicateZeroAndIncompatibleMaterial"
-        )
-
-    def test_service_serializes_versions_and_requires_production_lite(self) -> None:
-        service = SERVICE.read_text(encoding="utf-8")
-        self.assertIn("$entitlements->addOn('production-lite')", service)
-        self.assertIn("wrapInTransaction(", service)
         self.assertIn("LockMode::PESSIMISTIC_WRITE", service)
         self.assertIn("['version' => 'DESC']", service)
         self.assertIn("'active' => true", service)
         self.assertIn("$current->retire()", service)
         self.assertIn("$latest->version() + 1", service)
-        self.assertIn("$variant->tenant()->id() !== $tenant->id()", service)
+        self.phpunit(
+            "testBomVersionNormalizesQuantitiesAndKeepsPreviousVersionAuditable"
+        )
 
-    def test_migration_is_additive_and_version_is_0_1_170(self) -> None:
+    def test_rejects_cross_tenant_inactive_duplicate_zero_and_incompatible_units(self) -> None:
+        bom = BOM.read_text(encoding="utf-8")
+        line = LINE.read_text(encoding="utf-8")
+
+        self.assertIn("$variant->tenant()->id() !== $tenant->id()", bom)
+        self.assertIn("isset($seen[$material->id()])", bom)
+        self.assertIn("$material->tenant()->id() !== $tenant->id()", line)
+        self.assertIn("!$material->isActive()", line)
+        self.assertIn("$normalized === '0'", line)
+        self.phpunit(
+            "testBomRejectsCrossTenantInactiveDuplicateZeroAndIncompatibleMaterial"
+        )
+
+    def test_schema_is_additive_and_service_requires_production_lite(self) -> None:
         source = MIGRATION.read_text(encoding="utf-8")
         up = source.split("public function up", 1)[1].split("public function down", 1)[0]
+        service = SERVICE.read_text(encoding="utf-8")
 
         self.assertEqual(
             ["condor_production_bom", "condor_production_bom_line"],
@@ -84,10 +83,14 @@ class ProductionBomTests(unittest.TestCase):
             with self.subTest(pattern=pattern):
                 self.assertIsNone(re.search(pattern, up, flags=re.IGNORECASE))
 
-        self.assertIn("REFERENCES condor_product_variant (id)", up)
-        self.assertIn("REFERENCES condor_production_material (id)", up)
+        self.assertIn("REFERENCES condor_product_variant (tenant_id, id)", up)
+        self.assertIn("REFERENCES condor_production_material (tenant_id, id)", up)
+        self.assertIn("REFERENCES condor_production_bom (tenant_id, id)", up)
         self.assertIn("CHECK (quantity > 0)", up)
-        self.assertIn("uniq_production_bom_line_bom_material", up)
+        self.assertIn("uniq_production_bom_line_tenant_bom_material", up)
+        self.assertIn("$entitlements->addOn('production-lite')", service)
+        self.assertIn("wrapInTransaction(", service)
+        self.assertIn("$variant->tenant()->id() !== $tenant->id()", service)
         self.assertIn(
             "'version' => '0.1.170'",
             VERSION.read_text(encoding="utf-8"),

@@ -13,8 +13,8 @@ use DomainException;
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_production_bom_line')]
 #[ORM\UniqueConstraint(
-    name: 'uniq_production_bom_line_bom_material',
-    columns: ['bom_id', 'material_id'],
+    name: 'uniq_production_bom_line_tenant_bom_material',
+    columns: ['tenant_id', 'bom_id', 'material_id'],
 )]
 class BillOfMaterialsLine
 {
@@ -116,7 +116,8 @@ class BillOfMaterialsLine
 
     public function quantity(): string
     {
-        return $this->quantity;
+        return UnitOfMeasure::from($this->unitOfMeasure)
+            ->normalizeQuantity($this->quantity);
     }
 
     public function unitOfMeasure(): UnitOfMeasure
