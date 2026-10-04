@@ -67,6 +67,16 @@ print json_encode([
         self.assertTrue(observed["same_descriptor"])
         self.assertEqual({"status": "ok"}, observed["result"])
         self.assertEqual(1, observed["executions"])
+
+        source = SOURCE.read_text(encoding="utf-8").lower()
+        for forbidden in (
+            "pdo",
+            "doctrine",
+            "httpclient",
+            "curl_",
+            "file_get_contents(",
+            "fetch(",
+        ):
             self.assertNotIn(forbidden, source)
 
     def test_duplicate_unknown_or_descriptor_mismatch_fails_closed_without_execution(self) -> None:
