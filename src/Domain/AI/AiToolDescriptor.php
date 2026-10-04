@@ -210,11 +210,12 @@ final readonly class AiToolDescriptor
             throw new DomainException('Outputs de tool IA exceden el contrato.');
         }
 
-        foreach (array_keys($outputs) as $name) {
+        foreach ($outputs as $name => $value) {
             self::validateOutputName($name);
             if (!in_array($name, $this->outputNames, true)) {
                 throw new DomainException('Output fuera del contrato de la tool IA.');
             }
+            self::validateOutputValue($value);
         }
 
         foreach ($this->requiredOutputs as $required) {
@@ -314,6 +315,23 @@ final readonly class AiToolDescriptor
             if (in_array($segment, self::FORBIDDEN_INPUT_SEGMENTS, true)) {
                 throw new DomainException('Input fuera de la frontera minimizada de IA.');
             }
+        }
+    }
+
+    private static function validateOutputValue(mixed $value): void
+    {
+        if (
+            $value !== null
+            && !is_string($value)
+            && !is_int($value)
+            && !is_float($value)
+            && !is_bool($value)
+        ) {
+            throw new DomainException('Valor de output IA fuera del contrato escalar.');
+        }
+
+        if (is_float($value) && !is_finite($value)) {
+            throw new DomainException('Valor numérico de output IA no finito.');
         }
     }
 
