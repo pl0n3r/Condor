@@ -192,7 +192,15 @@ final class AiConversationCore
                 ],
             )->snapshot();
         } catch (DomainException) {
-            return self::handoff('tool_receipt_invalid', 'tool');
+            return [
+                'status' => 'handoff',
+                'route' => 'tool',
+                'reason' => 'tool_receipt_invalid',
+                'executed' => $result['executed'],
+                'evidence_refs' => [$result['evidence_ref']],
+                'sources' => [],
+                'audit' => $result['audit'],
+            ];
         }
 
         $status = match ($result['outcome']) {
