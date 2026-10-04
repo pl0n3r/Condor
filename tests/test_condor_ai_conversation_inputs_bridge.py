@@ -99,6 +99,16 @@ print json_encode([
         self.assertNotIn("opaque", encoded)
 
         source = CORE.read_text(encoding="utf-8")
+        self.assertIn("'inputs'", source)
+        self.assertIn("resolveWithInputs(", source)
+        self.assertIn("$registration['descriptor']", source)
+        self.assertIn("$registration['inputs']", source)
+
+    def test_invalid_inputs_handoff_before_handler_and_never_leak(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
 use App\Application\AI\AiConversationCore;
 use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
