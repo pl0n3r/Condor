@@ -6,6 +6,7 @@ namespace App\Tests\Application\AI;
 
 use App\Application\AI\AiToolInvocation;
 use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 use DomainException;
 use PHPUnit\Framework\TestCase;
@@ -92,6 +93,106 @@ final class AiToolInvocationTest extends TestCase
         }
 
         self::assertSame(0, $executions);
+    }
+
+    public function testDescriptorValidatedInputsReachHandlerWithoutLeakingIntoAudit(): void
+    {
+        $policy = new AiToolPolicy();
+        $context = self::context($policy, 'tenant-a', 'catalog.read');
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => ['category_ref', 'limit'],
+                'required_inputs' => ['category_ref'],
+            ],
+        );
+        $seen = null;
+
+        $result = AiToolInvocation::invoke(
+            $context,
+            $policy,
+            'tenant-a',
+            'catalog.read',
+            'evidence:catalog-inputs',
+            '2026-10-04T08:30:00+00:00',
+            static function (array $inputs) use (&$seen): void {
+                $seen = $inputs;
+            },
+            $descriptor,
+            [
+                'category_ref' => 'category:industrial',
+                'limit' => 12,
+            ],
+        );
+
+        self::assertSame(
+            [
+                'category_ref' => 'category:industrial',
+                'limit' => 12,
+            ],
+            $seen,
+        );
+        self::assertSame('success', $result['outcome']);
+        self::assertArrayNotHasKey('inputs', $result);
+        self::assertArrayNotHasKey('category_ref', $result['audit']);
+        self::assertArrayNotHasKey('limit', $result['audit']);
+    }
+
+    public function testInvalidInputBindingFailsBeforeExecutor(): void
+    {
+        $policy = new AiToolPolicy();
+        $context = self::context($policy, 'tenant-a', 'catalog.read');
+        $catalogDescriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => ['category_ref', 'limit'],
+                'required_inputs' => ['category_ref'],
+            ],
+        );
+        $inventoryDescriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'inventory.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => ['sku_ref'],
+                'required_inputs' => [],
+            ],
+        );
+
+        $cases = [
+            [$catalogDescriptor, []],
+            [$catalogDescriptor, ['category_ref' => 'category:a', 'unknown' => true]],
+            [$inventoryDescriptor, []],
+            [null, ['category_ref' => 'category:a']],
+        ];
+
+        foreach ($cases as [$descriptor, $inputs]) {
+            $executions = 0;
+
+            try {
+                AiToolInvocation::invoke(
+                    $context,
+                    $policy,
+                    'tenant-a',
+                    'catalog.read',
+                    'evidence:invalid-inputs',
+                    '2026-10-04T08:30:00+00:00',
+                    static function (array $validated = []) use (&$executions): void {
+                        ++$executions;
+                    },
+                    $descriptor,
+                    $inputs,
+                );
+
+                self::fail('El binding inválido debía fallar antes del handler.');
+            } catch (DomainException) {
+                self::assertSame(0, $executions);
+            }
+        }
     }
 
     public function testInvalidAuditMetadataFailsBeforeExecutor(): void
