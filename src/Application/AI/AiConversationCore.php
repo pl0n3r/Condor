@@ -226,48 +226,6 @@ final class AiConversationCore
             }
         }
 
-        if ($decision['risk'] === AiToolPolicy::REVERSIBLE_WRITE) {
-            if ($replayGuard === null) {
-                return self::handoff(
-                    $context,
-                    'tool_replay_guard_required',
-                    'tool',
-                );
-            }
-
-            try {
-                $canonicalRequest = AiToolRequest::fromArray(
-                    $context,
-                    $policy,
-                    [
-                        'tenant_id' => $turn['tenant_id'],
-                        'tool' => $turn['tool'],
-                        'request_ref' => $turn['request_ref'],
-                    ],
-                );
-                $replayKey = AiToolReplayKey::fromRequest(
-                    $canonicalRequest,
-                    $context,
-                    $policy,
-                );
-                $claimed = $replayGuard->claim($replayKey);
-            } catch (DomainException) {
-                return self::handoff(
-                    $context,
-                    'tool_replay_guard_unavailable',
-                    'tool',
-                );
-            }
-
-            if (!$claimed) {
-                return self::handoff(
-                    $context,
-                    'tool_replay_detected',
-                    'tool',
-                );
-            }
-        }
-
         try {
             $toolRegistry->resolve($turn['tool']);
         } catch (DomainException) {
