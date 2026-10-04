@@ -25,13 +25,7 @@ final readonly class AiToolRegistry
     ) {
     }
 
-    /**
-     * @param list<array{
-     *     tool: mixed,
-     *     descriptor: mixed,
-     *     handler: mixed
-     * }> $registrations
-     */
+    /** @param array<mixed> $registrations */
     public static function fromArray(
         AiToolPolicy $policy,
         array $registrations,
@@ -95,7 +89,7 @@ final readonly class AiToolRegistry
     public function resolve(string $tool): array
     {
         $entry = $this->entries[$tool] ?? null;
-        if (!is_array($entry)) {
+        if ($entry === null) {
             throw new DomainException('Tool IA no registrada.');
         }
 
