@@ -38,6 +38,7 @@ final class AiConversationCore
         array $articles,
         DateTimeImmutable $at,
         AiToolRegistry $toolRegistry,
+        ?AiToolReplayGuard $replayGuard = null,
     ): array {
         $intent = $turn['intent'] ?? null;
         $tenantId = $turn['tenant_id'] ?? null;
@@ -54,7 +55,13 @@ final class AiConversationCore
 
         return match ($intent) {
             'knowledge' => self::knowledgeTurn($context, $policy, $turn, $articles, $at),
-            'tool' => self::toolTurn($context, $policy, $turn, $toolRegistry),
+            'tool' => self::toolTurn(
+                $context,
+                $policy,
+                $turn,
+                $toolRegistry,
+                $replayGuard,
+            ),
             default => self::handoff($context, 'intent_not_supported'),
         };
     }
@@ -137,6 +144,7 @@ final class AiConversationCore
         AiToolPolicy $policy,
         array $turn,
         AiToolRegistry $toolRegistry,
+        ?AiToolReplayGuard $replayGuard,
     ): array {
         if (!self::hasExactKeys($turn, self::TOOL_KEYS)
             || !is_string($turn['tool'])
@@ -174,6 +182,48 @@ final class AiConversationCore
                 'sources' => [],
                 'audit' => null,
             ];
+        }
+
+        if ($decision['risk'] === AiToolPolicy::REVERSIBLE_WRITE) {
+            if ($replayGuard === null) {
+                return self::handoff(
+                    $context,
+                    'tool_replay_guard_required',
+                    'tool',
+                );
+            }
+
+            try {
+                $request = AiToolRequest::fromArray(
+                    $context,
+                    $policy,
+                    [
+                        'tenant_id' => $turn['tenant_id'],
+                        'tool' => $turn['tool'],
+                        'request_ref' => $turn['request_ref'],
+                    ],
+                );
+                $replayKey = AiToolReplayKey::fromRequest(
+                    $request,
+                    $context,
+                    $policy,
+                );
+                $claimed = $replayGuard->claim($replayKey);
+            } catch (DomainException) {
+                return self::handoff(
+                    $context,
+                    'tool_replay_guard_unavailable',
+                    'tool',
+                );
+            }
+
+            if (!$claimed) {
+                return self::handoff(
+                    $context,
+                    'tool_replay_detected',
+                    'tool',
+                );
+            }
         }
 
         try {
