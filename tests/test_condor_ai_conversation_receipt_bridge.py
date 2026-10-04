@@ -20,18 +20,41 @@ def run_php(script: str) -> dict[str, object]:
 
 
 class CondorAiConversationReceiptBridgeTests(unittest.TestCase):
-    def test_authorized_tool_turn_returns_minimized_receipt_bound_to_f1_contracts(self) -> None:
+    def test_authorized_tool_turn_returns_minimized_receipt_bound_to_registry_contracts(self) -> None:
         observed = run_php(
             r"""
 require 'vendor/autoload.php';
 
 use App\Application\AI\AiConversationCore;
+use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
+$descriptor = AiToolDescriptor::fromArray(
+    $policy,
+    [
+        'tool' => 'content.draft.update',
+        'risk' => AiToolPolicy::REVERSIBLE_WRITE,
+        'input_names' => [],
+        'required_inputs' => [],
+    ],
+);
 $executions = 0;
+$registry = AiToolRegistry::fromArray(
+    $policy,
+    [[
+        'tool' => 'content.draft.update',
+        'descriptor' => $descriptor,
+        'handler' => static function () use (&$executions): array {
+            ++$executions;
+            return ['opaque' => 'not-exposed'];
+        },
+    ]],
+);
+
 $result = AiConversationCore::turn(
     AiTenantContext::fromArray([
         'tenant_id' => 'tenant-a',
@@ -43,19 +66,13 @@ $result = AiConversationCore::turn(
         'intent' => 'tool',
         'tenant_id' => 'tenant-a',
         'tool' => 'content.draft.update',
-        'request_ref' => 'request:conversation-receipt-001',
-        'evidence_ref' => 'evidence:conversation-receipt-001',
-        'timestamp' => '2026-10-04T02:45:00+00:00',
+        'request_ref' => 'request:receipt-001',
+        'evidence_ref' => 'evidence:receipt-001',
+        'timestamp' => '2026-10-04T07:00:00+00:00',
     ],
     [],
-    new DateTimeImmutable('2026-10-04T02:45:00Z'),
-    static function () use (&$executions): array {
-        ++$executions;
-        return [
-            'raw_output' => 'must-not-leak',
-            'customer_email' => 'person@example.test',
-        ];
-    },
+    new DateTimeImmutable('2026-10-04T07:00:00Z'),
+    $registry,
 );
 
 print json_encode([
@@ -73,28 +90,55 @@ print json_encode([
             {
                 "tenant_ref": "tenant:tenant-a",
                 "tool_ref": "content.draft.update",
-                "request_ref": "request:conversation-receipt-001",
+                "request_ref": "request:receipt-001",
                 "decision": "authorized",
                 "risk": "reversible_write",
                 "outcome": "success",
-                "evidence_ref": "evidence:conversation-receipt-001",
-                "timestamp": "2026-10-04T02:45:00+00:00",
+                "evidence_ref": "evidence:receipt-001",
+                "timestamp": "2026-10-04T07:00:00+00:00",
             },
             result["receipt"],
         )
-        self.assertEqual(result["audit"]["evidence_ref"], result["receipt"]["evidence_ref"])
+        self.assertEqual(
+            result["audit"]["evidence_ref"],
+            result["receipt"]["evidence_ref"],
+        )
 
-    def test_receipt_never_exposes_executor_output_or_raw_payload(self) -> None:
+    def test_receipt_never_exposes_registry_handler_output(self) -> None:
         observed = run_php(
             r"""
 require 'vendor/autoload.php';
 
 use App\Application\AI\AiConversationCore;
+use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
+$descriptor = AiToolDescriptor::fromArray(
+    $policy,
+    [
+        'tool' => 'catalog.read',
+        'risk' => AiToolPolicy::READ_ONLY,
+        'input_names' => [],
+        'required_inputs' => [],
+    ],
+);
+$registry = AiToolRegistry::fromArray(
+    $policy,
+    [[
+        'tool' => 'catalog.read',
+        'descriptor' => $descriptor,
+        'handler' => static fn (): array => [
+            'opaque_input' => ['value' => 'internal'],
+            'opaque_output' => ['result' => 'internal'],
+            'metadata' => ['marker' => 'internal'],
+        ],
+    ]],
+);
+
 $result = AiConversationCore::turn(
     AiTenantContext::fromArray([
         'tenant_id' => 'tenant-a',
@@ -106,17 +150,13 @@ $result = AiConversationCore::turn(
         'intent' => 'tool',
         'tenant_id' => 'tenant-a',
         'tool' => 'catalog.read',
-        'request_ref' => 'request:conversation-receipt-002',
-        'evidence_ref' => 'evidence:conversation-receipt-002',
-        'timestamp' => '2026-10-04T02:45:00+00:00',
+        'request_ref' => 'request:receipt-002',
+        'evidence_ref' => 'evidence:receipt-002',
+        'timestamp' => '2026-10-04T07:00:00+00:00',
     ],
     [],
-    new DateTimeImmutable('2026-10-04T02:45:00Z'),
-    static fn (): array => [
-        'raw_input' => ['prompt' => 'secret'],
-        'raw_output' => ['result' => 'secret'],
-        'headers' => ['authorization' => 'secret'],
-    ],
+    new DateTimeImmutable('2026-10-04T07:00:00Z'),
+    $registry,
 );
 
 print json_encode($result, JSON_THROW_ON_ERROR);
@@ -124,10 +164,9 @@ print json_encode($result, JSON_THROW_ON_ERROR);
         )
 
         encoded = json.dumps(observed, sort_keys=True)
-        self.assertNotIn("raw_input", encoded)
-        self.assertNotIn("raw_output", encoded)
-        self.assertNotIn("authorization", encoded)
-        self.assertNotIn("secret", encoded)
+        self.assertNotIn("opaque_input", encoded)
+        self.assertNotIn("opaque_output", encoded)
+        self.assertNotIn("metadata", encoded)
         self.assertEqual(
             {
                 "tenant_ref",
