@@ -23,6 +23,9 @@ final readonly class AiToolDescriptor
         'authorization',
     ];
 
+    /** @var AiToolPolicy::READ_ONLY|AiToolPolicy::REVERSIBLE_WRITE|AiToolPolicy::SENSITIVE */
+    private string $risk;
+
     /** @var list<string> */
     private array $inputNames;
 
@@ -30,15 +33,17 @@ final readonly class AiToolDescriptor
     private array $requiredInputs;
 
     /**
+     * @param AiToolPolicy::READ_ONLY|AiToolPolicy::REVERSIBLE_WRITE|AiToolPolicy::SENSITIVE $risk
      * @param list<string> $inputNames
      * @param list<string> $requiredInputs
      */
     private function __construct(
         private string $tool,
-        private string $risk,
+        string $risk,
         array $inputNames,
         array $requiredInputs,
     ) {
+        $this->risk = $risk;
         $this->inputNames = $inputNames;
         $this->requiredInputs = $requiredInputs;
     }
@@ -100,6 +105,7 @@ final readonly class AiToolDescriptor
         return $this->tool;
     }
 
+    /** @return AiToolPolicy::READ_ONLY|AiToolPolicy::REVERSIBLE_WRITE|AiToolPolicy::SENSITIVE */
     public function risk(): string
     {
         return $this->risk;
