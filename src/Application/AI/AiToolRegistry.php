@@ -81,6 +81,27 @@ final readonly class AiToolRegistry
     }
 
     /**
+     * @param array<string, mixed> $inputs
+     * @return array{
+     *     descriptor: AiToolDescriptor,
+     *     handler: Closure,
+     *     inputs: array<string, mixed>
+     * }
+     */
+    public function resolveWithInputs(string $tool, array $inputs): array
+    {
+        $entry = $this->resolve($tool);
+        $descriptor = $entry['descriptor'];
+        $descriptor->validateInputs($inputs);
+
+        return [
+            'descriptor' => $descriptor,
+            'handler' => $entry['handler'],
+            'inputs' => $inputs,
+        ];
+    }
+
+    /**
      * @return array{
      *     descriptor: AiToolDescriptor,
      *     handler: Closure
