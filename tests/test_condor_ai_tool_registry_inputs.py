@@ -78,6 +78,16 @@ print json_encode([
         self.assertEqual(0, observed["executions"])
 
         source = REGISTRY.read_text(encoding="utf-8")
+        self.assertIn("resolveWithInputs(string $tool, array $inputs)", source)
+        self.assertIn("$descriptor->validateInputs($inputs)", source)
+
+    def test_registry_rejects_missing_unknown_or_tool_mismatch_without_execution(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Application\AI\AiToolRegistry;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 
 $policy = new AiToolPolicy();
