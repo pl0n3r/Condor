@@ -133,10 +133,6 @@ final readonly class AiToolDescriptor
         }
 
         foreach (array_keys($inputs) as $name) {
-            if (!is_string($name)) {
-                throw new DomainException('Input de tool IA no canónico.');
-            }
-
             self::validateInputName($name);
             if (!in_array($name, $this->inputNames, true)) {
                 throw new DomainException('Input fuera del contrato de la tool IA.');
