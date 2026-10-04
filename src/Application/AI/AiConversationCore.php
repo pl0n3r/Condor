@@ -13,7 +13,7 @@ use DomainException;
 final class AiConversationCore
 {
     private const KNOWLEDGE_KEYS = ['intent', 'knowledge_request', 'tenant_id'];
-    private const TOOL_KEYS = ['evidence_ref', 'intent', 'request_ref', 'tenant_id', 'timestamp', 'tool'];
+    private const TOOL_KEYS = ['evidence_ref', 'inputs', 'intent', 'request_ref', 'tenant_id', 'timestamp', 'tool'];
 
     /**
      * @param array<string, mixed> $turn
@@ -140,7 +140,8 @@ final class AiConversationCore
             || !is_string($turn['tool'])
             || !is_string($turn['request_ref'])
             || !is_string($turn['evidence_ref'])
-            || !is_string($turn['timestamp'])) {
+            || !is_string($turn['timestamp'])
+            || !is_array($turn['inputs'])) {
             return self::handoff($context, 'turn_not_canonical', 'tool');
         }
 
@@ -174,9 +175,18 @@ final class AiConversationCore
         }
 
         try {
-            $registration = $toolRegistry->resolve($turn['tool']);
+            $toolRegistry->resolve($turn['tool']);
         } catch (DomainException) {
             return self::handoff($context, 'tool_handler_unavailable', 'tool');
+        }
+
+        try {
+            $registration = $toolRegistry->resolveWithInputs(
+                $turn['tool'],
+                $turn['inputs'],
+            );
+        } catch (DomainException) {
+            return self::handoff($context, 'tool_inputs_invalid', 'tool');
         }
 
         try {
@@ -188,6 +198,8 @@ final class AiConversationCore
                 $turn['evidence_ref'],
                 $turn['timestamp'],
                 $registration['handler'],
+                $registration['descriptor'],
+                $registration['inputs'],
             );
         } catch (DomainException) {
             return self::handoff($context, 'tool_request_invalid', 'tool');
