@@ -20,14 +20,17 @@ def run_php(script: str) -> dict[str, object]:
 
 
 class CondorAiConversationDecisionBridgeTests(unittest.TestCase):
-    def test_tool_turn_builds_canonical_request_and_decision_before_executor(self) -> None:
+    def test_tool_turn_builds_canonical_request_and_decision_before_registry_handler(self) -> None:
         observed = run_php(
             r"""
 require 'vendor/autoload.php';
 
 use App\Application\AI\AiConversationCore;
+use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
+use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
 $context = AiTenantContext::fromArray([
@@ -35,11 +38,28 @@ $context = AiTenantContext::fromArray([
     'tool' => 'catalog.read',
     'knowledge_refs' => [],
 ], $policy);
+$descriptor = AiToolDescriptor::fromArray(
+    $policy,
+    [
+        'tool' => 'catalog.read',
+        'risk' => AiToolPolicy::READ_ONLY,
+        'input_names' => [],
+        'required_inputs' => [],
+    ],
+);
 $executions = 0;
-$executor = static function () use (&$executions): array {
-    ++$executions;
-    return ['raw_output' => 'must-not-leak'];
-};
+$registry = AiToolRegistry::fromArray(
+    $policy,
+    [[
+        'tool' => 'catalog.read',
+        'descriptor' => $descriptor,
+        'handler' => static function () use (&$executions): array {
+            ++$executions;
+            return ['opaque' => 'not-exposed'];
+        },
+    ]],
+);
+$at = new DateTimeImmutable('2026-10-04T07:00:00Z');
 
 $valid = AiConversationCore::turn(
     $context,
@@ -48,13 +68,13 @@ $valid = AiConversationCore::turn(
         'intent' => 'tool',
         'tenant_id' => 'tenant-a',
         'tool' => 'catalog.read',
-        'request_ref' => 'request:conversation-001',
-        'evidence_ref' => 'evidence:conversation-001',
-        'timestamp' => '2026-10-04T02:00:00+00:00',
+        'request_ref' => 'request:decision-001',
+        'evidence_ref' => 'evidence:decision-001',
+        'timestamp' => '2026-10-04T07:00:00+00:00',
     ],
     [],
-    new DateTimeImmutable('2026-10-04T02:00:00Z'),
-    $executor,
+    $at,
+    $registry,
 );
 
 $missingRequestRef = AiConversationCore::turn(
@@ -65,11 +85,11 @@ $missingRequestRef = AiConversationCore::turn(
         'tenant_id' => 'tenant-a',
         'tool' => 'catalog.read',
         'evidence_ref' => 'evidence:missing-request',
-        'timestamp' => '2026-10-04T02:00:00+00:00',
+        'timestamp' => '2026-10-04T07:00:00+00:00',
     ],
     [],
-    new DateTimeImmutable('2026-10-04T02:00:00Z'),
-    $executor,
+    $at,
+    $registry,
 );
 
 print json_encode([
@@ -84,24 +104,23 @@ print json_encode([
         self.assertEqual("completed", observed["valid"]["status"])
         self.assertTrue(observed["valid"]["executed"])
         self.assertEqual(
-            ["evidence:conversation-001"],
+            ["evidence:decision-001"],
             observed["valid"]["evidence_refs"],
         )
-        self.assertNotIn("raw_output", observed["valid"])
         self.assertEqual("handoff", observed["missing_request_ref"]["status"])
-        self.assertEqual(
-            "turn_not_canonical",
-            observed["missing_request_ref"]["reason"],
-        )
+        self.assertEqual("turn_not_canonical", observed["missing_request_ref"]["reason"])
 
-    def test_denied_sensitive_or_mismatched_turn_never_calls_executor(self) -> None:
+    def test_denied_sensitive_or_mismatched_turn_never_calls_registry_handler(self) -> None:
         observed = run_php(
             r"""
 require 'vendor/autoload.php';
 
 use App\Application\AI\AiConversationCore;
+use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
+use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
 $readContext = AiTenantContext::fromArray([
@@ -114,10 +133,26 @@ $sensitiveContext = AiTenantContext::fromArray([
     'tool' => 'identity.permission.change',
     'knowledge_refs' => [],
 ], $policy);
+$descriptor = AiToolDescriptor::fromArray(
+    $policy,
+    [
+        'tool' => 'catalog.read',
+        'risk' => AiToolPolicy::READ_ONLY,
+        'input_names' => [],
+        'required_inputs' => [],
+    ],
+);
 $executions = 0;
-$executor = static function () use (&$executions): void {
-    ++$executions;
-};
+$registry = AiToolRegistry::fromArray(
+    $policy,
+    [[
+        'tool' => 'catalog.read',
+        'descriptor' => $descriptor,
+        'handler' => static function () use (&$executions): void {
+            ++$executions;
+        },
+    ]],
+);
 
 $base = [
     'intent' => 'tool',
@@ -125,11 +160,11 @@ $base = [
     'tool' => 'catalog.read',
     'request_ref' => 'request:base',
     'evidence_ref' => 'evidence:base',
-    'timestamp' => '2026-10-04T02:00:00+00:00',
+    'timestamp' => '2026-10-04T07:00:00+00:00',
 ];
 
 $invalidRef = $base;
-$invalidRef['request_ref'] = 'person@example.test';
+$invalidRef['request_ref'] = 'invalid';
 
 $toolMismatch = $base;
 $toolMismatch['tool'] = 'inventory.read';
@@ -141,19 +176,19 @@ $sensitive = $base;
 $sensitive['tool'] = 'identity.permission.change';
 $sensitive['request_ref'] = 'request:sensitive';
 
-$at = new DateTimeImmutable('2026-10-04T02:00:00Z');
+$at = new DateTimeImmutable('2026-10-04T07:00:00Z');
 $out = [
     'invalid_ref' => AiConversationCore::turn(
-        $readContext, $policy, $invalidRef, [], $at, $executor
+        $readContext, $policy, $invalidRef, [], $at, $registry
     ),
     'tool_mismatch' => AiConversationCore::turn(
-        $readContext, $policy, $toolMismatch, [], $at, $executor
+        $readContext, $policy, $toolMismatch, [], $at, $registry
     ),
     'cross_tenant' => AiConversationCore::turn(
-        $readContext, $policy, $crossTenant, [], $at, $executor
+        $readContext, $policy, $crossTenant, [], $at, $registry
     ),
     'sensitive' => AiConversationCore::turn(
-        $sensitiveContext, $policy, $sensitive, [], $at, $executor
+        $sensitiveContext, $policy, $sensitive, [], $at, $registry
     ),
     'executions' => $executions,
 ];
@@ -166,20 +201,11 @@ print json_encode($out, JSON_THROW_ON_ERROR);
         self.assertEqual("denied", observed["invalid_ref"]["status"])
         self.assertEqual("tool_request_denied", observed["invalid_ref"]["reason"])
         self.assertEqual("denied", observed["tool_mismatch"]["status"])
-        self.assertEqual(
-            "tool_request_denied",
-            observed["tool_mismatch"]["reason"],
-        )
+        self.assertEqual("tool_request_denied", observed["tool_mismatch"]["reason"])
         self.assertEqual("handoff", observed["cross_tenant"]["status"])
-        self.assertEqual(
-            "tenant_context_mismatch",
-            observed["cross_tenant"]["reason"],
-        )
-        self.assertEqual("denied", observed["sensitive"]["status"])
-        self.assertEqual(
-            "tool_sensitive_requires_human",
-            observed["sensitive"]["reason"],
-        )
+        self.assertEqual("tenant_context_mismatch", observed["cross_tenant"]["reason"])
+        self.assertEqual("handoff", observed["sensitive"]["status"])
+        self.assertEqual("tool_sensitive_requires_human", observed["sensitive"]["reason"])
         for key in ("invalid_ref", "tool_mismatch", "cross_tenant", "sensitive"):
             self.assertFalse(observed[key]["executed"], key)
 
