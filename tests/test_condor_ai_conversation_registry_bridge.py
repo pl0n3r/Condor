@@ -69,6 +69,7 @@ $result = AiConversationCore::turn(
         'intent' => 'tool',
         'tenant_id' => 'tenant-a',
         'tool' => 'catalog.read',
+        'inputs' => [],
         'request_ref' => 'request:registry-bridge',
         'evidence_ref' => 'evidence:registry-bridge',
         'timestamp' => '2026-10-04T07:00:00+00:00',
@@ -102,9 +103,9 @@ print json_encode([
 
         source = CORE.read_text(encoding="utf-8")
         self.assertIn("AiToolRegistry $toolRegistry", source)
-        self.assertIn("$toolRegistry->resolve($turn['tool'])", source)
+        self.assertIn("$toolRegistry->resolveWithInputs(", source)
         self.assertNotIn("$toolExecutor", source)
-        self.assertIn("'version' => '0.1.154'", VERSION.read_text(encoding="utf-8"))
+        self.assertIn("'version' => '0.1.158'", VERSION.read_text(encoding="utf-8"))
 
     def test_unregistered_or_mismatched_tool_handoffs_without_arbitrary_executor(self) -> None:
         observed = run_php(
@@ -127,6 +128,7 @@ $turn = [
     'intent' => 'tool',
     'tenant_id' => 'tenant-a',
     'tool' => 'catalog.read',
+    'inputs' => [],
     'request_ref' => 'request:unregistered',
     'evidence_ref' => 'evidence:unregistered',
     'timestamp' => '2026-10-04T07:00:00+00:00',
