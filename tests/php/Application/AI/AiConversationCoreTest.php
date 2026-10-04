@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Tests\Application\AI;
 
 use App\Application\AI\AiConversationCore;
+use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 use App\Domain\Knowledge\KnowledgeArticle;
 use DateTimeImmutable;
@@ -32,7 +34,7 @@ final class AiConversationCoreTest extends TestCase
             ],
             [$this->article()],
             $at,
-            static fn (): never => throw new \RuntimeException('knowledge must not execute tools'),
+            AiToolRegistry::fromArray($policy, []),
         );
 
         self::assertSame('ready', $knowledge['status']);
@@ -43,6 +45,28 @@ final class AiConversationCoreTest extends TestCase
         self::assertArrayNotHasKey('body', $knowledge);
 
         $executions = 0;
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => [],
+                'required_inputs' => [],
+            ],
+        );
+        $registry = AiToolRegistry::fromArray(
+            $policy,
+            [[
+                'tool' => 'catalog.read',
+                'descriptor' => $descriptor,
+                'handler' => static function () use (&$executions): array {
+                    ++$executions;
+
+                    return ['raw' => 'must-not-leak'];
+                },
+            ]],
+        );
+
         $tool = AiConversationCore::turn(
             AiTenantContext::fromArray([
                 'tenant_id' => 'tenant-a',
@@ -60,11 +84,7 @@ final class AiConversationCoreTest extends TestCase
             ],
             [],
             $at,
-            static function () use (&$executions): array {
-                ++$executions;
-
-                return ['raw' => 'must-not-leak'];
-            },
+            $registry,
         );
 
         self::assertSame(1, $executions);
@@ -90,6 +110,23 @@ final class AiConversationCoreTest extends TestCase
         $executor = static function () use (&$executions): void {
             ++$executions;
         };
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => [],
+                'required_inputs' => [],
+            ],
+        );
+        $registry = AiToolRegistry::fromArray(
+            $policy,
+            [[
+                'tool' => 'catalog.read',
+                'descriptor' => $descriptor,
+                'handler' => $executor,
+            ]],
+        );
 
         $sensitive = AiConversationCore::turn(
             AiTenantContext::fromArray([
@@ -108,7 +145,7 @@ final class AiConversationCoreTest extends TestCase
             ],
             [],
             $at,
-            $executor,
+            $registry,
         );
         self::assertSame('handoff', $sensitive['status']);
         self::assertSame('tool_sensitive_requires_human', $sensitive['reason']);
@@ -134,7 +171,7 @@ final class AiConversationCoreTest extends TestCase
             ],
             [],
             $at,
-            $executor,
+            $registry,
         );
         self::assertSame('denied', $invalidRequest['status']);
         self::assertSame('tool_request_denied', $invalidRequest['reason']);
@@ -150,7 +187,7 @@ final class AiConversationCoreTest extends TestCase
             ['intent' => 'unknown', 'tenant_id' => 'tenant-a'],
             [],
             $at,
-            $executor,
+            $registry,
         );
         self::assertSame('handoff', $unknown['status']);
         self::assertSame('intent_not_supported', $unknown['reason']);
@@ -174,7 +211,7 @@ final class AiConversationCoreTest extends TestCase
             ],
             [],
             $at,
-            $executor,
+            $registry,
         );
         self::assertSame('handoff', $crossTenant['status']);
         self::assertSame('tenant_context_mismatch', $crossTenant['reason']);
@@ -195,7 +232,7 @@ final class AiConversationCoreTest extends TestCase
             ],
             [$this->article()],
             $at,
-            $executor,
+            $registry,
         );
         self::assertSame('handoff', $gap['status']);
         self::assertSame('evidence_insufficient', $gap['reason']);
