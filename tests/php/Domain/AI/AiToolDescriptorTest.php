@@ -50,6 +50,73 @@ final class AiToolDescriptorTest extends TestCase
         self::addToAssertionCount(1);
     }
 
+    public function testInputValuesAcceptOnlyScalarOrNullContract(): void
+    {
+        $policy = new AiToolPolicy();
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => [
+                    'bool_value',
+                    'float_value',
+                    'int_value',
+                    'null_value',
+                    'string_value',
+                ],
+                'required_inputs' => ['string_value'],
+            ],
+        );
+
+        $descriptor->validateInputs([
+            'string_value' => 'category:industrial',
+            'int_value' => 12,
+            'float_value' => 19.5,
+            'bool_value' => true,
+            'null_value' => null,
+        ]);
+
+        self::addToAssertionCount(1);
+    }
+
+    public function testNestedArrayObjectResourceOrNonFiniteInputFailsClosed(): void
+    {
+        $policy = new AiToolPolicy();
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => ['value'],
+                'required_inputs' => ['value'],
+            ],
+        );
+
+        $resource = fopen('php://memory', 'r');
+        self::assertIsResource($resource);
+
+        try {
+            foreach (
+                [
+                    ['nested' => 'value'],
+                    new \stdClass(),
+                    $resource,
+                    INF,
+                ] as $value
+            ) {
+                try {
+                    $descriptor->validateInputs(['value' => $value]);
+                    self::fail('El valor de input no escalar debía fallar cerrado.');
+                } catch (DomainException) {
+                    self::addToAssertionCount(1);
+                }
+            }
+        } finally {
+            fclose($resource);
+        }
+    }
+
     public function testDescriptorBindsCanonicalMinimizedOutputContract(): void
     {
         $policy = new AiToolPolicy();
