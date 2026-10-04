@@ -110,9 +110,12 @@ final class AiConversationCoreTest extends TestCase
             $at,
             $executor,
         );
-        self::assertSame('denied', $sensitive['status']);
+        self::assertSame('handoff', $sensitive['status']);
         self::assertSame('tool_sensitive_requires_human', $sensitive['reason']);
         self::assertFalse($sensitive['executed']);
+        self::assertSame('tenant:tenant-a', $sensitive['handoff']['tenant_ref']);
+        self::assertSame('tool', $sensitive['handoff']['route']);
+        self::assertSame([], $sensitive['handoff']['evidence_refs']);
 
         $invalidRequest = AiConversationCore::turn(
             AiTenantContext::fromArray([
@@ -151,6 +154,8 @@ final class AiConversationCoreTest extends TestCase
         );
         self::assertSame('handoff', $unknown['status']);
         self::assertSame('intent_not_supported', $unknown['reason']);
+        self::assertSame('tenant:tenant-a', $unknown['handoff']['tenant_ref']);
+        self::assertSame('none', $unknown['handoff']['route']);
 
         $crossTenant = AiConversationCore::turn(
             AiTenantContext::fromArray([
@@ -173,6 +178,8 @@ final class AiConversationCoreTest extends TestCase
         );
         self::assertSame('handoff', $crossTenant['status']);
         self::assertSame('tenant_context_mismatch', $crossTenant['reason']);
+        self::assertSame('tenant:tenant-a', $crossTenant['handoff']['tenant_ref']);
+        self::assertSame('none', $crossTenant['handoff']['route']);
 
         $gap = AiConversationCore::turn(
             AiTenantContext::fromArray([
@@ -192,6 +199,8 @@ final class AiConversationCoreTest extends TestCase
         );
         self::assertSame('handoff', $gap['status']);
         self::assertSame('evidence_insufficient', $gap['reason']);
+        self::assertSame('knowledge', $gap['handoff']['route']);
+        self::assertSame($gap['evidence_refs'], $gap['handoff']['evidence_refs']);
 
         self::assertSame(0, $executions);
         foreach ([$sensitive, $invalidRequest, $unknown, $crossTenant, $gap] as $result) {
