@@ -182,6 +182,28 @@ final class BillOfMaterialsTest extends TestCase
         }
     }
 
+    public function testBomRejectsMalformedComponentShape(): void
+    {
+        $tenant = $this->tenant('shape');
+        $variant = $this->variant($tenant, 'SKU-SHAPE');
+
+        foreach (
+            [
+                [[]],
+                [['material' => 'no-material', 'quantity' => '1', 'unit' => UnitOfMeasure::from('kg')]],
+                [['material' => new Material($tenant, 'MAT-S', 'Material', UnitOfMeasure::from('kg')), 'quantity' => 1, 'unit' => UnitOfMeasure::from('kg')]],
+                [['material' => new Material($tenant, 'MAT-U', 'Material', UnitOfMeasure::from('kg')), 'quantity' => '1', 'unit' => 'kg']],
+            ] as $components
+        ) {
+            try {
+                new BillOfMaterials($tenant, $variant, 1, $components);
+                self::fail('El shape inválido de BOM debía fallar cerrado.');
+            } catch (DomainException) {
+                self::assertTrue(true);
+            }
+        }
+    }
+
     private function tenant(string $prefix): Tenant
     {
         return new Tenant(
