@@ -20,27 +20,23 @@ final readonly class AiToolReplayKey
         AiTenantContext $context,
         AiToolPolicy $policy,
     ): self {
-        $tenantId = $request->tenantId();
-        $tool = $request->tool();
+        $snapshot = $request->snapshot();
+        $tool = strtolower(trim($context->tool()));
+        $expected = [
+            'tenant_ref' => 'tenant:' . $context->tenantId(),
+            'tool_ref' => $tool,
+            'request_ref' => $request->requestRef(),
+        ];
 
-        if (
-            $tenantId !== $context->tenantId()
-            || $tool !== strtolower(trim($context->tool()))
-        ) {
+        if ($snapshot !== $expected) {
             throw new DomainException('Request y contexto IA no son coherentes para replay.');
         }
 
         $policy->risk($tool);
 
-        $canonical = [
-            'request_ref' => $request->requestRef(),
-            'tenant_ref' => 'tenant:' . $tenantId,
-            'tool_ref' => $tool,
-        ];
-
         try {
             $encoded = json_encode(
-                $canonical,
+                $snapshot,
                 JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES,
             );
         } catch (JsonException) {
