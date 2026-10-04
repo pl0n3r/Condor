@@ -73,7 +73,13 @@ final class AiConversationCoreTest extends TestCase
         self::assertSame(['evidence:catalog-turn'], $tool['evidence_refs']);
         self::assertSame('tenant:tenant-a', $tool['audit']['tenant_ref']);
         self::assertSame('catalog.read', $tool['audit']['tool_ref']);
+        self::assertSame('request:catalog-turn', $tool['receipt']['request_ref']);
+        self::assertSame('authorized', $tool['receipt']['decision']);
+        self::assertSame('read_only', $tool['receipt']['risk']);
+        self::assertSame('success', $tool['receipt']['outcome']);
+        self::assertSame('evidence:catalog-turn', $tool['receipt']['evidence_ref']);
         self::assertArrayNotHasKey('raw', $tool);
+        self::assertArrayNotHasKey('raw_output', $tool['receipt']);
     }
 
     public function testSensitiveUnknownOrEvidenceGapHandoffsWithoutSideEffects(): void

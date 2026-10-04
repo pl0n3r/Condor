@@ -26,7 +26,8 @@ final class AiConversationCore
      *     executed:bool,
      *     evidence_refs:list<string>,
      *     sources:list<array<string, mixed>>,
-     *     audit:array<string, string>|null
+     *     audit:array<string, string>|null,
+     *     receipt?:array{tenant_ref:string,tool_ref:string,request_ref:string,decision:'authorized',risk:'read_only'|'reversible_write',outcome:'success'|'denied'|'failure',evidence_ref:string,timestamp:string}
      * }
      */
     public static function turn(
@@ -127,7 +128,8 @@ final class AiConversationCore
      *     executed:bool,
      *     evidence_refs:list<string>,
      *     sources:list<array<string, mixed>>,
-     *     audit:array<string, string>|null
+     *     audit:array<string, string>|null,
+     *     receipt?:array{tenant_ref:string,tool_ref:string,request_ref:string,decision:'authorized',risk:'read_only'|'reversible_write',outcome:'success'|'denied'|'failure',evidence_ref:string,timestamp:string}
      * }
      */
     private static function toolTurn(
@@ -181,6 +183,28 @@ final class AiConversationCore
             return self::handoff('tool_request_invalid', 'tool');
         }
 
+        try {
+            $receipt = AiToolReceipt::fromArray(
+                $context,
+                $policy,
+                [
+                    'request' => $decision['request'],
+                    'decision' => $decision,
+                    'audit' => $result['audit'],
+                ],
+            )->snapshot();
+        } catch (DomainException) {
+            return [
+                'status' => 'handoff',
+                'route' => 'tool',
+                'reason' => 'tool_receipt_invalid',
+                'executed' => $result['executed'],
+                'evidence_refs' => [$result['evidence_ref']],
+                'sources' => [],
+                'audit' => $result['audit'],
+            ];
+        }
+
         $status = match ($result['outcome']) {
             'success' => 'completed',
             'denied' => 'denied',
@@ -200,6 +224,7 @@ final class AiConversationCore
             'evidence_refs' => [$result['evidence_ref']],
             'sources' => [],
             'audit' => $result['audit'],
+            'receipt' => $receipt,
         ];
     }
 
