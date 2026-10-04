@@ -83,7 +83,136 @@ print json_encode([
         self.assertIn("public function outputNames(): array", source)
         self.assertIn("public function requiredOutputs(): array", source)
         self.assertIn("public function validateOutputs(array $outputs): void", source)
-        self.assertIn("'version' => '0.1.160'", VERSION.read_text(encoding="utf-8"))
+        self.assertIn("'version' => '0.1.161'", VERSION.read_text(encoding="utf-8"))
+
+    def test_output_values_accept_only_scalar_or_null_contract(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Domain\AI\AiToolDescriptor;
+use App\Domain\AI\AiToolPolicy;
+
+$descriptor = AiToolDescriptor::fromArray(
+    new AiToolPolicy(),
+    [
+        'tool' => 'catalog.read',
+        'risk' => AiToolPolicy::READ_ONLY,
+        'input_names' => [],
+        'required_inputs' => [],
+        'output_names' => [
+            'bool_value',
+            'float_value',
+            'int_value',
+            'null_value',
+            'string_value',
+        ],
+        'required_outputs' => ['string_value'],
+    ],
+);
+
+$descriptor->validateOutputs([
+    'string_value' => 'product:42',
+    'int_value' => 42,
+    'float_value' => 19.5,
+    'bool_value' => true,
+    'null_value' => null,
+]);
+
+print json_encode(['accepted' => true], JSON_THROW_ON_ERROR);
+"""
+        )
+
+        self.assertTrue(observed["accepted"])
+
+    def test_nested_array_object_or_resource_output_fails_closed(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Domain\AI\AiToolDescriptor;
+use App\Domain\AI\AiToolPolicy;
+use DomainException;
+
+$descriptor = AiToolDescriptor::fromArray(
+    new AiToolPolicy(),
+    [
+        'tool' => 'catalog.read',
+        'risk' => AiToolPolicy::READ_ONLY,
+        'input_names' => [],
+        'required_inputs' => [],
+        'output_names' => ['value'],
+        'required_outputs' => ['value'],
+    ],
+);
+
+$resource = fopen('php://memory', 'r');
+$cases = [
+    'nested_array' => ['raw' => 'opaque'],
+    'object' => new stdClass(),
+    'resource' => $resource,
+    'non_finite_float' => INF,
+];
+
+$out = [];
+foreach ($cases as $name => $value) {
+    try {
+        $descriptor->validateOutputs(['value' => $value]);
+        $out[$name] = false;
+    } catch (DomainException) {
+        $out[$name] = true;
+    }
+}
+fclose($resource);
+
+print json_encode($out, JSON_THROW_ON_ERROR);
+"""
+        )
+
+        self.assertTrue(observed)
+        for name, failed_closed in observed.items():
+            with self.subTest(case=name):
+                self.assertTrue(failed_closed)
+
+    def test_legacy_descriptor_keeps_empty_output_contract(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Domain\AI\AiToolDescriptor;
+use App\Domain\AI\AiToolPolicy;
+use DomainException;
+
+$descriptor = AiToolDescriptor::fromArray(
+    new AiToolPolicy(),
+    [
+        'tool' => 'catalog.read',
+        'risk' => AiToolPolicy::READ_ONLY,
+        'input_names' => [],
+        'required_inputs' => [],
+    ],
+);
+
+$descriptor->validateOutputs([]);
+$rejected = false;
+try {
+    $descriptor->validateOutputs(['value' => 'unexpected']);
+} catch (DomainException) {
+    $rejected = true;
+}
+
+print json_encode(
+    [
+        'empty_accepted' => true,
+        'nonempty_rejected' => $rejected,
+    ],
+    JSON_THROW_ON_ERROR,
+);
+"""
+        )
+
+        self.assertTrue(observed["empty_accepted"])
+        self.assertTrue(observed["nonempty_rejected"])
 
     def test_unknown_forbidden_or_missing_output_contract_fails_closed(self) -> None:
         observed = run_php(
