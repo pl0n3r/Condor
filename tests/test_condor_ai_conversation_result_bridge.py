@@ -99,6 +99,16 @@ print json_encode($result, JSON_THROW_ON_ERROR);
         self.assertNotIn("label", receipt)
         self.assertNotIn("product_ref", audit)
         self.assertNotIn("label", audit)
+
+    def test_invalid_handler_output_handoffs_without_raw_leak(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Application\AI\AiConversationCore;
+use App\Application\AI\AiToolRegistry;
+use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 
 $policy = new AiToolPolicy();
