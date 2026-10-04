@@ -84,6 +84,91 @@ print json_encode([
         ):
             self.assertNotIn(forbidden, source)
 
+    def test_input_values_accept_only_scalar_or_null_contract(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Domain\AI\AiToolDescriptor;
+use App\Domain\AI\AiToolPolicy;
+
+$descriptor = AiToolDescriptor::fromArray(
+    new AiToolPolicy(),
+    [
+        'tool' => 'catalog.read',
+        'risk' => AiToolPolicy::READ_ONLY,
+        'input_names' => [
+            'bool_value',
+            'float_value',
+            'int_value',
+            'null_value',
+            'string_value',
+        ],
+        'required_inputs' => ['string_value'],
+    ],
+);
+
+$descriptor->validateInputs([
+    'string_value' => 'category:industrial',
+    'int_value' => 12,
+    'float_value' => 19.5,
+    'bool_value' => true,
+    'null_value' => null,
+]);
+
+print json_encode(['accepted' => true], JSON_THROW_ON_ERROR);
+"""
+        )
+
+        self.assertTrue(observed["accepted"])
+
+    def test_nested_array_object_resource_or_non_finite_input_fails_closed(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Domain\AI\AiToolDescriptor;
+use App\Domain\AI\AiToolPolicy;
+use DomainException;
+
+$descriptor = AiToolDescriptor::fromArray(
+    new AiToolPolicy(),
+    [
+        'tool' => 'catalog.read',
+        'risk' => AiToolPolicy::READ_ONLY,
+        'input_names' => ['value'],
+        'required_inputs' => ['value'],
+    ],
+);
+
+$resource = fopen('php://memory', 'r');
+$cases = [
+    'nested_array' => ['raw' => 'opaque'],
+    'object' => new stdClass(),
+    'resource' => $resource,
+    'non_finite_float' => INF,
+];
+
+$out = [];
+foreach ($cases as $name => $value) {
+    try {
+        $descriptor->validateInputs(['value' => $value]);
+        $out[$name] = false;
+    } catch (DomainException) {
+        $out[$name] = true;
+    }
+}
+fclose($resource);
+
+print json_encode($out, JSON_THROW_ON_ERROR);
+"""
+        )
+
+        self.assertTrue(observed)
+        for name, failed_closed in observed.items():
+            with self.subTest(case=name):
+                self.assertTrue(failed_closed)
+
     def test_unknown_risk_mismatch_or_noncanonical_descriptor_fails_closed(self) -> None:
         observed = run_php(
             r"""
