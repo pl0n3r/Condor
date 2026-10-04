@@ -187,11 +187,12 @@ final readonly class AiToolDescriptor
             throw new DomainException('Inputs de tool IA exceden el contrato.');
         }
 
-        foreach (array_keys($inputs) as $name) {
+        foreach ($inputs as $name => $value) {
             self::validateInputName($name);
             if (!in_array($name, $this->inputNames, true)) {
                 throw new DomainException('Input fuera del contrato de la tool IA.');
             }
+            self::validateInputValue($value);
         }
 
         foreach ($this->requiredInputs as $required) {
@@ -299,6 +300,23 @@ final readonly class AiToolDescriptor
         sort($normalized);
 
         return $normalized;
+    }
+
+    private static function validateInputValue(mixed $value): void
+    {
+        if (
+            $value !== null
+            && !is_string($value)
+            && !is_int($value)
+            && !is_float($value)
+            && !is_bool($value)
+        ) {
+            throw new DomainException('Valor de input IA fuera del contrato escalar.');
+        }
+
+        if (is_float($value) && !is_finite($value)) {
+            throw new DomainException('Valor numérico de input IA no finito.');
+        }
     }
 
     private static function validateInputName(string $name): void
