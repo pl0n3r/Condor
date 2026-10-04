@@ -101,6 +101,7 @@ require 'vendor/autoload.php';
 use App\Application\AI\AiConversationCore;
 use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 
 $policy = new AiToolPolicy();
