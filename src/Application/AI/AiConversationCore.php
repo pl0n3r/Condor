@@ -27,7 +27,8 @@ final class AiConversationCore
      *     evidence_refs:list<string>,
      *     sources:list<array<string, mixed>>,
      *     audit:array<string, string>|null,
-     *     receipt?:array{tenant_ref:string,tool_ref:string,request_ref:string,decision:'authorized',risk:'read_only'|'reversible_write',outcome:'success'|'denied'|'failure',evidence_ref:string,timestamp:string}
+     *     receipt?:array{tenant_ref:string,tool_ref:string,request_ref:string,decision:'authorized',risk:'read_only'|'reversible_write',outcome:'success'|'denied'|'failure',evidence_ref:string,timestamp:string},
+     *     handoff?:array{tenant_ref:string,route:'knowledge'|'tool'|'none',reason:string,evidence_refs:list<string>}
      * }
      */
     public static function turn(
@@ -42,19 +43,19 @@ final class AiConversationCore
         $tenantId = $turn['tenant_id'] ?? null;
 
         if (!is_string($intent) || !is_string($tenantId)) {
-            return self::handoff('turn_not_canonical');
+            return self::handoff($context, 'turn_not_canonical');
         }
 
         $intent = strtolower(trim($intent));
         $tenantId = trim($tenantId);
         if ($tenantId !== $context->tenantId()) {
-            return self::handoff('tenant_context_mismatch');
+            return self::handoff($context, 'tenant_context_mismatch');
         }
 
         return match ($intent) {
             'knowledge' => self::knowledgeTurn($context, $policy, $turn, $articles, $at),
             'tool' => self::toolTurn($context, $policy, $turn, $toolExecutor),
-            default => self::handoff('intent_not_supported'),
+            default => self::handoff($context, 'intent_not_supported'),
         };
     }
 
@@ -68,7 +69,8 @@ final class AiConversationCore
      *     executed:false,
      *     evidence_refs:list<string>,
      *     sources:list<array<string, mixed>>,
-     *     audit:null
+     *     audit:null,
+     *     handoff?:array{tenant_ref:string,route:'knowledge'|'tool'|'none',reason:string,evidence_refs:list<string>}
      * }
      */
     private static function knowledgeTurn(
@@ -80,7 +82,7 @@ final class AiConversationCore
     ): array {
         if (!self::hasExactKeys($turn, self::KNOWLEDGE_KEYS)
             || !is_array($turn['knowledge_request'])) {
-            return self::handoff('turn_not_canonical', 'knowledge');
+            return self::knowledgeHandoff($context, 'turn_not_canonical');
         }
 
         try {
@@ -92,19 +94,16 @@ final class AiConversationCore
                 $at,
             );
         } catch (DomainException) {
-            return self::handoff('knowledge_request_invalid', 'knowledge');
+            return self::knowledgeHandoff($context, 'knowledge_request_invalid');
         }
 
         if ($result['status'] !== 'ready') {
-            return [
-                'status' => 'handoff',
-                'route' => 'knowledge',
-                'reason' => $result['reason'],
-                'executed' => false,
-                'evidence_refs' => $result['evidence_refs'],
-                'sources' => $result['sources'],
-                'audit' => null,
-            ];
+            return self::knowledgeHandoff(
+                $context,
+                $result['reason'],
+                $result['evidence_refs'],
+                $result['sources'],
+            );
         }
 
         return [
@@ -129,7 +128,8 @@ final class AiConversationCore
      *     evidence_refs:list<string>,
      *     sources:list<array<string, mixed>>,
      *     audit:array<string, string>|null,
-     *     receipt?:array{tenant_ref:string,tool_ref:string,request_ref:string,decision:'authorized',risk:'read_only'|'reversible_write',outcome:'success'|'denied'|'failure',evidence_ref:string,timestamp:string}
+     *     receipt?:array{tenant_ref:string,tool_ref:string,request_ref:string,decision:'authorized',risk:'read_only'|'reversible_write',outcome:'success'|'denied'|'failure',evidence_ref:string,timestamp:string},
+     *     handoff?:array{tenant_ref:string,route:'knowledge'|'tool'|'none',reason:string,evidence_refs:list<string>}
      * }
      */
     private static function toolTurn(
@@ -143,7 +143,7 @@ final class AiConversationCore
             || !is_string($turn['request_ref'])
             || !is_string($turn['evidence_ref'])
             || !is_string($turn['timestamp'])) {
-            return self::handoff('turn_not_canonical', 'tool');
+            return self::handoff($context, 'turn_not_canonical', 'tool');
         }
 
         $decision = AiToolDecision::decide(
@@ -156,12 +156,18 @@ final class AiConversationCore
             ],
         );
         if ($decision['status'] !== 'authorized') {
+            if ($decision['reason'] === 'sensitive_requires_human') {
+                return self::handoff(
+                    $context,
+                    'tool_sensitive_requires_human',
+                    'tool',
+                );
+            }
+
             return [
                 'status' => 'denied',
                 'route' => 'tool',
-                'reason' => $decision['reason'] === 'sensitive_requires_human'
-                    ? 'tool_sensitive_requires_human'
-                    : 'tool_request_denied',
+                'reason' => 'tool_request_denied',
                 'executed' => false,
                 'evidence_refs' => [],
                 'sources' => [],
@@ -180,7 +186,7 @@ final class AiConversationCore
                 $toolExecutor,
             );
         } catch (DomainException) {
-            return self::handoff('tool_request_invalid', 'tool');
+            return self::handoff($context, 'tool_request_invalid', 'tool');
         }
 
         try {
@@ -194,15 +200,15 @@ final class AiConversationCore
                 ],
             )->snapshot();
         } catch (DomainException) {
-            return [
-                'status' => 'handoff',
-                'route' => 'tool',
-                'reason' => 'tool_receipt_invalid',
-                'executed' => $result['executed'],
-                'evidence_refs' => [$result['evidence_ref']],
-                'sources' => [],
-                'audit' => $result['audit'],
-            ];
+            return self::handoff(
+                $context,
+                'tool_receipt_invalid',
+                'tool',
+                [$result['evidence_ref']],
+                [],
+                $result['executed'],
+                $result['audit'],
+            );
         }
 
         $status = match ($result['outcome']) {
@@ -216,6 +222,30 @@ final class AiConversationCore
             default => 'tool_failed',
         };
 
+        if ($status === 'handoff') {
+            $handoff = AiHandoffEnvelope::fromArray(
+                $context,
+                [
+                    'tenant_ref' => 'tenant:' . $context->tenantId(),
+                    'route' => 'tool',
+                    'reason' => $reason,
+                    'evidence_refs' => [$result['evidence_ref']],
+                ],
+            )->snapshot();
+
+            return [
+                'status' => 'handoff',
+                'route' => 'tool',
+                'reason' => $reason,
+                'executed' => $result['executed'],
+                'evidence_refs' => [$result['evidence_ref']],
+                'sources' => [],
+                'audit' => $result['audit'],
+                'receipt' => $receipt,
+                'handoff' => $handoff,
+            ];
+        }
+
         return [
             'status' => $status,
             'route' => 'tool',
@@ -225,6 +255,48 @@ final class AiConversationCore
             'sources' => [],
             'audit' => $result['audit'],
             'receipt' => $receipt,
+        ];
+    }
+
+    /**
+     * @param list<string> $evidenceRefs
+     * @param list<array<string, mixed>> $sources
+     * @return array{
+     *     status:'handoff',
+     *     route:'knowledge',
+     *     reason:string,
+     *     executed:false,
+     *     evidence_refs:list<string>,
+     *     sources:list<array<string, mixed>>,
+     *     audit:null,
+     *     handoff:array{tenant_ref:string,route:'knowledge'|'tool'|'none',reason:string,evidence_refs:list<string>}
+     * }
+     */
+    private static function knowledgeHandoff(
+        AiTenantContext $context,
+        string $reason,
+        array $evidenceRefs = [],
+        array $sources = [],
+    ): array {
+        $handoff = AiHandoffEnvelope::fromArray(
+            $context,
+            [
+                'tenant_ref' => 'tenant:' . $context->tenantId(),
+                'route' => 'knowledge',
+                'reason' => $reason,
+                'evidence_refs' => $evidenceRefs,
+            ],
+        )->snapshot();
+
+        return [
+            'status' => 'handoff',
+            'route' => 'knowledge',
+            'reason' => $reason,
+            'executed' => false,
+            'evidence_refs' => $evidenceRefs,
+            'sources' => $sources,
+            'audit' => null,
+            'handoff' => $handoff,
         ];
     }
 
@@ -243,26 +315,48 @@ final class AiConversationCore
 
     /**
      * @param 'knowledge'|'tool'|'none' $route
+     * @param list<string> $evidenceRefs
+     * @param list<array<string, mixed>> $sources
+     * @param array<string, string>|null $audit
      * @return array{
      *     status:'handoff',
      *     route:'knowledge'|'tool'|'none',
      *     reason:string,
-     *     executed:false,
+     *     executed:bool,
      *     evidence_refs:list<string>,
      *     sources:list<array<string, mixed>>,
-     *     audit:null
+     *     audit:array<string, string>|null,
+     *     handoff:array{tenant_ref:string,route:'knowledge'|'tool'|'none',reason:string,evidence_refs:list<string>}
      * }
      */
-    private static function handoff(string $reason, string $route = 'none'): array
-    {
+    private static function handoff(
+        AiTenantContext $context,
+        string $reason,
+        string $route = 'none',
+        array $evidenceRefs = [],
+        array $sources = [],
+        bool $executed = false,
+        ?array $audit = null,
+    ): array {
+        $handoff = AiHandoffEnvelope::fromArray(
+            $context,
+            [
+                'tenant_ref' => 'tenant:' . $context->tenantId(),
+                'route' => $route,
+                'reason' => $reason,
+                'evidence_refs' => $evidenceRefs,
+            ],
+        )->snapshot();
+
         return [
             'status' => 'handoff',
             'route' => $route,
             'reason' => $reason,
-            'executed' => false,
-            'evidence_refs' => [],
-            'sources' => [],
-            'audit' => null,
+            'executed' => $executed,
+            'evidence_refs' => $evidenceRefs,
+            'sources' => $sources,
+            'audit' => $audit,
+            'handoff' => $handoff,
         ];
     }
 }
