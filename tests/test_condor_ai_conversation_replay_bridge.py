@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PHPUNIT = ROOT / "vendor" / "bin" / "phpunit"
+PHPUNIT = ROOT / "vendor" / "bin" / "simple-phpunit"
 TEST_FILE = "tests/php/Application/AI/AiConversationCoreTest.php"
 
 
