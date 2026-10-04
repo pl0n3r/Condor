@@ -28,6 +28,7 @@ require 'vendor/autoload.php';
 use App\Application\AI\AiConversationCore;
 use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 use App\Domain\Knowledge\KnowledgeArticle;
 
@@ -114,7 +115,44 @@ $sensitiveContext = AiTenantContext::fromArray([
     'knowledge_refs' => [],
 ], $policy);
 $executions = 0;
-$registry = AiToolRegistry::fromArray($policy, []);
+$readDescriptor = AiToolDescriptor::fromArray(
+    $policy,
+    [
+        'tool' => 'catalog.read',
+        'risk' => AiToolPolicy::READ_ONLY,
+        'input_names' => [],
+        'required_inputs' => [],
+    ],
+);
+$sensitiveDescriptor = AiToolDescriptor::fromArray(
+    $policy,
+    [
+        'tool' => 'identity.permission.change',
+        'risk' => AiToolPolicy::SENSITIVE,
+        'input_names' => [],
+        'required_inputs' => [],
+    ],
+);
+$handler = static function (array $inputs = []) use (&$executions): array {
+    ++$executions;
+
+    return [];
+};
+$registry = AiToolRegistry::fromArray(
+    $policy,
+    [
+        [
+            'tool' => 'catalog.read',
+            'descriptor' => $readDescriptor,
+            'handler' => $handler,
+        ],
+        [
+            'tool' => 'identity.permission.change',
+            'descriptor' => $sensitiveDescriptor,
+            'handler' => $handler,
+        ],
+    ],
+);
 $at = new DateTimeImmutable('2026-10-04T03:00:00Z');
 
 $crossTenant = AiConversationCore::turn(
