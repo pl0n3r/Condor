@@ -132,6 +132,97 @@ final class AiToolDescriptorTest extends TestCase
         }
     }
 
+    public function testOutputValuesAcceptOnlyScalarOrNullContract(): void
+    {
+        $policy = new AiToolPolicy();
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => [],
+                'required_inputs' => [],
+                'output_names' => [
+                    'bool_value',
+                    'float_value',
+                    'int_value',
+                    'null_value',
+                    'string_value',
+                ],
+                'required_outputs' => ['string_value'],
+            ],
+        );
+
+        $descriptor->validateOutputs([
+            'string_value' => 'product:42',
+            'int_value' => 42,
+            'float_value' => 19.5,
+            'bool_value' => true,
+            'null_value' => null,
+        ]);
+
+        self::addToAssertionCount(1);
+    }
+
+    public function testNestedArrayObjectOrResourceOutputFailsClosed(): void
+    {
+        $policy = new AiToolPolicy();
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => [],
+                'required_inputs' => [],
+                'output_names' => ['value'],
+                'required_outputs' => ['value'],
+            ],
+        );
+
+        $resource = fopen('php://memory', 'r');
+        self::assertIsResource($resource);
+
+        try {
+            foreach (
+                [
+                    ['nested' => 'value'],
+                    new \stdClass(),
+                    $resource,
+                    INF,
+                ] as $value
+            ) {
+                try {
+                    $descriptor->validateOutputs(['value' => $value]);
+                    self::fail('El valor de output no escalar debía fallar cerrado.');
+                } catch (DomainException) {
+                    self::addToAssertionCount(1);
+                }
+            }
+        } finally {
+            fclose($resource);
+        }
+    }
+
+    public function testLegacyDescriptorKeepsEmptyOutputContract(): void
+    {
+        $policy = new AiToolPolicy();
+        $descriptor = AiToolDescriptor::fromArray(
+            $policy,
+            [
+                'tool' => 'catalog.read',
+                'risk' => AiToolPolicy::READ_ONLY,
+                'input_names' => [],
+                'required_inputs' => [],
+            ],
+        );
+
+        $descriptor->validateOutputs([]);
+        self::addToAssertionCount(1);
+
+        $this->expectException(DomainException::class);
+        $descriptor->validateOutputs(['value' => 'unexpected']);
+    }
+
     public function testUnknownRiskMismatchOrNoncanonicalDescriptorFailsClosed(): void
     {
         $policy = new AiToolPolicy();
