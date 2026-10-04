@@ -54,6 +54,7 @@ final class AiConversationCoreTest extends TestCase
                 'intent' => 'tool',
                 'tenant_id' => 'tenant-a',
                 'tool' => 'catalog.read',
+                'request_ref' => 'request:catalog-turn',
                 'evidence_ref' => 'evidence:catalog-turn',
                 'timestamp' => '2026-10-03T12:00:00+00:00',
             ],
@@ -95,6 +96,7 @@ final class AiConversationCoreTest extends TestCase
                 'intent' => 'tool',
                 'tenant_id' => 'tenant-a',
                 'tool' => 'identity.permission.change',
+                'request_ref' => 'request:sensitive-turn',
                 'evidence_ref' => 'evidence:sensitive-turn',
                 'timestamp' => '2026-10-03T12:00:00+00:00',
             ],
@@ -103,7 +105,31 @@ final class AiConversationCoreTest extends TestCase
             $executor,
         );
         self::assertSame('denied', $sensitive['status']);
+        self::assertSame('tool_sensitive_requires_human', $sensitive['reason']);
         self::assertFalse($sensitive['executed']);
+
+        $invalidRequest = AiConversationCore::turn(
+            AiTenantContext::fromArray([
+                'tenant_id' => 'tenant-a',
+                'tool' => 'catalog.read',
+                'knowledge_refs' => [],
+            ], $policy),
+            $policy,
+            [
+                'intent' => 'tool',
+                'tenant_id' => 'tenant-a',
+                'tool' => 'catalog.read',
+                'request_ref' => 'customer@example.test',
+                'evidence_ref' => 'evidence:invalid-request',
+                'timestamp' => '2026-10-03T12:00:00+00:00',
+            ],
+            [],
+            $at,
+            $executor,
+        );
+        self::assertSame('denied', $invalidRequest['status']);
+        self::assertSame('tool_request_denied', $invalidRequest['reason']);
+        self::assertFalse($invalidRequest['executed']);
 
         $unknown = AiConversationCore::turn(
             AiTenantContext::fromArray([
@@ -131,6 +157,7 @@ final class AiConversationCoreTest extends TestCase
                 'intent' => 'tool',
                 'tenant_id' => 'tenant-b',
                 'tool' => 'catalog.read',
+                'request_ref' => 'request:cross-tenant',
                 'evidence_ref' => 'evidence:cross-tenant',
                 'timestamp' => '2026-10-03T12:00:00+00:00',
             ],
@@ -161,7 +188,7 @@ final class AiConversationCoreTest extends TestCase
         self::assertSame('evidence_insufficient', $gap['reason']);
 
         self::assertSame(0, $executions);
-        foreach ([$sensitive, $unknown, $crossTenant, $gap] as $result) {
+        foreach ([$sensitive, $invalidRequest, $unknown, $crossTenant, $gap] as $result) {
             self::assertArrayNotHasKey('answer', $result);
             self::assertArrayNotHasKey('prompt', $result);
             self::assertArrayNotHasKey('body', $result);
