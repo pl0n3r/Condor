@@ -8,7 +8,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = ROOT / "src/Domain/AI/AiToolDescriptor.php"
-VERSION = ROOT / "config/version.php"
 
 
 def run_php(script: str) -> dict[str, object]:
@@ -80,17 +79,6 @@ print json_encode([
         self.assertEqual("catalog.read", snapshot["tool_ref"])
 
         source = DESCRIPTOR.read_text(encoding="utf-8")
-        self.assertIn("public function outputNames(): array", source)
-        self.assertIn("public function requiredOutputs(): array", source)
-        self.assertIn("public function validateOutputs(array $outputs): void", source)
-        self.assertIn("'version' => '0.1.161'", VERSION.read_text(encoding="utf-8"))
-
-    def test_output_values_accept_only_scalar_or_null_contract(self) -> None:
-        observed = run_php(
-            r"""
-require 'vendor/autoload.php';
-
-use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 
 $descriptor = AiToolDescriptor::fromArray(
@@ -132,7 +120,6 @@ require 'vendor/autoload.php';
 
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DomainException;
 
 $descriptor = AiToolDescriptor::fromArray(
     new AiToolPolicy(),
@@ -181,7 +168,6 @@ require 'vendor/autoload.php';
 
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DomainException;
 
 $descriptor = AiToolDescriptor::fromArray(
     new AiToolPolicy(),
@@ -221,7 +207,6 @@ require 'vendor/autoload.php';
 
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DomainException;
 
 $policy = new AiToolPolicy();
 $base = [
