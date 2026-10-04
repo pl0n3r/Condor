@@ -6,6 +6,7 @@ namespace App\Application\AI;
 
 use App\Domain\AI\AiAuditEnvelope;
 use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 use DomainException;
 use Throwable;
@@ -13,7 +14,8 @@ use Throwable;
 final class AiToolInvocation
 {
     /**
-     * @param callable():mixed $executor
+     * @param callable():mixed|callable(array<string, mixed>):mixed $executor
+     * @param array<string, mixed> $inputs
      * @return array{
      *     outcome:'success'|'denied'|'failure',
      *     executed:bool,
@@ -35,6 +37,8 @@ final class AiToolInvocation
         string $evidenceRef,
         string $timestamp,
         callable $executor,
+        ?AiToolDescriptor $descriptor = null,
+        array $inputs = [],
     ): array {
         self::assertAuditMetadataValid($context, $policy, $evidenceRef, $timestamp);
 
@@ -46,13 +50,55 @@ final class AiToolInvocation
             return self::result($context, $policy, 'denied', false, $evidenceRef, $timestamp);
         }
 
+        self::assertInputBindingValid(
+            $context,
+            $policy,
+            $requestedTool,
+            $descriptor,
+            $inputs,
+        );
+
         try {
-            $executor();
+            if ($descriptor === null) {
+                $executor();
+            } else {
+                $executor($inputs);
+            }
         } catch (Throwable) {
             return self::result($context, $policy, 'failure', true, $evidenceRef, $timestamp);
         }
 
         return self::result($context, $policy, 'success', true, $evidenceRef, $timestamp);
+    }
+
+    /**
+     * @param array<string, mixed> $inputs
+     */
+    private static function assertInputBindingValid(
+        AiTenantContext $context,
+        AiToolPolicy $policy,
+        string $requestedTool,
+        ?AiToolDescriptor $descriptor,
+        array $inputs,
+    ): void {
+        if ($descriptor === null) {
+            if ($inputs !== []) {
+                throw new DomainException('Inputs de tool IA requieren descriptor.');
+            }
+
+            return;
+        }
+
+        $canonicalTool = strtolower(trim($requestedTool));
+        if (
+            $descriptor->tool() !== $canonicalTool
+            || $descriptor->tool() !== $context->tool()
+            || $descriptor->risk() !== $policy->risk($canonicalTool)
+        ) {
+            throw new DomainException('Descriptor de inputs no corresponde a la tool solicitada.');
+        }
+
+        $descriptor->validateInputs($inputs);
     }
 
     private static function assertAuditMetadataValid(
