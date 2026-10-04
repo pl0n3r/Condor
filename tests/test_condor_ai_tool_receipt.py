@@ -89,7 +89,6 @@ use App\Application\AI\AiToolDecision;
 use App\Application\AI\AiToolReceipt;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolPolicy;
-use DomainException;
 
 $policy = new AiToolPolicy();
 $context = AiTenantContext::fromArray([
