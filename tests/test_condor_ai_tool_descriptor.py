@@ -106,7 +106,7 @@ $cases = [
     'noncanonical_tool' => array_replace($base, ['tool' => ' Catalog.Read ']),
     'risk_mismatch' => array_replace($base, ['risk' => AiToolPolicy::REVERSIBLE_WRITE]),
     'duplicate_input' => array_replace($base, ['input_names' => ['limit', 'limit']]),
-    'noncanonical_input' => array_replace($base, ['input_names' => ['CustomerEmail']]),
+    'noncanonical_input' => array_replace($base, ['input_names' => ['Invalid-Key']]),
     'free_payload' => array_replace($base, ['input_names' => ['payload']]),
     'required_outside_allowlist' => array_replace($base, ['required_inputs' => ['missing_ref']]),
     'extra_shape' => $base + ['handler' => 'arbitrary'],
@@ -126,7 +126,7 @@ $descriptor = AiToolDescriptor::fromArray($policy, $base);
 foreach (
     [
         'extra_input' => ['unknown' => 'x'],
-        'pii_input' => ['email' => 'person@example.test'],
+        'forbidden_runtime_input' => ['payload' => 'opaque'],
         'missing_required' => [],
     ] as $name => $inputs
 ) {

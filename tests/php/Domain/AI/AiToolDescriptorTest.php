@@ -63,7 +63,7 @@ final class AiToolDescriptorTest extends TestCase
             array_replace($base, ['tool' => ' Catalog.Read ']),
             array_replace($base, ['risk' => AiToolPolicy::REVERSIBLE_WRITE]),
             array_replace($base, ['input_names' => ['limit', 'limit']]),
-            array_replace($base, ['input_names' => ['CustomerEmail']]),
+            array_replace($base, ['input_names' => ['Invalid-Key']]),
             array_replace($base, ['input_names' => ['payload']]),
             array_replace($base, ['required_inputs' => ['missing_ref']]),
             $base + ['handler' => 'arbitrary'],
@@ -82,7 +82,7 @@ final class AiToolDescriptorTest extends TestCase
         foreach (
             [
                 ['unknown' => 'x'],
-                ['email' => 'person@example.test'],
+                ['payload' => 'opaque'],
             ] as $inputs
         ) {
             try {

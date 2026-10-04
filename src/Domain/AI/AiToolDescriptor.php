@@ -21,10 +21,6 @@ final readonly class AiToolDescriptor
         'credentials',
         'password',
         'authorization',
-        'email',
-        'phone',
-        'address',
-        'document',
     ];
 
     /** @var list<string> */
