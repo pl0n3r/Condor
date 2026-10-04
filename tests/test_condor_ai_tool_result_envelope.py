@@ -79,6 +79,16 @@ print json_encode($result, JSON_THROW_ON_ERROR);
         assert isinstance(audit, dict)
         self.assertNotIn("product_ref", audit)
         self.assertNotIn("label", audit)
+
+    def test_unknown_or_noncanonical_handler_output_fails_closed_without_raw_leak(
+        self,
+    ) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Application\AI\AiToolInvocation;
+use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 
