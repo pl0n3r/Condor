@@ -164,6 +164,64 @@ print json_encode($out, JSON_THROW_ON_ERROR);
                 self.assertTrue(result["failed_closed"])
                 self.assertEqual(0, result["executions"])
 
+    def test_invalid_input_value_fails_before_handler_without_leak(self) -> None:
+        observed = run_php(
+            r"""
+require 'vendor/autoload.php';
+
+use App\Application\AI\AiToolInvocation;
+use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
+use App\Domain\AI\AiToolPolicy;
+use DomainException;
+
+$policy = new AiToolPolicy();
+$context = AiTenantContext::fromArray([
+    'tenant_id' => 'tenant-a',
+    'tool' => 'catalog.read',
+    'knowledge_refs' => [],
+], $policy);
+$descriptor = AiToolDescriptor::fromArray(
+    $policy,
+    [
+        'tool' => 'catalog.read',
+        'risk' => AiToolPolicy::READ_ONLY,
+        'input_names' => ['category_ref'],
+        'required_inputs' => ['category_ref'],
+    ],
+);
+$executions = 0;
+$failedClosed = false;
+
+try {
+    AiToolInvocation::invoke(
+        $context,
+        $policy,
+        'tenant-a',
+        'catalog.read',
+        'evidence:invalid-input-value',
+        '2026-10-04T11:20:00+00:00',
+        static function (array $inputs) use (&$executions): void {
+            ++$executions;
+        },
+        $descriptor,
+        ['category_ref' => ['raw' => 'must-not-reach-handler']],
+    );
+} catch (DomainException) {
+    $failedClosed = true;
+}
+
+print json_encode([
+    'failed_closed' => $failedClosed,
+    'executions' => $executions,
+], JSON_THROW_ON_ERROR);
+"""
+        )
+
+        self.assertTrue(observed["failed_closed"])
+        self.assertEqual(0, observed["executions"])
+        self.assertNotIn("must-not-reach-handler", json.dumps(observed))
+
     def test_descriptor_is_mandatory_after_conversation_bridge(self) -> None:
         observed = run_php(
             r"""
