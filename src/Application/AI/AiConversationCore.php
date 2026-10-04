@@ -26,6 +26,7 @@ final class AiConversationCore
      *     evidence_refs:list<string>,
      *     sources:list<array<string, mixed>>,
      *     audit:array<string, string>|null,
+     *     tool_result?:array<string, string|int|float|bool|null>,
      *     receipt?:array{tenant_ref:string,tool_ref:string,request_ref:string,decision:'authorized',risk:'read_only'|'reversible_write',outcome:'success'|'denied'|'failure',evidence_ref:string,timestamp:string},
      *     handoff?:array{tenant_ref:string,route:'knowledge'|'tool'|'none',reason:string,evidence_refs:list<string>}
      * }
@@ -126,6 +127,7 @@ final class AiConversationCore
      *     evidence_refs:list<string>,
      *     sources:list<array<string, mixed>>,
      *     audit:array<string, string>|null,
+     *     tool_result?:array<string, string|int|float|bool|null>,
      *     receipt?:array{tenant_ref:string,tool_ref:string,request_ref:string,decision:'authorized',risk:'read_only'|'reversible_write',outcome:'success'|'denied'|'failure',evidence_ref:string,timestamp:string},
      *     handoff?:array{tenant_ref:string,route:'knowledge'|'tool'|'none',reason:string,evidence_refs:list<string>}
      * }
@@ -262,7 +264,7 @@ final class AiConversationCore
             ];
         }
 
-        return [
+        $response = [
             'status' => $status,
             'route' => 'tool',
             'reason' => $reason,
@@ -272,6 +274,12 @@ final class AiConversationCore
             'audit' => $result['audit'],
             'receipt' => $receipt,
         ];
+
+        if ($status === 'completed' && array_key_exists('tool_result', $result)) {
+            $response['tool_result'] = $result['tool_result'];
+        }
+
+        return $response;
     }
 
     /**
