@@ -62,10 +62,15 @@ class FactoryAdoptionTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, manual)
 
-    def test_factory_label_gate_remains_delegated_to_v1(self) -> None:
+    def test_factory_label_gate_keeps_general_v1_and_exact_pr_split(self) -> None:
         workflow = self.read(".github/workflows/sincronizar-gobierno.yml")
-        reference = "pl0n3r/factory/.github/workflows/etiquetas.yml@v1"
-        self.assertEqual(workflow.count(reference), 4)
+        general = "pl0n3r/factory/.github/workflows/etiquetas.yml@v1"
+        pr_split = (
+            "pl0n3r/factory/.github/workflows/etiquetas-pr.yml@"
+            "a2a2350b8ce686fda5aa06f49cd0e9accaa9ed98"
+        )
+        self.assertEqual(workflow.count(general), 3)
+        self.assertEqual(workflow.count(pr_split), 1)
         for mode in ("mode: sync", "mode: validate", "mode: sweep"):
             with self.subTest(mode=mode):
                 self.assertIn(mode, workflow)
