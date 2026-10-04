@@ -8,7 +8,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src/Domain/AI/AiToolDescriptor.php"
-VERSION = ROOT / "config/version.php"
 
 
 def run_php(script: str) -> dict[str, object]:
@@ -22,7 +21,7 @@ def run_php(script: str) -> dict[str, object]:
 
 
 class CondorAiToolDescriptorTests(unittest.TestCase):
-    def test_descriptor_binds_canonical_tool_risk_and_minimized_input_contract(self) -> None:
+    def test_descriptor_is_canonical_minimized_and_offline(self) -> None:
         observed = run_php(
             r"""
 require 'vendor/autoload.php';
@@ -71,8 +70,6 @@ print json_encode([
             },
             observed["snapshot"],
         )
-        self.assertIn("'version' => '0.1.152'", VERSION.read_text(encoding="utf-8"))
-
         source = SOURCE.read_text(encoding="utf-8").lower()
         for forbidden in (
             "pdo",
@@ -129,7 +126,6 @@ require 'vendor/autoload.php';
 
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DomainException;
 
 $descriptor = AiToolDescriptor::fromArray(
     new AiToolPolicy(),
@@ -176,7 +172,6 @@ require 'vendor/autoload.php';
 
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DomainException;
 
 $policy = new AiToolPolicy();
 $base = [

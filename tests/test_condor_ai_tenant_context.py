@@ -8,7 +8,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 AUTOLOAD = ROOT / "vendor/autoload.php"
 SOURCE = ROOT / "src/Domain/AI/AiTenantContext.php"
-VERSION = ROOT / "config/version.php"
 
 
 class CondorAiTenantContextTests(unittest.TestCase):
@@ -55,10 +54,6 @@ if ($context->snapshot() !== [
         ):
             self.assertNotIn(forbidden_dependency, source)
 
-        self.assertIn(
-            "'version' => '0.1.120'",
-            VERSION.read_text(encoding="utf-8"),
-        )
 
     def test_cross_tenant_rebind_or_personal_payload_fails_closed(self) -> None:
         self.run_php(

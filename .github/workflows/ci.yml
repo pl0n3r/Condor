@@ -545,6 +545,9 @@ jobs:
             --label "composer install" \
             -- composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Ejecutar contratos Condor AI
+        run: python3 -m unittest discover -s tests -p 'test_condor_ai_*.py'
+
       - name: Validar Composer y sintaxis PHP
         run: |
           set -euo pipefail

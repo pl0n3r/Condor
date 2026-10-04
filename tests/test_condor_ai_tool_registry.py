@@ -8,7 +8,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src/Application/AI/AiToolRegistry.php"
-VERSION = ROOT / "config/version.php"
 
 
 def run_php(script: str) -> dict[str, object]:
@@ -68,7 +67,6 @@ print json_encode([
         self.assertTrue(observed["same_descriptor"])
         self.assertEqual({"status": "ok"}, observed["result"])
         self.assertEqual(1, observed["executions"])
-        self.assertIn("'version' => '0.1.153'", VERSION.read_text(encoding="utf-8"))
 
         source = SOURCE.read_text(encoding="utf-8").lower()
         for forbidden in (
@@ -89,7 +87,6 @@ require 'vendor/autoload.php';
 use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DomainException;
 
 $policy = new AiToolPolicy();
 $descriptor = AiToolDescriptor::fromArray(

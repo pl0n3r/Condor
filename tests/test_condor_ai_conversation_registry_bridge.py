@@ -8,7 +8,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "src/Application/AI/AiConversationCore.php"
-VERSION = ROOT / "config/version.php"
 
 
 def run_php(script: str) -> dict[str, object]:
@@ -105,7 +104,6 @@ print json_encode([
         self.assertIn("AiToolRegistry $toolRegistry", source)
         self.assertIn("$toolRegistry->resolveWithInputs(", source)
         self.assertNotIn("$toolExecutor", source)
-        self.assertIn("'version' => '0.1.158'", VERSION.read_text(encoding="utf-8"))
 
     def test_unregistered_or_mismatched_tool_handoffs_without_arbitrary_executor(self) -> None:
         observed = run_php(

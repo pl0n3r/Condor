@@ -8,7 +8,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "src/Application/AI/AiToolRegistry.php"
-VERSION = ROOT / "config/version.php"
 
 
 def run_php(script: str) -> dict[str, object]:
@@ -81,7 +80,6 @@ print json_encode([
         source = REGISTRY.read_text(encoding="utf-8")
         self.assertIn("resolveWithInputs(string $tool, array $inputs)", source)
         self.assertIn("$descriptor->validateInputs($inputs)", source)
-        self.assertIn("'version' => '0.1.157'", VERSION.read_text(encoding="utf-8"))
 
     def test_registry_rejects_missing_unknown_or_tool_mismatch_without_execution(self) -> None:
         observed = run_php(
@@ -91,7 +89,6 @@ require 'vendor/autoload.php';
 use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DomainException;
 
 $policy = new AiToolPolicy();
 $descriptor = AiToolDescriptor::fromArray(

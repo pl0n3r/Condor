@@ -8,7 +8,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 AUTOLOAD = ROOT / "vendor/autoload.php"
 SOURCE = ROOT / "src/Domain/AI/AiAuditEnvelope.php"
-VERSION = ROOT / "config/version.php"
 
 
 class CondorAiAuditEnvelopeTests(unittest.TestCase):
@@ -64,10 +63,6 @@ if ($envelope->timestamp() !== '2026-10-03T01:00:00+00:00') { throw new \Runtime
         ):
             self.assertNotIn(forbidden_dependency, source)
 
-        self.assertIn(
-            "'version' => '0.1.121'",
-            VERSION.read_text(encoding="utf-8"),
-        )
 
     def test_prompt_pii_secrets_and_free_form_payload_fail_closed(self) -> None:
         self.run_php(

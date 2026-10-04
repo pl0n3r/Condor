@@ -8,7 +8,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "src/Application/AI/AiConversationCore.php"
-VERSION = ROOT / "config/version.php"
 
 
 def run_php(script: str) -> dict[str, object]:
@@ -32,7 +31,6 @@ use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
 $context = AiTenantContext::fromArray([
@@ -105,7 +103,6 @@ print json_encode([
         self.assertIn("resolveWithInputs(", source)
         self.assertIn("$registration['descriptor']", source)
         self.assertIn("$registration['inputs']", source)
-        self.assertIn("'version' => '0.1.158'", VERSION.read_text(encoding="utf-8"))
 
     def test_invalid_inputs_handoff_before_handler_and_never_leak(self) -> None:
         observed = run_php(
@@ -117,7 +114,6 @@ use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
 $context = AiTenantContext::fromArray([
