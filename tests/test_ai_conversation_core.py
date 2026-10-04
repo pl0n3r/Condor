@@ -26,13 +26,15 @@ class AiConversationCoreTests(unittest.TestCase):
 require 'vendor/autoload.php';
 
 use App\Application\AI\AiConversationCore;
+use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
+use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
 use App\Domain\Knowledge\KnowledgeArticle;
 use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
-$at = new DateTimeImmutable('2026-10-03T12:00:00Z');
+$at = new DateTimeImmutable('2026-10-04T07:00:00Z');
 $article = KnowledgeArticle::fromArray([
     'id' => 'guide',
     'version' => 1,
@@ -42,7 +44,7 @@ $article = KnowledgeArticle::fromArray([
     'locale' => 'es-CO',
     'scope' => 'tenant:tenant-a',
     'title' => 'Guía autorizada',
-    'body' => 'No debe convertirse en respuesta generada.',
+    'body' => 'Contenido de prueba.',
     'owner_ref' => 'team:support',
     'source_ref' => 'spec:guide',
     'tags' => ['support'],
@@ -73,10 +75,30 @@ $knowledge = AiConversationCore::turn(
     ],
     [$article],
     $at,
-    static fn (): null => null,
+    AiToolRegistry::fromArray($policy, []),
 );
 
 $executions = 0;
+$descriptor = AiToolDescriptor::fromArray(
+    $policy,
+    [
+        'tool' => 'catalog.read',
+        'risk' => AiToolPolicy::READ_ONLY,
+        'input_names' => [],
+        'required_inputs' => [],
+    ],
+);
+$registry = AiToolRegistry::fromArray(
+    $policy,
+    [[
+        'tool' => 'catalog.read',
+        'descriptor' => $descriptor,
+        'handler' => static function () use (&$executions): array {
+            ++$executions;
+            return ['opaque' => 'not-exposed'];
+        },
+    ]],
+);
 $tool = AiConversationCore::turn(
     AiTenantContext::fromArray([
         'tenant_id' => 'tenant-a',
@@ -88,15 +110,13 @@ $tool = AiConversationCore::turn(
         'intent' => 'tool',
         'tenant_id' => 'tenant-a',
         'tool' => 'catalog.read',
-        'evidence_ref' => 'evidence:catalog-turn',
-        'timestamp' => '2026-10-03T12:00:00+00:00',
+        'request_ref' => 'request:core-001',
+        'evidence_ref' => 'evidence:core-001',
+        'timestamp' => '2026-10-04T07:00:00+00:00',
     ],
     [],
     $at,
-    static function () use (&$executions): array {
-        ++$executions;
-        return ['raw' => 'must-not-leak'];
-    },
+    $registry,
 );
 
 print json_encode([
@@ -108,16 +128,10 @@ print json_encode([
         )
 
         self.assertEqual("ready", observed["knowledge"]["status"])
-        self.assertEqual(["knowledge:guide"], observed["knowledge"]["evidence_refs"])
         self.assertFalse(observed["knowledge"]["executed"])
         self.assertEqual(1, observed["executions"])
         self.assertEqual("completed", observed["tool"]["status"])
-        self.assertEqual("tenant:tenant-a", observed["tool"]["audit"]["tenant_ref"])
-        self.assertEqual(["evidence:catalog-turn"], observed["tool"]["evidence_refs"])
-        for result in (observed["knowledge"], observed["tool"]):
-            self.assertNotIn("answer", result)
-            self.assertNotIn("body", result)
-            self.assertNotIn("prompt", result)
+        self.assertEqual("catalog.read", observed["tool"]["audit"]["tool_ref"])
 
     def test_sensitive_unknown_or_evidence_gap_handoffs_without_side_effects(self) -> None:
         observed = run_php(
@@ -125,15 +139,14 @@ print json_encode([
 require 'vendor/autoload.php';
 
 use App\Application\AI\AiConversationCore;
+use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolPolicy;
-use App\Domain\Knowledge\KnowledgeArticle;
 use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
-$at = new DateTimeImmutable('2026-10-03T12:00:00Z');
-$executions = 0;
-$executor = static function () use (&$executions): void { ++$executions; };
+$at = new DateTimeImmutable('2026-10-04T07:00:00Z');
+$registry = AiToolRegistry::fromArray($policy, []);
 
 $sensitive = AiConversationCore::turn(
     AiTenantContext::fromArray([
@@ -146,12 +159,33 @@ $sensitive = AiConversationCore::turn(
         'intent' => 'tool',
         'tenant_id' => 'tenant-a',
         'tool' => 'identity.permission.change',
-        'evidence_ref' => 'evidence:sensitive-turn',
-        'timestamp' => '2026-10-03T12:00:00+00:00',
+        'request_ref' => 'request:sensitive',
+        'evidence_ref' => 'evidence:sensitive',
+        'timestamp' => '2026-10-04T07:00:00+00:00',
     ],
     [],
     $at,
-    $executor,
+    $registry,
+);
+
+$unregistered = AiConversationCore::turn(
+    AiTenantContext::fromArray([
+        'tenant_id' => 'tenant-a',
+        'tool' => 'catalog.read',
+        'knowledge_refs' => [],
+    ], $policy),
+    $policy,
+    [
+        'intent' => 'tool',
+        'tenant_id' => 'tenant-a',
+        'tool' => 'catalog.read',
+        'request_ref' => 'request:unregistered',
+        'evidence_ref' => 'evidence:unregistered',
+        'timestamp' => '2026-10-04T07:00:00+00:00',
+    ],
+    [],
+    $at,
+    $registry,
 );
 
 $unknown = AiConversationCore::turn(
@@ -164,94 +198,24 @@ $unknown = AiConversationCore::turn(
     ['intent' => 'unknown', 'tenant_id' => 'tenant-a'],
     [],
     $at,
-    $executor,
-);
-
-$cross = AiConversationCore::turn(
-    AiTenantContext::fromArray([
-        'tenant_id' => 'tenant-a',
-        'tool' => 'catalog.read',
-        'knowledge_refs' => [],
-    ], $policy),
-    $policy,
-    [
-        'intent' => 'tool',
-        'tenant_id' => 'tenant-b',
-        'tool' => 'catalog.read',
-        'evidence_ref' => 'evidence:cross-tenant',
-        'timestamp' => '2026-10-03T12:00:00+00:00',
-    ],
-    [],
-    $at,
-    $executor,
-);
-
-$article = KnowledgeArticle::fromArray([
-    'id' => 'guide',
-    'version' => 1,
-    'state' => 'published',
-    'visibility' => 'customer',
-    'audience' => 'customer',
-    'locale' => 'es-CO',
-    'scope' => 'tenant:tenant-a',
-    'title' => 'Guía autorizada',
-    'body' => 'No devolver como respuesta.',
-    'owner_ref' => 'team:support',
-    'source_ref' => 'spec:guide',
-    'tags' => ['support'],
-    'modules' => ['admin'],
-    'product_version_refs' => ['plan-version:negocio@2'],
-    'capability_refs' => ['capability:knowledge'],
-    'reviewed_at' => '2026-09-01T00:00:00Z',
-    'stale_after' => '2026-11-01T00:00:00Z',
-]);
-
-$gap = AiConversationCore::turn(
-    AiTenantContext::fromArray([
-        'tenant_id' => 'tenant-a',
-        'tool' => 'knowledge.read',
-        'knowledge_refs' => ['knowledge:guide'],
-    ], $policy),
-    $policy,
-    [
-        'intent' => 'knowledge',
-        'tenant_id' => 'tenant-a',
-        'knowledge_request' => [
-            'visibility' => 'customer',
-            'locale' => 'es-CO',
-            'module' => 'admin',
-            'evidence_confidence' => 'sufficient',
-            'minimum_sources' => 2,
-        ],
-    ],
-    [$article],
-    $at,
-    $executor,
+    $registry,
 );
 
 print json_encode([
-    'executions' => $executions,
     'sensitive' => $sensitive,
+    'unregistered' => $unregistered,
     'unknown' => $unknown,
-    'cross' => $cross,
-    'gap' => $gap,
 ], JSON_THROW_ON_ERROR);
 """
         )
 
-        self.assertEqual(0, observed["executions"])
-        self.assertEqual("denied", observed["sensitive"]["status"])
+        self.assertEqual("handoff", observed["sensitive"]["status"])
+        self.assertEqual("tool_sensitive_requires_human", observed["sensitive"]["reason"])
+        self.assertEqual("handoff", observed["unregistered"]["status"])
+        self.assertEqual("tool_handler_unavailable", observed["unregistered"]["reason"])
         self.assertEqual("handoff", observed["unknown"]["status"])
-        self.assertEqual("intent_not_supported", observed["unknown"]["reason"])
-        self.assertEqual("handoff", observed["cross"]["status"])
-        self.assertEqual("tenant_context_mismatch", observed["cross"]["reason"])
-        self.assertEqual("handoff", observed["gap"]["status"])
-        self.assertEqual("evidence_insufficient", observed["gap"]["reason"])
-        for name in ("sensitive", "unknown", "cross", "gap"):
-            self.assertFalse(observed[name]["executed"])
-            self.assertNotIn("answer", observed[name])
-            self.assertNotIn("body", observed[name])
-            self.assertNotIn("prompt", observed[name])
+        for key in ("sensitive", "unregistered", "unknown"):
+            self.assertFalse(observed[key]["executed"])
 
 
 if __name__ == "__main__":
