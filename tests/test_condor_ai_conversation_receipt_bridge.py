@@ -30,7 +30,6 @@ use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
 $descriptor = AiToolDescriptor::fromArray(
@@ -115,7 +114,6 @@ use App\Application\AI\AiToolRegistry;
 use App\Domain\AI\AiTenantContext;
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DateTimeImmutable;
 
 $policy = new AiToolPolicy();
 $descriptor = AiToolDescriptor::fromArray(
