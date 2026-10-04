@@ -188,6 +188,7 @@ $sensitive = AiConversationCore::turn(
         'intent' => 'tool',
         'tenant_id' => 'tenant-a',
         'tool' => 'identity.permission.change',
+        'inputs' => [],
         'request_ref' => 'request:sensitive-handoff',
         'evidence_ref' => 'evidence:sensitive-handoff',
         'timestamp' => '2026-10-04T03:00:00+00:00',
