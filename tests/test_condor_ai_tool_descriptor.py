@@ -126,7 +126,6 @@ require 'vendor/autoload.php';
 
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DomainException;
 
 $descriptor = AiToolDescriptor::fromArray(
     new AiToolPolicy(),
@@ -173,7 +172,6 @@ require 'vendor/autoload.php';
 
 use App\Domain\AI\AiToolDescriptor;
 use App\Domain\AI\AiToolPolicy;
-use DomainException;
 
 $policy = new AiToolPolicy();
 $base = [
