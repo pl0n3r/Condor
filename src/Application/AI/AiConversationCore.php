@@ -269,7 +269,7 @@ final class AiConversationCore
      *     evidence_refs:list<string>,
      *     sources:list<array<string, mixed>>,
      *     audit:null,
-     *     handoff:array{tenant_ref:string,route:'knowledge',reason:string,evidence_refs:list<string>}
+     *     handoff:array{tenant_ref:string,route:'knowledge'|'tool'|'none',reason:string,evidence_refs:list<string>}
      * }
      */
     private static function knowledgeHandoff(
