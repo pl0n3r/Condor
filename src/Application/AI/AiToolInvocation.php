@@ -20,6 +20,7 @@ final class AiToolInvocation
      *     outcome:'success'|'denied'|'failure',
      *     executed:bool,
      *     evidence_ref:string,
+     *     tool_result?:array<string, string|int|float|bool|null>,
      *     audit:array{
      *         tenant_ref:string,
      *         tool_ref:string,
@@ -59,12 +60,44 @@ final class AiToolInvocation
         );
 
         try {
-            $executor($inputs);
+            $handlerResult = $executor($inputs);
+
+            if ($descriptor->outputNames() === []) {
+                return self::result(
+                    $context,
+                    $policy,
+                    'success',
+                    true,
+                    $evidenceRef,
+                    $timestamp,
+                );
+            }
+
+            if (!is_array($handlerResult)) {
+                return self::result(
+                    $context,
+                    $policy,
+                    'failure',
+                    true,
+                    $evidenceRef,
+                    $timestamp,
+                );
+            }
+
+            $descriptor->validateOutputs($handlerResult);
         } catch (Throwable) {
             return self::result($context, $policy, 'failure', true, $evidenceRef, $timestamp);
         }
 
-        return self::result($context, $policy, 'success', true, $evidenceRef, $timestamp);
+        return self::result(
+            $context,
+            $policy,
+            'success',
+            true,
+            $evidenceRef,
+            $timestamp,
+            $handlerResult,
+        );
     }
 
     /**
@@ -146,6 +179,7 @@ final class AiToolInvocation
      *     outcome:'success'|'denied'|'failure',
      *     executed:bool,
      *     evidence_ref:string,
+     *     tool_result?:array<string, string|int|float|bool|null>,
      *     audit:array{
      *         tenant_ref:string,
      *         tool_ref:string,
@@ -162,6 +196,7 @@ final class AiToolInvocation
         bool $executed,
         string $evidenceRef,
         string $timestamp,
+        ?array $toolResult = null,
     ): array {
         $audit = AiAuditEnvelope::fromArray(
             [
@@ -174,11 +209,17 @@ final class AiToolInvocation
             $policy,
         );
 
-        return [
+        $result = [
             'outcome' => $outcome,
             'executed' => $executed,
             'evidence_ref' => $audit->evidenceRef(),
             'audit' => $audit->snapshot(),
         ];
+
+        if ($toolResult !== null) {
+            $result['tool_result'] = $toolResult;
+        }
+
+        return $result;
     }
 }
