@@ -11,15 +11,27 @@ use DomainException;
 
 final readonly class AiToolReceipt
 {
+    /** @var AiToolPolicy::READ_ONLY|AiToolPolicy::REVERSIBLE_WRITE */
+    private string $risk;
+
+    /** @var 'success'|'denied'|'failure' */
+    private string $outcome;
+
+    /**
+     * @param AiToolPolicy::READ_ONLY|AiToolPolicy::REVERSIBLE_WRITE $risk
+     * @param 'success'|'denied'|'failure' $outcome
+     */
     private function __construct(
         private string $tenantRef,
         private string $toolRef,
         private string $requestRef,
-        private string $risk,
-        private string $outcome,
+        string $risk,
+        string $outcome,
         private string $evidenceRef,
         private string $timestamp,
     ) {
+        $this->risk = $risk;
+        $this->outcome = $outcome;
     }
 
     /**
