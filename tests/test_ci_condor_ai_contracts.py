@@ -40,5 +40,41 @@ class CondorAiCiContractsTests(unittest.TestCase):
         )
 
 
+    def test_all_ai_contract_fixtures_are_release_agnostic_and_php85_clean(
+        self,
+    ) -> None:
+        fixtures = sorted((ROOT / "tests").glob("test_condor_ai_*.py"))
+        self.assertEqual(20, len(fixtures))
+
+        release_pin = re.compile(r"'version'\\s*=>\\s*'0\\.1\\.\\d+'")
+        forbidden_imports = (
+            "use DateTimeImmutable;",
+            "use DomainException;",
+            "use RuntimeException;",
+            "use stdClass;",
+        )
+
+        for fixture in fixtures:
+            source = fixture.read_text(encoding="utf-8")
+            with self.subTest(fixture=fixture.name):
+                self.assertNotIn('VERSION = ROOT / "config/version.php"', source)
+                self.assertNotIn("VERSION.read_text", source)
+                self.assertNotRegex(source, release_pin)
+                for forbidden in forbidden_imports:
+                    self.assertNotIn(forbidden, source)
+
+        replay = (
+            ROOT / "tests/test_condor_ai_conversation_replay_bridge.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('vendor" / "bin" / "simple-phpunit"', replay)
+        self.assertNotIn('vendor" / "bin" / "phpunit"', replay)
+
+        handoff = (
+            ROOT / "tests/test_condor_ai_handoff_envelope.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("AiToolRegistry::fromArray($policy, [])", handoff)
+        self.assertNotIn("$executor", handoff)
+
+
 if __name__ == "__main__":
     unittest.main()
