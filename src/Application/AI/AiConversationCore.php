@@ -62,7 +62,7 @@ final class AiConversationCore
      * @param list<KnowledgeArticle> $articles
      * @return array{
      *     status:'ready'|'handoff',
-     *     route:'knowledge'|'none',
+     *     route:'knowledge'|'tool'|'none',
      *     reason:string,
      *     executed:false,
      *     evidence_refs:list<string>,
@@ -122,7 +122,7 @@ final class AiConversationCore
      * @param callable():mixed $toolExecutor
      * @return array{
      *     status:'completed'|'denied'|'handoff',
-     *     route:'tool'|'none',
+     *     route:'knowledge'|'tool'|'none',
      *     reason:string,
      *     executed:bool,
      *     evidence_refs:list<string>,
