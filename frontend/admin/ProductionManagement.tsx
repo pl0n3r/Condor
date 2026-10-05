@@ -659,7 +659,7 @@ export function ProductionManagement({
               </div>
 
               {ready.materials.materials.length === 0 ? (
-                <p className="catalog-variant-empty">
+                <p className="catalog-variant-empty" role="status">
                   Aún no hay materias primas registradas.
                 </p>
               ) : (
@@ -841,7 +841,7 @@ export function ProductionManagement({
               </div>
 
               {ready.boms.boms.length === 0 ? (
-                <p className="catalog-variant-empty">
+                <p className="catalog-variant-empty" role="status">
                   Aún no hay BOM registradas.
                 </p>
               ) : (
@@ -965,7 +965,7 @@ export function ProductionManagement({
               </div>
 
               {ready.orders.orders.length === 0 ? (
-                <p className="catalog-variant-empty">
+                <p className="catalog-variant-empty" role="status">
                   Aún no hay órdenes de producción.
                 </p>
               ) : (
