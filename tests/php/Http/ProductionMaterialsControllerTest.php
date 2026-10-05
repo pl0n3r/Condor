@@ -207,8 +207,11 @@ final class ProductionMaterialsControllerTest extends WebTestCase
 
         [$tenantA, , $branchA, $ownerA] =
             $this->tenantWithOwner($manager, true, true);
-        [$tenantB, , , , ] =
-            $this->tenantWithOwner($manager, true, true);
+        $tenantB = $this->tenantWithOwner(
+            $manager,
+            true,
+            true,
+        )[0];
         $foreign = new Material(
             $tenantB,
             'FOREIGN-RAW',
