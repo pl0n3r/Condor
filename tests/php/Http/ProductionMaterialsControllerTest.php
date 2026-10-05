@@ -107,6 +107,18 @@ final class ProductionMaterialsControllerTest extends WebTestCase
         [$tenant, , $branch, $owner] =
             $this->tenantWithOwner($manager, true, true);
 
+        $viewer = new User(
+            'production-viewer-'.bin2hex(random_bytes(4)).'@example.test',
+            'Viewer producción',
+        );
+        $membership = new Membership($tenant, $viewer, 'ADMIN');
+        $role = new Role($tenant, 'Producción lectura', ['inventory.view']);
+        $assignment = new BranchRoleAssignment($membership, $branch, $role);
+        foreach ([$viewer, $membership, $role, $assignment] as $entity) {
+            $manager->persist($entity);
+        }
+        $manager->flush();
+
         $client->loginUser($owner);
         $csrf = $this->adminCsrfToken($client);
         $base = '/api/v1/branches/'.$branch->id().'/production/materials';
@@ -177,18 +189,6 @@ final class ProductionMaterialsControllerTest extends WebTestCase
             ['code' => 'NO-CSRF', 'name' => 'Denegada', 'unit' => 'unit'],
         );
         self::assertResponseStatusCodeSame(403);
-
-        $viewer = new User(
-            'production-viewer-'.bin2hex(random_bytes(4)).'@example.test',
-            'Viewer producción',
-        );
-        $membership = new Membership($tenant, $viewer, 'ADMIN');
-        $role = new Role($tenant, 'Producción lectura', ['inventory.view']);
-        $assignment = new BranchRoleAssignment($membership, $branch, $role);
-        foreach ([$viewer, $membership, $role, $assignment] as $entity) {
-            $manager->persist($entity);
-        }
-        $manager->flush();
 
         $client->loginUser($viewer);
         $client->jsonRequest(
