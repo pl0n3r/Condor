@@ -65,7 +65,7 @@ DEVELOPMENT_AUTO_MARKER = "condor-d043-dev-auto"
 MIGRATIONS_PREFIX = "migrations/"
 
 PHP_NOWDOC_ADD_SQL = re.compile(
-    r"""\$this->addSql\(\s*<<<'(?P<label>[A-Za-z_]\w*)'\r?\n(?P<sql>.*?)\r?\n(?P=label)\s*\)\s*;""",
+    r"""\$this->addSql\(\s*<<<'(?P<label>[A-Za-z_]\w*)'\r?\n(?P<sql>.*?)\r?\n[ \t]*(?P=label)\s*\)\s*;""",
     re.DOTALL | re.ASCII,
 )
 PHP_SINGLE_QUOTED_ADD_SQL = re.compile(

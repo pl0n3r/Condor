@@ -198,6 +198,40 @@ SQL);
         self.assertEqual(evidence["estado"], "VALIDATED_IN_PRODUCTION")
         self.assertEqual(evidence["development_auto_validation"]["migration_class"], "additive")
 
+    def test_indented_nowdoc_migration_is_classified_additive(self) -> None:
+        path = "migrations/Version20990101000001.php"
+        source = """<?php
+final class Version20990101000001 {
+    public function up(Schema $schema): void {
+        $this->addSql(<<<'SQL'
+            CREATE TABLE demo_indented (
+                id INT NOT NULL,
+                PRIMARY KEY(id)
+            )
+            SQL);
+    }
+    public function down(Schema $schema): void {}
+}
+"""
+        safety = module.development_transition_safety(
+            [path],
+            [{"path": path, "sha": SHA, "source": source}],
+        )
+        self.assertTrue(safety["migraciones"])
+        self.assertEqual(safety["migration_class"], "additive")
+        self.assertEqual(safety["migration_files"][0]["reason"], "additive_only")
+
+    def test_real_production_order_migration_version20261004153000_is_classified_additive(self) -> None:
+        path = "migrations/Version20261004153000.php"
+        source = (ROOT / path).read_text(encoding="utf-8")
+        safety = module.development_transition_safety(
+            [path],
+            [{"path": path, "sha": SHA, "source": source}],
+        )
+        self.assertTrue(safety["migraciones"])
+        self.assertEqual(safety["migration_class"], "additive")
+        self.assertEqual(safety["migration_files"][0]["reason"], "additive_only")
+
     def test_destructive_or_ambiguous_migration_keeps_human_path(self) -> None:
         path = "migrations/Version20990101000000.php"
         unsafe_up_bodies = [
