@@ -141,6 +141,7 @@ export function AdminApp({
         { href: '/admin/sitio', label: 'Sitio', current: section === 'site' },
         { href: '/admin#catalog', label: 'Catálogo' },
         { href: '/admin#inventory', label: 'Inventario' },
+        { href: '/admin#production', label: 'Producción' },
         { href: '/admin#commerce', label: 'Comercial' },
         { href: '/admin#orders', label: 'Pedidos' },
         { href: '/admin#roles', label: 'Roles y permisos' },
@@ -282,6 +283,15 @@ export function AdminApp({
             permissions={context.data.permissions}
             csrfToken={accessToken}
           />
+
+          {context.data.permissions.includes('inventory.view') && (
+            <ProductionManagement
+              key={'production-' + context.data.active_branch.id}
+              branchId={context.data.active_branch.id}
+              permissions={context.data.permissions}
+              csrfToken={accessToken}
+            />
+          )}
 
           <CommerceManagement
             key={'commerce-' + context.data.active_branch.id}
