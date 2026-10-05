@@ -55,8 +55,8 @@ final readonly class AiDraftWriteContract
             'risk' => AiToolPolicy::REVERSIBLE_WRITE,
             'input_names' => ['change_ref', 'draft_ref', 'expected_revision_ref'],
             'required_inputs' => ['change_ref', 'draft_ref'],
-            'output_names' => ['applied', 'draft_ref', 'revision_ref', 'status'],
-            'required_outputs' => ['applied', 'draft_ref', 'revision_ref', 'status'],
+            'output_names' => ['draft_ref', 'revision_ref', 'status'],
+            'required_outputs' => ['draft_ref', 'revision_ref', 'status'],
         ]);
     }
 
@@ -92,15 +92,7 @@ final readonly class AiDraftWriteContract
         $descriptor->validateOutputs($outputs);
         self::ref($outputs['draft_ref'], $draftPrefix, 'draft_ref');
         self::ref($outputs['revision_ref'], 'revision', 'revision_ref');
-        $status = self::status($outputs['status']);
-
-        if (!is_bool($outputs['applied'])) {
-            throw new DomainException('applied debe ser booleano.');
-        }
-
-        if (($status === 'updated') !== $outputs['applied']) {
-            throw new DomainException('status/applied de draft incoherentes.');
-        }
+        self::status($outputs['status']);
     }
 
     private static function ref(mixed $value, string $prefix, string $field): void
