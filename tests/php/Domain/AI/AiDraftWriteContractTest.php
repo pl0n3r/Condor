@@ -21,6 +21,22 @@ final class AiDraftWriteContractTest extends TestCase
         self::assertSame('settings.draft.update', $contract->settingsDescriptor()->tool());
         self::assertSame(AiToolPolicy::REVERSIBLE_WRITE, $contract->contentDescriptor()->risk());
         self::assertSame(AiToolPolicy::REVERSIBLE_WRITE, $contract->settingsDescriptor()->risk());
+        self::assertSame(
+            ['draft_ref', 'revision_ref', 'status'],
+            $contract->contentDescriptor()->outputNames(),
+        );
+        self::assertSame(
+            ['draft_ref', 'revision_ref', 'status'],
+            $contract->contentDescriptor()->requiredOutputs(),
+        );
+        self::assertSame(
+            ['draft_ref', 'revision_ref', 'status'],
+            $contract->settingsDescriptor()->outputNames(),
+        );
+        self::assertSame(
+            ['draft_ref', 'revision_ref', 'status'],
+            $contract->settingsDescriptor()->requiredOutputs(),
+        );
         self::assertSame($before, $policy->allowlist());
     }
 
