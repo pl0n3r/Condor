@@ -108,6 +108,26 @@ final class AiCommerceReadRuntimeTest extends TestCase
         self::assertSame('handoff', $missingHandler['status']);
         self::assertSame('tool_handler_unavailable', $missingHandler['reason']);
         self::assertSame(0, $calls);
+
+        $invalidOutput = AiCommerceReadRuntime::turn(
+            $context,
+            $policy,
+            self::turn('catalog.read', ['product_ref' => 'product:sku_42']),
+            $at,
+            [
+                'catalog.read' => static fn (array $inputs): array => [
+                    'product_ref' => $inputs['product_ref'],
+                    'currency' => 'BTC',
+                    'amount' => 1,
+                    'status' => 'available',
+                ],
+                'inventory.read' => $handlers['inventory.read'],
+            ],
+        );
+        self::assertSame('handoff', $invalidOutput['status']);
+        self::assertSame('tool_failed', $invalidOutput['reason']);
+        self::assertArrayNotHasKey('tool_result', $invalidOutput);
+        self::assertSame('failure', $invalidOutput['receipt']['outcome']);
     }
 
     public function testReadOnlyCommercePathNeverRequiresOrAcquiresWriteAuthority(): void
