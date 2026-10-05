@@ -18,7 +18,9 @@ Una release solo puede pasar a `VALIDATED_IN_PRODUCTION` automáticamente si tod
 6. no existe migración destructiva o ambigua;
 7. la fase sigue siendo `construccion`.
 
-Las transiciones candidatas están acotadas a `migraciones`, `comandos` y `cache`, pero además se exige procedencia. Las migraciones se consideran **ambiguas por defecto** y permanecen en camino humano hasta existir un clasificador determinista de destructividad. `comandos` solo se auto-resuelve cuando todos los paths que originan ese flag pertenecen a la allowlist mínima de tooling observacional (`scripts/release_evidence.py` y `scripts/d043_pending_releases.py`); cualquier `bin/console`, `src/Console/` o script de backfill/deploy/migrate/provision/release no allowlisted falla cerrado. `roles` y `configuracion` siempre mantienen el camino humano.
+Las transiciones candidatas están acotadas a `migraciones`, `comandos` y `cache`, pero además se exige procedencia. Las migraciones se clasifican desde el **contenido exacto del SHA de cada release** y solo pasan como `additive` cuando `up()` contiene exclusivamente SQL estático allowlisted: `CREATE TABLE`, `CREATE INDEX`, `ADD COLUMN` nullable o con default literal seguro y `ADD CONSTRAINT` sobre una tabla creada en la misma migración. `DROP`, `TRUNCATE`, `DELETE FROM`, `RENAME`, cambios de forma existentes, SQL dinámico, fuentes ausentes o cualquier sentencia no reconocida permanecen en camino humano. El clasificador nunca ejecuta SQL ni migraciones. `comandos` solo se auto-resuelve cuando todos los paths que originan ese flag pertenecen a la allowlist mínima de tooling observacional (`scripts/release_evidence.py` y `scripts/d043_pending_releases.py`); cualquier `bin/console`, `src/Console/` o script de backfill/deploy/migrate/provision/release no allowlisted falla cerrado. `cache` requiere `post-deploy phase=complete/result=success`. `roles` y `configuracion` siempre mantienen el camino humano.
+
+La evidencia publicada incluye la clase detectada (`none`, `additive` o `human`) y conserva un marker idempotente por versión+SHA para la revisión consolidada en #389.
 
 ## Bootstrap de la baseline previa y V0.1.138
 

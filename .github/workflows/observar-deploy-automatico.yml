@@ -222,9 +222,16 @@ jobs:
 
           jq --slurpfile post /tmp/d043-bootstrap-post.json             '.comprobaciones.post_deploy_status=$post[0]'             /tmp/d043-bootstrap-observation.json             > /tmp/d043-bootstrap-observation-dev.json
 
-          python3 scripts/release_evidence.py development-safety             < /tmp/d043-bootstrap-all-paths.txt             > /tmp/d043-bootstrap-safety.json
+          printf '%s\n' "$PREVIOUS_SHA" > /tmp/d043-bootstrap-source-shas.txt
+          jq -r '.[].sha' /tmp/d043-bootstrap-pending.json >> /tmp/d043-bootstrap-source-shas.txt
+          sort -u /tmp/d043-bootstrap-source-shas.txt -o /tmp/d043-bootstrap-source-shas.txt
+          python3 scripts/release_evidence.py development-migration-sources \
+            < /tmp/d043-bootstrap-source-shas.txt \
+            > /tmp/d043-bootstrap-migration-sources.json
 
-          dev_args=(development-auto --phase "$FASE_CONDOR")
+          jq -n --rawfile paths /tmp/d043-bootstrap-all-paths.txt --slurpfile migrations /tmp/d043-bootstrap-migration-sources.json '{changed_paths:($paths|split("\n")|map(select(length>0))),migration_sources:$migrations[0]}' | python3 scripts/release_evidence.py development-safety --json > /tmp/d043-bootstrap-safety.json
+
+          dev_args=(development-auto --phase "$FASE_CONDOR" --migration-class "$(jq -r '.migration_class' /tmp/d043-bootstrap-safety.json)")
           [[ "$(jq -r '.comandos' /tmp/d043-bootstrap-safety.json)" == "true" ]]             && dev_args+=(--commands-safe)
           [[ "$(jq -r '.migraciones' /tmp/d043-bootstrap-safety.json)" == "true" ]]             && dev_args+=(--migrations-safe)
 
@@ -473,9 +480,16 @@ jobs:
           set -euo pipefail
           jq --slurpfile post /tmp/d043-dev-post.json             '.comprobaciones.post_deploy_status=$post[0]'             /tmp/release-observation.json             > /tmp/d043-dev-observation.json
 
-          python3 scripts/release_evidence.py development-safety             < /tmp/d043-all-paths.txt             > /tmp/d043-dev-safety.json
+          printf '%s\n' "$GITHUB_SHA" > /tmp/d043-source-shas.txt
+          jq -r '.[].sha' /tmp/pending-identities.json >> /tmp/d043-source-shas.txt
+          sort -u /tmp/d043-source-shas.txt -o /tmp/d043-source-shas.txt
+          python3 scripts/release_evidence.py development-migration-sources \
+            < /tmp/d043-source-shas.txt \
+            > /tmp/d043-migration-sources.json
 
-          args=(development-auto --phase "$FASE_CONDOR")
+          jq -n --rawfile paths /tmp/d043-all-paths.txt --slurpfile migrations /tmp/d043-migration-sources.json '{changed_paths:($paths|split("\n")|map(select(length>0))),migration_sources:$migrations[0]}' | python3 scripts/release_evidence.py development-safety --json > /tmp/d043-dev-safety.json
+
+          args=(development-auto --phase "$FASE_CONDOR" --migration-class "$(jq -r '.migration_class' /tmp/d043-dev-safety.json)")
           [[ "$(jq -r '.comandos' /tmp/d043-dev-safety.json)" == "true" ]]             && args+=(--commands-safe)
           [[ "$(jq -r '.migraciones' /tmp/d043-dev-safety.json)" == "true" ]]             && args+=(--migrations-safe)
 
