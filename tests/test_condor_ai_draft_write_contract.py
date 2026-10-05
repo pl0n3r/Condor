@@ -61,7 +61,6 @@ $contract->validateContentOutputs([
   'draft_ref' => 'content_draft:homepage',
   'revision_ref' => 'revision:r43',
   'status' => 'updated',
-  'applied' => true,
 ]);
 $contract->validateSettingsInputs([
   'draft_ref' => 'settings_draft:storefront',
@@ -71,7 +70,6 @@ $contract->validateSettingsOutputs([
   'draft_ref' => 'settings_draft:storefront',
   'revision_ref' => 'revision:r10',
   'status' => 'conflict',
-  'applied' => false,
 ]);
 print json_encode(['accepted' => true], JSON_THROW_ON_ERROR);
 """
@@ -88,7 +86,7 @@ $cases = [
   'free_text' => fn () => $contract->validateContentInputs([
     'draft_ref' => 'content_draft:homepage', 'change_ref' => 'hero title libre'
   ]),
-  'extra' => fn () => $contract->validateContentInputs([
+  'extra_input' => fn () => $contract->validateContentInputs([
     'draft_ref' => 'content_draft:homepage', 'change_ref' => 'change:hero_title',
     'text' => 'contenido libre'
   ]),
@@ -96,13 +94,18 @@ $cases = [
     'draft_ref' => 'settings_draft:storefront', 'change_ref' => 'change:currency',
     'expected_revision_ref' => 'r10'
   ]),
-  'updated_not_applied' => fn () => $contract->validateContentOutputs([
+  'extra_output' => fn () => $contract->validateContentOutputs([
     'draft_ref' => 'content_draft:homepage', 'revision_ref' => 'revision:r43',
-    'status' => 'updated', 'applied' => false
+    'status' => 'updated', 'applied' => true
   ]),
-  'conflict_applied' => fn () => $contract->validateSettingsOutputs([
+  'conflict_revision' => fn () => $contract->validateSettingsOutputs([
+    'draft_ref' => 'settings_draft:storefront',
+    'revision_ref' => 'settings_draft:storefront',
+    'status' => 'conflict'
+  ]),
+  'status' => fn () => $contract->validateSettingsOutputs([
     'draft_ref' => 'settings_draft:storefront', 'revision_ref' => 'revision:r10',
-    'status' => 'conflict', 'applied' => true
+    'status' => 'pending'
   ]),
 ];
 $out = [];
