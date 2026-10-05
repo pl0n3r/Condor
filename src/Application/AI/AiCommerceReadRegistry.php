@@ -30,39 +30,27 @@ final readonly class AiCommerceReadRegistry
             throw new DomainException('Handlers comerciales read-only incompletos o no canónicos.');
         }
 
+        $contract = new AiCommerceReadContract($policy);
+        $registrations = [];
+
         foreach (self::TOOLS as $tool) {
-            if (!$handlers[$tool] instanceof Closure) {
+            $handler = $handlers[$tool] ?? null;
+            if (!$handler instanceof Closure) {
                 throw new DomainException('Handler comercial debe ser Closure.');
             }
+
+            $descriptor = $tool === 'catalog.read'
+                ? $contract->catalogDescriptor()
+                : $contract->inventoryDescriptor();
+
+            $registrations[] = [
+                'tool' => $tool,
+                'descriptor' => $descriptor,
+                'handler' => self::validatedHandler($contract, $tool, $handler),
+            ];
         }
 
-        $contract = new AiCommerceReadContract($policy);
-
-        return new self(
-            AiToolRegistry::fromArray(
-                $policy,
-                [
-                    [
-                        'tool' => 'catalog.read',
-                        'descriptor' => $contract->catalogDescriptor(),
-                        'handler' => self::validatedHandler(
-                            $contract,
-                            'catalog.read',
-                            $handlers['catalog.read'],
-                        ),
-                    ],
-                    [
-                        'tool' => 'inventory.read',
-                        'descriptor' => $contract->inventoryDescriptor(),
-                        'handler' => self::validatedHandler(
-                            $contract,
-                            'inventory.read',
-                            $handlers['inventory.read'],
-                        ),
-                    ],
-                ],
-            ),
-        );
+        return new self(AiToolRegistry::fromArray($policy, $registrations));
     }
 
     /**
