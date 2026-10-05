@@ -629,7 +629,7 @@ def safe_add_column(definition: str) -> bool:
 def classify_sql_statement(statement: str, created_tables: set[str]) -> tuple[bool, str]:
     """Clasifica una sentencia ascendente con allowlist aditiva estricta."""
     statement = re.sub(r"/\*.*?\*/", "", statement, flags=re.DOTALL)
-    statement = re.sub(r"--[^\\n]*|#[^\\n]*", "", statement).strip()
+    statement = re.sub(r"--[^\n]*|#[^\n]*", "", statement).strip()
     if not statement:
         return True, "empty"
     if SQL_FORBIDDEN.search(statement):
