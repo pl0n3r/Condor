@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Tests\Application\Commercial;
 
+use App\Application\Commercial\CommercialCatalogReader;
 use App\Application\Commercial\CommercialCatalogSeeder;
 use App\Application\Commercial\EntitlementContext;
 use App\Application\Commercial\EntitlementResolver;
+use App\Application\Commercial\PlanConfiguratorCatalogReader;
 use App\Application\Commercial\SubscriptionEntitlementContextFactory;
 use App\Domain\Commercial\Entity\AddOn;
 use App\Domain\Commercial\Entity\Plan;
@@ -15,6 +17,7 @@ use App\Domain\Commercial\Entity\Subscription;
 use App\Domain\Commercial\Entity\SubscriptionConfiguration;
 use App\Domain\Commercial\Entity\Vertical;
 use App\Domain\Commercial\EntitlementOverride;
+use App\Domain\Commercial\PlanVersionTimeline;
 use App\Domain\Commercial\SubscriptionLifecycle;
 use App\Domain\Commercial\SubscriptionState;
 use DateTimeImmutable;
@@ -45,9 +48,16 @@ final class SubscriptionEntitlementContextFactoryTest extends KernelTestCase
             $manager,
         );
 
-        $resolver = static::getContainer()->get(EntitlementResolver::class);
-        self::assertInstanceOf(EntitlementResolver::class, $resolver);
-        $this->resolver = $resolver;
+        $this->resolver = new EntitlementResolver(
+            new PlanConfiguratorCatalogReader(
+                new CommercialCatalogReader(
+                    $manager,
+                    new PlanVersionTimeline(),
+                ),
+                $manager,
+            ),
+            $manager,
+        );
         $this->at = new DateTimeImmutable('2026-10-05T10:00:00Z');
     }
 
