@@ -846,3 +846,117 @@
 .platform-catalog-variants code {
   color: var(--text);
 }
+
+.production-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.production-summary article {
+  display: grid;
+  gap: 4px;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.production-summary span,
+.production-row span,
+.production-row li {
+  color: var(--muted);
+}
+
+.production-summary strong {
+  font-size: 1.35rem;
+}
+
+.production-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+}
+
+.production-orders {
+  grid-column: 1 / -1;
+}
+
+.production-list,
+.production-components {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.production-row {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.production-row > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.production-row ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.production-component-row {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1.4fr)
+    minmax(120px, 0.7fr)
+    minmax(100px, 0.6fr)
+    auto;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.production-component-row .button,
+.production-complete .button {
+  width: auto;
+}
+
+.production-complete {
+  display: flex;
+  align-items: end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .production-layout,
+  .production-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .production-orders {
+    grid-column: auto;
+  }
+
+  .production-component-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .production-component-row {
+    grid-template-columns: 1fr;
+  }
+
+  .production-component-row .button,
+  .production-complete,
+  .production-complete .button {
+    width: 100%;
+  }
+}
+
