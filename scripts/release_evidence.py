@@ -62,6 +62,42 @@ DEVELOPMENT_SAFE_COMMAND_SCRIPTS = frozenset({
 })
 DEVELOPMENT_AUTO_MARKER = "condor-d043-dev-auto"
 
+PHP_NOWDOC_ADD_SQL = re.compile(
+    r"""\\$this->addSql\\(\\s*<<<'(?P<label>[A-Za-z_][A-Za-z0-9_]*)'\\r?\\n(?P<sql>.*?)\\r?\\n(?P=label)\\s*\\)\\s*;""",
+    re.DOTALL,
+)
+PHP_SINGLE_QUOTED_ADD_SQL = re.compile(
+    r"""\\$this->addSql\\(\\s*'(?P<sql>(?:\\\\.|[^'\\\\])*)'\\s*\\)\\s*;""",
+    re.DOTALL,
+)
+PHP_UP_METHOD = re.compile(
+    r"public\\s+function\\s+up\\s*\\([^)]*\\)\\s*(?::\\s*void)?\\s*\\{",
+    re.IGNORECASE,
+)
+PHP_DOWN_METHOD = re.compile(r"public\\s+function\\s+down\\s*\\(", re.IGNORECASE)
+SQL_CREATE_TABLE = re.compile(
+    r"^CREATE\\s+TABLE(?:\\s+IF\\s+NOT\\s+EXISTS)?\\s+([^\\s(]+)", re.IGNORECASE
+)
+SQL_CREATE_INDEX = re.compile(
+    r"^CREATE\\s+(?:UNIQUE\\s+)?INDEX\\s+[^\\s]+\\s+ON\\s+[^\\s(]+", re.IGNORECASE
+)
+SQL_ALTER_ADD_COLUMN = re.compile(
+    r"^ALTER\\s+TABLE\\s+([^\\s]+)\\s+ADD\\s+(?:COLUMN\\s+)?([^\\s]+)\\s+(.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
+SQL_ALTER_ADD_CONSTRAINT = re.compile(
+    r"^ALTER\\s+TABLE\\s+([^\\s]+)\\s+ADD\\s+CONSTRAINT\\s+.+$",
+    re.IGNORECASE | re.DOTALL,
+)
+SQL_FORBIDDEN = re.compile(
+    r"\\b(?:DROP|TRUNCATE|RENAME|UPDATE|INSERT|REPLACE|CALL)\\b|\\bDELETE\\s+FROM\\b",
+    re.IGNORECASE,
+)
+SQL_SAFE_DEFAULT = re.compile(
+    r"""\\bDEFAULT\\s+(?:NULL|TRUE|FALSE|-?\\d+(?:\\.\\d+)?|'(?:''|[^'])*')(?=\\s|,|$)""",
+    re.IGNORECASE,
+)
+
 
 class EvidenceError(ValueError):
     """Error determinista presentable sin datos sensibles."""
@@ -493,32 +529,221 @@ def finalize(
         },
     }
 
-def development_transition_safety(changed_paths: Iterable[str]) -> dict[str, Any]:
+def migration_up_section(source: str) -> str | None:
+    """Extrae up() sin interpretar PHP; cualquier forma inesperada falla cerrado."""
+    up = PHP_UP_METHOD.search(source)
+    if up is None:
+        return None
+    down = PHP_DOWN_METHOD.search(source, up.end())
+    if down is None:
+        return None
+    return source[up.end():down.start()]
+
+
+def php_static_add_sql_blocks(section: str) -> tuple[list[str], str | None]:
+    """Acepta solo addSql() con string simple o nowdoc estático."""
+    matches = [*PHP_NOWDOC_ADD_SQL.finditer(section), *PHP_SINGLE_QUOTED_ADD_SQL.finditer(section)]
+    matches.sort(key=lambda item: item.start())
+    if len(matches) != section.count("$this->addSql("):
+        return [], "dynamic_or_unparsed_add_sql"
+
+    blocks: list[str] = []
+    cursor = 0
+    residue: list[str] = []
+    for match in matches:
+        if match.start() < cursor:
+            return [], "overlapping_add_sql"
+        residue.append(section[cursor:match.start()])
+        raw = match.group("sql")
+        if match.re is PHP_SINGLE_QUOTED_ADD_SQL:
+            raw = raw.replace("\\'", "'").replace("\\\\", "\\")
+        blocks.append(raw)
+        cursor = match.end()
+    residue.append(section[cursor:])
+
+    remainder = "".join(residue)
+    remainder = re.sub(r"/\\*.*?\\*/", "", remainder, flags=re.DOTALL)
+    remainder = re.sub(r"//[^\\n]*|#[^\\n]*", "", remainder)
+    remainder = remainder.replace("}", "").strip()
+    if remainder:
+        return [], "non_add_sql_operation"
+    if not blocks:
+        return [], "no_static_add_sql"
+    return blocks, None
+
+
+def split_sql_statements(sql: str) -> list[str]:
+    """Divide SQL estático respetando literales y backticks."""
+    statements: list[str] = []
+    current: list[str] = []
+    quote: str | None = None
+    escaped = False
+    for char in sql:
+        if quote is not None:
+            current.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            continue
+        if char in {"'", '"', "`"}:
+            quote = char
+            current.append(char)
+            continue
+        if char == ";":
+            statement = "".join(current).strip()
+            if statement:
+                statements.append(statement)
+            current = []
+            continue
+        current.append(char)
+    if quote is not None:
+        return []
+    tail = "".join(current).strip()
+    if tail:
+        statements.append(tail)
+    return statements
+
+
+def sql_identifier(value: str) -> str:
+    """Normaliza identificadores simples para comparar tablas creadas."""
+    return value.strip().replace("`", "").lower()
+
+
+def safe_add_column(definition: str) -> bool:
+    """Permite columnas nullable o NOT NULL con default literal determinista."""
+    upper = definition.upper()
+    if any(token in upper for token in ("AUTO_INCREMENT", "GENERATED", " AS (")):
+        return False
+    nullable = re.search(r"\\bNULL\\b", definition, re.IGNORECASE) is not None
+    not_null = re.search(r"\\bNOT\\s+NULL\\b", definition, re.IGNORECASE) is not None
+    return (nullable and not not_null) or SQL_SAFE_DEFAULT.search(definition) is not None
+
+
+def classify_sql_statement(statement: str, created_tables: set[str]) -> tuple[bool, str]:
+    """Clasifica una sentencia ascendente con allowlist aditiva estricta."""
+    statement = re.sub(r"/\\*.*?\\*/", "", statement, flags=re.DOTALL)
+    statement = re.sub(r"--[^\\n]*|#[^\\n]*", "", statement).strip()
+    if not statement:
+        return True, "empty"
+    if SQL_FORBIDDEN.search(statement):
+        return False, "destructive_keyword"
+
+    create_table = SQL_CREATE_TABLE.match(statement)
+    if create_table is not None:
+        created_tables.add(sql_identifier(create_table.group(1)))
+        return True, "create_table"
+    if SQL_CREATE_INDEX.match(statement) is not None:
+        return True, "create_index"
+
+    add_column = SQL_ALTER_ADD_COLUMN.match(statement)
+    if add_column is not None:
+        definition = add_column.group(3)
+        if re.search(r"\\b(?:DROP|MODIFY|CHANGE|RENAME)\\b", definition, re.IGNORECASE):
+            return False, "alter_existing_shape"
+        if safe_add_column(definition):
+            return True, "add_column_safe"
+        return False, "add_column_not_safe"
+
+    add_constraint = SQL_ALTER_ADD_CONSTRAINT.match(statement)
+    if add_constraint is not None:
+        table = sql_identifier(add_constraint.group(1))
+        if table in created_tables:
+            return True, "add_constraint_new_table"
+        return False, "constraint_on_existing_table"
+    return False, "statement_not_allowlisted"
+
+
+def classify_migration_source(source: object) -> tuple[bool, str]:
+    """Clasifica únicamente el camino up(); down() no autoriza el ascenso."""
+    if not isinstance(source, str) or not source.strip():
+        return False, "migration_source_missing"
+    section = migration_up_section(source)
+    if section is None:
+        return False, "up_method_unparsed"
+    blocks, parse_error = php_static_add_sql_blocks(section)
+    if parse_error is not None:
+        return False, parse_error
+
+    created_tables: set[str] = set()
+    statement_count = 0
+    for block in blocks:
+        statements = split_sql_statements(block)
+        if not statements:
+            return False, "sql_unparsed"
+        for statement in statements:
+            statement_count += 1
+            safe, reason = classify_sql_statement(statement, created_tables)
+            if not safe:
+                return False, reason
+    return (True, "additive_only") if statement_count else (False, "no_sql")
+
+
+def migration_source_safety(migration_paths: list[str], migration_sources: object) -> dict[str, Any]:
+    """Exige fuente exacta para cada migración y clasifica todas fail-closed."""
+    if not migration_paths:
+        return {"safe": True, "class": "none", "reason": "no_migrations", "files": []}
+    if not isinstance(migration_sources, list):
+        return {"safe": False, "class": "human", "reason": "migration_sources_missing", "files": []}
+
+    expected = set(migration_paths)
+    seen: set[str] = set()
+    files: list[dict[str, Any]] = []
+    all_safe = True
+    for item in migration_sources:
+        if not isinstance(item, dict):
+            all_safe = False
+            files.append({"safe": False, "reason": "invalid_source_entry"})
+            continue
+        path = item.get("path")
+        sha = item.get("sha")
+        if not isinstance(path, str) or path not in expected:
+            all_safe = False
+            files.append({"safe": False, "reason": "unexpected_migration_path"})
+            continue
+        seen.add(path)
+        safe, reason = classify_migration_source(item.get("source"))
+        all_safe = all_safe and safe
+        files.append({"path": path, "sha": sha, "safe": safe, "reason": reason})
+
+    missing = sorted(expected.difference(seen))
+    if missing:
+        all_safe = False
+        files.extend({"path": path, "safe": False, "reason": "migration_source_missing"} for path in missing)
+    return {
+        "safe": all_safe,
+        "class": "additive" if all_safe else "human",
+        "reason": "additive_only" if all_safe else "destructive_or_ambiguous",
+        "files": files,
+    }
+
+
+def development_transition_safety(
+    changed_paths: Iterable[str],
+    migration_sources: object = None,
+) -> dict[str, Any]:
     """Clasifica procedencia operativa sin inferir ejecución de comandos."""
     paths = normalized_paths(changed_paths)
-    migration_paths = [
-        path for path in paths if path.startswith("migrations/")
-    ]
+    migration_paths = [path for path in paths if path.startswith("migrations/")]
+    migration = migration_source_safety(migration_paths, migration_sources)
     command_paths = [
         path
         for path in paths
         if (
             path == "bin/console"
             or path.startswith("src/Console/")
-            or (
-                path.startswith("scripts/")
-                and script_requires_release_transition(path)
-            )
+            or (path.startswith("scripts/") and script_requires_release_transition(path))
         )
     ]
-    unsafe_commands = sorted(
-        path
-        for path in command_paths
-        if path not in DEVELOPMENT_SAFE_COMMAND_SCRIPTS
-    )
+    unsafe_commands = sorted(path for path in command_paths if path not in DEVELOPMENT_SAFE_COMMAND_SCRIPTS)
     return {
-        "migraciones": not migration_paths,
+        "migraciones": migration["safe"],
         "comandos": not unsafe_commands,
+        "migration_class": migration["class"],
+        "migration_reason": migration["reason"],
+        "migration_files": migration["files"],
         "migration_paths": migration_paths,
         "command_paths": command_paths,
         "unsafe_command_paths": unsafe_commands,
@@ -594,6 +819,7 @@ def development_auto_validation(
             "reason": reasons[0],
             "required": sorted(required),
             "auto_verified": [],
+            "migration_class": str(safety.get("migration_class", "unknown")),
         }
         return evidence
 
@@ -606,6 +832,7 @@ def development_auto_validation(
         "reason": "exact_evidence_complete",
         "required": sorted(required),
         "auto_verified": sorted(required),
+        "migration_class": str(safety.get("migration_class", "unknown")),
     }
     return evidence
 
@@ -640,6 +867,7 @@ def development_validation_comment(evidence: dict[str, Any]) -> str:
         f"- SHA exacto: `{evidence['sha']}`\n"
         "- Fase: `construccion` (fuera de esta fase el mecanismo falla cerrado).\n"
         f"- Transiciones verificadas por evidencia: {verified}.\n"
+        f"- Clase de migración: `{dev.get('migration_class', 'unknown')}`.\n"
         "- Evidencia requerida: identidad exacta, smoke público, schema al día y "
         "`post-deploy phase=complete/result=success`.\n"
         "- Migraciones destructivas/ambiguas y transiciones no soportadas no se "
@@ -759,12 +987,13 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("accumulate")
 
     safety_parser = subparsers.add_parser("development-safety")
-    safety_parser.set_defaults(_development_safety=True)
+    safety_parser.add_argument("--json", action="store_true")
 
     development_parser = subparsers.add_parser("development-auto")
     development_parser.add_argument("--phase", required=True)
     development_parser.add_argument("--commands-safe", action="store_true")
     development_parser.add_argument("--migrations-safe", action="store_true")
+    development_parser.add_argument("--migration-class", choices=("none", "additive", "human", "unknown"), default="unknown")
 
     subparsers.add_parser("development-comment")
 
@@ -805,7 +1034,16 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "development-safety":
-            result = development_transition_safety(sys.stdin.read().splitlines())
+            if args.json:
+                payload = json.load(sys.stdin)
+                if not isinstance(payload, dict):
+                    raise EvidenceError("La entrada development-safety debe ser JSON.")
+                changed_paths = payload.get("changed_paths")
+                if not isinstance(changed_paths, list) or not all(isinstance(path, str) for path in changed_paths):
+                    raise EvidenceError("changed_paths debe ser una lista de strings.")
+                result = development_transition_safety(changed_paths, payload.get("migration_sources"))
+            else:
+                result = development_transition_safety(sys.stdin.read().splitlines())
             print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
 
@@ -825,6 +1063,7 @@ def main(argv: list[str] | None = None) -> int:
                 transition_safety={
                     "comandos": args.commands_safe,
                     "migraciones": args.migrations_safe,
+                    "migration_class": args.migration_class,
                 },
             )
             print(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True))

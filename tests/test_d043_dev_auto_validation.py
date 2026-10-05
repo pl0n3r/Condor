@@ -164,10 +164,65 @@ class D043DevAutoValidationTests(unittest.TestCase):
             ["scripts/provision-production.php"],
         )
         self.assertFalse(migration["migraciones"])
+        self.assertEqual(migration["migration_class"], "human")
         self.assertEqual(
             migration["migration_paths"],
             ["migrations/Version20261003000100.php"],
         )
+
+    def migration_manifest(self) -> dict:
+        value = manifest()
+        for item in value["transition"]["checks"]:
+            item["required"] = item["id"] in {"migraciones", "cache"}
+        return value
+
+    def test_additive_only_migration_is_classified_safe_and_auto_validated_in_construction(self) -> None:
+        path = "migrations/Version20990101000000.php"
+        source = """<?php
+final class Version20990101000000 {
+    public function up(Schema $schema): void {
+        $this->addSql(<<<'SQL'
+CREATE TABLE demo_safe (id INT NOT NULL, PRIMARY KEY(id))
+SQL);
+        $this->addSql('ALTER TABLE demo_safe ADD CONSTRAINT FK_DEMO FOREIGN KEY (id) REFERENCES other_table (id)');
+    }
+    public function down(Schema $schema): void {}
+}
+"""
+        safety = module.development_transition_safety([path], [{"path": path, "sha": SHA, "source": source}])
+        self.assertTrue(safety["migraciones"])
+        self.assertEqual(safety["migration_class"], "additive")
+        evidence = module.development_auto_validation(self.migration_manifest(), observation(), phase="construccion", transition_safety=safety)
+        self.assertEqual(evidence["estado"], "VALIDATED_IN_PRODUCTION")
+        self.assertEqual(evidence["development_auto_validation"]["migration_class"], "additive")
+
+    def test_destructive_or_ambiguous_migration_keeps_human_path(self) -> None:
+        path = "migrations/Version20990101000000.php"
+        unsafe_up_bodies = [
+            "$this->addSql('DROP TABLE demo_safe');",
+            "$this->addSql('TRUNCATE TABLE demo_safe');",
+            "$this->addSql('DELETE FROM demo_safe');",
+            "$this->addSql('RENAME TABLE demo_safe TO demo_other');",
+            "$this->addSql('ALTER TABLE demo_safe MODIFY value VARCHAR(255) NOT NULL');",
+            "$sql = 'CREATE TABLE demo_safe (id INT)'; $this->addSql($sql);",
+        ]
+        for body in unsafe_up_bodies:
+            with self.subTest(body=body):
+                source = "<?php\nfinal class Version20990101000000 {\npublic function up(Schema $schema): void {\n" + body + "\n}\npublic function down(Schema $schema): void {}\n}\n"
+                safety = module.development_transition_safety([path], [{"path": path, "sha": SHA, "source": source}])
+                self.assertFalse(safety["migraciones"])
+                self.assertEqual(safety["migration_class"], "human")
+                evidence = module.development_auto_validation(self.migration_manifest(), observation(), phase="construccion", transition_safety=safety)
+                self.assertNotEqual(evidence["estado"], "VALIDATED_IN_PRODUCTION")
+                self.assertEqual(evidence["development_auto_validation"]["reason"], "migration_not_proven_safe")
+
+    def test_real_bom_migration_version20261004143000_is_classified_additive(self) -> None:
+        path = "migrations/Version20261004143000.php"
+        source = (ROOT / path).read_text(encoding="utf-8")
+        safety = module.development_transition_safety([path], [{"path": path, "sha": SHA, "source": source}])
+        self.assertTrue(safety["migraciones"])
+        self.assertEqual(safety["migration_class"], "additive")
+        self.assertEqual(safety["migration_files"][0]["reason"], "additive_only")
 
     def test_auto_validation_is_recorded_distinguishable_and_idempotent(self) -> None:
         evidence = module.development_auto_validation(
@@ -181,6 +236,7 @@ class D043DevAutoValidationTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertIn("condor-d043-dev-auto", first)
         self.assertIn("validación automática de desarrollo", first)
+        self.assertIn("Clase de migración", first)
         self.assertIn("#389", first)
 
         workflow = WORKFLOW.read_text(encoding="utf-8")
