@@ -7,7 +7,6 @@ import {
 } from 'react';
 import {
   inventoryPath,
-  productionBomPath,
   productionBomsPath,
   productionMaterialAdjustmentPath,
   productionMaterialPath,
