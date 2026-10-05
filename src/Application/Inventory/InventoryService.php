@@ -40,7 +40,7 @@ final readonly class InventoryService
         $key = self::normalizeIdempotencyKey($idempotencyKey);
 
         try {
-            return $this->entityManager->wrapInTransaction(
+            return $this->transactional(
                 function (EntityManagerInterface $entityManager) use (
                 $tenant,
                 $source,
