@@ -66,7 +66,22 @@ final class Version20261004153000 extends AbstractMigration // NOSONAR -- nombre
                 CONSTRAINT CHK_PRODUCTION_ORDER_COMPLETED
                     CHECK (completed_quantity IS NULL OR completed_quantity > 0),
                 CONSTRAINT CHK_PRODUCTION_ORDER_STATUS
-                    CHECK (status IN ('draft', 'completed'))
+                    CHECK (status IN ('draft', 'completed')),
+                CONSTRAINT CHK_PRODUCTION_ORDER_COMPLETION_STATE
+                    CHECK (
+                        (
+                            status = 'draft'
+                            AND completed_quantity IS NULL
+                            AND completion_idempotency_key IS NULL
+                            AND completed_at IS NULL
+                        )
+                        OR (
+                            status = 'completed'
+                            AND completed_quantity = target_quantity
+                            AND completion_idempotency_key IS NOT NULL
+                            AND completed_at IS NOT NULL
+                        )
+                    )
             ) DEFAULT CHARACTER SET utf8mb4
               COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
             SQL);
