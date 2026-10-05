@@ -13,6 +13,11 @@ final readonly class AiCommerceReadRuntime
 {
     private const TOOLS = ['catalog.read', 'inventory.read'];
 
+    /**
+     * @param array<string, mixed> $turn
+     * @param array<string, mixed> $handlers
+     * @return array<string, mixed>
+     */
     public static function turn(
         AiTenantContext $context,
         AiToolPolicy $policy,
