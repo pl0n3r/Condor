@@ -64,6 +64,9 @@ final readonly class MaterialInventoryService
                                 $source,
                                 $material,
                                 $delta,
+                                str_starts_with($delta, '-')
+                                    ? MaterialInventoryMovement::TYPE_ADJUSTMENT_OUT
+                                    : MaterialInventoryMovement::TYPE_ADJUSTMENT_IN,
                                 $context,
                             );
 
@@ -194,6 +197,7 @@ final readonly class MaterialInventoryService
                                 $source,
                                 $material,
                                 $delta,
+                                MaterialInventoryMovement::TYPE_PRODUCTION_CONSUMPTION,
                                 $context,
                             );
                             $movements[] = $existing;
@@ -306,6 +310,7 @@ final readonly class MaterialInventoryService
         InventorySource $source,
         Material $material,
         string $delta,
+        string $type,
         array $context,
     ): void {
         if (
@@ -314,6 +319,7 @@ final readonly class MaterialInventoryService
             || $movement->delta() !== MaterialInventoryBalance::normalizeDelta(
                 $delta,
             )
+            || $movement->type() !== $type
             || $movement->context() !== $context
         ) {
             throw new DomainException(
