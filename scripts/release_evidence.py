@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import sys
+import subprocess
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -748,6 +749,40 @@ def migration_source_safety(migration_paths: list[str], migration_sources: objec
     }
 
 
+def git_text(args: list[str], *, missing_ok: bool = False) -> str | None:
+    """Lee Git sin shell; errores inesperados mantienen el camino fail-closed."""
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+    except (OSError, subprocess.CalledProcessError):
+        if missing_ok:
+            return None
+        raise EvidenceError("No fue posible leer la identidad histórica desde Git.")
+    return result.stdout
+
+
+def development_migration_sources(release_shas: Iterable[str]) -> list[dict[str, Any]]:
+    """Recupera fuentes exactas de migración para cada release sin ejecutar SQL."""
+    entries: list[dict[str, Any]] = []
+    for sha in normalized_paths(release_shas):
+        if SHA_PATTERN.fullmatch(sha) is None:
+            raise EvidenceError("Cada release source debe usar SHA exacto.")
+        changed = git_text(["diff", "--name-only", f"{sha}^", sha])
+        assert changed is not None
+        for path in normalized_paths(changed.splitlines()):
+            if not path.startswith("migrations/"):
+                continue
+            source = git_text(["show", f"{sha}:{path}"], missing_ok=True)
+            entries.append({"path": path, "sha": sha, "source": source})
+    return entries
+
+
 def development_transition_safety(
     changed_paths: Iterable[str],
     migration_sources: object = None,
@@ -1034,6 +1069,7 @@ def main(argv: list[str] | None = None) -> int:
 
     safety_parser = subparsers.add_parser("development-safety")
     safety_parser.add_argument("--json", action="store_true")
+    subparsers.add_parser("development-migration-sources")
 
     development_parser = subparsers.add_parser("development-auto")
     development_parser.add_argument("--phase", required=True)
@@ -1082,6 +1118,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "development-safety":
             changed_paths, migration_sources = load_development_safety_input(args.json)
             result = development_transition_safety(changed_paths, migration_sources)
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+
+        if args.command == "development-migration-sources":
+            result = development_migration_sources(sys.stdin.read().splitlines())
             print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
 
