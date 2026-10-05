@@ -38,12 +38,21 @@ $settings = $contract->settingsDescriptor();
 print json_encode([
   'content' => [$content->tool(), $content->risk()],
   'settings' => [$settings->tool(), $settings->risk()],
+  'content_outputs' => $content->outputNames(),
+  'content_required_outputs' => $content->requiredOutputs(),
+  'settings_outputs' => $settings->outputNames(),
+  'settings_required_outputs' => $settings->requiredOutputs(),
   'policy_unchanged' => $before === $policy->allowlist(),
 ], JSON_THROW_ON_ERROR);
 """
         )
+        expected_outputs = ["draft_ref", "revision_ref", "status"]
         self.assertEqual(["content.draft.update", "reversible_write"], observed["content"])
         self.assertEqual(["settings.draft.update", "reversible_write"], observed["settings"])
+        self.assertEqual(expected_outputs, observed["content_outputs"])
+        self.assertEqual(expected_outputs, observed["content_required_outputs"])
+        self.assertEqual(expected_outputs, observed["settings_outputs"])
+        self.assertEqual(expected_outputs, observed["settings_required_outputs"])
         self.assertTrue(observed["policy_unchanged"])
         policy = POLICY.read_text(encoding="utf-8")
         self.assertEqual(1, policy.count("'content.draft.update'"))
