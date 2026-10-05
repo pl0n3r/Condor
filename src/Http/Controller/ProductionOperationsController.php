@@ -9,6 +9,7 @@ use App\Application\Commercial\EntitlementSnapshot;
 use App\Application\Commercial\SubscriptionEntitlementContextFactory;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
+use App\Domain\Identity\Entity\User;
 use App\Application\Production\BillOfMaterialsService;
 use App\Application\Production\ProductionOrderService;
 use App\Domain\Catalog\Entity\ProductVariant;
@@ -54,12 +55,10 @@ final class ProductionOperationsController extends AbstractController
     )]
     public function boms(string $branchId): JsonResponse
     {
-        [, $tenant, $branch] = $this->authorizedBranchScope(
+        [, $tenant, $branch] = $this->productionScope(
             $branchId,
             'inventory.view',
         );
-        $this->productionEntitlements($tenant);
-        $this->branchSource($tenant, $branch);
 
         $boms = $this->entityManager
             ->getRepository(BillOfMaterials::class)
@@ -88,17 +87,15 @@ final class ProductionOperationsController extends AbstractController
         Request $request,
     ): JsonResponse {
         $this->requireCsrf($request);
-        [$user, $tenant, $branch] = $this->authorizedBranchScope(
+        [$user, $tenant, $branch, , $entitlements] = $this->productionScope(
             $branchId,
             'inventory.create',
         );
-        $entitlements = $this->productionEntitlements($tenant);
-        $this->branchSource($tenant, $branch);
         $payload = $this->payload($request, ['variant_id', 'components']);
 
         $variant = $this->variant(
             $tenant,
-            $this->requiredString($payload, 'variant_id', 26),
+            $this->textField($payload, 'variant_id', 26),
         );
         $components = $this->components($tenant, $payload['components'] ?? null);
 
@@ -137,12 +134,10 @@ final class ProductionOperationsController extends AbstractController
     )]
     public function orders(string $branchId): JsonResponse
     {
-        [, $tenant, $branch] = $this->authorizedBranchScope(
+        [, $tenant, $branch, $source] = $this->productionScope(
             $branchId,
             'inventory.view',
         );
-        $this->productionEntitlements($tenant);
-        $source = $this->branchSource($tenant, $branch);
 
         $orders = $this->entityManager
             ->getRepository(ProductionOrder::class)
@@ -181,17 +176,13 @@ final class ProductionOperationsController extends AbstractController
         Request $request,
     ): JsonResponse {
         $this->requireCsrf($request);
-        [$user, $tenant, $branch] = $this->authorizedBranchScope(
-            $branchId,
-            'inventory.create',
-        );
-        $entitlements = $this->productionEntitlements($tenant);
-        $source = $this->branchSource($tenant, $branch);
+        [$user, $tenant, $branch, $source, $entitlements] =
+            $this->productionScope($branchId, 'inventory.create');
         $payload = $this->payload($request, ['bom_id', 'target_quantity']);
 
         $bom = $this->bom(
             $tenant,
-            $this->requiredString($payload, 'bom_id', 26),
+            $this->textField($payload, 'bom_id', 26),
         );
         $targetQuantity = $this->requiredPositiveInt(
             $payload,
@@ -239,12 +230,8 @@ final class ProductionOperationsController extends AbstractController
         Request $request,
     ): JsonResponse {
         $this->requireCsrf($request);
-        [$user, $tenant, $branch] = $this->authorizedBranchScope(
-            $branchId,
-            'inventory.update',
-        );
-        $entitlements = $this->productionEntitlements($tenant);
-        $source = $this->branchSource($tenant, $branch);
+        [$user, $tenant, $branch, $source, $entitlements] =
+            $this->productionScope($branchId, 'inventory.update');
         $order = $this->order($tenant, $source, $orderId);
         $payload = $this->payload(
             $request,
@@ -254,7 +241,7 @@ final class ProductionOperationsController extends AbstractController
             $payload,
             'completed_quantity',
         );
-        $key = $this->requiredString($payload, 'idempotency_key', 80);
+        $key = $this->textField($payload, 'idempotency_key', 80);
         $created = !$order->isCompleted();
 
         $completed = $this->domain(
@@ -290,44 +277,55 @@ final class ProductionOperationsController extends AbstractController
         );
     }
 
-    private function productionEntitlements(Tenant $tenant): EntitlementSnapshot
-    {
-        return $this->domain(function () use ($tenant): EntitlementSnapshot {
-            $context = $this->entitlementContexts->forTenant(
-                $tenant->id(),
-                new DateTimeImmutable('now', new DateTimeZone('UTC')),
-            );
-            $snapshot = $this->entitlementResolver->resolve($context);
+    /**
+     * @return array{
+     *   0: User,
+     *   1: Tenant,
+     *   2: Branch,
+     *   3: InventorySource,
+     *   4: EntitlementSnapshot
+     * }
+     */
+    private function productionScope(
+        string $branchId,
+        string $permission,
+    ): array {
+        [$user, $tenant, $branch] = $this->authorizedBranchScope(
+            $branchId,
+            $permission,
+        );
 
-            if ($snapshot->addOn('production-lite') !== true) {
-                throw new DomainException(
-                    'Producción Lite no está habilitada para este tenant.',
-                );
-            }
-
-            return $snapshot;
-        });
-    }
-
-    private function branchSource(
-        Tenant $tenant,
-        Branch $branch,
-    ): InventorySource {
         $source = $this->entityManager
             ->getRepository(InventorySource::class)
-            ->findOneBy([
-                'tenant' => $tenant,
-                'branch' => $branch,
-                'type' => InventorySource::TYPE_BRANCH,
-                'active' => true,
-            ]);
-        if (!$source instanceof InventorySource) {
+            ->findOneBy(['tenant' => $tenant, 'branch' => $branch]);
+        if (
+            !$source instanceof InventorySource
+            || $source->type() !== InventorySource::TYPE_BRANCH
+            || !$source->isActive()
+        ) {
             throw new NotFoundHttpException(
                 'Fuente de inventario activa para la sede no encontrada.',
             );
         }
 
-        return $source;
+        $entitlements = $this->domain(fn (): EntitlementSnapshot =>
+            $this->entitlementResolver->resolve(
+                $this->entitlementContexts->forTenant(
+                    $tenant->id(),
+                    new DateTimeImmutable('now', new DateTimeZone('UTC')),
+                ),
+            )
+        );
+        $enabled = $this->domain(
+            fn (): bool => $entitlements->addOn('production-lite'),
+        );
+        if (!$enabled) {
+            throw new UnprocessableEntityHttpException(
+                'Producción Lite no está habilitada para este tenant.',
+            );
+        }
+
+        return [$user, $tenant, $branch, $source, $entitlements];
     }
 
     private function variant(
@@ -436,11 +434,11 @@ final class ProductionOperationsController extends AbstractController
 
             $material = $this->material(
                 $tenant,
-                $this->requiredString($component, 'material_id', 26),
+                $this->textField($component, 'material_id', 26),
             );
-            $quantity = $this->requiredString($component, 'quantity', 64);
+            $quantity = $this->textField($component, 'quantity', 64);
             $unit = UnitOfMeasure::from(
-                $this->requiredString($component, 'unit', 16),
+                $this->textField($component, 'unit', 16),
             );
             $components[] = [
                 'material' => $material,
@@ -453,7 +451,7 @@ final class ProductionOperationsController extends AbstractController
     }
 
     /** @param array<string,mixed> $payload */
-    private function requiredString(
+    private function textField(
         array $payload,
         string $field,
         int $maxLength,
