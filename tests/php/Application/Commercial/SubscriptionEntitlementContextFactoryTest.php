@@ -41,14 +41,9 @@ final class SubscriptionEntitlementContextFactoryTest extends KernelTestCase
         self::assertInstanceOf(CommercialCatalogSeeder::class, $seeder);
         $seeder->seed();
 
-        $factory = static::getContainer()->get(
-            SubscriptionEntitlementContextFactory::class,
+        $this->factory = new SubscriptionEntitlementContextFactory(
+            $manager,
         );
-        self::assertInstanceOf(
-            SubscriptionEntitlementContextFactory::class,
-            $factory,
-        );
-        $this->factory = $factory;
 
         $resolver = static::getContainer()->get(EntitlementResolver::class);
         self::assertInstanceOf(EntitlementResolver::class, $resolver);
