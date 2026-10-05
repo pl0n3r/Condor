@@ -45,16 +45,18 @@ final readonly class AiCommerceReadRegistry
                     [
                         'tool' => 'catalog.read',
                         'descriptor' => $contract->catalogDescriptor(),
-                        'handler' => self::catalogHandler(
+                        'handler' => self::validatedHandler(
                             $contract,
+                            'catalog.read',
                             $handlers['catalog.read'],
                         ),
                     ],
                     [
                         'tool' => 'inventory.read',
                         'descriptor' => $contract->inventoryDescriptor(),
-                        'handler' => self::inventoryHandler(
+                        'handler' => self::validatedHandler(
                             $contract,
+                            'inventory.read',
                             $handlers['inventory.read'],
                         ),
                     ],
@@ -85,33 +87,32 @@ final readonly class AiCommerceReadRegistry
         return $this->registry->resolve($tool)['descriptor'];
     }
 
-    private static function catalogHandler(
+    private static function validatedHandler(
         AiCommerceReadContract $contract,
+        string $tool,
         Closure $handler,
     ): Closure {
-        return static function (array $inputs) use ($contract, $handler): array {
-            $contract->validateCatalogInputs($inputs);
+        return static function (array $inputs) use ($contract, $tool, $handler): array {
+            if ($tool === 'catalog.read') {
+                $contract->validateCatalogInputs($inputs);
+            } elseif ($tool === 'inventory.read') {
+                $contract->validateInventoryInputs($inputs);
+            } else {
+                throw new DomainException('Tool comercial no soportada.');
+            }
+
             $outputs = $handler($inputs);
             if (!is_array($outputs)) {
-                throw new DomainException('Handler catalog.read devolvió output inválido.');
+                throw new DomainException('Handler comercial devolvió output inválido.');
             }
-            $contract->validateCatalogOutputs($outputs);
 
-            return $outputs;
-        };
-    }
-
-    private static function inventoryHandler(
-        AiCommerceReadContract $contract,
-        Closure $handler,
-    ): Closure {
-        return static function (array $inputs) use ($contract, $handler): array {
-            $contract->validateInventoryInputs($inputs);
-            $outputs = $handler($inputs);
-            if (!is_array($outputs)) {
-                throw new DomainException('Handler inventory.read devolvió output inválido.');
+            if ($tool === 'catalog.read') {
+                $contract->validateCatalogOutputs($outputs);
+            } elseif ($tool === 'inventory.read') {
+                $contract->validateInventoryOutputs($outputs);
+            } else {
+                throw new DomainException('Tool comercial no soportada.');
             }
-            $contract->validateInventoryOutputs($outputs);
 
             return $outputs;
         };
