@@ -224,7 +224,7 @@ final readonly class PlatformCommercialTrialCreator
         PlanVersion $planVersion,
         array $keys,
     ): array {
-        if (!array_is_list($keys) || count($keys) > 50) {
+        if (count($keys) > 50) {
             throw new DomainException('Add-ons del Quote inválidos.');
         }
 
@@ -238,8 +238,7 @@ final readonly class PlatformCommercialTrialCreator
         $resolved = [];
         foreach ($keys as $key) {
             if (
-                !is_string($key)
-                || !isset($allowed[$key])
+                !isset($allowed[$key])
                 || isset($resolved[$key])
             ) {
                 throw new DomainException(
