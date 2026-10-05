@@ -86,6 +86,7 @@ final readonly class SelfServiceTrialReview
                 'Solicitud de trial pendiente con datos inválidos.',
             );
         }
+        $quoteId = trim($quoteId);
 
         $decision = trim($decision);
         if ($decision === 'reject') {
@@ -103,7 +104,10 @@ final readonly class SelfServiceTrialReview
             'status' => 'approved',
             'quote_id' => $quoteId,
             'tenant_id' => $targetTenantId,
-            'trial' => $this->trialCreator->create($targetTenantId),
+            'trial' => $this->trialCreator->create(
+                $targetTenantId,
+                $quoteId,
+            ),
         ];
     }
 }
