@@ -5,6 +5,7 @@ import { InventoryManagement } from './InventoryManagement';
 import { CommerceManagement } from './CommerceManagement';
 import { CmsManagement } from './CmsManagement';
 import { OrdersManagement } from './OrdersManagement';
+import { ProductionManagement } from './ProductionManagement';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
 import { contextPath } from './api';
