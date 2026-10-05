@@ -160,7 +160,7 @@ final class SubscriptionEntitlementContextFactoryTest extends KernelTestCase
             1,
             false,
             ['users' => 1],
-            new DateTimeImmutable('2026-01-01T00:00:00Z'),
+            new DateTimeImmutable('2026-10-06T00:00:00Z'),
         );
         $version->addVertical($vertical);
         $staleSubscription = $this->subscription($staleTenant, $version);
