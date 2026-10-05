@@ -84,7 +84,7 @@ final class ProductionMaterialsControllerTest extends WebTestCase
         );
 
         self::assertResponseIsSuccessful();
-        $payload = $this->json($client);
+        $payload = $this->responsePayload($client);
         self::assertSame($branch->id(), $payload['branch']['id']);
         self::assertSame($source->id(), $payload['source']['id']);
         self::assertContains('kg', $payload['units']);
@@ -108,7 +108,7 @@ final class ProductionMaterialsControllerTest extends WebTestCase
             $this->tenantWithOwner($manager, true, true);
 
         $client->loginUser($owner);
-        $csrf = $this->csrf($client);
+        $csrf = $this->adminCsrfToken($client);
         $base = '/api/v1/branches/'.$branch->id().'/production/materials';
 
         $client->jsonRequest(
@@ -118,7 +118,7 @@ final class ProductionMaterialsControllerTest extends WebTestCase
             ['HTTP_X_CSRF_TOKEN' => $csrf],
         );
         self::assertResponseStatusCodeSame(201);
-        $material = $this->json($client)['material'];
+        $material = $this->responsePayload($client)['material'];
         self::assertSame('RAW-1', $material['code']);
         self::assertSame('kg', $material['unit']);
 
@@ -129,7 +129,7 @@ final class ProductionMaterialsControllerTest extends WebTestCase
             ['HTTP_X_CSRF_TOKEN' => $csrf],
         );
         self::assertResponseIsSuccessful();
-        self::assertSame('RAW-2', $this->json($client)['material']['code']);
+        self::assertSame('RAW-2', $this->responsePayload($client)['material']['code']);
 
         $key = 'material-http-'.bin2hex(random_bytes(5));
         $adjustment = [
@@ -144,7 +144,7 @@ final class ProductionMaterialsControllerTest extends WebTestCase
             ['HTTP_X_CSRF_TOKEN' => $csrf],
         );
         self::assertResponseStatusCodeSame(201);
-        self::assertSame('2.5', $this->json($client)['movement']['balance_after']);
+        self::assertSame('2.5', $this->responsePayload($client)['movement']['balance_after']);
 
         $client->jsonRequest(
             'POST',
@@ -169,7 +169,7 @@ final class ProductionMaterialsControllerTest extends WebTestCase
             ['HTTP_X_CSRF_TOKEN' => $csrf],
         );
         self::assertResponseIsSuccessful();
-        self::assertFalse($this->json($client)['material']['active']);
+        self::assertFalse($this->responsePayload($client)['material']['active']);
 
         $client->jsonRequest(
             'POST',
@@ -195,7 +195,7 @@ final class ProductionMaterialsControllerTest extends WebTestCase
             'POST',
             $base,
             ['code' => 'DENIED', 'name' => 'Denegada', 'unit' => 'unit'],
-            ['HTTP_X_CSRF_TOKEN' => $this->csrf($client)],
+            ['HTTP_X_CSRF_TOKEN' => $this->adminCsrfToken($client)],
         );
         self::assertResponseStatusCodeSame(403);
     }
@@ -226,7 +226,7 @@ final class ProductionMaterialsControllerTest extends WebTestCase
             'PATCH',
             '/api/v1/branches/'.$branchA->id().'/production/materials/'.$foreign->id(),
             ['code' => 'HACK', 'name' => 'Cruce', 'unit' => 'unit'],
-            ['HTTP_X_CSRF_TOKEN' => $this->csrf($client)],
+            ['HTTP_X_CSRF_TOKEN' => $this->adminCsrfToken($client)],
         );
         self::assertResponseStatusCodeSame(404);
 
@@ -264,28 +264,26 @@ final class ProductionMaterialsControllerTest extends WebTestCase
     }
 
     /** @return array<string,mixed> */
-    private function json(KernelBrowser $client): array
+    private function responsePayload(KernelBrowser $client): array
     {
-        $payload = json_decode(
+        $decoded = json_decode(
             (string) $client->getResponse()->getContent(),
             true,
-            512,
-            JSON_THROW_ON_ERROR,
+            flags: JSON_THROW_ON_ERROR,
         );
-        self::assertIsArray($payload);
+        self::assertIsArray($decoded);
 
-        return $payload;
+        return $decoded;
     }
 
-    private function csrf(KernelBrowser $client): string
+    private function adminCsrfToken(KernelBrowser $client): string
     {
-        $crawler = $client->request('GET', '/admin');
-        self::assertResponseIsSuccessful();
-        $token = $crawler
+        $token = $client
+            ->request('GET', '/admin')
             ->filter('#condor-admin-root')
             ->attr('data-access-token');
         self::assertIsString($token);
-        self::assertNotSame('', $token);
+        self::assertNotSame('', trim($token));
 
         return $token;
     }
