@@ -56,12 +56,18 @@ final readonly class PlatformCommercialTrialCreator
                     $quoteId,
                     $now,
                 ): void {
-                    $quote = $this->quoteForTrial(
-                        $entityManager,
-                        $quoteId,
-                        $now,
+                    $quote = $entityManager
+                        ->getRepository(Quote::class)
+                        ->find($quoteId);
+                    if (!$quote instanceof Quote) {
+                        throw new DomainException(
+                            'Quote comercial no disponible para crear el trial.',
+                        );
+                    }
+                    $entityManager->refresh(
+                        $quote,
+                        LockMode::PESSIMISTIC_WRITE,
                     );
-                    $entityManager->lock($quote, LockMode::PESSIMISTIC_WRITE);
                     $this->assertQuoteEligible($quote, $now);
                     $this->assertTenantAvailable($entityManager, $tenantId);
 
