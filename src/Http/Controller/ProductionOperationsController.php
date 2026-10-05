@@ -416,6 +416,9 @@ final class ProductionOperationsController extends AbstractController
 
         $components = [];
         foreach ($raw as $component) {
+            if (is_object($component)) {
+                $component = get_object_vars($component);
+            }
             if (!is_array($component) || array_is_list($component)) {
                 throw new UnprocessableEntityHttpException(
                     'Cada componente de BOM debe ser un objeto.',
