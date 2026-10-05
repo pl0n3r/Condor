@@ -291,37 +291,43 @@ final class SubscriptionEntitlementContextFactoryTest extends KernelTestCase
 
     private function planVersion(string $key): PlanVersion
     {
-        $plan = $this->manager
-            ->getRepository(Plan::class)
-            ->findOneBy(['key' => $key]);
-        self::assertInstanceOf(Plan::class, $plan);
-
-        $version = $this->manager
+        $plan = $this->catalogEntity(Plan::class, $key);
+        $matches = $this->manager
             ->getRepository(PlanVersion::class)
-            ->findOneBy(['plan' => $plan, 'version' => 1]);
-        self::assertInstanceOf(PlanVersion::class, $version);
+            ->findBy(['plan' => $plan, 'version' => 1], limit: 1);
+        $version = $matches[0] ?? null;
+        if (!$version instanceof PlanVersion) {
+            self::fail('PlanVersion canónica no encontrada.');
+        }
 
         return $version;
     }
 
     private function vertical(string $key): Vertical
     {
-        $vertical = $this->manager
-            ->getRepository(Vertical::class)
-            ->findOneBy(['key' => $key]);
-        self::assertInstanceOf(Vertical::class, $vertical);
-
-        return $vertical;
+        return $this->catalogEntity(Vertical::class, $key);
     }
 
     private function addOn(string $key): AddOn
     {
-        $addOn = $this->manager
-            ->getRepository(AddOn::class)
-            ->findOneBy(['key' => $key]);
-        self::assertInstanceOf(AddOn::class, $addOn);
+        return $this->catalogEntity(AddOn::class, $key);
+    }
 
-        return $addOn;
+    /**
+     * @template T of Plan|Vertical|AddOn
+     * @param class-string<T> $class
+     * @return T
+     */
+    private function catalogEntity(string $class, string $key): object
+    {
+        $entity = $this->manager
+            ->getRepository($class)
+            ->findOneBy(['key' => $key]);
+        if (!$entity instanceof $class) {
+            self::fail('Entidad comercial canónica no encontrada.');
+        }
+
+        return $entity;
     }
 
     private function assertDomainFailure(callable $operation): void
