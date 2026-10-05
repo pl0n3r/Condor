@@ -33,10 +33,10 @@ final readonly class AiCommerceReadContract
         return AiToolDescriptor::fromArray($this->policy, [
             'tool' => 'inventory.read',
             'risk' => AiToolPolicy::READ_ONLY,
-            'input_names' => ['location_ref', 'product_ref'],
+            'input_names' => ['branch_ref', 'product_ref'],
             'required_inputs' => ['product_ref'],
-            'output_names' => ['location_ref', 'product_ref', 'quantity', 'status'],
-            'required_outputs' => ['location_ref', 'product_ref', 'quantity', 'status'],
+            'output_names' => ['branch_ref', 'product_ref', 'quantity', 'status'],
+            'required_outputs' => ['branch_ref', 'product_ref', 'quantity', 'status'],
         ]);
     }
 
@@ -73,8 +73,8 @@ final readonly class AiCommerceReadContract
     {
         $this->inventoryDescriptor()->validateInputs($inputs);
         self::ref($inputs['product_ref'], 'product', 'product_ref');
-        if (($inputs['location_ref'] ?? null) !== null) {
-            self::ref($inputs['location_ref'], 'location', 'location_ref');
+        if (($inputs['branch_ref'] ?? null) !== null) {
+            self::ref($inputs['branch_ref'], 'branch', 'branch_ref');
         }
     }
 
@@ -83,8 +83,8 @@ final readonly class AiCommerceReadContract
     {
         $this->inventoryDescriptor()->validateOutputs($outputs);
         self::ref($outputs['product_ref'], 'product', 'product_ref');
-        if ($outputs['location_ref'] !== null) {
-            self::ref($outputs['location_ref'], 'location', 'location_ref');
+        if ($outputs['branch_ref'] !== null) {
+            self::ref($outputs['branch_ref'], 'branch', 'branch_ref');
         }
 
         $quantity = self::decimal($outputs['quantity'], 'quantity', 999_999_999.999, 3);

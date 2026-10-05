@@ -63,11 +63,11 @@ $contract->validateCatalogOutputs([
 ]);
 $contract->validateInventoryInputs([
   'product_ref' => 'product:sku_42',
-  'location_ref' => 'location:main',
+  'branch_ref' => 'location:main',
 ]);
 $contract->validateInventoryOutputs([
   'product_ref' => 'product:sku_42',
-  'location_ref' => 'location:main',
+  'branch_ref' => 'location:main',
   'quantity' => 12.500,
   'status' => 'in_stock',
 ]);
@@ -97,7 +97,7 @@ $cases = [
     'amount' => 10, 'status' => 'unavailable'
   ]),
   'stock_shape' => fn () => $contract->validateInventoryOutputs([
-    'product_ref' => 'product:sku_42', 'location_ref' => 'location:main',
+    'product_ref' => 'product:sku_42', 'branch_ref' => 'location:main',
     'quantity' => 0, 'status' => 'in_stock'
   ]),
 ];
