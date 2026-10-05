@@ -63,38 +63,38 @@ DEVELOPMENT_SAFE_COMMAND_SCRIPTS = frozenset({
 DEVELOPMENT_AUTO_MARKER = "condor-d043-dev-auto"
 
 PHP_NOWDOC_ADD_SQL = re.compile(
-    r"""\\$this->addSql\\(\\s*<<<'(?P<label>[A-Za-z_][A-Za-z0-9_]*)'\\r?\\n(?P<sql>.*?)\\r?\\n(?P=label)\\s*\\)\\s*;""",
+    r"""\$this->addSql\(\s*<<<'(?P<label>[A-Za-z_][A-Za-z0-9_]*)'\r?\n(?P<sql>.*?)\r?\n(?P=label)\s*\)\s*;""",
     re.DOTALL,
 )
 PHP_SINGLE_QUOTED_ADD_SQL = re.compile(
-    r"""\\$this->addSql\\(\\s*'(?P<sql>(?:\\\\.|[^'\\\\])*)'\\s*\\)\\s*;""",
+    r"""\$this->addSql\(\s*'(?P<sql>(?:\\.|[^'\\])*)'\s*\)\s*;""",
     re.DOTALL,
 )
 PHP_UP_METHOD = re.compile(
-    r"public\\s+function\\s+up\\s*\\([^)]*\\)\\s*(?::\\s*void)?\\s*\\{",
+    r"public\s+function\s+up\s*\([^)]*\)\s*(?::\s*void)?\s*\{",
     re.IGNORECASE,
 )
-PHP_DOWN_METHOD = re.compile(r"public\\s+function\\s+down\\s*\\(", re.IGNORECASE)
+PHP_DOWN_METHOD = re.compile(r"public\s+function\s+down\s*\(", re.IGNORECASE)
 SQL_CREATE_TABLE = re.compile(
-    r"^CREATE\\s+TABLE(?:\\s+IF\\s+NOT\\s+EXISTS)?\\s+([^\\s(]+)", re.IGNORECASE
+    r"^CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+([^\s(]+)", re.IGNORECASE
 )
 SQL_CREATE_INDEX = re.compile(
-    r"^CREATE\\s+(?:UNIQUE\\s+)?INDEX\\s+[^\\s]+\\s+ON\\s+[^\\s(]+", re.IGNORECASE
+    r"^CREATE\s+(?:UNIQUE\s+)?INDEX\s+[^\s]+\s+ON\s+[^\s(]+", re.IGNORECASE
 )
 SQL_ALTER_ADD_COLUMN = re.compile(
-    r"^ALTER\\s+TABLE\\s+([^\\s]+)\\s+ADD\\s+(?:COLUMN\\s+)?([^\\s]+)\\s+(.+)$",
+    r"^ALTER\s+TABLE\s+([^\s]+)\s+ADD\s+(?:COLUMN\s+)?([^\s]+)\s+(.+)$",
     re.IGNORECASE | re.DOTALL,
 )
 SQL_ALTER_ADD_CONSTRAINT = re.compile(
-    r"^ALTER\\s+TABLE\\s+([^\\s]+)\\s+ADD\\s+CONSTRAINT\\s+.+$",
+    r"^ALTER\s+TABLE\s+([^\s]+)\s+ADD\s+CONSTRAINT\s+.+$",
     re.IGNORECASE | re.DOTALL,
 )
 SQL_FORBIDDEN = re.compile(
-    r"\\b(?:DROP|TRUNCATE|RENAME|UPDATE|INSERT|REPLACE|CALL)\\b|\\bDELETE\\s+FROM\\b",
+    r"\b(?:DROP|TRUNCATE|RENAME|UPDATE|INSERT|REPLACE|CALL)\b|\bDELETE\s+FROM\b",
     re.IGNORECASE,
 )
 SQL_SAFE_DEFAULT = re.compile(
-    r"""\\bDEFAULT\\s+(?:NULL|TRUE|FALSE|-?\\d+(?:\\.\\d+)?|'(?:''|[^'])*')(?=\\s|,|$)""",
+    r"""\bDEFAULT\s+(?:NULL|TRUE|FALSE|-?\d+(?:\.\d+)?|'(?:''|[^'])*')(?=\s|,|$)""",
     re.IGNORECASE,
 )
 
@@ -562,8 +562,8 @@ def php_static_add_sql_blocks(section: str) -> tuple[list[str], str | None]:
     residue.append(section[cursor:])
 
     remainder = "".join(residue)
-    remainder = re.sub(r"/\\*.*?\\*/", "", remainder, flags=re.DOTALL)
-    remainder = re.sub(r"//[^\\n]*|#[^\\n]*", "", remainder)
+    remainder = re.sub(r"/\*.*?\*/", "", remainder, flags=re.DOTALL)
+    remainder = re.sub(r"//[^\n]*|#[^\n]*", "", remainder)
     remainder = remainder.replace("}", "").strip()
     if remainder:
         return [], "non_add_sql_operation"
@@ -617,14 +617,14 @@ def safe_add_column(definition: str) -> bool:
     upper = definition.upper()
     if any(token in upper for token in ("AUTO_INCREMENT", "GENERATED", " AS (")):
         return False
-    nullable = re.search(r"\\bNULL\\b", definition, re.IGNORECASE) is not None
-    not_null = re.search(r"\\bNOT\\s+NULL\\b", definition, re.IGNORECASE) is not None
+    nullable = re.search(r"\bNULL\b", definition, re.IGNORECASE) is not None
+    not_null = re.search(r"\bNOT\s+NULL\b", definition, re.IGNORECASE) is not None
     return (nullable and not not_null) or SQL_SAFE_DEFAULT.search(definition) is not None
 
 
 def classify_sql_statement(statement: str, created_tables: set[str]) -> tuple[bool, str]:
     """Clasifica una sentencia ascendente con allowlist aditiva estricta."""
-    statement = re.sub(r"/\\*.*?\\*/", "", statement, flags=re.DOTALL)
+    statement = re.sub(r"/\*.*?\*/", "", statement, flags=re.DOTALL)
     statement = re.sub(r"--[^\\n]*|#[^\\n]*", "", statement).strip()
     if not statement:
         return True, "empty"
@@ -641,7 +641,7 @@ def classify_sql_statement(statement: str, created_tables: set[str]) -> tuple[bo
     add_column = SQL_ALTER_ADD_COLUMN.match(statement)
     if add_column is not None:
         definition = add_column.group(3)
-        if re.search(r"\\b(?:DROP|MODIFY|CHANGE|RENAME)\\b", definition, re.IGNORECASE):
+        if re.search(r"\b(?:DROP|MODIFY|CHANGE|RENAME)\b", definition, re.IGNORECASE):
             return False, "alter_existing_shape"
         if safe_add_column(definition):
             return True, "add_column_safe"
