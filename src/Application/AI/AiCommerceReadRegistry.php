@@ -80,27 +80,29 @@ final readonly class AiCommerceReadRegistry
         string $tool,
         Closure $handler,
     ): Closure {
-        return static function (array $inputs) use ($contract, $tool, $handler): array {
-            if ($tool === 'catalog.read') {
-                $contract->validateCatalogInputs($inputs);
-            } elseif ($tool === 'inventory.read') {
-                $contract->validateInventoryInputs($inputs);
-            } else {
-                throw new DomainException('Tool comercial no soportada.');
-            }
+        [$validateInputs, $validateOutputs] = match ($tool) {
+            'catalog.read' => [
+                Closure::fromCallable([$contract, 'validateCatalogInputs']),
+                Closure::fromCallable([$contract, 'validateCatalogOutputs']),
+            ],
+            'inventory.read' => [
+                Closure::fromCallable([$contract, 'validateInventoryInputs']),
+                Closure::fromCallable([$contract, 'validateInventoryOutputs']),
+            ],
+            default => throw new DomainException('Tool comercial no soportada.'),
+        };
 
+        return static function (array $inputs) use (
+            $handler,
+            $validateInputs,
+            $validateOutputs,
+        ): array {
+            $validateInputs($inputs);
             $outputs = $handler($inputs);
             if (!is_array($outputs)) {
                 throw new DomainException('Handler comercial devolvió output inválido.');
             }
-
-            if ($tool === 'catalog.read') {
-                $contract->validateCatalogOutputs($outputs);
-            } elseif ($tool === 'inventory.read') {
-                $contract->validateInventoryOutputs($outputs);
-            } else {
-                throw new DomainException('Tool comercial no soportada.');
-            }
+            $validateOutputs($outputs);
 
             return $outputs;
         };
