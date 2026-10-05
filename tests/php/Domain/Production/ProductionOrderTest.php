@@ -140,33 +140,19 @@ final class ProductionOrderTest extends KernelTestCase
         );
         self::assertSame($first->id(), $replayed->id());
 
-        foreach (
-            [
-                fn () => $this->materials->adjust(
-                    $tenant,
-                    $source,
-                    $material,
-                    '-6',
-                    null,
-                    'negative-'.bin2hex(random_bytes(4)),
-                ),
-                fn () => $this->materials->adjust(
-                    $tenant,
-                    $source,
-                    $material,
-                    '6',
-                    null,
-                    $seedKey,
-                    ['reason' => 'seed'],
-                ),
-            ] as $case
-        ) {
-            try {
-                $case();
-                self::fail('El ledger inválido debía fallar cerrado.');
-            } catch (DomainException) {
-                self::assertTrue(true);
-            }
+        try {
+            $this->materials->adjust(
+                $tenant,
+                $source,
+                $material,
+                '6',
+                null,
+                $seedKey,
+                ['reason' => 'seed'],
+            );
+            self::fail('El reuse incompatible debía fallar cerrado.');
+        } catch (DomainException) {
+            self::assertTrue(true);
         }
 
         $otherTenant = new Tenant(
@@ -201,9 +187,30 @@ final class ProductionOrderTest extends KernelTestCase
             self::assertTrue(true);
         }
 
+        $source->reactivate($source->name(), $source->slug());
+        $this->entityManager->flush();
+
+        try {
+            $this->materials->adjust(
+                $tenant,
+                $source,
+                $material,
+                '-6',
+                null,
+                'negative-'.bin2hex(random_bytes(4)),
+            );
+            self::fail('El stock negativo debía fallar cerrado.');
+        } catch (DomainException) {
+            self::assertTrue(true);
+        }
+
         self::assertSame(
-            '5',
-            $this->materialBalance($tenant, $source, $material)->quantity(),
+            '5.000000',
+            (string) $this->entityManager->getConnection()->fetchOne(
+                'SELECT quantity FROM condor_production_material_balance '
+                .'WHERE tenant_id = ? AND source_id = ? AND material_id = ?',
+                [$tenant->id(), $source->id(), $material->id()],
+            ),
         );
     }
 
