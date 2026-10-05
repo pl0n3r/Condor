@@ -36,6 +36,33 @@ final readonly class MaterialInventoryService
         $key = $idempotencyKey === null
             ? null
             : MaterialInventoryMovement::normalizeIdempotencyKey($idempotencyKey);
+        $type = str_starts_with($delta, '-')
+            ? MaterialInventoryMovement::TYPE_ADJUSTMENT_OUT
+            : MaterialInventoryMovement::TYPE_ADJUSTMENT_IN;
+        ksort($context);
+
+        self::assertOwnedScope($tenant, $source, $material);
+        if ($key !== null) {
+            $existing = $this->entityManager
+                ->getRepository(MaterialInventoryMovement::class)
+                ->findOneBy([
+                    'tenant' => $tenant,
+                    'idempotencyKey' => $key,
+                ]);
+            if ($existing instanceof MaterialInventoryMovement) {
+                self::assertSameMovement(
+                    $existing,
+                    $source,
+                    $material,
+                    $delta,
+                    $type,
+                    $context,
+                );
+
+                return $existing;
+            }
+        }
+        self::assertActiveScope($source, $material);
 
         try {
             return $this->transactional(
@@ -44,11 +71,11 @@ final readonly class MaterialInventoryService
                     $source,
                     $material,
                     $delta,
+                    $type,
                     $actorUserId,
                     $key,
                     $context,
                 ): MaterialInventoryMovement {
-                    self::assertOwnedScope($tenant, $source, $material);
                     $this->lockScope($entityManager, $source, [$material]);
 
                     if ($key !== null) {
@@ -64,9 +91,7 @@ final readonly class MaterialInventoryService
                                 $source,
                                 $material,
                                 $delta,
-                                str_starts_with($delta, '-')
-                                    ? MaterialInventoryMovement::TYPE_ADJUSTMENT_OUT
-                                    : MaterialInventoryMovement::TYPE_ADJUSTMENT_IN,
+                                $type,
                                 $context,
                             );
 
@@ -87,9 +112,7 @@ final readonly class MaterialInventoryService
                         $tenant,
                         $source,
                         $material,
-                        str_starts_with($delta, '-')
-                            ? MaterialInventoryMovement::TYPE_ADJUSTMENT_OUT
-                            : MaterialInventoryMovement::TYPE_ADJUSTMENT_IN,
+                        $type,
                         $delta,
                         $balance->quantity(),
                         $actorUserId,
