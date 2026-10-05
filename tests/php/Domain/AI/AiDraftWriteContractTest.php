@@ -37,7 +37,6 @@ final class AiDraftWriteContractTest extends TestCase
             'draft_ref' => 'content_draft:homepage',
             'revision_ref' => 'revision:r43',
             'status' => 'updated',
-            'applied' => true,
         ]);
         $contract->validateSettingsInputs([
             'draft_ref' => 'settings_draft:storefront',
@@ -47,7 +46,6 @@ final class AiDraftWriteContractTest extends TestCase
             'draft_ref' => 'settings_draft:storefront',
             'revision_ref' => 'revision:r10',
             'status' => 'conflict',
-            'applied' => false,
         ]);
 
         self::addToAssertionCount(4);
@@ -79,13 +77,17 @@ final class AiDraftWriteContractTest extends TestCase
                 'draft_ref' => 'content_draft:homepage',
                 'revision_ref' => 'revision:r43',
                 'status' => 'updated',
-                'applied' => false,
+                'applied' => true,
+            ]),
+            fn () => $contract->validateSettingsOutputs([
+                'draft_ref' => 'settings_draft:storefront',
+                'revision_ref' => 'settings_draft:storefront',
+                'status' => 'conflict',
             ]),
             fn () => $contract->validateSettingsOutputs([
                 'draft_ref' => 'settings_draft:storefront',
                 'revision_ref' => 'revision:r10',
-                'status' => 'conflict',
-                'applied' => true,
+                'status' => 'pending',
             ]),
         ];
 
