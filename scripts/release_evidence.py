@@ -63,18 +63,15 @@ DEVELOPMENT_SAFE_COMMAND_SCRIPTS = frozenset({
 DEVELOPMENT_AUTO_MARKER = "condor-d043-dev-auto"
 
 PHP_NOWDOC_ADD_SQL = re.compile(
-    r"""\$this->addSql\(\s*<<<'(?P<label>[A-Za-z_][A-Za-z0-9_]*)'\r?\n(?P<sql>.*?)\r?\n(?P=label)\s*\)\s*;""",
-    re.DOTALL,
+    r"""\$this->addSql\(\s*<<<'(?P<label>[A-Za-z_]\w*)'\r?\n(?P<sql>.*?)\r?\n(?P=label)\s*\)\s*;""",
+    re.DOTALL | re.ASCII,
 )
 PHP_SINGLE_QUOTED_ADD_SQL = re.compile(
     r"""\$this->addSql\(\s*'(?P<sql>(?:\\.|[^'\\])*)'\s*\)\s*;""",
     re.DOTALL,
 )
-PHP_UP_METHOD = re.compile(
-    r"public\s+function\s+up\s*\([^)]*\)\s*(?::\s*void)?\s*\{",
-    re.IGNORECASE,
-)
-PHP_DOWN_METHOD = re.compile(r"public\s+function\s+down\s*\(", re.IGNORECASE)
+PHP_UP_MARKER = "public function up("
+PHP_DOWN_MARKER = "public function down("
 SQL_CREATE_TABLE = re.compile(
     r"^CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+([^\s(]+)\s*\(",
     re.IGNORECASE,
@@ -82,20 +79,8 @@ SQL_CREATE_TABLE = re.compile(
 SQL_CREATE_INDEX = re.compile(
     r"^CREATE\s+(?:UNIQUE\s+)?INDEX\s+[^\s]+\s+ON\s+[^\s(]+", re.IGNORECASE
 )
-SQL_ALTER_ADD_COLUMN = re.compile(
-    r"^ALTER\s+TABLE\s+([^\s]+)\s+ADD\s+(?:COLUMN\s+)?([^\s]+)\s+(.+)$",
-    re.IGNORECASE | re.DOTALL,
-)
-SQL_ALTER_ADD_CONSTRAINT = re.compile(
-    r"^ALTER\s+TABLE\s+([^\s]+)\s+ADD\s+CONSTRAINT\s+.+$",
-    re.IGNORECASE | re.DOTALL,
-)
 SQL_FORBIDDEN = re.compile(
     r"\b(?:DROP|TRUNCATE|RENAME|UPDATE|INSERT|REPLACE|CALL)\b|\bDELETE\s+FROM\b",
-    re.IGNORECASE,
-)
-SQL_SAFE_DEFAULT = re.compile(
-    r"""\bDEFAULT\s+(?:NULL|TRUE|FALSE|-?\d+(?:\.\d+)?|'(?:''|[^'])*')(?=\s|,|$)""",
     re.IGNORECASE,
 )
 
@@ -531,14 +516,17 @@ def finalize(
     }
 
 def migration_up_section(source: str) -> str | None:
-    """Extrae up() sin interpretar PHP; cualquier forma inesperada falla cerrado."""
-    up = PHP_UP_METHOD.search(source)
-    if up is None:
+    """Extrae up() por marcadores canónicos; cualquier forma distinta falla cerrado."""
+    up = source.find(PHP_UP_MARKER)
+    if up < 0:
         return None
-    down = PHP_DOWN_METHOD.search(source, up.end())
-    if down is None:
+    down = source.find(PHP_DOWN_MARKER, up + len(PHP_UP_MARKER))
+    if down < 0:
         return None
-    return source[up.end():down.start()]
+    opening_brace = source.find("{", up + len(PHP_UP_MARKER), down)
+    if opening_brace < 0:
+        return None
+    return source[opening_brace + 1:down]
 
 
 def php_static_add_sql_blocks(section: str) -> tuple[list[str], str | None]:
@@ -573,44 +561,57 @@ def php_static_add_sql_blocks(section: str) -> tuple[list[str], str | None]:
     return blocks, None
 
 
-def split_sql_statements(sql: str) -> list[str]:
-    """Divide SQL estático respetando literales y backticks."""
-    statements: list[str] = []
-    current: list[str] = []
-    quote: str | None = None
-    escaped = False
-    for char in sql:
-        if quote is not None:
-            current.append(char)
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
-                quote = None
-            continue
-        if char in {"'", '"', "`"}:
-            quote = char
-            current.append(char)
-            continue
-        if char == ";":
-            statement = "".join(current).strip()
-            if statement:
-                statements.append(statement)
-            current = []
-            continue
-        current.append(char)
-    if quote is not None:
-        return []
-    tail = "".join(current).strip()
-    if tail:
-        statements.append(tail)
-    return statements
+def single_sql_statement(sql: str) -> str | None:
+    """Acepta un único statement SQL estático por addSql()."""
+    statement = sql.strip()
+    if not statement:
+        return None
+    if statement.endswith(";"):
+        statement = statement[:-1].rstrip()
+    if not statement or ";" in statement:
+        return None
+    return statement
 
 
 def sql_identifier(value: str) -> str:
     """Normaliza identificadores simples para comparar tablas creadas."""
     return value.strip().replace("`", "").lower()
+
+
+def quoted_sql_literal_end(value: str) -> int | None:
+    """Devuelve el fin de un literal SQL simple, soportando escape por ''. """
+    if not value.startswith("'"):
+        return None
+    index = 1
+    while index < len(value):
+        if value[index] != "'":
+            index += 1
+            continue
+        if index + 1 < len(value) and value[index + 1] == "'":
+            index += 2
+            continue
+        return index + 1
+    return None
+
+
+def safe_default_literal(definition: str) -> bool:
+    """Reconoce únicamente defaults literales sin funciones ni expresiones."""
+    match = re.search(r"\bDEFAULT\b", definition, re.IGNORECASE)
+    if match is None:
+        return False
+    tail = definition[match.end():].lstrip()
+    if not tail:
+        return False
+    if tail.startswith("'"):
+        return quoted_sql_literal_end(tail) is not None
+
+    token = tail.split(None, 1)[0].rstrip(",")
+    if token.upper() in {"NULL", "TRUE", "FALSE"}:
+        return True
+    numeric = token.lstrip("-")
+    if numeric.count(".") > 1:
+        return False
+    return numeric.replace(".", "", 1).isdigit()
 
 
 def safe_add_column(definition: str) -> bool:
@@ -623,7 +624,32 @@ def safe_add_column(definition: str) -> bool:
         return False
     nullable = re.search(r"\bNULL\b", definition, re.IGNORECASE) is not None
     not_null = re.search(r"\bNOT\s+NULL\b", definition, re.IGNORECASE) is not None
-    return (nullable and not not_null) or SQL_SAFE_DEFAULT.search(definition) is not None
+    return (nullable and not not_null) or safe_default_literal(definition)
+
+
+def alter_table_parts(statement: str) -> tuple[str, str] | None:
+    """Separa tabla y operación ALTER sin regex ambiguas."""
+    prefix = "ALTER TABLE "
+    if not statement.upper().startswith(prefix):
+        return None
+    rest = statement[len(prefix):].lstrip()
+    table, separator, operation = rest.partition(" ")
+    if not separator or not table or not operation.strip():
+        return None
+    return table, operation.strip()
+
+
+def add_column_definition(operation: str) -> str | None:
+    """Extrae la definición de ADD [COLUMN] sin aceptar otras formas ALTER."""
+    upper = operation.upper()
+    prefix = "ADD COLUMN " if upper.startswith("ADD COLUMN ") else "ADD "
+    if not upper.startswith(prefix):
+        return None
+    remainder = operation[len(prefix):].lstrip()
+    _, separator, definition = remainder.partition(" ")
+    if not separator or not definition.strip():
+        return None
+    return definition.strip()
 
 
 def classify_sql_statement(statement: str, created_tables: set[str]) -> tuple[bool, str]:
@@ -642,22 +668,21 @@ def classify_sql_statement(statement: str, created_tables: set[str]) -> tuple[bo
     if SQL_CREATE_INDEX.match(statement) is not None:
         return True, "create_index"
 
-    add_constraint = SQL_ALTER_ADD_CONSTRAINT.match(statement)
-    if add_constraint is not None:
-        table = sql_identifier(add_constraint.group(1))
-        if table in created_tables:
+    alter = alter_table_parts(statement)
+    if alter is None:
+        return False, "statement_not_allowlisted"
+    table, operation = alter
+    if operation.upper().startswith("ADD CONSTRAINT "):
+        if sql_identifier(table) in created_tables:
             return True, "add_constraint_new_table"
         return False, "constraint_on_existing_table"
 
-    add_column = SQL_ALTER_ADD_COLUMN.match(statement)
-    if add_column is not None:
-        definition = add_column.group(3)
-        if re.search(r"\b(?:DROP|MODIFY|CHANGE|RENAME)\b", definition, re.IGNORECASE):
-            return False, "alter_existing_shape"
-        if safe_add_column(definition):
-            return True, "add_column_safe"
-        return False, "add_column_not_safe"
-    return False, "statement_not_allowlisted"
+    definition = add_column_definition(operation)
+    if definition is None:
+        return False, "alter_not_allowlisted"
+    if safe_add_column(definition):
+        return True, "add_column_safe"
+    return False, "add_column_not_safe"
 
 
 def classify_migration_source(source: object) -> tuple[bool, str]:
@@ -672,17 +697,14 @@ def classify_migration_source(source: object) -> tuple[bool, str]:
         return False, parse_error
 
     created_tables: set[str] = set()
-    statement_count = 0
     for block in blocks:
-        statements = split_sql_statements(block)
-        if not statements:
+        statement = single_sql_statement(block)
+        if statement is None:
             return False, "sql_unparsed"
-        for statement in statements:
-            statement_count += 1
-            safe, reason = classify_sql_statement(statement, created_tables)
-            if not safe:
-                return False, reason
-    return (True, "additive_only") if statement_count else (False, "no_sql")
+        safe, reason = classify_sql_statement(statement, created_tables)
+        if not safe:
+            return False, reason
+    return True, "additive_only"
 
 
 def migration_source_safety(migration_paths: list[str], migration_sources: object) -> dict[str, Any]:
@@ -975,6 +997,24 @@ def load_accumulation_envelope() -> tuple[dict[str, Any], list[dict[str, Any]]]:
     return current, pending
 
 
+def load_development_safety_input(as_json: bool) -> tuple[list[str], object]:
+    """Carga paths y fuentes exactas fuera de main para mantener el CLI simple."""
+    if not as_json:
+        return sys.stdin.read().splitlines(), None
+    try:
+        payload = json.load(sys.stdin)
+    except ValueError as error:
+        raise EvidenceError("La entrada development-safety no es JSON válido.") from error
+    if not isinstance(payload, dict):
+        raise EvidenceError("La entrada development-safety debe ser JSON.")
+    changed_paths = payload.get("changed_paths")
+    if not isinstance(changed_paths, list) or not all(
+        isinstance(path, str) for path in changed_paths
+    ):
+        raise EvidenceError("changed_paths debe ser una lista de strings.")
+    return changed_paths, payload.get("migration_sources")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Expone generación y consolidación como CLI determinista."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1038,16 +1078,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "development-safety":
-            if args.json:
-                payload = json.load(sys.stdin)
-                if not isinstance(payload, dict):
-                    raise EvidenceError("La entrada development-safety debe ser JSON.")
-                changed_paths = payload.get("changed_paths")
-                if not isinstance(changed_paths, list) or not all(isinstance(path, str) for path in changed_paths):
-                    raise EvidenceError("changed_paths debe ser una lista de strings.")
-                result = development_transition_safety(changed_paths, payload.get("migration_sources"))
-            else:
-                result = development_transition_safety(sys.stdin.read().splitlines())
+            changed_paths, migration_sources = load_development_safety_input(args.json)
+            result = development_transition_safety(changed_paths, migration_sources)
             print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
 
