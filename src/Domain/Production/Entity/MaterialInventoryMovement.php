@@ -81,7 +81,7 @@ class MaterialInventoryMovement
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
     private DateTimeImmutable $createdAt;
 
-    /** @param array<string, scalar|null> $context */
+    /** @param array<array-key,mixed> $context */
     public function __construct(
         Tenant $tenant,
         InventorySource $source,
@@ -97,7 +97,7 @@ class MaterialInventoryMovement
         $delta = MaterialInventoryBalance::normalizeDelta($delta);
         $balanceAfter = MaterialInventoryBalance::normalizeQuantity($balanceAfter);
         self::assertTypeDirection($type, $delta);
-        self::assertContext($context);
+        $context = self::normalizeContext($context);
 
         if ($actorUserId !== null) {
             $actorUserId = trim($actorUserId);
@@ -193,9 +193,13 @@ class MaterialInventoryMovement
         return $key;
     }
 
-    /** @param array<string, scalar|null> $context */
-    private static function assertContext(array $context): void
+    /**
+     * @param array<array-key,mixed> $context
+     * @return array<string, scalar|null>
+     */
+    private static function normalizeContext(array $context): array
     {
+        $normalized = [];
         foreach ($context as $key => $value) {
             if (
                 !is_string($key)
@@ -205,7 +209,11 @@ class MaterialInventoryMovement
                     'El contexto del movimiento solo admite claves string y valores scalar/null.',
                 );
             }
+            $normalized[$key] = $value;
         }
+        ksort($normalized);
+
+        return $normalized;
     }
 
     private static function assertTypeDirection(
