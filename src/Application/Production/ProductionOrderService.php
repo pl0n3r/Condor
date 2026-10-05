@@ -45,15 +45,19 @@ final readonly class ProductionOrderService
                 $targetQuantity,
             ): ProductionOrder {
                 $entityManager->refresh(
+                    $source,
+                    LockMode::PESSIMISTIC_WRITE,
+                );
+                $entityManager->refresh(
+                    $variant->product(),
+                    LockMode::PESSIMISTIC_READ,
+                );
+                $entityManager->refresh(
                     $variant,
                     LockMode::PESSIMISTIC_WRITE,
                 );
                 $entityManager->refresh(
                     $billOfMaterials,
-                    LockMode::PESSIMISTIC_READ,
-                );
-                $entityManager->refresh(
-                    $source,
                     LockMode::PESSIMISTIC_READ,
                 );
                 self::assertScope(
