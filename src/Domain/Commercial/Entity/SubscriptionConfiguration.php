@@ -84,7 +84,7 @@ final class SubscriptionConfiguration
 
     /**
      * @param array<array-key,mixed> $quantities
-     * @param list<mixed> $addOns
+     * @param array<array-key,mixed> $addOns
      */
     public function __construct(
         Subscription $subscription,
@@ -234,7 +234,7 @@ final class SubscriptionConfiguration
     }
 
     /**
-     * @param list<mixed> $addOns
+     * @param array<array-key,mixed> $addOns
      * @return list<AddOn>
      */
     private static function normalizeAddOns(
