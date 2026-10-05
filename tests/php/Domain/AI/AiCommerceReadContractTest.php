@@ -35,11 +35,11 @@ final class AiCommerceReadContractTest extends TestCase
         ]);
         $contract->validateInventoryInputs([
             'product_ref' => 'product:sku_42',
-            'branch_ref' => 'location:main',
+            'branch_ref' => 'branch:main',
         ]);
         $contract->validateInventoryOutputs([
             'product_ref' => 'product:sku_42',
-            'branch_ref' => 'location:main',
+            'branch_ref' => 'branch:main',
             'quantity' => 12.500,
             'status' => 'in_stock',
         ]);
@@ -75,7 +75,7 @@ final class AiCommerceReadContractTest extends TestCase
             ]),
             fn () => $contract->validateInventoryOutputs([
                 'product_ref' => 'product:sku_42',
-                'branch_ref' => 'location:main',
+                'branch_ref' => 'branch:main',
                 'quantity' => 0,
                 'status' => 'in_stock',
             ]),
