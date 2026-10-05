@@ -83,9 +83,6 @@ final class ProductionMaterialsController extends AbstractController
 
         $balanceByMaterial = [];
         foreach ($balances as $balance) {
-            if (!$balance instanceof MaterialInventoryBalance) {
-                continue;
-            }
             $balanceByMaterial[$balance->material()->id()] = $balance;
         }
 
@@ -98,10 +95,7 @@ final class ProductionMaterialsController extends AbstractController
             'units' => UnitOfMeasure::keys(),
             'materials' => array_map(
                 self::materialPayload(...),
-                array_values(array_filter(
-                    $materials,
-                    static fn (mixed $material): bool => $material instanceof Material,
-                )),
+                $materials,
             ),
             'balances' => array_values(array_map(
                 self::balancePayload(...),
@@ -109,11 +103,7 @@ final class ProductionMaterialsController extends AbstractController
             )),
             'movements' => array_map(
                 self::movementPayload(...),
-                array_values(array_filter(
-                    $movements,
-                    static fn (mixed $movement): bool =>
-                        $movement instanceof MaterialInventoryMovement,
-                )),
+                $movements,
             ),
         ]);
     }
