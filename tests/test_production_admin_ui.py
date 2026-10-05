@@ -27,6 +27,7 @@ class ProductionAdminUiTests(unittest.TestCase):
             APP,
         )
         self.assertIn("<ProductionManagement", APP)
+        self.assertIn("{ href: '/admin#production', label: 'Producción' }", APP)
         self.assertIn("branchId={context.data.active_branch.id}", APP)
         self.assertIn("permissions={context.data.permissions}", APP)
         self.assertIn("csrfToken={accessToken}", APP)
