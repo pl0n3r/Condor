@@ -118,6 +118,35 @@ final class SubscriptionConfigurationPersistenceTest extends KernelTestCase
             new DateTimeImmutable('2026-10-05T10:00:00Z'),
         ));
 
+        $zeroPlan = new Plan('zero-baseline', 'Zero baseline');
+        $zeroVersion = new PlanVersion(
+            $zeroPlan,
+            1,
+            1,
+            1,
+            false,
+            ['users' => 0],
+            new DateTimeImmutable('2026-01-01T00:00:00Z'),
+        );
+        $zeroVersion->addVertical($vertical);
+        $zeroLifecycle = new SubscriptionLifecycle(
+            'tenant-config-zero',
+            $zeroVersion,
+            SubscriptionState::Active,
+            new DateTimeImmutable('2026-10-05T09:00:00Z'),
+        );
+        $zeroSubscription = Subscription::fromLifecycle(
+            $zeroLifecycle,
+            new DateTimeImmutable('2026-10-05T09:00:01Z'),
+        );
+        $this->assertRejected(fn () => new SubscriptionConfiguration(
+            $zeroSubscription,
+            $vertical,
+            ['users' => 0],
+            [],
+            new DateTimeImmutable('2026-10-05T10:00:00Z'),
+        ));
+
         $pro = $this->planVersion('pro');
         $proLifecycle = new SubscriptionLifecycle(
             'tenant-config-pro',
