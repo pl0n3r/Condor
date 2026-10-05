@@ -66,14 +66,7 @@ final class ProductionOperationsController extends AbstractController
 
         return $this->json([
             'branch' => ['id' => $branch->id(), 'name' => $branch->name()],
-            'boms' => array_map(
-                self::bomPayload(...),
-                array_values(array_filter(
-                    $boms,
-                    static fn (mixed $bom): bool =>
-                        $bom instanceof BillOfMaterials,
-                )),
-            ),
+            'boms' => array_map(self::bomPayload(...), $boms),
         ]);
     }
 
@@ -155,14 +148,7 @@ final class ProductionOperationsController extends AbstractController
                 'id' => $source->id(),
                 'name' => $source->name(),
             ],
-            'orders' => array_map(
-                self::orderPayload(...),
-                array_values(array_filter(
-                    $orders,
-                    static fn (mixed $order): bool =>
-                        $order instanceof ProductionOrder,
-                )),
-            ),
+            'orders' => array_map(self::orderPayload(...), $orders),
         ]);
     }
 
