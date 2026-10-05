@@ -214,7 +214,7 @@ final class ProductionOrderTest extends KernelTestCase
             $tenant,
             $source,
             $material,
-            '1000',
+            '5000',
             null,
             'atomic-seed-'.bin2hex(random_bytes(5)),
         );
@@ -240,41 +240,56 @@ final class ProductionOrderTest extends KernelTestCase
             self::assertSame(ProductionOrder::STATUS_DRAFT, $order->status());
         }
 
+        $rollbackKey = 'rollback-'.bin2hex(random_bytes(5));
+        (new InventoryService($this->entityManager))->adjust(
+            $tenant,
+            $source,
+            $variant,
+            1,
+            null,
+            $rollbackKey.':finished',
+        );
+
         try {
             $this->orders->complete(
                 $tenant,
                 $this->entitlements($tenant, true),
                 $order,
                 2,
-                'insufficient-'.bin2hex(random_bytes(4)),
+                $rollbackKey,
             );
-            self::fail('Completion sin material suficiente debía fallar.');
+            self::fail('La colisión del terminado debía revertir el consumo.');
         } catch (DomainException) {
             self::assertSame(ProductionOrder::STATUS_DRAFT, $order->status());
         }
 
+        $connection = $this->entityManager->getConnection();
         self::assertSame(
-            '1000',
-            $this->materialBalance($tenant, $source, $material)->quantity(),
+            '5000.000000',
+            (string) $connection->fetchOne(
+                'SELECT quantity FROM condor_production_material_balance '
+                .'WHERE tenant_id = ? AND source_id = ? AND material_id = ?',
+                [$tenant->id(), $source->id(), $material->id()],
+            ),
         );
         self::assertSame(
             0,
-            $this->entityManager
-                ->getRepository(MaterialInventoryMovement::class)
-                ->count([
-                    'tenant' => $tenant,
-                    'type' => MaterialInventoryMovement::TYPE_PRODUCTION_CONSUMPTION,
-                ]),
+            (int) $connection->fetchOne(
+                'SELECT COUNT(*) FROM condor_production_material_movement '
+                .'WHERE tenant_id = ? AND type = ?',
+                [
+                    $tenant->id(),
+                    MaterialInventoryMovement::TYPE_PRODUCTION_CONSUMPTION,
+                ],
+            ),
         );
         self::assertSame(
-            0,
-            $this->entityManager
-                ->getRepository(InventoryBalance::class)
-                ->count([
-                    'tenant' => $tenant,
-                    'source' => $source,
-                    'variant' => $variant,
-                ]),
+            1,
+            (int) $connection->fetchOne(
+                'SELECT quantity FROM condor_inventory_balance '
+                .'WHERE tenant_id = ? AND source_id = ? AND variant_id = ?',
+                [$tenant->id(), $source->id(), $variant->id()],
+            ),
         );
     }
 
