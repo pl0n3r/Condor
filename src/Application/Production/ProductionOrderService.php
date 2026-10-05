@@ -35,22 +35,35 @@ final readonly class ProductionOrderService
         int $targetQuantity,
     ): ProductionOrder {
         self::assertEntitledTenant($tenant, $entitlements);
-        self::assertScope(
-            $tenant,
-            $billOfMaterials,
-            $variant,
-            $source,
-            true,
-        );
 
         return $this->entityManager->wrapInTransaction(
-            function () use (
+            function (EntityManagerInterface $entityManager) use (
                 $tenant,
                 $billOfMaterials,
                 $variant,
                 $source,
                 $targetQuantity,
             ): ProductionOrder {
+                $entityManager->refresh(
+                    $variant,
+                    LockMode::PESSIMISTIC_WRITE,
+                );
+                $entityManager->refresh(
+                    $billOfMaterials,
+                    LockMode::PESSIMISTIC_READ,
+                );
+                $entityManager->refresh(
+                    $source,
+                    LockMode::PESSIMISTIC_READ,
+                );
+                self::assertScope(
+                    $tenant,
+                    $billOfMaterials,
+                    $variant,
+                    $source,
+                    true,
+                );
+
                 $order = new ProductionOrder(
                     $tenant,
                     $billOfMaterials,
