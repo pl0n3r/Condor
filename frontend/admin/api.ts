@@ -153,6 +153,43 @@ export function inventoryTransferPath(branchId: string): string {
 }
 
 
+export function productionMaterialsPath(branchId: string): string {
+  return '/api/v1/branches/' + safeUlid(branchId) + '/production/materials';
+}
+
+export function productionMaterialPath(
+  branchId: string,
+  materialId: string,
+): string {
+  return productionMaterialsPath(branchId) + '/' + safeUlid(materialId);
+}
+
+export function productionMaterialAdjustmentPath(
+  branchId: string,
+  materialId: string,
+): string {
+  return productionMaterialPath(branchId, materialId) + '/adjustments';
+}
+
+export function productionBomsPath(branchId: string): string {
+  return '/api/v1/branches/' + safeUlid(branchId) + '/production/boms';
+}
+
+export function productionOrdersPath(branchId: string): string {
+  return '/api/v1/branches/' + safeUlid(branchId) + '/production/orders';
+}
+
+export function productionOrderCompletePath(
+  branchId: string,
+  orderId: string,
+): string {
+  return productionOrdersPath(branchId)
+    + '/'
+    + safeUlid(orderId)
+    + '/complete';
+}
+
+
 export function customersPath(branchId: string): string {
   return '/api/v1/branches/' + safeUlid(branchId) + '/customers';
 }
