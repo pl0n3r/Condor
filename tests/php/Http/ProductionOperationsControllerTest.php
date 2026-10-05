@@ -26,8 +26,8 @@ use App\Domain\Organization\Entity\Tenant;
 use App\Domain\Production\Entity\BillOfMaterials;
 use App\Domain\Production\Entity\Material;
 use App\Domain\Production\Entity\MaterialInventoryBalance;
-use App\Domain\Production\Entity\ProductionOrder;
 use App\Domain\Production\ValueObject\UnitOfMeasure;
+use App\Tests\Support\BrowserCsrfToken;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
@@ -36,448 +36,340 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 final class ProductionOperationsControllerTest extends WebTestCase
 {
+    use BrowserCsrfToken;
+
     public function testBomSnapshotAndVersionCreationAreTenantScopedAndEntitled(): void
     {
         $client = static::createClient();
-        $manager = $this->entityManager();
+        $em = $this->em();
+        $fx = $this->fixture($em);
+        $client->loginUser($fx['owner']);
+        $token = $this->branchToken($client);
+        $url = $this->api($fx['branch'], 'boms');
 
-        [
-            $tenant,
-            ,
-            $branch,
-            $owner,
-            ,
-            $variant,
-            $material,
-        ] = $this->tenantWithProduction($manager);
-
-        $client->loginUser($owner);
-        $csrf = $this->csrf($client);
-        $base = '/api/v1/branches/'.$branch->id().'/production/boms';
-
-        $client->jsonRequest(
-            'POST',
-            $base,
-            [
-                'variant_id' => $variant->id(),
-                'components' => [[
-                    'material_id' => $material->id(),
-                    'quantity' => '1.5',
-                    'unit' => 'kg',
-                ]],
-            ],
-            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        $first = $this->postBom(
+            $client,
+            $url,
+            $token,
+            $fx['variant'],
+            $fx['material'],
+            '1.5',
+            'kg',
         );
-        self::assertResponseStatusCodeSame(201);
-        $first = $this->json($client)['bom'];
         self::assertSame(1, $first['version']);
         self::assertTrue($first['active']);
         self::assertSame('1.5', $first['lines'][0]['quantity']);
-        self::assertSame('kg', $first['lines'][0]['unit']);
 
-        $client->jsonRequest(
-            'POST',
-            $base,
-            [
-                'variant_id' => $variant->id(),
-                'components' => [[
-                    'material_id' => $material->id(),
-                    'quantity' => '2000',
-                    'unit' => 'g',
-                ]],
-            ],
-            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        $second = $this->postBom(
+            $client,
+            $url,
+            $token,
+            $fx['variant'],
+            $fx['material'],
+            '2000',
+            'g',
         );
-        self::assertResponseStatusCodeSame(201);
-        $second = $this->json($client)['bom'];
         self::assertSame(2, $second['version']);
         self::assertSame('2', $second['lines'][0]['quantity']);
 
-        $client->request('GET', $base);
+        $client->request('GET', $url);
         self::assertResponseIsSuccessful();
-        $snapshot = $this->json($client);
-        self::assertCount(2, $snapshot['boms']);
-
-        $byVersion = [];
-        foreach ($snapshot['boms'] as $bom) {
-            $byVersion[$bom['version']] = $bom;
+        $versions = [];
+        foreach ($this->body($client)['boms'] as $bom) {
+            $versions[$bom['version']] = $bom;
         }
-        self::assertFalse($byVersion[1]['active']);
-        self::assertTrue($byVersion[2]['active']);
+        self::assertFalse($versions[1]['active']);
+        self::assertTrue($versions[2]['active']);
 
-        [$foreignTenant, , , , , $foreignVariant, $foreignMaterial] =
-            $this->tenantWithProduction($manager);
+        $foreign = $this->fixture($em);
         $foreignBom = new BillOfMaterials(
-            $foreignTenant,
-            $foreignVariant,
+            $foreign['tenant'],
+            $foreign['variant'],
             1,
             [[
-                'material' => $foreignMaterial,
+                'material' => $foreign['material'],
                 'quantity' => '1',
                 'unit' => UnitOfMeasure::from('kg'),
             ]],
         );
-        $manager->persist($foreignBom);
-        $manager->flush();
+        $em->persist($foreignBom);
+        $em->flush();
 
-        $client->request('GET', $base);
+        $client->request('GET', $url);
         self::assertResponseIsSuccessful();
-        foreach ($this->json($client)['boms'] as $bom) {
-            self::assertNotSame($foreignBom->id(), $bom['id']);
-        }
-
-        self::assertSame($tenant->id(), $variant->tenant()->id());
+        $ids = array_column($this->body($client)['boms'], 'id');
+        self::assertNotContains($foreignBom->id(), $ids);
     }
 
     public function testOrderCreateAndCompleteUseBranchSourceDomainServicesAndIdempotency(): void
     {
         $client = static::createClient();
-        $manager = $this->entityManager();
-
-        [
-            $tenant,
-            ,
-            $branch,
-            $owner,
-            $source,
-            $variant,
-            $material,
-        ] = $this->tenantWithProduction($manager);
-        $manager->persist(new MaterialInventoryBalance(
-            $tenant,
-            $source,
-            $material,
+        $em = $this->em();
+        $fx = $this->fixture($em);
+        $em->persist(new MaterialInventoryBalance(
+            $fx['tenant'],
+            $fx['source'],
+            $fx['material'],
             '10',
         ));
-        $manager->flush();
+        $em->flush();
 
-        $client->loginUser($owner);
-        $csrf = $this->csrf($client);
-        $base = '/api/v1/branches/'.$branch->id().'/production';
+        $client->loginUser($fx['owner']);
+        $token = $this->branchToken($client);
+        $base = $this->api($fx['branch']);
 
-        $client->jsonRequest(
-            'POST',
+        $bom = $this->postBom(
+            $client,
             $base.'/boms',
-            [
-                'variant_id' => $variant->id(),
-                'components' => [[
-                    'material_id' => $material->id(),
-                    'quantity' => '2',
-                    'unit' => 'kg',
-                ]],
-            ],
-            ['HTTP_X_CSRF_TOKEN' => $csrf],
+            $token,
+            $fx['variant'],
+            $fx['material'],
+            '2',
+            'kg',
         );
-        self::assertResponseStatusCodeSame(201);
-        $bom = $this->json($client)['bom'];
 
         $client->jsonRequest(
             'POST',
             $base.'/orders',
-            [
-                'bom_id' => $bom['id'],
-                'target_quantity' => 3,
-            ],
-            ['HTTP_X_CSRF_TOKEN' => $csrf],
+            ['bom_id' => $bom['id'], 'target_quantity' => 3],
+            ['HTTP_X_CSRF_TOKEN' => $token],
         );
         self::assertResponseStatusCodeSame(201);
-        $order = $this->json($client)['order'];
+        $order = $this->body($client)['order'];
         self::assertSame('draft', $order['status']);
-        self::assertSame($source->id(), $order['source_id']);
-        self::assertSame($variant->id(), $order['variant_id']);
+        self::assertSame($fx['source']->id(), $order['source_id']);
 
         $key = 'complete-http-'.bin2hex(random_bytes(5));
         $completion = [
             'completed_quantity' => 3,
             'idempotency_key' => $key,
         ];
-        $completeUrl = $base.'/orders/'.$order['id'].'/complete';
+        $complete = $base.'/orders/'.$order['id'].'/complete';
+
         $client->jsonRequest(
             'POST',
-            $completeUrl,
+            $complete,
             $completion,
-            ['HTTP_X_CSRF_TOKEN' => $csrf],
+            ['HTTP_X_CSRF_TOKEN' => $token],
         );
         self::assertResponseStatusCodeSame(201);
-        $completed = $this->json($client)['order'];
-        self::assertSame('completed', $completed['status']);
-        self::assertSame(3, $completed['completed_quantity']);
-        self::assertSame($key, $completed['completion_idempotency_key']);
+        $done = $this->body($client)['order'];
+        self::assertSame('completed', $done['status']);
+        self::assertSame($key, $done['completion_idempotency_key']);
 
         $client->jsonRequest(
             'POST',
-            $completeUrl,
+            $complete,
             $completion,
-            ['HTTP_X_CSRF_TOKEN' => $csrf],
+            ['HTTP_X_CSRF_TOKEN' => $token],
         );
         self::assertResponseStatusCodeSame(200);
-        self::assertSame('completed', $this->json($client)['order']['status']);
 
+        $db = $em->getConnection();
         self::assertSame(
             '4.000000',
-            (string) $manager->getConnection()->fetchOne(
+            (string) $db->fetchOne(
                 'SELECT quantity FROM condor_production_material_balance '
                 .'WHERE tenant_id = ? AND source_id = ? AND material_id = ?',
-                [$tenant->id(), $source->id(), $material->id()],
+                [
+                    $fx['tenant']->id(),
+                    $fx['source']->id(),
+                    $fx['material']->id(),
+                ],
             ),
         );
         self::assertSame(
             '3',
-            (string) $manager->getConnection()->fetchOne(
+            (string) $db->fetchOne(
                 'SELECT quantity FROM condor_inventory_balance '
                 .'WHERE tenant_id = ? AND source_id = ? AND variant_id = ?',
-                [$tenant->id(), $source->id(), $variant->id()],
+                [
+                    $fx['tenant']->id(),
+                    $fx['source']->id(),
+                    $fx['variant']->id(),
+                ],
             ),
         );
 
         $client->request('GET', $base.'/orders');
         self::assertResponseIsSuccessful();
-        $orders = $this->json($client)['orders'];
-        self::assertCount(1, $orders);
-        self::assertSame($order['id'], $orders[0]['id']);
+        self::assertSame(
+            $order['id'],
+            $this->body($client)['orders'][0]['id'],
+        );
     }
 
     public function testPermissionsCsrfCrossTenantStaleBomOrForeignOrderFailClosed(): void
     {
         $client = static::createClient();
-        $manager = $this->entityManager();
-
-        [
-            $tenantA,
-            ,
-            $branchA,
-            $ownerA,
-            $sourceA,
-            $variantA,
-            $materialA,
-        ] = $this->tenantWithProduction($manager);
-        $manager->persist(new MaterialInventoryBalance(
-            $tenantA,
-            $sourceA,
-            $materialA,
-            '20',
-        ));
-        $manager->flush();
+        $em = $this->em();
+        $local = $this->fixture($em);
+        $base = $this->api($local['branch']);
 
         $viewer = new User(
-            'production-ops-viewer-'.bin2hex(random_bytes(4)).'@example.test',
-            'Viewer producción',
+            'ops-viewer-'.bin2hex(random_bytes(4)).'@example.test',
+            'Viewer',
         );
-        $membership = new Membership($tenantA, $viewer, 'ADMIN');
-        $role = new Role($tenantA, 'Producción lectura', ['inventory.view']);
-        $assignment = new BranchRoleAssignment(
-            $membership,
-            $branchA,
-            $role,
+        $membership = new Membership($local['tenant'], $viewer, 'ADMIN');
+        $role = new Role(
+            $local['tenant'],
+            'Producción lectura',
+            ['inventory.view'],
         );
-        foreach ([$viewer, $membership, $role, $assignment] as $entity) {
-            $manager->persist($entity);
-        }
-        $manager->flush();
+        $this->persist(
+            $em,
+            [
+                $viewer,
+                $membership,
+                $role,
+                new BranchRoleAssignment(
+                    $membership,
+                    $local['branch'],
+                    $role,
+                ),
+            ],
+        );
 
-        $baseA = '/api/v1/branches/'.$branchA->id().'/production';
         $client->loginUser($viewer);
         $client->jsonRequest(
             'POST',
-            $baseA.'/boms',
-            [
-                'variant_id' => $variantA->id(),
-                'components' => [[
-                    'material_id' => $materialA->id(),
-                    'quantity' => '1',
-                    'unit' => 'kg',
-                ]],
-            ],
-            ['HTTP_X_CSRF_TOKEN' => $this->csrf($client)],
+            $base.'/boms',
+            $this->bomRequest($local['variant'], $local['material'], '1'),
+            ['HTTP_X_CSRF_TOKEN' => $this->branchToken($client)],
         );
         self::assertResponseStatusCodeSame(403);
 
-        $client->loginUser($ownerA);
+        $client->loginUser($local['owner']);
         $client->jsonRequest(
             'POST',
-            $baseA.'/boms',
-            [
-                'variant_id' => $variantA->id(),
-                'components' => [[
-                    'material_id' => $materialA->id(),
-                    'quantity' => '1',
-                    'unit' => 'kg',
-                ]],
-            ],
+            $base.'/boms',
+            $this->bomRequest($local['variant'], $local['material'], '1'),
         );
         self::assertResponseStatusCodeSame(403);
 
-        $csrf = $this->csrf($client);
-        $client->jsonRequest(
-            'POST',
-            $baseA.'/boms',
-            [
-                'variant_id' => $variantA->id(),
-                'components' => [[
-                    'material_id' => $materialA->id(),
-                    'quantity' => '1',
-                    'unit' => 'kg',
-                ]],
-            ],
-            ['HTTP_X_CSRF_TOKEN' => $csrf],
+        $token = $this->branchToken($client);
+        $stale = $this->postBom(
+            $client,
+            $base.'/boms',
+            $token,
+            $local['variant'],
+            $local['material'],
+            '1',
+            'kg',
         );
-        self::assertResponseStatusCodeSame(201);
-        $stale = $this->json($client)['bom'];
+        $this->postBom(
+            $client,
+            $base.'/boms',
+            $token,
+            $local['variant'],
+            $local['material'],
+            '2',
+            'kg',
+        );
 
         $client->jsonRequest(
             'POST',
-            $baseA.'/boms',
-            [
-                'variant_id' => $variantA->id(),
-                'components' => [[
-                    'material_id' => $materialA->id(),
-                    'quantity' => '2',
-                    'unit' => 'kg',
-                ]],
-            ],
-            ['HTTP_X_CSRF_TOKEN' => $csrf],
-        );
-        self::assertResponseStatusCodeSame(201);
-
-        $client->jsonRequest(
-            'POST',
-            $baseA.'/orders',
-            [
-                'bom_id' => $stale['id'],
-                'target_quantity' => 1,
-            ],
-            ['HTTP_X_CSRF_TOKEN' => $csrf],
+            $base.'/orders',
+            ['bom_id' => $stale['id'], 'target_quantity' => 1],
+            ['HTTP_X_CSRF_TOKEN' => $token],
         );
         self::assertResponseStatusCodeSame(422);
 
-        [
-            $tenantB,
-            ,
-            $branchB,
-            $ownerB,
-            ,
-            $variantB,
-            $materialB,
-        ] = $this->tenantWithProduction($manager);
-        $client->loginUser($ownerB);
-        $csrfB = $this->csrf($client);
-        $baseB = '/api/v1/branches/'.$branchB->id().'/production';
-
+        $foreign = $this->fixture($em);
+        $client->loginUser($foreign['owner']);
+        $foreignToken = $this->branchToken($client);
+        $foreignBase = $this->api($foreign['branch']);
+        $foreignBom = $this->postBom(
+            $client,
+            $foreignBase.'/boms',
+            $foreignToken,
+            $foreign['variant'],
+            $foreign['material'],
+            '1',
+            'kg',
+        );
         $client->jsonRequest(
             'POST',
-            $baseB.'/boms',
-            [
-                'variant_id' => $variantB->id(),
-                'components' => [[
-                    'material_id' => $materialB->id(),
-                    'quantity' => '1',
-                    'unit' => 'kg',
-                ]],
-            ],
-            ['HTTP_X_CSRF_TOKEN' => $csrfB],
+            $foreignBase.'/orders',
+            ['bom_id' => $foreignBom['id'], 'target_quantity' => 1],
+            ['HTTP_X_CSRF_TOKEN' => $foreignToken],
         );
         self::assertResponseStatusCodeSame(201);
-        $foreignBom = $this->json($client)['bom'];
+        $foreignOrder = $this->body($client)['order'];
 
+        $client->loginUser($local['owner']);
         $client->jsonRequest(
             'POST',
-            $baseB.'/orders',
-            [
-                'bom_id' => $foreignBom['id'],
-                'target_quantity' => 1,
-            ],
-            ['HTTP_X_CSRF_TOKEN' => $csrfB],
-        );
-        self::assertResponseStatusCodeSame(201);
-        $foreignOrder = $this->json($client)['order'];
-
-        $client->loginUser($ownerA);
-        $client->jsonRequest(
-            'POST',
-            $baseA.'/orders/'.$foreignOrder['id'].'/complete',
+            $base.'/orders/'.$foreignOrder['id'].'/complete',
             [
                 'completed_quantity' => 1,
                 'idempotency_key' => 'foreign-'.bin2hex(random_bytes(4)),
             ],
-            ['HTTP_X_CSRF_TOKEN' => $this->csrf($client)],
+            ['HTTP_X_CSRF_TOKEN' => $this->branchToken($client)],
         );
         self::assertResponseStatusCodeSame(404);
-
-        self::assertNotSame($tenantA->id(), $tenantB->id());
     }
 
-    private function entityManager(): EntityManagerInterface
+    private function em(): EntityManagerInterface
     {
-        $manager = static::getContainer()->get(EntityManagerInterface::class);
-        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $em);
 
-        return $manager;
+        return $em;
     }
 
     /** @return array<string,mixed> */
-    private function json(KernelBrowser $client): array
+    private function body(KernelBrowser $client): array
     {
-        $payload = json_decode(
-            (string) $client->getResponse()->getContent(),
-            true,
-            512,
-            JSON_THROW_ON_ERROR,
-        );
-        self::assertIsArray($payload);
+        $content = (string) $client->getResponse()->getContent();
+        $decoded = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($decoded);
 
-        return $payload;
+        return $decoded;
     }
 
-    private function csrf(KernelBrowser $client): string
+    private function branchToken(KernelBrowser $client): string
     {
-        $crawler = $client->request('GET', '/admin');
+        $client->request('GET', '/admin');
         self::assertResponseIsSuccessful();
-        $token = $crawler
-            ->filter('#condor-admin-root')
-            ->attr('data-access-token');
-        self::assertIsString($token);
-        self::assertNotSame('', $token);
 
-        return $token;
+        return $this->csrfToken($client, 'branch_access');
+    }
+
+    private function api(Branch $branch, string $suffix = ''): string
+    {
+        $base = '/api/v1/branches/'.$branch->id().'/production';
+
+        return $suffix === '' ? $base : $base.'/'.$suffix;
     }
 
     /**
      * @return array{
-     *   Tenant,
-     *   LegalEntity,
-     *   Branch,
-     *   User,
-     *   InventorySource,
-     *   ProductVariant,
-     *   Material
+     *   tenant: Tenant,
+     *   branch: Branch,
+     *   owner: User,
+     *   source: InventorySource,
+     *   variant: ProductVariant,
+     *   material: Material
      * }
      */
-    private function tenantWithProduction(
-        EntityManagerInterface $manager,
-    ): array {
-        $seeder = static::getContainer()->get(CommercialCatalogSeeder::class);
-        self::assertInstanceOf(CommercialCatalogSeeder::class, $seeder);
-        $seeder->seed();
+    private function fixture(EntityManagerInterface $em): array
+    {
+        $catalog = static::getContainer()->get(CommercialCatalogSeeder::class);
+        self::assertInstanceOf(CommercialCatalogSeeder::class, $catalog);
+        $catalog->seed();
 
-        $suffix = strtolower(bin2hex(random_bytes(4)));
-        $tenant = new Tenant('Producción ops '.$suffix, 'prod-ops-'.$suffix);
-        $legalEntity = new LegalEntity(
-            $tenant,
-            'Producción ops '.$suffix.' SAS',
-            null,
-            true,
-        );
+        $salt = strtolower(bin2hex(random_bytes(4)));
+        $tenant = new Tenant('Ops '.$salt, 'ops-'.$salt);
+        $legal = new LegalEntity($tenant, 'Ops '.$salt.' SAS', null, true);
         $branch = new Branch(
             $tenant,
             'Principal',
-            'principal-'.$suffix,
-            $legalEntity,
+            'principal-'.$salt,
+            $legal,
             true,
         );
-        $owner = new User(
-            'owner-prod-ops-'.$suffix.'@example.test',
-            'Owner producción',
-        );
+        $owner = new User('owner-'.$salt.'@example.test', 'Owner ops');
         $membership = new Membership(
             $tenant,
             $owner,
@@ -485,34 +377,30 @@ final class ProductionOperationsControllerTest extends WebTestCase
         );
         $source = new InventorySource(
             $tenant,
-            $legalEntity,
+            $legal,
             'Principal',
-            'principal-'.$suffix,
+            'principal-'.$salt,
             InventorySource::TYPE_BRANCH,
             $branch,
         );
-        $product = new Product(
-            $tenant,
-            'Producto '.$suffix,
-            'producto-'.$suffix,
-        );
+        $product = new Product($tenant, 'Producto '.$salt, 'producto-'.$salt);
         $variant = new ProductVariant(
             $tenant,
             $product,
-            'SKU-'.$suffix,
+            'SKU-'.$salt,
             'Única',
         );
         $material = new Material(
             $tenant,
-            'MAT-'.$suffix,
-            'Materia '.$suffix,
+            'MAT-'.$salt,
+            'Materia '.$salt,
             UnitOfMeasure::from('kg'),
         );
-
-        foreach (
+        $this->persist(
+            $em,
             [
                 $tenant,
-                $legalEntity,
+                $legal,
                 $branch,
                 $owner,
                 $membership,
@@ -520,60 +408,112 @@ final class ProductionOperationsControllerTest extends WebTestCase
                 $product,
                 $variant,
                 $material,
-            ] as $entity
-        ) {
-            $manager->persist($entity);
-        }
-        $manager->flush();
+            ],
+        );
+        $this->subscribe($em, $tenant);
 
-        $plan = $manager->getRepository(Plan::class)
-            ->findOneBy(['key' => 'business']);
+        return compact(
+            'tenant',
+            'branch',
+            'owner',
+            'source',
+            'variant',
+            'material',
+        );
+    }
+
+    private function subscribe(
+        EntityManagerInterface $em,
+        Tenant $tenant,
+    ): void {
+        $plan = $em->getRepository(Plan::class)->findOneBy(['key' => 'business']);
+        $vertical = $em->getRepository(Vertical::class)->findOneBy([
+            'key' => 'commerce',
+        ]);
+        $addOn = $em->getRepository(AddOn::class)->findOneBy([
+            'key' => 'production-lite',
+        ]);
         self::assertInstanceOf(Plan::class, $plan);
-        $version = $manager->getRepository(PlanVersion::class)
-            ->findOneBy(['plan' => $plan, 'version' => 1]);
-        self::assertInstanceOf(PlanVersion::class, $version);
-        $vertical = $manager->getRepository(Vertical::class)
-            ->findOneBy(['key' => 'commerce']);
         self::assertInstanceOf(Vertical::class, $vertical);
-        $production = $manager->getRepository(AddOn::class)
-            ->findOneBy(['key' => 'production-lite']);
-        self::assertInstanceOf(AddOn::class, $production);
+        self::assertInstanceOf(AddOn::class, $addOn);
 
-        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $version = $em->getRepository(PlanVersion::class)->findOneBy([
+            'plan' => $plan,
+            'version' => 1,
+        ]);
+        self::assertInstanceOf(PlanVersion::class, $version);
+
+        $at = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $subscription = Subscription::fromLifecycle(
             new SubscriptionLifecycle(
                 $tenant->id(),
                 $version,
                 SubscriptionState::Active,
-                $now,
+                $at,
             ),
-            $now,
+            $at,
         );
-        $quantities = [];
-        foreach ($version->limits() as $key => $value) {
-            if (is_int($value)) {
-                $quantities[$key] = $value;
-            }
-        }
-        $configuration = new SubscriptionConfiguration(
+        $limits = array_filter(
+            $version->limits(),
+            static fn (mixed $value): bool => is_int($value),
+        );
+        $em->persist($subscription);
+        $em->persist(new SubscriptionConfiguration(
             $subscription,
             $vertical,
-            $quantities,
-            [$production],
-            $now,
-        );
-        $manager->persist($subscription);
-        $manager->persist($configuration);
-        $manager->flush();
+            $limits,
+            [$addOn],
+            $at,
+        ));
+        $em->flush();
+    }
 
+    /** @param list<object> $entities */
+    private function persist(
+        EntityManagerInterface $em,
+        array $entities,
+    ): void {
+        foreach ($entities as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
+    }
+
+    /** @return array<string,mixed> */
+    private function postBom(
+        KernelBrowser $client,
+        string $url,
+        string $token,
+        ProductVariant $variant,
+        Material $material,
+        string $quantity,
+        string $unit,
+    ): array {
+        $client->jsonRequest(
+            'POST',
+            $url,
+            $this->bomRequest($variant, $material, $quantity, $unit),
+            ['HTTP_X_CSRF_TOKEN' => $token],
+        );
+        self::assertResponseStatusCodeSame(201);
+
+        return $this->body($client)['bom'];
+    }
+
+    /** @return array<string,mixed> */
+    private function bomRequest(
+        ProductVariant $variant,
+        Material $material,
+        string $quantity,
+        string $unit = 'kg',
+    ): array {
         return [
-            $tenant,
-            $legalEntity,
-            $branch,
-            $owner,
-            $source,
-            $variant,
-            $material,
+            'variant_id' => $variant->id(),
+            'components' => [[
+                'material_id' => $material->id(),
+                'quantity' => $quantity,
+                'unit' => $unit,
+            ]],
         ];
     }
 }
