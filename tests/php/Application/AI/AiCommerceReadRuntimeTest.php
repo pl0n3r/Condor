@@ -95,7 +95,7 @@ final class AiCommerceReadRuntimeTest extends TestCase
             $handlers,
         );
         self::assertSame('handoff', $invalidInput['status']);
-        self::assertSame('tool_inputs_invalid', $invalidInput['reason']);
+        self::assertSame('tool_failed', $invalidInput['reason']);
         self::assertSame(0, $calls);
 
         $missingHandler = AiCommerceReadRuntime::turn(
