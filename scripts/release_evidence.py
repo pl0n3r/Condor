@@ -76,7 +76,8 @@ PHP_UP_METHOD = re.compile(
 )
 PHP_DOWN_METHOD = re.compile(r"public\s+function\s+down\s*\(", re.IGNORECASE)
 SQL_CREATE_TABLE = re.compile(
-    r"^CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+([^\s(]+)", re.IGNORECASE
+    r"^CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+([^\s(]+)\s*\(",
+    re.IGNORECASE,
 )
 SQL_CREATE_INDEX = re.compile(
     r"^CREATE\s+(?:UNIQUE\s+)?INDEX\s+[^\s]+\s+ON\s+[^\s(]+", re.IGNORECASE
@@ -615,7 +616,10 @@ def sql_identifier(value: str) -> str:
 def safe_add_column(definition: str) -> bool:
     """Permite columnas nullable o NOT NULL con default literal determinista."""
     upper = definition.upper()
-    if any(token in upper for token in ("AUTO_INCREMENT", "GENERATED", " AS (")):
+    if any(
+        token in upper
+        for token in ("AUTO_INCREMENT", "GENERATED", " AS (", "ON UPDATE")
+    ):
         return False
     nullable = re.search(r"\bNULL\b", definition, re.IGNORECASE) is not None
     not_null = re.search(r"\bNOT\s+NULL\b", definition, re.IGNORECASE) is not None
@@ -638,6 +642,13 @@ def classify_sql_statement(statement: str, created_tables: set[str]) -> tuple[bo
     if SQL_CREATE_INDEX.match(statement) is not None:
         return True, "create_index"
 
+    add_constraint = SQL_ALTER_ADD_CONSTRAINT.match(statement)
+    if add_constraint is not None:
+        table = sql_identifier(add_constraint.group(1))
+        if table in created_tables:
+            return True, "add_constraint_new_table"
+        return False, "constraint_on_existing_table"
+
     add_column = SQL_ALTER_ADD_COLUMN.match(statement)
     if add_column is not None:
         definition = add_column.group(3)
@@ -646,13 +657,6 @@ def classify_sql_statement(statement: str, created_tables: set[str]) -> tuple[bo
         if safe_add_column(definition):
             return True, "add_column_safe"
         return False, "add_column_not_safe"
-
-    add_constraint = SQL_ALTER_ADD_CONSTRAINT.match(statement)
-    if add_constraint is not None:
-        table = sql_identifier(add_constraint.group(1))
-        if table in created_tables:
-            return True, "add_constraint_new_table"
-        return False, "constraint_on_existing_table"
     return False, "statement_not_allowlisted"
 
 
