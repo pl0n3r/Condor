@@ -185,6 +185,8 @@ final class Version20990101000000 {
 CREATE TABLE demo_safe (id INT NOT NULL, PRIMARY KEY(id))
 SQL);
         $this->addSql('ALTER TABLE demo_safe ADD CONSTRAINT FK_DEMO FOREIGN KEY (id) REFERENCES other_table (id)');
+        $this->addSql('ALTER TABLE other_table ADD COLUMN note VARCHAR(255) NULL');
+        $this->addSql('ALTER TABLE other_table ADD COLUMN attempts INT NOT NULL DEFAULT 0');
     }
     public function down(Schema $schema): void {}
 }
@@ -204,6 +206,7 @@ SQL);
             "$this->addSql('DELETE FROM demo_safe');",
             "$this->addSql('RENAME TABLE demo_safe TO demo_other');",
             "$this->addSql('ALTER TABLE demo_safe MODIFY value VARCHAR(255) NOT NULL');",
+            "$this->addSql('ALTER TABLE demo_safe ADD COLUMN risky INT NOT NULL DEFAULT (RAND())');",
             "$sql = 'CREATE TABLE demo_safe (id INT)'; $this->addSql($sql);",
         ]
         for body in unsafe_up_bodies:
