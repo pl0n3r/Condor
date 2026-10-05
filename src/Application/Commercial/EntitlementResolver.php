@@ -97,6 +97,15 @@ final readonly class EntitlementResolver
         }
 
         $limits = $version->limits();
+        foreach ($context->configuredLimits() as $key => $value) {
+            if (!array_key_exists($key, $limits) || !is_int($limits[$key])) {
+                throw new DomainException(
+                    'Límite configurado incompatible con la PlanVersion.',
+                );
+            }
+            $limits[$key] = $value;
+        }
+
         foreach (self::BASE_CONTROLS as $key) {
             if (
                 array_key_exists($key, $capabilities)
