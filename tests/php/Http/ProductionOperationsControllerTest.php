@@ -267,14 +267,6 @@ final class ProductionOperationsControllerTest extends WebTestCase
             'kg',
         );
 
-        $client->jsonRequest(
-            'POST',
-            $base.'/orders',
-            ['bom_id' => $stale['id'], 'target_quantity' => 1],
-            ['HTTP_X_CSRF_TOKEN' => $token],
-        );
-        self::assertResponseStatusCodeSame(422);
-
         $foreign = $this->fixture($em);
         $client->loginUser($foreign['owner']);
         $foreignToken = $this->branchToken($client);
@@ -308,6 +300,14 @@ final class ProductionOperationsControllerTest extends WebTestCase
             ['HTTP_X_CSRF_TOKEN' => $this->branchToken($client)],
         );
         self::assertResponseStatusCodeSame(404);
+
+        $client->jsonRequest(
+            'POST',
+            $base.'/orders',
+            ['bom_id' => $stale['id'], 'target_quantity' => 1],
+            ['HTTP_X_CSRF_TOKEN' => $token],
+        );
+        self::assertResponseStatusCodeSame(422);
     }
 
     private function em(): EntityManagerInterface
