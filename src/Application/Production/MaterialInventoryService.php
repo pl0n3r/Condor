@@ -111,7 +111,7 @@ final readonly class MaterialInventoryService
     }
 
     /**
-     * @param list<array{material: Material, quantity: string}> $requirements
+     * @param list<array<string,mixed>> $requirements
      * @return list<MaterialInventoryMovement>
      */
     public function consumeForProduction(
