@@ -579,7 +579,7 @@ def sql_identifier(value: str) -> str:
 
 
 def quoted_sql_literal_end(value: str) -> int | None:
-    """Devuelve el fin de un literal SQL simple, soportando escape por ''. """
+    """Devuelve el fin de un literal SQL simple, soportando escape por ''."""
     if not value.startswith("'"):
         return None
     index = 1
@@ -603,12 +603,14 @@ def safe_default_literal(definition: str) -> bool:
     if not tail:
         return False
     if tail.startswith("'"):
-        return quoted_sql_literal_end(tail) is not None
+        end = quoted_sql_literal_end(tail)
+        return end is not None and not tail[end:].strip()
 
-    token = tail.split(None, 1)[0].rstrip(",")
-    if token.upper() in {"NULL", "TRUE", "FALSE"}:
+    if any(char.isspace() for char in tail) or "," in tail:
+        return False
+    if tail.upper() in {"NULL", "TRUE", "FALSE"}:
         return True
-    numeric = token.lstrip("-")
+    numeric = tail.lstrip("-")
     if numeric.count(".") > 1:
         return False
     return numeric.replace(".", "", 1).isdigit()
