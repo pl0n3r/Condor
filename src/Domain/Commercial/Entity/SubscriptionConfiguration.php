@@ -214,6 +214,7 @@ final class SubscriptionConfiguration
                 !is_string($key)
                 || !array_key_exists($key, $baseline)
                 || !is_int($value)
+                || $value < 1
                 || $value < $baseline[$key]
             ) {
                 throw new DomainException(
