@@ -21,9 +21,13 @@ final readonly class EntitlementContext
     /** @var list<EntitlementOverride> */
     private array $overrides;
 
+    /** @var array<string,int> */
+    private array $configuredLimits;
+
     /**
      * @param list<mixed> $selectedAddOns
      * @param list<mixed> $overrides
+     * @param array<array-key,mixed> $configuredLimits
      */
     public function __construct(
         string $tenantId,
@@ -32,6 +36,7 @@ final readonly class EntitlementContext
         array $selectedAddOns,
         array $overrides,
         private DateTimeImmutable $evaluatedAt,
+        array $configuredLimits = [],
     ) {
         $tenantId = trim($tenantId);
         if ($tenantId === '') {
@@ -57,6 +62,10 @@ final readonly class EntitlementContext
         $this->tenantId = $tenantId;
         $this->selectedAddOns = $validatedAddOns;
         $this->overrides = $validatedOverrides;
+        $this->configuredLimits = self::normalizeConfiguredLimits(
+            $planVersion,
+            $configuredLimits,
+        );
     }
 
     public function tenantId(): string
@@ -86,8 +95,53 @@ final readonly class EntitlementContext
         return $this->overrides;
     }
 
+    /** @return array<string,int> */
+    public function configuredLimits(): array
+    {
+        return $this->configuredLimits;
+    }
+
     public function evaluatedAt(): DateTimeImmutable
     {
         return $this->evaluatedAt;
+    }
+
+    /**
+     * @param array<array-key,mixed> $configuredLimits
+     * @return array<string,int>
+     */
+    private static function normalizeConfiguredLimits(
+        PlanVersion $planVersion,
+        array $configuredLimits,
+    ): array {
+        if ($configuredLimits === []) {
+            return [];
+        }
+        if (array_is_list($configuredLimits)) {
+            throw new DomainException('Límites configurados inválidos.');
+        }
+
+        $baseline = $planVersion->limits();
+        $normalized = [];
+        foreach ($configuredLimits as $key => $value) {
+            $base = is_string($key) && array_key_exists($key, $baseline)
+                ? $baseline[$key]
+                : null;
+            if (
+                !is_string($key)
+                || !is_int($base)
+                || !is_int($value)
+                || $value < 1
+                || $value < $base
+            ) {
+                throw new DomainException(
+                    'Límite configurado incompatible con la PlanVersion.',
+                );
+            }
+            $normalized[$key] = $value;
+        }
+        ksort($normalized);
+
+        return $normalized;
     }
 }
