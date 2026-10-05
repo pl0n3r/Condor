@@ -205,7 +205,7 @@ final class SubscriptionEntitlementContextFactoryTest extends KernelTestCase
 
         self::assertSame(12, $context->configuredLimits()['users']);
         self::assertSame(15, $snapshot->limit('users'));
-        self::assertCount(1, $snapshot->provenance());
+        self::assertCount(1, $snapshot->overrideProvenance());
 
         $this->assertDomainFailure(
             fn () => new EntitlementContext(
