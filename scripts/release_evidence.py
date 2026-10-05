@@ -62,6 +62,7 @@ DEVELOPMENT_SAFE_COMMAND_SCRIPTS = frozenset({
     "scripts/d043_pending_releases.py",
 })
 DEVELOPMENT_AUTO_MARKER = "condor-d043-dev-auto"
+MIGRATIONS_PREFIX = "migrations/"
 
 PHP_NOWDOC_ADD_SQL = re.compile(
     r"""\$this->addSql\(\s*<<<'(?P<label>[A-Za-z_]\w*)'\r?\n(?P<sql>.*?)\r?\n(?P=label)\s*\)\s*;""",
@@ -110,7 +111,7 @@ def read_version(path: Path) -> str:
 
 def transition_requirements(paths: list[str], required: bool) -> dict[str, bool]:
     """Deriva un checklist operativo sin ejecutar ninguna transición."""
-    migrations = any(path.startswith("migrations/") for path in paths)
+    migrations = any(path.startswith(MIGRATIONS_PREFIX) for path in paths)
     roles = any(
         path == "config/packages/security.yaml"
         or path.startswith(
@@ -776,7 +777,7 @@ def development_migration_sources(release_shas: Iterable[str]) -> list[dict[str,
         changed = git_text(["diff", "--name-only", f"{sha}^", sha])
         assert changed is not None
         for path in normalized_paths(changed.splitlines()):
-            if not path.startswith("migrations/"):
+            if not path.startswith(MIGRATIONS_PREFIX):
                 continue
             source = git_text(["show", f"{sha}:{path}"], missing_ok=True)
             entries.append({"path": path, "sha": sha, "source": source})
@@ -789,7 +790,7 @@ def development_transition_safety(
 ) -> dict[str, Any]:
     """Clasifica procedencia operativa sin inferir ejecución de comandos."""
     paths = normalized_paths(changed_paths)
-    migration_paths = [path for path in paths if path.startswith("migrations/")]
+    migration_paths = [path for path in paths if path.startswith(MIGRATIONS_PREFIX)]
     migration = migration_source_safety(migration_paths, migration_sources)
     command_paths = [
         path
