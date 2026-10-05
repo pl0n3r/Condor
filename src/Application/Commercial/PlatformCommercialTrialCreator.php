@@ -15,7 +15,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\LockMode;
+use Doctrine\DBAL\LockMode;
 use DomainException;
 
 final readonly class PlatformCommercialTrialCreator
