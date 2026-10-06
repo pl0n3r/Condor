@@ -186,7 +186,7 @@ print json_encode([
         self.assertEqual("tool_sensitive_requires_human", observed["second"]["reason"])
         self.assertFalse(observed["first"]["executed"])
         self.assertFalse(observed["second"]["executed"])
-        self.assertEqual({}, observed["claims"])
+        self.assertEqual([], observed["claims"])
         self.assertEqual(0, observed["executions"])
 
     def test_cross_tenant_invalid_refs_unknown_or_noncanonical_sensitive_turn_fails_closed_without_side_effects(self) -> None:
@@ -296,7 +296,7 @@ print json_encode([
         self.assertEqual("turn_not_canonical", cases["noncanonical"]["reason"])
         self.assertFalse(cases["noncanonical"]["executed"])
         self.assertFalse(cases["noncanonical"]["has_sensitive_request"])
-        self.assertEqual({}, observed["claims"])
+        self.assertEqual([], observed["claims"])
         self.assertEqual(0, observed["executions"])
 
     def test_documented_boundary_contains_no_approval_execution_database_network_provider_real_data_or_live_path(self) -> None:
