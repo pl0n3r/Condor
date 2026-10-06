@@ -163,7 +163,9 @@ final class AiDraftWriteRuntimeTest extends TestCase
             new AiToolReplayGuard(),
         );
         self::assertSame('handoff', $invalidInput['status']);
-        self::assertSame('tool_inputs_invalid', $invalidInput['reason']);
+        self::assertSame('tool_failed', $invalidInput['reason']);
+        self::assertTrue($invalidInput['executed']);
+        self::assertSame('failure', $invalidInput['receipt']['outcome']);
         self::assertSame(0, $calls);
 
         $missingHandler = AiDraftWriteRuntime::turn(
