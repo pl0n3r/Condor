@@ -1,0 +1,138 @@
+name: External uptime Condor
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: external-uptime-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Probe externo y alerta deduplicada
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Descargar main confiable
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Validar contrato offline
+        run: python3 -m unittest tests/test_ci_external_uptime_watch.py
+
+      - name: Tomar dos muestras externas
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .external-uptime-work
+          python3 scripts/external_uptime_watch.py probe > .external-uptime-work/sample-1.json
+          sleep 20
+          python3 scripts/external_uptime_watch.py probe > .external-uptime-work/sample-2.json
+
+      - name: Leer alertas abiertas y decidir una sola mutación
+        id: decision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORIO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/$REPOSITORIO/issues?state=open&per_page=100" \
+            > .external-uptime-work/open-issue-pages.json
+          jq '[.[][]]' .external-uptime-work/open-issue-pages.json \
+            > .external-uptime-work/open-issues.json
+          python3 scripts/external_uptime_watch.py decide \
+            > .external-uptime-work/action.json
+          action="$(jq -r '.action' .external-uptime-work/action.json)"
+          state="$(jq -r '.state' .external-uptime-work/action.json)"
+          case "$action" in
+            noop|create|update|close) ;;
+            *) echo "::error::Decisión de uptime inválida"; exit 1 ;;
+          esac
+          echo "action=$action" >> "$GITHUB_OUTPUT"
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          {
+            echo "### External uptime Condor"
+            echo
+            echo "- Estado agregado: \`$state\`"
+            echo "- Acción GitHub: \`$action\`"
+            echo "- Dos muestras requeridas: sí"
+            echo "- Evidencia remota persistida: no"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Reconciliar alerta única
+        if: steps.decision.outputs.action != 'noop'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORIO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          ACTION: ${{ steps.decision.outputs.action }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          action_file=".external-uptime-work/action.json"
+          case "$ACTION" in
+            create)
+              jq -n \
+                --arg title "$(jq -r '.title' "$action_file")" \
+                --arg body "$(jq -r '.body' "$action_file")" \
+                --arg owner "$OWNER" \
+                '{
+                  title:$title,
+                  body:$body,
+                  assignees:[$owner],
+                  labels:[
+                    "tipo: incidente",
+                    "prioridad: alta",
+                    "estado: bloqueado",
+                    "rol: infraestructura",
+                    "rol: sre",
+                    "rol: seguridad"
+                  ]
+                }' \
+                | gh api --method POST "repos/$REPOSITORIO/issues" --input - >/dev/null
+              ;;
+            update)
+              number="$(jq -r '.issue_number' "$action_file")"
+              [[ "$number" =~ ^[1-9][0-9]*$ ]] || exit 1
+              jq -n --arg body "$(jq -r '.body' "$action_file")" '{body:$body}' \
+                | gh api --method PATCH "repos/$REPOSITORIO/issues/$number" --input - >/dev/null
+              ;;
+            close)
+              number="$(jq -r '.issue_number' "$action_file")"
+              [[ "$number" =~ ^[1-9][0-9]*$ ]] || exit 1
+              jq -n --arg body "$(jq -r '.comment' "$action_file")" '{body:$body}' \
+                | gh api --method POST "repos/$REPOSITORIO/issues/$number/comments" --input - >/dev/null
+              jq -n '{
+                state:"closed",
+                state_reason:"completed",
+                labels:[
+                  "tipo: incidente",
+                  "prioridad: alta",
+                  "estado: completado",
+                  "rol: infraestructura",
+                  "rol: sre",
+                  "rol: seguridad"
+                ]
+              }' \
+                | gh api --method PATCH "repos/$REPOSITORIO/issues/$number" --input - >/dev/null
+              ;;
+            *)
+              echo "::error::Mutación de uptime no permitida"
+              exit 1
+              ;;
+          esac
+
+      - name: Limpiar evidencia efímera local
+        if: always()
+        shell: bash
+        run: rm -rf .external-uptime-work
