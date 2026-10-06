@@ -38,8 +38,8 @@ $context = AiTenantContext::fromArray([
     'knowledge_refs' => [],
 ], $policy);
 $decision = AiToolDecision::decide($context, $policy, [
-    'tenant_ref' => 'tenant:tenant-a',
-    'tool_ref' => 'identity.permission.change',
+    'tenant_id' => 'tenant-a',
+    'tool' => 'identity.permission.change',
     'request_ref' => 'request:permission-review-001',
 ]);
 $handoff = AiSensitiveHandoffDecision::fromDecision(
@@ -101,18 +101,18 @@ $readContext = AiTenantContext::fromArray([
 ], $policy);
 
 $sensitiveDecision = AiToolDecision::decide($sensitiveContext, $policy, [
-    'tenant_ref' => 'tenant:tenant-a',
-    'tool_ref' => 'identity.permission.change',
+    'tenant_id' => 'tenant-a',
+    'tool' => 'identity.permission.change',
     'request_ref' => 'request:permission-review-001',
 ]);
 $readDecision = AiToolDecision::decide($readContext, $policy, [
-    'tenant_ref' => 'tenant:tenant-a',
-    'tool_ref' => 'catalog.read',
+    'tenant_id' => 'tenant-a',
+    'tool' => 'catalog.read',
     'request_ref' => 'request:catalog-read-001',
 ]);
 $invalidDecision = AiToolDecision::decide($sensitiveContext, $policy, [
-    'tenant_ref' => 'tenant:tenant-b',
-    'tool_ref' => 'identity.permission.change',
+    'tenant_id' => 'tenant-b',
+    'tool' => 'identity.permission.change',
     'request_ref' => 'request:permission-review-001',
 ]);
 $request = [
@@ -206,8 +206,8 @@ $context = AiTenantContext::fromArray([
     'knowledge_refs' => [],
 ], $policy);
 $decision = AiToolDecision::decide($context, $policy, [
-    'tenant_ref' => 'tenant:tenant-a',
-    'tool_ref' => 'identity.permission.change',
+    'tenant_id' => 'tenant-a',
+    'tool' => 'identity.permission.change',
     'request_ref' => 'request:permission-review-001',
 ]);
 $snapshot = AiSensitiveHandoffDecision::fromDecision(
@@ -259,8 +259,8 @@ $sensitiveContext = AiTenantContext::fromArray([
     'knowledge_refs' => [],
 ], $policy);
 $sensitiveDecision = AiToolDecision::decide($sensitiveContext, $policy, [
-    'tenant_ref' => 'tenant:tenant-a',
-    'tool_ref' => 'identity.permission.change',
+    'tenant_id' => 'tenant-a',
+    'tool' => 'identity.permission.change',
     'request_ref' => 'request:permission-review-001',
 ]);
 AiSensitiveHandoffDecision::fromDecision(
@@ -281,8 +281,8 @@ $readContext = AiTenantContext::fromArray([
     'knowledge_refs' => [],
 ], $policy);
 $readDecision = AiToolDecision::decide($readContext, $policy, [
-    'tenant_ref' => 'tenant:tenant-a',
-    'tool_ref' => 'catalog.read',
+    'tenant_id' => 'tenant-a',
+    'tool' => 'catalog.read',
     'request_ref' => 'request:catalog-read-001',
 ]);
 

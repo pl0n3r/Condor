@@ -26,8 +26,8 @@ final class AiSensitiveHandoffDecisionTest extends TestCase
             $context,
             $policy,
             [
-                'tenant_ref' => 'tenant:tenant-a',
-                'tool_ref' => 'identity.permission.change',
+                'tenant_id' => 'tenant-a',
+                'tool' => 'identity.permission.change',
                 'request_ref' => 'request:permission-review-001',
             ],
         );
@@ -74,8 +74,8 @@ final class AiSensitiveHandoffDecisionTest extends TestCase
             $context,
             $policy,
             [
-                'tenant_ref' => 'tenant:tenant-a',
-                'tool_ref' => 'identity.permission.change',
+                'tenant_id' => 'tenant-a',
+                'tool' => 'identity.permission.change',
                 'request_ref' => 'request:permission-review-001',
             ],
         );
