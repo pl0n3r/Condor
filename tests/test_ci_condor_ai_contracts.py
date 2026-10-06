@@ -44,7 +44,7 @@ class CondorAiCiContractsTests(unittest.TestCase):
         self,
     ) -> None:
         fixtures = sorted((ROOT / "tests").glob("test_condor_ai_*.py"))
-        self.assertEqual(25, len(fixtures))
+        self.assertEqual(26, len(fixtures))
 
         release_pin = re.compile(r"'version'\\s*=>\\s*'0\\.1\\.\\d+'")
         forbidden_imports = (
