@@ -154,31 +154,31 @@ def probe_health(fetcher: Callable[..., dict[str, object]]) -> dict[str, object]
             limit=MAX_HEALTH_BYTES,
         )
     except ProbeUnknown as error:
-        return endpoint_evidence("health", "unknown", error.reason)
+        return endpoint_evidence("readiness", "unknown", error.reason)
     except ValueError as error:
         reason = str(error)
         if reason not in {"payload_too_large", "unsupported_path"}:
             reason = "contract"
-        return endpoint_evidence("health", "degraded", reason)
+        return endpoint_evidence("readiness", "degraded", reason)
 
     status = response.get("status")
     if not isinstance(status, int) or status != 200:
         return endpoint_evidence(
-            "health",
+            "readiness",
             "degraded",
             "http_status",
             status if isinstance(status, int) else None,
         )
     if response.get("content_type") != "application/json":
-        return endpoint_evidence("health", "degraded", "content_type", status)
+        return endpoint_evidence("readiness", "degraded", "content_type", status)
     body = response.get("body")
     if not isinstance(body, (bytes, bytearray)):
-        return endpoint_evidence("health", "degraded", "contract", status)
+        return endpoint_evidence("readiness", "degraded", "contract", status)
 
     try:
         payload = json.loads(bytes(body).decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
-        return endpoint_evidence("health", "degraded", "invalid_json", status)
+        return endpoint_evidence("readiness", "degraded", "invalid_json", status)
 
     valid = (
         isinstance(payload, dict)
@@ -190,8 +190,8 @@ def probe_health(fetcher: Callable[..., dict[str, object]]) -> dict[str, object]
         and payload.get("schema_up_to_date") is True
     )
     if not valid:
-        return endpoint_evidence("health", "degraded", "contract", status)
-    return endpoint_evidence("health", "ok", "ok", status)
+        return endpoint_evidence("readiness", "degraded", "contract", status)
+    return endpoint_evidence("readiness", "ok", "ok", status)
 
 
 def probe_home(fetcher: Callable[..., dict[str, object]]) -> dict[str, object]:
@@ -314,7 +314,7 @@ def safe_endpoint_line(endpoint: object) -> str:
     outcome = endpoint.get("outcome")
     reason = endpoint.get("reason")
     status = endpoint.get("http_status")
-    if name not in {"health", "home"}:
+    if name not in {"readiness", "home"}:
         name = "unknown"
     if outcome not in {"ok", "degraded", "unknown"}:
         outcome = "unknown"

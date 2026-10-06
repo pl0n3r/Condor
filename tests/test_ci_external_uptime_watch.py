@@ -35,7 +35,7 @@ def observation(state: str, when: datetime) -> dict[str, object]:
     }[state]
     status = 200 if state != "UNKNOWN" else None
     endpoints: list[dict[str, object]] = []
-    for endpoint in ("health", "home"):
+    for endpoint in ("readiness", "home"):
         item: dict[str, object] = {
             "endpoint": endpoint,
             "outcome": endpoint_outcome,
