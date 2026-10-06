@@ -40,7 +40,7 @@ def complete_additive() -> dict[str, object]:
         "allowlist_complete": True,
         "backup_receipt_verified": True,
         "post_checks": {
-            "health": True,
+            "service_readiness": True,
             "schema": True,
             "smoke": True,
         },
@@ -65,6 +65,19 @@ class LiveMigrationPolicyTests(unittest.TestCase):
         self.assertFalse(extra["eligible_after_owner_gate"])
         self.assertEqual("evidence_incomplete", extra["reason"])
 
+        reordered = {
+            "post_checks": {
+                "smoke": True,
+                "service_readiness": True,
+                "schema": True,
+            },
+            "backup_receipt_verified": True,
+            "allowlist_complete": True,
+            "dry_run_valid": True,
+            "classification": "additive",
+        }
+        self.assertTrue(evaluate(reordered)["eligible_after_owner_gate"])
+
     def test_additive_requires_preflight_backup_receipt_and_postchecks(self) -> None:
         valid = evaluate(complete_additive())
         self.assertEqual("additive", valid["classification"])
@@ -77,7 +90,7 @@ class LiveMigrationPolicyTests(unittest.TestCase):
             ("dry_run_valid", None),
             ("allowlist_complete", None),
             ("backup_receipt_verified", None),
-            ("post_checks", "health"),
+            ("post_checks", "service_readiness"),
             ("post_checks", "schema"),
             ("post_checks", "smoke"),
         ]
@@ -115,7 +128,7 @@ class LiveMigrationPolicyTests(unittest.TestCase):
         result = evaluate(payload)
         self.assertFalse(result["eligible_after_owner_gate"])
 
-        for key in ("health", "schema", "smoke"):
+        for key in ("service_readiness", "schema", "smoke"):
             payload = complete_additive()
             post_checks = dict(payload["post_checks"])
             post_checks.pop(key)

@@ -10,11 +10,25 @@ const REQUIRED_TOP_LEVEL_KEYS = [
     'backup_receipt_verified',
     'post_checks',
 ];
-const REQUIRED_POST_CHECKS = ['health', 'schema', 'smoke'];
+const REQUIRED_POST_CHECKS = ['service_readiness', 'schema', 'smoke'];
 
 function booleanFlag(array $payload, string $key): bool
 {
     return array_key_exists($key, $payload) && $payload[$key] === true;
+}
+
+/**
+ * @param array<string,mixed> $payload
+ * @param list<string> $required
+ */
+function hasExactKeys(array $payload, array $required): bool
+{
+    $keys = array_keys($payload);
+    sort($keys);
+    $expected = $required;
+    sort($expected);
+
+    return $keys === $expected;
 }
 
 /**
@@ -24,7 +38,7 @@ function booleanFlag(array $payload, string $key): bool
 function evaluatePolicy(mixed $input): array
 {
     $payload = is_array($input) ? $input : [];
-    $exactShape = array_keys($payload) === REQUIRED_TOP_LEVEL_KEYS;
+    $exactShape = hasExactKeys($payload, REQUIRED_TOP_LEVEL_KEYS);
 
     $requested = $payload['classification'] ?? null;
     $classification = is_string($requested) && in_array($requested, CLASSIFICATIONS, true)
@@ -35,13 +49,13 @@ function evaluatePolicy(mixed $input): array
         ? $payload['post_checks']
         : [];
 
-    $postShape = array_keys($postChecks) === REQUIRED_POST_CHECKS;
+    $postShape = hasExactKeys($postChecks, REQUIRED_POST_CHECKS);
     $gates = [
         'dry_run_valid' => booleanFlag($payload, 'dry_run_valid'),
         'allowlist_complete' => booleanFlag($payload, 'allowlist_complete'),
         'backup_receipt_verified' => booleanFlag($payload, 'backup_receipt_verified'),
         'post_checks' => [
-            'health' => booleanFlag($postChecks, 'health'),
+            'service_readiness' => booleanFlag($postChecks, 'service_readiness'),
             'schema' => booleanFlag($postChecks, 'schema'),
             'smoke' => booleanFlag($postChecks, 'smoke'),
         ],
@@ -52,7 +66,7 @@ function evaluatePolicy(mixed $input): array
         && $gates['dry_run_valid']
         && $gates['allowlist_complete']
         && $gates['backup_receipt_verified']
-        && $gates['post_checks']['health']
+        && $gates['post_checks']['service_readiness']
         && $gates['post_checks']['schema']
         && $gates['post_checks']['smoke'];
 

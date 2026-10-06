@@ -1,6 +1,6 @@
 # Condor · política de migraciones para fase live
 
-Estado: **build-ahead durante construcción**. Este documento no activa fase live, no habilita ejecución automática y no reemplaza la decisión D-054.
+Estado: **build-ahead durante construcción**. Este documento **no autoriza go-live**, no activa fase live, no habilita ejecución automática y no reemplaza la decisión D-054.
 
 ## Autoridad vigente
 
@@ -23,7 +23,7 @@ Una candidata `additive` solo obtiene `eligible_after_owner_gate=true` cuando **
 1. dry-run válido;
 2. allowlist completa;
 3. backup receipt verificable;
-4. post-check de health requerido;
+4. post-check de readiness del servicio (`/health`) requerido;
 5. post-check de schema requerido;
 6. post-check de smoke requerido.
 
@@ -37,7 +37,7 @@ Abortar y fallar cerrado cuando ocurra cualquiera de estas condiciones:
 - dry-run ausente/fallido;
 - allowlist incompleta;
 - receipt de backup ausente o no verificable;
-- falta cualquiera de health/schema/smoke;
+- falta cualquiera de service-readiness/schema/smoke;
 - forma de evidencia inesperada o campos extra/no tipados como booleanos;
 - el owner no ha aprobado explícitamente la operación live.
 
@@ -66,7 +66,7 @@ Ejemplo de candidata completa:
   "allowlist_complete": true,
   "backup_receipt_verified": true,
   "post_checks": {
-    "health": true,
+    "service_readiness": true,
     "schema": true,
     "smoke": true
   }
