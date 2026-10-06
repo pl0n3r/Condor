@@ -142,7 +142,7 @@ foreach ($cases as $name => [$decision, $handoffRequest]) {
             $handoffRequest,
         );
         $out[$name] = false;
-    } catch (\Throwable) {
+    } catch (\DomainException) {
         $out[$name] = true;
     }
 }
