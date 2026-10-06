@@ -28,7 +28,8 @@ final class AiConversationCore
      *     audit:array<string, string>|null,
      *     tool_result?:array<string, string|int|float|bool|null>,
      *     receipt?:array{tenant_ref:string,tool_ref:string,request_ref:string,decision:'authorized',risk:'read_only'|'reversible_write',outcome:'success'|'denied'|'failure',evidence_ref:string,timestamp:string},
-     *     handoff?:array{tenant_ref:string,route:'knowledge'|'tool'|'none',reason:string,evidence_refs:list<string>}
+     *     handoff?:array{tenant_ref:string,route:'knowledge'|'tool'|'none',reason:string,evidence_refs:list<string>},
+     *     sensitive_request?:array{tenant_ref:string,tool_ref:string,request_ref:string,evidence_ref:string}
      * }
      */
     public static function turn(
@@ -77,7 +78,8 @@ final class AiConversationCore
      *     evidence_refs:list<string>,
      *     sources:list<array<string, mixed>>,
      *     audit:null,
-     *     handoff?:array{tenant_ref:string,route:'knowledge'|'tool'|'none',reason:string,evidence_refs:list<string>}
+     *     handoff?:array{tenant_ref:string,route:'knowledge'|'tool'|'none',reason:string,evidence_refs:list<string>},
+     *     sensitive_request?:array{tenant_ref:string,tool_ref:string,request_ref:string,evidence_ref:string}
      * }
      */
     private static function knowledgeTurn(
@@ -166,9 +168,40 @@ final class AiConversationCore
         );
         if ($decision['status'] !== 'authorized') {
             if ($decision['reason'] === 'sensitive_requires_human') {
-                return self::handoff(
+                try {
+                    $sensitiveDecision = AiSensitiveHandoffDecision::fromDecision(
+                        $context,
+                        $policy,
+                        $decision,
+                        [
+                            'tenant_ref' => 'tenant:' . $context->tenantId(),
+                            'tool_ref' => $context->tool(),
+                            'request_ref' => $turn['request_ref'],
+                            'evidence_ref' => $turn['evidence_ref'],
+                        ],
+                    )->snapshot();
+                } catch (DomainException) {
+                    return self::handoff(
+                        $context,
+                        'tool_sensitive_handoff_invalid',
+                        'tool',
+                    );
+                }
+
+                $response = self::handoff(
                     $context,
                     'tool_sensitive_requires_human',
+                    'tool',
+                );
+                $response['sensitive_request'] = $sensitiveDecision['request'];
+
+                return $response;
+            }
+
+            if ($policy->risk($context->tool()) === AiToolPolicy::SENSITIVE) {
+                return self::handoff(
+                    $context,
+                    'tool_sensitive_handoff_invalid',
                     'tool',
                 );
             }

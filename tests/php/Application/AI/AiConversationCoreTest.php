@@ -281,6 +281,17 @@ final class AiConversationCoreTest extends TestCase
         self::assertSame('tenant:tenant-a', $sensitive['handoff']['tenant_ref']);
         self::assertSame('tool', $sensitive['handoff']['route']);
         self::assertSame([], $sensitive['handoff']['evidence_refs']);
+        self::assertSame(
+            [
+                'tenant_ref' => 'tenant:tenant-a',
+                'tool_ref' => 'identity.permission.change',
+                'request_ref' => 'request:sensitive-turn',
+                'evidence_ref' => 'evidence:sensitive-turn',
+            ],
+            $sensitive['sensitive_request'],
+        );
+        self::assertArrayNotHasKey('permission_id', $sensitive['sensitive_request']);
+        self::assertArrayNotHasKey('actor_id', $sensitive['sensitive_request']);
 
         $invalidRequest = AiConversationCore::turn(
             AiTenantContext::fromArray([
