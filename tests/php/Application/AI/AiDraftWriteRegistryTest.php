@@ -16,124 +16,108 @@ final class AiDraftWriteRegistryTest extends TestCase
     {
         $policy = new AiToolPolicy();
         $before = $policy->allowlist();
-        $registry = AiDraftWriteRegistry::fromArray($policy, self::validHandlers());
+        $registry = AiDraftWriteRegistry::fromArray($policy, self::handlers());
 
-        self::assertSame(
+        foreach ([
             'content.draft.update',
-            $registry->descriptor('content.draft.update')->tool(),
-        );
-        self::assertSame(
             'settings.draft.update',
-            $registry->descriptor('settings.draft.update')->tool(),
-        );
-        self::assertSame(
-            AiToolPolicy::REVERSIBLE_WRITE,
-            $registry->descriptor('content.draft.update')->risk(),
-        );
-        self::assertSame(
-            AiToolPolicy::REVERSIBLE_WRITE,
-            $registry->descriptor('settings.draft.update')->risk(),
-        );
+        ] as $tool) {
+            self::assertSame($tool, $registry->descriptor($tool)->tool());
+            self::assertSame(
+                AiToolPolicy::REVERSIBLE_WRITE,
+                $registry->descriptor($tool)->risk(),
+            );
+        }
 
-        self::assertSame(
+        $cases = [
             [
-                'draft_ref' => 'content_draft:homepage',
-                'revision_ref' => 'revision:r43',
-                'status' => 'updated',
-            ],
-            $registry->execute(
                 'content.draft.update',
                 [
                     'draft_ref' => 'content_draft:homepage',
                     'change_ref' => 'change:hero_title',
                     'expected_revision_ref' => 'revision:r42',
                 ],
-            ),
-        );
-        self::assertSame(
-            [
-                'draft_ref' => 'settings_draft:storefront',
-                'revision_ref' => 'revision:r10',
-                'status' => 'conflict',
+                [
+                    'draft_ref' => 'content_draft:homepage',
+                    'revision_ref' => 'revision:r43',
+                    'status' => 'updated',
+                ],
             ],
-            $registry->execute(
+            [
                 'settings.draft.update',
                 [
                     'draft_ref' => 'settings_draft:storefront',
                     'change_ref' => 'change:currency',
                     'expected_revision_ref' => 'revision:r9',
                 ],
-            ),
-        );
+                [
+                    'draft_ref' => 'settings_draft:storefront',
+                    'revision_ref' => 'revision:r10',
+                    'status' => 'conflict',
+                ],
+            ],
+        ];
+
+        foreach ($cases as [$tool, $inputs, $expected]) {
+            self::assertSame($expected, $registry->execute($tool, $inputs));
+        }
         self::assertSame($before, $policy->allowlist());
     }
 
     public function testInvalidInputsFailBeforeHandlerAndInvalidOutputsFailClosed(): void
     {
         $calls = 0;
-        $registry = AiDraftWriteRegistry::fromArray(
-            new AiToolPolicy(),
-            [
-                'content.draft.update' => static function (array $inputs) use (&$calls): array {
-                    ++$calls;
+        $registry = AiDraftWriteRegistry::fromArray(new AiToolPolicy(), [
+            'content.draft.update' => static function (array $inputs) use (&$calls): array {
+                ++$calls;
 
-                    return [
-                        'draft_ref' => 'content_draft:other',
-                        'revision_ref' => 'revision:r43',
-                        'status' => 'updated',
-                    ];
-                },
-                'settings.draft.update' => static fn (array $inputs): array => [
-                    'draft_ref' => $inputs['draft_ref'],
-                    'revision_ref' => 'revision:r10',
-                    'status' => 'conflict',
-                ],
+                return [
+                    'draft_ref' => 'content_draft:other',
+                    'revision_ref' => 'revision:r43',
+                    'status' => 'updated',
+                ];
+            },
+            'settings.draft.update' => static fn (array $inputs): array => [
+                'draft_ref' => $inputs['draft_ref'],
+                'revision_ref' => 'revision:r10',
+                'status' => 'conflict',
             ],
-        );
+        ]);
 
-        $this->assertDomainFailure(
-            static fn (): array => $registry->execute(
-                'content.draft.update',
-                [
-                    'draft_ref' => 'content draft homepage',
-                    'change_ref' => 'change:hero_title',
-                ],
-            ),
-        );
+        $this->assertDomainFailure(static fn (): array => $registry->execute(
+            'content.draft.update',
+            ['draft_ref' => 'content draft homepage', 'change_ref' => 'change:hero_title'],
+        ));
         self::assertSame(0, $calls);
 
-        $this->assertDomainFailure(
-            static fn (): array => $registry->execute(
-                'content.draft.update',
-                [
-                    'draft_ref' => 'content_draft:homepage',
-                    'change_ref' => 'change:hero_title',
-                    'expected_revision_ref' => 'revision:r42',
-                ],
-            ),
-        );
+        $this->assertDomainFailure(static fn (): array => $registry->execute(
+            'content.draft.update',
+            [
+                'draft_ref' => 'content_draft:homepage',
+                'change_ref' => 'change:hero_title',
+                'expected_revision_ref' => 'revision:r42',
+            ],
+        ));
         self::assertSame(1, $calls);
 
-        $this->assertDomainFailure(
-            static fn (): array => $registry->execute(
-                'settings.draft.update',
-                [
-                    'draft_ref' => 'settings_draft:storefront',
-                    'change_ref' => 'change:currency',
-                ],
-            ),
-        );
+        $this->assertDomainFailure(static fn (): array => $registry->execute(
+            'settings.draft.update',
+            [
+                'draft_ref' => 'settings_draft:storefront',
+                'change_ref' => 'change:currency',
+            ],
+        ));
     }
 
     public function testMissingExtraOrNonClosureHandlersFailClosed(): void
     {
-        $policy = new AiToolPolicy();
         $valid = static fn (array $inputs): array => [
             'draft_ref' => $inputs['draft_ref'],
             'revision_ref' => 'revision:r2',
             'status' => 'updated',
         ];
-        $cases = [
+
+        foreach ([
             ['content.draft.update' => $valid],
             [
                 'content.draft.update' => $valid,
@@ -144,12 +128,10 @@ final class AiDraftWriteRegistryTest extends TestCase
                 'content.draft.update' => 'strlen',
                 'settings.draft.update' => $valid,
             ],
-        ];
-
-        foreach ($cases as $handlers) {
+        ] as $handlers) {
             $this->assertDomainFailure(
                 static fn (): AiDraftWriteRegistry => AiDraftWriteRegistry::fromArray(
-                    $policy,
+                    new AiToolPolicy(),
                     $handlers,
                 ),
             );
@@ -160,55 +142,46 @@ final class AiDraftWriteRegistryTest extends TestCase
     {
         $policy = new AiToolPolicy();
         $before = $policy->allowlist();
-        $registry = AiDraftWriteRegistry::fromArray($policy, self::validHandlers());
+        $registry = AiDraftWriteRegistry::fromArray($policy, self::handlers());
 
-        self::assertSame(
-            AiToolPolicy::REVERSIBLE_WRITE,
-            $registry->descriptor('content.draft.update')->risk(),
-        );
-        self::assertSame(
-            AiToolPolicy::REVERSIBLE_WRITE,
-            $registry->descriptor('settings.draft.update')->risk(),
-        );
+        foreach (['content.draft.update', 'settings.draft.update'] as $tool) {
+            self::assertSame(
+                AiToolPolicy::REVERSIBLE_WRITE,
+                $registry->descriptor($tool)->risk(),
+            );
+        }
         self::assertSame($before, $policy->allowlist());
 
         foreach (['catalog.read', 'Content.Draft.Update', 'unknown.draft.update'] as $tool) {
-            $this->assertDomainFailure(
-                static fn (): object => $registry->descriptor($tool),
-            );
+            $this->assertDomainFailure(static fn (): object => $registry->descriptor($tool));
         }
     }
 
     public function testBindingIsDeterministicAndCarriesNoFreeformPayload(): void
     {
         $policy = new AiToolPolicy();
-        $handlers = self::validHandlers();
-        $first = AiDraftWriteRegistry::fromArray($policy, $handlers);
-        $second = AiDraftWriteRegistry::fromArray($policy, $handlers);
+        $first = AiDraftWriteRegistry::fromArray($policy, self::handlers());
+        $second = AiDraftWriteRegistry::fromArray($policy, self::handlers());
 
-        self::assertSame(
-            $first->descriptor('content.draft.update')->snapshot(),
-            $second->descriptor('content.draft.update')->snapshot(),
-        );
-        self::assertSame(
-            $first->descriptor('settings.draft.update')->snapshot(),
-            $second->descriptor('settings.draft.update')->snapshot(),
-        );
+        foreach (['content.draft.update', 'settings.draft.update'] as $tool) {
+            self::assertSame(
+                $first->descriptor($tool)->snapshot(),
+                $second->descriptor($tool)->snapshot(),
+            );
+        }
 
-        $this->assertDomainFailure(
-            static fn (): array => $first->execute(
-                'content.draft.update',
-                [
-                    'draft_ref' => 'content_draft:homepage',
-                    'change_ref' => 'change:hero_title',
-                    'text' => 'contenido libre',
-                ],
-            ),
-        );
+        $this->assertDomainFailure(static fn (): array => $first->execute(
+            'content.draft.update',
+            [
+                'draft_ref' => 'content_draft:homepage',
+                'change_ref' => 'change:hero_title',
+                'text' => 'contenido libre',
+            ],
+        ));
     }
 
     /** @return array<string, Closure> */
-    private static function validHandlers(): array
+    private static function handlers(): array
     {
         return [
             'content.draft.update' => static fn (array $inputs): array => [
