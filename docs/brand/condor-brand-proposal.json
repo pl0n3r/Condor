@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "proposal_id": "condor-flightline-v1",
+  "status": {
+    "proposal_only": true,
+    "owner_approval_required": true,
+    "runtime_applied": false,
+    "final_identity": false
+  },
+  "positioning": {
+    "idea": "vision elevada + conexion operativa",
+    "promise": "Tu empresa, conectada.",
+    "attributes": ["sobria", "precisa", "confiable", "modular", "colombia-first", "global-ready"]
+  },
+  "logo_system": {
+    "name": "Flightline",
+    "concept": "Un trazo ascendente forma simultaneamente un ala de condor y una C abierta; los nodos terminales representan areas de negocio conectadas sin convertir el simbolo en un diagrama literal.",
+    "wordmark": {
+      "text": "CONDOR",
+      "construction": "logotipo dibujado a medida en mayusculas, geometrico y sobrio; no depende de una fuente de interfaz",
+      "tracking_character": "amplio",
+      "relationship_to_symbol": "el simbolo precede al wordmark en la firma primaria; el wordmark puede vivir solo"
+    },
+    "variants": ["primary-horizontal", "wordmark-only", "symbol-only", "monochrome-positive", "monochrome-negative"],
+    "clearspace": {
+      "unit": "x",
+      "definition": "x equivale a un cuarto de la altura de la O del wordmark",
+      "minimum": "1x en los cuatro lados"
+    },
+    "minimum_sizes": {
+      "digital_primary_width_px": 96,
+      "digital_symbol_px": 24,
+      "print_primary_width_mm": 24
+    },
+    "misuse_rules": [
+      "no deformar ni condensar",
+      "no rotar el simbolo",
+      "no aplicar sombras, bevels o gradientes al logo",
+      "no sustituir colores fuera de las variantes aprobadas",
+      "no reducir el clearspace minimo",
+      "no usar el simbolo como icono de estado funcional"
+    ]
+  },
+  "palette": {
+    "condor_cobalt": {"hex": "#2447E5", "role": "marca primaria y CTA de marca"},
+    "condor_cobalt_deep": {"hex": "#1D3AB8", "role": "estado de marca oscuro"},
+    "condor_night": {"hex": "#0D1830", "role": "fondos premium y firma negativa"},
+    "condor_cloud": {"hex": "#F5F6F2", "role": "fondo calido principal"},
+    "condor_paper": {"hex": "#FFFFFF", "role": "superficie"},
+    "condor_ink": {"hex": "#111412", "role": "texto principal"},
+    "condor_slate": {"hex": "#5E665F", "role": "texto secundario"},
+    "semantic_success": {"hex": "#2F6B3B", "role": "estado positivo; no es color de marca"},
+    "semantic_danger": {"hex": "#B42318", "role": "error/peligro; no es color de marca"},
+    "semantic_focus": {"hex": "#2257F5", "role": "foco accesible; semantica funcional"}
+  },
+  "contrast_pairs": [
+    {"foreground": "#FFFFFF", "background": "#2447E5", "minimum_ratio": 4.5, "usage": "texto normal sobre marca"},
+    {"foreground": "#FFFFFF", "background": "#1D3AB8", "minimum_ratio": 4.5, "usage": "texto normal sobre marca oscura"},
+    {"foreground": "#111412", "background": "#F5F6F2", "minimum_ratio": 4.5, "usage": "texto principal"},
+    {"foreground": "#0D1830", "background": "#F5F6F2", "minimum_ratio": 4.5, "usage": "titulos premium"},
+    {"foreground": "#5E665F", "background": "#FFFFFF", "minimum_ratio": 4.5, "usage": "texto secundario"},
+    {"foreground": "#FFFFFF", "background": "#2F6B3B", "minimum_ratio": 4.5, "usage": "estado success"},
+    {"foreground": "#FFFFFF", "background": "#B42318", "minimum_ratio": 4.5, "usage": "estado danger"},
+    {"foreground": "#FFFFFF", "background": "#2257F5", "minimum_ratio": 4.5, "usage": "focus/accion funcional"}
+  ],
+  "semantic_token_mapping": {
+    "mode": "proposal",
+    "preserve_semantic_layer": true,
+    "mapping": {
+      "--brand": "condor_cobalt",
+      "--accent": "condor_night",
+      "--bg": "condor_cloud",
+      "--surface": "condor_paper",
+      "--text": "condor_ink",
+      "--muted": "condor_slate",
+      "--focus": "semantic_focus",
+      "--green": "semantic_success",
+      "--danger": "semantic_danger"
+    },
+    "rules": [
+      "los componentes consumen tokens semanticos, no nombres de colores de marca",
+      "success, danger y focus conservan significado funcional independiente de la marca",
+      "cualquier cambio runtime requiere un leaf posterior y aprobacion explicita del owner"
+    ]
+  },
+  "adoption": {
+    "runtime_change_forbidden_without_owner_approval": true,
+    "stages": [
+      {"order": 1, "name": "proposal", "action": "documentar y validar candidata"},
+      {"order": 2, "name": "owner-approval", "action": "decision explicita del owner"},
+      {"order": 3, "name": "brand-assets", "action": "crear assets finales en leaf separado"},
+      {"order": 4, "name": "public-surfaces", "action": "adoptar tokens/assets con regresion visual y accesibilidad"},
+      {"order": 5, "name": "backoffice", "action": "adopcion progresiva sin alterar semantica funcional"}
+    ]
+  }
+}
