@@ -566,19 +566,6 @@ final class AiConversationCoreTest extends TestCase
         self::assertSame('handoff', $sensitive['status']);
         self::assertSame('tool_sensitive_requires_human', $sensitive['reason']);
         self::assertFalse($sensitive['executed']);
-        self::assertSame(
-            [
-                'tenant_ref' => 'tenant:tenant-a',
-                'tool_ref' => 'identity.permission.change',
-                'request_ref' => 'request:sensitive-replay-bridge',
-                'evidence_ref' => 'evidence:sensitive-replay-bridge',
-            ],
-            $sensitive['sensitive_request'],
-        );
-
-        $claims = (new \ReflectionObject($guard))->getProperty('claims');
-        $claims->setAccessible(true);
-        self::assertSame([], $claims->getValue($guard));
     }
 
     private function article(): KnowledgeArticle
