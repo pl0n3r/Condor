@@ -123,4 +123,4 @@ El owner debe decidir si Flightline se adopta, se itera o se descarta. Hasta ent
 - runtime_applied = false;
 - final_identity = false.
 
-La propuesta puede quedar validada en código sin convertirse en marca final.
+La propuesta puede quedar validada en código sin convertirse en marca final. La validación técnica de esta propuesta y la aprobación visual son gates distintos.
