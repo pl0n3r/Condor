@@ -210,6 +210,18 @@ class ExternalUptimeWatchTests(unittest.TestCase):
         ):
             self.assertIn(label, workflow)
         self.assertNotIn("secrets.", workflow)
+        self.assertNotIn("--first", workflow)
+        self.assertNotIn("--second", workflow)
+        self.assertNotIn("--issues", workflow)
+        self.assertIn(".external-uptime-work/sample-1.json", workflow)
+        self.assertIn(".external-uptime-work/sample-2.json", workflow)
+        self.assertIn(".external-uptime-work/open-issues.json", workflow)
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertNotIn('add_argument("--first"', script)
+        self.assertNotIn('add_argument("--second"', script)
+        self.assertNotIn('add_argument("--issues"', script)
+        self.assertIn('WORK_DIR = Path(".external-uptime-work")', script)
+        self.assertIn("input_outside_workdir", script)
         self.assertIn("no autoriza go-live", runbook.lower())
 
         now = datetime(2026, 10, 6, 13, 0, tzinfo=timezone.utc)

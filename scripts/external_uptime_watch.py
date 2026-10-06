@@ -26,6 +26,10 @@ MAX_HEALTH_BYTES = 64 * 1024
 MAX_HOME_BYTES = 512 * 1024
 MAX_AGE_SECONDS = 20 * 60
 MAX_INPUT_BYTES = 4 * 1024 * 1024
+WORK_DIR = Path(".external-uptime-work")
+FIRST_SAMPLE = WORK_DIR / "sample-1.json"
+SECOND_SAMPLE = WORK_DIR / "sample-2.json"
+OPEN_ISSUES = WORK_DIR / "open-issues.json"
 VERSION_RE = re.compile(r"\d+\.\d+\.\d+\Z", re.ASCII)
 SHA_RE = re.compile(r"[0-9a-f]{40}\Z", re.ASCII)
 STATE_LINE_RE = re.compile(r"^Current state: `(HEALTHY|DEGRADED|UNKNOWN)`$", re.MULTILINE)
@@ -438,13 +442,16 @@ def decide(
     }
 
 
-def read_json(path: str) -> object:
-    """Read a bounded JSON file used only for local workflow evidence."""
+def read_work_json(file_path: Path) -> object:
+    """Read one fixed workflow evidence file under the repository workspace."""
 
-    file_path = Path(path)
-    if file_path.stat().st_size > MAX_INPUT_BYTES:
+    resolved_root = WORK_DIR.resolve()
+    resolved_file = file_path.resolve()
+    if resolved_file.parent != resolved_root:
+        raise ValueError("input_outside_workdir")
+    if resolved_file.stat().st_size > MAX_INPUT_BYTES:
         raise ValueError("input_too_large")
-    return json.loads(file_path.read_text(encoding="utf-8"))
+    return json.loads(resolved_file.read_text(encoding="utf-8"))
 
 
 def parse_now(value: str | None) -> datetime:
@@ -467,9 +474,6 @@ def main() -> int:
     sub.add_parser("probe")
 
     decide_parser = sub.add_parser("decide")
-    decide_parser.add_argument("--first", required=True)
-    decide_parser.add_argument("--second", required=True)
-    decide_parser.add_argument("--issues", required=True)
     decide_parser.add_argument("--now")
 
     args = parser.parse_args()
@@ -477,9 +481,9 @@ def main() -> int:
         if args.command == "probe":
             result = probe()
         else:
-            first = read_json(args.first)
-            second = read_json(args.second)
-            issues = read_json(args.issues)
+            first = read_work_json(FIRST_SAMPLE)
+            second = read_work_json(SECOND_SAMPLE)
+            issues = read_work_json(OPEN_ISSUES)
             if not isinstance(first, dict) or not isinstance(second, dict):
                 raise ValueError("observation_not_object")
             result = decide(first, second, issues, now=parse_now(args.now))

@@ -32,9 +32,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/external_uptime_watch.py probe > "$RUNNER_TEMP/uptime-1.json"
+          mkdir -p .external-uptime-work
+          python3 scripts/external_uptime_watch.py probe > .external-uptime-work/sample-1.json
           sleep 20
-          python3 scripts/external_uptime_watch.py probe > "$RUNNER_TEMP/uptime-2.json"
+          python3 scripts/external_uptime_watch.py probe > .external-uptime-work/sample-2.json
 
       - name: Leer alertas abiertas y decidir una sola mutación
         id: decision
@@ -46,16 +47,13 @@ jobs:
           set -euo pipefail
           gh api --paginate --slurp \
             "repos/$REPOSITORIO/issues?state=open&per_page=100" \
-            > "$RUNNER_TEMP/open-issue-pages.json"
-          jq '[.[][]]' "$RUNNER_TEMP/open-issue-pages.json" \
-            > "$RUNNER_TEMP/open-issues.json"
+            > .external-uptime-work/open-issue-pages.json
+          jq '[.[][]]' .external-uptime-work/open-issue-pages.json \
+            > .external-uptime-work/open-issues.json
           python3 scripts/external_uptime_watch.py decide \
-            --first "$RUNNER_TEMP/uptime-1.json" \
-            --second "$RUNNER_TEMP/uptime-2.json" \
-            --issues "$RUNNER_TEMP/open-issues.json" \
-            > "$RUNNER_TEMP/uptime-action.json"
-          action="$(jq -r '.action' "$RUNNER_TEMP/uptime-action.json")"
-          state="$(jq -r '.state' "$RUNNER_TEMP/uptime-action.json")"
+            > .external-uptime-work/action.json
+          action="$(jq -r '.action' .external-uptime-work/action.json)"
+          state="$(jq -r '.state' .external-uptime-work/action.json)"
           case "$action" in
             noop|create|update|close) ;;
             *) echo "::error::Decisión de uptime inválida"; exit 1 ;;
@@ -81,7 +79,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          action_file="$RUNNER_TEMP/uptime-action.json"
+          action_file=".external-uptime-work/action.json"
           case "$ACTION" in
             create)
               jq -n \
@@ -133,3 +131,8 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Limpiar evidencia efímera local
+        if: always()
+        shell: bash
+        run: rm -rf .external-uptime-work
