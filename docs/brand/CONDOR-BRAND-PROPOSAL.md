@@ -3,6 +3,8 @@
 > Estado: propuesta técnica y visual. No es identidad final aprobada.
 >
 > La aprobación explícita del owner es obligatoria antes de crear o instalar assets, cambiar tokens vivos o aplicar esta candidata a cualquier superficie del producto.
+>
+> Base técnica de validación: Condor V0.1.193. Esta propuesta no modifica runtime ni incrementa versión.
 
 ## 1. Punto de partida
 
