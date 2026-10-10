@@ -36,7 +36,28 @@ if ($s['state']!=='ready' || $s['plan']['key']!=='standard'
  || $s['add_ons'][0]['key']!=='reports' || $s['entitlements'][0]['allowed']!==true) exit(8);
 $empty = new SaasControlCenterReader(fn($t)=>null, $usage, $ents);
 $x = $empty->read('ROLE_PLATFORM_OWNER','tenant-a','tenant-a');
-if ($x['state']!=='empty' || $x['plan']!==null || $x['usage']!==[]) exit(9);
+if ($x['state']!=='empty' || $x['plan']!==null || $x['add_ons']!==null
+ || $x['usage']!==null || $x['entitlements']!==null) exit(9);
+''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_empty_catalog_keeps_unread_ledgers_unknown(self):
+        result = run_php(r'''
+$usageCalls=0; $entitlementCalls=0;
+$usageSpy = function($tenant) use (&$usageCalls) {
+    $usageCalls++;
+    return [['tenant_id'=>$tenant,'metric'=>'seats','used'=>5,'limit'=>10]];
+};
+$entitlementSpy = function($tenant) use (&$entitlementCalls) {
+    $entitlementCalls++;
+    return [['tenant_id'=>$tenant,'key'=>'reports','allowed'=>true]];
+};
+$reader = new SaasControlCenterReader(fn($t)=>null, $usageSpy, $entitlementSpy);
+$projection = $reader->read('ROLE_PLATFORM_OWNER','tenant-a','tenant-a');
+if ($projection['state'] !== 'empty' || $projection['plan'] !== null
+ || $projection['add_ons'] !== null || $projection['usage'] !== null
+ || $projection['entitlements'] !== null) exit(41);
+if ($usageCalls !== 0 || $entitlementCalls !== 0) exit(42);
 ''')
         self.assertEqual(result.returncode, 0, result.stderr)
 

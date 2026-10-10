@@ -47,7 +47,9 @@ final readonly class SaasControlCenterReader
         if ($catalog === null) {
             return [
                 'state' => 'empty', 'tenant_id' => $tenantId,
-                'plan' => null, 'add_ons' => [], 'usage' => [], 'entitlements' => [],
+                // The catalog is absent; no other ledger was observed.
+                // null means NOT_OBSERVED, never known-zero usage or denied rights.
+                'plan' => null, 'add_ons' => null, 'usage' => null, 'entitlements' => null,
             ];
         }
         if (!is_array($catalog) || ($catalog['tenant_id'] ?? null) !== $tenantId) {
