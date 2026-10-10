@@ -38,7 +38,12 @@ final readonly class SaasControlCenterReader
             throw new DomainException('Acceso a tenant no autorizado.');
         }
 
-        $catalog = ($this->catalog)($tenantId);
+        try {
+            $catalog = ($this->catalog)($tenantId);
+        } catch (\Throwable) {
+            // Never propagate adapter diagnostics, identifiers or credentials.
+            throw new DomainException('Fuente comercial no disponible.');
+        }
         if ($catalog === null) {
             return [
                 'state' => 'empty', 'tenant_id' => $tenantId,
@@ -50,11 +55,17 @@ final readonly class SaasControlCenterReader
         }
         $plan = $catalog['plan'] ?? null;
         $addons = $catalog['add_ons'] ?? null;
-        $usage = ($this->usage)($tenantId);
-        $entitlements = ($this->entitlements)($tenantId);
-        if (!is_array($plan) || !is_array($addons) || !array_is_list($addons)
-            || !is_array($usage) || !array_is_list($usage)
-            || !is_array($entitlements) || !array_is_list($entitlements)) {
+        try {
+            $usage = ($this->usage)($tenantId);
+            $entitlements = ($this->entitlements)($tenantId);
+        } catch (\Throwable) {
+            throw new DomainException('Fuente comercial no disponible.');
+        }
+        // Bound cardinality before array unpacking, copying and sorting.
+        if (!is_array($plan) || !is_array($addons) || count($addons) > 128
+            || !array_is_list($addons) || !is_array($usage) || count($usage) > 128
+            || !array_is_list($usage) || !is_array($entitlements)
+            || count($entitlements) > 128 || !array_is_list($entitlements)) {
             throw new DomainException('Proyección comercial inválida.');
         }
         foreach ([$plan, $catalog, ...$addons, ...$usage, ...$entitlements] as $row) {
