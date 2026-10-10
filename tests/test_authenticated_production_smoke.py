@@ -71,7 +71,7 @@ class AuthenticatedProductionSmokeTests(unittest.TestCase):
     def test_login_csrf_and_same_origin_are_mandatory(self):
         client = FixtureClient()
         report = smoke.probe(client, "synthetic@example.test", "secret-only-test",
-                             SHA, clock=lambda: NOW)
+                             SHA, expected_version="0.1.194", clock=lambda: NOW)
         self.assertEqual(report["state"], "VALIDATED")
         methods = [call[0] for call in client.calls]
         self.assertEqual(methods.count("POST"), 1)
@@ -106,12 +106,11 @@ class AuthenticatedProductionSmokeTests(unittest.TestCase):
                     smoke.Client().request(method, path, {})
         client.responses[("GET", "/admin/login")] = smoke.Reply(200, b"<form></form>")
         with self.assertRaises(smoke.SmokeFailure):
-            smoke.probe(client, "synthetic@example.test", "secret-only-test", SHA)
+            smoke.probe(client, "synthetic@example.test", "secret-only-test", SHA, expected_version="0.1.194")
 
     def test_tenant_auth_dashboard_and_cross_scope_denial(self):
         client = FixtureClient()
-        report = smoke.probe(client, "synthetic@example.test", "synthetic-pass", SHA,
-                             clock=lambda: NOW)
+        report = smoke.probe(client, "synthetic@example.test", "synthetic-pass", SHA, expected_version="0.1.194", clock=lambda: NOW)
         self.assertTrue(report["tenant_safe"])
         self.assertEqual("0.1.194", report["version"])
         self.assertEqual(SHA, report["release_sha"])
@@ -121,25 +120,26 @@ class AuthenticatedProductionSmokeTests(unittest.TestCase):
             broken.responses[("GET", path)] = smoke.Reply(200)
             with self.subTest(path=path):
                 with self.assertRaises(smoke.SmokeFailure):
-                    smoke.probe(broken, "synthetic@example.test", "synthetic-pass", SHA)
+                    smoke.probe(broken, "synthetic@example.test", "synthetic-pass", SHA, expected_version="0.1.194")
         broken = FixtureClient()
         broken.responses[("GET", "/api/v1/context")] = smoke.Reply(
             200, b'{"tenant":{"id":"t"},"branches":[{"id":"b"}],"active_branch":{"id":"other"}}'
         )
         with self.assertRaises(smoke.SmokeFailure):
-            smoke.probe(broken, "synthetic@example.test", "synthetic-pass", SHA)
+            smoke.probe(broken, "synthetic@example.test", "synthetic-pass", SHA, expected_version="0.1.194")
 
     def test_health_sha_version_and_safe_evidence_fail_closed(self):
         client = FixtureClient()
         valid = smoke.probe(client, "synthetic@example.test", "never-print-this",
-                            SHA, clock=lambda: NOW)
+                            SHA, expected_version="0.1.194", clock=lambda: NOW)
         evidence = json.dumps(valid)
         for secret in ("synthetic@example.test", "never-print-this", "csrf-test",
                        "synthetic-tenant", "branch-synthetic"):
             self.assertNotIn(secret, evidence)
         self.assertEqual("2026-10-10T07:00:00Z", valid["observed_at"])
         for changes in ({"release_sha": "b" * 40}, {"schema_up_to_date": False},
-                        {"status": "failed"}, {"version": "broken"}):
+                        {"status": "failed"}, {"version": "broken"},
+                        {"version": "9.9.9"}):
             with self.subTest(changes=changes):
                 broken = FixtureClient()
                 current = json.loads(broken.responses[("GET", "/health")].body)
@@ -148,7 +148,7 @@ class AuthenticatedProductionSmokeTests(unittest.TestCase):
                     200, json.dumps(current).encode()
                 )
                 with self.assertRaises(smoke.SmokeFailure):
-                    smoke.probe(broken, "synthetic@example.test", "private", SHA)
+                    smoke.probe(broken, "synthetic@example.test", "private", SHA, expected_version="0.1.194")
 
 
 if __name__ == "__main__":

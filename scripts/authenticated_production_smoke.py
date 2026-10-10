@@ -6,6 +6,7 @@ import http.cookiejar
 import json
 import os
 import re
+from pathlib import Path
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -22,6 +23,7 @@ GET_PATHS = frozenset({"/health", LOGIN, "/admin", "/adminpl0n3r",
 MAX_BYTES = 256 * 1024
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}\Z", re.ASCII)
 VERSION_PATTERN = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+\Z", re.ASCII)
+CONFIG_VERSION_PATTERN = re.compile(r"""[\x27"]version[\x27"]\s*=>\s*[\x27"]([0-9]+\.[0-9]+\.[0-9]+)[\x27"]""", re.ASCII)
 
 
 class SmokeFailure(ValueError):
@@ -105,9 +107,11 @@ def target(location: str) -> str:
     return parsed.path
 
 
-def health(client, sha: str) -> str:
+def health(client, sha: str, expected_version: str) -> str:
     if not SHA_PATTERN.fullmatch(sha):
         raise SmokeFailure("invalid_expected_sha")
+    if not isinstance(expected_version, str) or not VERSION_PATTERN.fullmatch(expected_version):
+        raise SmokeFailure("invalid_expected_version")
     response = client.request("GET", "/health")
     if response.status != 200:
         raise SmokeFailure("health_unavailable")
@@ -122,6 +126,7 @@ def health(client, sha: str) -> str:
             or payload.get("schema_up_to_date") is not True
             or not isinstance(version, str)
             or not VERSION_PATTERN.fullmatch(version)
+            or version != expected_version
             or payload.get("release_sha") != sha):
         raise SmokeFailure("release_identity_mismatch")
     return version
@@ -149,10 +154,10 @@ def context_safe(payload: bytes) -> bool:
 
 
 def probe(client, email: str, password: str, sha: str, *,
-          clock=None) -> dict[str, object]:
+          expected_version: str, clock=None) -> dict[str, object]:
     if not email or not password:
         raise SmokeFailure("synthetic_identity_missing")
-    version = health(client, sha)
+    version = health(client, sha, expected_version)
     screen = client.request("GET", LOGIN)
     if screen.status != 200:
         raise SmokeFailure("login_screen_unavailable")
@@ -188,6 +193,18 @@ def probe(client, email: str, password: str, sha: str, *,
     }
 
 
+def checked_out_version() -> str:
+    """Identidad de versión leída del mismo checkout exacto que ejecuta el smoke."""
+    try:
+        config = (Path(__file__).resolve().parents[1] / "config/version.php").read_text(encoding="utf-8")
+    except OSError:
+        raise SmokeFailure("invalid_expected_version") from None
+    versions = CONFIG_VERSION_PATTERN.findall(config)
+    if len(versions) != 1:
+        raise SmokeFailure("invalid_expected_version")
+    return versions[0]
+
+
 def main() -> int:
     email = os.environ.get("CONDOR_SMOKE_EMAIL", "")
     password = os.environ.get("CONDOR_SMOKE_PASSWORD", "")
@@ -196,7 +213,8 @@ def main() -> int:
         print(json.dumps({"state": "SKIPPED", "reason": "identidad sintética no configurada"}))
         return 3
     try:
-        print(json.dumps(probe(Client(), email, password, sha), sort_keys=True))
+        print(json.dumps(probe(Client(), email, password, sha,
+                               expected_version=checked_out_version()), sort_keys=True))
         return 0
     except Exception:
         # No registrar URLs, respuestas, excepciones del transporte o datos de sesión.
