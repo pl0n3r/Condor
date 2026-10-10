@@ -77,7 +77,8 @@ def project_run_freshness(
                 or SHA_RE.fullmatch(sha) is None
                 or not isinstance(status, str)
                 or status not in {"completed", "in_progress", "queued", "waiting"}
-                or (status == "completed" and conclusion not in CONCLUSIONS)
+                or (status == "completed" and (not isinstance(conclusion, str)
+                                               or conclusion not in CONCLUSIONS))
                 or (status != "completed" and conclusion is not None)):
             return _unknown("invalid_run_metadata")
         fingerprint = (_stamp(started), sha, status, conclusion, raw["path"])
