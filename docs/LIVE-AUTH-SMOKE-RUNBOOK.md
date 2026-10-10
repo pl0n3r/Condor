@@ -10,6 +10,11 @@ El workflow authenticated-production-smoke.yml consume únicamente dos GitHub Ac
 - Presencia de ambos: ejecución diaria o mediante workflow_dispatch sobre main, checkout con github.sha exacto, regresiones offline y prueba autenticada. No activar en otras ramas.
 - Credenciales incorrectas, falta de permisos, dependencia caída, versión/sha distinto de main, fuga de aislamiento o schema atrasado: resultado no-success/UNKNOWN, sin considerar GREEN.
 
+## Precondiciones del fixture y límites de la evidencia
+Para que `GET /api/v1/context` pueda devolver 200 sin fabricar un estado, la identidad sintética necesita **exactamente una membresía tenant activa** si no tiene tenant seleccionado y **al menos una sede autorizada**; una cuenta sin sede o con selección ambigua puede recibir 403 por diseño. La comprobación `?branch=` usa el **ID de sede**, no el slug. Un 403 ante un ID de sede inexistente acredita el veto a una sede desconocida, **no** demuestra aislamiento entre dos tenants distintos. La evidencia *cross-tenant* permanece `NOT_VERIFIED` hasta disponer de dos tenants y sedes estrictamente sintéticos, autorizados y separados; no se asigna `tenant_safe=true` como sinónimo de cobertura cross-tenant real.
+
+El gate `release_identity_guard.py` del CI también exige que la versión candidata de `config/version.php` sea inédita y coincida con el sufijo `(V X.Y.Z)` del título del PR; la versión vigente en producción y el SHA en `/health` son identidad operativa separada y jamás se deducen del candidato. Un cambio de título o versión no dispara por sí mismo un smoke real ni autoriza publicar.
+
 ## Circuito permitido
 Origen fijo https://www.condorapp.com.co, HTTPS verificado. El único redirect seguido es el 302/303 del POST de login hacia /admin en el mismo origen, validado antes de hacer la petición; todos los demás redirects se rechazan. Solicitudes únicamente GET /health, GET /admin/login, POST /admin/login con CSRF Symfony (única escritura HTTP para crear sesión), GET /admin, GET /api/v1/context, GET /adminpl0n3r (debe devolver 403) y GET /api/v1/context?branch=00000000000000000000000000 (debe devolver 403). El éxito exige usuario tenant sintético: /admin 200 con root del panel y contexto de sede consistente. No se crean usuarios, tenants, pedidos ni archivos; no se ejecuta logout POST.
 
