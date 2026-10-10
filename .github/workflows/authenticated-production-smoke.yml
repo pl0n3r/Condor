@@ -1,0 +1,84 @@
+name: Condor smoke autenticado de producción (pre-live)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: condor-authenticated-production-smoke
+  cancel-in-progress: false
+
+jobs:
+  identity:
+    name: Confirmar identidad sintética (sin revelar secrets)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      configured: ${{ steps.guard.outputs.configured }}
+    steps:
+      - id: guard
+        name: Gate explícito de identidad sintética
+        env:
+          CONDOR_SMOKE_EMAIL: ${{ secrets.CONDOR_SMOKE_EMAIL }}
+          CONDOR_SMOKE_PASSWORD: ${{ secrets.CONDOR_SMOKE_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$CONDOR_SMOKE_EMAIL" || -z "$CONDOR_SMOKE_PASSWORD" ]]; then
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+            echo 'SKIPPED: identidad sintética no configurada' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+            echo 'Identidad sintética presente. No se imprime ni se persiste.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  smoke:
+    name: Smoke autenticado read-only (exact-main)
+    needs: identity
+    if: github.ref == 'refs/heads/main' && needs.identity.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Descargar candidato main exacto
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Validar smoke offline antes de contactar producción
+        run: python3 -m unittest tests/test_authenticated_production_smoke.py
+
+      - name: Ejecutar solo login sintético y GETs seguros
+        env:
+          CONDOR_SMOKE_EMAIL: ${{ secrets.CONDOR_SMOKE_EMAIL }}
+          CONDOR_SMOKE_PASSWORD: ${{ secrets.CONDOR_SMOKE_PASSWORD }}
+          EXPECTED_MAIN_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          python3 scripts/authenticated_production_smoke.py > "$RUNNER_TEMP/condor-auth-smoke.json"
+          result=$?
+          set -e
+          python3 - "$RUNNER_TEMP/condor-auth-smoke.json" <<'PY'
+          import json
+          import os
+          import sys
+          with open(sys.argv[1], encoding="utf-8") as source:
+              evidence = json.load(source)
+          allowed = ("state", "reason", "observed_at", "version",
+                     "release_sha", "authenticated", "tenant_safe", "read_only")
+          safe = {k: evidence[k] for k in allowed if k in evidence}
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as report:
+              report.write("### Condor · smoke autenticado sintético\n\n")
+              report.write("    " + json.dumps(safe, sort_keys=True) + "\n")
+              report.write("\nEl check solo acredita la identidad exact-main observada.\n")
+          PY
+          exit "$result"
