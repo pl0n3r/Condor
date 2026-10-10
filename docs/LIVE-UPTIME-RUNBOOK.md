@@ -51,3 +51,18 @@ Para considerar verificada la capacidad técnica de este leaf se requiere:
 3. La ruta de fallo/dedupe/recovery cubierta por los tests contractuales.
 
 No se provoca una caída real de producción para probar la alerta. Hasta que exista un incidente real o un ejercicio explícitamente autorizado, #389 debe distinguir “mecanismo implementado y observado saludable” de “incidente real ejercitado”.
+
+## Frescura del propio monitor (Condor #643, preparación offline)
+
+La frescura de **la ejecución del monitor** es distinta de la salud de **Condor**. Si GitHub Actions no inicia un run, el workflow no puede darse cuenta de su propio silencio. Los schedules pueden retrasarse u omitirse; no se debe interpretar el último `success` como salud actual.
+
+`scripts/external_uptime_run_freshness.py::project_run_freshness(runs, now, max_age_seconds=1800)` recibe **únicamente** metadatos de ejecuciones suministrados por un observador externo autorizado. No consulta GitHub ni Condor, no envía alertas y no modifica producción. Su umbral predeterminado de 30 minutos es una clasificación operativa local, no un SLA de GitHub Actions ni la antigüedad de 20 minutos de las muestras de `/health`.
+
+- `FRESH`: ejecución terminal con identidad exacta del workflow y fecha verificable dentro del umbral, independientemente de que su conclusión sea `success`, `failure` o `cancelled`.
+- `STALE`: última ejecución terminal verificable supera el umbral.
+- `UNKNOWN`: entradas ausentes, identidades incompletas o incompatibles, fechas futuras, ejecución más reciente todavía en curso o metadatos inválidos. No utilizar la última muestra buena para reemplazar un estado desconocido.
+- `product_health` se mantiene siempre `UNKNOWN`: un run fresco, incluso `success`, no acredita HTTP 200, ni dos probes `HEALTHY`, ni cierre de la alerta #642.
+
+La salida permite únicamente path fijo, SHA, ID de run, instante UTC, antigüedad y razón tipada; omite datos libres del input, IP, body, headers, tokens o PII. Pruebas: `python3 -m unittest discover -s tests -p 'test_ci_external_uptime_run_freshness.py' -v`.
+
+**Límite de implementación:** esta hoja solo crea un clasificador puro y pruebas. Para detectar silencio **mientras sucede** se requiere otro observador/scheduler autorizado que lo invoque; no se agrega en #643. La recuperación del incidente #642 continúa en manos del reconciliador existente y exige sus dos muestras canónicas `HEALTHY`. No habilitar alertas nuevas, merges, live ni cambios de WAF/hosting por inferencia.
