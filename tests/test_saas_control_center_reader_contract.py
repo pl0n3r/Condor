@@ -74,5 +74,40 @@ try {(new SaasControlCenterReader($catalog,$leakUsage,$ents))->read('ROLE_PLATFO
         self.assertNotIn('private fixture', result.stdout + result.stderr)
 
 
+    def test_provider_exceptions_are_sanitized_after_authorization(self):
+        result = run_php(r'''
+$bad=static function($t){throw new RuntimeException('private-adapter-diagnostic');};
+foreach ([[$bad,$usage,$ents],[$catalog,$bad,$ents],[$catalog,$usage,$bad]] as $providers) {
+    try {(new SaasControlCenterReader(...$providers))->read('ROLE_PLATFORM_OWNER','tenant-a','tenant-a'); exit(31);}
+    catch (DomainException $e) {
+        if ($e->getMessage() !== 'Fuente comercial no disponible.' || $e->getPrevious() !== null) exit(32);
+    }
+}
+''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn('private-adapter-diagnostic', result.stdout + result.stderr)
+
+    def test_provider_lists_are_bounded_before_projection(self):
+        result = run_php(r'''
+$addons=[]; $rows=[]; $allowed=[];
+for ($i=0; $i<129; $i++) {
+    $addons[]=['tenant_id'=>'tenant-a','key'=>'addon'.$i,'price_minor'=>12,'active'=>true];
+    $rows[]=['tenant_id'=>'tenant-a','metric'=>'metric'.$i,'used'=>1,'limit'=>2];
+    $allowed[]=['tenant_id'=>'tenant-a','key'=>'feature'.$i,'allowed'=>true];
+}
+$tooManyAddons=fn($t)=>array_replace($catalog($t), ['add_ons'=>$addons]);
+$tooMuchUsage=fn($t)=>$rows;
+$tooManyEntitlements=fn($t)=>$allowed;
+foreach ([[$tooManyAddons,$usage,$ents],[$catalog,$tooMuchUsage,$ents],
+          [$catalog,$usage,$tooManyEntitlements]] as $providers) {
+    try {(new SaasControlCenterReader(...$providers))->read('ROLE_PLATFORM_OWNER','tenant-a','tenant-a'); exit(33);}
+    catch (DomainException $e) {
+        if ($e->getMessage() !== 'Proyección comercial inválida.') exit(34);
+    }
+}
+''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 if __name__ == '__main__':
     unittest.main()
