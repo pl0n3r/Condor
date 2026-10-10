@@ -32,11 +32,15 @@ class SmokeFailure(ValueError):
 class Reply:
     status: int
     body: bytes = b""
-    location: str = ""
 
 
-class NoRedirect(HTTPRedirectHandler):
+class SafeLoginRedirect(HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, msg, headers, newurl):
+        if (request.get_method() == "POST" and request.full_url == ORIGIN + LOGIN
+                and code in (302, 303)):
+            target(newurl)
+            return Request(newurl, method="GET",
+                           headers={"User-Agent": "Condor-Synthetic-Auth-Smoke/1"})
         return None
 
 
@@ -56,7 +60,7 @@ class CSRFInput(HTMLParser):
 class Client:
     def __init__(self):
         self.opener = build_opener(
-            HTTPCookieProcessor(http.cookiejar.CookieJar()), NoRedirect()
+            HTTPCookieProcessor(http.cookiejar.CookieJar()), SafeLoginRedirect()
         )
 
     def request(self, method: str, path: str, data: dict[str, str] | None = None) -> Reply:
@@ -82,7 +86,9 @@ class Client:
             body = response.read(MAX_BYTES + 1)
             if len(body) > MAX_BYTES:
                 raise SmokeFailure("response_too_large")
-            return Reply(int(response.status), body, response.headers.get("Location", ""))
+            if method == "POST" and urlsplit(response.geturl()).path != "/admin":
+                raise SmokeFailure("unexpected_login_role")
+            return Reply(int(response.status), body)
         finally:
             response.close()
 
@@ -157,9 +163,8 @@ def probe(client, email: str, password: str, sha: str, *,
     login = client.request("POST", LOGIN, {
         "_username": email, "_password": password, "_csrf_token": csrf.token,
     })
-    if login.status not in (302, 303):
+    if login.status != 200 or b'id="condor-admin-root"' not in login.body:
         raise SmokeFailure("login_not_authenticated")
-    target(login.location)
     panel = client.request("GET", "/admin")
     if panel.status != 200 or b'id="condor-admin-root"' not in panel.body:
         raise SmokeFailure("tenant_dashboard_unavailable")
