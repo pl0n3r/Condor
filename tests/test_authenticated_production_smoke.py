@@ -33,7 +33,7 @@ class FixtureClient:
             ("GET", "/admin/login"): smoke.Reply(
                 200, b'<form><input name="_csrf_token" value="csrf-test"></form>'
             ),
-            ("POST", "/admin/login"): smoke.Reply(302, b"", "/admin"),
+            ("POST", "/admin/login"): smoke.Reply(200, b'<section id="condor-admin-root"></section>'),
             ("GET", "/admin"): smoke.Reply(
                 200, b'<section id="condor-admin-root"></section>'
             ),
