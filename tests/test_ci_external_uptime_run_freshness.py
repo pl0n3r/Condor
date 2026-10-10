@@ -51,6 +51,8 @@ class ExternalUptimeRunFreshnessTests(unittest.TestCase):
             [record(run_started_at=(NOW + timedelta(minutes=4)).isoformat())],
             [record(1), record(1, minutes_ago=6)],
             [record(status="completed", conclusion=None)],
+            [record(status="completed", conclusion=[])],
+            [record(status="completed", conclusion={})],
             [record(status="in_progress", conclusion="success")],
             [record(status="in_progress", conclusion=None)],
             [record(), record(2, minutes_ago=1, status="queued", conclusion=None)],
