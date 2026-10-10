@@ -79,6 +79,20 @@ class AuthenticatedProductionSmokeTests(unittest.TestCase):
             "_username": "synthetic@example.test",
             "_password": "secret-only-test", "_csrf_token": "csrf-test",
         }))
+        redirect = smoke.SafeLoginRedirect()
+        request = smoke.Request(smoke.ORIGIN + smoke.LOGIN, data=b"_username=test", method="POST")
+        followed = redirect.redirect_request(
+            request, None, 302, "Found", {}, smoke.ORIGIN + "/admin"
+        )
+        self.assertEqual("GET", followed.get_method())
+        self.assertEqual(smoke.ORIGIN + "/admin", followed.full_url)
+        with self.assertRaises(smoke.SmokeFailure):
+            redirect.redirect_request(request, None, 302, "Found", {},
+                                      "https://attacker.invalid/admin")
+        self.assertIsNone(redirect.redirect_request(
+            smoke.Request(smoke.ORIGIN + "/admin", method="GET"),
+            None, 302, "Found", {}, smoke.ORIGIN + "/admin"
+        ))
         self.assertEqual("/admin", smoke.target("/admin"))
         for location in ("https://attacker.invalid/admin", "//attacker.invalid/admin",
                          "/adminpl0n3r", "/admin?token=secret", ""):
