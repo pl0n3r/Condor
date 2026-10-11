@@ -252,25 +252,86 @@ def probe(
     }
 
 
+def endpoint_state(endpoints: object) -> str | None:
+    """Validate the producer's two endpoint records without trusting aggregate state."""
+    if type(endpoints) is not list or len(endpoints) != 2:
+        return None
+    names: set[str] = set()
+    outcomes: set[str] = set()
+    for row in endpoints:
+        if type(row) is not dict or set(row) not in (
+            {"endpoint", "outcome", "reason"},
+            {"endpoint", "outcome", "reason", "http_status"},
+        ):
+            return None
+        name, outcome, reason = (
+            row["endpoint"], row["outcome"], row["reason"]
+        )
+        if type(name) is not str or name not in {"readiness", "home"} or name in names:
+            return None
+        if type(outcome) is not str or outcome not in {"ok", "degraded", "unknown"}:
+            return None
+        if type(reason) is not str:
+            return None
+        names.add(name)
+        outcomes.add(outcome)
+        has_status = "http_status" in row
+        status = row.get("http_status")
+        if has_status and (type(status) is not int or not 100 <= status <= 599):
+            return None
+
+        if outcome == "ok":
+            if reason != "ok" or not has_status or status != 200:
+                return None
+        elif outcome == "unknown":
+            if reason not in {"network", "timeout", "tls"} or has_status:
+                return None
+        elif reason == "http_status":
+            # A non-200 status may be absent when an upstream response was invalid.
+            if has_status and status == 200:
+                return None
+        elif reason in {"content_type", "invalid_json"}:
+            if not has_status or status != 200:
+                return None
+        elif reason == "contract":
+            # A ValueError from a fetcher can produce contract with no HTTP status.
+            if has_status and status != 200:
+                return None
+        elif reason in {"payload_too_large", "unsupported_path"}:
+            if has_status:
+                return None
+        else:
+            return None
+
+    if names != {"readiness", "home"}:
+        return None
+    if "unknown" in outcomes:
+        return "UNKNOWN"
+    if "degraded" in outcomes:
+        return "DEGRADED"
+    return "HEALTHY"
+
+
 def effective_state(
     observation: dict[str, object],
     *,
     now: datetime,
     max_age_seconds: int = MAX_AGE_SECONDS,
 ) -> str:
-    """Return UNKNOWN for stale/future/malformed evidence; otherwise its declared state."""
-
+    """Fail closed on stale, malformed or internally contradictory probe evidence."""
+    if type(observation) is not dict:
+        return "UNKNOWN"
     state = observation.get("state")
     timestamp = parse_time(observation.get("observed_at"))
-    if state not in STATES or timestamp is None:
+    if type(state) is not str or state not in STATES or timestamp is None:
         return "UNKNOWN"
     age = (now - timestamp).total_seconds()
     if age < -60 or age > max_age_seconds:
         return "UNKNOWN"
-    endpoints = observation.get("endpoints")
-    if not isinstance(endpoints, list) or len(endpoints) != 2:
+    derived = endpoint_state(observation.get("endpoints"))
+    if derived is None or derived != state:
         return "UNKNOWN"
-    return str(state)
+    return state
 
 
 def persistent_state(
@@ -318,11 +379,11 @@ def safe_endpoint_line(endpoint: object) -> str:
     outcome = endpoint.get("outcome")
     reason = endpoint.get("reason")
     status = endpoint.get("http_status")
-    if name not in {"readiness", "home"}:
+    if type(name) is not str or name not in {"readiness", "home"}:
         name = "unknown"
-    if outcome not in {"ok", "degraded", "unknown"}:
+    if type(outcome) is not str or outcome not in {"ok", "degraded", "unknown"}:
         outcome = "unknown"
-    if reason not in {
+    if type(reason) is not str or reason not in {
         "ok",
         "timeout",
         "tls",
@@ -334,7 +395,7 @@ def safe_endpoint_line(endpoint: object) -> str:
         "contract",
     }:
         reason = "contract"
-    suffix = f", http={status}" if isinstance(status, int) and 100 <= status <= 599 else ""
+    suffix = f", http={status}" if type(status) is int and 100 <= status <= 599 else ""
     return f"{name}: {outcome} ({reason}{suffix})"
 
 
