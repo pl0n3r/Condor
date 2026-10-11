@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 WORKFLOW_PATH = ".github/workflows/external-uptime.yml"
-WORKFLOW_REPOSITORY = "pl0n3r/Condor"
+WORKFLOW_REPOSITORY_ID = 1377432719
 # GitHub Actions workflow identity verified on scheduled run #38095633954.
 WORKFLOW_ID = 376208478
 SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
@@ -84,9 +84,11 @@ def project_run_freshness(
                 or raw.get("event") != "schedule" or raw.get("head_branch") != "main"
                 or type(raw.get("workflow_id")) is not int or raw["workflow_id"] != WORKFLOW_ID
                 or not isinstance(raw.get("repository"), dict)
-                or raw["repository"].get("full_name") != WORKFLOW_REPOSITORY
+                or type(raw["repository"].get("id")) is not int
+                or raw["repository"]["id"] != WORKFLOW_REPOSITORY_ID
                 or not isinstance(raw.get("head_repository"), dict)
-                or raw["head_repository"].get("full_name") != WORKFLOW_REPOSITORY
+                or type(raw["head_repository"].get("id")) is not int
+                or raw["head_repository"]["id"] != WORKFLOW_REPOSITORY_ID
                 or started is None or not isinstance(sha, str)
                 or SHA_RE.fullmatch(sha) is None
                 or not isinstance(status, str)

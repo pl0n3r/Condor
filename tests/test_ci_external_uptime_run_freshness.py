@@ -22,8 +22,8 @@ def record(run_id=42, minutes_ago=5, conclusion="success", **changes):
         "run_started_at": (NOW - timedelta(minutes=minutes_ago)).isoformat().replace("+00:00", "Z"),
         "head_sha": "a" * 40, "event": "schedule", "head_branch": "main",
         "workflow_id": freshness.WORKFLOW_ID,
-        "repository": {"full_name": freshness.WORKFLOW_REPOSITORY},
-        "head_repository": {"full_name": freshness.WORKFLOW_REPOSITORY},
+        "repository": {"id": freshness.WORKFLOW_REPOSITORY_ID},
+        "head_repository": {"id": freshness.WORKFLOW_REPOSITORY_ID},
         "status": "completed", "conclusion": conclusion,
     }
     run.update(changes)
@@ -67,9 +67,11 @@ class ExternalUptimeRunFreshnessTests(unittest.TestCase):
             [record(run_started_at=(NOW + timedelta(seconds=30)).isoformat())],
             [record(event="workflow_dispatch")], [record(head_branch="feature")],
             [record(workflow_id=12345)], [record(workflow_id=True)],
-            [record(repository={"full_name": "otro/proyecto"})],
-            [record(head_repository={"full_name": "otro/proyecto"})],
-            [record(repository="pl0n3r/Condor")],
+            [record(repository={"id": 999})],
+            [record(head_repository={"id": 999})],
+            [record(repository={"id": True})],
+            [record(head_repository={"id": "1377432719"})],
+            [record(repository="wrong")],
             [record(head_repository=None)],
             [record(conclusion="skipped")], [record(conclusion="neutral")],
             [record(conclusion="action_required")], [record(conclusion="cancelled")],
@@ -93,7 +95,7 @@ class ExternalUptimeRunFreshnessTests(unittest.TestCase):
         self.assertEqual(classify([record()], now=NOW, max_age_seconds=0)["monitor_freshness"], "UNKNOWN")
         self.assertEqual(classify([record()] * 101, now=NOW)["monitor_freshness"], "UNKNOWN")
         # Contaminacion de origen en cualquier fila: UNKNOWN incluso con run reciente.
-        self.assertEqual(classify([record(1), record(2, repository={"full_name": "other/Condor"})])["monitor_freshness"], "UNKNOWN")
+        self.assertEqual(classify([record(1), record(2, repository={"id": 999})])["monitor_freshness"], "UNKNOWN")
         # Un total de dos filas con un mismo ID no prueba dos ejecuciones.
         repeat = record(42, minutes_ago=5)
         self.assertEqual(classify([repeat, repeat], snapshot_total_count=2)["monitor_freshness"], "UNKNOWN")
