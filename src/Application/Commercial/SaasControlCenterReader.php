@@ -147,6 +147,7 @@ final readonly class SaasControlCenterReader
 
     private static function nonNegative(mixed $value): bool
     {
-        return is_int($value) && $value >= 0;
+        // Prices and usage counters must round-trip exactly through JSON/JS Number.
+        return is_int($value) && $value >= 0 && $value <= 9007199254740991;
     }
 }
