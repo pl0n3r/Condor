@@ -14,9 +14,9 @@ from typing import Any
 WORKFLOW_PATH = ".github/workflows/external-uptime.yml"
 SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
 CONCLUSIONS = {"success", "failure", "cancelled", "timed_out", "skipped", "action_required", "neutral"}
+EVIDENCED_CONCLUSIONS = {"success", "failure"}
 MAX_RUNS = 100
 MAX_AGE_LIMIT = 86400
-FUTURE_TOLERANCE_SECONDS = 60
 
 
 def _utc(value: object) -> datetime | None:
@@ -32,7 +32,7 @@ def _utc(value: object) -> datetime | None:
 
 
 def _stamp(value: datetime) -> str:
-    return value.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return value.isoformat(timespec="microseconds" if value.microsecond else "seconds").replace("+00:00", "Z")
 
 
 def _unknown(reason: str) -> dict[str, Any]:
@@ -46,7 +46,8 @@ def _unknown(reason: str) -> dict[str, Any]:
 
 
 def project_run_freshness(
-    runs: object, *, now: datetime, max_age_seconds: int = 1800
+    runs: object, *, now: datetime, max_age_seconds: int = 1800,
+    snapshot_complete: bool = False, snapshot_total_count: int | None = None
 ) -> dict[str, Any]:
     """Classify last verified monitor execution, NOT site health.
 
@@ -58,8 +59,12 @@ def project_run_freshness(
             or isinstance(max_age_seconds, bool)
             or not 1 <= max_age_seconds <= MAX_AGE_LIMIT):
         return _unknown("invalid_parameters")
-    if not isinstance(runs, list) or not 1 <= len(runs) <= MAX_RUNS:
-        return _unknown("missing_or_unbounded_runs")
+    # El llamador autorizado certifica paginación completa. Una lista plana
+    # arbitraria (o el primer page de una API) nunca demuestra ausencia de runs.
+    if (snapshot_complete is not True or type(snapshot_total_count) is not int
+            or not isinstance(runs, list) or not 1 <= len(runs) <= MAX_RUNS
+            or snapshot_total_count != len(runs)):
+        return _unknown("missing_or_incomplete_runs")
 
     instant = now.astimezone(timezone.utc)
     seen: dict[int, tuple[object, ...]] = {}
@@ -73,6 +78,7 @@ def project_run_freshness(
         conclusion = raw.get("conclusion")
         status = raw.get("status")
         if (type(run_id) is not int or run_id <= 0 or raw.get("path") != WORKFLOW_PATH
+                or raw.get("event") != "schedule" or raw.get("head_branch") != "main"
                 or started is None or not isinstance(sha, str)
                 or SHA_RE.fullmatch(sha) is None
                 or not isinstance(status, str)
@@ -81,7 +87,8 @@ def project_run_freshness(
                                                or conclusion not in CONCLUSIONS))
                 or (status != "completed" and conclusion is not None)):
             return _unknown("invalid_run_metadata")
-        fingerprint = (_stamp(started), sha, status, conclusion, raw["path"])
+        fingerprint = (_stamp(started), sha, status, conclusion,
+                       raw["path"], raw["event"], raw["head_branch"])
         if run_id in seen:
             if seen[run_id] != fingerprint:
                 return _unknown("conflicting_run_identity")
@@ -93,10 +100,13 @@ def project_run_freshness(
         observations, key=lambda item: (item[0], item[1])
     )
     age = (instant - latest_started).total_seconds()
-    if age < -FUTURE_TOLERANCE_SECONDS:
+    if age < 0:
         return _unknown("future_run")
     if latest_outcome in {"in_progress", "queued", "waiting"}:
         return _unknown("latest_run_not_terminal")
+    # Un run omitido, cancelado o sin probes acreditados no aporta frescura.
+    if latest_outcome not in EVIDENCED_CONCLUSIONS:
+        return _unknown("latest_run_without_probe_evidence")
     age_seconds = max(0, int(age))
     freshness = "FRESH" if age <= max_age_seconds else "STALE"
     return {

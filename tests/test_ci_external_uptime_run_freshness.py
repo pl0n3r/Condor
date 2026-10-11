@@ -20,10 +20,21 @@ def record(run_id=42, minutes_ago=5, conclusion="success", **changes):
     run = {
         "id": run_id, "path": freshness.WORKFLOW_PATH,
         "run_started_at": (NOW - timedelta(minutes=minutes_ago)).isoformat().replace("+00:00", "Z"),
-        "head_sha": "a" * 40, "status": "completed", "conclusion": conclusion,
+        "head_sha": "a" * 40, "event": "schedule", "head_branch": "main",
+        "status": "completed", "conclusion": conclusion,
     }
     run.update(changes)
     return run
+
+
+def classify(runs, *, now=NOW, max_age_seconds=1800, snapshot_complete=True,
+             snapshot_total_count=None):
+    if snapshot_total_count is None and isinstance(runs, list):
+        snapshot_total_count = len(runs)
+    return freshness.project_run_freshness(
+        runs, now=now, max_age_seconds=max_age_seconds,
+        snapshot_complete=snapshot_complete, snapshot_total_count=snapshot_total_count,
+    )
 
 
 class ExternalUptimeRunFreshnessTests(unittest.TestCase):
@@ -31,16 +42,16 @@ class ExternalUptimeRunFreshnessTests(unittest.TestCase):
         a, b = record(1, minutes_ago=60), record(2, minutes_ago=5)
         for ordered in ([a, b], [b, a]):
             with self.subTest(order=[r["id"] for r in ordered]):
-                got = freshness.project_run_freshness(ordered, now=NOW)
+                got = classify(ordered, now=NOW)
                 self.assertEqual(got["monitor_freshness"], "FRESH")
                 self.assertEqual(got["run_id"], 2)
                 self.assertEqual(got["age_seconds"], 300)
-        at_boundary = freshness.project_run_freshness([record(3, minutes_ago=30)], now=NOW)
+        at_boundary = classify([record(3, minutes_ago=30)], now=NOW)
         self.assertEqual(at_boundary["monitor_freshness"], "FRESH")
-        past_boundary = freshness.project_run_freshness([record(4, minutes_ago=31)], now=NOW)
+        past_boundary = classify([record(4, minutes_ago=31)], now=NOW)
         self.assertEqual(past_boundary["monitor_freshness"], "STALE")
         self.assertEqual(past_boundary["reason"], "monitor_run_stale")
-        self.assertEqual(freshness.project_run_freshness([b, b], now=NOW)["run_id"], 2)
+        self.assertEqual(classify([b, b], now=NOW)["run_id"], 2)
 
     def test_missing_conflicting_and_future_evidence_is_unknown(self):
         invalid = [
@@ -49,7 +60,14 @@ class ExternalUptimeRunFreshnessTests(unittest.TestCase):
             [record(run_started_at="2026-10-10T22:25:00")],
             [record(run_started_at="not-a-date")],
             [record(run_started_at=(NOW + timedelta(minutes=4)).isoformat())],
+            [record(run_started_at=(NOW + timedelta(seconds=30)).isoformat())],
+            [record(event="workflow_dispatch")], [record(head_branch="feature")],
+            [record(conclusion="skipped")], [record(conclusion="neutral")],
+            [record(conclusion="action_required")], [record(conclusion="cancelled")],
+            [record(conclusion="timed_out")],
             [record(1), record(1, minutes_ago=6)],
+            [record(1, run_started_at="2026-10-10T22:25:00.100Z"),
+             record(1, run_started_at="2026-10-10T22:25:00.900Z")],
             [record(status="completed", conclusion=None)],
             [record(status="completed", conclusion=[])],
             [record(status="completed", conclusion={})],
@@ -59,32 +77,36 @@ class ExternalUptimeRunFreshnessTests(unittest.TestCase):
         ]
         for item in invalid:
             with self.subTest(case=repr(item)[:110]):
-                got = freshness.project_run_freshness(item, now=NOW)
+                got = classify(item, now=NOW)
                 self.assertEqual(got["monitor_freshness"], "UNKNOWN")
                 self.assertIsNone(got["run_id"])
-        self.assertEqual(freshness.project_run_freshness([record()], now=NOW.replace(tzinfo=None))["monitor_freshness"], "UNKNOWN")
-        self.assertEqual(freshness.project_run_freshness([record()], now=NOW, max_age_seconds=0)["monitor_freshness"], "UNKNOWN")
-        self.assertEqual(freshness.project_run_freshness([record()] * 101, now=NOW)["monitor_freshness"], "UNKNOWN")
+        self.assertEqual(classify([record()], now=NOW.replace(tzinfo=None))["monitor_freshness"], "UNKNOWN")
+        self.assertEqual(classify([record()], now=NOW, max_age_seconds=0)["monitor_freshness"], "UNKNOWN")
+        self.assertEqual(classify([record()] * 101, now=NOW)["monitor_freshness"], "UNKNOWN")
+        # Sin certificación del roster completo: no hay FRESH inferible.
+        self.assertEqual(classify([record()], snapshot_complete=False)["monitor_freshness"], "UNKNOWN")
+        self.assertEqual(classify([record()], snapshot_total_count=2)["monitor_freshness"], "UNKNOWN")
+        self.assertEqual(freshness.project_run_freshness([record()], now=NOW)["monitor_freshness"], "UNKNOWN")
 
     def test_successful_run_does_not_imply_healthy_product(self):
-        for outcome in ("success", "failure", "cancelled"):
+        for outcome in ("success", "failure"):
             with self.subTest(conclusion=outcome):
-                got = freshness.project_run_freshness([record(conclusion=outcome)], now=NOW)
+                got = classify([record(conclusion=outcome)], now=NOW)
                 self.assertEqual(got["monitor_freshness"], "FRESH")
                 self.assertEqual(got["run_conclusion"], outcome)
                 self.assertEqual(got["product_health"], "UNKNOWN")
                 self.assertNotIn("HEALTHY", json.dumps(got))
-        self.assertEqual(freshness.project_run_freshness([record(minutes_ago=50)], now=NOW)["product_health"], "UNKNOWN")
+        self.assertEqual(classify([record(minutes_ago=50)], now=NOW)["product_health"], "UNKNOWN")
 
     def test_output_is_safe_and_no_network_access(self):
         danger = "secret=example-only token=example-only user@example.org"
         clean = record(note=danger, html_url="https://example.org/" + danger)
         with patch("socket.socket", side_effect=AssertionError("network forbidden")):
-            result = freshness.project_run_freshness([clean], now=NOW)
+            result = classify([clean], now=NOW)
         self.assertEqual(result["monitor_freshness"], "FRESH")
         self.assertNotIn(danger, json.dumps(result))
         polluted = record(id=danger, head_sha=danger)
-        rejected = freshness.project_run_freshness([polluted], now=NOW)
+        rejected = classify([polluted], now=NOW)
         self.assertEqual(rejected["monitor_freshness"], "UNKNOWN")
         self.assertNotIn(danger, json.dumps(rejected))
         self.assertEqual(set(result), {
