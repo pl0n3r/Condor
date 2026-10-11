@@ -299,6 +299,47 @@ class ExternalUptimeWatchTests(unittest.TestCase):
                 altered = dict(good, endpoints=endpoints)
                 self.assertEqual("UNKNOWN", uptime.effective_state(altered, now=now))
 
+    def test_future_observation_cannot_close_existing_alert(self) -> None:
+        now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
+        previous = {
+            "number": 101, "state": "open",
+            "body": uptime.alert_body("DEGRADED", observation("DEGRADED", now)),
+        }
+        for seconds in (1, 30):
+            with self.subTest(future_seconds=seconds):
+                sample = observation("HEALTHY", now + timedelta(seconds=seconds))
+                self.assertEqual("UNKNOWN", uptime.effective_state(sample, now=now))
+                decision = uptime.decide(sample, sample, [previous], now=now)
+                self.assertNotEqual("close", decision["action"])
+                self.assertEqual("UNKNOWN", decision["state"])
+        self.assertEqual(
+            "HEALTHY", uptime.effective_state(observation("HEALTHY", now), now=now)
+        )
+
+    def test_noncanonical_observed_time_is_unknown_and_never_rendered(self) -> None:
+        now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
+        valid = observation("HEALTHY", now)
+        for bad in (
+            "2026-10-11\\n15:00:00Z",
+            "2026-10-11`15:00:00Z",
+            "2026-10-11 15:00:00Z",
+            "2026-10-11T15:00:00+00:00",
+            "2026-10-11T15:00:00.500Z",
+            [],
+            {},
+        ):
+            with self.subTest(timestamp=repr(bad)):
+                sample = dict(valid, observed_at=bad)
+                self.assertEqual("UNKNOWN", uptime.effective_state(sample, now=now))
+                rendered = uptime.alert_body("UNKNOWN", sample)
+                self.assertIn("Observed at: `unknown`", rendered)
+                if isinstance(bad, str):
+                    self.assertNotIn(bad, rendered)
+        self.assertIn(
+            "Observed at: `2026-10-11T15:00:00Z`",
+            uptime.alert_body("UNKNOWN", observation("UNKNOWN", now)),
+        )
+
     def test_consistent_samples_preserve_probe_recovery_contract(self) -> None:
         now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
         for state in ("HEALTHY", "DEGRADED", "UNKNOWN"):

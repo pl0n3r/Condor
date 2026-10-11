@@ -84,6 +84,14 @@ def parse_time(value: object) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def canonical_observed_time(value: object) -> datetime | None:
+    """Only the exact second-resolution UTC producer format is safe for evidence."""
+    parsed = parse_time(value)
+    if parsed is None or not isinstance(value, str) or format_time(parsed) != value:
+        return None
+    return parsed
+
+
 def read_bounded(response: Any, limit: int) -> bytes:
     """Read at most limit bytes and classify oversized payloads without logging content."""
 
@@ -322,11 +330,11 @@ def effective_state(
     if type(observation) is not dict:
         return "UNKNOWN"
     state = observation.get("state")
-    timestamp = parse_time(observation.get("observed_at"))
+    timestamp = canonical_observed_time(observation.get("observed_at"))
     if type(state) is not str or state not in STATES or timestamp is None:
         return "UNKNOWN"
     age = (now - timestamp).total_seconds()
-    if age < -60 or age > max_age_seconds:
+    if age < 0 or age > max_age_seconds:
         return "UNKNOWN"
     derived = endpoint_state(observation.get("endpoints"))
     if derived is None or derived != state:
@@ -405,8 +413,8 @@ def alert_body(state: str, observation: dict[str, object]) -> str:
     if state not in {"DEGRADED", "UNKNOWN"}:
         raise ValueError("invalid_alert_state")
     observed_at = observation.get("observed_at")
-    if parse_time(observed_at) is None:
-        observed_at = "unknown"
+    stamp = canonical_observed_time(observed_at)
+    observed_at = format_time(stamp) if stamp is not None else "unknown"
     endpoints = observation.get("endpoints")
     safe = endpoints if isinstance(endpoints, list) else []
     health = safe_endpoint_line(safe[0] if len(safe) > 0 else None)
