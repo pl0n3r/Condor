@@ -65,6 +65,8 @@ class ExternalUptimeRunFreshnessTests(unittest.TestCase):
             [record(run_started_at="not-a-date")],
             [record(run_started_at=(NOW + timedelta(minutes=4)).isoformat())],
             [record(run_started_at=(NOW + timedelta(seconds=30)).isoformat())],
+            [record(run_started_at="0001-01-01T00:00:00+01:00")],
+            [record(run_started_at="9999-12-31T23:59:59-01:00")],
             [record(event="workflow_dispatch")], [record(head_branch="feature")],
             [record(workflow_id=12345)], [record(workflow_id=True)],
             [record(repository={"id": 999})],
@@ -92,6 +94,8 @@ class ExternalUptimeRunFreshnessTests(unittest.TestCase):
                 self.assertEqual(got["monitor_freshness"], "UNKNOWN")
                 self.assertIsNone(got["run_id"])
         self.assertEqual(classify([record()], now=NOW.replace(tzinfo=None))["monitor_freshness"], "UNKNOWN")
+        self.assertEqual(classify([record()], now=datetime(1, 1, 1, tzinfo=timezone(timedelta(hours=1))))["monitor_freshness"], "UNKNOWN")
+        self.assertEqual(classify([record()], now=datetime(9999, 12, 31, 23, 59, 59, tzinfo=timezone(timedelta(hours=-1))))["monitor_freshness"], "UNKNOWN")
         self.assertEqual(classify([record()], now=NOW, max_age_seconds=0)["monitor_freshness"], "UNKNOWN")
         self.assertEqual(classify([record()] * 101, now=NOW)["monitor_freshness"], "UNKNOWN")
         # Contaminacion de origen en cualquier fila: UNKNOWN incluso con run reciente.

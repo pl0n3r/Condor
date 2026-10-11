@@ -27,11 +27,12 @@ def _utc(value: object) -> datetime | None:
         return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return None
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError):
+        # UTC conversion can overflow near datetime.min/max even for valid offsets.
         return None
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        return None
-    return parsed.astimezone(timezone.utc)
 
 
 def _stamp(value: datetime) -> str:
@@ -69,7 +70,10 @@ def project_run_freshness(
             or snapshot_total_count != len(runs)):
         return _unknown("missing_or_incomplete_runs")
 
-    instant = now.astimezone(timezone.utc)
+    try:
+        instant = now.astimezone(timezone.utc)
+    except (ValueError, OverflowError):
+        return _unknown("invalid_parameters")
     seen: dict[int, tuple[object, ...]] = {}
     observations: list[tuple[datetime, int, str, str]] = []
     for raw in runs:
