@@ -95,6 +95,39 @@ try {(new SaasControlCenterReader($catalog,$leakUsage,$ents))->read('ROLE_PLATFO
         self.assertNotIn('private fixture', result.stdout + result.stderr)
 
 
+
+    def test_js_safe_integer_boundaries_on_money_and_counters(self):
+        result = run_php(r'''
+$edge = 9007199254740991;
+$tooLarge = 9007199254740992;
+$edgeCatalog = $catalog('tenant-a');
+$edgeCatalog['plan']['price_minor'] = $edge;
+$edgeUsage = $usage('tenant-a');
+$edgeUsage[0]['used'] = $edge;
+$edgeUsage[0]['limit'] = $edge;
+$safe = (new SaasControlCenterReader(fn($t)=>$edgeCatalog, fn($t)=>$edgeUsage, $ents))
+    ->read('ROLE_PLATFORM_OWNER','tenant-a','tenant-a');
+if ($safe['plan']['price_minor'] !== $edge || $safe['usage'][0]['used'] !== $edge
+    || $safe['usage'][0]['limit'] !== $edge) exit(51);
+$json = json_encode($safe, JSON_THROW_ON_ERROR);
+if (!str_contains($json, '"price_minor":'.$edge) || !str_contains($json, '"used":'.$edge)) exit(52);
+foreach (['plan','addon','used','limit'] as $target) {
+    $badCatalog = $catalog('tenant-a');
+    $badUsage = $usage('tenant-a');
+    if ($target === 'plan') $badCatalog['plan']['price_minor'] = $tooLarge;
+    if ($target === 'addon') $badCatalog['add_ons'][0]['price_minor'] = $tooLarge;
+    if ($target === 'used') $badUsage[0]['used'] = $tooLarge;
+    if ($target === 'limit') $badUsage[0]['limit'] = $tooLarge;
+    $reader = new SaasControlCenterReader(fn($t)=>$badCatalog, fn($t)=>$badUsage, $ents);
+    try { $reader->read('ROLE_PLATFORM_OWNER','tenant-a','tenant-a'); exit(53); }
+    catch (DomainException $e) {
+        if (!in_array($e->getMessage(), ['Plan comercial inválido.',
+               'Add-on comercial inválido.', 'Uso comercial inválido.'], true)) exit(54);
+    }
+}
+''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_provider_exceptions_are_sanitized_after_authorization(self):
         result = run_php(r'''
 $bad=static function($t){throw new RuntimeException('private-adapter-diagnostic');};
