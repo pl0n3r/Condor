@@ -21,6 +21,9 @@ def record(run_id=42, minutes_ago=5, conclusion="success", **changes):
         "id": run_id, "path": freshness.WORKFLOW_PATH,
         "run_started_at": (NOW - timedelta(minutes=minutes_ago)).isoformat().replace("+00:00", "Z"),
         "head_sha": "a" * 40, "event": "schedule", "head_branch": "main",
+        "workflow_id": freshness.WORKFLOW_ID,
+        "repository": {"full_name": freshness.WORKFLOW_REPOSITORY},
+        "head_repository": {"full_name": freshness.WORKFLOW_REPOSITORY},
         "status": "completed", "conclusion": conclusion,
     }
     run.update(changes)
@@ -62,6 +65,11 @@ class ExternalUptimeRunFreshnessTests(unittest.TestCase):
             [record(run_started_at=(NOW + timedelta(minutes=4)).isoformat())],
             [record(run_started_at=(NOW + timedelta(seconds=30)).isoformat())],
             [record(event="workflow_dispatch")], [record(head_branch="feature")],
+            [record(workflow_id=12345)], [record(workflow_id=True)],
+            [record(repository={"full_name": "otro/proyecto"})],
+            [record(head_repository={"full_name": "otro/proyecto"})],
+            [record(repository="pl0n3r/Condor")],
+            [record(head_repository=None)],
             [record(conclusion="skipped")], [record(conclusion="neutral")],
             [record(conclusion="action_required")], [record(conclusion="cancelled")],
             [record(conclusion="timed_out")],
@@ -83,6 +91,8 @@ class ExternalUptimeRunFreshnessTests(unittest.TestCase):
         self.assertEqual(classify([record()], now=NOW.replace(tzinfo=None))["monitor_freshness"], "UNKNOWN")
         self.assertEqual(classify([record()], now=NOW, max_age_seconds=0)["monitor_freshness"], "UNKNOWN")
         self.assertEqual(classify([record()] * 101, now=NOW)["monitor_freshness"], "UNKNOWN")
+        # Contaminacion de origen en cualquier fila: UNKNOWN incluso con run reciente.
+        self.assertEqual(classify([record(1), record(2, repository={"full_name": "other/Condor"})])["monitor_freshness"], "UNKNOWN")
         # Sin certificación del roster completo: no hay FRESH inferible.
         self.assertEqual(classify([record()], snapshot_complete=False)["monitor_freshness"], "UNKNOWN")
         self.assertEqual(classify([record()], snapshot_total_count=2)["monitor_freshness"], "UNKNOWN")
