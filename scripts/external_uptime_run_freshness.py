@@ -98,9 +98,9 @@ def project_run_freshness(
         fingerprint = (_stamp(started), sha, status, conclusion,
                        raw["path"], raw["event"], raw["head_branch"])
         if run_id in seen:
-            if seen[run_id] != fingerprint:
-                return _unknown("conflicting_run_identity")
-            continue
+            # Las páginas completas contienen runs únicos: repetir una fila
+            # puede ocultar otra ejecución más reciente y alterar el veredicto.
+            return _unknown("duplicate_run_identity")
         seen[run_id] = fingerprint
         observations.append((started, run_id, sha, status if status != "completed" else str(conclusion)))
 

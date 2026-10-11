@@ -54,7 +54,8 @@ class ExternalUptimeRunFreshnessTests(unittest.TestCase):
         past_boundary = classify([record(4, minutes_ago=31)], now=NOW)
         self.assertEqual(past_boundary["monitor_freshness"], "STALE")
         self.assertEqual(past_boundary["reason"], "monitor_run_stale")
-        self.assertEqual(classify([b, b], now=NOW)["run_id"], 2)
+        self.assertEqual(classify([b, b], now=NOW)["monitor_freshness"], "UNKNOWN")
+        self.assertEqual(classify([b, b], now=NOW)["reason"], "duplicate_run_identity")
 
     def test_missing_conflicting_and_future_evidence_is_unknown(self):
         invalid = [
@@ -93,6 +94,10 @@ class ExternalUptimeRunFreshnessTests(unittest.TestCase):
         self.assertEqual(classify([record()] * 101, now=NOW)["monitor_freshness"], "UNKNOWN")
         # Contaminacion de origen en cualquier fila: UNKNOWN incluso con run reciente.
         self.assertEqual(classify([record(1), record(2, repository={"full_name": "other/Condor"})])["monitor_freshness"], "UNKNOWN")
+        # Un total de dos filas con un mismo ID no prueba dos ejecuciones.
+        repeat = record(42, minutes_ago=5)
+        self.assertEqual(classify([repeat, repeat], snapshot_total_count=2)["monitor_freshness"], "UNKNOWN")
+        self.assertEqual(classify([record(41), record(42)], snapshot_total_count=2)["monitor_freshness"], "FRESH")
         # Sin certificación del roster completo: no hay FRESH inferible.
         self.assertEqual(classify([record()], snapshot_complete=False)["monitor_freshness"], "UNKNOWN")
         self.assertEqual(classify([record()], snapshot_total_count=2)["monitor_freshness"], "UNKNOWN")
