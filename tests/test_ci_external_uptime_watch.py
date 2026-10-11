@@ -320,7 +320,7 @@ class ExternalUptimeWatchTests(unittest.TestCase):
         now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
         valid = observation("HEALTHY", now)
         for bad in (
-            "2026-10-11\\n15:00:00Z",
+            "2026-10-11" + chr(10) + "15:00:00Z",
             "2026-10-11`15:00:00Z",
             "2026-10-11 15:00:00Z",
             "2026-10-11T15:00:00+00:00",
