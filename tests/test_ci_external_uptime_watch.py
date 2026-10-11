@@ -245,5 +245,119 @@ class ExternalUptimeWatchTests(unittest.TestCase):
         self.assertIn(uptime.ALERT_MARKER.lower(), body)
 
 
+    def test_contradictory_healthy_evidence_cannot_close_alert(self) -> None:
+        now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
+        contradictory = observation("HEALTHY", now)
+        contradictory["endpoints"] = [
+            {"endpoint": name, "outcome": "degraded", "reason": "http_status",
+             "http_status": 500}
+            for name in ("readiness", "home")
+        ]
+        self.assertEqual("UNKNOWN", uptime.effective_state(contradictory, now=now))
+        existing = {
+            "number": 88,
+            "state": "open",
+            "body": uptime.alert_body("DEGRADED", observation("DEGRADED", now)),
+        }
+        result = uptime.decide(contradictory, contradictory, [existing], now=now)
+        self.assertEqual("UNKNOWN", result["state"])
+        self.assertNotEqual("close", result["action"])
+        self.assertEqual("update", result["action"])
+
+    def test_malformed_endpoint_evidence_is_unknown(self) -> None:
+        now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
+        good = observation("HEALTHY", now)
+        for bad_state in ([], {}, 0, False):
+            with self.subTest(state=repr(bad_state)):
+                altered = dict(good, state=bad_state)
+                self.assertEqual("UNKNOWN", uptime.effective_state(altered, now=now))
+
+        for invalid in (
+            [good["endpoints"][0], good["endpoints"][0]],
+            [{"endpoint": "unknown", "outcome": "ok", "reason": "ok", "http_status": 200},
+             good["endpoints"][1]],
+            [{}, {}],
+            [[], {}],
+            "not-an-endpoint-list",
+        ):
+            with self.subTest(invalid=repr(invalid)[:80]):
+                altered = dict(good, endpoints=invalid)
+                self.assertEqual("UNKNOWN", uptime.effective_state(altered, now=now))
+
+        for field, bad in (
+            ("endpoint", []),
+            ("outcome", []),
+            ("reason", {}),
+            ("http_status", True),
+            ("http_status", 999),
+            ("extra", "PRIVATE-CASE-SECRET"),
+            ("outcome", "unexpected"),
+        ):
+            with self.subTest(field=field, value=repr(bad)):
+                endpoints = [dict(row) for row in good["endpoints"]]
+                endpoints[0][field] = bad
+                altered = dict(good, endpoints=endpoints)
+                self.assertEqual("UNKNOWN", uptime.effective_state(altered, now=now))
+
+    def test_consistent_samples_preserve_probe_recovery_contract(self) -> None:
+        now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
+        for state in ("HEALTHY", "DEGRADED", "UNKNOWN"):
+            with self.subTest(state=state):
+                self.assertEqual(
+                    state, uptime.effective_state(observation(state, now), now=now)
+                )
+        degraded = observation("DEGRADED", now)
+        degraded["endpoints"][0].pop("http_status")
+        self.assertEqual("DEGRADED", uptime.effective_state(degraded, now=now))
+
+        http_failure = observation("DEGRADED", now)
+        http_failure["endpoints"][0] = {
+            "endpoint": "readiness", "outcome": "degraded",
+            "reason": "http_status", "http_status": 503,
+        }
+        self.assertEqual("DEGRADED", uptime.effective_state(http_failure, now=now))
+        recovered = observation("HEALTHY", now)
+        self.assertEqual(
+            "TRANSIENT",
+            uptime.persistent_state(recovered, degraded, now=now),
+        )
+        active_alert = {"number": 89, "state": "open",
+                        "body": uptime.alert_body("UNKNOWN", observation("UNKNOWN", now))}
+        self.assertEqual(
+            "close",
+            uptime.decide(recovered, recovered, [active_alert], now=now)["action"],
+        )
+        self.assertEqual(
+            "UNKNOWN",
+            uptime.effective_state(
+                observation("HEALTHY", now - timedelta(seconds=uptime.MAX_AGE_SECONDS + 1)),
+                now=now,
+            ),
+        )
+
+    def test_endpoint_consistency_is_private_and_offline(self) -> None:
+        from unittest.mock import patch
+        now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
+        sample = observation("UNKNOWN", now)
+        sample["sensitive_metadata"] = "PRIVATE-CASE-SECRET"
+        sample["endpoints"] = [
+            {"endpoint": [], "outcome": {}, "reason": {"secret": "PRIVATE-CASE-SECRET"}},
+            {"endpoint": "home", "outcome": "unknown",
+             "reason": "network", "private": "PRIVATE-CASE-SECRET"},
+        ]
+        original = json.dumps(sample, sort_keys=True)
+        with patch.object(
+            uptime, "fetch_endpoint",
+            side_effect=AssertionError("offline classification must not fetch"),
+        ):
+            self.assertEqual("UNKNOWN", uptime.effective_state(sample, now=now))
+            self.assertEqual("UNKNOWN", uptime.persistent_state(sample, sample, now=now))
+            rendered = uptime.alert_body("UNKNOWN", sample)
+            self.assertNotIn("PRIVATE-CASE-SECRET", rendered)
+            self.assertNotIn("['", rendered)
+            self.assertIn("No autoriza go-live", rendered)
+        self.assertEqual(original, json.dumps(sample, sort_keys=True))
+
+
 if __name__ == "__main__":
     unittest.main()
