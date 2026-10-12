@@ -112,6 +112,25 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         self.assertEqual(candidate.returncode, 0, candidate.stdout + candidate.stderr)
         self.assertEqual(tags_before, git(root, "show-ref", "--tags"))
 
+    def test_release_metadata_dispatch_only_on_canonical_version_change(self):
+        """Construction merges must not publish an existing release identity."""
+        workflow = (ROOT / ".github/workflows/tag-release.yml").read_text(encoding="utf-8")
+        header = workflow.split("on:\n", 1)[1].split("\npermissions:\n", 1)[0]
+        expected = "  push:\n    branches: [main]\n    paths:\n      - 'config/version.php'\n"
+        self.assertEqual(header.strip(), expected.strip())
+        self.assertNotIn("pull_request:", header)
+        self.assertNotIn("workflow_dispatch:", header)
+        self.assertEqual(1, header.count("      - "))
+        self.assertIn("permissions:\n  contents: write", workflow)
+        self.assertIn("uses: pl0n3r/factory/.github/workflows/release.yml@v1", workflow)
+        self.assertIn("version_source: config/version.php", workflow)
+        self.assertIn("version_format: auto", workflow)
+        for wrong in ("      - '**'", "      - 'README.md'",
+                      "      - 'config/version.php'\n      - 'src/**'"):
+            with self.subTest(wrong=wrong):
+                mutated = header.replace("      - 'config/version.php'", wrong, 1)
+                self.assertNotEqual(expected.strip(), mutated.strip())
+
     def test_release_context_still_rejects_tag_reuse_and_nonmonotonic_versions(self):
         root, sha = self.repo("0.1.77", "0.1.77")
         self.assertNotEqual(self.run_guard(root, "release (V 0.1.77)", sha).returncode, 0)
