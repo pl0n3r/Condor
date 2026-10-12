@@ -128,6 +128,27 @@ foreach (['plan','addon','used','limit'] as $target) {
 ''')
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_invalid_catalog_never_reads_tenant_ledgers(self):
+        result = run_php(r'''
+foreach (['plan', 'addon', 'duplicate'] as $kind) {
+    $bad = $catalog('tenant-a');
+    if ($kind === 'plan') $bad['plan']['price_minor'] = -1;
+    if ($kind === 'addon') $bad['add_ons'][0]['tenant_id'] = 'tenant-b';
+    if ($kind === 'duplicate') $bad['add_ons'][] = $bad['add_ons'][0];
+    $reads = 0;
+    $spy = function($tenant) use (&$reads) {$reads++; return [];};
+    try {
+        (new SaasControlCenterReader(fn($tenant)=>$bad, $spy, $spy))
+            ->read('ROLE_PLATFORM_OWNER', 'tenant-a', 'tenant-a');
+        exit(71);
+    } catch (DomainException $error) {
+        if ($error->getPrevious() !== null) exit(72);
+    }
+    if ($reads !== 0) exit(73);
+}
+''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_provider_exceptions_are_sanitized_after_authorization(self):
         result = run_php(r'''
 $bad=static function($t){throw new RuntimeException('private-adapter-diagnostic');};
