@@ -31,8 +31,9 @@ def _verified_pr_version(root, sha, base_sha, candidate, version, tags, names):
         raise GuardError("release_identity_guard: untrusted PR head commit.")
     if git(root, "rev-parse", "refs/remotes/origin/main") != base_sha:
         raise GuardError("release_identity_guard: PR base is not fetched origin/main.")
-    if git(root, "merge-base", base_sha, sha) != base_sha:
-        raise GuardError("release_identity_guard: PR head is not based on main.")
+    # An unchanged-version PR may be older than main but still merge cleanly.
+    # A new release identity, by contrast, must start from current main.
+    main_is_parent = git(root, "merge-base", base_sha, sha) == base_sha
     original = VERSION_RE.findall(git(root, "show", f"{base_sha}:config/version.php"))
     if len(original) != 1:
         raise GuardError("release_identity_guard: invalid trusted base version.")
@@ -40,13 +41,21 @@ def _verified_pr_version(root, sha, base_sha, candidate, version, tags, names):
     if sv(version) < sv(base_version):
         raise GuardError("release_identity_guard: PR version regresses main.")
     if version != base_version:
+        if not main_is_parent:
+            raise GuardError("release_identity_guard: new-version PR head is not based on current main.")
         return None
     if candidate not in names:
         raise GuardError("release_identity_guard: unchanged PR version lacks authentic tag.")
     if git(root, "cat-file", "-t", f"refs/tags/{candidate}") != "tag":
         raise GuardError("release_identity_guard: base tag is not annotated.")
-    if git(root, "rev-list", "-n", "1", candidate) != base_sha:
-        raise GuardError("release_identity_guard: release tag differs from trusted base.")
+    # The annotated latest release must be a common ancestor of both
+    # authenticated main and the PR head. This permits parallel code-only
+    # merges without permitting tag retargeting, stale pre-release heads or
+    # an unrelated history.
+    tag_sha = git(root, "rev-list", "-n", "1", candidate)
+    if (git(root, "merge-base", tag_sha, base_sha) != tag_sha
+            or git(root, "merge-base", tag_sha, sha) != tag_sha):
+        raise GuardError("release_identity_guard: release tag is not common trusted ancestry.")
     if not tags or tags[-1][0] != sv(version):
         raise GuardError("release_identity_guard: base release tag is not latest.")
     return candidate, tags[-1][1]

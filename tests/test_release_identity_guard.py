@@ -112,6 +112,32 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         self.assertEqual(candidate.returncode, 0, candidate.stdout + candidate.stderr)
         self.assertEqual(tags_before, git(root, "show-ref", "--tags"))
 
+    def test_pr_context_accepts_parallel_old_head_after_main_advances_without_tag_rewrite(self):
+        root, head = self.repo("0.1.77", "0.1.77")
+        tagged_base = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "checkout", "-B", "main", tagged_base)
+        (root / "unrelated-main-fix").write_text("no release", encoding="utf-8")
+        git(root, "add", ".")
+        git(root, "commit", "-m", "independent code-only main merge")
+        later_main = git(root, "rev-parse", "HEAD")
+        git(root, "update-ref", "refs/remotes/origin/main", later_main)
+        self.assertNotEqual(git(root, "merge-base", later_main, head), later_main)
+        before_tags = git(root, "show-ref", "--tags")
+        result = self.pr_guard(root, "feat: parallel (V 0.1.77)", head, later_main)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(before_tags, git(root, "show-ref", "--tags"))
+        # Same PR with an incorrect fetched main identity is still denied.
+        wrong = self.pr_guard(root, "feat: parallel (V 0.1.77)", head, tagged_base)
+        self.assertNotEqual(0, wrong.returncode)
+        # Version-bump PRs must not reuse stale main without reconciliation.
+        git(root, "checkout", "--detach", head)
+        self.write(root, "0.1.78")
+        git(root, "add", ".")
+        git(root, "commit", "-m", "new version on old PR branch")
+        bumped = git(root, "rev-parse", "HEAD")
+        rejected = self.pr_guard(root, "feat: bump (V 0.1.78)", bumped, later_main)
+        self.assertNotEqual(0, rejected.returncode)
+
     def test_release_metadata_dispatch_only_on_canonical_version_change(self):
         """Construction merges must not publish an existing release identity."""
         workflow = (ROOT / ".github/workflows/tag-release.yml").read_text(encoding="utf-8")
