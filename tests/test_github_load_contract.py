@@ -104,6 +104,9 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
                 self.assertIn(term, section)
         self.assertNotIn("2–3 agentes simultáneos", section)
         self.assertNotIn("máximo **uno por repo**", section)
+        # Different spellings of a fixed worker cap must not reappear.
+        self.assertNotRegex(section, r"(?i)(?:máximo|tope)(?:\\s|\\S){0,40}(?:uno|dos|\\d+)(?:\\s|\\S){0,30}(?:por repo|agentes simultáneos)")
+        self.assertRegex(section, r"cupo restante.*?inferior a \\*\\*1200 solicitudes\\*\\*")
 
     def test_factory_sweep_keeps_minimum_permissions(self) -> None:
         workflow = read_workflow("coordinacion-trabajo.yml")
