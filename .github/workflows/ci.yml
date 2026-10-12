@@ -328,7 +328,7 @@ jobs:
           persist-credentials: false
 
       - name: Preparar PHP 8.5
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
           php-version: '8.5'
           coverage: none
@@ -358,7 +358,7 @@ jobs:
           persist-credentials: false
 
       - name: Preparar PHP 8.5
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
           php-version: '8.5'
           coverage: none
@@ -478,7 +478,7 @@ jobs:
           persist-credentials: false
 
       - name: Preparar PHP 8.5
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
           php-version: '8.5'
           coverage: none
@@ -522,7 +522,7 @@ jobs:
           persist-credentials: false
 
       - name: Preparar PHP 8.5
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
           php-version: '8.5'
           coverage: none
@@ -660,7 +660,7 @@ jobs:
           persist-credentials: false
 
       - name: Preparar PHP 8.5
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
           php-version: '8.5'
           coverage: none
@@ -829,7 +829,7 @@ jobs:
           persist-credentials: false
 
       - name: Preparar PHP 8.5
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
           php-version: '8.5'
           coverage: none
