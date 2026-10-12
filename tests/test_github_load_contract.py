@@ -86,7 +86,7 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
         manual = (ROOT / "AGENTES.md").read_text(encoding="utf-8")
         self.assertIn("## 8. Carga y coordinación con varios agentes", manual)
         section = manual.split("## 8. Carga y coordinación con varios agentes", 1)[1]
-        section = section.split("\\n## 9.", 1)[0]
+        section = section.split("\n## 9.", 1)[0]
         for term in (
             "claims de archivo disjuntos",
             "reserva V3 válida",
