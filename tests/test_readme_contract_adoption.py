@@ -56,15 +56,22 @@ class ReadmeContractAdoptionTests(unittest.TestCase):
                 self.assertEqual(expected,paths(workflow,event,next_event))
                 self.assertEqual(1,workflow.split(f"  {event}:\n",1)[1].split(f"\n  {next_event}:\n",1)[0].count("    paths:\n"))
 
-        # Fail closed on broader/partial/foreign paths; never accept a wildcard.
-        variants=[
-            workflow.replace("- 'readme/**'","- '**'",1),
-            workflow.replace("      - 'README.md'\n","",1),
-            workflow.replace("- '.github/workflows/readme-contract.yml'","- 'src/**'",1),
-        ]
-        for candidate in variants:
-            with self.subTest(candidate=candidate):
-                self.assertNotEqual(expected,paths(candidate,"pull_request","push"))
+        # Test negative mutations for BOTH event scopes independently:
+        # a narrow pull_request filter cannot mask an unsafe push filter.
+        for event,next_event in (("pull_request","push"),("push","workflow_dispatch")):
+            original=workflow.split(f"  {event}:\n",1)[1].split(f"\n  {next_event}:\n",1)[0]
+            variants=[
+                original.replace("- 'readme/**'","- '**'",1),
+                original.replace("      - 'README.md'\n","",1),
+                original.replace("- '.github/workflows/readme-contract.yml'","- 'src/**'",1),
+            ]
+            for case,changed in enumerate(variants):
+                with self.subTest(event=event,case=case):
+                    self.assertNotEqual(original,changed)
+                    candidate=workflow.replace(
+                        f"  {event}:\n"+original+f"\n  {next_event}:\n",
+                        f"  {event}:\n"+changed+f"\n  {next_event}:\n",1)
+                    self.assertNotEqual(expected,paths(candidate,event,next_event))
 
         self.assertIn("uses: pl0n3r/factory/.github/workflows/readme.yml@v1",workflow)
         self.assertIn("readme_path: README.md",workflow)
