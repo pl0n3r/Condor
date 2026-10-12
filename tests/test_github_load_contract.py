@@ -73,12 +73,37 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
         manual = (ROOT / "AGENTES.md").read_text(encoding="utf-8")
         for term in (
             "polling de checks", "Agrupar los pushes",
-            "2–3 agentes simultáneos entre repos distintos", "uno por repo",
             "comentarios de progreso",
             "telemetría CI se muestrea una vez por hora",
+            "Relay de Sonar exclusivamente manual",
         ):
             with self.subTest(term=term):
                 self.assertIn(term, manual)
+        self.assertNotIn("2–3 agentes simultáneos entre repos distintos", manual)
+        self.assertNotIn("máximo **uno por repo**", manual)
+
+    def test_agents_capacity_is_claim_based_not_fixed(self) -> None:
+        manual = (ROOT / "AGENTES.md").read_text(encoding="utf-8")
+        self.assertIn("## 8. Carga y coordinación con varios agentes", manual)
+        section = manual.split("## 8. Carga y coordinación con varios agentes", 1)[1]
+        section = section.split("\\n## 9.", 1)[0]
+        for term in (
+            "claims de archivo disjuntos",
+            "reserva V3 válida",
+            "sin tope fijo de agentes por repo",
+            "tantas hojas elegibles",
+            "nunca reservar un directorio completo",
+            "archivo ya reclamado",
+            "cupo restante de la API de GitHub",
+            "1200 solicitudes",
+            "PLAN-AGENTES global",
+            "límite menor",
+            "prevalece",
+        ):
+            with self.subTest(term=term):
+                self.assertIn(term, section)
+        self.assertNotIn("2–3 agentes simultáneos", section)
+        self.assertNotIn("máximo **uno por repo**", section)
 
     def test_factory_sweep_keeps_minimum_permissions(self) -> None:
         workflow = read_workflow("coordinacion-trabajo.yml")
