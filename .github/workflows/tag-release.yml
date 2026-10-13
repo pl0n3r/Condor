@@ -3,6 +3,8 @@ name: Release Factory v1
 on:
   push:
     branches: [main]
+    paths:
+      - 'config/version.php'
 
 permissions:
   contents: write
