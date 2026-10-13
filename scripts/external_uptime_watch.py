@@ -332,13 +332,20 @@ def effective_state(
     max_age_seconds: int = MAX_AGE_SECONDS,
 ) -> str:
     """Fail closed on stale, malformed or internally contradictory probe evidence."""
-    if type(observation) is not dict:
+    if (type(observation) is not dict or not isinstance(now, datetime)
+            or now.tzinfo is None or type(max_age_seconds) is not int
+            or max_age_seconds < 1):
         return "UNKNOWN"
     state = observation.get("state")
     timestamp = canonical_observed_time(observation.get("observed_at"))
     if type(state) is not str or state not in STATES or timestamp is None:
         return "UNKNOWN"
-    age = (now - timestamp).total_seconds()
+    try:
+        if now.utcoffset() is None:
+            return "UNKNOWN"
+        age = (now.astimezone(timezone.utc) - timestamp).total_seconds()
+    except (ValueError, OverflowError, TypeError):
+        return "UNKNOWN"
     if age < 0 or age > max_age_seconds:
         return "UNKNOWN"
     derived = endpoint_state(observation.get("endpoints"))

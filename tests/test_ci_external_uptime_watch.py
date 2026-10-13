@@ -361,6 +361,26 @@ class ExternalUptimeWatchTests(unittest.TestCase):
             "HEALTHY", uptime.effective_state(observation("HEALTHY", now), now=now)
         )
 
+    def test_invalid_observer_clock_or_threshold_is_unknown(self) -> None:
+        now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
+        healthy = observation("HEALTHY", now)
+        invalid_clocks = (
+            now.replace(tzinfo=None),
+            None,
+            "2026-10-11T15:00:00Z",
+            datetime(1, 1, 1, tzinfo=timezone(timedelta(hours=1))),
+            datetime(9999, 12, 31, 23, 59, 59,
+                     tzinfo=timezone(timedelta(hours=-1))),
+        )
+        for candidate in invalid_clocks:
+            with self.subTest(now=repr(candidate)):
+                self.assertEqual("UNKNOWN", uptime.effective_state(healthy, now=candidate))
+        for limit in (True, False, 0, -1, "1200", None, []):
+            with self.subTest(limit=repr(limit)):
+                self.assertEqual("UNKNOWN", uptime.effective_state(
+                    healthy, now=now, max_age_seconds=limit))
+        self.assertEqual("HEALTHY", uptime.effective_state(healthy, now=now))
+
     def test_noncanonical_observed_time_is_unknown_and_never_rendered(self) -> None:
         now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
         valid = observation("HEALTHY", now)
