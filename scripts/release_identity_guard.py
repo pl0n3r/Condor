@@ -11,7 +11,7 @@ SHA_RE=re.compile(r"^[0-9a-f]{40}$")
 class GuardError(RuntimeError): pass
 
 def sv(s):
-    m=re.fullmatch(r"(\d+)\.(\d+)\.(\d+)",s)
+    m=re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)",s)
     if not m: raise GuardError(f"release_identity_guard: invalid SemVer {s!r}.")
     return tuple(map(int,m.groups()))
 
