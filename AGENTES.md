@@ -134,7 +134,8 @@ Siempre requieren autorización explícita: SQL/migraciones destructivas, borrad
 
 - No hacer polling de checks, comentarios ni workflows: una lectura del CI tras entregar el PR y nuevos chequeos solo por hito verificable.
 - Agrupar los pushes por bloque lógico y evitar comentarios de progreso sin resultado.
-- Capacidad operativa de **2–3 agentes simultáneos entre repos distintos**; máximo **uno por repo** (Factory admite el segundo agente solo en los archivos exclusivos previstos por el protocolo). Cada trabajo conserva su reserva válida y evita colisiones.
+- La capacidad se decide por **claims de archivo disjuntos** y **reserva V3 válida**: **sin tope fijo de agentes por repo**. Se pueden despachar simultáneamente tantas hojas elegibles como tengan claims de archivos concretos sin solapamiento; nunca reservar un directorio completo ni un archivo ya reclamado. Cada trabajo mantiene su reserva y sigue las puertas de Coordinación.
+- Pausar el despacho de trabajo nuevo cuando el **cupo restante de la API de GitHub** sea inferior a **1200 solicitudes** o si el **PLAN-AGENTES global** fija un **límite menor**, que **prevalece**. No usar el cupo como excusa para saltar el interruptor global, límites operativos ni los gates de CI.
 - La telemetría CI se muestrea una vez por hora; no dispara una corrida por cada CI ni duplica artifacts para el mismo run.
 - Relay de Sonar exclusivamente manual: SonarCloud ya publica Quality Gate nativo.
 

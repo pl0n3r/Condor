@@ -73,12 +73,46 @@ class GitHubLoadPolicyContractTests(unittest.TestCase):
         manual = (ROOT / "AGENTES.md").read_text(encoding="utf-8")
         for term in (
             "polling de checks", "Agrupar los pushes",
-            "2–3 agentes simultáneos entre repos distintos", "uno por repo",
             "comentarios de progreso",
             "telemetría CI se muestrea una vez por hora",
+            "Relay de Sonar exclusivamente manual",
         ):
             with self.subTest(term=term):
                 self.assertIn(term, manual)
+        self.assertNotIn("2–3 agentes simultáneos entre repos distintos", manual)
+        self.assertNotIn("máximo **uno por repo**", manual)
+
+    def test_agents_capacity_is_claim_based_not_fixed(self) -> None:
+        manual = (ROOT / "AGENTES.md").read_text(encoding="utf-8")
+        self.assertIn("## 8. Carga y coordinación con varios agentes", manual)
+        section = manual.split("## 8. Carga y coordinación con varios agentes", 1)[1]
+        section = section.split("\n## 9.", 1)[0]
+        for term in (
+            "claims de archivo disjuntos",
+            "reserva V3 válida",
+            "sin tope fijo de agentes por repo",
+            "tantas hojas elegibles",
+            "nunca reservar un directorio completo",
+            "archivo ya reclamado",
+            "cupo restante de la API de GitHub",
+            "1200 solicitudes",
+            "PLAN-AGENTES global",
+            "límite menor",
+            "prevalece",
+        ):
+            with self.subTest(term=term):
+                self.assertIn(term, section)
+        self.assertNotIn("2–3 agentes simultáneos", section)
+        self.assertNotIn("máximo **uno por repo**", section)
+        # Different spellings of a fixed worker cap must not reappear.
+        # Prove that the guard detects forbidden fixed caps; otherwise an
+        # over-escaped raw regex could silently pass assertNotRegex.
+        fixed_cap = r"(?i)(?:máximo|tope)[\s\S]{0,40}(?:uno|dos|\d+)[\s\S]{0,30}(?:por repo|agentes simultáneos)"
+        self.assertRegex("máximo dos agentes simultáneos", fixed_cap)
+        self.assertRegex("máximo 2 por repo", fixed_cap)
+        self.assertNotRegex("sin tope fijo de agentes por repo", fixed_cap)
+        self.assertNotRegex(section, fixed_cap)
+        self.assertRegex(section, r"cupo restante.*?inferior a \*\*1200 solicitudes\*\*")
 
     def test_factory_sweep_keeps_minimum_permissions(self) -> None:
         workflow = read_workflow("coordinacion-trabajo.yml")
