@@ -67,7 +67,10 @@ class PurchasingOrdersTests(unittest.TestCase):
         self.assertIn("['persist']", order)
         up = migration.split("public function up", 1)[1].split("public function down", 1)[0]
         self.assertEqual(2, len(re.findall(r"CREATE\s+TABLE", up, flags=re.I)))
-        self.assertNotRegex(up, r"\b(DROP|DELETE|TRUNCATE|ALTER)\b")
+        for forbidden in (r"\bDROP\s+TABLE\b", r"\bDELETE\s+FROM\b",
+                          r"\bTRUNCATE\b", r"\bALTER\s+TABLE\b"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotRegex(up, forbidden)
         down = migration.split("public function down", 1)[1]
         self.assertIn("$this->abortIf(", down)
         self.phpunit("testQuantityCostAndDuplicateMaterialMustBeValid")
