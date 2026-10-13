@@ -62,6 +62,19 @@ final readonly class SupplierService
             }
         }
 
+        // Una entidad gestionada puede cambiar de código sin figurar todavía
+        // en getScheduledEntityUpdates() antes de computeChangeSets()/flush().
+        foreach ($this->entityManager->getUnitOfWork()->getIdentityMap()[Supplier::class] ?? [] as $managed) {
+            if (
+                $managed instanceof Supplier
+                && $managed->tenant()->id() === $tenant->id()
+                && $managed->code() === $code
+                && ($current === null || $managed->id() !== $current->id())
+            ) {
+                throw new DomainException('Ya existe un proveedor con ese código en el tenant.');
+            }
+        }
+
         $existing = $this->entityManager->getRepository(Supplier::class)->findOneBy([
             'tenant' => $tenant,
             'code' => $code,

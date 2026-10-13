@@ -172,6 +172,47 @@ final class SupplierDomainTest extends TestCase
         self::assertCount(2, $scheduled);
     }
 
+    public function testServiceRejectsDuplicateManagedUpdateBeforeFlush(): void
+    {
+        $own = self::tenant('Propio');
+        $foreign = self::tenant('Ajeno');
+        $first = new Supplier($own, 'SUP-01', 'Primero');
+        $second = new Supplier($own, 'SUP-02', 'Segundo');
+        $otherTenant = new Supplier($foreign, 'SUP-02', 'Ajeno');
+
+        // Se simula un EntityManager que ya administra las tres entidades.
+        // La base de datos conserva los códigos anteriores hasta flush().
+        $unitOfWork = $this->createMock(UnitOfWork::class);
+        $unitOfWork->method('getIdentityMap')->willReturn([
+            Supplier::class => [
+                $first->id() => $first,
+                $second->id() => $second,
+                $otherTenant->id() => $otherTenant,
+            ],
+        ]);
+        $repository = $this->createMock(EntityRepository::class);
+        $repository->method('findOneBy')->willReturn(null);
+        $manager = $this->createMock(EntityManagerInterface::class);
+        $manager->method('getUnitOfWork')->willReturn($unitOfWork);
+        $manager->method('getRepository')->with(Supplier::class)->willReturn($repository);
+        $service = new SupplierService($manager);
+
+        $service->update($own, $first, 'PENDIENTE', 'Actualizado', 10);
+        self::assertSame('PENDIENTE', $first->code());
+
+        try {
+            $service->update($own, $second, ' pendiente ', 'Duplicado', 20);
+            self::fail('Debe rechazar códigos duplicados entre updates antes de flush.');
+        } catch (DomainException $error) {
+            self::assertStringContainsString('Ya existe', $error->getMessage());
+        }
+        self::assertSame('SUP-02', $second->code());
+        self::assertSame('Segundo', $second->name());
+
+        $service->update($foreign, $otherTenant, 'PENDIENTE', 'Ajeno permitido', 0);
+        self::assertSame('PENDIENTE', $otherTenant->code());
+    }
+
     public function testServiceRejectsCrossTenantMutationAndAllowsOwnedDeactivate(): void
     {
         $own = self::tenant('Propio');
