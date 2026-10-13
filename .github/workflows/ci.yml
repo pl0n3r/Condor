@@ -64,9 +64,10 @@ jobs:
         env:
           TITULO_PR: ${{ github.event.pull_request.title }}
           CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          python3 scripts/release_identity_guard.py --pr-title "$TITULO_PR" --candidate-sha "$CANDIDATE_SHA"
+          python3 scripts/release_identity_guard.py --pr-title "$TITULO_PR" --candidate-sha "$CANDIDATE_SHA" --context pr --base-sha "$BASE_SHA"
 
       - name: Validar línea Symfony 7.4 LTS
         env:

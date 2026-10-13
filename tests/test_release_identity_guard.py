@@ -1,9 +1,11 @@
-import json,subprocess,sys,tempfile,unittest
+import json,os,subprocess,sys,tempfile,unittest
 from pathlib import Path
-
+from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0,str(ROOT))
+
+from scripts.release_identity_guard import GuardError, git as guarded_git
 
 from scripts.dependency_pr_promotion import (
     PromotionError, RUNTIME_DIR, build_plan, contract_fingerprint,
@@ -88,6 +90,173 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
             "0.1.78","v0.1.78","pl0n3r/Condor","pl0n3r","c"*40,
         )
 
+
+    def pr_guard(self, root, title, sha, base):
+        return subprocess.run(
+            [sys.executable, str(GUARD), "--repo-root", str(root),
+             "--pr-title", title, "--candidate-sha", sha, "--context", "pr",
+             "--base-sha", base], text=True, capture_output=True,
+        )
+
+    def test_pr_context_accepts_same_version_as_verified_main_without_reusing_release_tag(self):
+        root, first = self.repo("0.1.77", "0.1.77")
+        base = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "update-ref", "refs/remotes/origin/main", base)
+        tags_before = git(root, "show-ref", "--tags")
+        candidate = self.pr_guard(root, "feat: first (V 0.1.77)", first, base)
+        self.assertEqual(candidate.returncode, 0, candidate.stdout + candidate.stderr)
+        git(root, "checkout", "-b", "parallel-pr", base)
+        (root / "parallel").write_text("parallel", encoding="utf-8")
+        git(root, "add", ".")
+        git(root, "commit", "-m", "parallel")
+        second = git(root, "rev-parse", "HEAD")
+        candidate = self.pr_guard(root, "feat: second (V 0.1.77)", second, base)
+        self.assertEqual(candidate.returncode, 0, candidate.stdout + candidate.stderr)
+        self.assertEqual(tags_before, git(root, "show-ref", "--tags"))
+
+    def test_pr_context_accepts_parallel_old_head_after_main_advances_without_tag_rewrite(self):
+        root, head = self.repo("0.1.77", "0.1.77")
+        tagged_base = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "checkout", "-B", "main", tagged_base)
+        (root / "unrelated-main-fix").write_text("no release", encoding="utf-8")
+        git(root, "add", ".")
+        git(root, "commit", "-m", "independent code-only main merge")
+        later_main = git(root, "rev-parse", "HEAD")
+        git(root, "update-ref", "refs/remotes/origin/main", later_main)
+        self.assertNotEqual(git(root, "merge-base", later_main, head), later_main)
+        before_tags = git(root, "show-ref", "--tags")
+        result = self.pr_guard(root, "feat: parallel (V 0.1.77)", head, later_main)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(before_tags, git(root, "show-ref", "--tags"))
+        # Same PR with an incorrect fetched main identity is still denied.
+        wrong = self.pr_guard(root, "feat: parallel (V 0.1.77)", head, tagged_base)
+        self.assertNotEqual(0, wrong.returncode)
+        # Version-bump PRs must not reuse stale main without reconciliation.
+        git(root, "checkout", "--detach", head)
+        self.write(root, "0.1.78")
+        git(root, "add", ".")
+        git(root, "commit", "-m", "new version on old PR branch")
+        bumped = git(root, "rev-parse", "HEAD")
+        rejected = self.pr_guard(root, "feat: bump (V 0.1.78)", bumped, later_main)
+        self.assertNotEqual(0, rejected.returncode)
+
+    def test_pr_context_same_version_source_edit_cannot_trigger_release(self):
+        root, code_only = self.repo("0.1.77", "0.1.77")
+        base = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "update-ref", "refs/remotes/origin/main", base)
+        source = root / "config/version.php"
+        source.write_text(source.read_text(encoding="utf-8") + "// cosmetic change\n", encoding="utf-8")
+        git(root, "add", "config/version.php")
+        git(root, "commit", "-m", "edit version source without new version")
+        modified_head = git(root, "rev-parse", "HEAD")
+        self.assertEqual(
+            "config/version.php",
+            git(root, "diff", "--name-only", base, modified_head, "--", "config/version.php"),
+        )
+        denied = self.pr_guard(root, "docs: version comment (V 0.1.77)", modified_head, base)
+        self.assertNotEqual(denied.returncode, 0)
+        self.assertIn("same-version PR modifies config/version.php", denied.stdout)
+        valid = self.pr_guard(root, "feat: code only (V 0.1.77)", code_only, base)
+        self.assertEqual(valid.returncode, 0, valid.stdout + valid.stderr)
+
+    def test_release_metadata_dispatch_only_on_canonical_version_change(self):
+        """Construction merges must not publish an existing release identity."""
+        workflow = (ROOT / ".github/workflows/tag-release.yml").read_text(encoding="utf-8")
+        header = workflow.split("on:\n", 1)[1].split("\npermissions:\n", 1)[0]
+        expected = "  push:\n    branches: [main]\n    paths:\n      - 'config/version.php'\n"
+        self.assertEqual(header.strip(), expected.strip())
+        self.assertNotIn("pull_request:", header)
+        self.assertNotIn("workflow_dispatch:", header)
+        self.assertEqual(1, header.count("      - "))
+        self.assertIn("permissions:\n  contents: write", workflow)
+        self.assertIn("uses: pl0n3r/factory/.github/workflows/release.yml@v1", workflow)
+        self.assertIn("version_source: config/version.php", workflow)
+        self.assertIn("version_format: auto", workflow)
+        for wrong in ("      - '**'", "      - 'README.md'",
+                      "      - 'config/version.php'\n      - 'src/**'"):
+            with self.subTest(wrong=wrong):
+                mutated = header.replace("      - 'config/version.php'", wrong, 1)
+                self.assertNotEqual(expected.strip(), mutated.strip())
+
+    def test_release_context_still_rejects_tag_reuse_and_nonmonotonic_versions(self):
+        root, sha = self.repo("0.1.77", "0.1.77")
+        self.assertNotEqual(self.run_guard(root, "release (V 0.1.77)", sha).returncode, 0)
+        old, candidate = self.repo("0.1.78", "0.1.76")
+        self.assertNotEqual(self.run_guard(old, "downgrade (V 0.1.76)", candidate).returncode, 0)
+        base = git(root, "rev-parse", "v0.1.77^{commit}")
+        scoped_release = subprocess.run(
+            [sys.executable, str(GUARD), "--repo-root", str(root),
+             "--pr-title", "release (V 0.1.77)", "--candidate-sha", sha,
+             "--base-sha", base], text=True, capture_output=True)
+        self.assertNotEqual(scoped_release.returncode, 0)
+
+    def test_pr_context_rejects_untrusted_base_title_sha_and_stale_version(self):
+        root, sha = self.repo("0.1.77", "0.1.77")
+        base = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "update-ref", "refs/remotes/origin/main", base)
+        invalid = (
+            ("wrong title (V 0.1.78)", sha, base),
+            ("wrong base (V 0.1.77)", sha, "f" * 40),
+            ("wrong sha (V 0.1.77)", "f" * 40, base),
+            ("stale origin/main (V 0.1.77)", sha, sha),
+        )
+        for title, head, parent in invalid:
+            with self.subTest(title=title):
+                self.assertNotEqual(self.pr_guard(root, title, head, parent).returncode, 0)
+        git(root, "tag", "-f", "-a", "v0.1.77", "-m", "divergent", sha)
+        self.assertNotEqual(
+            self.pr_guard(root, "wrong tag (V 0.1.77)", sha, base).returncode, 0)
+        newer, head = self.repo("0.1.79", "0.1.78")
+        ref = git(newer, "rev-parse", "v0.1.79^{commit}")
+        git(newer, "update-ref", "refs/remotes/origin/main", ref)
+        self.assertNotEqual(
+            self.pr_guard(newer, "downgrade (V 0.1.78)", head, ref).returncode, 0)
+
+    def test_guarded_git_rejects_unapproved_commands_before_subprocess(self):
+        root, head = self.repo("0.1.77", "0.1.77")
+        invalid = (
+            ("config", "user.email", "attacker.invalid"),
+            ("tag", "--delete", "v0.1.77"),
+            ("show", "--output=/tmp/unsafe"),
+            ("cat-file", "-t", "--batch"),
+            ("cat-file", "-t", "refs/tags/v0.1.77^{commit}"),
+            ("rev-list", "-n", "1", "--exec=sh"),
+            ("diff", "--name-only", head, head, "--", "../secrets"),
+            ("merge-base", "--octopus", head),
+            ("rev-parse", "--git-dir"),
+            ("cat-file", "-t", head + ";whoami"),
+        )
+        for arguments in invalid:
+            with self.subTest(arguments=arguments):
+                with patch("scripts.release_identity_guard.subprocess.run") as runner:
+                    with self.assertRaises(GuardError):
+                        guarded_git(root, *arguments)
+                    runner.assert_not_called()
+        self.assertEqual(guarded_git(root, "tag", "--list"), "v0.1.77")
+        self.assertEqual(guarded_git(root, "cat-file", "-t", head + "^{commit}"), "commit")
+        self.assertEqual(guarded_git(root, "merge-base", head, head), head)
+
+    def test_guarded_git_ignores_inherited_repository_location(self):
+        root, head = self.repo("0.1.77", "0.1.77")
+        foreign, _ = self.repo("0.1.88", "0.1.88")
+        with patch.dict(os.environ, {
+            "GIT_DIR": str(foreign / ".git"),
+            "GIT_WORK_TREE": str(foreign),
+            "GIT_INDEX_FILE": str(foreign / ".git" / "index"),
+        }):
+            self.assertEqual(guarded_git(root, "tag", "--list"), "v0.1.77")
+            self.assertEqual(guarded_git(root, "cat-file", "-t", head + "^{commit}"), "commit")
+
+    def test_ci_pr_preflight_only_uses_context_scoped_identity_check(self):
+        workflow = CI.read_text(encoding="utf-8")
+        identity = workflow.split("      - name: Validar identidad candidata de release\n", 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn("if: github.event_name == 'pull_request'", identity)
+        self.assertIn('--context pr --base-sha "$BASE_SHA"', identity)
+        self.assertIn("BASE_SHA: " + "$" + "{{ github.event.pull_request.base.sha }}", identity)
+        self.assertEqual(workflow.count("--context pr"), 1)
+        release = (ROOT / ".github/workflows/tag-release.yml").read_text(encoding="utf-8")
+        self.assertNotIn("--context pr", release)
+
     def test_unused_monotonic_candidate_is_accepted(self):
         r,sha=self.repo("0.1.77","0.1.78"); p=self.run_guard(r,"ci: guard (V 0.1.78)",sha)
         self.assertEqual(p.returncode,0,p.stdout+p.stderr); self.assertIn("latest=v0.1.77",p.stdout)
@@ -105,7 +274,7 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         self.assertIn("permissions:\n  contents: read",w); self.assertNotIn("contents: write",pre); self.assertIn("fetch-depth: 0",pre)
         self.assertLess(pre.index("Validar identidad candidata de release"),pre.index("Clasificar cambios"))
         self.assertIn("github.event.pull_request.head.sha",pre)
-        command='python3 scripts/release_identity_guard.py --pr-title "$TITULO_PR" --candidate-sha "$CANDIDATE_SHA"'
+        command='python3 scripts/release_identity_guard.py --pr-title "$TITULO_PR" --candidate-sha "$CANDIDATE_SHA" --context pr --base-sha "$BASE_SHA"'
         self.assertIn(command,pre)
         self.assertNotIn("release_identity_guard.py \\\\",pre)
         self.assertIn("run: python3 tests/test_release_identity_guard.py",w)
