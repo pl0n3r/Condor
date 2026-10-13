@@ -6,7 +6,8 @@ Autorización acotada del propietario en [Condor #613](https://github.com/pl0n3r
 ## Identidad sintética
 El workflow authenticated-production-smoke.yml consume únicamente dos GitHub Actions Secrets del repositorio: CONDOR_SMOKE_EMAIL y CONDOR_SMOKE_PASSWORD. Solo debe corresponder a un usuario sintético de tenant con acceso mínimo a /admin y su propia sede, sin rol de propietario de plataforma. Los agentes no crean cuentas ni copian credenciales al chat.
 
-- Ausencia de uno o ambos secrets: el job identity indica "SKIPPED: identidad sintética no configurada" y el job Smoke autenticado read-only (exact-main) aparece skipped. Nunca equivale a validación productiva.
+- **Puerta adicional desactivada por defecto:** ambos jobs de acceso a identidad/producto requieren `vars.CONDOR_AUTH_SMOKE_ENABLED == 'true'`. Sin habilitación explícita posterior y autorizada de esa variable, el horario diario y `workflow_dispatch` **no cargan secrets ni contactan producción**; quedan `SKIPPED`. Preparar o fusionar código nunca activa por sí mismo esta puerta. No configurar esta variable en este PR.
+- Ausencia de uno o ambos secrets (cuando la puerta anterior esté habilitada): el job identity indica "SKIPPED: identidad sintética no configurada" y el job Smoke autenticado read-only (exact-main) aparece skipped. Nunca equivale a validación productiva.
 - Presencia de ambos: ejecución diaria o mediante workflow_dispatch sobre main, checkout con github.sha exacto, regresiones offline y prueba autenticada. No activar en otras ramas.
 - Credenciales incorrectas, falta de permisos, dependencia caída, versión/sha distinto de main, fuga de aislamiento o schema atrasado: resultado no-success/UNKNOWN, sin considerar GREEN.
 

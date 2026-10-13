@@ -29,7 +29,7 @@ jobs:
 
   identity:
     name: Confirmar identidad sintética (sin revelar secrets)
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && vars.CONDOR_AUTH_SMOKE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
@@ -54,7 +54,7 @@ jobs:
   smoke:
     name: Smoke autenticado read-only (exact-main)
     needs: identity
-    if: github.ref == 'refs/heads/main' && needs.identity.outputs.configured == 'true'
+    if: github.ref == 'refs/heads/main' && vars.CONDOR_AUTH_SMOKE_ENABLED == 'true' && needs.identity.outputs.configured == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
