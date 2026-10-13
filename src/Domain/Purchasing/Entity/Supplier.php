@@ -117,7 +117,11 @@ class Supplier
     private static function canonicalName(string $name): string
     {
         $name = trim($name);
-        if ($name === '' || mb_strlen($name, 'UTF-8') > 160) {
+        // Rechazar entradas invisibles y normalizar espacios Unicode en los bordes.
+        $name = preg_replace('/\A[\p{Z}\p{Cf}\s]+|[\p{Z}\p{Cf}\s]+\z/u', '', $name);
+        // ext-iconv es obligatoria en Composer; mbstring no lo es.
+        $length = $name === null ? false : iconv_strlen($name, 'UTF-8');
+        if ($length === false || $length < 1 || $length > 160) {
             throw new DomainException('El nombre del proveedor es obligatorio (máximo 160 caracteres).');
         }
 
