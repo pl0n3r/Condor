@@ -1,4 +1,4 @@
-import json,subprocess,sys,tempfile,unittest
+import json,os,subprocess,sys,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
@@ -235,6 +235,17 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         self.assertEqual(guarded_git(root, "tag", "--list"), "v0.1.77")
         self.assertEqual(guarded_git(root, "cat-file", "-t", head + "^{commit}"), "commit")
         self.assertEqual(guarded_git(root, "merge-base", head, head), head)
+
+    def test_guarded_git_ignores_inherited_repository_location(self):
+        root, head = self.repo("0.1.77", "0.1.77")
+        foreign, _ = self.repo("0.1.88", "0.1.88")
+        with patch.dict(os.environ, {
+            "GIT_DIR": str(foreign / ".git"),
+            "GIT_WORK_TREE": str(foreign),
+            "GIT_INDEX_FILE": str(foreign / ".git" / "index"),
+        }):
+            self.assertEqual(guarded_git(root, "tag", "--list"), "v0.1.77")
+            self.assertEqual(guarded_git(root, "cat-file", "-t", head + "^{commit}"), "commit")
 
     def test_ci_pr_preflight_only_uses_context_scoped_identity_check(self):
         workflow = CI.read_text(encoding="utf-8")
