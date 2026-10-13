@@ -133,10 +133,17 @@ class TrialCiCoverageTests(unittest.TestCase):
         self.assertEqual(expected, valid["calls"])
         self.assertEqual(QUOTE_ID, valid["result"]["quote_id"])
 
-        for scenario in ("missing_quote", "empty_quote", "cross_tenant"):
+        rejection_messages = {
+            "missing_quote": "Solicitud de trial incompatible con revisión owner-only.",
+            "empty_quote": "Solicitud de trial pendiente con datos inválidos.",
+            "cross_tenant": "Handoff de trial entre empresas no permitido.",
+        }
+        for scenario, message in rejection_messages.items():
             with self.subTest(scenario=scenario):
                 invalid = self._invoke(REVIEW, scenario)
                 self.assertFalse(invalid["ok"], invalid)
+                self.assertEqual("DomainException", invalid["class"])
+                self.assertEqual(message, invalid["message"])
                 self.assertEqual([], invalid["calls"])
 
         # Prueba de mutación negativa: el mismo comportamiento de aprobación
