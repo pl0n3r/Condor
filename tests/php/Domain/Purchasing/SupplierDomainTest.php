@@ -64,6 +64,10 @@ final class SupplierDomainTest extends TestCase
             "\u{00A0}", // Espacio no separable.
             "\u{200B}", // Carácter sin anchura.
             "\u{00A0}\u{200B}\u{00A0}",
+            "\x1B", // ESC, no visible pero no retirado por trim().
+            "\x7F", // DEL, no visible.
+            "\u{FE0F}", // Selector de variación sin carácter base.
+            "\u{034F}", // Combining Grapheme Joiner sin carácter base.
             "\xC3\x28", // UTF-8 incompleto.
             str_repeat('ñ', 161),
         ] as $name) {
@@ -85,6 +89,10 @@ final class SupplierDomainTest extends TestCase
         $supplier->update('UNICODE', "\u{200B}Árbol,\u{00A0}S.A.\u{200B}", 15);
         self::assertSame("Árbol,\u{00A0}S.A.", $supplier->name());
         self::assertSame(15, $supplier->paymentTermsDays());
+
+        // El filtro de invisibilidad no debe borrar marcas de acento combinadas válidas.
+        $supplier->update('UNICODE', "Cafe\u{0301}", 15);
+        self::assertSame("Cafe\u{0301}", $supplier->name());
 
         $maxLength = str_repeat('ñ', 160);
         $supplier->update('UNICODE', $maxLength, 15);
