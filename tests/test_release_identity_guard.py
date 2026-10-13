@@ -297,6 +297,22 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
     def test_non_monotonic_version_is_rejected_but_forward_gap_is_allowed(self):
         r,sha=self.repo("0.1.77","0.1.76"); self.assertNotEqual(self.run_guard(r,"ci: lower (V 0.1.76)",sha).returncode,0)
         r,sha=self.repo("0.1.77","0.1.80"); self.assertEqual(self.run_guard(r,"ci: gap (V 0.1.80)",sha).returncode,0)
+    def test_noncanonical_semver_components_fail_closed_without_tag_mutation(self):
+        # Leading zeroes are not canonical SemVer, in PR or release mode.
+        for candidate in ("01.1.77", "0.01.77", "0.1.077"):
+            with self.subTest(candidate=candidate):
+                root, head = self.repo("0.1.77", candidate)
+                base = git(root, "rev-parse", "v0.1.77^{commit}")
+                git(root, "update-ref", "refs/remotes/origin/main", base)
+                before_tags = git(root, "show-ref", "--tags")
+                title = f"fix: no canonical version (V {candidate})"
+                release = self.run_guard(root, title, head)
+                scoped_pr = self.pr_guard(root, title, head, base)
+                for result in (release, scoped_pr):
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("invalid SemVer", result.stdout)
+                self.assertEqual(git(root, "show-ref", "--tags"), before_tags)
+
     def test_pr_title_version_must_match_canonical_version(self):
         r,sha=self.repo("0.1.77","0.1.78"); p=self.run_guard(r,"ci: mismatch (V 0.1.79)",sha)
         self.assertNotEqual(p.returncode,0); self.assertIn("does not match",p.stdout)
