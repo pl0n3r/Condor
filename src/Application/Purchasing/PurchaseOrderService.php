@@ -62,7 +62,7 @@ final readonly class PurchaseOrderService
                     $tenant, $source, $order, $key, $actorUserId
                 ): PurchaseOrder {
                     $entityManager->refresh($order, LockMode::PESSIMISTIC_WRITE);
-                    self::assertScope($tenant, $source, $order);
+                    self::assertScope($tenant, $source, $order, false);
                     if ($order->isReceived()) {
                         $order->assertSameReceipt($key, $source->id());
                         return $order;
