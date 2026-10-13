@@ -33,7 +33,29 @@ def git(root,*args):
     if (not args or any(type(a) is not str or "\x00" in a for a in args)
             or not any(rule.fullmatch("\x00".join(args)) for rule in _SAFE_GIT_COMMANDS)):
         raise GuardError("release_identity_guard: unapproved Git command arguments.")
-    p=subprocess.run(["git",*args],cwd=root,text=True,capture_output=True)
+    # Allowlisted verbs/prefixes are constructed here, never copied from
+    # untrusted CLI arguments. Pattern validation above also rejects options
+    # masquerading as SHA, tag or file-path operands.
+    verb=args[0]
+    prefixes={
+        "tag": ["git", "tag", "--list"],
+        "rev-parse": ["git", "rev-parse", "refs/remotes/origin/main"],
+        "cat-file": ["git", "cat-file", "-t"],
+        "merge-base": ["git", "merge-base"],
+        "show": ["git", "show"],
+        "diff": ["git", "diff", "--name-only"],
+        "rev-list": ["git", "rev-list", "-n", "1"],
+    }
+    suffixes={
+        "tag": [],
+        "rev-parse": [],
+        "cat-file": [args[2]] if verb=="cat-file" else [],
+        "merge-base": list(args[1:]) if verb=="merge-base" else [],
+        "show": [args[1]] if verb=="show" else [],
+        "diff": [args[2],args[3],"--","config/version.php"] if verb=="diff" else [],
+        "rev-list": [args[3]] if verb=="rev-list" else [],
+    }
+    p=subprocess.run(prefixes[verb]+suffixes[verb],cwd=root,text=True,capture_output=True,check=False)
     if p.returncode: raise GuardError("release_identity_guard: "+(p.stderr.strip() or p.stdout.strip()))
     return p.stdout.strip()
 
