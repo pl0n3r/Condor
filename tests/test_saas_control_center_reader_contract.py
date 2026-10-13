@@ -71,6 +71,9 @@ $other = fn($t)=>['tenant_id'=>$t,
 $b = (new SaasControlCenterReader($other,$usage,$ents))->read('ROLE_PLATFORM_OWNER','tenant-a','tenant-a');
 if ($a['plan']['price_minor']!==12500 || $b['plan']['price_minor']!==98765
  || $b['add_ons'][0]['price_minor']!==3333) exit(12);
+$denied = fn($t)=>[['tenant_id'=>$t,'key'=>'reports','allowed'=>false]];
+$c = (new SaasControlCenterReader($other,$usage,$denied))->read('ROLE_PLATFORM_OWNER','tenant-a','tenant-a');
+if ($a['entitlements'][0]['allowed']!==true || $c['entitlements'][0]['allowed']!==false) exit(13);
 ''')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn('12500', SOURCE.read_text())
@@ -90,6 +93,8 @@ $wrong = fn($tenant)=>['tenant_id'=>'tenant-b','plan'=>[], 'add_ons'=>[]];
 try {(new SaasControlCenterReader($wrong,$usage,$ents))->read('ROLE_PLATFORM_OWNER','tenant-a','tenant-a'); exit(23);} catch (DomainException $e) {}
 $leakUsage = fn($t) => [['tenant_id'=>'tenant-b','metric'=>'seats','used'=>1,'limit'=>5]];
 try {(new SaasControlCenterReader($catalog,$leakUsage,$ents))->read('ROLE_PLATFORM_OWNER','tenant-a','tenant-a'); exit(24);} catch (DomainException $e) {}
+$leakEntitlements = fn($t) => [['tenant_id'=>'tenant-b','key'=>'reports','allowed'=>true]];
+try {(new SaasControlCenterReader($catalog,$usage,$leakEntitlements))->read('ROLE_PLATFORM_OWNER','tenant-a','tenant-a'); exit(25);} catch (DomainException $e) {}
 ''')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn('private fixture', result.stdout + result.stderr)
