@@ -166,7 +166,7 @@ try {
         expected = {
             "unknown_quote": "Quote comercial no disponible para solicitud de trial.",
             "expired_quote": "Quote comercial no disponible para solicitud de trial.",
-            "missing_consent": "Consentimiento explícito requerido.",
+            "missing_consent": "Campos de solicitud de trial no permitidos.",
             "false_consent": "Consentimiento explícito requerido.",
             "extra_fields": "Campos de solicitud de trial no permitidos.",
         }
