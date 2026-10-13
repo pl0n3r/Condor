@@ -5,7 +5,7 @@ from pathlib import Path
 
 VERSION_RE=re.compile(r"""['"]version['"]\s*=>\s*['"](\d+\.\d+\.\d+)['"]""")
 TITLE_RE=re.compile(r"\(V (\d+\.\d+\.\d+)\)$")
-TAG_RE=re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+TAG_RE=re.compile(r"^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 SHA_RE=re.compile(r"^[0-9a-f]{40}$")
 
 class GuardError(RuntimeError): pass
