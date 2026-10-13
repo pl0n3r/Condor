@@ -119,9 +119,9 @@ class Supplier
         $name = trim($name);
         // Rechazar entradas invisibles y normalizar espacios Unicode en los bordes.
         $name = preg_replace('/\A[\p{Z}\p{Cf}\s]+|[\p{Z}\p{Cf}\s]+\z/u', '', $name);
-        // Rechazar controles internos, separadores de línea y marcas bidi
-        // que pueden alterar la presentación en logs y reportes.
-        $unsafe = $name !== null && preg_match('/[\p{Cc}\p{Zl}\p{Zp}\x{061C}\x{200E}\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}]/u', $name) === 1;
+        // Rechazar controles y formatos invisibles internos (incluidas marcas bidi),
+        // excepto ZWNJ/ZWJ legítimos para escritura Unicode y emoji compuestos.
+        $unsafe = $name !== null && preg_match('/[\p{Cc}\p{Zl}\p{Zp}]|(?![\x{200C}\x{200D}])\p{Cf}/u', $name) === 1;
         // Los caracteres de control o marcas Unicode solas no son nombres visibles.
         $visible = $name !== null && preg_match('/[\p{L}\p{N}\p{P}\p{S}]/u', $name) === 1;
         // ext-iconv es obligatoria en Composer; mbstring no lo es.

@@ -109,6 +109,9 @@ final class SupplierDomainTest extends TestCase
             "Proveedor\nS.A.", // Inyección de línea.
             "Proveedor\u{202E}ABCD", // Right-to-left override.
             "Proveedor\u{2066}ABCD", // Unicode bidi isolate.
+            "Proveedor\u{200B}Interno", // Zero width space interno.
+            "Proveedor\u{2060}Interno", // Word joiner interno.
+            "Proveedor\u{FEFF}Interno", // BOM/zero width no-break space interno.
         ] as $invalidName) {
             try {
                 new Supplier($tenant, 'NUEVO', $invalidName);
@@ -126,6 +129,14 @@ final class SupplierDomainTest extends TestCase
                 self::assertSame(15, $supplier->paymentTermsDays());
             }
         }
+
+        // ZWJ/ZWNJ internos siguen admitidos para escrituras y emoji válidos.
+        $joinedEmoji = "👩\u{200D}🔧";
+        $supplier->update('VALID', $joinedEmoji, 15);
+        self::assertSame($joinedEmoji, $supplier->name());
+        $joinedWord = "می\u{200C}روم";
+        $supplier->update('VALID', $joinedWord, 15);
+        self::assertSame($joinedWord, $supplier->name());
     }
 
     public function testServiceRejectsDuplicateCodeWithinTenantAndAllowsOtherTenant(): void
