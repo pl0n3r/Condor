@@ -70,6 +70,7 @@ final readonly class SaasControlCenterReader
             throw new DomainException('Plan comercial inválido.');
         }
         $preSeen = [];
+        $safeAddons = [];
         foreach ($addons as $row) {
             if (!is_array($row) || ($row['tenant_id'] ?? null) !== $tenantId
                 || !self::key($row['key'] ?? null)
@@ -78,6 +79,10 @@ final readonly class SaasControlCenterReader
                 throw new DomainException('Add-on comercial inválido.');
             }
             $preSeen[$row['key']] = true;
+            $safeAddons[] = [
+                'key' => $row['key'], 'price_minor' => $row['price_minor'],
+                'active' => $row['active'],
+            ];
         }
         try {
             $usage = ($this->usage)($tenantId);
@@ -85,45 +90,17 @@ final readonly class SaasControlCenterReader
         } catch (\Throwable) {
             throw new DomainException('Fuente comercial no disponible.');
         }
-        // Bound cardinality before array unpacking, copying and sorting.
-        if (!is_array($plan) || !is_array($addons) || count($addons) > 128
-            || !array_is_list($addons) || !is_array($usage) || count($usage) > 128
-            || !array_is_list($usage) || !is_array($entitlements)
-            || count($entitlements) > 128 || !array_is_list($entitlements)) {
+        // Catalog, plan and add-ons were validated before protected ledger reads.
+        // Validate both remaining ledgers independently, without trusting adapters.
+        if (!is_array($usage) || count($usage) > 128 || !array_is_list($usage)
+            || !is_array($entitlements) || count($entitlements) > 128
+            || !array_is_list($entitlements)) {
             throw new DomainException('Proyección comercial inválida.');
-        }
-        foreach ([$plan, $catalog, ...$addons, ...$usage, ...$entitlements] as $row) {
-            if (!is_array($row)) {
-                throw new DomainException('Proyección comercial inválida.');
-            }
-        }
-        if (($plan['tenant_id'] ?? null) !== $tenantId
-            || !self::key($plan['key'] ?? null)
-            || !self::key($plan['version'] ?? null)
-            || !self::key($plan['currency'] ?? null)
-            || !self::nonNegative($plan['price_minor'] ?? null)) {
-            throw new DomainException('Plan comercial inválido.');
-        }
-        $seen = [];
-        $safeAddons = [];
-        foreach ($addons as $row) {
-            if (($row['tenant_id'] ?? null) !== $tenantId
-                || !self::key($row['key'] ?? null)
-                || !self::nonNegative($row['price_minor'] ?? null)
-                || !is_bool($row['active'] ?? null)
-                || isset($seen[$row['key']])) {
-                throw new DomainException('Add-on comercial inválido.');
-            }
-            $seen[$row['key']] = true;
-            $safeAddons[] = [
-                'key' => $row['key'], 'price_minor' => $row['price_minor'],
-                'active' => $row['active'],
-            ];
         }
         $seen = [];
         $safeUsage = [];
         foreach ($usage as $row) {
-            if (($row['tenant_id'] ?? null) !== $tenantId
+            if (!is_array($row) || ($row['tenant_id'] ?? null) !== $tenantId
                 || !self::key($row['metric'] ?? null)
                 || !self::nonNegative($row['used'] ?? null)
                 || !self::nonNegative($row['limit'] ?? null)
@@ -139,7 +116,7 @@ final readonly class SaasControlCenterReader
         $seen = [];
         $safeEntitlements = [];
         foreach ($entitlements as $row) {
-            if (($row['tenant_id'] ?? null) !== $tenantId
+            if (!is_array($row) || ($row['tenant_id'] ?? null) !== $tenantId
                 || !self::key($row['key'] ?? null)
                 || !is_bool($row['allowed'] ?? null)
                 || isset($seen[$row['key']])) {
