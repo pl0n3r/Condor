@@ -77,11 +77,20 @@ def parse_time(value: object) -> datetime | None:
         return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return None
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError):
+        # Converting a valid extreme offset can overflow datetime.min/max.
         return None
-    if parsed.tzinfo is None:
+
+
+def canonical_observed_time(value: object) -> datetime | None:
+    """Only the exact second-resolution UTC producer format is safe for evidence."""
+    parsed = parse_time(value)
+    if parsed is None or not isinstance(value, str) or format_time(parsed) != value:
         return None
-    return parsed.astimezone(timezone.utc)
+    return parsed
 
 
 def read_bounded(response: Any, limit: int) -> bytes:
@@ -148,6 +157,16 @@ def endpoint_evidence(
     return result
 
 
+def strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject ambiguous duplicate JSON keys, including nested objects."""
+    unique: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in unique:
+            raise ValueError("duplicate_json_key")
+        unique[key] = value
+    return unique
+
+
 def probe_health(fetcher: Callable[..., dict[str, object]]) -> dict[str, object]:
     """Validate the public health contract and return sanitized evidence."""
 
@@ -166,12 +185,12 @@ def probe_health(fetcher: Callable[..., dict[str, object]]) -> dict[str, object]
         return endpoint_evidence("readiness", "degraded", reason)
 
     status = response.get("status")
-    if not isinstance(status, int) or status != 200:
+    if type(status) is not int or status != 200:
         return endpoint_evidence(
             "readiness",
             "degraded",
             "http_status",
-            status if isinstance(status, int) else None,
+            status if type(status) is int else None,
         )
     if response.get("content_type") != "application/json":
         return endpoint_evidence("readiness", "degraded", "content_type", status)
@@ -180,7 +199,8 @@ def probe_health(fetcher: Callable[..., dict[str, object]]) -> dict[str, object]
         return endpoint_evidence("readiness", "degraded", "contract", status)
 
     try:
-        payload = json.loads(bytes(body).decode("utf-8"))
+        payload = json.loads(bytes(body).decode("utf-8"),
+                             object_pairs_hook=strict_json_object)
     except (UnicodeDecodeError, ValueError):
         return endpoint_evidence("readiness", "degraded", "invalid_json", status)
 
@@ -216,15 +236,19 @@ def probe_home(fetcher: Callable[..., dict[str, object]]) -> dict[str, object]:
         return endpoint_evidence("home", "degraded", reason)
 
     status = response.get("status")
-    if not isinstance(status, int) or status != 200:
+    if type(status) is not int or status != 200:
         return endpoint_evidence(
             "home",
             "degraded",
             "http_status",
-            status if isinstance(status, int) else None,
+            status if type(status) is int else None,
         )
     if response.get("content_type") != "text/html":
         return endpoint_evidence("home", "degraded", "content_type", status)
+    body = response.get("body")
+    if not isinstance(body, (bytes, bytearray)) or not body.strip():
+        # A blank 200 HTML response does not prove the home is rendered.
+        return endpoint_evidence("home", "degraded", "contract", status)
     return endpoint_evidence("home", "ok", "ok", status)
 
 
@@ -252,25 +276,95 @@ def probe(
     }
 
 
+def endpoint_state(endpoints: object) -> str | None:
+    """Validate the producer's two endpoint records without trusting aggregate state."""
+    if type(endpoints) is not list or len(endpoints) != 2:
+        return None
+    names: set[str] = set()
+    outcomes: set[str] = set()
+    for row in endpoints:
+        if type(row) is not dict or set(row) not in (
+            {"endpoint", "outcome", "reason"},
+            {"endpoint", "outcome", "reason", "http_status"},
+        ):
+            return None
+        name, outcome, reason = (
+            row["endpoint"], row["outcome"], row["reason"]
+        )
+        if type(name) is not str or name not in {"readiness", "home"} or name in names:
+            return None
+        if type(outcome) is not str or outcome not in {"ok", "degraded", "unknown"}:
+            return None
+        if type(reason) is not str:
+            return None
+        names.add(name)
+        outcomes.add(outcome)
+        has_status = "http_status" in row
+        status = row.get("http_status")
+        if has_status and (type(status) is not int or not 100 <= status <= 599):
+            return None
+
+        if outcome == "ok":
+            if reason != "ok" or not has_status or status != 200:
+                return None
+        elif outcome == "unknown":
+            if reason not in {"network", "timeout", "tls"} or has_status:
+                return None
+        elif reason == "http_status":
+            # A non-200 status may be absent when an upstream response was invalid.
+            if has_status and status == 200:
+                return None
+        elif reason in {"content_type", "invalid_json"}:
+            if not has_status or status != 200:
+                return None
+        elif reason == "contract":
+            # A ValueError from a fetcher can produce contract with no HTTP status.
+            if has_status and status != 200:
+                return None
+        elif reason in {"payload_too_large", "unsupported_path"}:
+            if has_status:
+                return None
+        else:
+            return None
+
+    if names != {"readiness", "home"}:
+        return None
+    if "unknown" in outcomes:
+        return "UNKNOWN"
+    if "degraded" in outcomes:
+        return "DEGRADED"
+    return "HEALTHY"
+
+
 def effective_state(
     observation: dict[str, object],
     *,
     now: datetime,
     max_age_seconds: int = MAX_AGE_SECONDS,
 ) -> str:
-    """Return UNKNOWN for stale/future/malformed evidence; otherwise its declared state."""
-
+    """Fail closed on stale, malformed or internally contradictory probe evidence."""
+    if (type(observation) is not dict
+            or set(observation) != {"state", "observed_at", "endpoints"}
+            or not isinstance(now, datetime)
+            or now.tzinfo is None or type(max_age_seconds) is not int
+            or max_age_seconds < 1):
+        return "UNKNOWN"
     state = observation.get("state")
-    timestamp = parse_time(observation.get("observed_at"))
-    if state not in STATES or timestamp is None:
+    timestamp = canonical_observed_time(observation.get("observed_at"))
+    if type(state) is not str or state not in STATES or timestamp is None:
         return "UNKNOWN"
-    age = (now - timestamp).total_seconds()
-    if age < -60 or age > max_age_seconds:
+    try:
+        if now.utcoffset() is None:
+            return "UNKNOWN"
+        age = (now.astimezone(timezone.utc) - timestamp).total_seconds()
+    except (ValueError, OverflowError, TypeError):
         return "UNKNOWN"
-    endpoints = observation.get("endpoints")
-    if not isinstance(endpoints, list) or len(endpoints) != 2:
+    if age < 0 or age > max_age_seconds:
         return "UNKNOWN"
-    return str(state)
+    derived = endpoint_state(observation.get("endpoints"))
+    if derived is None or derived != state:
+        return "UNKNOWN"
+    return state
 
 
 def persistent_state(
@@ -318,11 +412,11 @@ def safe_endpoint_line(endpoint: object) -> str:
     outcome = endpoint.get("outcome")
     reason = endpoint.get("reason")
     status = endpoint.get("http_status")
-    if name not in {"readiness", "home"}:
+    if type(name) is not str or name not in {"readiness", "home"}:
         name = "unknown"
-    if outcome not in {"ok", "degraded", "unknown"}:
+    if type(outcome) is not str or outcome not in {"ok", "degraded", "unknown"}:
         outcome = "unknown"
-    if reason not in {
+    if type(reason) is not str or reason not in {
         "ok",
         "timeout",
         "tls",
@@ -334,7 +428,7 @@ def safe_endpoint_line(endpoint: object) -> str:
         "contract",
     }:
         reason = "contract"
-    suffix = f", http={status}" if isinstance(status, int) and 100 <= status <= 599 else ""
+    suffix = f", http={status}" if type(status) is int and 100 <= status <= 599 else ""
     return f"{name}: {outcome} ({reason}{suffix})"
 
 
@@ -344,8 +438,8 @@ def alert_body(state: str, observation: dict[str, object]) -> str:
     if state not in {"DEGRADED", "UNKNOWN"}:
         raise ValueError("invalid_alert_state")
     observed_at = observation.get("observed_at")
-    if parse_time(observed_at) is None:
-        observed_at = "unknown"
+    stamp = canonical_observed_time(observed_at)
+    observed_at = format_time(stamp) if stamp is not None else "unknown"
     endpoints = observation.get("endpoints")
     safe = endpoints if isinstance(endpoints, list) else []
     health = safe_endpoint_line(safe[0] if len(safe) > 0 else None)
@@ -401,7 +495,7 @@ def decide(
         if existing is None:
             return {"action": "noop", "state": "HEALTHY", "reason": "already_clear"}
         number = existing.get("number")
-        if not isinstance(number, int) or number < 1:
+        if type(number) is not int or number < 1:
             return {"action": "error", "state": "UNKNOWN", "reason": "invalid_issue"}
         return {
             "action": "close",
@@ -425,7 +519,7 @@ def decide(
         }
 
     number = existing.get("number")
-    if not isinstance(number, int) or number < 1:
+    if type(number) is not int or number < 1:
         return {"action": "error", "state": "UNKNOWN", "reason": "invalid_issue"}
     if last_recorded_state(existing) == aggregate:
         return {
@@ -451,7 +545,8 @@ def read_work_json(file_path: Path) -> object:
         raise ValueError("input_outside_workdir")
     if resolved_file.stat().st_size > MAX_INPUT_BYTES:
         raise ValueError("input_too_large")
-    return json.loads(resolved_file.read_text(encoding="utf-8"))
+    return json.loads(resolved_file.read_text(encoding="utf-8"),
+                      object_pairs_hook=strict_json_object)
 
 
 def parse_now(value: str | None) -> datetime:
