@@ -98,6 +98,37 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
              "--base-sha", base], text=True, capture_output=True,
         )
 
+    def test_pr_without_version_bump_is_accepted_when_version_equals_base(self):
+        """A construction PR reuses the version, never the release tag."""
+        root, head = self.repo("0.1.77", "0.1.77")
+        base = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "update-ref", "refs/remotes/origin/main", base)
+        before_tag = git(root, "show-ref", "--tags")
+        before_head = git(root, "rev-parse", "HEAD")
+        result = self.pr_guard(root, "fix: code only (V 0.1.77)", head, base)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(git(root, "show-ref", "--tags"), before_tag)
+        self.assertEqual(git(root, "rev-parse", "HEAD"), before_head)
+
+    def test_two_prs_with_same_next_version_are_not_rejected_for_tag_reuse(self):
+        """Two parallel build PRs may retain the effective base version."""
+        root, first = self.repo("0.1.77", "0.1.77")
+        tagged = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "update-ref", "refs/remotes/origin/main", tagged)
+        before_tags = git(root, "show-ref", "--tags")
+        initial = self.pr_guard(root, "fix: parallel A (V 0.1.77)", first, tagged)
+        self.assertEqual(initial.returncode, 0, initial.stdout + initial.stderr)
+        # Model first code-only PR merging to main, without releasing.
+        git(root, "update-ref", "refs/remotes/origin/main", first)
+        git(root, "checkout", "-b", "parallel-b", tagged)
+        (root / "parallel-b.txt").write_text("independent", encoding="utf-8")
+        git(root, "add", ".")
+        git(root, "commit", "-m", "parallel code-only change")
+        second = git(root, "rev-parse", "HEAD")
+        result = self.pr_guard(root, "fix: parallel B (V 0.1.77)", second, first)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(git(root, "show-ref", "--tags"), before_tags)
+
     def test_pr_context_accepts_same_version_as_verified_main_without_reusing_release_tag(self):
         root, first = self.repo("0.1.77", "0.1.77")
         base = git(root, "rev-parse", "v0.1.77^{commit}")
@@ -145,7 +176,14 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         base = git(root, "rev-parse", "v0.1.77^{commit}")
         git(root, "update-ref", "refs/remotes/origin/main", base)
         source = root / "config/version.php"
-        source.write_text(source.read_text(encoding="utf-8") + "// cosmetic change\n", encoding="utf-8")
+        # Cambiar solo espacios conserva el PHP canónico y ejercita el veto
+        # específico al diff de config/version.php, no el parser de PHP.
+        source.write_text(
+            source.read_text(encoding="utf-8").replace(
+                "return ['version' => '0.1.77'];",
+                "return [ 'version' => '0.1.77' ];",
+            ), encoding="utf-8",
+        )
         git(root, "add", "config/version.php")
         git(root, "commit", "-m", "edit version source without new version")
         modified_head = git(root, "rev-parse", "HEAD")
@@ -266,6 +304,91 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
     def test_non_monotonic_version_is_rejected_but_forward_gap_is_allowed(self):
         r,sha=self.repo("0.1.77","0.1.76"); self.assertNotEqual(self.run_guard(r,"ci: lower (V 0.1.76)",sha).returncode,0)
         r,sha=self.repo("0.1.77","0.1.80"); self.assertEqual(self.run_guard(r,"ci: gap (V 0.1.80)",sha).returncode,0)
+    def test_version_from_commented_or_unreachable_php_never_authorizes_release(self):
+        """A coincidental 'version' string is not executable metadata."""
+        root, head = self.repo("0.1.77", "0.1.77")
+        base = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "update-ref", "refs/remotes/origin/main", base)
+        saved_tags = git(root, "show-ref", "--tags")
+        malformed = (
+            "<?php\n// return ['version' => '0.1.77'];\n",
+            "<?php\n/* return ['version' => '0.1.77']; */\nreturn [];\n",
+            "<?php\nreturn [];\n// 'version' => '0.1.77'\n",
+            "<?php\nreturn ['version' => '0.1.77'];\nreturn ['version' => '0.1.78'];\n",
+            "<?php\nreturn ['version' => '0.1.77'];\nexit;\n",
+            "<?php\nreturn ['version\" => '0.1.77'];\n",
+            "<?php\nreturn ['version' => '0.1.77\"];\n",
+            "<?php\nreturn [\"version' => \"0.1.77\"];\n",
+            "<?php\nreturn [\"version\" => \"0.1.77'];\n",
+        )
+        for contents in malformed:
+            with self.subTest(source=contents[:42]):
+                (root / "config/version.php").write_text(contents, encoding="utf-8")
+                for result in (
+                    self.run_guard(root, "release (V 0.1.77)", head),
+                    self.pr_guard(root, "code-only (V 0.1.77)", head, base),
+                ):
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("exactly one canonical version", result.stdout)
+                self.assertEqual(git(root, "show-ref", "--tags"), saved_tags)
+        self.write(root, "0.1.77")
+        accepted = self.pr_guard(root, "code-only (V 0.1.77)", head, base)
+        self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+        for canonical in (
+            '<?php\nreturn ["version" => "0.1.77"];\n',
+            '<?php\nreturn ["version" => \'0.1.77\'];\n',
+        ):
+            with self.subTest(canonical=canonical):
+                (root / "config/version.php").write_text(canonical, encoding="utf-8")
+                accepted = self.pr_guard(root, "code-only (V 0.1.77)", head, base)
+                self.assertEqual(0, accepted.returncode, accepted.stdout + accepted.stderr)
+                self.assertEqual(git(root, "show-ref", "--tags"), saved_tags)
+
+    def test_noncanonical_semver_components_fail_closed_without_tag_mutation(self):
+        # Leading zeroes are not canonical SemVer, in PR or release mode.
+        for candidate in ("01.1.77", "0.01.77", "0.1.077", "1٢.1.77", "0.1٣.77", "0.1.7٤"):
+            with self.subTest(candidate=candidate):
+                root, head = self.repo("0.1.77", candidate)
+                base = git(root, "rev-parse", "v0.1.77^{commit}")
+                git(root, "update-ref", "refs/remotes/origin/main", base)
+                before_tags = git(root, "show-ref", "--tags")
+                title = f"fix: no canonical version (V {candidate})"
+                release = self.run_guard(root, title, head)
+                scoped_pr = self.pr_guard(root, title, head, base)
+                for result in (release, scoped_pr):
+                    self.assertNotEqual(result.returncode, 0)
+                    # VERSION_RE falla ya en la sintaxis PHP para dígitos
+                    # Unicode; los ceros iniciales llegan a sv() y fallan allí.
+                    expected = ("exactly one canonical version"
+                                if not candidate.isascii() else "invalid SemVer")
+                    self.assertIn(expected, result.stdout)
+                self.assertEqual(git(root, "show-ref", "--tags"), before_tags)
+
+    def test_noncanonical_git_tags_cannot_replace_latest_canonical_release(self):
+        # Un tag v0.01.999 o con digitos Unicode no es identidad
+        # SemVer valida; no puede eclipsar la release 0.1.77.
+        invalid_tags=("v0.01.999", "v0.1.٩٩٩", "v00.1.888")
+        root,head=self.repo("0.1.77","0.1.78")
+        for name in invalid_tags:
+            git(root,"tag","-a",name,"-m","noncanonical ignored")
+        tags_before=git(root,"show-ref","--tags")
+        result=self.run_guard(root,"fix: new release (V 0.1.78)",head)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn("latest=v0.1.77",result.stdout)
+        self.assertEqual(git(root,"show-ref","--tags"),tags_before)
+
+        # Construccion sin bump con un tag valido de ancestro. Los
+        # tags invalidos nunca hacen que el tag real parezca no-latest.
+        root,head=self.repo("0.1.77","0.1.77")
+        base=git(root,"rev-parse","v0.1.77^{commit}")
+        git(root,"update-ref","refs/remotes/origin/main",base)
+        for name in invalid_tags:
+            git(root,"tag","-a",name,"-m","noncanonical ignored")
+        before=git(root,"show-ref","--tags")
+        result=self.pr_guard(root,"fix: code only (V 0.1.77)",head,base)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual(git(root,"show-ref","--tags"),before)
+
     def test_pr_title_version_must_match_canonical_version(self):
         r,sha=self.repo("0.1.77","0.1.78"); p=self.run_guard(r,"ci: mismatch (V 0.1.79)",sha)
         self.assertNotEqual(p.returncode,0); self.assertIn("does not match",p.stdout)
