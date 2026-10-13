@@ -99,6 +99,51 @@ class ExternalUptimeWatchTests(unittest.TestCase):
             )
         )
 
+    def test_duplicate_health_json_keys_are_never_healthy(self) -> None:
+        now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
+        valid = ('"version":"0.1.194","release_sha":"' + "a" * 40
+                 + '","schema_up_to_date":true')
+        payloads = (
+            ('{"status":"degraded","status":"ok",' + valid + '}').encode(),
+            ('{"status":"ok","release_sha":"broken",' + valid + '}').encode(),
+            ('{"status":"ok",' + valid + ',"extra":{"id":1,"id":2}}').encode(),
+        )
+        alert = {"number": 77, "state": "open",
+                 "body": uptime.alert_body("DEGRADED", observation("DEGRADED", now))}
+        for body in payloads:
+            with self.subTest(payload=body[:85]):
+                def fake_fetch(path: str, *, timeout: float, limit: int) -> dict[str, object]:
+                    if path == uptime.HEALTH_PATH:
+                        return {"status": 200, "content_type": "application/json",
+                                "body": body}
+                    return {"status": 200, "content_type": "text/html",
+                            "body": b"<html></html>"}
+                evidence = uptime.probe(fake_fetch, now=now)
+                self.assertEqual("DEGRADED", evidence["state"])
+                self.assertEqual("invalid_json", evidence["endpoints"][0]["reason"])
+                action = uptime.decide(evidence, evidence, [alert], now=now)
+                self.assertNotEqual("close", action["action"])
+                self.assertNotIn("duplicate_json_key", json.dumps(action))
+        normal = {"status": 200, "content_type": "application/json",
+                  "body": ('{"status":"ok",' + valid + '}').encode()}
+        self.assertEqual("ok", uptime.probe_health(
+            lambda path, **_: normal)["outcome"])
+
+    def test_boolean_http_status_does_not_imply_health(self) -> None:
+        payload = json.dumps({"status": "ok", "version": "0.1.194",
+                              "release_sha": "a" * 40,
+                              "schema_up_to_date": True}).encode()
+        for candidate in (True, False, 200.0, "200"):
+            with self.subTest(status=repr(candidate)):
+                def fake_fetch(path: str, **kwargs: object) -> dict[str, object]:
+                    return {"status": candidate, "content_type":
+                            "application/json" if path == uptime.HEALTH_PATH else "text/html",
+                            "body": payload if path == uptime.HEALTH_PATH else b"<html/>"}
+                evidence = uptime.probe(fake_fetch)
+                self.assertEqual("DEGRADED", evidence["state"])
+                self.assertEqual("degraded", evidence["endpoints"][0]["outcome"])
+                self.assertEqual("degraded", evidence["endpoints"][1]["outcome"])
+
     def test_empty_home_200_is_not_healthy_and_cannot_close_alert(self) -> None:
         now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
         def fake_fetch(path: str, *, timeout: float, limit: int) -> dict[str, object]:

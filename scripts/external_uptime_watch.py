@@ -157,6 +157,16 @@ def endpoint_evidence(
     return result
 
 
+def strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject ambiguous duplicate JSON keys, including nested objects."""
+    unique: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in unique:
+            raise ValueError("duplicate_json_key")
+        unique[key] = value
+    return unique
+
+
 def probe_health(fetcher: Callable[..., dict[str, object]]) -> dict[str, object]:
     """Validate the public health contract and return sanitized evidence."""
 
@@ -175,12 +185,12 @@ def probe_health(fetcher: Callable[..., dict[str, object]]) -> dict[str, object]
         return endpoint_evidence("readiness", "degraded", reason)
 
     status = response.get("status")
-    if not isinstance(status, int) or status != 200:
+    if type(status) is not int or status != 200:
         return endpoint_evidence(
             "readiness",
             "degraded",
             "http_status",
-            status if isinstance(status, int) else None,
+            status if type(status) is int else None,
         )
     if response.get("content_type") != "application/json":
         return endpoint_evidence("readiness", "degraded", "content_type", status)
@@ -189,7 +199,8 @@ def probe_health(fetcher: Callable[..., dict[str, object]]) -> dict[str, object]
         return endpoint_evidence("readiness", "degraded", "contract", status)
 
     try:
-        payload = json.loads(bytes(body).decode("utf-8"))
+        payload = json.loads(bytes(body).decode("utf-8"),
+                             object_pairs_hook=strict_json_object)
     except (UnicodeDecodeError, ValueError):
         return endpoint_evidence("readiness", "degraded", "invalid_json", status)
 
@@ -225,12 +236,12 @@ def probe_home(fetcher: Callable[..., dict[str, object]]) -> dict[str, object]:
         return endpoint_evidence("home", "degraded", reason)
 
     status = response.get("status")
-    if not isinstance(status, int) or status != 200:
+    if type(status) is not int or status != 200:
         return endpoint_evidence(
             "home",
             "degraded",
             "http_status",
-            status if isinstance(status, int) else None,
+            status if type(status) is int else None,
         )
     if response.get("content_type") != "text/html":
         return endpoint_evidence("home", "degraded", "content_type", status)
