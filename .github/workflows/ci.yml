@@ -297,6 +297,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Preparar PHP para pruebas de aceptación ejecutables
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+
       - name: Probar herramientas internas del CI
         run: python3 -m unittest discover -s tests -p 'test_ci_*.py'
 
@@ -548,6 +554,9 @@ jobs:
 
       - name: Ejecutar contratos Condor AI
         run: python3 -m unittest discover -s tests -p 'test_condor_ai_*.py'
+
+      - name: Ejecutar contratos reales de self-service trial (Composer instalado)
+        run: python3 -m unittest discover -s tests -p 'test_self_service_trial_*.py' -v
 
       - name: Validar Composer y sintaxis PHP
         run: |

@@ -9,7 +9,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src/Application/Commercial/SelfServiceTrialApplication.php"
 DATA = ROOT / "datos.yml"
-VERSION = ROOT / "config/version.php"
 QUOTE_ID = "01AAAAAAAAAAAAAAAAAAAAAAAA"
 
 
@@ -152,10 +151,6 @@ try {
         self.assertNotIn(
             "trial_consent_recorded_at",
             customer_contact["fields"],
-        )
-        self.assertIn(
-            "'version' => '0.1.116'",
-            VERSION.read_text(encoding="utf-8"),
         )
 
         syntax = subprocess.run(

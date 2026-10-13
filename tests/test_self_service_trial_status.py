@@ -8,7 +8,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src/Application/Commercial/SelfServiceTrialStatus.php"
-VERSION = ROOT / "config/version.php"
 
 
 class SelfServiceTrialStatusTests(unittest.TestCase):
@@ -158,10 +157,6 @@ try {
         source = SOURCE.read_text(encoding="utf-8")
         self.assertNotIn("CommercialCatalogReader", source)
         self.assertNotIn("PlatformCommercialTenantSummary", source)
-        self.assertIn(
-            "'version' => '0.1.118'",
-            VERSION.read_text(encoding="utf-8"),
-        )
 
         syntax = subprocess.run(
             ["php", "-l", str(SOURCE)],
