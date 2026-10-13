@@ -332,7 +332,9 @@ def effective_state(
     max_age_seconds: int = MAX_AGE_SECONDS,
 ) -> str:
     """Fail closed on stale, malformed or internally contradictory probe evidence."""
-    if (type(observation) is not dict or not isinstance(now, datetime)
+    if (type(observation) is not dict
+            or set(observation) != {"state", "observed_at", "endpoints"}
+            or not isinstance(now, datetime)
             or now.tzinfo is None or type(max_age_seconds) is not int
             or max_age_seconds < 1):
         return "UNKNOWN"

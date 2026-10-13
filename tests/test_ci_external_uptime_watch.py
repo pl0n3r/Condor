@@ -361,6 +361,29 @@ class ExternalUptimeWatchTests(unittest.TestCase):
             "HEALTHY", uptime.effective_state(observation("HEALTHY", now), now=now)
         )
 
+    def test_observation_envelope_rejects_unexpected_metadata(self) -> None:
+        now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
+        clean = observation("HEALTHY", now)
+        self.assertEqual("HEALTHY", uptime.effective_state(clean, now=now))
+        for unexpected in (
+            {"unexpected_metadata": "PRIVATE-SENTINEL"},
+            {"sensitive_metadata": "PRIVATE-SENTINEL", "extra": True},
+        ):
+            with self.subTest(keys=tuple(unexpected)):
+                hostile = {**clean, **unexpected}
+                self.assertEqual("UNKNOWN", uptime.effective_state(hostile, now=now))
+                alert = {"number": 88, "state": "open",
+                         "body": uptime.alert_body("DEGRADED", observation("DEGRADED", now))}
+                action = uptime.decide(hostile, hostile, [alert], now=now)
+                self.assertNotEqual("close", action["action"])
+                self.assertEqual("UNKNOWN", action["state"])
+                self.assertNotIn("PRIVATE-SENTINEL", json.dumps(action))
+        for absent in ("state", "observed_at", "endpoints"):
+            with self.subTest(missing=absent):
+                incomplete = dict(clean)
+                del incomplete[absent]
+                self.assertEqual("UNKNOWN", uptime.effective_state(incomplete, now=now))
+
     def test_invalid_observer_clock_or_threshold_is_unknown(self) -> None:
         now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
         healthy = observation("HEALTHY", now)
