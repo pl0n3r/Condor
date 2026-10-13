@@ -26,7 +26,6 @@ final class Version20261012120000 extends AbstractMigration // NOSONAR -- nombre
                 active TINYINT(1) NOT NULL DEFAULT 1,
                 created_at DATETIME NOT NULL,
                 updated_at DATETIME NOT NULL,
-                INDEX IDX_PURCHASING_SUPPLIER_TENANT (tenant_id),
                 UNIQUE INDEX uniq_purchasing_supplier_tenant_code (tenant_id, code),
                 UNIQUE INDEX uniq_purchasing_supplier_tenant_id (tenant_id, id),
                 PRIMARY KEY(id),
