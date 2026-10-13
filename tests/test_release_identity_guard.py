@@ -98,6 +98,37 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
              "--base-sha", base], text=True, capture_output=True,
         )
 
+    def test_pr_without_version_bump_is_accepted_when_version_equals_base(self):
+        """A construction PR reuses the version, never the release tag."""
+        root, head = self.repo("0.1.77", "0.1.77")
+        base = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "update-ref", "refs/remotes/origin/main", base)
+        before_tag = git(root, "show-ref", "--tags")
+        before_head = git(root, "rev-parse", "HEAD")
+        result = self.pr_guard(root, "fix: code only (V 0.1.77)", head, base)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(git(root, "show-ref", "--tags"), before_tag)
+        self.assertEqual(git(root, "rev-parse", "HEAD"), before_head)
+
+    def test_two_prs_with_same_next_version_are_not_rejected_for_tag_reuse(self):
+        """Two parallel build PRs may retain the effective base version."""
+        root, first = self.repo("0.1.77", "0.1.77")
+        tagged = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "update-ref", "refs/remotes/origin/main", tagged)
+        before_tags = git(root, "show-ref", "--tags")
+        initial = self.pr_guard(root, "fix: parallel A (V 0.1.77)", first, tagged)
+        self.assertEqual(initial.returncode, 0, initial.stdout + initial.stderr)
+        # Model first code-only PR merging to main, without releasing.
+        git(root, "update-ref", "refs/remotes/origin/main", first)
+        git(root, "checkout", "-b", "parallel-b", tagged)
+        (root / "parallel-b.txt").write_text("independent", encoding="utf-8")
+        git(root, "add", ".")
+        git(root, "commit", "-m", "parallel code-only change")
+        second = git(root, "rev-parse", "HEAD")
+        result = self.pr_guard(root, "fix: parallel B (V 0.1.77)", second, first)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(git(root, "show-ref", "--tags"), before_tags)
+
     def test_pr_context_accepts_same_version_as_verified_main_without_reusing_release_tag(self):
         root, first = self.repo("0.1.77", "0.1.77")
         base = git(root, "rev-parse", "v0.1.77^{commit}")
