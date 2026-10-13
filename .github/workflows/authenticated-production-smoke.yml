@@ -1,6 +1,7 @@
 name: Condor smoke autenticado de producción (pre-live)
 
 on:
+  pull_request:
   workflow_dispatch:
   schedule:
     - cron: '17 5 * * *'
@@ -13,6 +14,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  offline:
+    name: Regresiones offline del smoke (sin credenciales)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Descargar código de la PR sin persistir credenciales
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verificar el contrato sintético sin acceso a producción
+        run: python3 -m unittest tests/test_authenticated_production_smoke.py
+
   identity:
     name: Confirmar identidad sintética (sin revelar secrets)
     if: github.ref == 'refs/heads/main'
