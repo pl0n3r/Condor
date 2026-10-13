@@ -74,7 +74,9 @@ jobs:
           with open(sys.argv[1], encoding="utf-8") as source:
               evidence = json.load(source)
           allowed = ("state", "reason", "observed_at", "version",
-                     "release_sha", "authenticated", "tenant_safe", "read_only")
+                     "release_sha", "authenticated", "tenant_safe", "read_only",
+                     "tenant_context_consistent", "unknown_branch_denied",
+                     "cross_tenant_verified")
           safe = {k: evidence[k] for k in allowed if k in evidence}
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as report:
               report.write("### Condor · smoke autenticado sintético\n\n")

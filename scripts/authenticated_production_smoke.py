@@ -30,6 +30,20 @@ class SmokeFailure(ValueError):
     """Error con código constante apto para logs, sin evidencia privada."""
 
 
+def _reject_duplicate_keys(pairs):
+    """Reject ambiguous JSON keys at every nesting level."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate_json_key")
+        result[key] = value
+    return result
+
+
+def strict_json(payload):
+    return json.loads(payload, object_pairs_hook=_reject_duplicate_keys)
+
+
 @dataclass(frozen=True)
 class Reply:
     status: int
@@ -116,7 +130,7 @@ def health(client, sha: str, expected_version: str) -> str:
     if response.status != 200:
         raise SmokeFailure("health_unavailable")
     try:
-        payload = json.loads(response.body)
+        payload = strict_json(response.body)
     except (ValueError, UnicodeDecodeError):
         raise SmokeFailure("invalid_health") from None
     if not isinstance(payload, dict):
@@ -134,7 +148,7 @@ def health(client, sha: str, expected_version: str) -> str:
 
 def context_safe(payload: bytes) -> bool:
     try:
-        context = json.loads(payload)
+        context = strict_json(payload)
     except (ValueError, UnicodeDecodeError):
         return False
     if not isinstance(context, dict):
@@ -149,8 +163,21 @@ def context_safe(payload: bytes) -> bool:
     if not isinstance(tenant.get("id"), str) or not tenant["id"]:
         return False
     identifier = active.get("id")
-    return (isinstance(identifier, str) and bool(identifier)
-            and any(isinstance(b, dict) and b.get("id") == identifier for b in branches))
+    if not isinstance(identifier, str) or not identifier:
+        return False
+    selected = [b for b in branches if isinstance(b, dict) and b.get("id") == identifier]
+    if len(selected) != 1:
+        return False
+    # The producer emits these projections of the same selected branch.
+    entities = (active.get("legal_entity"), selected[0].get("legal_entity"),
+                context.get("active_legal_entity"))
+    for entity in entities:
+        if entity is not None and (not isinstance(entity, dict)
+                                   or not isinstance(entity.get("id"), str)
+                                   or not entity["id"]):
+            return False
+    ids = tuple(entity["id"] if entity is not None else None for entity in entities)
+    return ids[0] == ids[1] == ids[2]
 
 
 def probe(client, email: str, password: str, sha: str, *,
@@ -182,6 +209,8 @@ def probe(client, email: str, password: str, sha: str, *,
     wrong_branch = client.request("GET", BAD_BRANCH)
     if wrong_branch.status != 403:
         raise SmokeFailure("unknown_branch_scope_not_denied")
+    # Detect a deployment change while authentication and scope checks run.
+    health(client, sha, expected_version)
     observed = clock() if clock else datetime.now(timezone.utc)
     if not isinstance(observed, datetime) or observed.tzinfo is None:
         raise SmokeFailure("invalid_clock")
@@ -189,7 +218,9 @@ def probe(client, email: str, password: str, sha: str, *,
         "state": "VALIDATED", "observed_at": observed.astimezone(timezone.utc)
         .replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "version": version, "release_sha": sha,
-        "authenticated": True, "tenant_safe": True, "read_only": True,
+        "authenticated": True, "tenant_safe": False, "read_only": True,
+        "tenant_context_consistent": True, "unknown_branch_denied": True,
+        "cross_tenant_verified": False,
     }
 
 

@@ -111,7 +111,10 @@ class AuthenticatedProductionSmokeTests(unittest.TestCase):
     def test_tenant_auth_dashboard_and_cross_scope_denial(self):
         client = FixtureClient()
         report = smoke.probe(client, "synthetic@example.test", "synthetic-pass", SHA, expected_version="0.1.194", clock=lambda: NOW)
-        self.assertTrue(report["tenant_safe"])
+        self.assertFalse(report["tenant_safe"])
+        self.assertTrue(report["tenant_context_consistent"])
+        self.assertTrue(report["unknown_branch_denied"])
+        self.assertFalse(report["cross_tenant_verified"])
         self.assertEqual("0.1.194", report["version"])
         self.assertEqual(SHA, report["release_sha"])
         self.assertTrue(all(m == "GET" for m, p, d in client.calls if p != "/admin/login"))
@@ -149,6 +152,72 @@ class AuthenticatedProductionSmokeTests(unittest.TestCase):
                 )
                 with self.assertRaises(smoke.SmokeFailure):
                     smoke.probe(broken, "synthetic@example.test", "private", SHA, expected_version="0.1.194")
+
+    def test_health_identity_remains_stable_through_the_full_probe(self):
+        stable = FixtureClient()
+        report = smoke.probe(stable, "synthetic@example.test", "private",
+                             SHA, expected_version="0.1.194", clock=lambda: NOW)
+        self.assertEqual("VALIDATED", report["state"])
+        self.assertEqual(2, sum(method == "GET" and path == "/health"
+                                for method, path, _ in stable.calls))
+
+        class ChangingHealth(FixtureClient):
+            def __init__(self):
+                super().__init__()
+                self.health_reads = 0
+
+            def request(self, method, path, data=None):
+                if method == "GET" and path == "/health":
+                    self.health_reads += 1
+                    if self.health_reads == 2:
+                        return smoke.Reply(200, json.dumps({
+                            "status": "ok", "version": "0.1.194",
+                            "release_sha": "b" * 40, "schema_up_to_date": True,
+                        }).encode())
+                return super().request(method, path, data)
+
+        changed = ChangingHealth()
+        with self.assertRaises(smoke.SmokeFailure):
+            smoke.probe(changed, "synthetic@example.test", "private",
+                        SHA, expected_version="0.1.194", clock=lambda: NOW)
+        self.assertEqual(2, changed.health_reads)
+
+    def test_json_duplicate_keys_fail_closed_for_health_and_tenant(self):
+        conflicting_health = FixtureClient()
+        conflicting_health.responses[("GET", "/health")] = smoke.Reply(
+            200, ('{"status":"ok","version":"0.1.194",'
+                  '"release_sha":"' + "b" * 40 + '",'
+                  '"schema_up_to_date":true,'
+                  '"release_sha":"' + SHA + '"}').encode())
+        with self.assertRaises(smoke.SmokeFailure):
+            smoke.probe(conflicting_health, "synthetic@example.test", "private",
+                        SHA, expected_version="0.1.194", clock=lambda: NOW)
+
+        conflicting_tenant = FixtureClient()
+        conflicting_tenant.responses[("GET", "/api/v1/context")] = smoke.Reply(
+            200, b'{"tenant":{"id":"synthetic","id":"different"},'
+                 b'"active_branch":{"id":"branch-1"},'
+                 b'"branches":[{"id":"branch-1"}]}')
+        with self.assertRaises(smoke.SmokeFailure):
+            smoke.probe(conflicting_tenant, "synthetic@example.test", "private",
+                        SHA, expected_version="0.1.194", clock=lambda: NOW)
+
+    def test_context_rejects_conflicting_legal_entity_projection(self):
+        inconsistent = FixtureClient()
+        inconsistent.responses[("GET", "/api/v1/context")] = smoke.Reply(
+            200, json.dumps({
+                "tenant": {"id": "synthetic"},
+                "active_branch": {
+                    "id": "branch-1", "legal_entity": {"id": "entity-A"},
+                },
+                "branches": [{
+                    "id": "branch-1", "legal_entity": {"id": "entity-B"},
+                }],
+                "active_legal_entity": {"id": "entity-A"},
+            }).encode())
+        with self.assertRaises(smoke.SmokeFailure):
+            smoke.probe(inconsistent, "synthetic@example.test", "private",
+                        SHA, expected_version="0.1.194", clock=lambda: NOW)
 
 
 if __name__ == "__main__":
