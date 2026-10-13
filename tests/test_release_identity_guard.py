@@ -138,6 +138,25 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         rejected = self.pr_guard(root, "feat: bump (V 0.1.78)", bumped, later_main)
         self.assertNotEqual(0, rejected.returncode)
 
+    def test_pr_context_same_version_source_edit_cannot_trigger_release(self):
+        root, code_only = self.repo("0.1.77", "0.1.77")
+        base = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "update-ref", "refs/remotes/origin/main", base)
+        source = root / "config/version.php"
+        source.write_text(source.read_text(encoding="utf-8") + "// cosmetic change\n", encoding="utf-8")
+        git(root, "add", "config/version.php")
+        git(root, "commit", "-m", "edit version source without new version")
+        modified_head = git(root, "rev-parse", "HEAD")
+        self.assertEqual(
+            "config/version.php",
+            git(root, "diff", "--name-only", base, modified_head, "--", "config/version.php"),
+        )
+        denied = self.pr_guard(root, "docs: version comment (V 0.1.77)", modified_head, base)
+        self.assertNotEqual(denied.returncode, 0)
+        self.assertIn("same-version PR modifies config/version.php", denied.stdout)
+        valid = self.pr_guard(root, "feat: code only (V 0.1.77)", code_only, base)
+        self.assertEqual(valid.returncode, 0, valid.stdout + valid.stderr)
+
     def test_release_metadata_dispatch_only_on_canonical_version_change(self):
         """Construction merges must not publish an existing release identity."""
         workflow = (ROOT / ".github/workflows/tag-release.yml").read_text(encoding="utf-8")
