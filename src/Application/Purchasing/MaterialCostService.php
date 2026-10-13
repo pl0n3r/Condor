@@ -31,9 +31,6 @@ final readonly class MaterialCostService
         $seen = [];
 
         foreach ($orders as $order) {
-            if (!$order instanceof PurchaseOrder) {
-                throw new DomainException('El histórico solo admite órdenes de compra.');
-            }
             // Nunca se consulta el contenido de un registro de otro tenant.
             if ($order->tenant()->id() !== $tenant->id() || !$order->isReceived()) {
                 continue;
