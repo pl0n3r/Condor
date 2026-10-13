@@ -1,11 +1,11 @@
 import json,subprocess,sys,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
-from scripts.release_identity_guard import GuardError, git as guarded_git
-
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0,str(ROOT))
+
+from scripts.release_identity_guard import GuardError, git as guarded_git
 
 from scripts.dependency_pr_promotion import (
     PromotionError, RUNTIME_DIR, build_plan, contract_fingerprint,
