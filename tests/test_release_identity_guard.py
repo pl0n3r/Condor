@@ -176,7 +176,14 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         base = git(root, "rev-parse", "v0.1.77^{commit}")
         git(root, "update-ref", "refs/remotes/origin/main", base)
         source = root / "config/version.php"
-        source.write_text(source.read_text(encoding="utf-8") + "// cosmetic change\n", encoding="utf-8")
+        # Cambiar solo espacios conserva el PHP canónico y ejercita el veto
+        # específico al diff de config/version.php, no el parser de PHP.
+        source.write_text(
+            source.read_text(encoding="utf-8").replace(
+                "return ['version' => '0.1.77'];",
+                "return [ 'version' => '0.1.77' ];",
+            ), encoding="utf-8",
+        )
         git(root, "add", "config/version.php")
         git(root, "commit", "-m", "edit version source without new version")
         modified_head = git(root, "rev-parse", "HEAD")
@@ -337,7 +344,11 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
                 scoped_pr = self.pr_guard(root, title, head, base)
                 for result in (release, scoped_pr):
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertIn("invalid SemVer", result.stdout)
+                    # VERSION_RE falla ya en la sintaxis PHP para dígitos
+                    # Unicode; los ceros iniciales llegan a sv() y fallan allí.
+                    expected = ("exactly one canonical version"
+                                if not candidate.isascii() else "invalid SemVer")
+                    self.assertIn(expected, result.stdout)
                 self.assertEqual(git(root, "show-ref", "--tags"), before_tags)
 
     def test_noncanonical_git_tags_cannot_replace_latest_canonical_release(self):
