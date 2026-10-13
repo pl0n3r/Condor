@@ -316,6 +316,10 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
             "<?php\nreturn [];\n// 'version' => '0.1.77'\n",
             "<?php\nreturn ['version' => '0.1.77'];\nreturn ['version' => '0.1.78'];\n",
             "<?php\nreturn ['version' => '0.1.77'];\nexit;\n",
+            "<?php\nreturn ['version\" => '0.1.77'];\n",
+            "<?php\nreturn ['version' => '0.1.77\"];\n",
+            "<?php\nreturn [\"version' => \"0.1.77\"];\n",
+            "<?php\nreturn [\"version\" => \"0.1.77'];\n",
         )
         for contents in malformed:
             with self.subTest(source=contents[:42]):
@@ -330,6 +334,15 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         self.write(root, "0.1.77")
         accepted = self.pr_guard(root, "code-only (V 0.1.77)", head, base)
         self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+        for canonical in (
+            '<?php\nreturn ["version" => "0.1.77"];\n',
+            '<?php\nreturn ["version" => \'0.1.77\'];\n',
+        ):
+            with self.subTest(canonical=canonical):
+                (root / "config/version.php").write_text(canonical, encoding="utf-8")
+                accepted = self.pr_guard(root, "code-only (V 0.1.77)", head, base)
+                self.assertEqual(0, accepted.returncode, accepted.stdout + accepted.stderr)
+                self.assertEqual(git(root, "show-ref", "--tags"), saved_tags)
 
     def test_noncanonical_semver_components_fail_closed_without_tag_mutation(self):
         # Leading zeroes are not canonical SemVer, in PR or release mode.
