@@ -6,7 +6,7 @@ from pathlib import Path
 # The file must BE the canonical PHP return array; a string in a comment,
 # unreachable second return or arbitrary PHP expression cannot claim a release.
 VERSION_RE=re.compile(
-    r"""\A<\?php\s+(?:declare\s*\(\s*strict_types\s*=\s*1\s*\)\s*;\s*)?return\s*\[\s*['"]version['"]\s*=>\s*['"]([0-9]+\.[0-9]+\.[0-9]+)['"]\s*,?\s*\]\s*;\s*\Z""",
+    r"""\A<\?php\s+(?:declare\s*\(\s*strict_types\s*=\s*1\s*\)\s*;\s*)?return\s*\[\s*(?P<key_quote>['"])version(?P=key_quote)\s*=>\s*(?P<value_quote>['"])(?P<version>[0-9]+\.[0-9]+\.[0-9]+)(?P=value_quote)\s*,?\s*\]\s*;\s*\Z""",
     re.ASCII,
 )
 TITLE_RE=re.compile(r"\(V (\d+\.\d+\.\d+)\)$")
@@ -83,7 +83,7 @@ def _verified_pr_version(root, sha, base_sha, candidate, version, tags, names):
     # An unchanged-version PR may be older than main but still merge cleanly.
     # A new release identity, by contrast, must start from current main.
     main_is_parent = git(root, "merge-base", base_sha, sha) == base_sha
-    original = VERSION_RE.findall(git(root, "show", f"{base_sha}:config/version.php"))
+    original = [m.group("version") for m in VERSION_RE.finditer(git(root, "show", f"{base_sha}:config/version.php"))]
     if len(original) != 1:
         raise GuardError("release_identity_guard: invalid trusted base version.")
     base_version = original[0]
@@ -116,7 +116,7 @@ def _verified_pr_version(root, sha, base_sha, candidate, version, tags, names):
 def validate(root,title,sha, *, context='release', base_sha=None):
     root=Path(root)
     if not SHA_RE.fullmatch(sha.lower()): raise GuardError("release_identity_guard: candidate SHA must be a full 40-char commit SHA.")
-    versions=VERSION_RE.findall((root/"config/version.php").read_text(encoding="utf-8"))
+    versions=[m.group("version") for m in VERSION_RE.finditer((root/"config/version.php").read_text(encoding="utf-8"))]
     if len(versions)!=1: raise GuardError("release_identity_guard: config/version.php must define exactly one canonical version.")
     version=versions[0]; sv(version)
     m=TITLE_RE.search(title)
