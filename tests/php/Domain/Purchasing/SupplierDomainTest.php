@@ -56,6 +56,40 @@ final class SupplierDomainTest extends TestCase
         }
     }
 
+    public function testSupplierRejectsInvisibleAndMalformedUnicodeNames(): void
+    {
+        $tenant = self::tenant('Propio');
+        foreach ([
+            "\u{00A0}", // Espacio no separable.
+            "\u{200B}", // Carácter sin anchura.
+            "\u{00A0}\u{200B}\u{00A0}",
+            "\xC3\x28", // UTF-8 incompleto.
+            str_repeat('ñ', 161),
+        ] as $name) {
+            try {
+                new Supplier($tenant, 'UNICODE', $name);
+                self::fail('Un nombre inválido debe rechazarse.');
+            } catch (DomainException) {
+                self::assertTrue(true);
+            }
+        }
+    }
+
+    public function testSupplierTrimsUnicodeWithoutMbstringAndPreservesVisibleNames(): void
+    {
+        $tenant = self::tenant('Propio');
+        $supplier = new Supplier($tenant, 'UNICODE', "\u{00A0}Muñecas Ñandú\u{00A0}");
+        self::assertSame('Muñecas Ñandú', $supplier->name());
+
+        $supplier->update('UNICODE', "\u{200B}Árbol,\u{00A0}S.A.\u{200B}", 15);
+        self::assertSame("Árbol,\u{00A0}S.A.", $supplier->name());
+        self::assertSame(15, $supplier->paymentTermsDays());
+
+        $maxLength = str_repeat('ñ', 160);
+        $supplier->update('UNICODE', $maxLength, 15);
+        self::assertSame($maxLength, $supplier->name());
+    }
+
     public function testServiceRejectsDuplicateCodeWithinTenantAndAllowsOtherTenant(): void
     {
         $own = self::tenant('Propio');
