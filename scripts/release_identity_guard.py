@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse,re,subprocess
+import argparse,os,re,subprocess
 from pathlib import Path
 
 VERSION_RE=re.compile(r"""['"]version['"]\s*=>\s*['"](\d+\.\d+\.\d+)['"]""")
@@ -55,7 +55,12 @@ def git(root,*args):
         "diff": [args[2],args[3],"--","config/version.php"] if verb=="diff" else [],
         "rev-list": [args[3]] if verb=="rev-list" else [],
     }
-    p=subprocess.run(prefixes[verb]+suffixes[verb],cwd=root,text=True,capture_output=True,check=False)
+    # Repository-location overrides from a parent process must not bypass cwd.
+    # The guard only performs read-only Git operations and needs no GIT_* settings.
+    clean_env = {key: value for key, value in os.environ.items()
+                 if not key.startswith("GIT_")}
+    p=subprocess.run(prefixes[verb]+suffixes[verb],cwd=root,text=True,
+                     capture_output=True,check=False,env=clean_env)
     if p.returncode: raise GuardError("release_identity_guard: "+(p.stderr.strip() or p.stdout.strip()))
     return p.stdout.strip()
 
