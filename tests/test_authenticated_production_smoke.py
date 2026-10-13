@@ -71,6 +71,22 @@ class AuthenticatedProductionSmokeTests(unittest.TestCase):
         self.assertIn("EXPECTED_MAIN_SHA:", workflow)
         self.assertNotIn("set -x", workflow)
 
+    def test_sonar_triage_is_read_only_and_fails_closed(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        sonar = workflow.split("  sonar_triage:\n", 1)[1].split("  identity:\n", 1)[0]
+        self.assertIn("github.event_name == 'pull_request'", sonar)
+        self.assertIn("checks: read", sonar)
+        self.assertIn("PR_HEAD_SHA:", sonar)
+        self.assertIn("PR_NUMBER:", sonar)
+        self.assertIn("SonarCloud%20Code%20Analysis", sonar)
+        self.assertIn("componentKeys=pl0n3r_Condor", sonar)
+        self.assertIn("total != expected", sonar)
+        self.assertIn("raise Unverified()", sonar)
+        self.assertIn('state = "UNKNOWN"', sonar)
+        self.assertIn('sys.exit(0 if state == "NO_HIGH_FINDINGS" else 1)', sonar)
+        self.assertNotIn("secrets.", sonar)
+        self.assertNotIn("condorapp.com.co", sonar)
+
     def test_login_csrf_and_same_origin_are_mandatory(self):
         client = FixtureClient()
         report = smoke.probe(client, "synthetic@example.test", "secret-only-test",

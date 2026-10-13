@@ -27,6 +27,129 @@ jobs:
       - name: Verificar el contrato sintético sin acceso a producción
         run: python3 -m unittest tests/test_authenticated_production_smoke.py
 
+  sonar_triage:
+    name: Clasificar SonarCloud sin credenciales (exact-HEAD)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: Consultar reglas y severidades de SonarCloud (solo GitHub y SonarCloud)
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import collections
+          import json
+          import os
+          import re
+          import sys
+          from urllib.request import Request, urlopen
+          
+          class Unverified(Exception):
+              pass
+          
+          def read_json(url, token=None):
+              headers = {"Accept": "application/vnd.github+json" if token else "application/json",
+                         "User-Agent": "Condor-Prelive-Sonar-Audit/1"}
+              if token:
+                  headers["Authorization"] = "Bearer " + token
+              with urlopen(Request(url, headers=headers), timeout=12) as response:
+                  raw = response.read(512 * 1024 + 1)
+              if len(raw) > 512 * 1024:
+                  raise Unverified()
+              return json.loads(raw)
+          
+          def audit():
+              sha = os.environ["PR_HEAD_SHA"]
+              number = os.environ["PR_NUMBER"]
+              token = os.environ["GH_TOKEN"]
+              if not re.fullmatch(r"[0-9a-f]{40}", sha) or not re.fullmatch(r"[0-9]{1,8}", number):
+                  raise Unverified()
+              if not token:
+                  raise Unverified()
+              check_url = ("https://api.github.com/repos/pl0n3r/Condor/commits/" + sha
+                           + "/check-runs?check_name=SonarCloud%20Code%20Analysis&per_page=10")
+              checks = read_json(check_url, token)
+              matching = [item for item in checks.get("check_runs", [])
+                          if item.get("name") == "SonarCloud Code Analysis"
+                          and item.get("head_sha") == sha
+                          and item.get("status") == "completed"
+                          and item.get("conclusion") == "success"]
+              if len(matching) != 1 or checks.get("total_count") != 1:
+                  raise Unverified()
+              expected = matching[0].get("output", {}).get("annotations_count")
+              if type(expected) is not int:
+                  raise Unverified()
+          
+              query = ("https://sonarcloud.io/api/issues/search?componentKeys=pl0n3r_Condor"
+                       "&pullRequest=" + number + "&issueStatuses=OPEN%2CCONFIRMED&ps=100&p=1")
+              result = read_json(query)
+              findings = result.get("issues")
+              total = result.get("total")
+              if (not isinstance(findings, list) or type(total) is not int
+                      or total != len(findings) or total != expected or total > 100):
+                  raise Unverified()
+              known_types = {"BUG", "VULNERABILITY", "CODE_SMELL"}
+              known_severities = {"INFO", "LOW", "MINOR", "MEDIUM", "MAJOR",
+                                  "HIGH", "CRITICAL", "BLOCKER"}
+              severe = {"HIGH", "CRITICAL", "BLOCKER"}
+              details = collections.Counter()
+              blocked = []
+              for finding in findings:
+                  kind = finding.get("type")
+                  severity = finding.get("severity")
+                  impacts = finding.get("impacts") or []
+                  if kind is not None and kind not in known_types:
+                      raise Unverified()
+                  if severity is not None and severity not in known_severities:
+                      raise Unverified()
+                  if not isinstance(impacts, list):
+                      raise Unverified()
+                  impact_severity = []
+                  for impact in impacts:
+                      if (not isinstance(impact, dict)
+                              or impact.get("softwareQuality") not in {"SECURITY", "RELIABILITY", "MAINTAINABILITY"}
+                              or impact.get("severity") not in known_severities):
+                          raise Unverified()
+                      impact_severity.append((impact["softwareQuality"], impact["severity"]))
+                  if severity is None and not impact_severity:
+                      raise Unverified()
+                  if kind is None and not impact_severity:
+                      raise Unverified()
+                  details[(kind or "IMPACT_ONLY", severity or "IMPACT_SEVERITY")] += 1
+                  if ((kind in {"BUG", "VULNERABILITY"} and severity in severe)
+                          or any(quality in {"SECURITY", "RELIABILITY"} and rank in severe
+                                 for quality, rank in impact_severity)):
+                      blocked.append(finding.get("rule", "rule-unavailable"))
+              return total, details, blocked
+          
+          state = "UNKNOWN"
+          summary = ["### SonarCloud · clasificación exact-HEAD (solo lectura)", ""]
+          try:
+              total, details, blocked = audit()
+              state = "BLOCKED" if blocked else "NO_HIGH_FINDINGS"
+              summary.append("Resultado: " + state)
+              summary.append("Incidencias verificadas: " + str(total))
+              for (kind, severity), count in sorted(details.items()):
+                  summary.append("- " + kind + " / " + severity + ": " + str(count))
+              if blocked:
+                  summary.append("Reglas con posible severidad grave: "
+                                 + ", ".join(sorted({str(rule)[:80] for rule in blocked})))
+          except Exception:
+              summary.append("Resultado: UNKNOWN (fuente incompleta, inaccesible o SHA no acreditado)")
+          summary.append("Este job no evalua secretos ni solicita endpoints de produccion.")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
+              stream.write("\n".join(summary) + "\n")
+          print("SonarCloud security audit:", state)
+          sys.exit(0 if state == "NO_HIGH_FINDINGS" else 1)
+          PY
+
   identity:
     name: Confirmar identidad sintética (sin revelar secrets)
     if: github.ref == 'refs/heads/main' && vars.CONDOR_AUTH_SMOKE_ENABLED == 'true'
