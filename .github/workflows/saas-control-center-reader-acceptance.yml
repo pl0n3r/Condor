@@ -1,0 +1,40 @@
+# Ejecuta los criterios AC-01..03 del lector comercial (Issue #640).
+# Solo PR a main; sin secretos, servicios, tenant real ni despliegues.
+name: Aceptación lector SaaS Control Center
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/Application/Commercial/SaasControlCenterReader.php'
+      - 'tests/test_saas_control_center_reader_contract.py'
+      - '.github/workflows/saas-control-center-reader-acceptance.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: saas-reader-acceptance-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  reader-acceptance:
+    name: AC-01..03 lector SaaS (PHP offline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Descargar SHA exacto sin persistir credenciales
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Preparar PHP 8.5 reproducible
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Ejecutar contrato AC-01..03 y regresiones negativas
+        run: python3 -m unittest tests/test_saas_control_center_reader_contract.py -v
