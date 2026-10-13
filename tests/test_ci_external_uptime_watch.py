@@ -99,6 +99,51 @@ class ExternalUptimeWatchTests(unittest.TestCase):
             )
         )
 
+    def test_empty_home_200_is_not_healthy_and_cannot_close_alert(self) -> None:
+        now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
+        def fake_fetch(path: str, *, timeout: float, limit: int) -> dict[str, object]:
+            if path == uptime.HEALTH_PATH:
+                return {"status": 200, "content_type": "application/json",
+                        "body": json.dumps({
+                            "status": "ok", "version": "0.1.194",
+                            "release_sha": "a" * 40, "schema_up_to_date": True
+                        }).encode()}
+            return {"status": 200, "content_type": "text/html", "body": b""}
+
+        observed = uptime.probe(fake_fetch, now=now)
+        self.assertEqual("DEGRADED", observed["state"])
+        self.assertNotEqual("ok", observed["endpoints"][1]["outcome"])
+        open_alert = {"number": 77, "state": "open",
+                      "body": uptime.alert_body("DEGRADED", observation("DEGRADED", now))}
+        result = uptime.decide(observed, observed, [open_alert], now=now)
+        self.assertNotEqual("close", result["action"])
+        self.assertEqual("DEGRADED", result["state"])
+        self.assertEqual("degraded", uptime.probe_home(fake_fetch)["outcome"])
+
+    def test_boolean_issue_id_fails_closed_for_close_and_update(self) -> None:
+        now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
+        existing = {"number": True, "state": "open",
+                    "body": uptime.alert_body("DEGRADED", observation("DEGRADED", now))}
+        for state in ("HEALTHY", "UNKNOWN"):
+            with self.subTest(state=state):
+                sample = observation(state, now)
+                result = uptime.decide(sample, sample, [existing], now=now)
+                self.assertEqual("error", result["action"])
+                self.assertEqual("UNKNOWN", result["state"])
+                self.assertNotIn("issue_number", result)
+
+    def test_extreme_utc_offsets_fail_closed_without_overflow(self) -> None:
+        now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
+        for text in ("0001-01-01T00:00:00+01:00",
+                     "9999-12-31T23:59:59-01:00"):
+            with self.subTest(value=text):
+                self.assertIsNone(uptime.parse_time(text))
+                altered = observation("HEALTHY", now)
+                altered["observed_at"] = text
+                self.assertEqual("UNKNOWN", uptime.effective_state(altered, now=now))
+                body = uptime.alert_body("UNKNOWN", altered)
+                self.assertIn("Observed at: `unknown`", body)
+
     def test_states_and_freshness_are_explicit(self) -> None:
         now = datetime(2026, 10, 6, 13, 0, tzinfo=timezone.utc)
         for state in ("HEALTHY", "DEGRADED", "UNKNOWN"):

@@ -77,11 +77,12 @@ def parse_time(value: object) -> datetime | None:
         return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return None
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError):
+        # Converting a valid extreme offset can overflow datetime.min/max.
         return None
-    if parsed.tzinfo is None:
-        return None
-    return parsed.astimezone(timezone.utc)
 
 
 def canonical_observed_time(value: object) -> datetime | None:
@@ -233,6 +234,10 @@ def probe_home(fetcher: Callable[..., dict[str, object]]) -> dict[str, object]:
         )
     if response.get("content_type") != "text/html":
         return endpoint_evidence("home", "degraded", "content_type", status)
+    body = response.get("body")
+    if not isinstance(body, (bytes, bytearray)) or not body.strip():
+        # A blank 200 HTML response does not prove the home is rendered.
+        return endpoint_evidence("home", "degraded", "contract", status)
     return endpoint_evidence("home", "ok", "ok", status)
 
 
@@ -470,7 +475,7 @@ def decide(
         if existing is None:
             return {"action": "noop", "state": "HEALTHY", "reason": "already_clear"}
         number = existing.get("number")
-        if not isinstance(number, int) or number < 1:
+        if type(number) is not int or number < 1:
             return {"action": "error", "state": "UNKNOWN", "reason": "invalid_issue"}
         return {
             "action": "close",
@@ -494,7 +499,7 @@ def decide(
         }
 
     number = existing.get("number")
-    if not isinstance(number, int) or number < 1:
+    if type(number) is not int or number < 1:
         return {"action": "error", "state": "UNKNOWN", "reason": "invalid_issue"}
     if last_recorded_state(existing) == aggregate:
         return {
