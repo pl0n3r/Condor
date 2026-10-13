@@ -106,7 +106,7 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         before_tag = git(root, "show-ref", "--tags")
         before_head = git(root, "rev-parse", "HEAD")
         result = self.pr_guard(root, "fix: code only (V 0.1.77)", head, base)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertEqual(git(root, "show-ref", "--tags"), before_tag)
         self.assertEqual(git(root, "rev-parse", "HEAD"), before_head)
 
