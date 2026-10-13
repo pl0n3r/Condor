@@ -313,6 +313,31 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
                     self.assertIn("invalid SemVer", result.stdout)
                 self.assertEqual(git(root, "show-ref", "--tags"), before_tags)
 
+    def test_noncanonical_git_tags_cannot_replace_latest_canonical_release(self):
+        # Un tag v0.01.999 o con digitos Unicode no es identidad
+        # SemVer valida; no puede eclipsar la release 0.1.77.
+        invalid_tags=("v0.01.999", "v0.1.٩٩٩", "v00.1.888")
+        root,head=self.repo("0.1.77","0.1.78")
+        for name in invalid_tags:
+            git(root,"tag","-a",name,"-m","noncanonical ignored")
+        tags_before=git(root,"show-ref","--tags")
+        result=self.run_guard(root,"fix: new release (V 0.1.78)",head)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn("latest=v0.1.77",result.stdout)
+        self.assertEqual(git(root,"show-ref","--tags"),tags_before)
+
+        # Construccion sin bump con un tag valido de ancestro. Los
+        # tags invalidos nunca hacen que el tag real parezca no-latest.
+        root,head=self.repo("0.1.77","0.1.77")
+        base=git(root,"rev-parse","v0.1.77^{commit}")
+        git(root,"update-ref","refs/remotes/origin/main",base)
+        for name in invalid_tags:
+            git(root,"tag","-a",name,"-m","noncanonical ignored")
+        before=git(root,"show-ref","--tags")
+        result=self.pr_guard(root,"fix: code only (V 0.1.77)",head,base)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual(git(root,"show-ref","--tags"),before)
+
     def test_pr_title_version_must_match_canonical_version(self):
         r,sha=self.repo("0.1.77","0.1.78"); p=self.run_guard(r,"ci: mismatch (V 0.1.79)",sha)
         self.assertNotEqual(p.returncode,0); self.assertIn("does not match",p.stdout)
