@@ -90,7 +90,7 @@ final class PurchaseOrderDomainTest extends TestCase
     public function testQuantityCostAndDuplicateMaterialMustBeValid(): void
     {
         $tenant = new Tenant('Principal', 'principal');
-        $order = new PurchaseOrder($tenant, new Supplier($tenant, 'SUP-1', 'Proveedor'));
+        $order = new PurchaseOrder($tenant, self::legalEntity($tenant), new Supplier($tenant, 'SUP-1', 'Proveedor'));
         $material = self::material($tenant);
         foreach ([['0', '5'], ['-1', '5'], ['1', '-0.01'], ['1', '12.34567']] as [$quantity, $price]) {
             try {
