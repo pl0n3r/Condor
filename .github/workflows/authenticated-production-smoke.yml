@@ -49,6 +49,7 @@ jobs:
           import os
           import re
           import sys
+          import time
           from urllib.request import Request, urlopen
           
           class Unverified(Exception):
@@ -75,13 +76,20 @@ jobs:
                   raise Unverified()
               check_url = ("https://api.github.com/repos/pl0n3r/Condor/commits/" + sha
                            + "/check-runs?check_name=SonarCloud%20Code%20Analysis&per_page=10")
-              checks = read_json(check_url, token)
-              matching = [item for item in checks.get("check_runs", [])
-                          if item.get("name") == "SonarCloud Code Analysis"
-                          and item.get("head_sha") == sha
-                          and item.get("status") == "completed"
-                          and item.get("conclusion") == "success"]
-              if len(matching) != 1 or checks.get("total_count") != 1:
+              # SonarCloud posts its external check asynchronously after CI begins.
+              # Wait at most 11 x 8 seconds; never accept a mismatched or failed check.
+              for attempt in range(12):
+                  checks = read_json(check_url, token)
+                  matching = [item for item in checks.get("check_runs", [])
+                              if item.get("name") == "SonarCloud Code Analysis"
+                              and item.get("head_sha") == sha
+                              and item.get("status") == "completed"
+                              and item.get("conclusion") == "success"]
+                  if len(matching) == 1 and checks.get("total_count") == 1:
+                      break
+                  if attempt < 11:
+                      time.sleep(8)
+              else:
                   raise Unverified()
               expected = matching[0].get("output", {}).get("annotations_count")
               if type(expected) is not int:

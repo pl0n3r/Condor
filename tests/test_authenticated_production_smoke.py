@@ -2,6 +2,7 @@
 """Regresiones offline del smoke sintético, sin acceso a producción."""
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import unittest
@@ -82,6 +83,13 @@ class AuthenticatedProductionSmokeTests(unittest.TestCase):
         self.assertIn("componentKeys=pl0n3r_Condor", sonar)
         self.assertIn("total != expected", sonar)
         self.assertIn("raise Unverified()", sonar)
+        self.assertIn("for attempt in range(12):", sonar)
+        self.assertIn("time.sleep(8)", sonar)
+        self.assertIn("if attempt < 11:", sonar)
+        # Fail closed when the external Sonar check never becomes complete.
+        self.assertIn('else:\n                  raise Unverified()', sonar)
+        script = sonar.split("          python3 - <<'PY'\n", 1)[1].split("          PY\n", 1)[0]
+        ast.parse("\n".join(line[10:] for line in script.splitlines()))
         self.assertIn('state = "UNKNOWN"', sonar)
         self.assertIn('sys.exit(0 if state == "NO_HIGH_FINDINGS" else 1)', sonar)
         self.assertNotIn("secrets.", sonar)
