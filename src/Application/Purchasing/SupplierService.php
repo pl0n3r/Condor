@@ -50,6 +50,18 @@ final readonly class SupplierService
 
     private function assertCodeAvailable(Tenant $tenant, string $code, ?Supplier $current = null): void
     {
+        // Los persist() pendientes no aparecen en findOneBy() antes de flush().
+        foreach ($this->entityManager->getUnitOfWork()->getScheduledEntityInsertions() as $pending) {
+            if (
+                $pending instanceof Supplier
+                && $pending->tenant()->id() === $tenant->id()
+                && $pending->code() === $code
+                && ($current === null || $pending->id() !== $current->id())
+            ) {
+                throw new DomainException('Ya existe un proveedor con ese código en el tenant.');
+            }
+        }
+
         $existing = $this->entityManager->getRepository(Supplier::class)->findOneBy([
             'tenant' => $tenant,
             'code' => $code,

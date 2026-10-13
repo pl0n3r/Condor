@@ -37,11 +37,50 @@ class ReadmeContractAdoptionTests(unittest.TestCase):
         self.assertIn("| main SHA | UNKNOWN |",status)
         self.assertIn("| Readiness | UNKNOWN |",progress)
 
-    def test_consumer_workflow_uses_factory_v1(self):
-        wf=self.read(".github/workflows/readme-contract.yml")
-        self.assertIn("uses: pl0n3r/factory/.github/workflows/readme.yml@v1",wf)
-        self.assertIn("readme_path: README.md",wf); self.assertIn("metadata_path: readme/project.json",wf)
-        self.assertNotIn("readme.yml@main",wf)
+    def test_readme_caller_only_on_document_changes(self):
+        """F2B: preserve exact reusable README validation on documentation edits."""
+        workflow=self.read(".github/workflows/readme-contract.yml")
+        expected=["README.md","readme/**",".github/workflows/readme-contract.yml"]
+
+        def paths(source,event,next_event):
+            section=source.split(f"  {event}:\n",1)[1].split(f"\n  {next_event}:\n",1)[0]
+            return [line.strip()[2:].strip("'\\\"")
+                    for line in section.splitlines() if line.strip().startswith("- ")]
+
+        self.assertIn("  workflow_dispatch:\n",workflow)
+        self.assertIn("    branches: [main]\n",workflow)
+        self.assertIn("    types: [opened, synchronize, reopened, ready_for_review]",workflow)
+        self.assertEqual(2,workflow.count("    paths:\n"))
+        for event,next_event in (("pull_request","push"),("push","workflow_dispatch")):
+            with self.subTest(event=event):
+                self.assertEqual(expected,paths(workflow,event,next_event))
+                self.assertEqual(1,workflow.split(f"  {event}:\n",1)[1].split(f"\n  {next_event}:\n",1)[0].count("    paths:\n"))
+
+        # Test negative mutations for BOTH event scopes independently:
+        # a narrow pull_request filter cannot mask an unsafe push filter.
+        for event,next_event in (("pull_request","push"),("push","workflow_dispatch")):
+            original=workflow.split(f"  {event}:\n",1)[1].split(f"\n  {next_event}:\n",1)[0]
+            variants=[
+                original.replace("- 'readme/**'","- '**'",1),
+                original.replace("      - 'README.md'\n","",1),
+                original.replace("- '.github/workflows/readme-contract.yml'","- 'src/**'",1),
+            ]
+            for case,changed in enumerate(variants):
+                with self.subTest(event=event,case=case):
+                    self.assertNotEqual(original,changed)
+                    candidate=workflow.replace(
+                        f"  {event}:\n"+original+f"\n  {next_event}:\n",
+                        f"  {event}:\n"+changed+f"\n  {next_event}:\n",1)
+                    self.assertNotEqual(expected,paths(candidate,event,next_event))
+
+        self.assertIn("uses: pl0n3r/factory/.github/workflows/readme.yml@v1",workflow)
+        self.assertIn("readme_path: README.md",workflow)
+        self.assertIn("metadata_path: readme/project.json",workflow)
+        self.assertIn("permissions:\n  contents: read",workflow)
+        self.assertNotIn("contents: write",workflow)
+        self.assertNotIn("readme.yml@main",workflow)
+        self.assertIn("cancel-in-progress: true",workflow)
+        self.assertIn("github.event.pull_request.draft == false",workflow)
 
     def test_work_queue_links_canonical_roadmap(self):
         text=self.read("README.md")

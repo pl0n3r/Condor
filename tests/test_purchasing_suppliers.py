@@ -49,6 +49,7 @@ class PurchasingSuppliersTests(unittest.TestCase):
         self.assertIn("assertCodeAvailable", source)
         self.assertIn("$supplier->tenant()->id() !== $tenant->id()", source)
         self.phpunit("testServiceRejectsDuplicateCodeWithinTenantAndAllowsOtherTenant")
+        self.phpunit("testServiceRejectsPendingDuplicateBeforeFlushAndAllowsOtherTenant")
         self.phpunit("testServiceRejectsCrossTenantMutationAndAllowsOwnedDeactivate")
 
     def test_migration_is_additive_and_rollback_is_guarded(self) -> None:

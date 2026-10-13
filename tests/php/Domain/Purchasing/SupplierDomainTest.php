@@ -9,6 +9,7 @@ use App\Domain\Organization\Entity\Tenant;
 use App\Domain\Purchasing\Entity\Supplier;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityRepository;
+use Doctrine\ORM\UnitOfWork;
 use DomainException;
 use PHPUnit\Framework\TestCase;
 
@@ -107,6 +108,7 @@ final class SupplierDomainTest extends TestCase
         );
         $manager = $this->createMock(EntityManagerInterface::class);
         $manager->method('getRepository')->with(Supplier::class)->willReturn($repository);
+        $manager->method('getUnitOfWork')->willReturn($this->createMock(UnitOfWork::class));
         $manager->expects(self::once())->method('persist')->with(self::isInstanceOf(Supplier::class));
         $service = new SupplierService($manager);
 
@@ -119,6 +121,47 @@ final class SupplierDomainTest extends TestCase
         $created = $service->create($foreign, ' sup-01 ', 'Válido en otro tenant', 15);
         self::assertSame($foreign->id(), $created->tenant()->id());
         self::assertSame('SUP-01', $created->code());
+    }
+
+    public function testServiceRejectsPendingDuplicateBeforeFlushAndAllowsOtherTenant(): void
+    {
+        $own = self::tenant('Propio');
+        $foreign = self::tenant('Ajeno');
+        $scheduled = [];
+
+        $repository = $this->createMock(EntityRepository::class);
+        $repository->method('findOneBy')->willReturn(null);
+        $unitOfWork = $this->createMock(UnitOfWork::class);
+        $unitOfWork->method('getScheduledEntityInsertions')->willReturnCallback(
+            static function () use (&$scheduled): array {
+                return $scheduled;
+            },
+        );
+        $manager = $this->createMock(EntityManagerInterface::class);
+        $manager->method('getRepository')->with(Supplier::class)->willReturn($repository);
+        $manager->method('getUnitOfWork')->willReturn($unitOfWork);
+        $manager->expects(self::exactly(2))->method('persist')->willReturnCallback(
+            static function (object $entity) use (&$scheduled): void {
+                $scheduled[] = $entity;
+            },
+        );
+        $service = new SupplierService($manager);
+
+        $first = $service->create($own, 'SUP-01', 'Primero');
+        self::assertCount(1, $scheduled);
+        try {
+            $service->create($own, ' sup-01 ', 'Duplicado antes del flush');
+            self::fail('Dos persist sin flush deben rechazar el código repetido.');
+        } catch (DomainException $error) {
+            self::assertStringContainsString('Ya existe', $error->getMessage());
+        }
+        self::assertCount(1, $scheduled);
+        self::assertSame($first, $scheduled[0]);
+
+        $other = $service->create($foreign, 'sup-01', 'Permitido en otro tenant');
+        self::assertSame('SUP-01', $other->code());
+        self::assertSame($foreign->id(), $other->tenant()->id());
+        self::assertCount(2, $scheduled);
     }
 
     public function testServiceRejectsCrossTenantMutationAndAllowsOwnedDeactivate(): void
