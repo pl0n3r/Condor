@@ -297,6 +297,33 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
     def test_non_monotonic_version_is_rejected_but_forward_gap_is_allowed(self):
         r,sha=self.repo("0.1.77","0.1.76"); self.assertNotEqual(self.run_guard(r,"ci: lower (V 0.1.76)",sha).returncode,0)
         r,sha=self.repo("0.1.77","0.1.80"); self.assertEqual(self.run_guard(r,"ci: gap (V 0.1.80)",sha).returncode,0)
+    def test_version_from_commented_or_unreachable_php_never_authorizes_release(self):
+        """A coincidental 'version' string is not executable metadata."""
+        root, head = self.repo("0.1.77", "0.1.77")
+        base = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "update-ref", "refs/remotes/origin/main", base)
+        saved_tags = git(root, "show-ref", "--tags")
+        malformed = (
+            "<?php\n// return ['version' => '0.1.77'];\n",
+            "<?php\n/* return ['version' => '0.1.77']; */\nreturn [];\n",
+            "<?php\nreturn [];\n// 'version' => '0.1.77'\n",
+            "<?php\nreturn ['version' => '0.1.77'];\nreturn ['version' => '0.1.78'];\n",
+            "<?php\nreturn ['version' => '0.1.77'];\nexit;\n",
+        )
+        for contents in malformed:
+            with self.subTest(source=contents[:42]):
+                (root / "config/version.php").write_text(contents, encoding="utf-8")
+                for result in (
+                    self.run_guard(root, "release (V 0.1.77)", head),
+                    self.pr_guard(root, "code-only (V 0.1.77)", head, base),
+                ):
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("exactly one canonical version", result.stdout)
+                self.assertEqual(git(root, "show-ref", "--tags"), saved_tags)
+        self.write(root, "0.1.77")
+        accepted = self.pr_guard(root, "code-only (V 0.1.77)", head, base)
+        self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+
     def test_noncanonical_semver_components_fail_closed_without_tag_mutation(self):
         # Leading zeroes are not canonical SemVer, in PR or release mode.
         for candidate in ("01.1.77", "0.01.77", "0.1.077", "1٢.1.77", "0.1٣.77", "0.1.7٤"):
