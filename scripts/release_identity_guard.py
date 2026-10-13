@@ -3,7 +3,12 @@ from __future__ import annotations
 import argparse,os,re,subprocess
 from pathlib import Path
 
-VERSION_RE=re.compile(r"""['"]version['"]\s*=>\s*['"](\d+\.\d+\.\d+)['"]""")
+# The file must BE the canonical PHP return array; a string in a comment,
+# unreachable second return or arbitrary PHP expression cannot claim a release.
+VERSION_RE=re.compile(
+    r"""\A<\?php\s+(?:declare\s*\(\s*strict_types\s*=\s*1\s*\)\s*;\s*)?return\s*\[\s*['"]version['"]\s*=>\s*['"]([0-9]+\.[0-9]+\.[0-9]+)['"]\s*,?\s*\]\s*;\s*\Z""",
+    re.ASCII,
+)
 TITLE_RE=re.compile(r"\(V (\d+\.\d+\.\d+)\)$")
 TAG_RE=re.compile(r"^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 SHA_RE=re.compile(r"^[0-9a-f]{40}$")
