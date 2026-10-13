@@ -44,6 +44,9 @@ def _verified_pr_version(root, sha, base_sha, candidate, version, tags, names):
         if not main_is_parent:
             raise GuardError("release_identity_guard: new-version PR head is not based on current main.")
         return None
+    common_parent = git(root, "merge-base", base_sha, sha)
+    if git(root, "diff", "--name-only", common_parent, sha, "--", "config/version.php"):
+        raise GuardError("release_identity_guard: same-version PR modifies config/version.php.")
     if candidate not in names:
         raise GuardError("release_identity_guard: unchanged PR version lacks authentic tag.")
     if git(root, "cat-file", "-t", f"refs/tags/{candidate}") != "tag":
