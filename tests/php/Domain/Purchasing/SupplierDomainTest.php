@@ -99,6 +99,35 @@ final class SupplierDomainTest extends TestCase
         self::assertSame($maxLength, $supplier->name());
     }
 
+    public function testSupplierRejectsEmbeddedControlsAndBidiOverrides(): void
+    {
+        $tenant = self::tenant('Propio');
+        $supplier = new Supplier($tenant, 'VALID', 'Nombre válido', 15);
+        foreach ([
+            "Proveedor\x1B[31m", // Secuencia ANSI en un nombre visible.
+            "Proveedor\x00Falso", // NUL incrustado.
+            "Proveedor\nS.A.", // Inyección de línea.
+            "Proveedor\u{202E}ABCD", // Right-to-left override.
+            "Proveedor\u{2066}ABCD", // Unicode bidi isolate.
+        ] as $invalidName) {
+            try {
+                new Supplier($tenant, 'NUEVO', $invalidName);
+                self::fail('Un control incrustado no puede usarse en el nombre.');
+            } catch (DomainException) {
+                self::assertTrue(true);
+            }
+
+            try {
+                $supplier->update('CAMBIO', $invalidName, 30);
+                self::fail('Una actualización con controles debe fallar cerrada.');
+            } catch (DomainException) {
+                self::assertSame('VALID', $supplier->code());
+                self::assertSame('Nombre válido', $supplier->name());
+                self::assertSame(15, $supplier->paymentTermsDays());
+            }
+        }
+    }
+
     public function testServiceRejectsDuplicateCodeWithinTenantAndAllowsOtherTenant(): void
     {
         $own = self::tenant('Propio');

@@ -40,6 +40,7 @@ class PurchasingSuppliersTests(unittest.TestCase):
         self.phpunit("testSupplierNormalizesCodeAndKeepsTenantScope")
         self.phpunit("testSupplierRejectsInvalidCodeNameAndPaymentTerms")
         self.phpunit("testSupplierRejectsInvisibleAndMalformedUnicodeNames")
+        self.phpunit("testSupplierRejectsEmbeddedControlsAndBidiOverrides")
         self.phpunit("testSupplierTrimsUnicodeWithoutMbstringAndPreservesVisibleNames")
 
     def test_service_rejects_duplicate_code_within_tenant_but_allows_other_tenant(self) -> None:
