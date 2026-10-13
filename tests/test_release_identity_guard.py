@@ -1,5 +1,7 @@
 import json,subprocess,sys,tempfile,unittest
 from pathlib import Path
+from unittest.mock import patch
+from scripts.release_identity_guard import GuardError, git as guarded_git
 
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -209,6 +211,30 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         git(newer, "update-ref", "refs/remotes/origin/main", ref)
         self.assertNotEqual(
             self.pr_guard(newer, "downgrade (V 0.1.78)", head, ref).returncode, 0)
+
+    def test_guarded_git_rejects_unapproved_commands_before_subprocess(self):
+        root, head = self.repo("0.1.77", "0.1.77")
+        invalid = (
+            ("config", "user.email", "attacker.invalid"),
+            ("tag", "--delete", "v0.1.77"),
+            ("show", "--output=/tmp/unsafe"),
+            ("cat-file", "-t", "--batch"),
+            ("cat-file", "-t", "refs/tags/v0.1.77^{commit}"),
+            ("rev-list", "-n", "1", "--exec=sh"),
+            ("diff", "--name-only", head, head, "--", "../secrets"),
+            ("merge-base", "--octopus", head),
+            ("rev-parse", "--git-dir"),
+            ("cat-file", "-t", head + ";whoami"),
+        )
+        for arguments in invalid:
+            with self.subTest(arguments=arguments):
+                with patch("scripts.release_identity_guard.subprocess.run") as runner:
+                    with self.assertRaises(GuardError):
+                        guarded_git(root, *arguments)
+                    runner.assert_not_called()
+        self.assertEqual(guarded_git(root, "tag", "--list"), "v0.1.77")
+        self.assertEqual(guarded_git(root, "cat-file", "-t", head + "^{commit}"), "commit")
+        self.assertEqual(guarded_git(root, "merge-base", head, head), head)
 
     def test_ci_pr_preflight_only_uses_context_scoped_identity_check(self):
         workflow = CI.read_text(encoding="utf-8")

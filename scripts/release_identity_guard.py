@@ -15,7 +15,24 @@ def sv(s):
     if not m: raise GuardError(f"release_identity_guard: invalid SemVer {s!r}.")
     return tuple(map(int,m.groups()))
 
+_SAFE_GIT_COMMANDS = tuple(re.compile(pattern) for pattern in (
+    r"tag\x00--list",
+    r"rev-parse\x00refs/remotes/origin/main",
+    r"cat-file\x00-t\x00[0-9a-f]{40}\^\{commit\}",
+    r"cat-file\x00-t\x00refs/tags/v[0-9]+\.[0-9]+\.[0-9]+",
+    r"merge-base\x00[0-9a-f]{40}\x00[0-9a-f]{40}",
+    r"show\x00[0-9a-f]{40}:config/version\.php",
+    r"diff\x00--name-only\x00[0-9a-f]{40}\x00[0-9a-f]{40}\x00--\x00config/version\.php",
+    r"rev-list\x00-n\x001\x00v[0-9]+\.[0-9]+\.[0-9]+",
+))
+
+
 def git(root,*args):
+    # Only the read-only operations used by this identity guard may reach Git.
+    # Reject unexpected verbs, flags, non-string arguments and embedded NULs.
+    if (not args or any(type(a) is not str or "\x00" in a for a in args)
+            or not any(rule.fullmatch("\x00".join(args)) for rule in _SAFE_GIT_COMMANDS)):
+        raise GuardError("release_identity_guard: unapproved Git command arguments.")
     p=subprocess.run(["git",*args],cwd=root,text=True,capture_output=True)
     if p.returncode: raise GuardError("release_identity_guard: "+(p.stderr.strip() or p.stdout.strip()))
     return p.stdout.strip()
