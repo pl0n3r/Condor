@@ -299,7 +299,7 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         r,sha=self.repo("0.1.77","0.1.80"); self.assertEqual(self.run_guard(r,"ci: gap (V 0.1.80)",sha).returncode,0)
     def test_noncanonical_semver_components_fail_closed_without_tag_mutation(self):
         # Leading zeroes are not canonical SemVer, in PR or release mode.
-        for candidate in ("01.1.77", "0.01.77", "0.1.077"):
+        for candidate in ("01.1.77", "0.01.77", "0.1.077", "1٢.1.77", "0.1٣.77", "0.1.7٤"):
             with self.subTest(candidate=candidate):
                 root, head = self.repo("0.1.77", candidate)
                 base = git(root, "rev-parse", "v0.1.77^{commit}")
