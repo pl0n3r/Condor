@@ -21,6 +21,7 @@ final class Version20261012121000 extends AbstractMigration // NOSONAR -- nombre
                 id VARCHAR(26) NOT NULL,
                 tenant_id VARCHAR(26) NOT NULL,
                 supplier_id VARCHAR(26) NOT NULL,
+                legal_entity_id VARCHAR(26) NOT NULL,
                 status VARCHAR(20) NOT NULL DEFAULT 'draft',
                 receipt_key VARCHAR(80) DEFAULT NULL,
                 receipt_source_id VARCHAR(26) DEFAULT NULL,
@@ -30,11 +31,15 @@ final class Version20261012121000 extends AbstractMigration // NOSONAR -- nombre
                 UNIQUE INDEX uniq_purchasing_order_tenant_id (tenant_id, id),
                 UNIQUE INDEX uniq_purchasing_order_tenant_receipt (tenant_id, receipt_key),
                 INDEX idx_purchasing_order_supplier (tenant_id, supplier_id),
+                INDEX idx_purchasing_order_legal_entity (tenant_id, legal_entity_id),
                 CONSTRAINT FK_PURCHASING_ORDER_TENANT
                     FOREIGN KEY (tenant_id) REFERENCES condor_tenant (id) ON DELETE CASCADE,
                 CONSTRAINT FK_PURCHASING_ORDER_SUPPLIER
                     FOREIGN KEY (tenant_id, supplier_id)
                     REFERENCES condor_purchasing_supplier (tenant_id, id) ON DELETE RESTRICT,
+                CONSTRAINT FK_PURCHASING_ORDER_LEGAL_ENTITY
+                    FOREIGN KEY (tenant_id, legal_entity_id)
+                    REFERENCES condor_legal_entity (tenant_id, id) ON DELETE RESTRICT,
                 CONSTRAINT CHK_PURCHASING_ORDER_STATUS
                     CHECK (status IN ('draft', 'received'))
             ) DEFAULT CHARACTER SET utf8mb4

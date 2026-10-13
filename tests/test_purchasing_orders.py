@@ -29,10 +29,13 @@ class PurchasingOrdersTests(unittest.TestCase):
         line = LINE.read_text(encoding="utf-8")
         migration = MIGRATION.read_text(encoding="utf-8")
         self.assertIn("$supplier->tenant()->id() !== $tenant->id()", order)
+        self.assertIn("$legalEntity->tenant()->id() !== $tenant->id()", order)
+        self.assertIn("$source->legalEntity()->id() !== $order->legalEntity()->id()", SERVICE.read_text(encoding="utf-8"))
         self.assertIn("$material->tenant()->id() !== $this->tenant->id()", order)
         self.assertIn("$order->tenant()->id() !== $material->tenant()->id()", line)
         for key in (
             "FOREIGN KEY (tenant_id, supplier_id)",
+            "FOREIGN KEY (tenant_id, legal_entity_id)",
             "FOREIGN KEY (tenant_id, order_id)",
             "FOREIGN KEY (tenant_id, material_id)",
         ):
@@ -52,6 +55,7 @@ class PurchasingOrdersTests(unittest.TestCase):
             self.assertIn(token, service)
         self.assertIn("UNIQUE INDEX uniq_purchasing_order_tenant_receipt (tenant_id, receipt_key)", migration)
         self.phpunit("testPurchaseOrderStateIsMonotonicAndIdempotent")
+        self.phpunit("testReceiptReplayAfterDeactivationAndLegalEntityIsolation")
 
     def test_receive_delegates_stock_entry_to_material_inventory_service(self):
         service = SERVICE.read_text(encoding="utf-8")

@@ -6,9 +6,11 @@ namespace App\Application\Purchasing;
 
 use App\Application\Production\MaterialInventoryService;
 use App\Domain\Inventory\Entity\InventorySource;
+use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use App\Domain\Production\Entity\Material;
 use App\Domain\Purchasing\Entity\PurchaseOrder;
+use App\Domain\Purchasing\Entity\Supplier;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
@@ -22,13 +24,13 @@ final readonly class PurchaseOrderService
     ) {
     }
 
-    /** @param list<array{material:Material,quantity:string,unitCost:string}> $items */
-    public function create(Tenant $tenant, \App\Domain\Purchasing\Entity\Supplier $supplier, array $items): PurchaseOrder
+    /** @param list<array<string,mixed>> $items */
+    public function create(Tenant $tenant, LegalEntity $legalEntity, Supplier $supplier, array $items): PurchaseOrder
     {
         if ($items === []) {
             throw new DomainException('La orden de compra debe incluir al menos una línea.');
         }
-        $order = new PurchaseOrder($tenant, $supplier);
+        $order = new PurchaseOrder($tenant, $legalEntity, $supplier);
         foreach ($items as $item) {
             if (!isset($item['material'], $item['quantity'], $item['unitCost'])
                 || !$item['material'] instanceof Material
@@ -52,7 +54,7 @@ final readonly class PurchaseOrderService
         ?string $actorUserId = null,
     ): PurchaseOrder {
         $key = PurchaseOrder::normalizeReceiptKey($idempotencyKey);
-        self::assertScope($tenant, $source, $order);
+        self::assertScope($tenant, $source, $order, false);
 
         try {
             return $this->entityManager->wrapInTransaction(
@@ -65,6 +67,7 @@ final readonly class PurchaseOrderService
                         $order->assertSameReceipt($key, $source->id());
                         return $order;
                     }
+                    self::assertScope($tenant, $source, $order, true);
                     $other = $entityManager->getRepository(PurchaseOrder::class)->findOneBy([
                         'tenant' => $tenant,
                         'receiptKey' => $key,
@@ -95,17 +98,27 @@ final readonly class PurchaseOrderService
         }
     }
 
-    private static function assertScope(Tenant $tenant, InventorySource $source, PurchaseOrder $order): void
+    private static function assertScope(
+        Tenant $tenant,
+        InventorySource $source,
+        PurchaseOrder $order,
+        bool $requireActive,
+    ): void
     {
         if ($order->tenant()->id() !== $tenant->id()
             || $order->supplier()->tenant()->id() !== $tenant->id()
             || $source->tenant()->id() !== $tenant->id()
-            || !$source->isActive()
+            || $order->legalEntity()->tenant()->id() !== $tenant->id()
+            || $source->legalEntity()->id() !== $order->legalEntity()->id()
+            || ($requireActive && !$source->isActive())
         ) {
             throw new DomainException('La orden, proveedor y fuente deben pertenecer al tenant activo.');
         }
         foreach ($order->lines() as $line) {
-            if ($line->material()->tenant()->id() !== $tenant->id() || !$line->material()->isActive()) {
+            if ($line->tenant()->id() !== $tenant->id()
+                || $line->material()->tenant()->id() !== $tenant->id()
+                || ($requireActive && !$line->material()->isActive())
+            ) {
                 throw new DomainException('La recepción contiene material ajeno o inactivo.');
             }
         }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Purchasing\Entity;
 
 use App\Domain\Organization\Entity\Tenant;
+use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Production\Entity\Material;
 use App\Shared\Id\UlidFactory;
 use DateTimeImmutable;
@@ -35,6 +36,10 @@ class PurchaseOrder
     #[ORM\JoinColumn(name: 'supplier_id', referencedColumnName: 'id', nullable: false, onDelete: 'RESTRICT')]
     private Supplier $supplier;
 
+    #[ORM\ManyToOne(targetEntity: LegalEntity::class)]
+    #[ORM\JoinColumn(name: 'legal_entity_id', referencedColumnName: 'id', nullable: false, onDelete: 'RESTRICT')]
+    private LegalEntity $legalEntity;
+
     #[ORM\Column(type: 'string', length: 20)]
     private string $status = self::STATUS_DRAFT;
 
@@ -54,13 +59,17 @@ class PurchaseOrder
     #[ORM\OneToMany(mappedBy: 'purchaseOrder', targetEntity: PurchaseOrderLine::class, cascade: ['persist'], orphanRemoval: true)]
     private Collection $lines;
 
-    public function __construct(Tenant $tenant, Supplier $supplier)
+    public function __construct(Tenant $tenant, LegalEntity $legalEntity, Supplier $supplier)
     {
+        if ($legalEntity->tenant()->id() !== $tenant->id()) {
+            throw new DomainException('La entidad legal de la orden debe pertenecer al mismo tenant.');
+        }
         if ($supplier->tenant()->id() !== $tenant->id() || !$supplier->isActive()) {
             throw new DomainException('La orden requiere un proveedor activo del mismo tenant.');
         }
         $this->id = UlidFactory::new();
         $this->tenant = $tenant;
+        $this->legalEntity = $legalEntity;
         $this->supplier = $supplier;
         $this->createdAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $this->lines = new ArrayCollection();
@@ -68,6 +77,7 @@ class PurchaseOrder
 
     public function id(): string { return $this->id; }
     public function tenant(): Tenant { return $this->tenant; }
+    public function legalEntity(): LegalEntity { return $this->legalEntity; }
     public function supplier(): Supplier { return $this->supplier; }
     public function status(): string { return $this->status; }
     public function receiptKey(): ?string { return $this->receiptKey; }

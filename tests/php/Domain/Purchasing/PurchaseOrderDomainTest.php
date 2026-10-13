@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace App\Tests\Domain\Purchasing;
 
 use App\Domain\Organization\Entity\Tenant;
+use App\Domain\Organization\Entity\LegalEntity;
+use App\Domain\Inventory\Entity\InventorySource;
+use App\Application\Purchasing\PurchaseOrderService;
+use App\Application\Production\MaterialInventoryService;
+use Doctrine\ORM\EntityManagerInterface;
 use App\Domain\Production\Entity\Material;
 use App\Domain\Production\ValueObject\UnitOfMeasure;
 use App\Domain\Purchasing\Entity\PurchaseOrder;
@@ -14,6 +19,11 @@ use PHPUnit\Framework\TestCase;
 
 final class PurchaseOrderDomainTest extends TestCase
 {
+    private static function legalEntity(Tenant $tenant): LegalEntity
+    {
+        return new LegalEntity($tenant, 'Organización sintética', null);
+    }
+
     private static function material(Tenant $tenant, string $code = 'TELA'): Material
     {
         return new Material($tenant, $code, 'Tela', UnitOfMeasure::from('m'));
@@ -26,13 +36,21 @@ final class PurchaseOrderDomainTest extends TestCase
         $supplier = new Supplier($own, 'SUP-1', 'Proveedor');
         $foreignSupplier = new Supplier($foreign, 'SUP-2', 'Proveedor ajeno');
         try {
-            new PurchaseOrder($own, $foreignSupplier);
+            new PurchaseOrder($own, self::legalEntity($own), $foreignSupplier);
             self::fail('Un proveedor ajeno no puede crear una orden.');
         } catch (DomainException) {
             self::assertTrue(true);
         }
 
-        $order = new PurchaseOrder($own, $supplier);
+        try {
+            new PurchaseOrder($own, self::legalEntity($foreign), $supplier);
+            self::fail('No debe aceptarse una entidad legal de otro tenant.');
+        } catch (DomainException) {
+            self::assertTrue(true);
+        }
+        $legal = self::legalEntity($own);
+        $order = new PurchaseOrder($own, $legal, $supplier);
+        self::assertSame($legal->id(), $order->legalEntity()->id());
         try {
             $order->addLine(self::material($foreign), '1', '20');
             self::fail('Un material de otro tenant no puede añadirse.');
@@ -47,7 +65,7 @@ final class PurchaseOrderDomainTest extends TestCase
     public function testPurchaseOrderStateIsMonotonicAndIdempotent(): void
     {
         $tenant = new Tenant('Principal', 'principal');
-        $order = new PurchaseOrder($tenant, new Supplier($tenant, 'SUP-1', 'Proveedor'));
+        $order = new PurchaseOrder($tenant, self::legalEntity($tenant), new Supplier($tenant, 'SUP-1', 'Proveedor'));
         $order->addLine(self::material($tenant), '2', '35');
         $sourceId = str_repeat('A', 26);
         $order->markReceived('receive:1', $sourceId);
@@ -90,4 +108,50 @@ final class PurchaseOrderDomainTest extends TestCase
             self::assertCount(1, $order->lines());
         }
     }
+    public function testReceiptReplayAfterDeactivationAndLegalEntityIsolation(): void
+    {
+        $tenant = new Tenant('Principal', 'principal');
+        $legal = self::legalEntity($tenant);
+        $otherLegal = self::legalEntity($tenant);
+        $source = new InventorySource($tenant, $legal, 'Almacén', 'almacen', InventorySource::TYPE_LOGICAL);
+        $wrongSource = new InventorySource($tenant, $otherLegal, 'Almacén ajeno', 'almacen-ajeno', InventorySource::TYPE_LOGICAL);
+        $material = self::material($tenant);
+        $order = new PurchaseOrder($tenant, $legal, new Supplier($tenant, 'SUP-1', 'Proveedor'));
+        $order->addLine($material, '3', '100');
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('wrapInTransaction')->willReturnCallback(
+            static function (callable $callback) use ($em): mixed {
+                return $callback($em);
+            },
+        );
+        $service = new PurchaseOrderService($em, new MaterialInventoryService($em));
+        try {
+            $service->receive($tenant, $wrongSource, $order, 'receive:1');
+            self::fail('No recibir en otra entidad legal aunque sea el mismo tenant.');
+        } catch (DomainException) {
+            self::assertFalse($order->isReceived());
+        }
+
+        $order->markReceived('receive:1', $source->id());
+        $material->deactivate();
+        $source->deactivate();
+        self::assertSame($order, $service->receive($tenant, $source, $order, 'receive:1'));
+        self::assertTrue($order->isReceived());
+
+        try {
+            $service->receive($tenant, $source, $order, 'receive:otra');
+            self::fail('Replay con otra clave debe rechazarse.');
+        } catch (DomainException) {
+            self::assertSame('receive:1', $order->receiptKey());
+        }
+
+        try {
+            $service->receive($tenant, $wrongSource, $order, 'receive:1');
+            self::fail('Replay entre entidades legales diferentes debe rechazarse.');
+        } catch (DomainException) {
+            self::assertSame($source->id(), $order->receiptSourceId());
+        }
+    }
+
 }
