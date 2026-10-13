@@ -545,7 +545,8 @@ def read_work_json(file_path: Path) -> object:
         raise ValueError("input_outside_workdir")
     if resolved_file.stat().st_size > MAX_INPUT_BYTES:
         raise ValueError("input_too_large")
-    return json.loads(resolved_file.read_text(encoding="utf-8"))
+    return json.loads(resolved_file.read_text(encoding="utf-8"),
+                      object_pairs_hook=strict_json_object)
 
 
 def parse_now(value: str | None) -> datetime:

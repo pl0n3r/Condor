@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -98,6 +99,28 @@ class ExternalUptimeWatchTests(unittest.TestCase):
                 None, None, 302, "redirect", {}, "https://example.test/"
             )
         )
+
+    def test_workflow_json_rejects_ambiguous_samples_before_recovery(self) -> None:
+        from unittest.mock import patch
+        now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
+        sample = observation("HEALTHY", now)
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            with patch.object(uptime, "WORK_DIR", directory):
+                evidence = directory / "sample-1.json"
+                for raw in (
+                    '{"state":"DEGRADED","state":"HEALTHY",'
+                    '"observed_at":"' + ts(now) + '","endpoints":' +
+                    json.dumps(sample["endpoints"]) + '}',
+                    '{"state":"HEALTHY","observed_at":"' + ts(now) +
+                    '","endpoints":[{"endpoint":"readiness","endpoint":"home"}]}',
+                ):
+                    with self.subTest(body=raw[:90]):
+                        evidence.write_text(raw, encoding="utf-8")
+                        with self.assertRaisesRegex(ValueError, "duplicate_json_key"):
+                            uptime.read_work_json(evidence)
+                evidence.write_text(json.dumps(sample), encoding="utf-8")
+                self.assertEqual(sample, uptime.read_work_json(evidence))
 
     def test_duplicate_health_json_keys_are_never_healthy(self) -> None:
         now = datetime(2026, 10, 11, 15, 0, tzinfo=timezone.utc)
