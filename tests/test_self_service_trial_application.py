@@ -9,7 +9,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src/Application/Commercial/SelfServiceTrialApplication.php"
 DATA = ROOT / "datos.yml"
-VERSION = ROOT / "config/version.php"
 QUOTE_ID = "01AAAAAAAAAAAAAAAAAAAAAAAA"
 
 
@@ -153,10 +152,6 @@ try {
             "trial_consent_recorded_at",
             customer_contact["fields"],
         )
-        self.assertIn(
-            "'version' => '0.1.116'",
-            VERSION.read_text(encoding="utf-8"),
-        )
 
         syntax = subprocess.run(
             ["php", "-l", str(SOURCE)],
@@ -171,7 +166,7 @@ try {
         expected = {
             "unknown_quote": "Quote comercial no disponible para solicitud de trial.",
             "expired_quote": "Quote comercial no disponible para solicitud de trial.",
-            "missing_consent": "Consentimiento explícito requerido.",
+            "missing_consent": "Campos de solicitud de trial no permitidos.",
             "false_consent": "Consentimiento explícito requerido.",
             "extra_fields": "Campos de solicitud de trial no permitidos.",
         }

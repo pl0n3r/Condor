@@ -12,7 +12,6 @@ CANONICAL_CREATOR = (
     ROOT / "src/Application/Commercial/PlatformCommercialTrialCreator.php"
 )
 LIFECYCLE = ROOT / "src/Domain/Commercial/SubscriptionLifecycle.php"
-VERSION = ROOT / "config/version.php"
 
 
 class SelfServiceTrialReviewTests(unittest.TestCase):
@@ -23,9 +22,9 @@ namespace App\Application\Commercial {
     {
         public array $calls = [];
 
-        public function create(string $tenantId): array
+        public function create(string $tenantId, ?string $quoteId = null): array
         {
-            $this->calls[] = $tenantId;
+            $this->calls[] = [$tenantId, $quoteId];
 
             return [
                 'status' => 'configured',
@@ -82,6 +81,12 @@ namespace {
         case 'non_owner':
             $reviewer = $normal;
             break;
+        case 'missing_quote':
+            unset($application['quote_id']);
+            break;
+        case 'empty_quote':
+            $application['quote_id'] = ' ';
+            break;
         default:
             throw new \RuntimeException('Escenario desconocido.');
     }
@@ -132,7 +137,7 @@ namespace {
     def test_owner_approval_uses_existing_business_trial_contract_without_client_controlled_plan_or_duration(self) -> None:
         response = self.scenario("success")
         self.assertTrue(response["ok"])
-        self.assertEqual(["tenant-alpha"], response["calls"])
+        self.assertEqual([["tenant-alpha", "01AAAAAAAAAAAAAAAAAAAAAAAA"]], response["calls"])
         self.assertEqual("approved", response["result"]["status"])
         self.assertEqual("tenant-alpha", response["result"]["tenant_id"])
         self.assertEqual(
@@ -152,7 +157,7 @@ namespace {
         source = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PlatformCommercialTrialCreator", source)
         self.assertIn(
-            "$this->trialCreator->create($targetTenantId)",
+            "$targetTenantId,\n                $quoteId,",
             source,
         )
         for forbidden in (
@@ -168,10 +173,6 @@ namespace {
         self.assertIn("=== 'business'", canonical)
         self.assertIn("SubscriptionState::Trialing", canonical)
         self.assertIn("TRIAL_DURATION_DAYS = 14", lifecycle)
-        self.assertIn(
-            "'version' => '0.1.117'",
-            VERSION.read_text(encoding="utf-8"),
-        )
 
         syntax = subprocess.run(
             ["php", "-l", str(SOURCE)],
@@ -195,6 +196,8 @@ namespace {
             "non_owner": (
                 "Solo el dueño de plataforma puede revisar solicitudes de trial."
             ),
+            "missing_quote": "Solicitud de trial incompatible con revisión owner-only.",
+            "empty_quote": "Solicitud de trial pendiente con datos inválidos.",
         }
         for scenario, message in expected.items():
             with self.subTest(scenario=scenario):
