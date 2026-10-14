@@ -144,9 +144,6 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
             ->getRepository(UsageObservation::class)
             ->findBy(['tenantId' => $tenantId]);
         foreach ($records as $record) {
-            if (!$record instanceof UsageObservation) {
-                throw new DomainException('Registro de uso inválido.');
-            }
             $ledger->add($record->toRecord());
         }
 
