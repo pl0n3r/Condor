@@ -21,16 +21,38 @@ type State =
   | { status: 'permission-denied' }
   | { status: 'error' };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isKey(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,79}$/.test(value);
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** Validate the entire server payload before rendering commercial facts. */
 function isProjection(value: unknown, tenantId: string): value is Projection {
-  if (!value || typeof value !== 'object') return false;
-  const row = value as Record<string, unknown>;
-  return row.state === 'ready'
-    && row.tenant_id === tenantId
-    && !!row.plan
-    && typeof row.plan === 'object'
-    && Array.isArray(row.add_ons)
-    && Array.isArray(row.usage)
-    && Array.isArray(row.entitlements);
+  if (!isRecord(value) || !isRecord(value.plan)) return false;
+  const plan = value.plan;
+  if (value.state !== 'ready' || value.tenant_id !== tenantId
+      || !isKey(plan.key) || !isKey(plan.version)
+      || typeof plan.currency !== 'string' || !/^[A-Z]{3}$/.test(plan.currency)
+      || !isCount(plan.price_minor)
+      || !Array.isArray(value.add_ons) || value.add_ons.length > 128
+      || !Array.isArray(value.usage) || value.usage.length > 128
+      || !Array.isArray(value.entitlements) || value.entitlements.length > 128) {
+    return false;
+  }
+  return value.add_ons.every((row: unknown) =>
+    isRecord(row) && isKey(row.key) && isCount(row.price_minor)
+    && typeof row.active === 'boolean')
+    && value.usage.every((row: unknown) =>
+      isRecord(row) && isKey(row.metric) && isCount(row.used) && isCount(row.limit))
+    && value.entitlements.every((row: unknown) =>
+      isRecord(row) && isKey(row.key) && typeof row.allowed === 'boolean');
 }
 
 function money(minor: number, currency: string): string {
