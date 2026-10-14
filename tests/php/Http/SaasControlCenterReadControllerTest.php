@@ -170,4 +170,12 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
         self::assertStringContainsString('Datos comerciales no disponibles.', $raw);
         self::assertStringNotContainsString($tenant->id(), $raw);
     }
+    private function entityManager(): EntityManagerInterface
+    {
+        $manager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+
+        return $manager;
+    }
+
 }
