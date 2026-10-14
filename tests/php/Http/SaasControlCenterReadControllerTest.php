@@ -120,6 +120,32 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
         self::assertSame(12, $revoked->limit('users'));
     }
 
+    public function testTenantWithoutSubscriptionRemainsUnknownNotKnownZero(): void
+    {
+        $client = static::createClient();
+        $em = $this->entityManager();
+        $owner = new User('saas-empty-owner@example.test', 'Owner', [User::ROLE_PLATFORM_OWNER]);
+        $tenant = new Tenant('Tenant without commercial data', 'saas-no-subscription');
+        $em->persist($owner);
+        $em->persist($tenant);
+        $em->flush();
+
+        $client->loginUser($owner);
+        $client->request(
+            'GET', '/adminpl0n3r/api/tenants/'.$tenant->id().'/saas-control-center'
+        );
+        self::assertResponseIsSuccessful();
+        $payload = json_decode(
+            (string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR
+        );
+        self::assertSame('empty', $payload['state']);
+        self::assertSame($tenant->id(), $payload['tenant_id']);
+        foreach (['plan', 'add_ons', 'usage', 'entitlements'] as $field) {
+            self::assertArrayHasKey($field, $payload);
+            self::assertNull($payload[$field], $field.' not observed, not known zero');
+        }
+    }
+
     public function testNonOwnerAndUnknownTenantFailClosed(): void
     {
         $client = static::createClient();
