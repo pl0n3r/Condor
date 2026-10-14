@@ -50,13 +50,34 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
           previous_sha="${{ github.event.before }}"
-          previous_version=""
-          if [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]] && [[ "$previous_sha" != "0000000000000000000000000000000000000000" ]]; then
-            previous_version="$(
-              git show "${previous_sha}:config/version.php" 2>/dev/null                 | grep -oP "'version'\s*=>\s*'\K[^']+"                 || true
-            )"
+          if [[ ! "$previous_sha" =~ ^[0-9a-f]{40}$ ]] || [[ "$previous_sha" == "0000000000000000000000000000000000000000" ]]; then
+            echo "::error::D-043 exige SHA anterior canónico para reconocer una release nueva."
+            exit 1
+          fi
+          if ! git cat-file -e "${previous_sha}^{commit}" || ! git merge-base --is-ancestor "$previous_sha" "${{ github.sha }}"; then
+            echo "::error::D-043 no puede verificar la ascendencia del commit anterior."
+            exit 1
+          fi
+          previous_version="$(
+            git show "${previous_sha}:config/version.php" \
+              | grep -oP "'version'\s*=>\s*'\K[^']+" \
+              || true
+          )"
+          if [[ -z "$previous_version" ]]; then
+            echo "::error::D-043 no pudo leer versión previa; no se infiere release."
+            exit 1
           fi
           echo "previous_version=$previous_version" >> "$GITHUB_OUTPUT"
+
+          version_unchanged=false
+          if [[ "$previous_version" == "$version" ]]; then
+            if ! git diff --quiet "$previous_sha" "${{ github.sha }}" -- config/version.php; then
+              echo "::error::D-043: config/version.php cambió sin incremento de SemVer."
+              exit 1
+            fi
+            version_unchanged=true
+          fi
+          echo "version_unchanged=$version_unchanged" >> "$GITHUB_OUTPUT"
 
           bootstrap_previous=false
           if [[ -n "$previous_version" && "$previous_version" != "$version" ]]; then
@@ -88,6 +109,16 @@ jobs:
           fi
           echo "bootstrap_only=$bootstrap_only" >> "$GITHUB_OUTPUT"
 
+      - name: Registrar push sin release D-043
+        if: ${{ steps.version.outputs.version_unchanged == 'true' }}
+        run: |
+          {
+            echo "### D-043: push de código sin nueva release"
+            echo "- Estado productivo: **NO_EVALUADO**; este push no ejecutó smoke D-043."
+            echo "- La versión canónica no cambió; no se registra una identidad nueva de release."
+            echo "- Pendientes previas mantienen su identidad y NO se declaran validadas."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Resolver fase D-043 desde la puerta canónica
         id: fase
         env:
@@ -108,7 +139,7 @@ jobs:
           echo "Fase D-043 resuelta desde #389: $phase" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Auto-validar baseline D-043 previa en construcción
-        if: ${{ steps.version.outputs.bootstrap_only == 'true' || steps.version.outputs.bootstrap_previous == 'true' }}
+        if: ${{ (steps.version.outputs.bootstrap_only == 'true' || steps.version.outputs.bootstrap_previous == 'true') && steps.version.outputs.version_unchanged != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           FASE_CONDOR: ${{ steps.fase.outputs.value }}
@@ -261,7 +292,7 @@ jobs:
           echo "Baseline D-043 previa auto-validada con evidencia exacta; registrada también en #389." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Detectar cambios de la release
-        if: ${{ steps.version.outputs.bootstrap_only != 'true' }}
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.version.outputs.version_unchanged != 'true' }}
         id: transicion
         run: |
           set -euo pipefail
@@ -277,7 +308,7 @@ jobs:
           echo "requerida=$requiere" >> "$GITHUB_OUTPUT"
 
       - name: Construir manifiesto canónico actual
-        if: ${{ steps.version.outputs.bootstrap_only != 'true' }}
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.version.outputs.version_unchanged != 'true' }}
         id: manifiesto
         env:
           VERSION_ESPERADA: ${{ steps.version.outputs.version }}
@@ -291,7 +322,7 @@ jobs:
             > /tmp/release-current-manifest.json
 
       - name: Acumular transiciones D-043 pendientes
-        if: ${{ steps.version.outputs.bootstrap_only != 'true' }}
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.version.outputs.version_unchanged != 'true' }}
         id: acumulado
         env:
           GH_TOKEN: ${{ github.token }}
@@ -358,7 +389,7 @@ jobs:
           echo "requerida=$requerida" >> "$GITHUB_OUTPUT"
 
       - name: Observar producción en modo solo lectura
-        if: ${{ steps.version.outputs.bootstrap_only != 'true' }}
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.version.outputs.version_unchanged != 'true' }}
         id: smoke
         env:
           VERSION_ESPERADA: ${{ steps.version.outputs.version }}
@@ -429,7 +460,7 @@ jobs:
 
       - name: Capturar evidencia post-deploy para D-043 desarrollo
         id: post_deploy_dev
-        if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.acumulado.outputs.requerida == 'true' }}
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.version.outputs.version_unchanged != 'true' && steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.acumulado.outputs.requerida == 'true' }}
         env:
           VERSION_ESPERADA: ${{ steps.version.outputs.version }}
           SHA_ESPERADO: ${{ github.sha }}
@@ -473,7 +504,7 @@ jobs:
 
       - name: Evaluar auto-validación D-043 de desarrollo
         id: auto_dev
-        if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.acumulado.outputs.requerida == 'true' }}
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.version.outputs.version_unchanged != 'true' && steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.acumulado.outputs.requerida == 'true' }}
         env:
           FASE_CONDOR: ${{ steps.fase.outputs.value }}
         run: |
@@ -525,7 +556,7 @@ jobs:
           done
 
       - name: Publicar tarjeta humana D-043 pendiente
-        if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.acumulado.outputs.requerida == 'true' && steps.auto_dev.outputs.validada != 'true' }}
+        if: ${{ steps.version.outputs.bootstrap_only != 'true' && steps.version.outputs.version_unchanged != 'true' && steps.smoke.outputs.estado == 'DEPLOY_OBSERVED' && steps.acumulado.outputs.requerida == 'true' && steps.auto_dev.outputs.validada != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           STOREFRONT_SLUG: ${{ vars.STOREFRONT_SLUG }}
@@ -566,7 +597,7 @@ jobs:
           fi
 
       - name: Registrar estado observado en el roadmap
-        if: ${{ always() && steps.version.outputs.bootstrap_only != 'true' && steps.smoke.outputs.estado != '' && steps.auto_dev.outputs.validada != 'true' }}
+        if: ${{ always() && steps.version.outputs.bootstrap_only != 'true' && steps.version.outputs.version_unchanged != 'true' && steps.smoke.outputs.estado != '' && steps.auto_dev.outputs.validada != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION_ESPERADA: ${{ steps.version.outputs.version }}

@@ -77,6 +77,19 @@ class DependabotPolicyTests(unittest.TestCase):
             f"{ecosystem} debe ignorar majors con una sola regla dependency-name/update-types.",
         )
 
+    def test_monthly_schedule_without_weekday(self) -> None:
+        for ecosystem in ECOSYSTEMS:
+            with self.subTest(ecosystem=ecosystem):
+                block = self.block(ecosystem)
+                self.assertEqual(1, block.count('    schedule:'))
+                self.assertEqual(
+                    1,
+                    block.count('    schedule:\n      interval: "monthly"\n'),
+                    f"{ecosystem} debe tener exactamente un calendario mensual.",
+                )
+                self.assertNotRegex(block, r'(?m)^\s+day\s*:')
+                self.assertNotIn('interval: "weekly"', block)
+
     def test_composer_major_updates_are_ignored(self) -> None:
         self.assert_major_ignore_rule("composer")
 

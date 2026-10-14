@@ -1,12 +1,11 @@
 version: 2
-# Actualizaciones agrupadas y semanales: pocos PRs, para no cargar GitHub ni a los agentes.
+# Actualizaciones agrupadas y mensuales: pocos PRs, para no cargar GitHub ni a los agentes.
 # Los majors se planifican explícitamente: no deben abrir PRs automáticos fuera del stack vigente.
 updates:
   - package-ecosystem: "composer"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
     open-pull-requests-limit: 3
     groups:
       composer-minor:
@@ -21,8 +20,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
     open-pull-requests-limit: 3
     groups:
       npm-minor:
@@ -37,8 +35,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
     open-pull-requests-limit: 3
     groups:
       github-actions-minor:
