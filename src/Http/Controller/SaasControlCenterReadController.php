@@ -14,6 +14,7 @@ use App\Application\Identity\PlatformOwnerTenantContext;
 use App\Domain\Commercial\Entity\Subscription;
 use App\Domain\Commercial\Entity\UsageObservation;
 use App\Domain\Commercial\UsageLedger;
+use App\Domain\Commercial\SubscriptionState;
 use App\Domain\Identity\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
@@ -55,7 +56,16 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
         $at = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $effective = null;
         try {
-            if ($this->subscription($tenantId) !== null) {
+            $subscription = $this->subscription($tenantId);
+            if ($subscription !== null) {
+                // Configuration may outlive a suspended or cancelled contract;
+                // never report its historical capabilities as active rights.
+                if (in_array($subscription->state(), [
+                    SubscriptionState::Suspended,
+                    SubscriptionState::Cancelled,
+                ], true)) {
+                    return $this->unavailable();
+                }
                 $context = $this->entitlementContexts->forTenant($tenantId, $at);
                 $effective = $this->entitlementResolver->resolve($context);
                 if (!hash_equals($tenantId, $effective->tenantId())) {

@@ -120,6 +120,58 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
         self::assertSame(12, $revoked->limit('users'));
     }
 
+    public function testInactiveSubscriptionDoesNotExposeCommercialRights(): void
+    {
+        $client = static::createClient();
+        $em = $this->entityManager();
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $owner = new User('saas-inactive-owner@example.test', 'Owner', [User::ROLE_PLATFORM_OWNER]);
+        $plan = new Plan('saas-inactive-plan', 'Inactive plan');
+        $vertical = new Vertical('saas-inactive-vertical', 'Inactive vertical');
+        $capability = new Capability('analytics', 'Analytics');
+        $version = new PlanVersion(
+            $plan, 1, 24000, null, false, ['users' => 10], $now->modify('-10 days')
+        );
+        $version->addVertical($vertical);
+        $version->addCapability($capability);
+        $relation = new VerticalCapability($vertical, $capability, 1);
+        foreach ([$owner, $plan, $vertical, $capability, $version, $relation] as $entity) {
+            $em->persist($entity);
+        }
+
+        $tenants = [];
+        foreach ([SubscriptionState::Suspended, SubscriptionState::Cancelled] as $state) {
+            $tenant = new Tenant('Inactive tenant '.$state->value, 'saas-inactive-'.$state->value);
+            $subscription = Subscription::fromLifecycle(
+                new SubscriptionLifecycle(
+                    $tenant->id(), $version, $state, $now->modify('-2 days')
+                ),
+                $now->modify('-1 day'),
+            );
+            $configuration = new SubscriptionConfiguration(
+                $subscription, $vertical, ['users' => 10], [], $now->modify('-1 day')
+            );
+            foreach ([$tenant, $subscription, $configuration] as $entity) {
+                $em->persist($entity);
+            }
+            $tenants[] = $tenant;
+        }
+        $em->flush();
+
+        $client->loginUser($owner);
+        foreach ($tenants as $tenant) {
+            $client->request(
+                'GET', '/adminpl0n3r/api/tenants/'.$tenant->id().'/saas-control-center'
+            );
+            self::assertResponseStatusCodeSame(503);
+            $raw = (string) $client->getResponse()->getContent();
+            self::assertStringContainsString('Datos comerciales no disponibles.', $raw);
+            self::assertStringNotContainsString($tenant->id(), $raw);
+            self::assertStringNotContainsString('analytics', $raw);
+            self::assertStringNotContainsString('"allowed":true', $raw);
+        }
+    }
+
     public function testTenantWithoutSubscriptionRemainsUnknownNotKnownZero(): void
     {
         $client = static::createClient();
