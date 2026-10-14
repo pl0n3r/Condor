@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
+import { SaasControlCenterReadPanel } from './SaasControlCenterReadPanel';
 import {
   FunctionalSignalsPanel,
   type FunctionalSignalCounts,
@@ -1059,6 +1060,7 @@ export function PlatformOwnerApp({
 
           {selected && (
             <>
+              <SaasControlCenterReadPanel key={selected.id} tenantId={selected.id} />
               <OverviewGrid
                 ariaLabel="Resumen de empresa seleccionada"
                 variant="control"
