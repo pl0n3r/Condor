@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Commercial\SaasControlCenterReader;
+use App\Application\Commercial\SubscriptionEntitlementContextFactory;
+use App\Application\Commercial\EntitlementResolver;
+use App\Application\Commercial\EntitlementSnapshot;
+use DateTimeImmutable;
+use DateTimeZone;
 use App\Application\Identity\PlatformOwnerTenantContext;
 use App\Domain\Commercial\Entity\Subscription;
 use App\Domain\Commercial\Entity\UsageObservation;
@@ -25,6 +30,8 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
     public function __construct(
         private readonly PlatformOwnerTenantContext $tenants,
         private readonly EntityManagerInterface $entityManager,
+        private readonly SubscriptionEntitlementContextFactory $entitlementContexts,
+        private readonly EntitlementResolver $entitlementResolver,
     ) {
     }
 
@@ -43,10 +50,26 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
         }
         $this->tenants->tenant($tenantId);
 
+        // Resolve the same effective tenant entitlements for all three views.
+        // A missing commercial configuration is UNKNOWN, never "allowed".
+        $at = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $effective = null;
+        try {
+            if ($this->subscription($tenantId) !== null) {
+                $context = $this->entitlementContexts->forTenant($tenantId, $at);
+                $effective = $this->entitlementResolver->resolve($context);
+                if (!hash_equals($tenantId, $effective->tenantId())) {
+                    throw new DomainException('Entitlement de otro tenant.');
+                }
+            }
+        } catch (DomainException) {
+            return $this->unavailable();
+        }
+
         $reader = new SaasControlCenterReader(
-            fn (string $id): ?array => $this->catalog($id),
-            fn (string $id): array => $this->usage($id),
-            fn (string $id): array => $this->entitlements($id),
+            fn (string $id): ?array => $this->catalog($id, $effective),
+            fn (string $id): array => $this->usage($id, $effective, $at),
+            fn (string $id): array => $this->entitlements($id, $effective),
         );
 
         try {
@@ -57,23 +80,23 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
             );
         } catch (DomainException) {
             // Never serialize adapter exceptions, raw tenant rows or SQL errors.
-            return $this->json(
-                ['state' => 'error', 'message' => 'Datos comerciales no disponibles.'],
-                JsonResponse::HTTP_SERVICE_UNAVAILABLE,
-            );
+            return $this->unavailable();
         }
 
         return $this->json($projection);
     }
 
     /** @return array<string,mixed>|null */
-    private function catalog(string $tenantId): ?array
+    private function catalog(string $tenantId, ?EntitlementSnapshot $effective): ?array
     {
         $subscription = $this->subscription($tenantId);
         if ($subscription === null) {
             return null;
         }
 
+        if ($effective === null) {
+            throw new DomainException('Entitlement no observado.');
+        }
         $version = $subscription->planVersion();
         // A quote-required plan/add-on has no known price. Never encode it as 0.
         $monthly = $version->monthlyAmount();
@@ -91,7 +114,7 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
                 'tenant_id' => $tenantId,
                 'key' => $addOn->key(),
                 'price_minor' => self::priceMinor($price),
-                'active' => true,
+                'active' => $effective->addOn($addOn->key()),
             ];
         }
 
@@ -109,7 +132,7 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
     }
 
     /** @return list<array<string,mixed>> */
-    private function usage(string $tenantId): array
+    private function usage(string $tenantId, ?EntitlementSnapshot $effective, DateTimeImmutable $at): array
     {
         $subscription = $this->subscription($tenantId);
         if ($subscription === null) {
@@ -127,10 +150,25 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
             $ledger->add($record->toRecord());
         }
 
-        $limits = $subscription->planVersion()->limits();
+        $limits = $effective?->limits();
+        if ($limits === null) {
+            throw new DomainException('Límites efectivos no observados.');
+        }
         $result = [];
+        $seen = [];
         foreach ($ledger->snapshot() as $row) {
+            // Each usage metric must use its active time window only.
+            // Mixing historic windows fabricates totals and can cause HTTP 503.
+            $start = new DateTimeImmutable($row['window_start']);
+            $end = new DateTimeImmutable($row['window_end']);
+            if ($start > $at || $end <= $at) {
+                continue;
+            }
             $metric = $row['metric'];
+            if (isset($seen[$metric])) {
+                throw new DomainException('Ventanas de uso vigentes ambiguas.');
+            }
+            $seen[$metric] = true;
             $limit = $limits[$metric] ?? null;
             // A missing/non-numeric quota is UNKNOWN, not 0 or unlimited.
             if (!is_int($limit) || $limit < 0) {
@@ -148,19 +186,22 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
     }
 
     /** @return list<array<string,mixed>> */
-    private function entitlements(string $tenantId): array
+    private function entitlements(string $tenantId, ?EntitlementSnapshot $effective): array
     {
         $subscription = $this->subscription($tenantId);
         if ($subscription === null) {
             return [];
         }
 
+        if ($effective === null) {
+            throw new DomainException('Permisos efectivos no observados.');
+        }
         $items = [];
         foreach ($subscription->planVersion()->capabilities() as $capability) {
             $items[] = [
                 'tenant_id' => $tenantId,
                 'key' => $capability->key(),
-                'allowed' => true,
+                'allowed' => $effective->capability($capability->key()),
             ];
         }
 
@@ -174,6 +215,14 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
             ->findOneBy(['tenantId' => $tenantId]);
 
         return $subscription instanceof Subscription ? $subscription : null;
+    }
+
+    private function unavailable(): JsonResponse
+    {
+        return $this->json(
+            ['state' => 'error', 'message' => 'Datos comerciales no disponibles.'],
+            JsonResponse::HTTP_SERVICE_UNAVAILABLE,
+        );
     }
 
     private static function priceMinor(int $amount): int
