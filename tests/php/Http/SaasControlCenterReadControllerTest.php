@@ -150,19 +150,58 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
     {
         $client = static::createClient();
         $em = $this->entityManager();
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $user = new User('saas-reader@example.test', 'Reader');
         $owner = new User('saas-supervisor@example.test', 'Owner', [User::ROLE_PLATFORM_OWNER]);
-        $em->persist($user);
-        $em->persist($owner);
+        $protectedTenant = new Tenant('Protected SaaS tenant', 'saas-protected');
+        $emptyTenant = new Tenant('Empty SaaS tenant', 'saas-empty-scope');
+        $plan = new Plan('saas-protected-plan', 'Protected Plan');
+        $version = new PlanVersion(
+            $plan, 1, 24000, null, false, ['users' => 10], $now->modify('-2 days')
+        );
+        $subscription = Subscription::fromLifecycle(
+            new SubscriptionLifecycle(
+                $protectedTenant->id(), $version, SubscriptionState::Active,
+                $now->modify('-1 day'),
+            ),
+            $now,
+        );
+        foreach ([
+            $user, $owner, $protectedTenant, $emptyTenant,
+            $plan, $version, $subscription,
+        ] as $entity) {
+            $em->persist($entity);
+        }
         $em->flush();
 
+        // A non-owner cannot read an existing tenant with commercial data.
         $client->loginUser($user);
-        $client->request('GET', '/adminpl0n3r/api/tenants/missing/saas-control-center');
+        $client->request(
+            'GET', '/adminpl0n3r/api/tenants/'.$protectedTenant->id().'/saas-control-center'
+        );
         self::assertResponseStatusCodeSame(403);
+        self::assertStringNotContainsString(
+            'saas-protected-plan', (string) $client->getResponse()->getContent()
+        );
 
         $client->loginUser($owner);
         $client->request('GET', '/adminpl0n3r/api/tenants/missing/saas-control-center');
         self::assertResponseStatusCodeSame(404);
+
+        // A different tenant must not inherit the stored subscription or its plan.
+        $client->request(
+            'GET', '/adminpl0n3r/api/tenants/'.$emptyTenant->id().'/saas-control-center'
+        );
+        self::assertResponseIsSuccessful();
+        $payload = json_decode(
+            (string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR
+        );
+        self::assertSame('empty', $payload['state']);
+        self::assertSame($emptyTenant->id(), $payload['tenant_id']);
+        foreach (['plan', 'add_ons', 'usage', 'entitlements'] as $field) {
+            self::assertArrayHasKey($field, $payload);
+            self::assertNull($payload[$field], $field.' must remain unobserved');
+        }
     }
 
     public function testUnresolvedCommercialConfigurationIsNotReportedAsAllowed(): void
