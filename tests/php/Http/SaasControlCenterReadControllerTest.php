@@ -128,7 +128,7 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
         $owner = new User('saas-inactive-owner@example.test', 'Owner', [User::ROLE_PLATFORM_OWNER]);
         $plan = new Plan('saas-inactive-plan', 'Inactive plan');
         $vertical = new Vertical('saas-inactive-vertical', 'Inactive vertical');
-        $capability = new Capability('analytics', 'Analytics');
+        $capability = new Capability('saas-inactive-analytics', 'Inactive analytics');
         $version = new PlanVersion(
             $plan, 1, 24000, null, false, ['users' => 10], $now->modify('-10 days')
         );
@@ -167,7 +167,7 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
             $raw = (string) $client->getResponse()->getContent();
             self::assertStringContainsString('Datos comerciales no disponibles.', $raw);
             self::assertStringNotContainsString($tenant->id(), $raw);
-            self::assertStringNotContainsString('analytics', $raw);
+            self::assertStringNotContainsString('saas-inactive-analytics', $raw);
             self::assertStringNotContainsString('"allowed":true', $raw);
         }
     }
