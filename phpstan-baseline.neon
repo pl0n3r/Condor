@@ -409,12 +409,6 @@ parameters:
 			path: src/Infrastructure/Observability/FatalLog.php
 
 		-
-			message: '#^Method App\\Infrastructure\\Observability\\SentryEventSanitizer\:\:__invoke\(\) never returns null so it can be removed from the return type\.$#'
-			identifier: return.unusedType
-			count: 1
-			path: src/Infrastructure/Observability/SentryEventSanitizer.php
-
-		-
 			message: '#^Parameter \#1 \$params of static method App\\Shared\\Runtime\\DatabaseDsn\:\:validate\(\) expects array\<string, mixed\>, array\<int\|string, array\<mixed\>\|int\<0, 65535\>\|string\> given\.$#'
 			identifier: argument.type
 			count: 1
