@@ -19,6 +19,7 @@ type State =
   | { status: 'ready'; data: Projection }
   | { status: 'empty' }
   | { status: 'permission-denied' }
+  | { status: 'not-found' }
   | { status: 'error' };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -100,6 +101,10 @@ export function SaasControlCenterReadPanel({ tenantId }: Readonly<{ tenantId: st
           setState({ status: 'permission-denied' });
           return;
         }
+        if (response.status === 404) {
+          setState({ status: 'not-found' });
+          return;
+        }
         if (!response.ok) {
           setState({ status: 'error' });
           return;
@@ -140,6 +145,9 @@ export function SaasControlCenterReadPanel({ tenantId }: Readonly<{ tenantId: st
       {state.status === 'loading' && <p role="status">Cargando información comercial…</p>}
       {state.status === 'permission-denied' && (
         <p role="alert">Tu sesión no tiene permiso para consultar esta empresa.</p>
+      )}
+      {state.status === 'not-found' && (
+        <p role="alert">Esta empresa no se encontró. Información comercial: UNKNOWN.</p>
       )}
       {state.status === 'empty' && (
         <p className="platform-empty">

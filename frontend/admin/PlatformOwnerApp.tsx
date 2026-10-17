@@ -412,6 +412,8 @@ export function PlatformOwnerApp({
 }: PlatformOwnerAppProps) {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [platformRevision, setPlatformRevision] = useState(0);
+  // Any successful tenant refresh invalidates cached read-only SaaS entitlements.
+  const [saasPanelRevision, setSaasPanelRevision] = useState(0);
   const [selectedPlanVersionId, setSelectedPlanVersionId] = useState('');
   const [subscriptionCreation, setSubscriptionCreation] = useState<
     { status: 'idle' | 'saving' } | { status: 'error'; message: string }
@@ -488,6 +490,9 @@ export function PlatformOwnerApp({
           globalPage.current = data.tenant_pagination.page;
         }
         setState({ status: 'ready', data });
+        if (tenantId !== undefined) {
+          setSaasPanelRevision((current) => current + 1);
+        }
       }
     } catch {
       if (requestId === requestSequence.current) {
@@ -1060,7 +1065,10 @@ export function PlatformOwnerApp({
 
           {selected && (
             <>
-              <SaasControlCenterReadPanel key={selected.id} tenantId={selected.id} />
+              <SaasControlCenterReadPanel
+                key={`${selected.id}:${saasPanelRevision}`}
+                tenantId={selected.id}
+              />
               <OverviewGrid
                 ariaLabel="Resumen de empresa seleccionada"
                 variant="control"

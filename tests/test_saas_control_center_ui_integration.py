@@ -62,16 +62,20 @@ class SaasControlCenterUiIntegrationTests(unittest.TestCase):
         panel = (ROOT / "frontend/admin/SaasControlCenterReadPanel.tsx").read_text()
         app = (ROOT / "frontend/admin/PlatformOwnerApp.tsx").read_text()
         for state in (
-            "loading", "ready", "empty", "permission-denied", "error",
+            "loading", "ready", "empty", "permission-denied", "not-found", "error",
             "UNKNOWN",
         ):
             self.assertIn(state, panel)
         self.assertIn("credentials: 'same-origin'", panel)
+        self.assertIn("response.status === 404", panel)
+        self.assertIn("setState({ status: 'not-found' })", panel)
         self.assertNotRegex(panel, r"method:\s*['\"](?:POST|PUT|PATCH|DELETE)")
         self.assertIn("SaasControlCenterReadPanel", app)
         self.assertRegex(
-            app, r"<SaasControlCenterReadPanel\s+key=\{selected\.id\}\s+tenantId=\{selected\.id\}"
+            app, r"<SaasControlCenterReadPanel\s+key=\{`\$\{selected\.id\}:\$\{saasPanelRevision\}`\}\s+tenantId=\{selected\.id\}"
         )
+        self.assertIn("setSaasPanelRevision((current) => current + 1)", app)
+        self.assertIn("if (tenantId !== undefined)", app)
         if (ROOT / "node_modules/.bin/tsc").exists():
             self.run_command(["npm", "run", "typecheck"])
             self.run_command(["npm", "run", "build:admin"])
