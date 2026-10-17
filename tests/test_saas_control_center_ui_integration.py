@@ -69,6 +69,17 @@ class SaasControlCenterUiIntegrationTests(unittest.TestCase):
         self.assertIn("credentials: 'same-origin'", panel)
         self.assertIn("response.status === 404", panel)
         self.assertIn("setState({ status: 'not-found' })", panel)
+        # 404 must terminate before the generic error branch; never invite a blind retry.
+        self.assertRegex(
+            panel,
+            r"if \(response\.status === 404\) \{\s*"
+            r"setState\(\{ status: 'not-found' \}\);\s*return;\s*\}"
+            r"\s*if \(!response\.ok\)",
+        )
+        self.assertIn(
+            '<p role="alert">Esta empresa no se encontró. Información comercial: UNKNOWN.</p>',
+            panel,
+        )
         self.assertNotRegex(panel, r"method:\s*['\"](?:POST|PUT|PATCH|DELETE)")
         self.assertIn("SaasControlCenterReadPanel", app)
         self.assertRegex(
