@@ -65,7 +65,10 @@ jobs:
           Verificar --check y seguir la reserva V3, PR normal y squash.
 
           ### Criterios de aceptación
-          - [ ] El generador --check termina 0.
+          - [ ] [AC-01] tests/test_revision_juridica.py::RevisionJuridicaTests::test_package_and_workflow
+
+          ### Contrato ejecutable
+          <!-- factory-acceptance {"version":1,"criteria":[{"id":"AC-01","kind":"test","target":"tests/test_revision_juridica.py::RevisionJuridicaTests::test_package_and_workflow"}]} -->
 
           ### Rutas reclamadas
           - revision-juridica/

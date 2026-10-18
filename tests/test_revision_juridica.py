@@ -39,6 +39,7 @@ class RevisionJuridicaTests(unittest.TestCase):
         for fragment in ("push:", "schedule:", "concurrency:",
                          "contents: read", "issues: write",
                          "gh issue list", "revision-juridica-desfase",
+                         "factory-acceptance", "RevisionJuridicaTests::test_package_and_workflow",
                          "python scripts/generar_revision_juridica.py --check"):
             self.assertIn(fragment, workflow)
         for forbidden in ("pull_request_target", "contents: write", "git push"):
