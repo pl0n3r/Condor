@@ -10,6 +10,8 @@ on:
       - 'AGENTES.md'
       - 'config/version.php'
       - 'scripts/generar_revision_juridica.py'
+      - 'revision-juridica/**'
+      - '.github/workflows/revision-juridica-sync.yml'
   schedule:
     - cron: '19 8 * * *'
   workflow_dispatch:
@@ -37,7 +39,13 @@ jobs:
           if python scripts/generar_revision_juridica.py --check; then
             echo 'drift=false' >> "$GITHUB_OUTPUT"
           else
-            echo 'drift=true' >> "$GITHUB_OUTPUT"
+            status=$?
+            if [[ "$status" -eq 1 ]]; then
+              echo 'drift=true' >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::No es un desfase regenerable: --check salió con $status"
+              exit "$status"
+            fi
           fi
       - name: Registrar un Issue de desfase, solo si no hay otro abierto
         if: steps.audit.outputs.drift == 'true'

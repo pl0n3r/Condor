@@ -46,6 +46,11 @@ class RevisionJuridicaTests(unittest.TestCase):
                           "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                           "persist-credentials: false"):
             self.assertIn(mandatory, workflow)
+        for mandatory in ("'revision-juridica/**'",
+                          "'.github/workflows/revision-juridica-sync.yml'",
+                          'if [[ "$status" -eq 1 ]]',
+                          'exit "$status"'):
+            self.assertIn(mandatory, workflow)
         for forbidden in ("pull_request_target", "contents: write", "git push"):
             self.assertNotIn(forbidden, workflow)
         result = subprocess.run(
@@ -53,6 +58,23 @@ class RevisionJuridicaTests(unittest.TestCase):
              "--check"], cwd=ROOT, text=True, capture_output=True, check=False
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_check_unverifiable_source_exits_two_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for path in ("scripts/generar_revision_juridica.py",
+                         "revision-juridica/00-LEEME.md"):
+                dest = root / path
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / path, dest)
+            original = (root / "revision-juridica/00-LEEME.md").read_bytes()
+            result = subprocess.run(
+                [sys.executable, str(root / "scripts/generar_revision_juridica.py"),
+                 "--check"], cwd=root, capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual((root / "revision-juridica/00-LEEME.md").read_bytes(),
+                             original)
 
     def test_check_detects_drift_without_writing(self):
         with tempfile.TemporaryDirectory() as tmp:
