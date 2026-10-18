@@ -42,6 +42,10 @@ class RevisionJuridicaTests(unittest.TestCase):
                          "factory-acceptance", "RevisionJuridicaTests::test_package_and_workflow",
                          "python scripts/generar_revision_juridica.py --check"):
             self.assertIn(fragment, workflow)
+        for mandatory in ("timeout-minutes: 10",
+                          "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                          "persist-credentials: false"):
+            self.assertIn(mandatory, workflow)
         for forbidden in ("pull_request_target", "contents: write", "git push"):
             self.assertNotIn(forbidden, workflow)
         result = subprocess.run(
