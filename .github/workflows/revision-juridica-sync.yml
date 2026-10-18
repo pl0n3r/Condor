@@ -1,0 +1,82 @@
+name: Revision juridica - detectar desfases
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/privacidad/**'
+      - 'docs/arquitectura-entidades-legales.md'
+      - 'datos.yml'
+      - 'AGENTES.md'
+      - 'config/version.php'
+      - 'scripts/generar_revision_juridica.py'
+  schedule:
+    - cron: '19 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: revision-juridica-desfase
+  cancel-in-progress: false
+
+jobs:
+  detectar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Comprobar el paquete sin escribir
+        id: audit
+        shell: bash
+        run: |
+          if python scripts/generar_revision_juridica.py --check; then
+            echo 'drift=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'drift=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Registrar un Issue de desfase, solo si no hay otro abierto
+        if: steps.audit.outputs.drift == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! gh api "repos/$GITHUB_REPOSITORY/labels/revision-juridica-desfase" > /dev/null 2>&1; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/labels" \
+              -f name='revision-juridica-desfase' -f color='c5d6e8' \
+              -f description='El paquete de documentos jurídicos necesita regenerarse'
+          fi
+          count="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --label 'revision-juridica-desfase' --json number --jq 'length')"
+          if [[ "$count" != "0" ]]; then
+            echo 'Ya hay un Issue abierto de desfase; no duplicar.'
+            exit 0
+          fi
+          cat > /tmp/legal-drift.md <<'ISSUE'
+          ## Contexto
+          El check read-only detectó diferencias en revision-juridica/.
+          No declarar ni simular aprobación legal.
+
+          ## Alcance
+          Regenerar desde las siete fuentes originales con
+          python scripts/generar_revision_juridica.py.
+          Verificar --check y seguir la reserva V3, PR normal y squash.
+
+          ### Criterios de aceptación
+          - [ ] El generador --check termina 0.
+
+          ### Rutas reclamadas
+          - revision-juridica/
+
+          <!-- factory-plan-task {"version":1,"epic":681,"task_key":"REVISION_JURIDICA_DESFASE","order":1,"owner":"pl0n3r","roles":["legal-privacidad","documentacion","ingenieria-software"],"depends_on":[],"paths":["revision-juridica/"]} -->
+          ISSUE
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title 'docs(legal): corregir desfase del paquete jurídico' \
+            --body-file /tmp/legal-drift.md \
+            --label 'tipo: documentación' \
+            --label 'prioridad: media' \
+            --label 'estado: disponible' \
+            --label 'rol: legal-privacidad' \
+            --label 'revision-juridica-desfase'
