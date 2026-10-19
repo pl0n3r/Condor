@@ -56,8 +56,7 @@ final class TenantCsvReportService
             self::writeRow($stream, $columns);
             $seen = 0;
             foreach ($records as $record) {
-                if (!is_array($record)
-                    || !isset($record['tenant_id'])
+                if (!isset($record['tenant_id'])
                     || !is_string($record['tenant_id'])
                     || !isset($record['occurred_at'])
                     || !is_string($record['occurred_at'])) {
@@ -116,7 +115,10 @@ final class TenantCsvReportService
         return $value;
     }
 
-    /** @param resource $stream @param list<string> $values */
+    /**
+     * @param resource $stream
+     * @param list<string> $values
+     */
     private static function writeRow($stream, array $values): void
     {
         if (fputcsv($stream, $values, ',', '"', '') === false) {
