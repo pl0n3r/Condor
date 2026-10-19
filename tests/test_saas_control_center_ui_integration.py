@@ -68,6 +68,13 @@ class SaasControlCenterUiIntegrationTests(unittest.TestCase):
         ):
             self.assertIn(state, panel)
         self.assertIn("credentials: 'same-origin'", panel)
+        # Native output exposes an accessible status without redundant role overrides.
+        self.assertIn('<output>Cargando información comercial…</output>', panel)
+        self.assertNotIn('role="status"', panel)
+        # A stale 200 must not update global page, data, or revision state.
+        self.assertRegex(
+            app, r"if \(requestId !== requestSequence\.current\) \{\s*return;\s*\}"
+        )
         self.assertIn("response.status === 404", panel)
         self.assertIn("setState({ status: 'not-found' })", panel)
         # 404 must terminate before the generic error branch; never invite a blind retry.

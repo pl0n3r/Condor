@@ -485,14 +485,15 @@ export function PlatformOwnerApp({
       }
 
       const data = await response.json() as PlatformContextResponse;
-      if (requestId === requestSequence.current) {
-        if (data.mode === 'global') {
-          globalPage.current = data.tenant_pagination.page;
-        }
-        setState({ status: 'ready', data });
-        if (tenantId !== undefined) {
-          setSaasPanelRevision((current) => current + 1);
-        }
+      if (requestId !== requestSequence.current) {
+        return;
+      }
+      if (data.mode === 'global') {
+        globalPage.current = data.tenant_pagination.page;
+      }
+      setState({ status: 'ready', data });
+      if (tenantId !== undefined) {
+        setSaasPanelRevision((current) => current + 1);
       }
     } catch {
       if (requestId === requestSequence.current) {

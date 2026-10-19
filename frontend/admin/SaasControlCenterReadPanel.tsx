@@ -142,7 +142,7 @@ export function SaasControlCenterReadPanel({ tenantId }: Readonly<{ tenantId: st
         </div>
         <span className="status-pill">Solo lectura</span>
       </div>
-      {state.status === 'loading' && <p role="status">Cargando información comercial…</p>}
+      {state.status === 'loading' && <output>Cargando información comercial…</output>}
       {state.status === 'permission-denied' && (
         <p role="alert">Tu sesión no tiene permiso para consultar esta empresa.</p>
       )}
