@@ -82,6 +82,9 @@ class SaasControlCenterUiIntegrationTests(unittest.TestCase):
         # null with a known-zero price or erase known usage/entitlements.
         self.assertIn("price_minor: number | null", panel)
         self.assertIn("isNullableCount(plan.price_minor)", panel)
+        # Null must be explicit. Undefined or malformed prices remain errors.
+        self.assertIn("value === null || isCount(value)", panel)
+        self.assertNotIn("price_minor ?? 0", panel)
         self.assertIn("isNullableCount(row.price_minor)", panel)
         self.assertIn("minor === null", panel)
         self.assertIn("return 'UNKNOWN';", panel)
