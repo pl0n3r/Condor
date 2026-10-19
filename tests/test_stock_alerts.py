@@ -57,7 +57,18 @@ function stockMove(array $scope, int $delta, int $after): InventoryMovement {
 
 $a = stockScope('a');
 $b = stockScope('b');
-$alerts = new StockAlertService();
+$preferenceEnabled = true;
+$preferenceChecks = [];
+$alerts = new StockAlertService(
+    static function (User $user, string $event, string $channel) use (&$preferenceEnabled, &$preferenceChecks): bool {
+        $preferenceChecks[] = [
+            'user_id' => $user->id(),
+            'event' => $event,
+            'channel' => $channel,
+        ];
+        return $preferenceEnabled;
+    },
+);
 
 $cross = stockMove($a, -3, 4); // 7 -> 4, minimum 5
 $first = $alerts->onMovement($a[3], $cross, 5);
@@ -70,6 +81,13 @@ $alternateScope = [$a[0], $alternate, $a[2], $a[3]];
 $sameTenantOtherSource = $alerts->onMovement($a[3], stockMove($alternateScope, -5, 2), 3);
 $otherMinimum = $alerts->onMovement($b[3], stockMove($b, -3, 4), 3);
 $otherCross = $alerts->onMovement($b[3], stockMove($b, -5, 2), 3);
+// A disabled optional stock.low preference must suppress delivery creation.
+$preferenceEnabled = false;
+$disabledMovement = stockMove($a, -4, 4);
+$disabled = $alerts->onMovement($a[3], $disabledMovement, 5);
+$preferenceEnabled = true;
+$reactivated = $alerts->onMovement($a[3], $disabledMovement, 5);
+$reactivatedReplay = $alerts->onMovement($a[3], $disabledMovement, 5);
 $mismatch = false;
 try {
     $alerts->onMovement($b[3], stockMove($a, -3, 4), 5);
@@ -94,6 +112,10 @@ print json_encode([
     'other_tenant' => $otherCross?->payload(),
     'same_tenant_other_source' => $sameTenantOtherSource?->payload(),
     'mismatch_rejected' => $mismatch,
+    'disabled_preference_suppressed' => $disabled === null,
+    'enabled_preference_restored' => $reactivated instanceof \\App\\Domain\\Notification\\Entity\\NotificationDelivery,
+    'reactivated_replay_suppressed' => $reactivatedReplay === null,
+    'preference_checks' => $preferenceChecks,
     'invalid_minimum_rejected' => $invalid,
 ], JSON_THROW_ON_ERROR);
 """
@@ -127,6 +149,11 @@ class AlertasStockBajoTests(unittest.TestCase):
         self.assertEqual(3, same_tenant_other_source["minimum"])
         self.assertTrue(observed["mismatch_rejected"])
         self.assertTrue(observed["invalid_minimum_rejected"])
+        self.assertTrue(observed["disabled_preference_suppressed"])
+        self.assertTrue(observed["enabled_preference_restored"])
+        self.assertTrue(observed["reactivated_replay_suppressed"])
+        self.assertGreater(len(observed["preference_checks"]), 0)
+        self.assertTrue(all(item["event"] == "stock.low" and item["channel"] == "in_app" for item in observed["preference_checks"]))
 
 
 if __name__ == "__main__":
