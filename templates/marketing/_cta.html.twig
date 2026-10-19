@@ -1,0 +1,32 @@
+{# Cierre común: solicitud de demo y pie del sitio público. #}
+<section class="mk-demo" id="solicitar-demo" aria-labelledby="demo-title">
+    <div>
+        <h2 id="demo-title">Cuéntanos cómo funciona tu <span class="mk-mark">negocio</span>.</h2>
+        <p>La demo parte de tu operación real, sea pequeña o grande. Sin guion de ventas.</p>
+        <ul>
+            <li>30 minutos por videollamada</li>
+            <li>Con ejemplos de tu tipo de negocio</li>
+            <li>Sin tarjeta y sin compromiso</li>
+        </ul>
+        <p class="mk-note">Esta portada no recoge datos personales. El canal para solicitar la demo se habilitará como un flujo separado y verificable.</p>
+    </div>
+    <div class="mk-cta-row">
+        <a class="mk-btn mk-btn-mark" href="{{ path('app_login') }}">Ingresar</a>
+        <a class="mk-btn mk-btn-ghost" href="{{ path('app_marketing_producto') }}">Ver el producto</a>
+    </div>
+</section>
+
+<footer class="mk-footer mk-wrap" aria-label="Pie del sitio">
+    <div>
+        <a class="mk-logo" href="{{ path('app_home') }}"><i aria-hidden="true"></i>Condor</a>
+        <p class="mk-foot-note">Digitaliza tu negocio, sea del tamaño que sea. Hecho en Colombia.</p>
+    </div>
+    <div class="mk-cols">
+        <div>
+            <a href="{{ path('app_marketing_producto') }}">Producto</a>
+            <a href="{{ path('app_marketing_soluciones') }}">Soluciones</a>
+            <a href="{{ path('app_marketing_seguridad') }}">Seguridad</a>
+        </div>
+        <div><a href="{{ path('app_login') }}">Ingresar</a></div>
+    </div>
+</footer>
