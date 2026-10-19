@@ -7,9 +7,9 @@ type Projection = {
     key: string;
     version: string;
     currency: string;
-    price_minor: number;
+    price_minor: number | null;
   };
-  add_ons: Array<{ key: string; price_minor: number; active: boolean }>;
+  add_ons: Array<{ key: string; price_minor: number | null; active: boolean }>;
   usage: Array<{ metric: string; used: number; limit: number }>;
   entitlements: Array<{ key: string; allowed: boolean }>;
 };
@@ -34,6 +34,10 @@ function isCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
+function isNullableCount(value: unknown): value is number | null {
+  return value === null || isCount(value);
+}
+
 /** Validate the entire server payload before rendering commercial facts. */
 function isProjection(value: unknown, tenantId: string): value is Projection {
   if (!isRecord(value) || !isRecord(value.plan)) return false;
@@ -41,14 +45,14 @@ function isProjection(value: unknown, tenantId: string): value is Projection {
   if (value.state !== 'ready' || value.tenant_id !== tenantId
       || !isKey(plan.key) || !isKey(plan.version)
       || typeof plan.currency !== 'string' || !/^[A-Z]{3}$/.test(plan.currency)
-      || !isCount(plan.price_minor)
+      || !isNullableCount(plan.price_minor)
       || !Array.isArray(value.add_ons) || value.add_ons.length > 128
       || !Array.isArray(value.usage) || value.usage.length > 128
       || !Array.isArray(value.entitlements) || value.entitlements.length > 128) {
     return false;
   }
   return value.add_ons.every((row: unknown) =>
-    isRecord(row) && isKey(row.key) && isCount(row.price_minor)
+    isRecord(row) && isKey(row.key) && isNullableCount(row.price_minor)
     && typeof row.active === 'boolean')
     && value.usage.every((row: unknown) =>
       isRecord(row) && isKey(row.metric) && isCount(row.used) && isCount(row.limit))
@@ -56,8 +60,9 @@ function isProjection(value: unknown, tenantId: string): value is Projection {
       isRecord(row) && isKey(row.key) && typeof row.allowed === 'boolean');
 }
 
-function money(minor: number, currency: string): string {
-  if (!Number.isSafeInteger(minor) || minor < 0 || !/^[A-Z]{3}$/.test(currency)) {
+function money(minor: number | null, currency: string): string {
+  if (minor === null || !Number.isSafeInteger(minor)
+      || minor < 0 || !/^[A-Z]{3}$/.test(currency)) {
     return 'UNKNOWN';
   }
   try {
