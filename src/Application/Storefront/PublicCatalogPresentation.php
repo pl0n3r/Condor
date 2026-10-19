@@ -6,6 +6,7 @@ namespace App\Application\Storefront;
 
 use App\Application\Commerce\PricingService;
 use App\Domain\Catalog\Entity\Product;
+use App\Domain\Catalog\Entity\ProductMedia;
 use App\Domain\Catalog\Entity\ProductVariant;
 use App\Domain\Commerce\Entity\SalesChannel;
 use App\Domain\Commerce\Entity\VariantPrice;
@@ -198,6 +199,19 @@ final readonly class PublicCatalogPresentation
             ];
         }
 
+        // An older pre-deploy schema must not break the public catalog.
+        $photosByProduct = [];
+        if ($products !== [] && $this->productMediaSchemaReady()) {
+            $photos = $this->entityManager->getRepository(ProductMedia::class)->findBy(
+                ['tenant' => $tenant, 'product' => $products, 'active' => true],
+                ['sortOrder' => 'ASC', 'id' => 'ASC'],
+            );
+            foreach ($photos as $photo) {
+                if (!$photo instanceof ProductMedia || !$photo->product()->isActive()) continue;
+                $photosByProduct[$photo->product()->id()][] = $photo;
+            }
+        }
+
         $payload = [];
         foreach ($products as $product) {
             $variantPayload = $variantsByProduct[$product->id()] ?? [];
@@ -210,7 +224,16 @@ final readonly class PublicCatalogPresentation
                 'name' => $product->name(),
                 'slug' => $product->slug(),
                 'description' => $product->description(),
-                'variants' => $variantPayload,
+                'primary_image' => $this->mediaPayload($photosByProduct[$product->id()] ?? [], null),
+                'variants' => array_map(
+                    fn (array $item): array => $item + [
+                        'primary_image' => $this->mediaPayload(
+                            $photosByProduct[$product->id()] ?? [],
+                            $item['id'],
+                        ),
+                    ],
+                    $variantPayload,
+                ),
             ];
         }
 
@@ -229,6 +252,31 @@ final readonly class PublicCatalogPresentation
                 'has_next' => $hasNext,
             ],
         ];
+    }
+
+    /** @param list<ProductMedia> $photos */
+    private function mediaPayload(array $photos, ?string $variantId): ?array
+    {
+        foreach ($photos as $photo) {
+            if (($photo->variant()?->id()) !== $variantId || !$photo->isPrimary()) continue;
+            return [
+                'id' => $photo->id(),
+                'url' => $photo->filePath(),
+                'mime_type' => $photo->mimeType(),
+            ];
+        }
+        return null;
+    }
+
+    private function productMediaSchemaReady(): bool
+    {
+        return false !== $this->entityManager->getConnection()->fetchOne(
+            <<<'SQL'
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1
+                SQL,
+            ['condor_product_media'],
+        );
     }
 
     private function salesChannelSchemaReady(): bool
