@@ -97,6 +97,17 @@ if ($projection['state'] !== 'ready' || $projection['tenant_id'] !== 'tenant-a'
     || $projection['entitlements'][0]['allowed'] !== true) exit(81);
 $json = json_encode($projection, JSON_THROW_ON_ERROR);
 if (!str_contains($json, '"price_minor":null')) exit(82);
+// A mixed catalog keeps the known price unchanged while the other is quoted.
+$onlyPlanQuoted = $catalog('tenant-a');
+$onlyPlanQuoted['plan']['price_minor'] = null;
+$a = (new SaasControlCenterReader(fn($t) => $onlyPlanQuoted, $usage, $ents))
+    ->read('ROLE_PLATFORM_OWNER', 'tenant-a', 'tenant-a');
+if ($a['plan']['price_minor'] !== null || $a['add_ons'][0]['price_minor'] !== 2500) exit(90);
+$onlyAddonQuoted = $catalog('tenant-a');
+$onlyAddonQuoted['add_ons'][0]['price_minor'] = null;
+$b = (new SaasControlCenterReader(fn($t) => $onlyAddonQuoted, $usage, $ents))
+    ->read('ROLE_PLATFORM_OWNER', 'tenant-a', 'tenant-a');
+if ($b['plan']['price_minor'] !== 12500 || $b['add_ons'][0]['price_minor'] !== null) exit(91);
 try {
     $reader->read('ROLE_PLATFORM_OWNER', 'tenant-b', 'tenant-a');
     exit(83);
