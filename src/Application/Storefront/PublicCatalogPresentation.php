@@ -207,7 +207,7 @@ final readonly class PublicCatalogPresentation
                 ['sortOrder' => 'ASC', 'id' => 'ASC'],
             );
             foreach ($photos as $photo) {
-                if (!$photo instanceof ProductMedia || !$photo->product()->isActive()) continue;
+                if (!$photo->product()->isActive()) continue;
                 $photosByProduct[$photo->product()->id()][] = $photo;
             }
         }
@@ -254,7 +254,10 @@ final readonly class PublicCatalogPresentation
         ];
     }
 
-    /** @param list<ProductMedia> $photos */
+    /**
+     * @param list<ProductMedia> $photos
+     * @return null|array{id:string,url:string,mime_type:string}
+     */
     private function mediaPayload(array $photos, ?string $variantId): ?array
     {
         foreach ($photos as $photo) {
