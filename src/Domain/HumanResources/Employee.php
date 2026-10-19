@@ -12,7 +12,7 @@ use DomainException;
 
 /**
  * Minimal offline HR aggregate. Employee identity is independent of login.
- * The code is an opaque alias, not a name, document or biometric identifier.
+ * The code is an opaque tenant-local alias containing no personal attributes.
  * Database mapping is intentionally deferred to a separately scoped migration.
  */
 final class Employee
