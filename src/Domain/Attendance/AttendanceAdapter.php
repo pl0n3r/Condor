@@ -6,7 +6,7 @@ namespace App\Domain\Attendance;
 
 /**
  * Replaceable reader contract: only already-normalized AttendanceMark objects
- * may cross into Condor. Integrations must discard biometric/device raw data
+ * may cross into Condor. Integrations must discard all raw sensor/device data
  * outside Condor and must not call this contract until privacy is approved.
  *
  * No real reader, network transport or credential wiring exists in this slice.

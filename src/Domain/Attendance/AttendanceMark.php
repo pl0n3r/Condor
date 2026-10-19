@@ -9,8 +9,8 @@ use DateTimeImmutable;
 use DomainException;
 
 /**
- * Normalized clock metadata only. No biometric template, image, fingerprint,
- * face embedding, device credential or raw vendor payload can be carried here.
+ * Normalized clock metadata only. Only employee, external key, time and direction; raw sensor or vendor
+ * payloads and credentials have no place in this typed value.
  */
 final readonly class AttendanceMark
 {

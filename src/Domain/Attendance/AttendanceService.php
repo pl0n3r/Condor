@@ -28,7 +28,7 @@ final readonly class AttendanceService
 
     /**
      * Strict DTO boundary for a future reader adapter. Unknown keys (including
-     * biometric, photo, device secret and raw payload) fail closed.
+     * photos, credentials and raw device payload) fail closed.
      *
      * @param array<string, mixed> $payload
      */
