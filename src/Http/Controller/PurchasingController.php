@@ -212,10 +212,17 @@ final class PurchasingController extends AbstractController
     private function text(array $data, string $field, int $maxLength): string
     {
         $value = $data[$field] ?? null;
-        if (!is_string($value) || trim($value) === '' || strlen(trim($value)) > $maxLength) {
+        if (!is_string($value)) {
             throw new UnprocessableEntityHttpException('El campo '.$field.' no es válido.');
         }
-        return trim($value);
+        $value = trim($value);
+        $length = iconv_strlen($value, 'UTF-8');
+        if ($value === '' || $length === false || $length > $maxLength
+            || preg_match('/[\\x00-\\x1F\\x7F]/', $value) === 1
+        ) {
+            throw new UnprocessableEntityHttpException('El campo '.$field.' no es válido.');
+        }
+        return $value;
     }
 
     private function flushUnique(string $message): void
