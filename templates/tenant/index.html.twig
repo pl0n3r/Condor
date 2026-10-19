@@ -28,6 +28,12 @@
     {% for product in catalog.products %}
         <article class="storefront-product" data-product-slug="{{ product.slug }}">
             <h3>{{ product.name }}</h3>
+            {% if product.primary_image %}
+                <img class="storefront-product-cover"
+                     src="{{ product.primary_image.url }}"
+                     alt="{{ product.name }}"
+                     loading="lazy" decoding="async">
+            {% endif %}
             {% if product.description %}<p>{{ product.description }}</p>{% endif %}
 
             <div class="storefront-variants">

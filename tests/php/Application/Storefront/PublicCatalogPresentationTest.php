@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Application\Storefront;
 
+use App\Application\Catalog\ProductMediaService;
 use App\Application\Commerce\PricingService;
 use App\Application\Storefront\PublicCatalogPresentation;
 use App\Domain\Catalog\Entity\Product;
@@ -72,6 +73,50 @@ final class PublicCatalogPresentationTest extends KernelTestCase
             $catalog['products'][0]['variants'][0]['availability'],
         );
         self::assertFalse($catalog['products'][0]['variants'][0]['backorder']);
+    }
+
+    public function testPrimaryPhotoSwitchReflectsPublicCatalogAndRejectsOtherTenant(): void
+    {
+        [$tenant, , , , $variant] = $this->fixture();
+        $product = $variant->product();
+        $otherTenant = new Tenant('Otro', 'otro-'.bin2hex(random_bytes(3)));
+        $this->entityManager->persist($otherTenant);
+        $media = new ProductMediaService($this->entityManager);
+        $one = $media->add($tenant, $product, null,
+            '/uploads/catalog/'.$tenant->id().'/front.jpg', 'image/jpeg', 3500);
+        $two = $media->add($tenant, $product, null,
+            '/uploads/catalog/'.$tenant->id().'/back.webp', 'image/webp', 5500);
+        $this->entityManager->flush();
+
+        self::assertSame($one->filePath(), $this->presentation->catalog($tenant)['products'][0]['primary_image']['url']);
+        $media->makePrimary($tenant, $product, $two);
+        self::assertSame($two->filePath(), $this->presentation->catalog($tenant)['products'][0]['primary_image']['url']);
+
+        $media->reorder($tenant, $product, null, [$two->id(), $one->id()]);
+        self::assertSame([$two->id(), $one->id()], array_map(
+            static fn ($photo): string => $photo->id(),
+            $media->byScope($tenant, $product),
+        ));
+        $this->expectException(\DomainException::class);
+        $media->makePrimary($otherTenant, $product, $one);
+    }
+
+    public function testCrossTenantPhotoCannotBeRegistered(): void
+    {
+        [$tenant, , , , $variant] = $this->fixture();
+        $other = new Tenant('Otro', 'otro-'.bin2hex(random_bytes(3)));
+        $media = new ProductMediaService($this->entityManager);
+        $this->expectException(\DomainException::class);
+        $media->add($other, $variant->product(), null,
+            '/uploads/catalog/'.$other->id().'/foreign.jpg', 'image/jpeg', 3000);
+    }
+
+    public function testMalformedMediaMetadataFailsClosed(): void
+    {
+        [$tenant, , , , $variant] = $this->fixture();
+        $media = new ProductMediaService($this->entityManager);
+        $this->expectException(\DomainException::class);
+        $media->add($tenant, $variant->product(), null, 'https://external.test/a.jpg', 'image/jpeg', 4000);
     }
 
     public function testActiveReservationsReducePublicAvailability(): void
