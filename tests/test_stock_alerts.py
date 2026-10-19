@@ -65,6 +65,9 @@ $repeat = $alerts->onMovement($a[3], $cross, 5);
 $stillLow = $alerts->onMovement($a[3], stockMove($a, -1, 3), 5);
 $replenish = $alerts->onMovement($a[3], stockMove($a, 8, 11), 5);
 $again = $alerts->onMovement($a[3], stockMove($a, -8, 3), 5);
+$alternate = new InventorySource($a[0], $a[1]->legalEntity(), 'Auxiliar', 'auxiliar', InventorySource::TYPE_LOGICAL);
+$alternateScope = [$a[0], $alternate, $a[2], $a[3]];
+$sameTenantOtherSource = $alerts->onMovement($a[3], stockMove($alternateScope, -5, 2), 3);
 $otherMinimum = $alerts->onMovement($b[3], stockMove($b, -3, 4), 3);
 $otherCross = $alerts->onMovement($b[3], stockMove($b, -5, 2), 3);
 $mismatch = false;
@@ -89,6 +92,7 @@ print json_encode([
     'again' => $again?->payload(),
     'independent_minimum' => $otherMinimum === null,
     'other_tenant' => $otherCross?->payload(),
+    'same_tenant_other_source' => $sameTenantOtherSource?->payload(),
     'mismatch_rejected' => $mismatch,
     'invalid_minimum_rejected' => $invalid,
 ], JSON_THROW_ON_ERROR);
@@ -101,6 +105,7 @@ class AlertasStockBajoTests(unittest.TestCase):
         first = observed["first"]
         second = observed["again"]
         other = observed["other_tenant"]
+        same_tenant_other_source = observed["same_tenant_other_source"]
         self.assertEqual("stock.low", observed["event"])
         self.assertEqual("in_app", observed["channel"])
         self.assertTrue(observed["repeat"])
@@ -116,6 +121,10 @@ class AlertasStockBajoTests(unittest.TestCase):
         self.assertEqual(3, other["minimum"])
         self.assertEqual(2, other["quantity"])
         self.assertNotEqual(first["tenant_id"], other["tenant_id"])
+        self.assertEqual(first["tenant_id"], same_tenant_other_source["tenant_id"])
+        self.assertEqual(first["variant_id"], same_tenant_other_source["variant_id"])
+        self.assertNotEqual(first["source_id"], same_tenant_other_source["source_id"])
+        self.assertEqual(3, same_tenant_other_source["minimum"])
         self.assertTrue(observed["mismatch_rejected"])
         self.assertTrue(observed["invalid_minimum_rejected"])
 
