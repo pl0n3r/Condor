@@ -18,6 +18,17 @@ namespace App\Domain\Organization\Entity {
         public function __construct(private string $key) {}
         public function id(): string { return $this->key; }
     }
+    class LegalEntity {
+        public function __construct(private string $key) {}
+        public function id(): string { return $this->key; }
+    }
+}
+namespace App\Domain\Inventory\Entity {
+    class InventorySource {
+        public function __construct(private \App\Domain\Organization\Entity\Tenant $tenant, private \App\Domain\Organization\Entity\LegalEntity $legalEntity) {}
+        public function tenant(): \App\Domain\Organization\Entity\Tenant { return $this->tenant; }
+        public function legalEntity(): \App\Domain\Organization\Entity\LegalEntity { return $this->legalEntity; }
+    }
 }
 namespace App\Domain\Catalog\Entity {
     class ProductVariant {
@@ -48,10 +59,11 @@ namespace App\Domain\Production\Entity {
         public function version(): int { return 3; }
     }
     class ProductionOrder {
-        public function __construct(private Tenant $tenant, private BillOfMaterials $bom, private \App\Domain\Catalog\Entity\ProductVariant $variant, private bool $done = true) {}
+        public function __construct(private Tenant $tenant, private BillOfMaterials $bom, private \App\Domain\Catalog\Entity\ProductVariant $variant, private \App\Domain\Inventory\Entity\InventorySource $source, private bool $done = true) {}
         public function tenant(): Tenant { return $this->tenant; }
         public function billOfMaterials(): BillOfMaterials { return $this->bom; }
         public function variant(): \App\Domain\Catalog\Entity\ProductVariant { return $this->variant; }
+        public function source(): \App\Domain\Inventory\Entity\InventorySource { return $this->source; }
         public function id(): string { return 'order-1'; }
         public function isCompleted(): bool { return $this->done; }
         public function completedQuantity(): ?int { return $this->done ? 2 : null; }
@@ -59,6 +71,7 @@ namespace App\Domain\Production\Entity {
 }
 namespace App\Domain\Purchasing\Entity {
     use App\Domain\Organization\Entity\Tenant;
+    use App\Domain\Organization\Entity\LegalEntity;
     use App\Domain\Production\Entity\Material;
     class PurchaseOrderLine {
         public function __construct(private Tenant $tenant, private Material $material, private string $quantity, private string $price) {}
@@ -68,8 +81,9 @@ namespace App\Domain\Purchasing\Entity {
         public function unitCost(): string { return $this->price; }
     }
     class PurchaseOrder {
-        public function __construct(private Tenant $tenant, private string $key, private array $lines, private bool $received = true) {}
+        public function __construct(private Tenant $tenant, private LegalEntity $legalEntity, private string $key, private array $lines, private bool $received = true) {}
         public function tenant(): Tenant { return $this->tenant; }
+        public function legalEntity(): LegalEntity { return $this->legalEntity; }
         public function id(): string { return $this->key; }
         public function lines(): array { return $this->lines; }
         public function isReceived(): bool { return $this->received; }
@@ -79,7 +93,8 @@ namespace {
     require %BALANCE%;
     require %WEIGHTED%;
     require %SERVICE%;
-    use App\Domain\Organization\Entity\Tenant;
+    use App\Domain\Organization\Entity\{Tenant, LegalEntity};
+    use App\Domain\Inventory\Entity\InventorySource;
     use App\Domain\Catalog\Entity\ProductVariant;
     use App\Domain\Production\Entity\{Material, BillOfMaterialsLine, BillOfMaterials, ProductionOrder};
     use App\Domain\Purchasing\Entity\{PurchaseOrder, PurchaseOrderLine};
@@ -93,6 +108,10 @@ namespace {
 
     $tenant = new Tenant('tenant-1');
     $foreign = new Tenant('tenant-2');
+    $legalEntity = new LegalEntity('legal-1');
+    $otherLegalEntity = new LegalEntity('legal-2');
+    $foreignLegalEntity = new LegalEntity('legal-foreign');
+    $source = new InventorySource($tenant, $legalEntity);
     $variant = new ProductVariant($tenant);
     $materialA = new Material($tenant, 'material-a');
     $materialB = new Material($tenant, 'material-b');
@@ -100,12 +119,12 @@ namespace {
         new BillOfMaterialsLine($tenant, $materialA, '1.5'),
         new BillOfMaterialsLine($tenant, $materialB, '0.25'),
     ]);
-    $order = new ProductionOrder($tenant, $bom, $variant);
-    $first = new PurchaseOrder($tenant, 'purchase-1', [
+    $order = new ProductionOrder($tenant, $bom, $variant, $source);
+    $first = new PurchaseOrder($tenant, $legalEntity, 'purchase-1', [
         new PurchaseOrderLine($tenant, $materialA, '1', '10.0000'),
         new PurchaseOrderLine($tenant, $materialB, '1', '2.0000'),
     ]);
-    $second = new PurchaseOrder($tenant, 'purchase-2', [
+    $second = new PurchaseOrder($tenant, $legalEntity, 'purchase-2', [
         new PurchaseOrderLine($tenant, $materialA, '3', '14.0000'),
     ]);
     $service = new ProductionCostService(new MaterialCostService());
@@ -121,12 +140,20 @@ namespace {
         throw new \RuntimeException('Weighted material cost depends on receipt order');
     }
     $foreignMaterial = new Material($foreign, 'material-a');
-    $foreignReceipt = new PurchaseOrder($foreign, 'foreign-receipt', [
+    $foreignReceipt = new PurchaseOrder($foreign, $foreignLegalEntity, 'foreign-receipt', [
         new PurchaseOrderLine($foreign, $foreignMaterial, '100', '0.0001'),
     ]);
     if ($service->calculate($tenant, $order, [$first, $foreignReceipt, $second]) !== $initial) {
         throw new \RuntimeException('Foreign tenant receipt affected production cost');
     }
+    $otherLegalReceipt = new PurchaseOrder($tenant, $otherLegalEntity, 'purchase-other-entity', [
+        new PurchaseOrderLine($tenant, $materialA, '100', '0.0001'),
+        new PurchaseOrderLine($tenant, $materialB, '100', '999.0000'),
+    ]);
+    if ($service->calculate($tenant, $order, [$first, $otherLegalReceipt, $second]) !== $initial) {
+        throw new \RuntimeException('Other legal entity changed weighted production cost');
+    }
+    expectFailure(fn() => $service->calculate($tenant, $order, [$otherLegalReceipt]), 'unknown cost from unrelated legal entity');
     if ($initial['consumptions'][0] !== [
         'material_id'=>'material-a',
         'quantity'=>'3',
@@ -135,13 +162,13 @@ namespace {
     ]) {
         throw new \RuntimeException('Historical unit cost is missing');
     }
-    $unreceived = new PurchaseOrder($tenant, 'purchase-unreceived', [
+    $unreceived = new PurchaseOrder($tenant, $legalEntity, 'purchase-unreceived', [
         new PurchaseOrderLine($tenant, $materialA, '100', '900.0000'),
     ], false);
     if ($service->calculate($tenant, $order, [$first, $second, $unreceived]) !== $initial) {
         throw new \RuntimeException('Unreceived purchase altered weighted material cost');
     }
-    $later = new PurchaseOrder($tenant, 'purchase-3', [
+    $later = new PurchaseOrder($tenant, $legalEntity, 'purchase-3', [
         new PurchaseOrderLine($tenant, $materialA, '100', '999.0000'),
         new PurchaseOrderLine($tenant, $materialB, '10', '50.0000'),
     ]);
@@ -159,8 +186,14 @@ namespace {
         throw new \RuntimeException('Recalculation did not preserve the original cost');
     }
     expectFailure(fn() => $service->calculate($foreign, $order, [$first]), 'cross tenant');
-    expectFailure(fn() => $service->calculate($tenant, new ProductionOrder($tenant, $bom, $variant, false), [$first]), 'draft order');
+    expectFailure(fn() => $service->calculate($tenant, new ProductionOrder($tenant, $bom, $variant, $source, false), [$first]), 'draft order');
     expectFailure(fn() => $service->calculate($tenant, $order, []), 'unknown cost');
+    $foreignLineBom = new BillOfMaterials($tenant, $variant, [new BillOfMaterialsLine($foreign, $materialA, '1')]);
+    expectFailure(fn() => $service->calculate($tenant, new ProductionOrder($tenant, $foreignLineBom, $variant, $source), [$first]), 'foreign bom line');
+    $foreignMatBom = new BillOfMaterials($tenant, $variant, [new BillOfMaterialsLine($tenant, new Material($foreign, 'material-x'), '1')]);
+    expectFailure(fn() => $service->calculate($tenant, new ProductionOrder($tenant, $foreignMatBom, $variant, $source), [$first]), 'foreign bom material');
+    $foreignSource = new InventorySource($foreign, $foreignLegalEntity);
+    expectFailure(fn() => $service->calculate($tenant, new ProductionOrder($tenant, $bom, $variant, $foreignSource), [$first]), 'foreign production source');
     $bad = $initial; $bad['consumptions'][0]['quantity'] = '999';
     expectFailure(fn() => $service->calculate($tenant, $order, [], $bad), 'changed consumption');
     $bad = $initial; $bad['total_cost'] = '0.0000';

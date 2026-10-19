@@ -36,6 +36,7 @@ final readonly class ProductionCostService
             $order->tenant()->id() !== $tenant->id()
             || $order->billOfMaterials()->tenant()->id() !== $tenant->id()
             || $order->variant()->tenant()->id() !== $tenant->id()
+            || $order->source()->tenant()->id() !== $tenant->id()
         ) {
             throw new DomainException('La orden y la BOM pertenecen a otro tenant.');
         }
@@ -101,7 +102,15 @@ final readonly class ProductionCostService
 
         $history = [];
         if ($savedRows === null) {
+            // Costos de una entidad legal no pueden afectar otra del mismo tenant.
+            $legalEntityId = $order->source()->legalEntity()->id();
             foreach ($receivedOrders as $purchase) {
+                if (
+                    $purchase->tenant()->id() !== $tenant->id()
+                    || $purchase->legalEntity()->id() !== $legalEntityId
+                ) {
+                    continue;
+                }
                 $history[] = $purchase;
             }
         }
