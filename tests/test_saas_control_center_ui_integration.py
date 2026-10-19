@@ -53,6 +53,11 @@ class SaasControlCenterUiIntegrationTests(unittest.TestCase):
             "testOwnerGetUsesSelectedAddOnsEffectiveLimitsAndCurrentWindow"
         )
 
+    def test_quote_required_catalog_keeps_unknown_prices(self) -> None:
+        # Real Doctrine/catalog adapter regression. Full HTTP 200 requires
+        # the disjoint #705 reader correction to be integrated first.
+        self.php_test("testQuoteRequiredCatalogKeepsExplicitUnknownPrices")
+
     def test_auth_and_cross_tenant_fail_closed(self) -> None:
         self.php_test("testNonOwnerAndUnknownTenantFailClosed")
         self.php_test("testUnresolvedCommercialConfigurationIsNotReportedAsAllowed")
