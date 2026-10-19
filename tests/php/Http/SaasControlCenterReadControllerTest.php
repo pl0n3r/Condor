@@ -291,25 +291,11 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
     public function testUnresolvedCommercialConfigurationIsNotReportedAsAllowed(): void
     {
         $client = static::createClient();
-        $em = $this->entityManager();
-        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
-        $owner = new User('saas-unresolved-owner@example.test', 'Owner', [User::ROLE_PLATFORM_OWNER]);
-        $tenant = new Tenant('Tenant unresolved', 'saas-unresolved');
-        $plan = new Plan('plan-unresolved', 'Plan unresolved');
-        $version = new PlanVersion(
-            $plan, 1, 24000, null, false, ['users' => 10], $now->modify('-1 day')
+        // No SubscriptionConfiguration: the canonical entitlement source is UNKNOWN.
+        [$owner, $tenant] = $this->seedUnconfiguredSubscription(
+            $this->entityManager(), new DateTimeImmutable('now', new DateTimeZone('UTC')),
+            'unresolved'
         );
-        $subscription = Subscription::fromLifecycle(
-            new SubscriptionLifecycle(
-                $tenant->id(), $version, SubscriptionState::Active, $now->modify('-2 hours')
-            ),
-            $now->modify('-1 hour'),
-        );
-        // No SubscriptionConfiguration exists: do not infer full access from PlanVersion.
-        foreach ([$owner, $tenant, $plan, $version, $subscription] as $entity) {
-            $em->persist($entity);
-        }
-        $em->flush();
         $client->loginUser($owner);
         $client->request(
             'GET', '/adminpl0n3r/api/tenants/'.$tenant->id().'/saas-control-center'
@@ -323,23 +309,10 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
     {
         $client = static::createClient();
         $em = $this->entityManager();
-        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
-        $owner = new User('saas-failure-owner@example.test', 'Owner', [User::ROLE_PLATFORM_OWNER]);
-        $tenant = new Tenant('SaaS failure tenant', 'saas-runtime-failure');
-        $plan = new Plan('saas-runtime-failure-plan', 'Runtime failure plan');
-        $version = new PlanVersion(
-            $plan, 1, 24000, null, false, ['users' => 10], $now->modify('-10 days')
+        [$owner, $tenant] = $this->seedUnconfiguredSubscription(
+            $em, new DateTimeImmutable('now', new DateTimeZone('UTC')),
+            'runtime-failure'
         );
-        $subscription = Subscription::fromLifecycle(
-            new SubscriptionLifecycle(
-                $tenant->id(), $version, SubscriptionState::Active, $now->modify('-2 days')
-            ),
-            $now->modify('-1 day'),
-        );
-        foreach ([$owner, $tenant, $plan, $version, $subscription] as $entity) {
-            $em->persist($entity);
-        }
-        $em->flush();
         $client->loginUser($owner);
 
         // Real Doctrine hydration (not an authorization mock): the tenant
@@ -369,6 +342,37 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
         self::assertStringNotContainsString($tenant->id(), $body);
         self::assertStringNotContainsString('saas-runtime-failure-plan', $body);
         self::assertStringNotContainsString('"allowed":true', $body);
+    }
+
+    /**
+     * A real Doctrine subscription without configuration. Its tenant and
+     * owner are distinct per test, so neither source can inherit rights.
+     *
+     * @return array{User, Tenant}
+     */
+    private function seedUnconfiguredSubscription(
+        EntityManagerInterface $em,
+        DateTimeImmutable $now,
+        string $suffix,
+    ): array {
+        $owner = new User('saas-'.$suffix.'-owner@example.test', 'Owner', [User::ROLE_PLATFORM_OWNER]);
+        $tenant = new Tenant('SaaS '.$suffix, 'saas-'.$suffix);
+        $plan = new Plan('saas-'.$suffix.'-plan', 'Plan '.$suffix);
+        $version = new PlanVersion(
+            $plan, 1, 24000, null, false, ['users' => 10], $now->modify('-1 day')
+        );
+        $subscription = Subscription::fromLifecycle(
+            new SubscriptionLifecycle(
+                $tenant->id(), $version, SubscriptionState::Active, $now->modify('-2 hours')
+            ),
+            $now->modify('-1 hour'),
+        );
+        foreach ([$owner, $tenant, $plan, $version, $subscription] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
+
+        return [$owner, $tenant];
     }
 
     private function entityManager(): EntityManagerInterface
