@@ -88,6 +88,12 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
         readJson<{ materials: Material[] }>(productionMaterialsPath(branchId)),
       ]);
       if (current !== requestId.current) return;
+      if (!Array.isArray(suppliersResult.suppliers)
+        || !Array.isArray(ordersResult.orders)
+        || !Array.isArray(materialsResult.materials)
+        || ordersResult.orders.some((order) => !Array.isArray(order.lines))) {
+        throw new Error('El servidor devolvió una respuesta de compras inválida.');
+      }
       const data = {
         suppliers: suppliersResult.suppliers,
         orders: ordersResult.orders,
@@ -192,6 +198,10 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
       /^0(?:\.0+)?$/.test(line.quantity)
     ))) {
       setNotice({ kind: 'error', text: 'Revisa los materiales, cantidades y costos.' });
+      return;
+    }
+    if (new Set(lines.map((line) => line.material_id)).size !== lines.length) {
+      setNotice({ kind: 'error', text: 'No repitas un material en la misma orden.' });
       return;
     }
     if (await mutate(ordersPath, { supplier_id: supplierId, lines }, 'Orden creada.')) {

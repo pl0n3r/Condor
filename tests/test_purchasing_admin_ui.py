@@ -33,6 +33,8 @@ class ComprasUiAdminTests(unittest.TestCase):
             self.assertIn(route, CONTROLLER)
         self.assertIn("'X-CSRF-Token': csrfToken", PANEL)
         self.assertIn("credentials: 'same-origin'", PANEL)
+        self.assertIn("Array.isArray(ordersResult.orders)", PANEL)
+        self.assertIn("new Set(lines.map((line) => line.material_id))", PANEL)
         self.assertIn("state.status === 'loading'", PANEL)
         self.assertIn("state.status === 'denied'", PANEL)
         self.assertIn("state.status === 'error'", PANEL)
