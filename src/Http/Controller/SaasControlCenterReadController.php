@@ -112,20 +112,13 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
         $version = $subscription->planVersion();
         // A quote-required plan/add-on has no known price. Never encode it as 0.
         $monthly = $version->monthlyAmount();
-        if ($monthly === null) {
-            throw new DomainException('Precio todavía no observado.');
-        }
-
         $addOns = [];
         foreach ($version->addOns() as $addOn) {
             $price = $addOn->monthlyAmount();
-            if ($price === null) {
-                throw new DomainException('Precio de add-on no observado.');
-            }
             $addOns[] = [
                 'tenant_id' => $tenantId,
                 'key' => $addOn->key(),
-                'price_minor' => self::priceMinor($price),
+                'price_minor' => $price === null ? null : self::priceMinor($price),
                 'active' => $effective->addOn($addOn->key()),
             ];
         }
@@ -137,7 +130,7 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
                 'key' => $version->plan()->key(),
                 'version' => (string) $version->version(),
                 'currency' => $version->currency(),
-                'price_minor' => self::priceMinor($monthly),
+                'price_minor' => $monthly === null ? null : self::priceMinor($monthly),
             ],
             'add_ons' => $addOns,
         ];
