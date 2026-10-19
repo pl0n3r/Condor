@@ -13,9 +13,9 @@ test.describe('Slice 1 — fundación y onboarding', () => {
 
   test('muestra versión, autentica y expone el contexto tenant', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Tu empresa no necesita más software. Necesita que todo funcione junto.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Digitaliza tu negocio, sea del tamaño que sea.' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Condor, inicio' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'La empresa se vuelve difícil de operar cuando cada parte vive por separado.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Lo que Condor resuelve.' })).toBeVisible();
     await expect(page.locator('.site-footer').getByText(`V ${appVersion}`)).toBeVisible();
 
     await page.goto('/admin/login');
@@ -50,8 +50,8 @@ test.describe('Slice 1 — fundación y onboarding', () => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto('/');
 
-    await expect(page.getByRole('heading', { name: 'Tu empresa no necesita más software. Necesita que todo funcione junto.' })).toBeVisible();
-    await expect(page.locator('.public-nav').getByRole('link', { name: 'Ingresar', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Digitaliza tu negocio, sea del tamaño que sea.' })).toBeVisible();
+    await expect(page.locator('.mk-bar').getByRole('link', { name: 'Ingresar', exact: true })).toBeVisible();
     await expect(page.locator('.site-footer').getByText(`V ${appVersion}`)).toBeVisible();
   });
 });

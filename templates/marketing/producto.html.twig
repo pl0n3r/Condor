@@ -1,0 +1,70 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Condor — Producto: ocho módulos conectados{% endblock %}
+
+{% block head %}
+    <meta name="description" content="Catálogo y precios, inventario, pedidos, clientes, tienda online, producción, compras y empresas con sus accesos: ocho módulos de Condor que comparten la misma información.">
+    <link rel="canonical" href="https://www.condorapp.com.co/producto">
+    <link rel="stylesheet" href="/marketing.css">
+{% endblock %}
+
+{% block body %}
+<div class="mk-site">
+{% include 'marketing/_nav.html.twig' with {'current': 'producto'} %}
+<div class="mk-wrap">
+
+<div class="mk-top">
+    <div><span class="mk-eyebrow">Producto</span><h1>Ocho módulos que se hablan entre sí.</h1></div>
+    <p class="mk-lead">Activa solo los que necesitas. Todos comparten los mismos productos, el mismo inventario y los mismos clientes, así que no copias nada de un lado a otro.</p>
+</div>
+
+<div class="mk-tabs mk-explore">
+<input class="mk-vh" type="radio" name="modulo" id="mx1" checked>
+<input class="mk-vh" type="radio" name="modulo" id="mx2">
+<input class="mk-vh" type="radio" name="modulo" id="mx3">
+<input class="mk-vh" type="radio" name="modulo" id="mx4">
+<input class="mk-vh" type="radio" name="modulo" id="mx5">
+<input class="mk-vh" type="radio" name="modulo" id="mx6">
+<input class="mk-vh" type="radio" name="modulo" id="mx7">
+<input class="mk-vh" type="radio" name="modulo" id="mx8">
+    <div class="mk-map" aria-label="Mapa de conexiones entre módulos">
+        <div class="mk-map-h"><span class="mk-eyebrow">Cómo se conectan</span><span class="hint">Pasa el cursor o toca un módulo</span></div>
+        <div class="mk-map-c">
+            <svg viewBox="0 0 760 330" preserveAspectRatio="none" aria-hidden="true"><line class="e e-catalogo e-inventario" x1="140" y1="70" x2="380" y2="70"/><line class="e e-catalogo e-tienda" x1="140" y1="70" x2="140" y2="190"/><line class="e e-catalogo e-pedidos" x1="140" y1="70" x2="620" y2="70"/><line class="e e-inventario e-pedidos" x1="380" y1="70" x2="620" y2="70"/><line class="e e-inventario e-produccion" x1="380" y1="70" x2="260" y2="290"/><line class="e e-inventario e-compras" x1="380" y1="70" x2="500" y2="290"/><line class="e e-pedidos e-clientes" x1="620" y1="70" x2="620" y2="190"/><line class="e e-pedidos e-tienda" x1="620" y1="70" x2="140" y2="190"/><line class="e e-tienda e-inventario" x1="140" y1="190" x2="380" y2="70"/><line class="e e-clientes e-catalogo" x1="620" y1="190" x2="140" y2="70"/><line class="e e-produccion e-compras" x1="260" y1="290" x2="500" y2="290"/></svg>
+            <div class="frame"><label for="mx8">Empresas y accesos · la base de todos</label></div>
+            <label class="nodo n-catalogo" for="mx1">Catálogo y precios</label><label class="nodo n-inventario" for="mx2">Inventario</label><label class="nodo n-pedidos" for="mx3">Pedidos y ventas</label><label class="nodo n-tienda" for="mx5">Tienda online</label><label class="nodo n-clientes" for="mx4">Clientes</label><label class="nodo n-produccion" for="mx6">Producción</label><label class="nodo n-compras warn" for="mx7">Compras</label>
+        </div>
+    </div>
+    <section class="mk-section mk-section-tight" id="modulos" aria-labelledby="modulos-title">
+        <div class="mk-ex-h"><h2 id="modulos-title">Explora cada módulo.</h2><p>Elige uno y mira cómo se ve.</p></div>
+        <div class="mk-mods">
+            <div class="mk-tablist" role="presentation">
+<label for="mx1"><span class="dot"></span><span class="tt">Catálogo y precios</span><span class="mk-chip mk-chip-ok">Disponible</span></label>
+<label for="mx2"><span class="dot"></span><span class="tt">Inventario</span><span class="mk-chip mk-chip-ok">Disponible</span></label>
+<label for="mx3"><span class="dot"></span><span class="tt">Pedidos y ventas</span><span class="mk-chip mk-chip-ok">Disponible</span></label>
+<label for="mx4"><span class="dot"></span><span class="tt">Clientes</span><span class="mk-chip mk-chip-ok">Disponible</span></label>
+<label for="mx5"><span class="dot"></span><span class="tt">Tienda online</span><span class="mk-chip mk-chip-ok">Disponible</span></label>
+<label for="mx6"><span class="dot"></span><span class="tt">Producción</span><span class="mk-chip mk-chip-ok">Disponible</span></label>
+<label for="mx7"><span class="dot"></span><span class="tt">Compras</span><span class="mk-chip mk-chip-warn">En construcción</span></label>
+<label for="mx8"><span class="dot"></span><span class="tt">Empresas y accesos</span><span class="mk-chip mk-chip-ok">Disponible</span></label>
+            </div>
+            <div class="mk-panels mk-panel">
+<article class="mk-tp xp1" id="modulo-catalogo" aria-label="Catálogo y precios"><div class="mk-ub"><i></i><i></i><i></i><b>Catálogo · Camisa oxford</b><span class="mk-chip">Ejemplo</span></div><div class="mk-bd"><table><thead><tr><th>Variante</th><th>Color</th><th class="n">Detal</th><th class="n">Mayorista</th></tr></thead><tbody><tr><td>Talla M</td><td><span class="mk-swatch mk-sw-blue"></span>Azul</td><td class="n">$ 59.900</td><td class="n">$ 41.900</td></tr><tr><td>Talla L</td><td><span class="mk-swatch mk-sw-blue"></span>Azul</td><td class="n">$ 59.900</td><td class="n">$ 41.900</td></tr><tr><td>Talla M</td><td><span class="mk-swatch mk-sw-white"></span>Blanco</td><td class="n">$ 57.900</td><td class="n">$ 40.500</td></tr></tbody></table><div class="mk-rule"><span><b>Regla</b> · Mayorista · 10 o más unidades</span><span><b>−12 %</b></span></div></div><div class="mk-info"><p>Tus productos una sola vez, con el precio justo para cada cliente.</p><ul><li>Variantes: tallas, colores y más</li><li>Listas de precio por tipo de cliente</li><li>Descuentos por cantidad</li></ul></div></article>
+<article class="mk-tp xp2" id="modulo-inventario" aria-label="Inventario"><div class="mk-ub"><i></i><i></i><i></i><b>Inventario · Camisa oxford M azul</b><span class="mk-chip">Ejemplo</span></div><div class="mk-bd"><table><thead><tr><th>Sede</th><th class="n">Stock</th><th class="n">Mínimo</th><th>Estado</th></tr></thead><tbody><tr><td>Bodega Medellín</td><td class="n">96</td><td class="n">40</td><td><span class="mk-pill mk-pill-g">OK</span></td></tr><tr><td>Local Cali</td><td class="n">14</td><td class="n">20</td><td><span class="mk-pill mk-pill-r">BAJO MÍNIMO</span></td></tr><tr><td>Local Bogotá</td><td class="n">31</td><td class="n">20</td><td><span class="mk-pill mk-pill-g">OK</span></td></tr></tbody></table><div class="mk-rule"><span><b>Traslado</b> · Medellín → Cali</span><span><b>12 und</b></span></div></div><div class="mk-info"><p>Cuánto tienes, dónde está y por qué cambió.</p><ul><li>Stock por producto y por sede</li><li>Cada entrada y salida queda registrada</li><li>Traslados entre sedes</li><li class="soon">Alertas de stock bajo (en construcción)</li></ul></div></article>
+<article class="mk-tp xp3" id="modulo-pedidos" aria-label="Pedidos y ventas"><div class="mk-ub"><i></i><i></i><i></i><b>Pedido #1048 · Almacenes La 70</b><span class="mk-chip">Ejemplo</span></div><div class="mk-bd"><div class="mk-line">Camisa oxford M azul × 14<span>$ 41.900 c/u</span></div><div class="mk-line">Camisa oxford M blanco × 6<span>$ 40.500 c/u</span></div><div class="mk-line"><b>Total</b><span><b class="mk-strong">$ 829.600</b></span></div><div class="mk-states"><div><span class="k">Pedido</span><span class="mk-pill mk-pill-g">Confirmado</span></div><div><span class="k">Pago</span><span class="mk-pill mk-pill-a">Pendiente</span></div><div><span class="k">Entrega</span><span class="mk-pill mk-pill-s">En preparación</span></div></div></div><div class="mk-info"><p>Todo lo que se vende, venga de donde venga.</p><ul><li>Pedidos manuales, de mayoristas y de la tienda web</li><li>Estado de pedido, pago y entrega por separado</li><li>Reserva el stock al confirmar</li></ul></div></article>
+<article class="mk-tp xp4" id="modulo-clientes" aria-label="Clientes"><div class="mk-ub"><i></i><i></i><i></i><b>Clientes</b><span class="mk-chip">Ejemplo</span></div><div class="mk-bd"><table><thead><tr><th>Cliente</th><th>Categoría</th><th>Lista de precio</th></tr></thead><tbody><tr><td>Almacenes La 70</td><td><span class="mk-pill mk-pill-a">MAYORISTA</span></td><td>Mayorista −12 % desde 10 und</td></tr><tr><td>María Gómez</td><td><span class="mk-pill mk-pill-s">DETAL</span></td><td>Detal</td></tr><tr><td>Moda Express</td><td><span class="mk-pill mk-pill-a">MAYORISTA</span></td><td>Mayorista −12 % desde 10 und</td></tr></tbody></table></div><div class="mk-info"><p>Quién te compra y qué trato le corresponde.</p><ul><li>Categoría comercial: detal, mayorista u otra</li><li>La lista de precios se aplica sola</li><li>Vende con o sin cliente registrado</li></ul></div></article>
+<article class="mk-tp xp5" id="modulo-tienda" aria-label="Tienda online"><div class="mk-ub"><i></i><i></i><i></i><b>Vista de la tienda</b><span class="mk-chip">Ejemplo</span></div><div class="mk-bd"><div class="mk-url mk-url-block">tutienda.com.co</div><div class="mk-grid3"><div class="mk-prod"><div class="mk-ph mk-ph-mark"></div><b>Camisa oxford</b><span>$ 59.900</span></div><div class="mk-prod"><div class="mk-ph mk-ph-ink"></div><b>Morral urbano</b><span>$ 89.000</span></div><div class="mk-prod"><div class="mk-ph mk-ph-soft"></div><b>Gorra clásica</b><span>$ 34.500</span></div></div></div><div class="mk-info"><p>Tu tienda en tu dominio, conectada a lo que manejas.</p><ul><li>Catálogo público con precios y disponibilidad</li><li>Tu contenido y tus páginas, administrables</li><li>Cada compra llega como pedido</li></ul></div></article>
+<article class="mk-tp xp6" id="modulo-produccion" aria-label="Producción"><div class="mk-ub"><i></i><i></i><i></i><b>Receta · Camisa oxford M</b><span class="mk-chip">Ejemplo</span></div><div class="mk-bd"><table><thead><tr><th>Material</th><th class="n">Por unidad</th><th>Unidad</th></tr></thead><tbody><tr><td>Popelina azul</td><td class="n">1,17</td><td>m</td></tr><tr><td>Botones 18 mm</td><td class="n">8</td><td>und</td></tr><tr><td>Hilo y entretela</td><td class="n">1</td><td>kit</td></tr></tbody></table><div class="mk-rule"><span><b>Orden OP-0412</b> · 36 unidades</span><span><b>En proceso</b></span></div></div><div class="mk-info"><p>Para quien transforma: de la materia prima al terminado.</p><ul><li>Materiales con sus unidades</li><li>Receta de cada producto</li><li>Órdenes que descuentan lo que consumen</li><li class="soon">Costo real de cada orden (en construcción)</li></ul></div></article>
+<article class="mk-tp xp7" id="modulo-compras" aria-label="Compras"><div class="mk-ub"><i></i><i></i><i></i><b>Orden de compra OC-0087</b><span class="mk-chip mk-chip-warn">En construcción</span></div><div class="mk-bd"><table><thead><tr><th>Producto</th><th class="n">Pedido</th><th class="n">Recibido</th><th>Estado</th></tr></thead><tbody><tr><td>Popelina azul</td><td class="n">120 m</td><td class="n">42 m</td><td><span class="mk-pill mk-pill-a">PARCIAL</span></td></tr><tr><td>Popelina blanca</td><td class="n">80 m</td><td class="n">80 m</td><td><span class="mk-pill mk-pill-g">COMPLETA</span></td></tr></tbody></table><p class="mk-note">Hoy la lógica de compras existe en el producto. Falta la pantalla para usarla.</p></div><div class="mk-info"><p>Proveedores, órdenes de compra y lo que realmente llegó.</p><ul><li>Proveedores propios de cada empresa</li><li>Recepción parcial o completa</li><li class="soon">La pantalla para usarlo está en construcción</li></ul></div></article>
+<article class="mk-tp xp8" id="modulo-accesos" aria-label="Empresas y accesos"><div class="mk-ub"><i></i><i></i><i></i><b>Roles · Sede Cali</b><span class="mk-chip">Ejemplo</span></div><div class="mk-bd"><table class="mk-mx"><thead><tr><th>Rol</th><th>Inventario</th><th>Pedidos</th><th>Precios</th></tr></thead><tbody><tr><td>Administrador</td><td><span class="mk-dk"></span></td><td><span class="mk-dk"></span></td><td><span class="mk-dk"></span></td></tr><tr><td>Vendedor</td><td><span class="mk-dk mk-dk-h"></span></td><td><span class="mk-dk"></span></td><td><span class="mk-dk mk-dk-o"></span></td></tr><tr><td>Bodega</td><td><span class="mk-dk"></span></td><td><span class="mk-dk mk-dk-h"></span></td><td><span class="mk-dk mk-dk-o"></span></td></tr></tbody></table><p class="mk-note"><span class="mk-dk"></span> ver y editar &nbsp; <span class="mk-dk mk-dk-h"></span> solo ver &nbsp; <span class="mk-dk mk-dk-o"></span> sin acceso</p></div><div class="mk-info"><p>Quién eres, dónde operas y quién puede hacer qué.</p><ul><li>Una o varias empresas, cada una aparte</li><li>Sedes dentro de cada empresa</li><li>Roles editables, por módulo y por sede</li></ul></div></article>
+            </div>
+        </div>
+    </section>
+</div>
+
+</div>
+<div class="mk-wrap">
+{% include 'marketing/_cta.html.twig' %}
+</div>
+</div>
+{% endblock %}
