@@ -15,6 +15,7 @@ use App\Domain\Production\Entity\Material;
 use App\Domain\Purchasing\Entity\PurchaseOrder;
 use App\Domain\Purchasing\Entity\Supplier;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -120,22 +121,30 @@ final class PurchasingController extends AbstractController
         $order = $this->order($tenant, $source, $orderId);
         $payload = $this->payload($request, ['idempotency_key']);
         $key = $this->text($payload, 'idempotency_key', 80);
-        $alreadyReceived = $order->isReceived();
-        // PurchaseOrderService owns the pessimistic lock and stock transaction.
-        $received = $this->domain(fn (): PurchaseOrder => $this->purchaseOrders->receive(
-            $tenant, $source, $order, $key, $user->id(),
-        ));
-        if (!$alreadyReceived) {
-            $this->audit($tenant, $user, 'purchasing_order.received', PurchaseOrder::class, $received->id(), [
-                'branch_id' => $branch->id(),
-                'source_id' => $source->id(),
-            ]);
-            $this->entityManager->flush();
-        }
+        // Lock first, then decide whether this request created a receipt.
+        // The outer transaction includes both the stock update and its audit event.
+        // A concurrent retry therefore cannot record a second receipt audit.
+        return $this->entityManager->wrapInTransaction(
+            function (EntityManagerInterface $entityManager) use (
+                $tenant, $source, $order, $key, $user, $branch
+            ): JsonResponse {
+                $entityManager->refresh($order, LockMode::PESSIMISTIC_WRITE);
+                $alreadyReceived = $order->isReceived();
+                $received = $this->domain(fn (): PurchaseOrder => $this->purchaseOrders->receive(
+                    $tenant, $source, $order, $key, $user->id(),
+                ));
+                if (!$alreadyReceived) {
+                    $this->audit($tenant, $user, 'purchasing_order.received', PurchaseOrder::class, $received->id(), [
+                        'branch_id' => $branch->id(),
+                        'source_id' => $source->id(),
+                    ]);
+                }
 
-        return $this->json(
-            ['order' => self::orderPayload($received)],
-            $alreadyReceived ? Response::HTTP_OK : Response::HTTP_CREATED,
+                return $this->json(
+                    ['order' => self::orderPayload($received)],
+                    $alreadyReceived ? Response::HTTP_OK : Response::HTTP_CREATED,
+                );
+            },
         );
     }
 
