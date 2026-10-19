@@ -23,6 +23,20 @@ final class StockAlertService
     /** @var array<string, true> */
     private array $seenMovements = [];
 
+    /**
+     * A preference checker must be supplied: a stock alert is optional.
+     *
+     * @param \Closure(\App\Domain\Identity\Entity\User, string, string): bool $isEnabled
+     */
+    public function __construct(private readonly \Closure $isEnabled)
+    {
+    }
+
+    public static function fromPreferences(NotificationPreferenceService $preferences): self
+    {
+        return new self($preferences->isEnabled(...));
+    }
+
     public function onMovement(
         Membership $recipient,
         InventoryMovement $movement,
@@ -58,6 +72,14 @@ final class StockAlertService
             || $previous <= $minimum
             || $movement->balanceAfter() > $minimum
         ) {
+            return null;
+        }
+
+        if (!(($this->isEnabled)(
+            $user,
+            NotificationCatalog::EVENT_STOCK_LOW,
+            NotificationCatalog::CHANNEL_IN_APP,
+        ))) {
             return null;
         }
 
