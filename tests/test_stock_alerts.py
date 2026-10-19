@@ -113,7 +113,7 @@ print json_encode([
     'same_tenant_other_source' => $sameTenantOtherSource?->payload(),
     'mismatch_rejected' => $mismatch,
     'disabled_preference_suppressed' => $disabled === null,
-    'enabled_preference_restored' => $reactivated instanceof \\App\\Domain\\Notification\\Entity\\NotificationDelivery,
+    'enabled_preference_restored' => $reactivated instanceof \App\Domain\Notification\Entity\NotificationDelivery,
     'reactivated_replay_suppressed' => $reactivatedReplay === null,
     'preference_checks' => $preferenceChecks,
     'invalid_minimum_rejected' => $invalid,
