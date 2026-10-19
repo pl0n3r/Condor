@@ -232,6 +232,15 @@ class ComprasApiHttpTests(unittest.TestCase):
         self.assertIn("LockMode::PESSIMISTIC_WRITE", service)
         self.assertIn("$order->assertSameReceipt($key, $source->id())", service)
 
+        php = shutil.which("php")
+        self.assertIsNotNone(php, "El PHP CLI es necesario para validar la API")
+        syntax = subprocess.run(
+            [php, "-l", str(CONTROLLER)], capture_output=True, text=True,
+            check=False,
+        )
+        self.assertEqual(0, syntax.returncode, syntax.stdout + syntax.stderr)
+        runner = ROOT / "vendor/bin/simple-phpunit"
+        self.assertTrue(runner.exists(), "PHPUnit instalado necesario para comprobar idempotencia")
         # Run actual authenticated HTTP requests against synthetic tenants/branches.
         # Keep the generated PHPUnit fixture in a temporary directory rather than
         # adding a file outside this issue's reserved repository paths.
@@ -244,15 +253,6 @@ class ComprasApiHttpTests(unittest.TestCase):
             )
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
-        php = shutil.which("php")
-        self.assertIsNotNone(php, "El PHP CLI es necesario para validar la API")
-        syntax = subprocess.run(
-            [php, "-l", str(CONTROLLER)], capture_output=True, text=True,
-            check=False,
-        )
-        self.assertEqual(0, syntax.returncode, syntax.stdout + syntax.stderr)
-        runner = ROOT / "vendor/bin/simple-phpunit"
-        self.assertTrue(runner.exists(), "PHPUnit instalado necesario para comprobar idempotencia")
         for pattern in (
             "testPurchaseOrderRejectsCrossTenantSupplierAndMaterial",
             "testPurchaseOrderStateIsMonotonicAndIdempotent",
