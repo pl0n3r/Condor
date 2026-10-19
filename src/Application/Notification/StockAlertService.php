@@ -100,4 +100,32 @@ final class StockAlertService
 
         return $alert;
     }
+    /**
+     * Read-side guard for stock.low inbox projections. Storage queries must
+     * also be tenant-scoped; user identity alone does not prove tenant scope.
+     *
+     * @param iterable<NotificationDelivery> $deliveries
+     * @return list<NotificationDelivery>
+     */
+    public function visibleInbox(Membership $viewer, iterable $deliveries): array
+    {
+        if (!$viewer->isActive() || !$viewer->user()->isActive()) {
+            return [];
+        }
+
+        $visible = [];
+        foreach ($deliveries as $delivery) {
+            $payload = $delivery->payload();
+            if (
+                $delivery->user()->id() === $viewer->user()->id()
+                && $delivery->eventKey() === NotificationCatalog::EVENT_STOCK_LOW
+                && $delivery->channelKey() === NotificationCatalog::CHANNEL_IN_APP
+                && ($payload['tenant_id'] ?? null) === $viewer->tenant()->id()
+            ) {
+                $visible[] = $delivery;
+            }
+        }
+
+        return $visible;
+    }
 }

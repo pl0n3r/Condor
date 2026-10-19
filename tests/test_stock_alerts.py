@@ -82,6 +82,15 @@ $sameTenantOtherSource = $alerts->onMovement($a[3], stockMove($alternateScope, -
 $otherMinimum = $alerts->onMovement($b[3], stockMove($b, -3, 4), 3);
 $otherCross = $alerts->onMovement($b[3], stockMove($b, -5, 2), 3);
 // A disabled optional stock.low preference must suppress delivery creation.
+// Offline inbox projection exercises the actual service's read-side guard.
+$sharedUserInB = new Membership($b[0], $a[3]->user(), Membership::ROLE_OWNER);
+$inboxCandidates = [$first, $otherCross];
+$inboxA = $alerts->visibleInbox($a[3], $inboxCandidates);
+$inboxB = $alerts->visibleInbox($b[3], $inboxCandidates);
+$inboxSharedUserInB = $alerts->visibleInbox($sharedUserInB, $inboxCandidates);
+$atMinimum = $alerts->onMovement($a[3], stockMove($a, -1, 5), 5); // 6 -> 5 triggers
+$afterMinimum = $alerts->onMovement($a[3], stockMove($a, -1, 4), 5); // 5 -> 4 does not
+
 $preferenceEnabled = false;
 $disabledMovement = stockMove($a, -4, 4);
 $disabled = $alerts->onMovement($a[3], $disabledMovement, 5);
@@ -101,6 +110,13 @@ try {
     $invalid = true;
 }
 print json_encode([
+    'inbox_a' => array_map(static fn ($d) => $d->id(), $inboxA),
+    'inbox_b' => array_map(static fn ($d) => $d->id(), $inboxB),
+    'inbox_shared_user_other_tenant' => array_map(static fn ($d) => $d->id(), $inboxSharedUserInB),
+    'first_delivery_id' => $first?->id(),
+    'other_delivery_id' => $otherCross?->id(),
+    'at_minimum' => $atMinimum?->payload(),
+    'after_minimum_suppressed' => $afterMinimum === null,
     'first' => $first?->payload(),
     'event' => $first?->eventKey(),
     'channel' => $first?->channelKey(),
@@ -128,6 +144,11 @@ class AlertasStockBajoTests(unittest.TestCase):
         second = observed["again"]
         other = observed["other_tenant"]
         same_tenant_other_source = observed["same_tenant_other_source"]
+        self.assertEqual([observed["first_delivery_id"]], observed["inbox_a"])
+        self.assertEqual([observed["other_delivery_id"]], observed["inbox_b"])
+        self.assertEqual([], observed["inbox_shared_user_other_tenant"])
+        self.assertEqual(5, observed["at_minimum"]["quantity"])
+        self.assertTrue(observed["after_minimum_suppressed"])
         self.assertEqual("stock.low", observed["event"])
         self.assertEqual("in_app", observed["channel"])
         self.assertTrue(observed["repeat"])
