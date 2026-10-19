@@ -146,6 +146,69 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
         self::assertStringNotContainsString('"allowed":true', $raw);
     }
 
+    /**
+     * The catalog boundary accepts quote-required prices without fabricating
+     * zero. The full HTTP-ready projection requires the separate #705 reader
+     * change; this regression deliberately exercises only the claimed adapter.
+     */
+    public function testQuoteRequiredCatalogKeepsExplicitUnknownPrices(): void
+    {
+        static::createClient();
+        $em = $this->entityManager();
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $tenant = new Tenant('Quoted SaaS tenant', 'saas-quoted-integration');
+        $plan = new Plan('saas-quote-plan', 'Quoted Plan');
+        $vertical = new Vertical('saas-quote-vertical', 'Quoted Vertical');
+        $capability = new Capability('quoted-analytics', 'Quoted Analytics');
+        $addOn = new AddOn('quoted-exports', 'Quoted Exports', null, true);
+        $version = new PlanVersion(
+            $plan, 1, null, null, true, ['users' => 10], $now->modify('-2 days')
+        );
+        $version->addVertical($vertical);
+        $version->addCapability($capability);
+        $version->addAddOn($addOn);
+        $relation = new VerticalCapability($vertical, $capability, 1);
+        $subscription = Subscription::fromLifecycle(
+            new SubscriptionLifecycle(
+                $tenant->id(), $version, SubscriptionState::Active, $now->modify('-1 day')
+            ),
+            $now,
+        );
+        $configuration = new SubscriptionConfiguration(
+            $subscription, $vertical, ['users' => 12], [], $now
+        );
+        foreach ([
+            $tenant, $plan, $vertical, $capability, $addOn,
+            $version, $relation, $subscription, $configuration,
+        ] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
+
+        $factory = static::getContainer()->get(SubscriptionEntitlementContextFactory::class);
+        $resolver = static::getContainer()->get(EntitlementResolver::class);
+        $effective = $resolver->resolve($factory->forTenant($tenant->id(), $now));
+        self::assertSame($tenant->id(), $effective->tenantId());
+
+        $controller = static::getContainer()->get(
+            \\App\\Http\\Controller\\SaasControlCenterReadController::class
+        );
+        $catalog = new \\ReflectionMethod($controller, 'catalog');
+        $data = $catalog->invoke($controller, $tenant->id(), $effective);
+
+        self::assertIsArray($data);
+        self::assertSame($tenant->id(), $data['tenant_id']);
+        self::assertArrayHasKey('price_minor', $data['plan']);
+        self::assertNull($data['plan']['price_minor']);
+        self::assertCount(1, $data['add_ons']);
+        self::assertArrayHasKey('price_minor', $data['add_ons'][0]);
+        self::assertNull($data['add_ons'][0]['price_minor']);
+        self::assertSame('quoted-exports', $data['add_ons'][0]['key']);
+        self::assertFalse($data['add_ons'][0]['active']);
+        self::assertSame(12, $effective->limit('users'));
+        self::assertTrue($effective->capability('quoted-analytics'));
+    }
+
     public function testInactiveSubscriptionDoesNotExposeCommercialRights(): void
     {
         $client = static::createClient();
