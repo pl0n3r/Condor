@@ -26,6 +26,7 @@ class FactoryAdoptionTests(unittest.TestCase):
         self.assertIn("python3 .factory/scripts/coordinar_trabajo.py validar-pr", coordination)
         self.assertIn("args+=(--require-reservation)", coordination)
         self.assertIn('if git cat-file -e "$BASE_SHA:decisiones.yml"', coordination)
+        self.assertIn("coordinacion", job_value(job_blocks(workflow)["validar"], "needs") or "")
         self.assertNotIn("Validar coordinación Factory v1", workflow)
 
     def test_decisions_include_owner_contract(self) -> None:
