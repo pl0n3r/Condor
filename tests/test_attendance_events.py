@@ -117,13 +117,25 @@ $badTypeDenied = rejected(fn() => $service->recordPayload(
 $badIdDenied = rejected(fn() => $service->recordPayload(
     $tenantA, $employeeA, $readerA, [...$input, 'external_event_id' => 'person@example.com'], $now,
 ));
+// A future persistence adapter is an untrusted boundary: it must not be
+// allowed to return an event from another tenant under this request.
+$maliciousStore = new class($otherTenant) implements AttendanceEventStore {
+    public function __construct(private AttendanceEvent $foreignEvent) {}
+    public function recordOnce(AttendanceEvent $event, DateTimeImmutable $expireBefore): AttendanceEvent
+    {
+        return $this->foreignEvent;
+    }
+};
+$foreignStoreDenied = rejected(fn() => (new AttendanceService($maliciousStore))
+    ->recordPayload($tenantA, $employeeA, $readerA, $input, $now));
+
 $payload = json_encode($first->toSafeArray(), JSON_THROW_ON_ERROR);
 echo json_encode([
     'replay_idempotent' => $repeat->id() === $first->id() && count($store->rows) === 3,
     'tenant_isolated' => $first->tenantId() !== $otherTenant->tenantId(),
     'source_isolated' => $first->id() !== $sameTenantOtherSource->id(),
     'employee_bound' => $first->employeeId() === $employeeA->id(),
-    'tenant_guard' => $crossTenantDenied,
+    'tenant_guard' => $crossTenantDenied && $foreignStoreDenied,
     'collision_guard' => $payloadChanged && $foreignEmployeeSameKey,
     'biometric_guard' => $biometricDenied && $faceDenied && $unknownFieldDenied,
     'source_guard' => $badSourceDenied,
