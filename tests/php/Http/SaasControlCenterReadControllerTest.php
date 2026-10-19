@@ -121,6 +121,28 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
         self::assertFalse($revoked->capability('analytics'));
         self::assertFalse($revoked->addOn('exports'));
         self::assertSame(12, $revoked->limit('users'));
+
+        // Regression: a previously successful GET is not permission to reuse
+        // commercial rights once the SAME persisted subscription is cancelled.
+        // Exercise real Doctrine lifecycle persistence and another HTTP GET.
+        $lifecycle = $subscription->toLifecycle();
+        $lifecycle->transitionTo(SubscriptionState::Cancelled, $now->modify('-30 minutes'));
+        $subscription->syncFromLifecycle($lifecycle, $now->modify('-15 minutes'));
+        $em->flush();
+
+        $client->request(
+            'GET',
+            '/adminpl0n3r/api/tenants/'.$tenant->id().'/saas-control-center'
+        );
+        self::assertResponseStatusCodeSame(503);
+        self::assertStringContainsString(
+            'no-store', (string) $client->getResponse()->headers->get('Cache-Control')
+        );
+        $raw = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('Datos comerciales no disponibles.', $raw);
+        self::assertStringNotContainsString($tenant->id(), $raw);
+        self::assertStringNotContainsString('saas-integrated', $raw);
+        self::assertStringNotContainsString('"allowed":true', $raw);
     }
 
     public function testInactiveSubscriptionDoesNotExposeCommercialRights(): void
