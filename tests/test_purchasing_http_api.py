@@ -65,6 +65,26 @@ class ComprasApiHttpTests(unittest.TestCase):
         self.assertNotIn("$payload['source_id']", controller)
         self.assertIn("$this->purchaseOrders->receive(", controller)
         self.assertIn("$alreadyReceived = $order->isReceived()", controller)
+        # Concurrent replays must acquire the database lock before the
+        # already-received decision; stock receipt and audit share a transaction.
+        receipt = controller.split("public function receiveOrder(", 1)[1].split(
+            "private function branchSource(", 1
+        )[0]
+        self.assertIn("return $this->entityManager->wrapInTransaction(", receipt)
+        self.assertIn("refresh($order, LockMode::PESSIMISTIC_WRITE)", receipt)
+        self.assertLess(
+            receipt.index("refresh($order, LockMode::PESSIMISTIC_WRITE)"),
+            receipt.index("$alreadyReceived = $order->isReceived()"),
+        )
+        self.assertLess(
+            receipt.index("$alreadyReceived = $order->isReceived()"),
+            receipt.index("$this->purchaseOrders->receive("),
+        )
+        self.assertLess(
+            receipt.index("$this->purchaseOrders->receive("),
+            receipt.index("purchasing_order.received"),
+        )
+        self.assertNotIn("$this->entityManager->flush();", receipt)
         self.assertIn("$alreadyReceived ? Response::HTTP_OK : Response::HTTP_CREATED", controller)
         self.assertIn("if (!$alreadyReceived)", controller)
         self.assertIn("$this->audit(", controller)
