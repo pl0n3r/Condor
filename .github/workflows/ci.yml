@@ -242,7 +242,7 @@ jobs:
           python3 scripts/verify_sonar_merge_gate.py < "$RUNNER_TEMP/condor-ruleset.json"
 
   coordinacion:
-    name: Validar coordinación Factory v1
+    name: Validar coordinación
     needs: preflight
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

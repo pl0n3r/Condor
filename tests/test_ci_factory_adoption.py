@@ -18,6 +18,17 @@ class FactoryAdoptionTests(unittest.TestCase):
     def read(self, path: str) -> str:
         return (ROOT / path).read_text(encoding="utf-8")
 
+    def test_policy_gate_recognizes_condor_coordination_name(self) -> None:
+        """Policy Factory@v1 accepts a real, terminal Condor coordination check."""
+        workflow = self.read(".github/workflows/ci.yml")
+        coordination = job_blocks(workflow)["coordinacion"]
+        self.assertEqual("Validar coordinación", job_value(coordination, "name"))
+        self.assertIn("python3 .factory/scripts/coordinar_trabajo.py validar-pr", coordination)
+        self.assertIn("args+=(--require-reservation)", coordination)
+        self.assertIn('if git cat-file -e "$BASE_SHA:decisiones.yml"', coordination)
+        self.assertIn("coordinacion", job_value(job_blocks(workflow)["validar"], "needs") or "")
+        self.assertNotIn("Validar coordinación Factory v1", workflow)
+
     def test_decisions_include_owner_contract(self) -> None:
         payload = json.loads(self.read("decisiones.yml"))
         self.assertEqual(payload["version"], 1)
