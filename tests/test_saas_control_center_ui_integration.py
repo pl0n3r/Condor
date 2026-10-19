@@ -77,6 +77,20 @@ class SaasControlCenterUiIntegrationTests(unittest.TestCase):
         )
         self.assertIn("response.status === 404", panel)
         self.assertIn("setState({ status: 'not-found' })", panel)
+
+        # A quote-required price may be explicitly unknown; never conflate
+        # null with a known-zero price or erase known usage/entitlements.
+        self.assertIn("price_minor: number | null", panel)
+        self.assertIn("isNullableCount(plan.price_minor)", panel)
+        self.assertIn("isNullableCount(row.price_minor)", panel)
+        self.assertIn("minor === null", panel)
+        self.assertIn("return 'UNKNOWN';", panel)
+        controller = (
+            ROOT / "src/Http/Controller/SaasControlCenterReadController.php"
+        ).read_text()
+        self.assertIn("$price === null ? null : self::priceMinor($price)", controller)
+        self.assertIn("$monthly === null ? null : self::priceMinor($monthly)", controller)
+
         # 404 must terminate before the generic error branch; never invite a blind retry.
         self.assertRegex(
             panel,
