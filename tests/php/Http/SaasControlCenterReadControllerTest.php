@@ -191,9 +191,9 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
         self::assertSame($tenant->id(), $effective->tenantId());
 
         $controller = static::getContainer()->get(
-            \\App\\Http\\Controller\\SaasControlCenterReadController::class
+            \App\Http\Controller\SaasControlCenterReadController::class
         );
-        $catalog = new \\ReflectionMethod($controller, 'catalog');
+        $catalog = new \ReflectionMethod($controller, 'catalog');
         $data = $catalog->invoke($controller, $tenant->id(), $effective);
 
         self::assertIsArray($data);
