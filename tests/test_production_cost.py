@@ -116,6 +116,17 @@ namespace {
     ) {
         throw new \RuntimeException('Wrong weighted cost: '.json_encode($initial));
     }
+    $reordered = $service->calculate($tenant, $order, [$second, $first]);
+    if ($reordered !== $initial) {
+        throw new \RuntimeException('Weighted material cost depends on receipt order');
+    }
+    $foreignMaterial = new Material($foreign, 'material-a');
+    $foreignReceipt = new PurchaseOrder($foreign, 'foreign-receipt', [
+        new PurchaseOrderLine($foreign, $foreignMaterial, '100', '0.0001'),
+    ]);
+    if ($service->calculate($tenant, $order, [$first, $foreignReceipt, $second]) !== $initial) {
+        throw new \RuntimeException('Foreign tenant receipt affected production cost');
+    }
     if ($initial['consumptions'][0] !== [
         'material_id'=>'material-a',
         'quantity'=>'3',
