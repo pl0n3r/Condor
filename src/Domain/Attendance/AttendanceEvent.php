@@ -51,7 +51,10 @@ final readonly class AttendanceEvent
             && $this->type === $other->type;
     }
 
-    /** Explicit safe projection: no raw device payload or unrestricted personal field. */
+    /**
+     * Explicit safe projection: no raw device payload or unrestricted personal field.
+     * @return array<string, string>
+     */
     public function toSafeArray(): array
     {
         return [
