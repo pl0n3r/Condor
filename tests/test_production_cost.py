@@ -124,6 +124,12 @@ namespace {
     ]) {
         throw new \RuntimeException('Historical unit cost is missing');
     }
+    $unreceived = new PurchaseOrder($tenant, 'purchase-unreceived', [
+        new PurchaseOrderLine($tenant, $materialA, '100', '900.0000'),
+    ], false);
+    if ($service->calculate($tenant, $order, [$first, $second, $unreceived]) !== $initial) {
+        throw new \RuntimeException('Unreceived purchase altered weighted material cost');
+    }
     $later = new PurchaseOrder($tenant, 'purchase-3', [
         new PurchaseOrderLine($tenant, $materialA, '100', '999.0000'),
         new PurchaseOrderLine($tenant, $materialB, '10', '50.0000'),
@@ -133,7 +139,11 @@ namespace {
         throw new \RuntimeException('Expected weighted average to change with new receipts');
     }
     $stored = json_decode(json_encode($initial, JSON_THROW_ON_ERROR), true, 512, JSON_THROW_ON_ERROR);
-    $recalculated = $service->calculate($tenant, $order, [$first, $second, $later], $stored);
+    $forbiddenHistory = (static function (): \Generator {
+        throw new \RuntimeException('Saved cost snapshot re-read current purchase history');
+        yield null;
+    })();
+    $recalculated = $service->calculate($tenant, $order, $forbiddenHistory, $stored);
     if ($recalculated !== $initial) {
         throw new \RuntimeException('Recalculation did not preserve the original cost');
     }
@@ -146,6 +156,8 @@ namespace {
     expectFailure(fn() => $service->calculate($tenant, $order, [], $bad), 'changed total');
     $bad = $initial; $bad['consumptions'][1]['material_id'] = 'material-a';
     expectFailure(fn() => $service->calculate($tenant, $order, [], $bad), 'duplicate consumption');
+    $bad = $initial; $bad['consumptions'][0]['material_id'] = 'unknown-material';
+    expectFailure(fn() => $service->calculate($tenant, $order, [], $bad), 'unexpected material in snapshot');
     $bad = $initial; $bad['tenant_id'] = $foreign->id();
     expectFailure(fn() => $service->calculate($tenant, $order, [], $bad), 'cross-tenant snapshot');
     $bad = $initial; $bad['consumptions'][0]['unit_cost'] = '999999999999999999999';
