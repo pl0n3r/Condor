@@ -56,6 +56,7 @@ class SaasControlCenterUiIntegrationTests(unittest.TestCase):
     def test_auth_and_cross_tenant_fail_closed(self) -> None:
         self.php_test("testNonOwnerAndUnknownTenantFailClosed")
         self.php_test("testUnresolvedCommercialConfigurationIsNotReportedAsAllowed")
+        self.php_test("testUnexpectedCommercialAdapterFailureIsSanitized")
         self.php_test("testTenantWithoutSubscriptionRemainsUnknownNotKnownZero")
 
     def test_ui_shows_safe_states_and_canonical_values(self) -> None:

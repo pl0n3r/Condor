@@ -25,6 +25,7 @@ use App\Domain\Organization\Entity\Tenant;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Events;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 /** Real Symfony HTTP and Doctrine fixtures; never mocks platform authorization. */
@@ -318,6 +319,58 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
         self::assertStringContainsString('Datos comerciales no disponibles.', $raw);
         self::assertStringNotContainsString($tenant->id(), $raw);
     }
+    public function testUnexpectedCommercialAdapterFailureIsSanitized(): void
+    {
+        $client = static::createClient();
+        $em = $this->entityManager();
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $owner = new User('saas-failure-owner@example.test', 'Owner', [User::ROLE_PLATFORM_OWNER]);
+        $tenant = new Tenant('SaaS failure tenant', 'saas-runtime-failure');
+        $plan = new Plan('saas-runtime-failure-plan', 'Runtime failure plan');
+        $version = new PlanVersion(
+            $plan, 1, 24000, null, false, ['users' => 10], $now->modify('-10 days')
+        );
+        $subscription = Subscription::fromLifecycle(
+            new SubscriptionLifecycle(
+                $tenant->id(), $version, SubscriptionState::Active, $now->modify('-2 days')
+            ),
+            $now->modify('-1 day'),
+        );
+        foreach ([$owner, $tenant, $plan, $version, $subscription] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
+        $client->loginUser($owner);
+
+        // Real Doctrine hydration (not an authorization mock): the tenant
+        // and owner resolve normally, but the commercial subscription source
+        // raises an unexpected infrastructure exception after scope checks.
+        $em->clear();
+        $listener = new class {
+            public function postLoad(object $event): void
+            {
+                if ($event->getObject() instanceof Subscription) {
+                    throw new \RuntimeException('synthetic-private-sql-diagnostic');
+                }
+            }
+        };
+        $em->getEventManager()->addEventListener([Events::postLoad], $listener);
+
+        $client->request(
+            'GET', '/adminpl0n3r/api/tenants/'.$tenant->id().'/saas-control-center'
+        );
+        self::assertResponseStatusCodeSame(503);
+        self::assertStringContainsString(
+            'no-store', (string) $client->getResponse()->headers->get('Cache-Control')
+        );
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('Datos comerciales no disponibles.', $body);
+        self::assertStringNotContainsString('synthetic-private-sql-diagnostic', $body);
+        self::assertStringNotContainsString($tenant->id(), $body);
+        self::assertStringNotContainsString('saas-runtime-failure-plan', $body);
+        self::assertStringNotContainsString('"allowed":true', $body);
+    }
+
     private function entityManager(): EntityManagerInterface
     {
         $manager = static::getContainer()->get(EntityManagerInterface::class);

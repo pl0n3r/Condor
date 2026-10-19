@@ -72,7 +72,9 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
                     throw new DomainException('Entitlement de otro tenant.');
                 }
             }
-        } catch (DomainException) {
+        } catch (\Throwable) {
+            // Auth and tenant scope were validated above; fail closed on any
+            // provider/ORM fault without exposing technical diagnostics.
             return $this->unavailable();
         }
 
@@ -88,7 +90,7 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
                 $tenantId,
                 $tenantId, // Tenant identity was independently resolved above.
             );
-        } catch (DomainException) {
+        } catch (\Throwable) {
             // Never serialize adapter exceptions, raw tenant rows or SQL errors.
             return $this->unavailable();
         }
