@@ -89,6 +89,9 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
             '/adminpl0n3r/api/tenants/'.$tenant->id().'/saas-control-center'
         );
         self::assertResponseIsSuccessful();
+        self::assertStringContainsString(
+            'no-store', (string) $client->getResponse()->headers->get('Cache-Control')
+        );
         $payload = json_decode(
             (string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR
         );
@@ -164,6 +167,9 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
                 'GET', '/adminpl0n3r/api/tenants/'.$tenant->id().'/saas-control-center'
             );
             self::assertResponseStatusCodeSame(503);
+            self::assertStringContainsString(
+                'no-store', (string) $client->getResponse()->headers->get('Cache-Control')
+            );
             $raw = (string) $client->getResponse()->getContent();
             self::assertStringContainsString('Datos comerciales no disponibles.', $raw);
             self::assertStringNotContainsString($tenant->id(), $raw);
@@ -191,6 +197,9 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
             (string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR
         );
         self::assertSame('empty', $payload['state']);
+        self::assertStringContainsString(
+            'no-store', (string) $client->getResponse()->headers->get('Cache-Control')
+        );
         self::assertSame($tenant->id(), $payload['tenant_id']);
         foreach (['plan', 'add_ons', 'usage', 'entitlements'] as $field) {
             self::assertArrayHasKey($field, $payload);

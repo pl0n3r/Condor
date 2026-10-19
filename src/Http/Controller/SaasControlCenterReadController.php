@@ -93,7 +93,7 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
             return $this->unavailable();
         }
 
-        return $this->json($projection);
+        return $this->privateReadJson($projection);
     }
 
     /** @return array<string,mixed>|null */
@@ -224,9 +224,23 @@ final class SaasControlCenterReadController extends PlatformOwnerApiController
         return $subscription instanceof Subscription ? $subscription : null;
     }
 
+    /**
+     * Tenant-scoped commercial rights must never remain in HTTP caches when
+     * a subscription changes, a tenant is switched, or an owner logs out.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function privateReadJson(array $payload, int $status = JsonResponse::HTTP_OK): JsonResponse
+    {
+        $response = $this->json($payload, $status);
+        $response->headers->set('Cache-Control', 'private, no-store, max-age=0');
+
+        return $response;
+    }
+
     private function unavailable(): JsonResponse
     {
-        return $this->json(
+        return $this->privateReadJson(
             ['state' => 'error', 'message' => 'Datos comerciales no disponibles.'],
             JsonResponse::HTTP_SERVICE_UNAVAILABLE,
         );
