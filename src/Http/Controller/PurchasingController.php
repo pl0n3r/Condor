@@ -56,7 +56,9 @@ final class PurchasingController extends AbstractController
         $this->requireCsrf($request);
         [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'inventory.create');
         $payload = $this->payload($request, ['code', 'name', 'payment_terms_days']);
-        $days = $payload['payment_terms_days'] ?? 0;
+        $days = array_key_exists('payment_terms_days', $payload)
+            ? $payload['payment_terms_days']
+            : 0;
         if (!is_int($days) || $days < 0 || $days > 365) {
             throw new UnprocessableEntityHttpException('El plazo de pago debe estar entre 0 y 365 días.');
         }
@@ -79,7 +81,7 @@ final class PurchasingController extends AbstractController
     public function orders(string $branchId): JsonResponse
     {
         [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'inventory.view');
-        $source = $this->branchSource($tenant, $branch);
+        $source = $this->branchSource($tenant, $branch, false);
         $orders = $this->entityManager->getRepository(PurchaseOrder::class)->findBy(
             ['tenant' => $tenant, 'legalEntity' => $source->legalEntity()],
             ['createdAt' => 'DESC'],
@@ -117,7 +119,7 @@ final class PurchasingController extends AbstractController
     {
         $this->requireCsrf($request);
         [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'inventory.update');
-        $source = $this->branchSource($tenant, $branch);
+        $source = $this->branchSource($tenant, $branch, false);
         $order = $this->order($tenant, $source, $orderId);
         $payload = $this->payload($request, ['idempotency_key']);
         $key = $this->text($payload, 'idempotency_key', 80);
@@ -130,6 +132,9 @@ final class PurchasingController extends AbstractController
             ): JsonResponse {
                 $entityManager->refresh($order, LockMode::PESSIMISTIC_WRITE);
                 $alreadyReceived = $order->isReceived();
+                if (!$alreadyReceived && !$source->isActive()) {
+                    throw new NotFoundHttpException('Fuente de inventario activa para la sede no encontrada.');
+                }
                 $received = $this->domain(fn (): PurchaseOrder => $this->purchaseOrders->receive(
                     $tenant, $source, $order, $key, $user->id(),
                 ));
@@ -148,14 +153,16 @@ final class PurchasingController extends AbstractController
         );
     }
 
-    private function branchSource(Tenant $tenant, Branch $branch): InventorySource
+    private function branchSource(Tenant $tenant, Branch $branch, bool $requireActive = true): InventorySource
     {
         $source = $this->entityManager->getRepository(InventorySource::class)->findOneBy([
             'tenant' => $tenant,
             'branch' => $branch,
             'type' => InventorySource::TYPE_BRANCH,
-            'active' => true,
         ]);
+        if ($source instanceof InventorySource && $requireActive && !$source->isActive()) {
+            throw new NotFoundHttpException('Fuente de inventario activa para la sede no encontrada.');
+        }
         if (!$source instanceof InventorySource) {
             throw new NotFoundHttpException('Fuente de inventario activa para la sede no encontrada.');
         }
