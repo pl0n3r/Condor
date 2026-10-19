@@ -1,0 +1,15 @@
+{# Barra superior del sitio público. Variable: current = home|producto|soluciones|seguridad #}
+<header class="mk-bar" aria-label="Navegación principal">
+    <div class="mk-wrap">
+        <a class="mk-logo" href="{{ path('app_home') }}" aria-label="Condor, inicio"><i aria-hidden="true"></i>Condor</a>
+        <nav class="mk-nav" aria-label="Secciones">
+            <a href="{{ path('app_marketing_producto') }}"{% if current|default('') == 'producto' %} aria-current="page"{% endif %}>Producto</a>
+            <a href="{{ path('app_marketing_soluciones') }}"{% if current|default('') == 'soluciones' %} aria-current="page"{% endif %}>Soluciones</a>
+            <a href="{{ path('app_marketing_seguridad') }}"{% if current|default('') == 'seguridad' %} aria-current="page"{% endif %}>Seguridad</a>
+        </nav>
+        <div class="mk-actions">
+            <a class="mk-login" href="{{ path('app_login') }}">Ingresar</a>
+            <a class="mk-btn mk-btn-primary" href="{{ path('app_home') }}#solicitar-demo">Solicitar una demo</a>
+        </div>
+    </div>
+</header>
