@@ -6,6 +6,7 @@ namespace App\Application\HumanResources;
 
 use App\Domain\Audit\Entity\AuditEvent;
 use App\Domain\HumanResources\Employee;
+use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Tenant;
 
@@ -18,6 +19,8 @@ use App\Domain\Organization\Entity\Tenant;
  */
 interface EmployeeStore
 {
+    public function membership(Tenant $tenant, User $user): ?Membership;
+
     public function findById(Tenant $tenant, string $id): ?Employee;
 
     public function findByCode(Tenant $tenant, string $code): ?Employee;

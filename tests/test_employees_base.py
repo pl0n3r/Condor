@@ -32,6 +32,12 @@ final class MemoryEmployeeStore implements EmployeeStore
 {
     public array $employees = [];
     public array $events = [];
+    public array $memberships = [];
+
+    public function membership(Tenant $tenant, User $user): ?Membership
+    {
+        return $this->memberships[$tenant->id()][$user->id()] ?? null;
+    }
 
     public function findById(Tenant $tenant, string $id): ?Employee
     {
@@ -80,27 +86,34 @@ $target = new User('staff@example.test', 'Staff A');
 $memberA = new Membership($tenantA, $target, 'STAFF');
 $memberB = new Membership($tenantB, $target, 'STAFF');
 $store = new MemoryEmployeeStore();
+$store->memberships[$tenantA->id()][$actor->id()] = $ownerA;
+$store->memberships[$tenantB->id()][$actor->id()] = $ownerB;
+$store->memberships[$tenantA->id()][$target->id()] = $memberA;
+$store->memberships[$tenantB->id()][$target->id()] = $memberB;
+$foreignTarget = new User('foreign@example.test', 'Other tenant');
+$store->memberships[$tenantB->id()][$foreignTarget->id()] = new Membership($tenantB, $foreignTarget, 'STAFF');
+$unregisteredActor = new User('unregistered@example.test', 'No membership');
 $service = new EmployeeService($store);
 
-$employee = $service->create($tenantA, ' emp-001 ', $actor, $ownerA);
+$employee = $service->create($tenantA, ' emp-001 ', $actor);
 $withoutUser = $employee->user() === null && $employee->code() === 'EMP-001';
-$foreignAbsent = $service->find($tenantB, $employee->id(), $actor, $ownerB) === null;
-$invalidCrossMembership = rejected(fn() => $service->attachUser($tenantA, $employee->id(), $target, $memberB, $actor, $ownerA));
-$duplicateCode = rejected(fn() => $service->create($tenantA, 'EMP-001', $actor, $ownerA));
-$crossOwner = rejected(fn() => $service->create($tenantB, 'EMP-002', $actor, $ownerA));
-$invalidCode = rejected(fn() => $service->create($tenantA, "EMP\n3", $actor, $ownerA));
+$foreignAbsent = $service->find($tenantB, $employee->id(), $actor) === null;
+$invalidCrossMembership = rejected(fn() => $service->attachUser($tenantA, $employee->id(), $foreignTarget, $actor));
+$duplicateCode = rejected(fn() => $service->create($tenantA, 'EMP-001', $actor));
+$crossOwner = rejected(fn() => $service->create($tenantB, 'EMP-002', $unregisteredActor));
+$invalidCode = rejected(fn() => $service->create($tenantA, "EMP\n3", $actor));
 
-$linked = $service->attachUser($tenantA, $employee->id(), $target, $memberA, $actor, $ownerA);
+$linked = $service->attachUser($tenantA, $employee->id(), $target, $actor);
 $linkedCorrectly = $linked->user()?->id() === $target->id() &&
-    $service->find($tenantA, $employee->id(), $actor, $ownerA)?->user()?->id() === $target->id();
-$replay = $service->attachUser($tenantA, $employee->id(), $target, $memberA, $actor, $ownerA);
+    $service->find($tenantA, $employee->id(), $actor)?->user()?->id() === $target->id();
+$replay = $service->attachUser($tenantA, $employee->id(), $target, $actor);
 $repeatSafe = $replay->id() === $linked->id() && count($store->events) === 2;
 
-$second = $service->create($tenantA, 'EMP-002', $actor, $ownerA);
-$duplicateUser = rejected(fn() => $service->attachUser($tenantA, $second->id(), $target, $memberA, $actor, $ownerA));
-$otherTenantSameCode = $service->create($tenantB, 'EMP-001', $actor, $ownerB);
+$second = $service->create($tenantA, 'EMP-002', $actor);
+$duplicateUser = rejected(fn() => $service->attachUser($tenantA, $second->id(), $target, $actor));
+$otherTenantSameCode = $service->create($tenantB, 'EMP-001', $actor);
 $otherTenantIndependent = $otherTenantSameCode->user() === null && $otherTenantSameCode->tenant()->id() === $tenantB->id();
-$invalidTenantEmployee = rejected(fn() => $service->attachUser($tenantB, $employee->id(), $target, $memberB, $actor, $ownerB));
+$invalidTenantEmployee = rejected(fn() => $service->attachUser($tenantB, $employee->id(), $target, $actor));
 
 echo json_encode([
     'without_user' => $withoutUser,
