@@ -10,8 +10,6 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTROLLER = ROOT / "src/Http/Controller/TenantPublicController.php"
-RESOLVER = ROOT / "src/Infrastructure/Tenancy/TenantResolver.php"
 TEMPLATE = ROOT / "templates/tenant/index.html.twig"
 
 HTTP_SMOKE = r"""<?php
@@ -21,6 +19,7 @@ use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\StorefrontProfile;
 use App\Domain\Organization\Entity\Tenant;
+use App\Domain\Organization\Entity\TenantDomain;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
@@ -55,20 +54,32 @@ final class TenantPublicContractHttpSmokeTest extends WebTestCase
         $membershipB = new Membership(
             $tenantB, $internalB, Membership::ROLE_OWNER,
         );
+        $verifiedHost = 'tenant-a-'.$suffix.'.example.test';
+        $verifiedDomain = new TenantDomain($tenantA, $verifiedHost, true, true);
 
         foreach ([
             $tenantA, $tenantB, $profileA, $profileB, $internalA, $internalB,
-            $membershipA, $membershipB,
+            $membershipA, $membershipB, $verifiedDomain,
         ] as $entity) {
             $em->persist($entity);
         }
         $em->flush();
+
+        // The verified custom domain resolves tenant A at the homepage.
+        $client->request('GET', '/', server: ['HTTP_HOST' => $verifiedHost]);
+        self::assertResponseStatusCodeSame(200);
+        $domainPage = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('VISIBLE_A_'.$suffix, $domainPage);
+        self::assertStringContainsString('data-tenant-slug="'.$tenantA->slug().'"', $domainPage);
+        self::assertStringNotContainsString('VISIBLE_B_'.$suffix, $domainPage);
+        self::assertStringNotContainsString('internal-a-'.$suffix, $domainPage);
 
         $host = ['HTTP_HOST' => 'www.condorapp.com.co'];
         $client->request('GET', '/'.$tenantA->slug(), server: $host);
         self::assertResponseStatusCodeSame(200);
         $pageA = (string) $client->getResponse()->getContent();
         self::assertStringContainsString('VISIBLE_A_'.$suffix, $pageA);
+        self::assertStringContainsString('Descripcion publicada A '.$suffix, $pageA);
         self::assertStringContainsString('data-tenant-slug="'.$tenantA->slug().'"', $pageA);
         self::assertStringNotContainsString('VISIBLE_B_'.$suffix, $pageA);
         self::assertStringNotContainsString('internal-a-'.$suffix, $pageA);
@@ -109,21 +120,9 @@ final class TenantPublicContractHttpSmokeTest extends WebTestCase
 
 class TenantPublicoContratoHttpTests(unittest.TestCase):
     def test_acceptance(self) -> None:
-        self.assertTrue(CONTROLLER.is_file())
-        self.assertTrue(RESOLVER.is_file())
         self.assertTrue(TEMPLATE.is_file())
-        source = CONTROLLER.read_text(encoding="utf-8")
-        resolver = RESOLVER.read_text(encoding="utf-8")
         template = TEMPLATE.read_text(encoding="utf-8")
-
-        self.assertIn("TenantResolver::isPlatformHost($request->getHost())", source)
-        self.assertIn("'slug' => $tenant_slug", source)
-        self.assertIn("$current->id() !== $tenant->id()", source)
-        self.assertIn("new NotFoundHttpException()", source)
-        self.assertIn("PublicCatalogPresentation::MAX_PAGE", source)
-        self.assertIn("'verified' => true", resolver)
         self.assertIn("{{ storefront.headline ?: storefront.name }}", template)
-        self.assertIn("{{ storefront.description }}", template)
         self.assertNotIn("membership", template.lower())
 
         php = shutil.which("php")
