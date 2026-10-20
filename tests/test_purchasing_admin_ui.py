@@ -47,10 +47,22 @@ class ComprasUiAdminTests(unittest.TestCase):
         self.assertNotIn("legal_entity_id:", PANEL)
         self.assertNotIn("source_id:", PANEL)
 
-    def test_no_unverified_weighted_cost_is_presented_as_fact(self):
-        self.assertIn("API actual no expone ese valor", PANEL)
-        self.assertNotIn("average_unit_cost:", PANEL)
+    def test_weighted_cost_requires_verified_server_history(self):
+        self.assertIn("const materialCostsPath = basePath + '/material-costs'", PANEL)
+        self.assertIn("readJson<{ material_costs: MaterialCost[] }>(materialCostsPath)", PANEL)
+        self.assertIn("Array.isArray(materialCostsResult.material_costs)", PANEL)
+        self.assertIn("cost.state !== 'KNOWN' && cost.state !== 'UNKNOWN'", PANEL)
+        self.assertIn("cost.average_unit_cost !== null", PANEL)
+        self.assertIn("cost.receipt_count < 0", PANEL)
+        self.assertIn("materialCosts: materialCostsResult.material_costs", PANEL)
+        self.assertIn("historical?.state === 'KNOWN'", PANEL)
+        self.assertIn("Sin costo promedio histórico verificado", PANEL)
+        self.assertIn("Costo promedio ponderado de materiales", PANEL)
+        self.assertIn("Los materiales sin historial se muestran como desconocidos", PANEL)
         self.assertNotIn("parseFloat(", PANEL)
+        self.assertNotIn("parseInt(", PANEL)
+        self.assertNotIn("Number(historical.average_unit_cost)", PANEL)
+        self.assertNotIn("tenant_id:", PANEL)
 
 
 if __name__ == "__main__":
