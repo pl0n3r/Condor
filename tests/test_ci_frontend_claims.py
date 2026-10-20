@@ -31,7 +31,7 @@ def context():
     import json
     pr = {
         "state": "open", "draft": True, "body": "<!-- condor-reserva-id: " + ID + " -->",
-        "head": {"ref": BRANCH, "sha": SHA, "repo": {"full_name": REPO}},
+        "head": {"ref": BRANCH, "sha": SHA, "repo": {"name": "Condor", "owner": {"login": "pl0n3r"}}},
         "base": {"ref": "main"}, "user": {"login": "pl0n3r"},
     }
     issue = {"number": 673, "state": "open",

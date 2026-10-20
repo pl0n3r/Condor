@@ -54,7 +54,13 @@ def authorize(
     head = pr.get("head")
     if not isinstance(head, dict) or head.get("ref") != branch or head.get("sha") != head_sha:
         return False
-    if not isinstance(head.get("repo"), dict) or head["repo"].get("full_name") != repository:
+    # Use only repository identifiers, not any personal-name fields.
+    repo_details = head.get("repo")
+    owner, sep, repo_name = repository.partition("/")
+    if (not isinstance(repo_details, dict) or not sep
+        or not isinstance(repo_details.get("owner"), dict)
+        or repo_details["owner"].get("login") != owner
+        or repo_details.get("name") != repo_name):
         return False
     user = pr.get("user")
     if not isinstance(user, dict) or not isinstance(user.get("login"), str):
