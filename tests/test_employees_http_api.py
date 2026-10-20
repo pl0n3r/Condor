@@ -32,6 +32,7 @@ use App\Http\Controller\EmployeeHttpStore;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -200,6 +201,17 @@ $extraFieldDenied = rejected(
         req(['code' => 'NO', 'salary' => '1000000'])),
     UnprocessableEntityHttpException::class,
 );
+$oversizedJson = rejected(
+    fn() => invokeAction($api, 'createWithinTenant', $tenantA, $owner,
+        req(['code' => str_repeat('X', 4097)])),
+    BadRequestHttpException::class,
+);
+$malformedJson = rejected(
+    fn() => invokeAction($api, 'createWithinTenant', $tenantA, $owner,
+        Request::create('/api/v1/hr/employees', 'POST', [], [], [],
+            ['CONTENT_TYPE' => 'application/json'], '{not-json')),
+    BadRequestHttpException::class,
+);
 $disabled = new EmployeeController();
 $disabled->setContainer(new ServiceLocator([]));
 $failClosed = rejected(
@@ -223,6 +235,8 @@ echo json_encode([
     'foreign_attendance_denied' => $foreignAttendance,
     'viewer_attendance_denied' => $viewerAttendanceDenied,
     'sensitive_extra_field_denied' => $extraFieldDenied,
+    'oversized_json_denied' => $oversizedJson,
+    'malformed_json_denied' => $malformedJson,
     'unwired_api_disabled' => $failClosed,
     'minimal_safe_json' => !str_contains($responseJson, 'owner@example.test')
         && !str_contains($responseJson, 'fingerprint')
@@ -258,7 +272,7 @@ class EmpleadosApiTests(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         evidence = json.loads(result.stdout)
-        self.assertEqual(len(evidence), 15)
+        self.assertEqual(len(evidence), 17)
         for name, passes in evidence.items():
             with self.subTest(case=name):
                 self.assertTrue(passes, name)
