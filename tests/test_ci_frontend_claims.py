@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/ci_frontend_claim_guard.py"
@@ -47,6 +49,49 @@ class FrontendArtifactClaimsTests(unittest.TestCase):
         return guard.authorize(pr, issue, comments,
                                files if files is not None else ["public/build/admin.js"],
                                REPO, BRANCH, SHA)
+
+    def test_denied_staged_bundle_fails_reproducibility_gate(self):
+        workflow = (SCRIPT.parents[0] / ".github" / "workflows" / "ci.yml").read_text()
+        self.assertIn("run: git diff HEAD --exit-code -- public/build", workflow)
+        self.assertIn("if ! python3 scripts/ci_frontend_claim_guard.py; then", workflow)
+        self.assertIn("if: always()", workflow)
+        # Git diff without HEAD checks only the unstaged worktree, not the
+        # index.  Reproduce the exact denied-V3 path in a disposable repo.
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Path(folder)
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            bundle = repo / "public" / "build" / "admin.js"
+            bundle.parent.mkdir(parents=True)
+            bundle.write_text("original")
+            subprocess.run(["git", "add", "public/build/admin.js"], cwd=repo, check=True)
+            subprocess.run(
+                ["git", "-c", "user.name=CI Fixture",
+                 "-c", "user.email=ci-fixture@example.invalid",
+                 "commit", "-qm", "fixture"],
+                cwd=repo, check=True,
+            )
+            self.assertEqual(
+                subprocess.run(
+                    ["git", "diff", "HEAD", "--exit-code", "--", "public/build"],
+                    cwd=repo, capture_output=True,
+                ).returncode, 0,
+            )
+            bundle.write_text("modified by Vite")
+            subprocess.run(["git", "add", "-f", "public/build/admin.js"], cwd=repo, check=True)
+            self.assertEqual(
+                subprocess.run(
+                    ["git", "diff", "--exit-code", "--", "public/build"],
+                    cwd=repo, capture_output=True,
+                ).returncode, 0,
+                "Old gate would falsely approve a staged and unauthorized bundle",
+            )
+            self.assertEqual(
+                subprocess.run(
+                    ["git", "diff", "HEAD", "--exit-code", "--", "public/build"],
+                    cwd=repo, capture_output=True,
+                ).returncode, 1,
+                "New gate must reject the unauthorized staged bundle",
+            )
 
     def test_unclaimed_bundle_never_pushes(self):
         pr, issue, comments = context()
