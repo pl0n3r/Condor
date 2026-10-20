@@ -6,6 +6,7 @@ import { CommerceManagement } from './CommerceManagement';
 import { CmsManagement } from './CmsManagement';
 import { OrdersManagement } from './OrdersManagement';
 import { ProductionManagement } from './ProductionManagement';
+import { PurchasingManagement } from './PurchasingManagement';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
 import { contextPath } from './api';
@@ -142,6 +143,7 @@ export function AdminApp({
         { href: '/admin#catalog', label: 'Catálogo' },
         { href: '/admin#inventory', label: 'Inventario' },
         { href: '/admin#production', label: 'Producción' },
+        { href: '/admin#purchasing', label: 'Compras' },
         { href: '/admin#commerce', label: 'Comercial' },
         { href: '/admin#orders', label: 'Pedidos' },
         { href: '/admin#roles', label: 'Roles y permisos' },
@@ -292,6 +294,13 @@ export function AdminApp({
               csrfToken={accessToken}
             />
           )}
+
+          <PurchasingManagement
+            key={'purchasing-' + context.data.active_branch.id}
+            branchId={context.data.active_branch.id}
+            permissions={context.data.permissions}
+            csrfToken={accessToken}
+          />
 
           <CommerceManagement
             key={'commerce-' + context.data.active_branch.id}
