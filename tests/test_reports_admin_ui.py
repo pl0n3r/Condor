@@ -124,9 +124,22 @@ const tick = async () => {await new Promise(resolve => realSetTimeout(resolve, 2
   await tick();
   const staleBlocked = clicked.length === before;
 
+  // Permission changes within the same branch must also invalidate a pending CSV.
+  fetchPromise = new Promise(resolve => {resolveFetch = resolve;});
+  props = {...props, permissions:['inventory.view']};
+  tree = render();
+  elements(tree, 'form')[0].props.onSubmit({preventDefault() {}});
+  const beforeRevoke = clicked.length;
+  props = {...props, permissions:[]};
+  render();
+  resolveFetch({ok:true,status:200,headers:{get:()=>contentType},
+    blob:async()=>new Blob([csv],{type:'text/csv'})});
+  await tick();
+  const permissionRevocationBlocked = clicked.length === beforeRevoke;
+
   // Branch context is supplied by the authenticated admin, never query tenant.
   process.stdout.write(JSON.stringify({
-    success, saved, denied, empty, staleBlocked,
+    success, saved, denied, empty, staleBlocked, permissionRevocationBlocked,
     blobs:blobs.length, revoked:revoked.length,
     urlCount:downloads.length,
   }));
@@ -157,6 +170,7 @@ class ReportesUiAdminTests(unittest.TestCase):
         self.assertTrue(data["denied"])
         self.assertTrue(data["empty"])
         self.assertTrue(data["staleBlocked"])
+        self.assertTrue(data["permissionRevocationBlocked"])
         self.assertEqual(data["blobs"], data["revoked"])
 
     def test_security_contract_and_negative_states(self):
@@ -172,6 +186,8 @@ class ReportesUiAdminTests(unittest.TestCase):
             self.assertIn(permission, panel)
         self.assertNotIn("purchases.view", panel)
         self.assertIn("credentials: 'same-origin'", panel)
+        self.assertIn("[branchId, permissions]", panel)
+        self.assertIn("permissionsRef.current.includes(requiredPermission)", panel)
         self.assertIn("new URLSearchParams({ from, through })", panel)
         self.assertIn("encodeURIComponent(branchId)", panel)
         self.assertIn("URL.revokeObjectURL", panel)
