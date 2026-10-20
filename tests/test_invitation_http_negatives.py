@@ -171,27 +171,36 @@ final class InvitationActivationNegativesSmokeTest extends WebTestCase
 
 class InvitacionesNegativasHttpTests(unittest.TestCase):
     def test_acceptance(self) -> None:
-        self.assertTrue(CONTROLLER.is_file(), str(CONTROLLER))
-        self.assertTrue(ACCEPTANCE.is_file(), str(ACCEPTANCE))
-        php = shutil.which("php")
-        self.assertIsNotNone(php, "PHP CLI obligatorio para HTTP real")
+        for required_source in (CONTROLLER, ACCEPTANCE):
+            self.assertTrue(required_source.is_file(), str(required_source))
+
+        interpreter = shutil.which("php")
+        self.assertIsNotNone(interpreter, "PHP CLI obligatorio para HTTP real")
         self.assertTrue(RUNNER.is_file(), "PHPUnit real obligatorio para AC-01")
 
-        with tempfile.TemporaryDirectory(prefix="condor-invitation-http-") as temp:
-            fixture = Path(temp) / "InvitationActivationNegativesSmokeTest.php"
-            fixture.write_text(PHP_SCENARIO, encoding="utf-8")
-            lint = subprocess.run(
-                [php, "-l", str(fixture)],
-                cwd=ROOT, capture_output=True, text=True, check=False, timeout=25,
+        with tempfile.TemporaryDirectory(prefix="condor-invitation-http-") as directory:
+            scenario = Path(directory) / "InvitationActivationNegativesSmokeTest.php"
+            scenario.write_text(PHP_SCENARIO, encoding="utf-8")
+            stages = (
+                ("php-syntax", [interpreter, "-l", str(scenario)], 25),
+                ("http-acceptance", [str(RUNNER), str(scenario)], 180),
             )
-            self.assertEqual(0, lint.returncode, lint.stdout + lint.stderr)
-            result = subprocess.run(
-                [str(RUNNER), str(fixture)],
-                cwd=ROOT, capture_output=True, text=True, check=False, timeout=180,
-            )
-            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-            self.assertRegex(result.stdout + result.stderr, r"OK\s*\(\s*1 test,")
+            execution_log = {}
+            for stage, command, limit in stages:
+                completed = subprocess.run(
+                    command, cwd=ROOT, check=False,
+                    capture_output=True, text=True, timeout=limit,
+                )
+                evidence = completed.stdout + completed.stderr
+                self.assertEqual(
+                    0, completed.returncode, f"{stage} failed:\n{evidence}",
+                )
+                execution_log[stage] = evidence
 
+            # A successful phpunit command alone might have discovered no tests.
+            self.assertRegex(
+                execution_log["http-acceptance"], r"OK\s*\(\s*1 test,",
+            )
 
 if __name__ == "__main__":
     unittest.main()
