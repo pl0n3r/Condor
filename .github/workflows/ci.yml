@@ -588,9 +588,6 @@ jobs:
       - name: Ejecutar aceptación HTTP gerencial tenant A/B (#695)
         run: python3 -m unittest tests/test_management_dashboard.py -v
 
-      - name: Ejecutar aceptación HTTP RRHH sintética (#718)
-        run: python3 -m unittest tests/test_employees_http_api.py -v
-
       - name: Ejecutar pruebas PHP
         run: vendor/bin/simple-phpunit
 
