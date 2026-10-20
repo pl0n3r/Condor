@@ -88,7 +88,12 @@ class FrontendArtifactClaimsTests(unittest.TestCase):
         workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text()
         self.assertIn("run: git diff HEAD --exit-code -- public/build", workflow)
         self.assertIn("if ! python3 scripts/ci_frontend_claim_guard.py; then", workflow)
-        self.assertIn("if: always()", workflow)
+        self.assertRegex(
+            workflow,
+            r"- name: Conservar build frontend para reconciliación\s+"
+            r"if: always\(\)\s+"
+            r"uses: actions/upload-artifact@",
+        )
         # Git diff without HEAD checks only the unstaged worktree, not the
         # index.  Reproduce the exact denied-V3 path in a disposable repo.
         with tempfile.TemporaryDirectory() as folder:
@@ -126,6 +131,44 @@ class FrontendArtifactClaimsTests(unittest.TestCase):
                 ).returncode, 1,
                 "New gate must reject the unauthorized staged bundle",
             )
+
+    def test_run_guard_rejects_bad_environment_and_api_snapshot(self):
+        """Exercise the executable wrapper, not merely the pure authorize()."""
+        import os
+        from unittest.mock import patch
+
+        pr, issue, comments = context()
+        env = {
+            "GITHUB_REPOSITORY": REPO,
+            "HEAD_REF": BRANCH,
+            "EXPECTED_HEAD_SHA": SHA,
+            "PR_NUMBER": "716",
+        }
+        def git_run(command, **_kwargs):
+            if command[:3] == ["git", "rev-parse", "HEAD"]:
+                return subprocess.CompletedProcess(command, 0, stdout=SHA + "\n")
+            if command[:3] == ["git", "diff", "--cached"]:
+                return subprocess.CompletedProcess(command, 0, stdout=b"public/build/admin.js\x00")
+            raise AssertionError("Unexpected git call")
+
+        with patch.dict(os.environ, env), patch.object(guard.subprocess, "run",
+                side_effect=git_run), patch.object(guard, "gh_api",
+                side_effect=[pr, issue, [comments]]) as api:
+            self.assertEqual(guard.run_guard(), 0)
+            self.assertEqual(api.call_count, 3)
+
+        for wrong in ({"PR_NUMBER": "oops"}, {"EXPECTED_HEAD_SHA": "b" * 40},
+                      {"HEAD_REF": "trabajo/issue-691"}):
+            with patch.dict(os.environ, {**env, **wrong}), \
+                 patch.object(guard.subprocess, "run", side_effect=git_run), \
+                 patch.object(guard, "gh_api") as api:
+                self.assertEqual(guard.run_guard(), 1)
+                api.assert_not_called()
+
+        with patch.dict(os.environ, env), \
+             patch.object(guard.subprocess, "run", side_effect=git_run), \
+             patch.object(guard, "gh_api", side_effect=[pr, issue, {"bad": "page"}]):
+            self.assertEqual(guard.run_guard(), 1)
 
     def test_unclaimed_bundle_never_pushes(self):
         from copy import deepcopy
