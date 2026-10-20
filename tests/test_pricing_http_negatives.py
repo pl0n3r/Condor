@@ -77,19 +77,31 @@ final class PricingHttpNegativesSmokeTest extends WebTestCase
         $base = '/api/v1/branches/'.$branchA->id().'/pricing';
         $pricePath = $base.'/lists/'.$listA->id().'/variants/'.$variantA->id();
 
+        // BrowserKit may reboot the kernel between requests. Always query a
+        // fresh EntityManager, never refresh detached fixture objects.
         $assertUnchanged = static function () use (
-            $manager, $tenantA, $tenantB, $savedA, $savedB, $listA, $listB
+            $tenantA, $tenantB, $savedA, $savedB, $listA, $listB
         ): void {
-            $manager->refresh($savedA);
-            $manager->refresh($savedB);
-            self::assertSame(4500, $savedA->amountMinor());
-            self::assertSame(9900, $savedB->amountMinor());
-            self::assertSame(1, $manager->getRepository(PriceList::class)->count(['tenant' => $tenantA]));
-            self::assertSame(1, $manager->getRepository(PriceList::class)->count(['tenant' => $tenantB]));
-            self::assertSame('COP', $listA->currency());
-            self::assertSame('COP', $listB->currency());
-            self::assertSame(1, $manager->getRepository(VariantPrice::class)->count(['tenant' => $tenantA]));
-            self::assertSame(1, $manager->getRepository(VariantPrice::class)->count(['tenant' => $tenantB]));
+            $em = static::getContainer()->get(EntityManagerInterface::class);
+            self::assertInstanceOf(EntityManagerInterface::class, $em);
+            $a = $em->getRepository(VariantPrice::class)->find($savedA->id());
+            $b = $em->getRepository(VariantPrice::class)->find($savedB->id());
+            self::assertInstanceOf(VariantPrice::class, $a);
+            self::assertInstanceOf(VariantPrice::class, $b);
+            self::assertSame(4500, $a->amountMinor());
+            self::assertSame(9900, $b->amountMinor());
+            $tenantRefA = $em->getReference(Tenant::class, $tenantA->id());
+            $tenantRefB = $em->getReference(Tenant::class, $tenantB->id());
+            self::assertSame(1, $em->getRepository(PriceList::class)->count(['tenant' => $tenantRefA]));
+            self::assertSame(1, $em->getRepository(PriceList::class)->count(['tenant' => $tenantRefB]));
+            $freshListA = $em->getRepository(PriceList::class)->find($listA->id());
+            $freshListB = $em->getRepository(PriceList::class)->find($listB->id());
+            self::assertInstanceOf(PriceList::class, $freshListA);
+            self::assertInstanceOf(PriceList::class, $freshListB);
+            self::assertSame('COP', $freshListA->currency());
+            self::assertSame('COP', $freshListB->currency());
+            self::assertSame(1, $em->getRepository(VariantPrice::class)->count(['tenant' => $tenantRefA]));
+            self::assertSame(1, $em->getRepository(VariantPrice::class)->count(['tenant' => $tenantRefB]));
         };
         $assertUnchanged();
 
@@ -140,11 +152,17 @@ final class PricingHttpNegativesSmokeTest extends WebTestCase
         // rather than treating universal denials as a passing HTTP contract.
         $client->jsonRequest('PUT', $pricePath, ['amount_minor' => 4600], $headers);
         self::assertResponseStatusCodeSame(200);
-        $manager->refresh($savedA);
-        $manager->refresh($savedB);
-        self::assertSame(4600, $savedA->amountMinor());
-        self::assertSame(9900, $savedB->amountMinor());
-        self::assertSame(1, $manager->getRepository(VariantPrice::class)->count(['tenant' => $tenantA]));
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $em);
+        $currentA = $em->getRepository(VariantPrice::class)->find($savedA->id());
+        $currentB = $em->getRepository(VariantPrice::class)->find($savedB->id());
+        self::assertInstanceOf(VariantPrice::class, $currentA);
+        self::assertInstanceOf(VariantPrice::class, $currentB);
+        self::assertSame(4600, $currentA->amountMinor());
+        self::assertSame(9900, $currentB->amountMinor());
+        self::assertSame(1, $em->getRepository(VariantPrice::class)->count([
+            'tenant' => $em->getReference(Tenant::class, $tenantA->id()),
+        ]));
 
         $client->request('GET', $base);
         self::assertResponseStatusCodeSame(200);
