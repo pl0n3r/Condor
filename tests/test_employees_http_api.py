@@ -36,6 +36,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Component\HttpKernel\Exception\UnsupportedMediaTypeHttpException;
 
 final class MemoryEmployeeHttpStore implements EmployeeHttpStore
 {
@@ -212,6 +213,19 @@ $malformedJson = rejected(
             ['CONTENT_TYPE' => 'application/json'], '{not-json')),
     BadRequestHttpException::class,
 );
+$unsupportedMediaType = rejected(
+    fn() => invokeAction($api, 'createWithinTenant', $tenantA, $owner,
+        Request::create('/api/v1/hr/employees', 'POST', [], [], [],
+            ['CONTENT_TYPE' => 'text/plain'],
+            json_encode(['code' => 'BAD'], JSON_THROW_ON_ERROR))),
+    UnsupportedMediaTypeHttpException::class,
+);
+$missingMediaType = rejected(
+    fn() => invokeAction($api, 'createWithinTenant', $tenantA, $owner,
+        Request::create('/api/v1/hr/employees', 'POST', [], [], [], [],
+            json_encode(['code' => 'BAD'], JSON_THROW_ON_ERROR))),
+    UnsupportedMediaTypeHttpException::class,
+);
 $disabled = new EmployeeController();
 $disabled->setContainer(new ServiceLocator([]));
 $failClosed = rejected(
@@ -237,6 +251,8 @@ echo json_encode([
     'sensitive_extra_field_denied' => $extraFieldDenied,
     'oversized_json_denied' => $oversizedJson,
     'malformed_json_denied' => $malformedJson,
+    'unsupported_media_type_denied' => $unsupportedMediaType,
+    'missing_media_type_denied' => $missingMediaType,
     'unwired_api_disabled' => $failClosed,
     'minimal_safe_json' => !str_contains($responseJson, 'owner@example.test')
         && !str_contains($responseJson, 'fingerprint')
@@ -272,7 +288,7 @@ class EmpleadosApiTests(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         evidence = json.loads(result.stdout)
-        self.assertEqual(len(evidence), 17)
+        self.assertEqual(len(evidence), 19)
         for name, passes in evidence.items():
             with self.subTest(case=name):
                 self.assertTrue(passes, name)
