@@ -72,13 +72,18 @@ function readStockData(alerts: unknown, minimums: unknown): StockData {
     || alerts.source_id.length === 0
     || minimums.source_id !== alerts.source_id
     || !Array.isArray(alerts.alerts)
-    || !Array.isArray(minimums.minimums)
-    || !alerts.alerts.every((item) => stockAlert(item, alerts.source_id))
-    || !minimums.minimums.every((item) => stockMinimum(item, alerts.source_id))) {
+    || !Array.isArray(minimums.minimums)) {
+    throw new Error('La respuesta de alertas no es válida para esta sede.');
+  }
+  // Capture the narrowed identifier: TypeScript does not preserve a mutable
+  // record property narrow across Array.every callbacks.
+  const sourceId = alerts.source_id;
+  if (!alerts.alerts.every((item) => stockAlert(item, sourceId))
+    || !minimums.minimums.every((item) => stockMinimum(item, sourceId))) {
     throw new Error('La respuesta de alertas no es válida para esta sede.');
   }
   return {
-    sourceId: alerts.source_id,
+    sourceId,
     alerts: alerts.alerts,
     minimums: minimums.minimums,
   };
