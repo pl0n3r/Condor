@@ -78,13 +78,12 @@ final readonly class TenantReportRecordsReader
             ->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d');
     }
 
-    /** @param list<array<string, mixed>> $rows */
-    private static function bounded(array $rows): array
+    /** @param array<mixed> $rows */
+    private static function bounded(array $rows): void
     {
         if (count($rows) > self::ROW_LIMIT) {
             throw new DomainException('REPORT_ROW_LIMIT');
         }
-        return $rows;
     }
 
     /** @return list<array<string, int|string>> */
@@ -104,8 +103,9 @@ final readonly class TenantReportRecordsReader
             ->from(InventoryBalance::class, 'b')
             ->where('b.tenant = :tenant AND b.legalEntity = :legal AND b.source = :source')
             ->andWhere('b.updatedAt >= :start AND b.updatedAt < :end')
-            ->setParameters(['tenant' => $tenant, 'legal' => $legalEntity, 'source' => $source,
-                'start' => $start, 'end' => $end])
+            ->setParameter('tenant', $tenant)->setParameter('legal', $legalEntity)
+            ->setParameter('source', $source)->setParameter('start', $start)
+            ->setParameter('end', $end)
             ->orderBy('b.updatedAt', 'ASC')->addOrderBy('b.id', 'ASC')
             ->setMaxResults(self::ROW_LIMIT + 1)->getQuery()->getArrayResult();
         self::bounded($rows);
@@ -139,8 +139,9 @@ final readonly class TenantReportRecordsReader
             ->from(Order::class, 'o')
             ->where('o.tenant = :tenant AND o.legalEntity = :legal AND o.inventorySource = :source')
             ->andWhere('o.createdAt >= :start AND o.createdAt < :end')
-            ->setParameters(['tenant' => $tenant, 'legal' => $legalEntity, 'source' => $source,
-                'start' => $start, 'end' => $end])
+            ->setParameter('tenant', $tenant)->setParameter('legal', $legalEntity)
+            ->setParameter('source', $source)->setParameter('start', $start)
+            ->setParameter('end', $end)
             ->orderBy('o.createdAt', 'ASC')->addOrderBy('o.id', 'ASC')
             ->setMaxResults(self::ROW_LIMIT + 1)->getQuery()->getArrayResult();
         self::bounded($rows);
@@ -174,9 +175,10 @@ final readonly class TenantReportRecordsReader
             ->where('p.tenant = :tenant AND p.legalEntity = :legal')
             ->andWhere('p.status = :received AND p.receiptSourceId = :sourceId')
             ->andWhere('p.receivedAt >= :start AND p.receivedAt < :end')
-            ->setParameters(['tenant' => $tenant, 'legal' => $legalEntity,
-                'received' => PurchaseOrder::STATUS_RECEIVED, 'sourceId' => $source->id(),
-                'start' => $start, 'end' => $end])
+            ->setParameter('tenant', $tenant)->setParameter('legal', $legalEntity)
+            ->setParameter('received', PurchaseOrder::STATUS_RECEIVED)
+            ->setParameter('sourceId', $source->id())->setParameter('start', $start)
+            ->setParameter('end', $end)
             ->orderBy('p.receivedAt', 'ASC')->addOrderBy('p.id', 'ASC')
             ->setMaxResults(self::ROW_LIMIT + 1)->getQuery()->getResult();
         self::bounded($rows);
