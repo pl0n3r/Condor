@@ -232,6 +232,41 @@ $failClosed = rejected(
     fn() => invokeAction($disabled, 'indexWithinTenant', $tenantA, $owner),
     ServiceUnavailableHttpException::class,
 );
+// Exercise public controller entrypoints, not only private tenant-scoped helpers.
+// No token is installed; no real DB, CSRF bypass or personal data is involved.
+$anonymousApi = new EmployeeController($store, $events);
+$anonymousApi->setContainer(new ServiceLocator([
+    'security.token_storage' => static fn() =>
+        new \Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage(),
+]));
+$anonymousListDenied = rejected(
+    fn() => $anonymousApi->index(), AccessDeniedHttpException::class,
+);
+$anonymousShowDenied = rejected(
+    fn() => $anonymousApi->show($employeeId), AccessDeniedHttpException::class,
+);
+// Route attributes are part of the public HTTP contract, not an implementation detail.
+$expectedRoutes = [
+    'index' => ['/api/v1/hr/employees', 'GET'],
+    'create' => ['/api/v1/hr/employees', 'POST'],
+    'show' => ['/api/v1/hr/employees/{employeeId}', 'GET'],
+    'link' => ['/api/v1/hr/employees/{employeeId}/link', 'POST'],
+    'attendance' => ['/api/v1/hr/employees/{employeeId}/attendance', 'POST'],
+];
+$routesCorrect = true;
+foreach ($expectedRoutes as $method => [$path, $httpMethod]) {
+    $attributes = (new ReflectionMethod(EmployeeController::class, $method))
+        ->getAttributes(\Symfony\Component\Routing\Attribute\Route::class);
+    if (count($attributes) !== 1) {
+        $routesCorrect = false;
+        break;
+    }
+    $route = $attributes[0]->newInstance();
+    if ($route->getPath() !== $path || $route->getMethods() !== [$httpMethod]) {
+        $routesCorrect = false;
+        break;
+    }
+}
 $responseJson = json_encode([$createdData, $linked, $first], JSON_THROW_ON_ERROR);
 echo json_encode([
     'create_http_201' => $created->getStatusCode() === 201 && $createdData['employee']['code'] === 'EMP-1',
@@ -254,6 +289,9 @@ echo json_encode([
     'unsupported_media_type_denied' => $unsupportedMediaType,
     'missing_media_type_denied' => $missingMediaType,
     'unwired_api_disabled' => $failClosed,
+    'public_anonymous_list_denied' => $anonymousListDenied,
+    'public_anonymous_show_denied' => $anonymousShowDenied,
+    'http_route_attributes_exact' => $routesCorrect,
     'minimal_safe_json' => !str_contains($responseJson, 'owner@example.test')
         && !str_contains($responseJson, 'fingerprint')
         && array_keys($createdData['employee']) === ['id', 'code', 'linked'],
@@ -288,7 +326,7 @@ class EmpleadosApiTests(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         evidence = json.loads(result.stdout)
-        self.assertEqual(len(evidence), 19)
+        self.assertEqual(len(evidence), 22)
         for name, passes in evidence.items():
             with self.subTest(case=name):
                 self.assertTrue(passes, name)
