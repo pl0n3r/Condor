@@ -28,6 +28,7 @@ type Snapshot = {
   orders: PurchaseOrder[];
   materials: Material[];
   materialCosts: MaterialCost[];
+  historyStatus: 'verified' | 'unavailable';
 };
 type LoadState =
   | { status: 'loading' }
@@ -91,12 +92,23 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
     const current = ++requestId.current;
     setState({ status: 'loading' });
     try {
-      const [suppliersResult, ordersResult, materialsResult, materialCostsResult] = await Promise.all([
+      // The historical cost endpoint may be deployed after the purchasing UI.
+      // Degrade only historical costs; never downgrade an authorization failure.
+      const historicalRequest = readJson<{ material_costs: MaterialCost[] }>(materialCostsPath)
+        .then((result) => ({ result, available: true as const }))
+        .catch((error: unknown) => {
+          if (error instanceof Error && error.message === 'PERMISSION_DENIED') {
+            throw error;
+          }
+          return { result: { material_costs: [] as MaterialCost[] }, available: false as const };
+        });
+      const [suppliersResult, ordersResult, materialsResult, historical] = await Promise.all([
         readJson<{ suppliers: Supplier[] }>(suppliersPath),
         readJson<{ orders: PurchaseOrder[] }>(ordersPath),
         readJson<{ materials: Material[] }>(productionMaterialsPath(branchId)),
-        readJson<{ material_costs: MaterialCost[] }>(materialCostsPath),
+        historicalRequest,
       ]);
+      const materialCostsResult = historical.result;
       if (current !== requestId.current) return;
       if (!Array.isArray(suppliersResult.suppliers)
         || !Array.isArray(ordersResult.orders)
@@ -123,6 +135,7 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
         orders: ordersResult.orders,
         materials: materialsResult.materials,
         materialCosts: materialCostsResult.material_costs,
+        historyStatus: historical.available ? 'verified' as const : 'unavailable' as const,
       };
       setState({ status: 'ready', data });
       setSupplierId((old) => (
@@ -371,6 +384,12 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
             )}
             <section aria-labelledby="weighted-cost-title">
               <h3 id="weighted-cost-title">Costo promedio ponderado de materiales</h3>
+              {data.historyStatus === 'unavailable' && (
+                <p role="alert" className="alert alert-error">
+                  No se pudo verificar el costo histórico. Los proveedores y órdenes siguen disponibles,
+                  pero no se mostrará ningún promedio hasta recuperar la consulta del servidor.
+                </p>
+              )}
               {data.materials.length === 0 ? (
                 <p role="status">No hay materiales para consultar costos históricos.</p>
               ) : (
@@ -380,7 +399,7 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
                     return (
                       <li key={material.id}>
                         {material.code} · {material.name}: {' '}
-                        {historical?.state === 'KNOWN' && historical.average_unit_cost !== null
+                        {data.historyStatus === 'verified' && historical?.state === 'KNOWN' && historical.average_unit_cost !== null
                           ? `${historical.average_unit_cost} COP por ${material.unit}`
                           : 'Sin costo promedio histórico verificado'}
                       </li>
