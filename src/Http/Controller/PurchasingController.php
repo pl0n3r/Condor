@@ -6,6 +6,7 @@ namespace App\Http\Controller;
 
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
+use App\Application\Purchasing\MaterialCostService;
 use App\Application\Purchasing\PurchaseOrderService;
 use App\Application\Purchasing\SupplierService;
 use App\Domain\Inventory\Entity\InventorySource;
@@ -37,6 +38,7 @@ final class PurchasingController extends AbstractController
         private readonly EntityManagerInterface $entityManager,
         private readonly SupplierService $suppliers,
         private readonly PurchaseOrderService $purchaseOrders,
+        private readonly MaterialCostService $materialCosts,
     ) {
     }
 
@@ -88,6 +90,31 @@ final class PurchasingController extends AbstractController
         );
 
         return $this->json(['orders' => array_map(self::orderPayload(...), $orders)]);
+    }
+
+    /** Read-only historical average from all received purchases of the authorized tenant. */
+    #[Route('/api/v1/branches/{branchId}/purchasing/material-costs', name: 'api_purchasing_material_costs', methods: ['GET'])]
+    public function materialCosts(string $branchId): JsonResponse
+    {
+        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'inventory.view');
+        $this->branchSource($tenant, $branch, false);
+
+        $materials = $this->entityManager->getRepository(Material::class)->findBy(
+            ['tenant' => $tenant], ['code' => 'ASC'],
+        );
+        $orders = $this->entityManager->getRepository(PurchaseOrder::class)->findBy([
+            'tenant' => $tenant,
+            'status' => PurchaseOrder::STATUS_RECEIVED,
+        ]);
+        $costs = [];
+        foreach ($materials as $material) {
+            $costs[] = array_merge(
+                ['material_id' => $material->id()],
+                $this->domain(fn (): array => $this->materialCosts->calculate($tenant, $material, $orders)),
+            );
+        }
+
+        return $this->json(['material_costs' => $costs]);
     }
 
     #[Route('/api/v1/branches/{branchId}/purchasing/orders', name: 'api_purchasing_order_create', methods: ['POST'])]
