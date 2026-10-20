@@ -10,6 +10,13 @@ type Supplier = {
 };
 type Material = { id: string; code: string; name: string; unit: string; active: boolean };
 type Line = { material_id: string; quantity: string; unit_cost: string };
+type MaterialCost = {
+  material_id: string;
+  state: 'KNOWN' | 'UNKNOWN';
+  average_unit_cost: string | null;
+  total_quantity: string;
+  receipt_count: number;
+};
 type PurchaseOrder = {
   id: string;
   status: string;
@@ -20,6 +27,7 @@ type Snapshot = {
   suppliers: Supplier[];
   orders: PurchaseOrder[];
   materials: Material[];
+  materialCosts: MaterialCost[];
 };
 type LoadState =
   | { status: 'loading' }
@@ -77,27 +85,44 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
   const basePath = '/api/v1/branches/' + encodeURIComponent(branchId) + '/purchasing';
   const suppliersPath = basePath + '/suppliers';
   const ordersPath = basePath + '/orders';
+  const materialCostsPath = basePath + '/material-costs';
 
   async function load() {
     const current = ++requestId.current;
     setState({ status: 'loading' });
     try {
-      const [suppliersResult, ordersResult, materialsResult] = await Promise.all([
+      const [suppliersResult, ordersResult, materialsResult, materialCostsResult] = await Promise.all([
         readJson<{ suppliers: Supplier[] }>(suppliersPath),
         readJson<{ orders: PurchaseOrder[] }>(ordersPath),
         readJson<{ materials: Material[] }>(productionMaterialsPath(branchId)),
+        readJson<{ material_costs: MaterialCost[] }>(materialCostsPath),
       ]);
       if (current !== requestId.current) return;
       if (!Array.isArray(suppliersResult.suppliers)
         || !Array.isArray(ordersResult.orders)
         || !Array.isArray(materialsResult.materials)
-        || ordersResult.orders.some((order) => !Array.isArray(order.lines))) {
+        || !Array.isArray(materialCostsResult.material_costs)
+        || ordersResult.orders.some((order) => !Array.isArray(order.lines))
+        || materialCostsResult.material_costs.some((cost) => (
+          typeof cost.material_id !== 'string'
+          || (cost.state !== 'KNOWN' && cost.state !== 'UNKNOWN')
+          || (cost.state === 'UNKNOWN' && cost.average_unit_cost !== null)
+          || (cost.state === 'KNOWN' && (
+            typeof cost.average_unit_cost !== 'string'
+            || !/^(0|[1-9][0-9]*)\.[0-9]{4}$/.test(cost.average_unit_cost)
+          ))
+          || typeof cost.total_quantity !== 'string'
+          || !/^(0|[1-9][0-9]*)\.[0-9]{6}$/.test(cost.total_quantity)
+          || !Number.isSafeInteger(cost.receipt_count)
+          || cost.receipt_count < 0
+        ))) {
         throw new Error('El servidor devolvió una respuesta de compras inválida.');
       }
       const data = {
         suppliers: suppliersResult.suppliers,
         orders: ordersResult.orders,
         materials: materialsResult.materials,
+        materialCosts: materialCostsResult.material_costs,
       };
       setState({ status: 'ready', data });
       setSupplierId((old) => (
@@ -344,10 +369,30 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
                 <button className="button" disabled={busy || !activeSuppliers.length || !activeMaterials.length} type="submit">Crear orden</button>
               </form>
             )}
-            <p className="muted">
-              El costo unitario mostrado corresponde a la orden. El costo promedio ponderado
-              se calcula en el dominio; la API actual no expone ese valor y no se estima aquí.
-            </p>
+            <section aria-labelledby="weighted-cost-title">
+              <h3 id="weighted-cost-title">Costo promedio ponderado de materiales</h3>
+              {data.materials.length === 0 ? (
+                <p role="status">No hay materiales para consultar costos históricos.</p>
+              ) : (
+                <ul>
+                  {data.materials.map((material) => {
+                    const historical = data.materialCosts.find((cost) => cost.material_id === material.id);
+                    return (
+                      <li key={material.id}>
+                        {material.code} · {material.name}: {' '}
+                        {historical?.state === 'KNOWN' && historical.average_unit_cost !== null
+                          ? `${historical.average_unit_cost} COP por ${material.unit}`
+                          : 'Sin costo promedio histórico verificado'}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <p className="muted">
+                El promedio procede de recepciones confirmadas del servidor, no del costo unitario de una orden.
+                Los materiales sin historial se muestran como desconocidos, nunca como costo cero.
+              </p>
+            </section>
           </section>
         </div>
       )}
