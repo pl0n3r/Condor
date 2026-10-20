@@ -6,6 +6,7 @@ namespace App\Application\Production;
 
 use App\Application\Commercial\EntitlementSnapshot;
 use App\Application\Inventory\InventoryService;
+use App\Domain\Purchasing\Entity\PurchaseOrder;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Organization\Entity\Tenant;
 use App\Domain\Production\Entity\BillOfMaterials;
@@ -23,6 +24,7 @@ final readonly class ProductionOrderService
         private EntityManagerInterface $entityManager,
         private MaterialInventoryService $materialInventory,
         private InventoryService $inventory,
+        private ProductionCostService $productionCosts,
     ) {
     }
 
@@ -192,6 +194,33 @@ final readonly class ProductionOrderService
                     );
 
                     $order->complete($completedQuantity, $key);
+
+                    // El costo queda congelado bajo la misma transacción y lock.
+                    // Sin histórico suficiente, cost_snapshot sigue NULL, nunca cero.
+                    $receipts = $entityManager
+                        ->getRepository(PurchaseOrder::class)
+                        ->createQueryBuilder('p')
+                        ->andWhere('p.tenant = :tenant')
+                        ->andWhere('p.legalEntity = :legalEntity')
+                        ->andWhere('p.status = :received')
+                        ->andWhere('p.receivedAt <= :completedAt')
+                        ->setParameter('tenant', $tenant)
+                        ->setParameter('legalEntity', $source->legalEntity())
+                        ->setParameter('received', PurchaseOrder::STATUS_RECEIVED)
+                        ->setParameter('completedAt', $order->completedAt())
+                        ->getQuery()
+                        ->getResult();
+                    try {
+                        $snapshot = $this->productionCosts->calculate($tenant, $order, $receipts);
+                        $snapshot['source_id'] = $source->id();
+                        $order->saveCostSnapshot($snapshot);
+                    } catch (DomainException $exception) {
+                        // No bloquear producción histórica sin precios acreditados.
+                        // Ningún otro error puede convertirse silenciosamente en UNKNOWN.
+                        if (!str_starts_with($exception->getMessage(), 'Costo ponderado desconocido:')) {
+                            throw $exception;
+                        }
+                    }
 
                     return $order;
                 },

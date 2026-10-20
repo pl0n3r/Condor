@@ -86,6 +86,10 @@ class ProductionOrder
     #[ORM\Column(name: 'completed_at', type: 'datetime_immutable', nullable: true)]
     private ?DateTimeImmutable $completedAt = null;
 
+    /** @var array<string, mixed>|null */
+    #[ORM\Column(name: 'cost_snapshot', type: 'json', nullable: true)]
+    private ?array $costSnapshot = null;
+
     public function __construct(
         Tenant $tenant,
         BillOfMaterials $billOfMaterials,
@@ -164,6 +168,42 @@ class ProductionOrder
     public function completedAt(): ?DateTimeImmutable
     {
         return $this->completedAt;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function costSnapshot(): ?array
+    {
+        return $this->costSnapshot;
+    }
+
+    /** @param array<string, mixed> $snapshot */
+    public function saveCostSnapshot(array $snapshot): void
+    {
+        if (!$this->isCompleted() || $this->completedQuantity === null) {
+            throw new DomainException('El costo requiere una orden terminada.');
+        }
+        if (
+            ($snapshot['state'] ?? null) !== 'ESTIMATED_COST'
+            || ($snapshot['tenant_id'] ?? null) !== $this->tenant->id()
+            || ($snapshot['order_id'] ?? null) !== $this->id
+            || ($snapshot['source_id'] ?? null) !== $this->source->id()
+            || ($snapshot['bom_id'] ?? null) !== $this->billOfMaterials->id()
+            || ($snapshot['bom_version'] ?? null) !== $this->billOfMaterials->version()
+            || ($snapshot['completed_quantity'] ?? null) !== $this->completedQuantity
+            || !is_string($snapshot['total_cost'] ?? null)
+            || !is_string($snapshot['unit_cost'] ?? null)
+            || !is_array($snapshot['consumptions'] ?? null)
+        ) {
+            throw new DomainException('Snapshot de costo ajeno, incompleto o inválido.');
+        }
+        if ($this->costSnapshot !== null) {
+            if ($this->costSnapshot !== $snapshot) {
+                throw new DomainException('El comprobante guardado es inmutable.');
+            }
+
+            return;
+        }
+        $this->costSnapshot = $snapshot;
     }
 
     public function isCompleted(): bool
