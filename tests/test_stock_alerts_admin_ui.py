@@ -111,5 +111,31 @@ class AlertasUiAdminTests(unittest.TestCase):
         self.assertIn("aria-live=\"polite\"", PANEL)
 
 
+    def test_save_rejects_invalid_or_stale_receipts(self):
+        """A PUT success requires an exact tenant-scoped response and live request."""
+        # 401/403 never fall through to an editable success state.
+        self.assertIn("status === 401 || status === 403", PANEL)
+        self.assertIn("setState({ status: 'denied' })", PANEL)
+        # 404/422 are API errors; a rejected or malformed response is not success.
+        self.assertIn("status === 404", PANEL)
+        self.assertIn("status === 422", PANEL)
+        self.assertIn("if (!response.ok)", PANEL)
+        self.assertIn("throw apiError(response.status)", PANEL)
+        self.assertIn("!stockMinimum(result.minimum, ready.sourceId)", PANEL)
+        self.assertIn("result.minimum.variant_id !== variantId", PANEL)
+        self.assertIn("result.minimum.minimum !== minimum", PANEL)
+        self.assertIn("throw new Error('El servidor no confirmó el nuevo mínimo.')", PANEL)
+        # A branch switch invalidates both success and error callbacks.
+        self.assertIn("const requestId = requestSequence.current", PANEL)
+        self.assertGreaterEqual(
+            PANEL.count("if (requestId !== requestSequence.current) return"), 3,
+        )
+        self.assertIn("if (requestId === requestSequence.current) setSavingVariant(null)", PANEL)
+        # Range and permission are validated before any network mutation.
+        self.assertIn("if (!canUpdate || savingVariant !== null || ready === null) return;", PANEL)
+        self.assertIn("if (minimum === null)", PANEL)
+        self.assertIn("value <= 2147483647", PANEL)
+
+
 if __name__ == "__main__":
     unittest.main()
