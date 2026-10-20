@@ -233,8 +233,12 @@ final class EmployeeController extends AbstractController
      */
     private function strictPayload(Request $request, array $allowed): array
     {
+        $raw = (string) $request->getContent();
+        if (strlen($raw) > 4096) {
+            throw new BadRequestHttpException('JSON excede tamaño permitido.');
+        }
         try {
-            $decoded = json_decode((string) $request->getContent(), false, 512, JSON_THROW_ON_ERROR);
+            $decoded = json_decode($raw, false, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
             throw new BadRequestHttpException('JSON inválido.', $exception);
         }
