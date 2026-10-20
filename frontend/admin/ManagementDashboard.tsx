@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 type SourceRow = { id: string; source_url: string };
 type Sale = SourceRow & { amount_minor: number; currency: string; occurred_at: string };
@@ -46,7 +46,7 @@ function SourceLink({
 }: {
   branchId: string;
   row: SourceRow;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const href = authorizedSourceHref(branchId, row.source_url);
   return href ? <a href={href} rel="nofollow">{children}</a> : <span>{children}</span>;
@@ -60,6 +60,7 @@ function SourceLink({
 export function ManagementDashboard({ branchId, permissions }: Props) {
   const canView = permissions.includes('orders.view') && permissions.includes('inventory.view');
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+  const [retry, setRetry] = useState(0);
   const [from, setFrom] = useState(() => datePart(new Date(Date.now() - 29 * 86400000)));
   const [through, setThrough] = useState(() => datePart(new Date()));
   const currentRequest = useRef(0);
@@ -107,7 +108,7 @@ export function ManagementDashboard({ branchId, permissions }: Props) {
     })();
 
     return () => abort.abort();
-  }, [branchId, canView, from, through]);
+  }, [branchId, canView, from, through, retry]);
 
   return (
     <section id="management" aria-labelledby="management-title">
@@ -125,7 +126,12 @@ export function ManagementDashboard({ branchId, permissions }: Props) {
       )}
       {state.status === 'loading' && <p role="status">Cargando cifras verificables…</p>}
       {state.status === 'denied' && <p role="alert">No tienes permiso para consultar este panel.</p>}
-      {state.status === 'error' && <p role="alert">No fue posible recuperar las fuentes del panel.</p>}
+      {state.status === 'error' && (
+        <div role="alert">
+          <p>No fue posible recuperar las fuentes del panel.</p>
+          <button type="button" onClick={() => setRetry((value) => value + 1)}>Reintentar</button>
+        </div>
+      )}
       {state.status === 'ready' && (
         <>
           <section aria-label="Ventas del período">
