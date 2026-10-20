@@ -57,6 +57,12 @@ final class StockAlertController extends AbstractController
                 'user' => $user,
                 'eventKey' => NotificationCatalog::EVENT_STOCK_LOW,
                 'channelKey' => NotificationCatalog::CHANNEL_IN_APP,
+                // Apply active-state filtering before the 200-row limit:
+                // a backlog of failed deliveries must not hide valid alerts.
+                'status' => [
+                    NotificationDelivery::STATUS_PENDING,
+                    NotificationDelivery::STATUS_DELIVERED,
+                ],
             ],
             ['createdAt' => 'DESC'],
             200,

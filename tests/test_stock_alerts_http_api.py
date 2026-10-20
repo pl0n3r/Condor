@@ -83,6 +83,8 @@ use App\Domain\Identity\Entity\Role;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Inventory\Entity\InventoryMovement;
 use App\Domain\Inventory\Entity\InventorySource;
+use App\Domain\Notification\Entity\NotificationDelivery;
+use App\Domain\Notification\NotificationCatalog;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
@@ -188,6 +190,27 @@ final class StockAlertsScopeSmokeTest extends WebTestCase
         self::assertSame(3, $rows[0]['minimum']);
         self::assertSame(2, $rows[0]['quantity']);
 
+        // Failed notifications from the same user are not active alerts.
+        // Persist more than the API page limit to catch a filter-after-limit
+        // regression; a valid pending stock.low alert must remain visible.
+        usleep(1_100_000);
+        for ($i = 0; $i < 205; ++$i) {
+            $failed = new NotificationDelivery(
+                $owner,
+                NotificationCatalog::EVENT_STOCK_LOW,
+                NotificationCatalog::CHANNEL_IN_APP,
+                ['tenant_id' => $tenantA->id()],
+            );
+            $failed->markFailed('fixture');
+            $em->persist($failed);
+        }
+        $em->flush();
+        $client->request('GET', $url);
+        self::assertResponseStatusCodeSame(200);
+        $rows = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR)['alerts'];
+        self::assertCount(1, $rows);
+        self::assertSame($variantA->id(), $rows[0]['variant_id']);
+
         $client->loginUser($viewer);
         $client->request('GET', $minimums);
         self::assertResponseStatusCodeSame(200);
@@ -219,6 +242,7 @@ class AlertasStockApiTests(unittest.TestCase):
         self.assertIn("visibleInbox($membership, $candidateDeliveries)", controller)
         self.assertIn("NotificationDelivery::STATUS_PENDING", controller)
         self.assertIn("NotificationCatalog::CHANNEL_IN_APP", controller)
+        self.assertIn("'status' => [", controller)
 
         # Minimums survive requests via tenant-scoped append-only records, not
         # process memory or client-supplied tenant IDs.
