@@ -28,6 +28,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Component\HttpKernel\Exception\UnsupportedMediaTypeHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
@@ -233,6 +234,10 @@ final class EmployeeController extends AbstractController
      */
     private function strictPayload(Request $request, array $allowed): array
     {
+        $contentType = (string) $request->headers->get('Content-Type', '');
+        if (preg_match('/^application\/json(?:\s*;|\s*$)/i', $contentType) !== 1) {
+            throw new UnsupportedMediaTypeHttpException('Se requiere Content-Type application/json.');
+        }
         $raw = (string) $request->getContent();
         if (strlen($raw) > 4096) {
             throw new BadRequestHttpException('JSON excede tamaño permitido.');
