@@ -119,6 +119,17 @@ class SaasControlCenterUiIntegrationTests(unittest.TestCase):
         )
         self.assertIn("setSaasPanelRevision((current) => current + 1)", app)
         self.assertIn("if (tenantId !== undefined)", app)
+
+        # El bridge no certifica comportamiento DOM por inspección de TSX.
+        # La suite Playwright ejerce realmente el bundle en Chromium.
+        browser_spec = ROOT / "tests/e2e/saas-control-center.spec.mjs"
+        self.assertTrue(browser_spec.is_file(), "AC-03 exige navegador real")
+        browser_cases = browser_spec.read_text()
+        for case in ("HTTP 403", "HTTP 404", "HTTP 5xx", "empty declara UNKNOWN",
+                     "ready representa plan", "POST comercial exitoso"):
+            self.assertIn(case, browser_cases)
+        ci_workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertIn("npm run test:e2e", ci_workflow)
         if (ROOT / "node_modules/.bin/tsc").exists():
             self.run_command(["npm", "run", "typecheck"])
             self.run_command(["npm", "run", "build:admin"])
