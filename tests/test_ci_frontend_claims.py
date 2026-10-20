@@ -157,13 +157,19 @@ class FrontendArtifactClaimsTests(unittest.TestCase):
             self.assertEqual(guard.run_guard(), 0)
             self.assertEqual(api.call_count, 3)
 
-        for wrong in ({"PR_NUMBER": "oops"}, {"EXPECTED_HEAD_SHA": "b" * 40},
-                      {"HEAD_REF": "trabajo/issue-691"}):
+        for wrong in ({"PR_NUMBER": "oops"}, {"EXPECTED_HEAD_SHA": "b" * 40}):
             with patch.dict(os.environ, {**env, **wrong}), \
                  patch.object(guard.subprocess, "run", side_effect=git_run), \
                  patch.object(guard, "gh_api") as api:
                 self.assertEqual(guard.run_guard(), 1)
                 api.assert_not_called()
+
+        # A syntactically valid but mismatched branch reaches the remote
+        # snapshot, then authorize() denies even if that API returned data.
+        with patch.dict(os.environ, {**env, "HEAD_REF": "trabajo/issue-691"}), \
+             patch.object(guard.subprocess, "run", side_effect=git_run), \
+             patch.object(guard, "gh_api", side_effect=[pr, issue, [comments]]):
+            self.assertEqual(guard.run_guard(), 1)
 
         with patch.dict(os.environ, env), \
              patch.object(guard.subprocess, "run", side_effect=git_run), \
