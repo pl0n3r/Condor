@@ -47,6 +47,21 @@ class ComprasUiAdminTests(unittest.TestCase):
         self.assertNotIn("legal_entity_id:", PANEL)
         self.assertNotIn("source_id:", PANEL)
 
+    def test_historical_cost_failure_does_not_block_order_workflow(self):
+        """El histórico no disponible nunca inventa un costo ni oculta 403."""
+        self.assertIn("const historicalRequest =", PANEL)
+        self.assertIn("readJson<{ material_costs: MaterialCost[] }>(materialCostsPath)", PANEL)
+        self.assertIn("error.message === 'PERMISSION_DENIED'", PANEL)
+        self.assertIn("throw error;", PANEL)
+        self.assertIn("historyStatus: 'verified' | 'unavailable'", PANEL)
+        self.assertIn("historyStatus: historical.available", PANEL)
+        self.assertIn("data.historyStatus === 'unavailable'", PANEL)
+        self.assertIn("data.historyStatus === 'verified'", PANEL)
+        self.assertIn("No se pudo verificar el costo histórico.", PANEL)
+        self.assertIn("Los proveedores y órdenes siguen disponibles", PANEL)
+        self.assertNotIn("average_unit_cost: '0'", PANEL)
+        self.assertNotIn("average_unit_cost: 0", PANEL)
+
     def test_weighted_cost_requires_verified_server_history(self):
         self.assertIn("const materialCostsPath = basePath + '/material-costs'", PANEL)
         self.assertIn("readJson<{ material_costs: MaterialCost[] }>(materialCostsPath)", PANEL)
