@@ -149,7 +149,15 @@ export function InventoryManagement({
       }
 
       const data = await response.json() as Snapshot;
-      if (requestId !== inventoryRequestId.current || data.branch?.id !== branchId) {
+      if (requestId !== inventoryRequestId.current) {
+        return;
+      }
+      if (data.branch?.id !== branchId) {
+        // Do not keep the loader spinning on a wrong-scope response.
+        setState({
+          status: 'error',
+          message: 'El inventario recibido no corresponde a esta sede.',
+        });
         return;
       }
       setState({ status: 'ready', data });

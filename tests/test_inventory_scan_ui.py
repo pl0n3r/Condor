@@ -54,6 +54,8 @@ class EscaneoUiInventarioTests(unittest.TestCase):
         self.assertIn("const requestId = ++inventoryRequestId.current;", PANEL)
         self.assertIn("data.branch?.id !== branchId", PANEL)
         self.assertIn("if (requestId !== inventoryRequestId.current)", PANEL)
+        self.assertIn("El inventario recibido no corresponde a esta sede.", PANEL)
+        self.assertIn("status: 'error'", PANEL)
         self.assertIn("inventoryRequestId.current += 1;", PANEL)
 
     def test_inventory_refresh_clears_obsolete_scan_selection(self) -> None:
