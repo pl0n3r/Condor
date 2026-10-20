@@ -48,7 +48,7 @@ final class ScanController extends AbstractController
         [, $tenant] = $this->authorizedBranchScope($branchId, 'inventory.view');
         [$variant, $identifier] = $this->variantForCode($tenant, $code);
 
-        return $this->json([
+        $response = $this->json([
             'code' => $identifier->code(),
             'action' => $identifier->action(),
             'variant' => [
@@ -58,6 +58,10 @@ final class ScanController extends AbstractController
                 'product_name' => $variant->product()->name(),
             ],
         ]);
+        // Scanned inventory identities are tenant-scoped private responses.
+        $response->headers->set('Cache-Control', 'private, no-store');
+
+        return $response;
     }
 
     #[Route(

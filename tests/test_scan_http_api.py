@@ -18,7 +18,9 @@ declare(strict_types=1);
 
 use App\Domain\Catalog\Entity\Product;
 use App\Domain\Catalog\Entity\ProductVariant;
+use App\Domain\Identity\Entity\BranchRoleAssignment;
 use App\Domain\Identity\Entity\Membership;
+use App\Domain\Identity\Entity\Role;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\LegalEntity;
@@ -40,6 +42,10 @@ final class ScanScopeHttpSmokeTest extends WebTestCase
         $branchA = new Branch($alpha, 'Principal', 'principal-'.$suffix, $legalA, true);
         $owner = new User('scan-'.$suffix.'@example.test', 'Owner');
         $membership = new Membership($alpha, $owner, Membership::ROLE_OWNER);
+        $viewer = new User('scan-viewer-'.$suffix.'@example.test', 'Viewer');
+        $viewerMember = new Membership($alpha, $viewer, 'ADMIN');
+        $viewerRole = new Role($alpha, 'Solo catálogo', ['catalog.view']);
+        $viewerAssignment = new BranchRoleAssignment($viewerMember, $branchA, $viewerRole);
         $productA = new Product($alpha, 'Producto A', 'producto-a-'.$suffix);
         $variantA = new ProductVariant(
             $alpha, $productA, 'SCAN-0001', 'Café & <script>malicioso</script>',
@@ -56,7 +62,8 @@ final class ScanScopeHttpSmokeTest extends WebTestCase
         $foreignOnly = new ProductVariant($beta, $productB, 'FOREIGN-0001', 'No visible');
 
         foreach ([
-            $alpha, $legalA, $branchA, $owner, $membership, $productA,
+            $alpha, $legalA, $branchA, $owner, $membership,
+            $viewer, $viewerMember, $viewerRole, $viewerAssignment, $productA,
             $variantA, $inactiveProduct, $inactiveVariant,
             $beta, $legalB, $branchB, $productB, $sameCodeB, $foreignOnly,
         ] as $entity) {
@@ -75,6 +82,9 @@ final class ScanScopeHttpSmokeTest extends WebTestCase
         self::assertNotSame($sameCodeB->id(), $json['variant']['id']);
         self::assertSame('SCAN-0001', $json['code']);
         self::assertSame('view_variant', $json['action']);
+        self::assertStringContainsString(
+            'no-store', (string) $client->getResponse()->headers->get('Cache-Control'),
+        );
 
         $client->request('GET', $base.'/scan/FOREIGN-0001');
         self::assertResponseStatusCodeSame(404);
@@ -100,6 +110,12 @@ final class ScanScopeHttpSmokeTest extends WebTestCase
         $client->request('GET', $base.'/labels/FOREIGN-0001');
         self::assertResponseStatusCodeSame(404);
 
+        $client->loginUser($viewer);
+        $client->request('GET', $base.'/scan/SCAN-0001');
+        self::assertResponseStatusCodeSame(403);
+        $client->request('GET', $base.'/labels/SCAN-0001');
+        self::assertResponseStatusCodeSame(403);
+
         $client->restart();
         $client->request('GET', $base.'/scan/SCAN-0001');
         self::assertResponseStatusCodeSame(403);
@@ -118,6 +134,7 @@ class EscaneoApiTests(unittest.TestCase):
             "ScanIdentifier::canonicalCode($code)",
             "'tenant' => $tenant",
             "'active' => true",
+            "Cache-Control', 'private, no-store'",
             "new ScanResolver()",
             "$resolver->resolve($tenant, $canonical)",
             "$this->labels->render(",
