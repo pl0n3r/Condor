@@ -26,6 +26,7 @@ type LoadState =
   | { status: 'loading' }
   | { status: 'ready'; data: Dashboard }
   | { status: 'denied' }
+  | { status: 'invalid_range' }
   | { status: 'error' };
 
 type Props = Readonly<{ branchId: string; permissions: string[] }>;
@@ -69,6 +70,18 @@ export function ManagementDashboard({ branchId, permissions }: Props) {
     const number = ++currentRequest.current;
     if (!canView) {
       setState({ status: 'denied' });
+      return;
+    }
+    const fromTime = Date.parse(from + 'T00:00:00Z');
+    const throughTime = Date.parse(through + 'T00:00:00Z');
+    const durationDays = (throughTime - fromTime) / 86400000;
+    // Reject impossible dates and unsupported periods locally rather than
+    // offering a retry button that can only repeat an invalid request.
+    if (!Number.isFinite(durationDays)
+      || datePart(new Date(fromTime)) !== from
+      || datePart(new Date(throughTime)) !== through
+      || durationDays < 0 || durationDays > 366) {
+      setState({ status: 'invalid_range' });
       return;
     }
     const abort = new AbortController();
@@ -117,15 +130,18 @@ export function ManagementDashboard({ branchId, permissions }: Props) {
       {canView && (
         <div>
           <label>Desde
-            <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+            <input type="date" value={from} max={through} onChange={(event) => setFrom(event.target.value)} />
           </label>
           <label>Hasta
-            <input type="date" value={through} onChange={(event) => setThrough(event.target.value)} />
+            <input type="date" value={through} min={from} onChange={(event) => setThrough(event.target.value)} />
           </label>
         </div>
       )}
       {state.status === 'loading' && <p role="status">Cargando cifras verificables…</p>}
       {state.status === 'denied' && <p role="alert">No tienes permiso para consultar este panel.</p>}
+      {state.status === 'invalid_range' && (
+        <p role="alert">Corrige las fechas: usa un período válido, ordenado y de máximo 367 días.</p>
+      )}
       {state.status === 'error' && (
         <div role="alert">
           <p>No fue posible recuperar las fuentes del panel.</p>
