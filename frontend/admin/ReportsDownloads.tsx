@@ -36,6 +36,9 @@ export function ReportsDownloads({ branchId, permissions }: Props) {
   branchRef.current = branchId;
   permissionsRef.current = permissions;
   const allowed = types.filter((item) => permissions.includes(item.permission));
+  // Depend only on report capabilities, not the identity of an equivalent array.
+  const permissionScope = [permissions.includes('inventory.view'), permissions.includes('orders.view')]
+    .map(Boolean).map((granted) => granted ? '1' : '0').join('');
   const selected = allowed.some((item) => item.kind === kind) ? kind : allowed[0]?.kind;
   const canDownload = Boolean(selected && branchId && validDate(from)
     && validDate(through) && from <= through && status !== 'loading');
@@ -55,7 +58,7 @@ export function ReportsDownloads({ branchId, permissions }: Props) {
       for (const url of urls.current) URL.revokeObjectURL(url);
       urls.current.clear();
     };
-  }, [branchId, permissions]);
+  }, [branchId, permissionScope]);
 
   async function download() {
     if (!selected || !canDownload) { setStatus('invalid'); return; }
