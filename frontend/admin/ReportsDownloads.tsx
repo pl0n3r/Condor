@@ -32,7 +32,9 @@ export function ReportsDownloads({ branchId, permissions }: Props) {
   const active = useRef<AbortController | null>(null);
   const urls = useRef(new Set<string>());
   const branchRef = useRef(branchId);
+  const permissionsRef = useRef(permissions);
   branchRef.current = branchId;
+  permissionsRef.current = permissions;
   const allowed = types.filter((item) => permissions.includes(item.permission));
   const selected = allowed.some((item) => item.kind === kind) ? kind : allowed[0]?.kind;
   const canDownload = Boolean(selected && branchId && validDate(from)
@@ -53,7 +55,7 @@ export function ReportsDownloads({ branchId, permissions }: Props) {
       for (const url of urls.current) URL.revokeObjectURL(url);
       urls.current.clear();
     };
-  }, [branchId]);
+  }, [branchId, permissions]);
 
   async function download() {
     if (!selected || !canDownload) { setStatus('invalid'); return; }
@@ -63,8 +65,11 @@ export function ReportsDownloads({ branchId, permissions }: Props) {
     const controller = new AbortController();
     active.current = controller;
     setStatus('loading');
+    const requiredPermission = types.find((item) => item.kind === selected)?.permission;
     const current = () => request === sequence.current
-      && branchRef.current === originalBranch && !controller.signal.aborted;
+      && branchRef.current === originalBranch
+      && Boolean(requiredPermission && permissionsRef.current.includes(requiredPermission))
+      && !controller.signal.aborted;
     try {
       const response = await fetch(downloadPath(originalBranch, selected, from, through), {
         method: 'GET',
