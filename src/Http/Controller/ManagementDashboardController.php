@@ -64,18 +64,29 @@ final class ManagementDashboardController extends AbstractController
         $inventory = [];
         $production = [];
         if ($source instanceof InventorySource) {
-            foreach ($this->entityManager->getRepository(Order::class)->findBy([
-                'tenant' => $tenant,
-                'inventorySource' => $source,
-            ]) as $order) {
-                if ($order->createdAt() < $from
-                    || $order->createdAt() >= $through->modify('+1 day')
-                    || $order->paymentStatus() !== Order::PAYMENT_PAID
-                    || $order->orderStatus() === Order::STATUS_CANCELLED
-                    || $order->fulfillmentStatus() !== Order::FULFILLMENT_CONSUMED
-                ) {
-                    continue;
-                }
+            $until = $through->modify('+1 day');
+            // Filter in SQL so historical orders outside the requested period
+            // cannot exhaust memory or distort tenant/branch-scoped reporting.
+            /** @var list<Order> $saleOrders */
+            $saleOrders = $this->entityManager->getRepository(Order::class)
+                ->createQueryBuilder('sale')
+                ->andWhere('sale.tenant = :tenant')
+                ->andWhere('sale.inventorySource = :source')
+                ->andWhere('sale.createdAt >= :from')
+                ->andWhere('sale.createdAt < :until')
+                ->andWhere('sale.paymentStatus = :paid')
+                ->andWhere('sale.fulfillmentStatus = :consumed')
+                ->andWhere('sale.orderStatus <> :cancelled')
+                ->setParameter('tenant', $tenant)
+                ->setParameter('source', $source)
+                ->setParameter('from', $from)
+                ->setParameter('until', $until)
+                ->setParameter('paid', Order::PAYMENT_PAID)
+                ->setParameter('consumed', Order::FULFILLMENT_CONSUMED)
+                ->setParameter('cancelled', Order::STATUS_CANCELLED)
+                ->getQuery()
+                ->getResult();
+            foreach ($saleOrders as $order) {
 
                 $currency = $order->currency();
                 $amount = $order->totalAmountMinor();
@@ -107,17 +118,22 @@ final class ManagementDashboardController extends AbstractController
                 ];
             }
 
-            foreach ($this->entityManager->getRepository(ProductionOrder::class)->findBy([
-                'tenant' => $tenant,
-                'source' => $source,
-            ]) as $order) {
-                if (!$order->isCompleted()
-                    || $order->completedAt() === null
-                    || $order->completedAt() < $from
-                    || $order->completedAt() >= $through->modify('+1 day')
-                ) {
-                    continue;
-                }
+            /** @var list<ProductionOrder> $completedOrders */
+            $completedOrders = $this->entityManager->getRepository(ProductionOrder::class)
+                ->createQueryBuilder('production')
+                ->andWhere('production.tenant = :tenant')
+                ->andWhere('production.source = :source')
+                ->andWhere('production.status = :complete')
+                ->andWhere('production.completedAt >= :from')
+                ->andWhere('production.completedAt < :until')
+                ->setParameter('tenant', $tenant)
+                ->setParameter('source', $source)
+                ->setParameter('complete', ProductionOrder::STATUS_COMPLETED)
+                ->setParameter('from', $from)
+                ->setParameter('until', $until)
+                ->getQuery()
+                ->getResult();
+            foreach ($completedOrders as $order) {
                 $saved = $order->costSnapshot();
                 $valid = self::isSavedCost($saved, $tenant->id(), $order->id());
                 $production[] = [
