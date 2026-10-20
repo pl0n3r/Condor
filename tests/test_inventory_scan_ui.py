@@ -49,6 +49,13 @@ class EscaneoUiInventarioTests(unittest.TestCase):
         self.assertIn("}, [branchId, canView]);", PANEL)
         self.assertIn("function clearScanSelection()", PANEL)
 
+    def test_stale_branch_inventory_responses_are_rejected(self) -> None:
+        self.assertIn("const inventoryRequestId = useRef(0);", PANEL)
+        self.assertIn("const requestId = ++inventoryRequestId.current;", PANEL)
+        self.assertIn("data.branch?.id !== branchId", PANEL)
+        self.assertIn("if (requestId !== inventoryRequestId.current)", PANEL)
+        self.assertIn("inventoryRequestId.current += 1;", PANEL)
+
     def test_authoritative_api_is_branch_and_tenant_scoped(self) -> None:
         self.assertIn(
             "$this->authorizedBranchScope($branchId, 'inventory.view')",

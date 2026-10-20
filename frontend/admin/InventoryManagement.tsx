@@ -94,6 +94,7 @@ export function InventoryManagement({
   const [scanMessage, setScanMessage] = useState('');
   const [scannedVariantId, setScannedVariantId] = useState<string | null>(null);
   const scanRequestId = useRef(0);
+  const inventoryRequestId = useRef(0);
   const movementHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const adjustmentIdempotency = useRef<IdempotencyState>({
     signature: '',
@@ -119,6 +120,9 @@ export function InventoryManagement({
   const [transferQuantity, setTransferQuantity] = useState('1');
 
   async function loadInventory() {
+    const requestId = ++inventoryRequestId.current;
+    // Invalidate pending scans when the authoritative branch snapshot refreshes.
+    scanRequestId.current += 1;
     if (!canView) {
       return;
     }
@@ -137,6 +141,9 @@ export function InventoryManagement({
       }
 
       const data = await response.json() as Snapshot;
+      if (requestId !== inventoryRequestId.current || data.branch?.id !== branchId) {
+        return;
+      }
       setState({ status: 'ready', data });
 
       const firstSource = data.sources[0]?.id ?? '';
@@ -148,6 +155,9 @@ export function InventoryManagement({
       setTransferTo((current) => current || secondSource);
       setTransferVariant((current) => current || firstVariant);
     } catch (error) {
+      if (requestId !== inventoryRequestId.current) {
+        return;
+      }
       setState({
         status: 'error',
         message: error instanceof Error
@@ -160,6 +170,7 @@ export function InventoryManagement({
   useEffect(() => {
     setNotice(null);
     scanRequestId.current += 1;
+    inventoryRequestId.current += 1;
     setScanCode('');
     setScanStatus('idle');
     setScanMessage('');
