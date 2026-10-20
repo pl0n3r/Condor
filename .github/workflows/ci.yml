@@ -389,6 +389,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      issues: read
+      pull-requests: read
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -424,20 +426,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_REF: ${{ github.head_ref }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f public/build/admin.js public/build/admin.css public/build/configurator.js public/build/chunks/*.js
           if git diff --cached --quiet; then
             echo "Build ya reconciliado; no hay commit generado."
             exit 0
           fi
+          if ! python3 scripts/ci_frontend_claim_guard.py; then
+            echo "::warning::Bundle modificado, pero sin V3 que reclame el diff: no se escribe la rama; check reproducible permanece activo."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "build(configurator): reconciliar artefactos Vite"
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${HEAD_REF}"
 
       - name: Verificar build reproducible
-        run: git diff --exit-code -- public/build
+        # Compara contra HEAD, no contra el índice: el paso previo dejó staged
+        # los bundles no reclamados aunque la guarda V3 deniegue el autopush.
+        run: git diff HEAD --exit-code -- public/build
 
       - name: Conservar build frontend para reconciliación
         if: always()
