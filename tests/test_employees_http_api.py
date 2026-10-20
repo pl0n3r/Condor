@@ -191,6 +191,15 @@ $foreignAttendance = rejected(
     fn() => invokeAction($api, 'attendanceWithinTenant', $tenantB, $owner, $employeeId, req($payload)),
     NotFoundHttpException::class,
 );
+$viewerAttendanceDenied = rejected(
+    fn() => invokeAction($api, 'attendanceWithinTenant', $tenantA, $viewer, $employeeId, req($payload)),
+    AccessDeniedHttpException::class,
+);
+$extraFieldDenied = rejected(
+    fn() => invokeAction($api, 'createWithinTenant', $tenantA, $owner,
+        req(['code' => 'NO', 'salary' => '1000000'])),
+    UnprocessableEntityHttpException::class,
+);
 $disabled = new EmployeeController();
 $disabled->setContainer(new ServiceLocator([]));
 $failClosed = rejected(
@@ -212,6 +221,8 @@ echo json_encode([
     'collision_denied' => $collision,
     'biometric_denied' => $biometric,
     'foreign_attendance_denied' => $foreignAttendance,
+    'viewer_attendance_denied' => $viewerAttendanceDenied,
+    'sensitive_extra_field_denied' => $extraFieldDenied,
     'unwired_api_disabled' => $failClosed,
     'minimal_safe_json' => !str_contains($responseJson, 'owner@example.test')
         && !str_contains($responseJson, 'fingerprint')
@@ -247,7 +258,7 @@ class EmpleadosApiTests(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         evidence = json.loads(result.stdout)
-        self.assertEqual(len(evidence), 13)
+        self.assertEqual(len(evidence), 15)
         for name, passes in evidence.items():
             with self.subTest(case=name):
                 self.assertTrue(passes, name)
