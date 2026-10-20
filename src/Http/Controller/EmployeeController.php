@@ -155,7 +155,7 @@ final class EmployeeController extends AbstractController
             }
             $items[] = self::employeePayload($employee);
         }
-        return $this->json(['employees' => $items]);
+        return $this->privateJson(['employees' => $items]);
     }
 
     private function createWithinTenant(Tenant $tenant, User $actor, Request $request): JsonResponse
@@ -168,12 +168,12 @@ final class EmployeeController extends AbstractController
         } catch (DomainException $exception) {
             throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
         }
-        return $this->json(['employee' => self::employeePayload($employee)], Response::HTTP_CREATED);
+        return $this->privateJson(['employee' => self::employeePayload($employee)], Response::HTTP_CREATED);
     }
 
     private function showWithinTenant(Tenant $tenant, User $actor, string $id): JsonResponse
     {
-        return $this->json(['employee' => self::employeePayload($this->ownedEmployee($tenant, $actor, $id))]);
+        return $this->privateJson(['employee' => self::employeePayload($this->ownedEmployee($tenant, $actor, $id))]);
     }
 
     private function linkWithinTenant(Tenant $tenant, User $actor, string $id, User $target): JsonResponse
@@ -185,7 +185,7 @@ final class EmployeeController extends AbstractController
         } catch (DomainException $exception) {
             throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
         }
-        return $this->json(['employee' => self::employeePayload($updated)]);
+        return $this->privateJson(['employee' => self::employeePayload($updated)]);
     }
 
     private function attendanceWithinTenant(
@@ -210,7 +210,7 @@ final class EmployeeController extends AbstractController
             throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
         }
         // First writes and valid replays both give an idempotent 200 receipt.
-        return $this->json(['event' => [
+        return $this->privateJson(['event' => [
             'id' => $event->id(), 'employee_id' => $event->employeeId(),
             'occurred_at' => $event->occurredAt(), 'type' => $event->type(),
         ]]);
@@ -273,6 +273,22 @@ final class EmployeeController extends AbstractController
         if (!$this->isCsrfTokenValid('branch_access', (string) $request->headers->get('X-CSRF-Token', ''))) {
             throw new AccessDeniedHttpException('Token CSRF inválido.');
         }
+    }
+
+
+    /**
+     * Personal HR metadata must never be retained by HTTP or shared caches.
+     * This response policy is enforced even by offline synthetic adapters.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function privateJson(array $data, int $status = Response::HTTP_OK): JsonResponse
+    {
+        $response = $this->json($data, $status);
+        $response->headers->set('Cache-Control', 'private, no-store');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+
+        return $response;
     }
 
     /** @return array{id: string, code: string, linked: bool} */
