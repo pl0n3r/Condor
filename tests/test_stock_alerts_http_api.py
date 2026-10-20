@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -68,6 +69,136 @@ print json_encode(['routes' => $routes, 'first' => $first->payload(),
 '''
 
 
+
+PHP_HTTP_SCENARIO = r'''<?php
+declare(strict_types=1);
+use App\Application\Notification\StockAlertService;
+use App\Application\Notification\NotificationPreferenceService;
+use App\Domain\Audit\Entity\AuditEvent;
+use App\Domain\Catalog\Entity\Product;
+use App\Domain\Catalog\Entity\ProductVariant;
+use App\Domain\Identity\Entity\BranchRoleAssignment;
+use App\Domain\Identity\Entity\Membership;
+use App\Domain\Identity\Entity\Role;
+use App\Domain\Identity\Entity\User;
+use App\Domain\Inventory\Entity\InventoryMovement;
+use App\Domain\Inventory\Entity\InventorySource;
+use App\Domain\Organization\Entity\Branch;
+use App\Domain\Organization\Entity\LegalEntity;
+use App\Domain\Organization\Entity\Tenant;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+
+final class StockAlertsScopeSmokeTest extends WebTestCase
+{
+    public function testActualHttpPermissionsPersistenceAndCrossTenantIsolation(): void
+    {
+        $client = static::createClient();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $em);
+        $suffix = strtolower(bin2hex(random_bytes(5)));
+
+        $tenantA = new Tenant('Alertas A '.$suffix, 'alertas-a-'.$suffix);
+        $legalA = new LegalEntity($tenantA, 'Legal A '.$suffix, null, true);
+        $branchA = new Branch($tenantA, 'Sede A', 'sede-a-'.$suffix, $legalA, true);
+        $sourceA = new InventorySource($tenantA, $legalA, 'Sede A', 'sede-a-'.$suffix, InventorySource::TYPE_BRANCH, $branchA);
+        $productA = new Product($tenantA, 'Producto A', 'producto-a-'.$suffix);
+        $variantA = new ProductVariant($tenantA, $productA, 'ALERT-A-'.$suffix, 'Tamaño');
+        $owner = new User('stock-owner-'.$suffix.'@example.test', 'Owner A');
+        $ownerMember = new Membership($tenantA, $owner, Membership::ROLE_OWNER);
+        $viewer = new User('stock-viewer-'.$suffix.'@example.test', 'Viewer A');
+        $viewerMember = new Membership($tenantA, $viewer, 'ADMIN');
+        $viewRole = new Role($tenantA, 'Inventario lectura '.$suffix, ['inventory.view']);
+        $viewAssignment = new BranchRoleAssignment($viewerMember, $branchA, $viewRole);
+
+        $tenantB = new Tenant('Alertas B '.$suffix, 'alertas-b-'.$suffix);
+        $legalB = new LegalEntity($tenantB, 'Legal B '.$suffix, null, true);
+        $branchB = new Branch($tenantB, 'Sede B', 'sede-b-'.$suffix, $legalB, true);
+        $sourceB = new InventorySource($tenantB, $legalB, 'Sede B', 'sede-b-'.$suffix, InventorySource::TYPE_BRANCH, $branchB);
+        $productB = new Product($tenantB, 'Producto B', 'producto-b-'.$suffix);
+        $variantB = new ProductVariant($tenantB, $productB, 'ALERT-B-'.$suffix, 'Tamaño B');
+        $otherUser = new User('stock-other-'.$suffix.'@example.test', 'Owner B');
+        $otherMember = new Membership($tenantB, $otherUser, Membership::ROLE_OWNER);
+        foreach ([
+            $tenantA, $legalA, $branchA, $sourceA, $productA, $variantA,
+            $owner, $ownerMember, $viewer, $viewerMember, $viewRole, $viewAssignment,
+            $tenantB, $legalB, $branchB, $sourceB, $productB, $variantB,
+            $otherUser, $otherMember,
+        ] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
+
+        $url = '/api/v1/branches/'.$branchA->id().'/inventory/stock-alerts';
+        $minimums = $url.'/minimums';
+        $setUrl = $minimums.'/'.$variantA->id();
+        $client->loginUser($owner);
+        $crawler = $client->request('GET', '/admin');
+        self::assertResponseIsSuccessful();
+        $csrf = $crawler->filter('#condor-admin-root')->attr('data-access-token');
+        self::assertIsString($csrf);
+        self::assertNotSame('', $csrf);
+        $client->request('GET', $url);
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame([], json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR)['alerts']);
+        $client->request('GET', $minimums);
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame([], json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR)['minimums']);
+        $client->request('GET', '/api/v1/branches/'.$branchB->id().'/inventory/stock-alerts');
+        self::assertResponseStatusCodeSame(404);
+
+        foreach ([null, -1, 2147483648, 1.5, '4'] as $invalid) {
+            $client->jsonRequest('PUT', $setUrl, ['minimum' => $invalid], ['HTTP_X_CSRF_TOKEN' => $csrf]);
+            self::assertResponseStatusCodeSame(422);
+        }
+        $client->jsonRequest('PUT', $setUrl, ['minimum' => 3]);
+        self::assertResponseStatusCodeSame(403);
+        $client->jsonRequest('PUT', $minimums.'/'.$variantB->id(), ['minimum' => 3], ['HTTP_X_CSRF_TOKEN' => $csrf]);
+        self::assertResponseStatusCodeSame(404);
+        $client->jsonRequest('PUT', $setUrl, ['minimum' => 3, 'tenant_id' => $tenantB->id()], ['HTTP_X_CSRF_TOKEN' => $csrf]);
+        self::assertResponseStatusCodeSame(422);
+
+        $client->jsonRequest('PUT', $setUrl, ['minimum' => 3], ['HTTP_X_CSRF_TOKEN' => $csrf]);
+        self::assertResponseStatusCodeSame(200);
+        $client->jsonRequest('PUT', $setUrl, ['minimum' => 3], ['HTTP_X_CSRF_TOKEN' => $csrf]);
+        self::assertResponseStatusCodeSame(200);
+        self::assertCount(1, $em->getRepository(AuditEvent::class)->findBy([
+            'tenant' => $tenantA, 'action' => 'inventory.stock_minimum.set',
+        ]));
+        $client->request('GET', $minimums);
+        self::assertResponseStatusCodeSame(200);
+        $rows = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR)['minimums'];
+        self::assertSame([['variant_id' => $variantA->id(), 'source_id' => $sourceA->id(), 'minimum' => 3]], $rows);
+
+        $movementA = new InventoryMovement(
+            $tenantA, $sourceA, $variantA, InventoryMovement::TYPE_ADJUSTMENT_OUT, -4, 2, $owner->id(),
+        );
+        $alerts = StockAlertService::fromPreferences(static::getContainer()->get(NotificationPreferenceService::class));
+        $delivery = $alerts->onMovement($ownerMember, $movementA, 3);
+        self::assertNotNull($delivery);
+        self::assertNull($alerts->onMovement($ownerMember, $movementA, 3));
+        $em->persist($movementA);
+        $em->persist($delivery);
+        $em->flush();
+        $client->request('GET', $url);
+        self::assertResponseStatusCodeSame(200);
+        $rows = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR)['alerts'];
+        self::assertCount(1, $rows);
+        self::assertSame($variantA->id(), $rows[0]['variant_id']);
+        self::assertSame(3, $rows[0]['minimum']);
+        self::assertSame(2, $rows[0]['quantity']);
+
+        $client->loginUser($viewer);
+        $client->request('GET', $minimums);
+        self::assertResponseStatusCodeSame(200);
+        $client->jsonRequest('PUT', $setUrl, ['minimum' => 4], ['HTTP_X_CSRF_TOKEN' => $csrf]);
+        self::assertResponseStatusCodeSame(403);
+        $client->request('GET', '/api/v1/branches/'.$branchB->id().'/inventory/stock-alerts/minimums');
+        self::assertResponseStatusCodeSame(404);
+    }
+}
+'''
+
 class AlertasStockApiTests(unittest.TestCase):
     def test_acceptance(self):
         controller = CONTROLLER.read_text(encoding="utf-8")
@@ -113,6 +244,16 @@ class AlertasStockApiTests(unittest.TestCase):
         self.assertEqual(3, actual["first"]["minimum"])
         self.assertEqual(2, actual["first"]["quantity"])
         self.assertEqual(["PUT"], actual["routes"]["setMinimum"][1])
+
+        # Exercise real HTTP auth/CSRF, persistence and isolation with fake tenants.
+        with tempfile.TemporaryDirectory(prefix="condor-stock-alerts-http-") as tempdir:
+            smoke = Path(tempdir) / "StockAlertsScopeSmokeTest.php"
+            smoke.write_text(PHP_HTTP_SCENARIO, encoding="utf-8")
+            result = subprocess.run(
+                ["vendor/bin/simple-phpunit", str(smoke)],
+                cwd=ROOT, text=True, capture_output=True, timeout=180, check=False,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

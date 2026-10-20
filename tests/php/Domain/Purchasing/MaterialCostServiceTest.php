@@ -100,12 +100,41 @@ final class MaterialCostServiceTest extends TestCase
         $service->calculate($foreign, $material, [$own]);
     }
 
-    public function testExtremeValuesFailClosedRatherThanOverflow(): void
+    public function testLargeValidHistoricalCostIsExactBeyond64Bit(): void
+    {
+        $tenant = new Tenant('Principal', 'principal');
+        $material = self::material($tenant);
+        $first = self::order($tenant, $material, '10000', '100000', 'large:1');
+        $second = self::order($tenant, $material, '10000', '100001', 'large:2');
+        $service = new MaterialCostService();
+
+        self::assertSame([
+            'state' => 'KNOWN',
+            'average_unit_cost' => '100000.5000',
+            'total_quantity' => '20000.000000',
+            'receipt_count' => 2,
+        ], $service->calculate($tenant, $material, [$first, $second]));
+    }
+
+    public function testExtremeValidHistoricalCostIsExactWithoutOverflow(): void
     {
         $tenant = new Tenant('Principal', 'principal');
         $material = self::material($tenant);
         $large = self::order($tenant, $material, '9000000000000', '999999999999999', 'huge:1');
+
+        self::assertSame([
+            'state' => 'KNOWN',
+            'average_unit_cost' => '999999999999999.0000',
+            'total_quantity' => '9000000000000.000000',
+            'receipt_count' => 1,
+        ], (new MaterialCostService())->calculate($tenant, $material, [$large]));
+    }
+
+    public function testQuantityOutsideInventoryDomainStillFailsClosed(): void
+    {
+        $tenant = new Tenant('Principal', 'principal');
+        $material = self::material($tenant);
         $this->expectException(DomainException::class);
-        (new MaterialCostService())->calculate($tenant, $material, [$large]);
+        self::order($tenant, $material, '9000000000001', '1', 'invalid:1');
     }
 }
