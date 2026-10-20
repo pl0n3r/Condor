@@ -6,7 +6,6 @@ reservation may authorize publishing generated files to the matching PR head.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -14,6 +13,18 @@ import re
 import subprocess
 import sys
 from typing import Any
+
+# Depend on Condor's existing canonical pure validators, which mirror
+# Factory/aceptacion_kit.py and Factory/orquestador_kit.py.
+# CI invokes this as a script; unittest imports it as a module.
+try:
+    from scripts.dependency_pr_promotion import (
+        PromotionError, contract_fingerprint, parse_task_marker, task_marker_fingerprint,
+    )
+except ModuleNotFoundError:
+    from dependency_pr_promotion import (
+        PromotionError, contract_fingerprint, parse_task_marker, task_marker_fingerprint,
+    )
 
 TASK = re.compile(r"<!-- factory-plan-task (\{[^\n]+\}) -->")
 ACCEPTANCE = re.compile(r"<!-- factory-acceptance (\{[^\n]+\}) -->")
@@ -50,84 +61,6 @@ def _single_json_marker(body: Any, pattern: re.Pattern[str]) -> dict[str, Any] |
     except (ValueError, TypeError):
         return None
     return value if isinstance(value, dict) else None
-
-
-def _section(body: str, heading: str) -> str:
-    """Mirror Factory/aceptacion_kit.py::_section for the pinned AC digest."""
-    lines = body.splitlines()
-    indices = [i for i, line in enumerate(lines) if line.strip() == heading]
-    if len(indices) != 1:
-        raise ValueError("Invalid contract section")
-    start = indices[0] + 1
-    end = next((i for i in range(start, len(lines)) if lines[i].startswith("### ")), len(lines))
-    value = "\n".join(lines[start:end]).strip()
-    if not value:
-        raise ValueError("Empty contract section")
-    return value
-
-
-def contract_fingerprint(body: Any) -> str:
-    """Exact canonical digest from Factory/aceptacion_kit.py::contract_fingerprint.
-
-    CI has only the Condor checkout. Reproduce the pinned pure algorithm here;
-    never accept hashes merely for looking like SHA256.
-    """
-    if not isinstance(body, str) or not 1 <= len(body) <= 200_000:
-        raise ValueError("Invalid issue body")
-    for heading in ("### Contexto", "### Alcance", "### Fuera de alcance",
-                    "### Criterios de aceptación", "### Contrato ejecutable"):
-        _section(body, heading)
-    human: dict[str, str] = {}
-    for line in _section(body, "### Criterios de aceptación").splitlines():
-        value = line.strip()
-        if not value.startswith("- ["):
-            continue
-        match = CRITERION.fullmatch(value)
-        if match is None or match.group(1) in human:
-            raise ValueError("Invalid/duplicate human criterion")
-        human[match.group(1)] = match.group(2).strip()
-    if not 1 <= len(human) <= 20:
-        raise ValueError("Invalid human criteria")
-    payload = _single_json_marker(body, ACCEPTANCE)
-    if (payload is None or set(payload) != {"version", "criteria"}
-        or type(payload["version"]) is not int or payload["version"] != 1):
-        raise ValueError("Invalid acceptance marker")
-    criteria = payload["criteria"]
-    if not isinstance(criteria, list) or not 1 <= len(criteria) <= 20:
-        raise ValueError("Invalid machine criteria")
-    machine: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for item in criteria:
-        if not isinstance(item, dict) or set(item) != {"id", "kind", "target"}:
-            raise ValueError("Invalid machine item")
-        cid, kind, target = item["id"], item["kind"], item["target"]
-        if not isinstance(cid, str) or re.fullmatch(r"AC-[0-9]{2}", cid) is None or cid in seen:
-            raise ValueError("Invalid machine ID")
-        if kind == "test":
-            if not isinstance(target, str) or TEST_TARGET.fullmatch(target) is None:
-                raise ValueError("Invalid test target")
-        elif kind == "check":
-            if (not isinstance(target, str) or re.fullmatch(r"[^\r\n]{1,120}", target) is None
-                or target in {"Validar", "Criterios de aceptación"}):
-                raise ValueError("Invalid check target")
-        else:
-            raise ValueError("Invalid machine kind")
-        seen.add(cid)
-        machine.append({"id": cid, "kind": kind, "target": target})
-    if seen != set(human):
-        raise ValueError("Acceptance mismatch")
-    canonical = {
-        "human": [{"id": cid, "description": human[cid]} for cid in sorted(human)],
-        "machine": sorted(machine, key=lambda item: item["id"]),
-    }
-    packed = json.dumps(canonical, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-    return hashlib.sha256(packed.encode("utf-8")).hexdigest()
-
-
-def task_marker_fingerprint(task: dict[str, Any]) -> str:
-    """Exact canonical digest from Factory/orquestador_kit.py."""
-    packed = json.dumps(task, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-    return hashlib.sha256(packed.encode("utf-8")).hexdigest()
 
 
 def authorize(
@@ -172,21 +105,19 @@ def authorize(
     if len(refs) != 1 or not UUID.fullmatch(refs[0]):
         return False
     issue_body = issue.get("body")
-    task = _single_json_marker(issue_body, TASK)
-    required = {"version", "epic", "task_key", "order", "owner",
-                "roles", "depends_on", "paths"}
-    if (task is None or set(task) != required or type(task["version"]) is not int
-        or task["version"] != 1 or task["owner"] != user["login"]
-        or type(task["epic"]) is not int or task["epic"] < 1
-        or type(task["order"]) is not int or task["order"] < 1
-        or not isinstance(task["task_key"], str)
-        or not isinstance(task["roles"], list) or not task["roles"]
-        or not all(isinstance(role, str) and role for role in task["roles"])):
+    if not isinstance(issue_body, str):
+        return False
+    # Canonical task parser validates the entire task schema and concrete
+    # markers; local marker parsing additionally rejects ambiguous JSON.
+    if _single_json_marker(issue_body, TASK) is None:
         return False
     try:
+        task = parse_task_marker(issue_body)
         acceptance_sha256 = contract_fingerprint(issue_body)
         task_sha256 = task_marker_fingerprint(task)
-    except (ValueError, TypeError, KeyError):
+    except (PromotionError, ValueError, TypeError, KeyError):
+        return False
+    if task is None or task_sha256 is None or task.get("owner") != user["login"]:
         return False
     task_paths = task.get("paths")
     task_deps = task.get("depends_on")
