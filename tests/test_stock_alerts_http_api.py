@@ -104,6 +104,8 @@ final class StockAlertsScopeSmokeTest extends WebTestCase
         $legalA = new LegalEntity($tenantA, 'Legal A '.$suffix, null, true);
         $branchA = new Branch($tenantA, 'Sede A', 'sede-a-'.$suffix, $legalA, true);
         $sourceA = new InventorySource($tenantA, $legalA, 'Sede A', 'sede-a-'.$suffix, InventorySource::TYPE_BRANCH, $branchA);
+        $branchA2 = new Branch($tenantA, 'Sede A2', 'sede-a2-'.$suffix, $legalA, true);
+        $sourceA2 = new InventorySource($tenantA, $legalA, 'Sede A2', 'sede-a2-'.$suffix, InventorySource::TYPE_BRANCH, $branchA2);
         $productA = new Product($tenantA, 'Producto A', 'producto-a-'.$suffix);
         $variantA = new ProductVariant($tenantA, $productA, 'ALERT-A-'.$suffix, 'Tamaño');
         $owner = new User('stock-owner-'.$suffix.'@example.test', 'Owner A');
@@ -122,7 +124,7 @@ final class StockAlertsScopeSmokeTest extends WebTestCase
         $otherUser = new User('stock-other-'.$suffix.'@example.test', 'Owner B');
         $otherMember = new Membership($tenantB, $otherUser, Membership::ROLE_OWNER);
         foreach ([
-            $tenantA, $legalA, $branchA, $sourceA, $productA, $variantA,
+            $tenantA, $legalA, $branchA, $sourceA, $branchA2, $sourceA2, $productA, $variantA,
             $owner, $ownerMember, $viewer, $viewerMember, $viewRole, $viewAssignment,
             $tenantB, $legalB, $branchB, $sourceB, $productB, $variantB,
             $otherUser, $otherMember,
@@ -172,6 +174,28 @@ final class StockAlertsScopeSmokeTest extends WebTestCase
         $rows = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR)['minimums'];
         self::assertSame([['variant_id' => $variantA->id(), 'source_id' => $sourceA->id(), 'minimum' => 3]], $rows);
 
+        // Append 510 other-branch revisions for this same tenant/variant:
+        // neither reads nor repeated idempotent PUTs should start failing.
+        for ($i = 0; $i < 510; ++$i) {
+            $em->persist(new AuditEvent(
+                $tenantA, $owner->id(), 'inventory.stock_minimum.set',
+                ProductVariant::class, $variantA->id(),
+                ['source_id' => $sourceA2->id(), 'branch_id' => $branchA2->id(), 'minimum' => 7],
+            ));
+        }
+        $em->flush();
+        $client->request('GET', $minimums);
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame(
+            [['variant_id' => $variantA->id(), 'source_id' => $sourceA->id(), 'minimum' => 3]],
+            json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR)['minimums'],
+        );
+        $client->jsonRequest('PUT', $setUrl, ['minimum' => 3], ['HTTP_X_CSRF_TOKEN' => $csrf]);
+        self::assertResponseStatusCodeSame(200);
+        self::assertCount(511, $em->getRepository(AuditEvent::class)->findBy([
+            'tenant' => $tenantA, 'action' => 'inventory.stock_minimum.set',
+        ]));
+
         $movementA = new InventoryMovement(
             $tenantA, $sourceA, $variantA, InventoryMovement::TYPE_ADJUSTMENT_OUT, -4, 2, $owner->id(),
         );
@@ -203,6 +227,26 @@ final class StockAlertsScopeSmokeTest extends WebTestCase
             );
             $failed->markFailed('fixture');
             $em->persist($failed);
+        }
+        $em->flush();
+        $client->request('GET', $url);
+        self::assertResponseStatusCodeSame(200);
+        $rows = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR)['alerts'];
+        self::assertCount(1, $rows);
+        self::assertSame($variantA->id(), $rows[0]['variant_id']);
+
+        // 205 newer active alerts for a different source must not hide
+        // the previously persisted pending alert in the requested branch.
+        for ($i = 0; $i < 205; ++$i) {
+            $em->persist(new NotificationDelivery(
+                $owner, NotificationCatalog::EVENT_STOCK_LOW,
+                NotificationCatalog::CHANNEL_IN_APP,
+                [
+                    'tenant_id' => $tenantA->id(), 'source_id' => $sourceA2->id(),
+                    'variant_id' => $variantA->id(), 'movement_id' => 'other-'.$i,
+                    'minimum' => 7, 'quantity' => 1,
+                ],
+            ));
         }
         $em->flush();
         $client->request('GET', $url);
@@ -250,9 +294,11 @@ class AlertasStockApiTests(unittest.TestCase):
         # A busy tenant can have many revisions for the same variant across
         # branches. A bounded read must reject overflow, not silently create
         # another audit record after losing the previous branch setting.
-        self.assertIn("if (count($latest) > self::MAX_REVISIONS)", controller)
-        self.assertEqual(2, controller.count("->setMaxResults(self::MAX_REVISIONS + 1)"))
-        self.assertNotIn("->setMaxResults(200)\n                ->getQuery()->getArrayResult()", controller)
+        self.assertIn("ROW_NUMBER() OVER", controller)
+        self.assertIn("JSON_UNQUOTE(JSON_EXTRACT(a.context, '$.source_id')) = :source", controller)
+        self.assertIn("JSON_UNQUOTE(JSON_EXTRACT(d.payload, '$.tenant_id')) = :tenant", controller)
+        self.assertIn("LIMIT 201", controller)
+        self.assertNotIn("MAX_REVISIONS", controller)
         self.assertIn("'inventory.stock_minimum.set'", controller)
         self.assertIn("LockMode::PESSIMISTIC_WRITE", controller)
         self.assertIn("$this->entityManager->wrapInTransaction(", controller)

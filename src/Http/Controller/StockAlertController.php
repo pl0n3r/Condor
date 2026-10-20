@@ -37,7 +37,6 @@ final class StockAlertController extends AbstractController
     use BranchApiSupport;
 
     private const MINIMUM_ACTION = 'inventory.stock_minimum.set';
-    private const MAX_REVISIONS = 500;
 
     public function __construct(
         private readonly CurrentTenantForUser $currentTenantForUser,
@@ -52,21 +51,31 @@ final class StockAlertController extends AbstractController
     {
         [$user, $tenant, $branch, $membership] = $this->authorizedBranchScope($branchId, 'inventory.view');
         $source = $this->branchSource($tenant, $branch);
-        $candidateDeliveries = $this->entityManager->getRepository(NotificationDelivery::class)->findBy(
+        // Filter by authenticated tenant AND branch before limiting results.
+        $ids = $this->entityManager->getConnection()->executeQuery(
+            <<<'SQL'
+            SELECT d.id FROM condor_notification_delivery d
+            WHERE d.user_id = :user AND d.event_key = :event
+              AND d.channel_key = :channel
+              AND d.status IN (:pending, :delivered)
+              AND JSON_UNQUOTE(JSON_EXTRACT(d.payload, '$.tenant_id')) = :tenant
+              AND JSON_UNQUOTE(JSON_EXTRACT(d.payload, '$.source_id')) = :source
+            ORDER BY d.created_at DESC, d.id DESC
+            LIMIT 201
+            SQL,
             [
-                'user' => $user,
-                'eventKey' => NotificationCatalog::EVENT_STOCK_LOW,
-                'channelKey' => NotificationCatalog::CHANNEL_IN_APP,
-                // Apply active-state filtering before the 200-row limit:
-                // a backlog of failed deliveries must not hide valid alerts.
-                'status' => [
-                    NotificationDelivery::STATUS_PENDING,
-                    NotificationDelivery::STATUS_DELIVERED,
-                ],
+                'user' => $user->id(), 'event' => NotificationCatalog::EVENT_STOCK_LOW,
+                'channel' => NotificationCatalog::CHANNEL_IN_APP,
+                'pending' => NotificationDelivery::STATUS_PENDING,
+                'delivered' => NotificationDelivery::STATUS_DELIVERED,
+                'tenant' => $tenant->id(), 'source' => $source->id(),
             ],
-            ['createdAt' => 'DESC'],
-            200,
-        );
+        )->fetchFirstColumn();
+        if (count($ids) > 200) {
+            throw new ServiceUnavailableHttpException(null, 'Demasiadas alertas para una página.');
+        }
+        $candidateDeliveries = $ids === [] ? [] : $this->entityManager
+            ->getRepository(NotificationDelivery::class)->findBy(['id' => $ids]);
         $service = StockAlertService::fromPreferences($this->preferences);
         $alerts = [];
         foreach ($service->visibleInbox($membership, $candidateDeliveries) as $delivery) {
@@ -98,26 +107,32 @@ final class StockAlertController extends AbstractController
     {
         [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'inventory.view');
         $source = $this->branchSource($tenant, $branch);
-        // Never silently drop older settings if the bounded log is saturated.
-        $rows = $this->entityManager->createQueryBuilder()
-            ->select('a.entityId', 'a.context')
-            ->from(AuditEvent::class, 'a')
-            ->where('a.tenant = :tenant')
-            ->andWhere('a.action = :action')
-            ->andWhere('a.entityType = :type')
-            ->setParameter('tenant', $tenant)
-            ->setParameter('action', self::MINIMUM_ACTION)
-            ->setParameter('type', ProductVariant::class)
-            ->orderBy('a.createdAt', 'DESC')
-            ->addOrderBy('a.id', 'DESC')
-            ->setMaxResults(self::MAX_REVISIONS + 1)
-            ->getQuery()->getArrayResult();
-        if (count($rows) > self::MAX_REVISIONS) {
-            throw new ServiceUnavailableHttpException(null, 'Registro de mínimos excede el límite verificable.');
-        }
+        // Read the latest value of every variant in THIS branch regardless
+        // of how many immutable audit revisions exist in the tenant.
+        $rows = $this->entityManager->getConnection()->executeQuery(
+            <<<'SQL'
+            SELECT latest.variant_id, latest.context FROM (
+                SELECT a.entity_id AS variant_id, a.context,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY a.entity_id
+                           ORDER BY a.created_at DESC, a.id DESC
+                       ) AS revision
+                FROM condor_audit_event a
+                WHERE a.tenant_id = :tenant AND a.action = :action
+                  AND a.entity_type = :type
+                  AND JSON_UNQUOTE(JSON_EXTRACT(a.context, '$.source_id')) = :source
+                  AND JSON_UNQUOTE(JSON_EXTRACT(a.context, '$.branch_id')) = :branch
+            ) latest WHERE latest.revision = 1
+            SQL,
+            [
+                'tenant' => $tenant->id(), 'action' => self::MINIMUM_ACTION,
+                'type' => ProductVariant::class, 'source' => $source->id(),
+                'branch' => $branch->id(),
+            ],
+        )->fetchAllAssociative();
         $visible = [];
         foreach ($rows as $row) {
-            $context = $row['context'] ?? null;
+            $context = self::auditContext($row['context'] ?? null);
             $variantId = $row['entityId'] ?? null;
             if (!is_string($variantId) || !is_array($context)
                 || ($context['source_id'] ?? null) !== $source->id()
@@ -170,38 +185,27 @@ final class StockAlertController extends AbstractController
             if (!$source->isActive()) {
                 throw new NotFoundHttpException('Fuente de inventario activa no encontrada.');
             }
-            $latest = $em->createQueryBuilder()
-                ->select('a.context')
-                ->from(AuditEvent::class, 'a')
-                ->where('a.tenant = :tenant')
-                ->andWhere('a.action = :action')
-                ->andWhere('a.entityType = :type')
-                ->andWhere('a.entityId = :id')
-                ->setParameter('tenant', $tenant)
-                ->setParameter('action', self::MINIMUM_ACTION)
-                ->setParameter('type', ProductVariant::class)
-                ->setParameter('id', $variant->id())
-                ->orderBy('a.createdAt', 'DESC')
-                ->addOrderBy('a.id', 'DESC')
-                ->setMaxResults(self::MAX_REVISIONS + 1)
-                ->getQuery()->getArrayResult();
-            // Other branches share a variant's audit history. Never treat a
-            // truncated search as "no prior setting": that would break the
-            // idempotent PUT contract for this branch.
-            if (count($latest) > self::MAX_REVISIONS) {
-                throw new ServiceUnavailableHttpException(
-                    null,
-                    'Historial de mínimos excede el límite verificable.',
-                );
-            }
-            $previous = null;
-            foreach ($latest as $row) {
-                $c = $row['context'] ?? null;
-                if (is_array($c) && ($c['source_id'] ?? null) === $source->id()
-                    && ($c['branch_id'] ?? null) === $branch->id()) {
-                    $previous = $c['minimum'] ?? null;
-                    break;
-                }
+            // The locked source serializes PUTs; query only the matching
+            // source/branch/variant's most recent durable threshold.
+            $latest = $em->getConnection()->executeQuery(
+                <<<'SQL'
+                SELECT a.context FROM condor_audit_event a
+                WHERE a.tenant_id = :tenant AND a.action = :action
+                  AND a.entity_type = :type AND a.entity_id = :variant
+                  AND JSON_UNQUOTE(JSON_EXTRACT(a.context, '$.source_id')) = :source
+                  AND JSON_UNQUOTE(JSON_EXTRACT(a.context, '$.branch_id')) = :branch
+                ORDER BY a.created_at DESC, a.id DESC LIMIT 1
+                SQL,
+                [
+                    'tenant' => $tenant->id(), 'action' => self::MINIMUM_ACTION,
+                    'type' => ProductVariant::class, 'variant' => $variant->id(),
+                    'source' => $source->id(), 'branch' => $branch->id(),
+                ],
+            )->fetchAssociative();
+            $previous = $latest === false ? null
+                : (self::auditContext($latest['context'] ?? null)['minimum'] ?? null);
+            if ($latest !== false && (!is_int($previous) || $previous < 0 || $previous > 2147483647)) {
+                throw new ServiceUnavailableHttpException(null, 'Mínimo almacenado inválido.');
             }
             if ($previous !== $minimum) {
                 $em->persist(new AuditEvent(
@@ -218,6 +222,21 @@ final class StockAlertController extends AbstractController
                 ],
             ]);
         });
+    }
+
+    /** @return array<string, mixed> */
+    private static function auditContext(mixed $raw): array
+    {
+        try {
+            $context = is_string($raw)
+                ? json_decode($raw, true, 512, JSON_THROW_ON_ERROR) : $raw;
+        } catch (\JsonException) {
+            throw new ServiceUnavailableHttpException(null, 'Contexto de mínimo inválido.');
+        }
+        if (!is_array($context)) {
+            throw new ServiceUnavailableHttpException(null, 'Contexto de mínimo inválido.');
+        }
+        return $context;
     }
 
     private function branchSource(Tenant $tenant, Branch $branch): InventorySource
