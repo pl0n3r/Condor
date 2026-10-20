@@ -445,7 +445,9 @@ jobs:
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${HEAD_REF}"
 
       - name: Verificar build reproducible
-        run: git diff --exit-code -- public/build
+        # Compara contra HEAD, no contra el índice: el paso previo dejó staged
+        # los bundles no reclamados aunque la guarda V3 deniegue el autopush.
+        run: git diff HEAD --exit-code -- public/build
 
       - name: Conservar build frontend para reconciliación
         if: always()
