@@ -14,6 +14,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\QueryBuilder;
 use DomainException;
 
 /**
@@ -86,6 +87,31 @@ final readonly class TenantReportRecordsReader
         }
     }
 
+    /**
+     * Centralize the exact tenant, legal-entity, date and row-budget filters
+     * for the three already-known persisted entity kinds.
+     *
+     * @param class-string $entityClass
+     */
+    private function scopedQuery(
+        string $entityClass,
+        string $alias,
+        string $dateField,
+        Tenant $tenant,
+        LegalEntity $legalEntity,
+        DateTimeImmutable $start,
+        DateTimeImmutable $end,
+    ): QueryBuilder {
+        return $this->entityManager->createQueryBuilder()
+            ->from($entityClass, $alias)
+            ->where($alias.'.tenant = :tenant AND '.$alias.'.legalEntity = :legal')
+            ->andWhere($alias.'.'.$dateField.' >= :start AND '.$alias.'.'.$dateField.' < :end')
+            ->setParameter('tenant', $tenant)->setParameter('legal', $legalEntity)
+            ->setParameter('start', $start)->setParameter('end', $end)
+            ->orderBy($alias.'.'.$dateField, 'ASC')->addOrderBy($alias.'.id', 'ASC')
+            ->setMaxResults(self::ROW_LIMIT + 1);
+    }
+
     /** @return list<array<string, int|string>> */
     private function inventory(
         Tenant $tenant,
@@ -94,20 +120,16 @@ final readonly class TenantReportRecordsReader
         DateTimeImmutable $start,
         DateTimeImmutable $end,
     ): array {
-        $rows = $this->entityManager->createQueryBuilder()
+        $rows = $this->scopedQuery(
+            InventoryBalance::class, 'b', 'updatedAt', $tenant, $legalEntity, $start, $end,
+        )
             ->select(
                 'b.id AS recordId', 'b.updatedAt AS stamp',
                 'IDENTITY(b.source) AS sourceId', 'IDENTITY(b.variant) AS variantId',
                 'b.quantity AS quantity', 'b.reservedQuantity AS reservedQuantity',
             )
-            ->from(InventoryBalance::class, 'b')
-            ->where('b.tenant = :tenant AND b.legalEntity = :legal AND b.source = :source')
-            ->andWhere('b.updatedAt >= :start AND b.updatedAt < :end')
-            ->setParameter('tenant', $tenant)->setParameter('legal', $legalEntity)
-            ->setParameter('source', $source)->setParameter('start', $start)
-            ->setParameter('end', $end)
-            ->orderBy('b.updatedAt', 'ASC')->addOrderBy('b.id', 'ASC')
-            ->setMaxResults(self::ROW_LIMIT + 1)->getQuery()->getArrayResult();
+            ->andWhere('b.source = :source')->setParameter('source', $source)
+            ->getQuery()->getArrayResult();
         self::bounded($rows);
         $result = [];
         foreach ($rows as $row) {
@@ -132,18 +154,14 @@ final readonly class TenantReportRecordsReader
         DateTimeImmutable $start,
         DateTimeImmutable $end,
     ): array {
-        $rows = $this->entityManager->createQueryBuilder()
+        $rows = $this->scopedQuery(
+            Order::class, 'o', 'createdAt', $tenant, $legalEntity, $start, $end,
+        )
             ->select('o.id AS orderId', 'o.createdAt AS stamp',
                 'o.currency AS currency', 'o.totalAmountMinor AS total',
                 'o.paymentStatus AS payment')
-            ->from(Order::class, 'o')
-            ->where('o.tenant = :tenant AND o.legalEntity = :legal AND o.inventorySource = :source')
-            ->andWhere('o.createdAt >= :start AND o.createdAt < :end')
-            ->setParameter('tenant', $tenant)->setParameter('legal', $legalEntity)
-            ->setParameter('source', $source)->setParameter('start', $start)
-            ->setParameter('end', $end)
-            ->orderBy('o.createdAt', 'ASC')->addOrderBy('o.id', 'ASC')
-            ->setMaxResults(self::ROW_LIMIT + 1)->getQuery()->getArrayResult();
+            ->andWhere('o.inventorySource = :source')->setParameter('source', $source)
+            ->getQuery()->getArrayResult();
         self::bounded($rows);
         $result = [];
         foreach ($rows as $row) {
@@ -169,18 +187,14 @@ final readonly class TenantReportRecordsReader
     ): array {
         // Drafts do not belong to a branch. Only received purchases with a
         // persisted receipt source can be safely exported by branch.
-        $rows = $this->entityManager->createQueryBuilder()
+        $rows = $this->scopedQuery(
+            PurchaseOrder::class, 'p', 'receivedAt', $tenant, $legalEntity, $start, $end,
+        )
             ->select('p', 'p.receivedAt AS stamp')
-            ->from(PurchaseOrder::class, 'p')
-            ->where('p.tenant = :tenant AND p.legalEntity = :legal')
             ->andWhere('p.status = :received AND p.receiptSourceId = :sourceId')
-            ->andWhere('p.receivedAt >= :start AND p.receivedAt < :end')
-            ->setParameter('tenant', $tenant)->setParameter('legal', $legalEntity)
             ->setParameter('received', PurchaseOrder::STATUS_RECEIVED)
-            ->setParameter('sourceId', $source->id())->setParameter('start', $start)
-            ->setParameter('end', $end)
-            ->orderBy('p.receivedAt', 'ASC')->addOrderBy('p.id', 'ASC')
-            ->setMaxResults(self::ROW_LIMIT + 1)->getQuery()->getResult();
+            ->setParameter('sourceId', $source->id())
+            ->getQuery()->getResult();
         self::bounded($rows);
         $result = [];
         foreach ($rows as $row) {
