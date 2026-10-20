@@ -199,7 +199,7 @@ class InventarioNegativasHttpTests(unittest.TestCase):
             )
             self.assertEqual(0, lint.returncode, lint.stdout + lint.stderr)
             result = subprocess.run(
-                [str(runner), "--no-progress", str(fixture)],
+                [str(runner), str(fixture)],
                 cwd=ROOT, capture_output=True, text=True, check=False, timeout=180,
             )
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
