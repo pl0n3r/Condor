@@ -182,6 +182,8 @@ namespace Acceptance {
                 'entity'=>new PurchaseOrder(new \DateTimeImmutable('2026-10-19T00:00:00Z'))],
             ['tenant'=>$tenant,'legal'=>$legal,'status'=>PurchaseOrder::STATUS_RECEIVED,
                 'entity'=>new PurchaseOrder(new \DateTimeImmutable('2026-10-21T00:00:00Z'))],
+            ['tenant'=>$foreign,'legal'=>$legal,'status'=>PurchaseOrder::STATUS_RECEIVED,
+                'entity'=>new PurchaseOrder(new \DateTimeImmutable('2026-10-18T00:00:00Z'))],
         ])
     ]);
     $cost=new ProductionCostService();
