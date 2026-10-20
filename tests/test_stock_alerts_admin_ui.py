@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PANEL = (ROOT / "frontend/admin/StockAlertsPanel.tsx").read_text(encoding="utf-8")
 APP = (ROOT / "frontend/admin/AdminApp.tsx").read_text(encoding="utf-8")
+BUNDLE = (ROOT / "public/build/admin.js").read_text(encoding="utf-8")
 CONTROLLER = (ROOT / "src/Http/Controller/StockAlertController.php").read_text(
     encoding="utf-8"
 )
@@ -42,6 +43,15 @@ class AlertasUiAdminTests(unittest.TestCase):
         self.assertIn("'error'", PANEL)
         self.assertIn("readStockData(alerts, minimums)", PANEL)
         self.assertNotIn("minimum: 0, quantity: 0", PANEL)
+
+    def test_shipped_bundle_contains_stock_alerts(self):
+        """Fail if the compiled admin asset omits the approved inventory UI."""
+        self.assertIn("Alertas de stock bajo", BUNDLE)
+        self.assertIn("No hay alertas activas de stock bajo para esta sede.", BUNDLE)
+        self.assertIn("Mínimo de stock actualizado.", BUNDLE)
+        self.assertIn("No fue posible consultar las alertas de stock.", BUNDLE)
+        self.assertIn("Guardar mínimo", BUNDLE)
+        self.assertIn("Acceso denegado a las alertas de esta sede.", BUNDLE)
 
     def test_branch_context_and_permissions(self):
         """Identity and active branch come from authenticated AdminApp context."""
