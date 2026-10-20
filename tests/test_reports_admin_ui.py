@@ -1,0 +1,199 @@
+"""Synthetic behavioral acceptance for the build-ahead reports component (#727).
+
+The frontend currently has an isolated V3: AdminApp and the generated bundle
+belong to other agents.  No test here asserts the component is mounted in the
+shipped bundle or that D-043 is validated.  Both remain merge gates.
+"""
+import json
+import subprocess
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+PANEL = ROOT / "frontend/admin/ReportsDownloads.tsx"
+CONTROLLER = ROOT / "src/Http/Controller/ReportsController.php"
+SERVICE = ROOT / "src/Application/Reporting/TenantCsvReportService.php"
+
+# Execute the actual TSX export with TypeScript's transpiler and instrumented
+# React hooks/DOM. No browser traffic, tenant PII or external services.
+HARNESS = r"""
+const fs = require('fs');
+const ts = require('typescript');
+const Module = require('module');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const output = ts.transpileModule(source, {compilerOptions: {
+  target: ts.ScriptTarget.ES2022,
+  module: ts.ModuleKind.CommonJS,
+  jsx: ts.JsxEmit.ReactJSX,
+}}).outputText;
+let slots = [], refs = [], index = 0, refIndex = 0;
+const react = {
+  useState(initial) {
+    const n = index++;
+    if (!(n in slots)) slots[n] = initial;
+    return [slots[n], value => {slots[n] = typeof value === 'function' ? value(slots[n]) : value;}];
+  },
+  useRef(initial) {
+    const n = refIndex++;
+    if (!(n in refs)) refs[n] = {current: initial};
+    return refs[n];
+  },
+  useEffect() {}, // stable branch; identity-switch tested via render
+};
+const jsx = (type, props) => ({type, props: props || {}});
+const mod = new Module(process.argv[1], module);
+mod.filename = process.argv[1];
+mod.require = id => {
+  if (id === 'react') return react;
+  if (id === 'react/jsx-runtime') return {jsx, jsxs: jsx, Fragment: 'fragment'};
+  return require(id);
+};
+mod._compile(output, process.argv[1]);
+const ReportsDownloads = mod.exports.ReportsDownloads;
+if (typeof ReportsDownloads !== 'function') throw Error('Missing export');
+let props = {branchId: 'branch-auth-01', permissions: ['inventory.view', 'orders.view']};
+function render() { index = 0; refIndex = 0; return ReportsDownloads(props); }
+function elements(tree, tag) {
+  if (!tree || typeof tree !== 'object') return [];
+  const result = tree.type === tag ? [tree] : [];
+  const children = tree.props?.children;
+  for (const child of Array.isArray(children) ? children : [children])
+    result.push(...elements(child, tag));
+  return result;
+}
+const realSetTimeout = setTimeout;
+const downloads = [];
+const revoked = [];
+let blobs = [];
+let status = 200, csv = 'id,quantity\nalpha,2\n', contentType = 'text/csv; charset=utf-8';
+let fetchPromise = null;
+global.fetch = (url, options) => {
+  downloads.push({url, credentials: options.credentials, accept: options.headers.Accept,
+    signal: Boolean(options.signal), method: options.method});
+  if (fetchPromise) return fetchPromise;
+  return Promise.resolve({ok: status === 200, status,
+    headers: {get: () => contentType},
+    blob: async () => new Blob([csv], {type:'text/csv'})});
+};
+global.URL.createObjectURL = blob => {blobs.push(blob); return 'blob:synthetic-' + blobs.length;};
+global.URL.revokeObjectURL = url => revoked.push(url);
+const clicked = [];
+global.document = {body: {appendChild() {}}, createElement() {
+  return {href:'', download:'', click() {clicked.push(this.download);}, remove() {}};
+}};
+const tick = async () => {await new Promise(resolve => realSetTimeout(resolve, 25));};
+(async () => {
+  let tree = render();
+  const inputs = elements(tree, 'input');
+  if (inputs.length !== 2) throw Error('Missing two date controls');
+  inputs[0].props.onChange({target:{value:'2026-10-01'}});
+  tree = render();
+  elements(tree, 'input')[1].props.onChange({target:{value:'2026-10-20'}});
+  tree = render();
+  const button = elements(tree, 'button')[0];
+  if (button.props.disabled) throw Error('Valid date range rejected');
+  elements(tree, 'form')[0].props.onSubmit({preventDefault() {}});
+  await tick();
+  const saved = [...clicked];
+  const success = downloads[0];
+
+  status = 403;
+  tree = render();
+  elements(tree, 'form')[0].props.onSubmit({preventDefault() {}});
+  await tick();
+  const denied = Boolean(elements(render(), 'p').find(x => x.props.role === 'alert'));
+
+  status = 200; csv = 'id,quantity\n'; // header only: no data.
+  tree = render();
+  elements(tree, 'form')[0].props.onSubmit({preventDefault() {}});
+  await tick();
+  const empty = elements(render(), 'output').some(x =>
+    String(x.props.children).includes('Sin registros'));
+
+  // An in-flight response for branch A must not download after branch B mounts.
+  let resolveFetch;
+  fetchPromise = new Promise(resolve => {resolveFetch = resolve;});
+  csv = 'id,quantity\nbeta,99\n';
+  const before = clicked.length;
+  tree = render();
+  elements(tree, 'form')[0].props.onSubmit({preventDefault() {}});
+  props = {...props, branchId:'branch-auth-02'};
+  render();
+  resolveFetch({ok:true,status:200,headers:{get:()=>contentType},
+    blob:async()=>new Blob([csv],{type:'text/csv'})});
+  await tick();
+  const staleBlocked = clicked.length === before;
+
+  // Branch context is supplied by the authenticated admin, never query tenant.
+  process.stdout.write(JSON.stringify({
+    success, saved, denied, empty, staleBlocked,
+    blobs:blobs.length, revoked:revoked.length,
+    urlCount:downloads.length,
+  }));
+})().catch(error => {console.error(error.stack);process.exitCode=1;});
+"""
+
+
+class ReportesUiAdminTests(unittest.TestCase):
+    def test_acceptance(self):
+        """AC-01 preparation: real TSX behavior with synthetic CSV and scoped branch."""
+        self.assertTrue(PANEL.is_file())
+        result = subprocess.run(
+            ["node", "-e", HARNESS, str(PANEL)],
+            cwd=ROOT, capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(
+            data["success"]["url"],
+            "/api/v1/branches/branch-auth-01/reports/inventory.csv"
+            "?from=2026-10-01&through=2026-10-20",
+        )
+        self.assertEqual(data["success"]["credentials"], "same-origin")
+        self.assertEqual(data["success"]["accept"], "text/csv")
+        self.assertEqual(data["success"]["method"], "GET")
+        self.assertTrue(data["success"]["signal"])
+        self.assertEqual(data["saved"], ["inventory-2026-10-01-2026-10-20.csv"])
+        self.assertTrue(data["denied"])
+        self.assertTrue(data["empty"])
+        self.assertTrue(data["staleBlocked"])
+        self.assertEqual(data["blobs"], data["revoked"])
+
+    def test_security_contract_and_negative_states(self):
+        panel = PANEL.read_text(encoding="utf-8")
+        backend = CONTROLLER.read_text(encoding="utf-8")
+        csv = SERVICE.read_text(encoding="utf-8")
+        self.assertIn("export function ReportsDownloads", panel)
+        for kind in ("inventory", "sales", "purchases"):
+            self.assertIn(f"kind: '{kind}'", panel)
+            self.assertIn(f"'{kind}' =>", backend)
+            self.assertIn(f"'{kind}' => [", csv)
+        for permission in ("inventory.view", "orders.view"):
+            self.assertIn(permission, panel)
+        self.assertNotIn("purchases.view", panel)
+        self.assertIn("credentials: 'same-origin'", panel)
+        self.assertIn("new URLSearchParams({ from, through })", panel)
+        self.assertIn("encodeURIComponent(branchId)", panel)
+        self.assertIn("URL.revokeObjectURL", panel)
+        self.assertIn("Content-Type", panel)
+        self.assertIn("response.blob()", panel)
+        self.assertIn("response.status === 401 || response.status === 403", panel)
+        for status in ("400", "404", "503"):
+            self.assertIn(f"response.status === {status}", panel)
+        self.assertIn("validDate(from)", panel)
+        self.assertIn("validDate(through)", panel)
+        self.assertIn("from <= through", panel)
+        self.assertNotIn("localStorage", panel)
+        self.assertNotIn("tenantId", panel)
+        self.assertIn("'/api/v1/branches/{branchId}/reports/{kind}.csv'", backend)
+        self.assertIn("authorizedBranchScope($branchId, $permission)", backend)
+        self.assertIn("'Cache-Control' => 'private, no-store, max-age=0'", backend)
+
+    def test_build_ahead_does_not_claim_shipped_integration(self):
+        """V3 does not yet authorize modifying AdminApp or public/build/admin.js."""
+        source = (ROOT / "frontend/admin/AdminApp.tsx").read_text(encoding="utf-8")
+        self.assertNotIn("import { ReportsDownloads }", source)
+
+
+if __name__ == "__main__":
+    unittest.main()
