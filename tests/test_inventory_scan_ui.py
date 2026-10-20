@@ -67,6 +67,28 @@ class EscaneoUiInventarioTests(unittest.TestCase):
         self.assertIn("setScanMessage('');", block)
         self.assertIn("setScanCode('');", block)
 
+    def test_invalidated_scan_never_leaves_old_mutation_variant(self) -> None:
+        """An obsolete scanner selection cannot remain a silent write target."""
+        refresh = PANEL.split("async function loadInventory() {", 1)[1].split(
+            "setState({ status: 'loading' });", 1
+        )[0]
+        submit = PANEL.split("async function scanVariant(", 1)[1].split(
+            "setScanStatus('loading');", 1
+        )[0]
+        clear = PANEL.split("function clearScanSelection() {", 1)[1].split(
+            "async function createSource(", 1
+        )[0]
+        edit = PANEL.split("setScanCode(event.target.value);", 1)[0].rsplit(
+            "onChange={(event) => {", 1
+        )[-1]
+        for name, block in (("refresh", refresh), ("submit", submit),
+                            ("clear", clear), ("edit", edit)):
+            with self.subTest(name=name):
+                self.assertIn("setAdjustVariant('');", block)
+                self.assertIn("setTransferVariant('');", block)
+        self.assertIn("if (scannedVariantId !== null)", submit)
+        self.assertIn("if (scannedVariantId !== null)", edit)
+
     def test_authoritative_api_is_branch_and_tenant_scoped(self) -> None:
         self.assertIn(
             "$this->authorizedBranchScope($branchId, 'inventory.view')",

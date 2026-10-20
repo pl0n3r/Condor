@@ -125,6 +125,9 @@ export function InventoryManagement({
     // A previously scanned variant might no longer belong to this inventory.
     scanRequestId.current += 1;
     setScannedVariantId(null);
+    // Never keep a scanned mutation target across an inventory refresh.
+    setAdjustVariant('');
+    setTransferVariant('');
     setScanStatus('idle');
     setScanMessage('');
     setScanCode('');
@@ -231,6 +234,12 @@ export function InventoryManagement({
 
     const code = scanCode.trim();
     const attempt = ++scanRequestId.current;
+    // A failed follow-up scan must not leave the previous scanned SKU
+    // selected in adjustment or transfer forms.
+    if (scannedVariantId !== null) {
+      setAdjustVariant('');
+      setTransferVariant('');
+    }
     setScannedVariantId(null);
     setScanMessage('');
     if (code.length < 4 || code.length > 64) {
@@ -299,6 +308,10 @@ export function InventoryManagement({
 
   function clearScanSelection() {
     scanRequestId.current += 1;
+    if (scannedVariantId !== null) {
+      setAdjustVariant('');
+      setTransferVariant('');
+    }
     setScanCode('');
     setScanStatus('idle');
     setScanMessage('');
@@ -557,6 +570,10 @@ export function InventoryManagement({
                 value={scanCode}
                 onChange={(event) => {
                   scanRequestId.current += 1;
+                  if (scannedVariantId !== null) {
+                    setAdjustVariant('');
+                    setTransferVariant('');
+                  }
                   setScanCode(event.target.value);
                   setScannedVariantId(null);
                   setScanStatus('idle');
