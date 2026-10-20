@@ -267,6 +267,23 @@ foreach ($expectedRoutes as $method => [$path, $httpMethod]) {
         break;
     }
 }
+// HR responses carry personal/pseudonymous data: both browsers and proxies
+// must be forbidden to store them, even on 201/200 idempotent receipts.
+$privateHrResponses = [
+    $created,
+    invokeAction($api, 'indexWithinTenant', $tenantA, $owner),
+    invokeAction($api, 'showWithinTenant', $tenantA, $owner, $employeeId),
+    invokeAction($api, 'linkWithinTenant', $tenantA, $owner, $employeeId, $viewer),
+    invokeAction($api, 'attendanceWithinTenant', $tenantA, $owner, $employeeId, req($payload)),
+];
+$privateResponsesNotCached = count($privateHrResponses) === 5;
+foreach ($privateHrResponses as $response) {
+    $cache = (string) $response->headers->get('Cache-Control', '');
+    $privateResponsesNotCached = $privateResponsesNotCached
+        && str_contains($cache, 'private')
+        && str_contains($cache, 'no-store')
+        && $response->headers->get('X-Content-Type-Options') === 'nosniff';
+}
 $responseJson = json_encode([$createdData, $linked, $first], JSON_THROW_ON_ERROR);
 echo json_encode([
     'create_http_201' => $created->getStatusCode() === 201 && $createdData['employee']['code'] === 'EMP-1',
@@ -292,6 +309,7 @@ echo json_encode([
     'public_anonymous_list_denied' => $anonymousListDenied,
     'public_anonymous_show_denied' => $anonymousShowDenied,
     'http_route_attributes_exact' => $routesCorrect,
+    'hr_responses_never_cached' => $privateResponsesNotCached,
     'minimal_safe_json' => !str_contains($responseJson, 'owner@example.test')
         && !str_contains($responseJson, 'fingerprint')
         && array_keys($createdData['employee']) === ['id', 'code', 'linked'],
@@ -326,7 +344,7 @@ class EmpleadosApiTests(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         evidence = json.loads(result.stdout)
-        self.assertEqual(len(evidence), 22)
+        self.assertEqual(len(evidence), 23)
         for name, passes in evidence.items():
             with self.subTest(case=name):
                 self.assertTrue(passes, name)
