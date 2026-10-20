@@ -1,0 +1,97 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Condor — Seguridad: tu información, aparte y protegida{% endblock %}
+
+{% block head %}
+    <meta name="description" content="Cómo cuida Condor la información de tu negocio: aislamiento entre empresas, permisos por rol, respaldos y qué funciona hoy y qué estamos terminando.">
+    <link rel="canonical" href="https://www.condorapp.com.co/seguridad">
+    <link rel="stylesheet" href="/marketing.css">
+{% endblock %}
+
+{% block body %}
+<div class="mk-site">
+{% include 'marketing/_nav.html.twig' with {'current': 'seguridad'} %}
+<div class="mk-wrap">
+
+<div class="mk-top">
+    <div><span class="mk-eyebrow">Seguridad</span><h1>Tu información, aparte y <span class="mk-mark">protegida</span>.</h1></div>
+    <p class="mk-lead">Un negocio le entrega a Condor sus productos, sus clientes y sus ventas. Esta página explica cómo lo cuidamos, qué ya funciona y qué todavía estamos terminando, sin promesas absolutas.</p>
+</div>
+<div class="mk-pillars">
+    <div><b>Aparte</b><span>Cada empresa solo ve su información.</span></div>
+    <div><b>Cada quien lo suyo</b><span>Permisos por rol, validados en el servidor.</span></div>
+    <div><b>Sin duplicados</b><span>Repetir una operación no repite sus efectos.</span></div>
+    <div><b>Recuperable</b><span>Copias de respaldo y ensayos de restauración.</span></div>
+</div>
+
+<section class="mk-section" id="y-si" aria-labelledby="ysi-title">
+    <div class="mk-head"><h2 id="ysi-title">¿Y si…?</h2><p>Estas son las preguntas que un dueño de negocio se hace. Elige una y te decimos qué pasa.</p></div>
+    <div class="mk-yes mk-tabs">
+<input class="mk-vh" type="radio" name="ysi" id="ys1" checked>
+<input class="mk-vh" type="radio" name="ysi" id="ys2">
+<input class="mk-vh" type="radio" name="ysi" id="ys3">
+<input class="mk-vh" type="radio" name="ysi" id="ys4">
+<input class="mk-vh" type="radio" name="ysi" id="ys5">
+<input class="mk-vh" type="radio" name="ysi" id="ys6">
+        <div class="mk-qlist" role="presentation">
+<label for="ys1">¿Y si alguien adivina el enlace de otra empresa?</label>
+<label for="ys2">¿Y si un empleado se va de la empresa?</label>
+<label for="ys3">¿Y si se repite una operación por error?</label>
+<label for="ys4">¿Y si olvido mi contraseña?</label>
+<label for="ys5">¿Y si alguien sube un archivo raro?</label>
+<label for="ys6">¿Y si se daña el servidor?</label>
+        </div>
+        <div class="mk-ans-panels">
+<article class="mk-tp yp1" aria-label="¿Y si alguien adivina el enlace de otra empresa?"><span class="mk-chip mk-chip-ok">Disponible · Aislamiento</span><h3>No ve nada.</h3><p>Conocer una dirección o un identificador de otra empresa no da acceso. Cada vez que se pide información, el servidor comprueba que pertenezca a tu empresa.</p><ul><li>La comprobación se hace en el servidor, no en la pantalla</li><li>Hay pruebas automáticas que intentan leer, cambiar y exportar datos de otra empresa</li></ul></article>
+<article class="mk-tp yp2" aria-label="¿Y si un empleado se va de la empresa?"><span class="mk-chip mk-chip-ok">Disponible · Accesos</span><h3>Le quitas el acceso y listo.</h3><p>Cada persona entra con su propio usuario y su rol. Cuando alguien se va, desactivas su usuario sin tocar el de los demás. Nadie comparte contraseñas.</p><ul><li>Roles que parten de una plantilla y tu empresa edita</li><li>Permisos por módulo y por sede, validados en el servidor</li></ul></article>
+<article class="mk-tp yp3" aria-label="¿Y si se repite una operación por error?"><span class="mk-chip mk-chip-ok">Disponible · Integridad</span><h3>No se duplica.</h3><p>Si un envío se repite por una falla de internet o por un doble clic, el movimiento de inventario o el pedido no se registra dos veces.</p><ul><li>Las operaciones de stock usan transacciones y claves de repetición segura</li><li>Un reintento no duplica pedidos ni movimientos</li></ul></article>
+<article class="mk-tp yp4" aria-label="¿Y si olvido mi contraseña?"><span class="mk-chip mk-chip-ok">Disponible · Cuentas</span><h3>La recuperas con un enlace de un solo uso.</h3><p>Recibes un enlace que sirve una vez y caduca. Nosotros no guardamos la clave de recuperación en claro, solo una huella que no se puede revertir.</p><ul><li>El código de recuperación no se escribe en registros ni en analítica</li><li>Las contraseñas deben cumplir una política mínima</li></ul></article>
+<article class="mk-tp yp5" aria-label="¿Y si alguien sube un archivo raro?"><span class="mk-chip mk-chip-ok">Disponible · Archivos</span><h3>Lo revisamos antes de aceptarlo.</h3><p>Validamos el tipo, el tamaño y el contenido real del archivo, no solo su extensión. Los archivos subidos nunca se ejecutan como programas.</p><ul><li>Nombres internos opacos, sin rutas elegidas por el usuario</li><li>Revisión con antivirus: próximamente</li></ul></article>
+<article class="mk-tp yp6" aria-label="¿Y si se daña el servidor?"><span class="mk-chip mk-chip-warn">En construcción · Respaldos</span><h3>Hay copias, y las estamos reforzando.</h3><p>Existe el respaldo cifrado y un ensayo automático de restauración. Estamos terminando la copia fuera del servidor y la evidencia de que corre cada día.</p><ul><li>Disponible: respaldo, cifrado y ensayo de restauración</li><li>En construcción: copia externa bloqueada contra borrado y respaldo diario evidenciado</li></ul></article>
+        </div>
+    </div>
+</section>
+
+<section class="mk-section" id="capas" aria-labelledby="capas-title">
+    <div class="mk-head"><h2 id="capas-title">Lo que ya funciona y lo que falta.</h2><p>Preferimos decirte qué está terminado que prometerte todo. Esta es la lista al día de hoy.</p></div>
+    <div class="mk-layers">
+        <article class="mk-col"><span class="mk-chip mk-chip-ok">Disponible hoy</span><h3>Lo que ya protege tu cuenta</h3><ul>
+            <li>Aislamiento entre empresas, con pruebas que intentan cruzar datos</li><li>Roles y permisos validados en el servidor, por módulo y por sede</li>
+            <li>Contraseñas con política y recuperación con enlace de un solo uso</li><li>Invitaciones de cuenta para tu equipo</li><li>Contenido editable limpiado antes de mostrarse</li>
+            <li>Archivos subidos validados por tipo, tamaño y contenido real</li><li>Operaciones sensibles sin duplicar efectos</li><li>Monitoreo de errores con datos mínimos</li></ul></article>
+        <article class="mk-col"><span class="mk-chip mk-chip-warn">En construcción</span><h3>Lo que estamos terminando</h3><ul>
+            <li>Respaldos programados en producción, con evidencia a la vista</li><li>Copia de respaldo fuera del servidor, con bloqueo contra borrado</li><li>Historial de cambios consultable por ti</li></ul></article>
+        <article class="mk-col mk-col-c"><span class="mk-chip mk-chip-soon">Próximamente</span><h3>Lo que sigue</h3><ul>
+            <li>Verificación en dos pasos para tu equipo</li><li>Revisión de archivos con antivirus</li><li>Alertas cuando alguien intente entrar de forma sospechosa</li></ul></article>
+    </div>
+</section>
+
+<section class="mk-section" id="respaldo" aria-labelledby="respaldo-title">
+    <div class="mk-bk">
+        <div class="mk-bk-copy"><span class="mk-eyebrow">Respaldos y recuperación</span><h2 id="respaldo-title">Si algo falla, se vuelve atrás.</h2><p>Una copia de respaldo solo sirve si se puede restaurar. Por eso no basta con guardarla: la ensayamos. Esta es la cadena completa y en qué punto está cada eslabón.</p></div>
+        <ol class="mk-chain">
+            <li><b>Respaldo de la base de datos <span class="mk-chip mk-chip-ok">Disponible</span></b><p>Un proceso genera la copia de tu información con un script que se ejecuta de forma controlada.</p></li>
+            <li><b>Cifrado de la copia <span class="mk-chip mk-chip-ok">Disponible</span></b><p>La copia se cifra antes de salir del servidor, con una clave que no vive en el código.</p></li>
+            <li><b>Ensayo de restauración <span class="mk-chip mk-chip-ok">Disponible</span></b><p>Una prueba automática restaura la copia en un entorno aparte y verifica que los datos vuelven completos. Nunca se prueba sobre tu información real.</p></li>
+            <li class="todo"><b>Copia fuera del servidor, bloqueada contra borrado <span class="mk-chip mk-chip-warn">En construcción</span></b><p>Un almacenamiento externo que impide eliminar o alterar la copia durante un tiempo definido. El flujo está diseñado y falta activarlo en producción.</p></li>
+            <li class="todo"><b>Respaldo diario con 30 días de historia <span class="mk-chip mk-chip-warn">En construcción</span></b><p>Nuestra meta es una copia por día y al menos 30 días de puntos de recuperación, según permita el alojamiento. Falta la evidencia de que corre cada día.</p></li>
+        </ol>
+    </div>
+</section>
+
+<section class="mk-section" id="verificamos" aria-labelledby="verificamos-title">
+    <div class="mk-head"><h2 id="verificamos-title">Cómo cuidamos cada cambio.</h2><p>Condor mejora todo el tiempo. Cada mejora pasa por los mismos controles antes de llegar a tu cuenta.</p></div>
+    <div class="mk-vf">
+        <div><b>Pruebas automáticas</b><span>Cada cambio corre pruebas, incluidas las de seguridad entre empresas, antes de publicarse.</span></div>
+        <div><b>Revisión</b><span>Nada llega a producción sin pasar por una revisión del código.</span></div>
+        <div><b>Cambios que no destruyen datos</b><span>Los cambios en la base de datos se hacen en pasos que conservan tu información. No se ejecutan borrados masivos de forma automática.</span></div>
+        <div class="n"><b>Lo que no decimos</b><span>No decimos que sea imposible que algo falle. Decimos qué hacemos para que no pase y cómo nos recuperamos si pasa.</span></div>
+    </div>
+</section>
+
+</div>
+<div class="mk-wrap">
+{% include 'marketing/_cta.html.twig' %}
+</div>
+</div>
+{% endblock %}
