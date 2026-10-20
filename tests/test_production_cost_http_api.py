@@ -2,7 +2,7 @@
 """Contrato offline de API de costos, Condor #719.
 
 Ejecuta el controller PHP auténtico con dobles tipados y sin DB/credenciales.
-No prueba un snapshot de costo persistido: la implementación declara ese límite.
+Valida lectura del snapshot persistido e historial UNKNOWN sin recalcular precios.
 """
 
 import subprocess
@@ -47,14 +47,16 @@ namespace App\Domain\Inventory\Entity {
         public function type(): string { return self::TYPE_BRANCH; }
         public function isActive(): bool { return true; }
         public function legalEntity(): object { return $this->legal; }
+        public function id(): string { return 'source-1'; }
     }
 }
 namespace App\Domain\Production\Entity {
     class ProductionOrder {
-        public function __construct(private string $key, private ?\DateTimeImmutable $date) {}
+        public function __construct(private string $key, private ?\DateTimeImmutable $date, private ?array $snapshot = null) {}
         public function id(): string { return $this->key; }
         public function isCompleted(): bool { return $this->date !== null; }
         public function completedAt(): ?\DateTimeImmutable { return $this->date; }
+        public function costSnapshot(): ?array { return $this->snapshot; }
     }
 }
 namespace App\Domain\Purchasing\Entity {
@@ -66,14 +68,15 @@ namespace App\Domain\Purchasing\Entity {
 namespace App\Application\Production {
     class ProductionCostService {
         public array $seen = [];
-        public function calculate(object $tenant, object $order, iterable $receipts): array {
+        public function calculate(object $tenant, object $order, iterable $receipts,
+                                  ?array $savedSnapshot = null): array {
             $this->seen = $receipts;
-            if (count($receipts) !== 1) {
-                throw new \RuntimeException('Historical receipt cutoff was ignored.');
+            if ($receipts !== [] || $savedSnapshot === null
+                || $savedSnapshot['tenant_id'] !== $tenant->key
+                || $savedSnapshot['order_id'] !== $order->id()) {
+                throw new \RuntimeException('GET recalculated prices or accepted foreign proof.');
             }
-            return ['state'=>'ESTIMATED_COST', 'total_cost'=>'40.0000',
-                'unit_cost'=>'20.0000', 'consumptions'=>[
-                    ['material_id'=>'material-1', 'line_cost'=>'40.0000']]];
+            return $savedSnapshot;
         }
     }
 }
@@ -150,8 +153,7 @@ namespace Acceptance {
     class PurchaseRepo {
         public function __construct(private array $rows) {}
         public function createQueryBuilder(string $alias): Query {
-            if ($alias !== 'p') { throw new \RuntimeException('Unexpected repository query.'); }
-            return new Query($this->rows);
+            throw new \RuntimeException('GET must never query receipt history.');
         }
     }
     class Store implements EntityManagerInterface {
@@ -165,7 +167,15 @@ namespace Acceptance {
     $tenant=new Tenant('tenant-a'); $foreign=new Tenant('tenant-b');
     $branch=new Branch('branch-1'); $GLOBALS['branch']=$branch;
     $legal=new LegalEntity('legal-a'); $source=new InventorySource($legal);
-    $completed=new ProductionOrder('completed',new \DateTimeImmutable('2026-10-20T01:00:00Z'));
+    $saved=['state'=>'ESTIMATED_COST','tenant_id'=>'tenant-a','order_id'=>'completed',
+        'source_id'=>'source-1','bom_id'=>'bom-1','bom_version'=>1,'completed_quantity'=>2,
+        'total_cost'=>'40.0000','unit_cost'=>'20.0000',
+        'consumptions'=>[['material_id'=>'material-1','quantity'=>'2.000000',
+                         'unit_cost'=>'20.0000','line_cost'=>'40.0000']]];
+    $completed=new ProductionOrder('completed',new \DateTimeImmutable('2026-10-20T01:00:00Z'),$saved);
+    $unknown=new ProductionOrder('unknown',new \DateTimeImmutable('2026-10-20T01:00:00Z'));
+    $wrong=new ProductionOrder('wrong',new \DateTimeImmutable('2026-10-20T01:00:00Z'),
+        array_merge($saved,['order_id'=>'wrong','source_id'=>'other-source']));
     $draft=new ProductionOrder('draft',null);
     $other=new ProductionOrder('other-tenant',new \DateTimeImmutable('2026-10-20T01:00:00Z'));
     $store=new Store([
@@ -175,6 +185,8 @@ namespace Acceptance {
         ProductionOrder::class=>new Repo([
             ['id'=>'completed','tenant'=>$tenant,'source'=>$source,'entity'=>$completed],
             ['id'=>'draft','tenant'=>$tenant,'source'=>$source,'entity'=>$draft],
+            ['id'=>'unknown','tenant'=>$tenant,'source'=>$source,'entity'=>$unknown],
+            ['id'=>'wrong','tenant'=>$tenant,'source'=>$source,'entity'=>$wrong],
             ['id'=>'other-tenant','tenant'=>$foreign,'source'=>$source,'entity'=>$other],
         ]),
         PurchaseOrder::class=>new PurchaseRepo([
@@ -193,7 +205,9 @@ namespace Acceptance {
     if ($result['cost']['total_cost']!=='40.0000'
         ||$result['cost']['unit_cost']!=='20.0000'
         ||$result['cost']['consumptions'][0]['line_cost']!=='40.0000'
-        ||$result['snapshot_persisted']!==false) {
+        ||$result['snapshot_persisted']!==true
+        ||$result['state']!=='ESTIMATED_COST'
+        ||$result['provenance']!=='production_completion_snapshot') {
         throw new \RuntimeException('Completed order response invalid.');
     }
     foreach ([['branch-1','other-tenant'],['foreign-branch','completed']] as [$branchId,$orderId]) {
@@ -205,6 +219,15 @@ namespace Acceptance {
     catch (UnprocessableEntityHttpException) { goto checked; }
     throw new \RuntimeException('Draft order exposed a cost.');
     checked:
+    $unknownResult=$api->cost('branch-1','unknown')->data;
+    if ($unknownResult['state']!=='UNKNOWN' || $unknownResult['cost']!==null
+        ||$unknownResult['snapshot_persisted']!==false) {
+        throw new \RuntimeException('Legacy order inferred a price without evidence.');
+    }
+    try { $api->cost('branch-1','wrong'); }
+    catch (UnprocessableEntityHttpException) { goto invalid_proof_checked; }
+    throw new \RuntimeException('A cross-source snapshot was accepted.');
+    invalid_proof_checked:
     if ($store->writes!==0) { throw new \RuntimeException('GET mutated storage.'); }
     echo 'OK';
 }
