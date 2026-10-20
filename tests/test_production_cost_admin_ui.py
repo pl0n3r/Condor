@@ -39,7 +39,7 @@ class CostoOrdenUiTests(unittest.TestCase):
 
         self.assertIn("methods: ['GET']", CONTROLLER)
         self.assertIn("'inventory.view'", CONTROLLER)
-        self.assertIn("['id' => $orderId,", CONTROLLER.replace("\n", " "))
+        self.assertIn("'id' => $orderId,", CONTROLLER)
         self.assertIn("'production_completion_snapshot'", CONTROLLER)
         self.assertIn("'snapshot_persisted' => true", CONTROLLER)
         self.assertIn("'consumptions' => $lines", COSTS)
