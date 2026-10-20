@@ -88,9 +88,9 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
   const ordersPath = basePath + '/orders';
   const materialCostsPath = basePath + '/material-costs';
 
-  async function load() {
+  async function load(options: { keepData?: boolean } = {}) {
     const current = ++requestId.current;
-    setState({ status: 'loading' });
+    if (!options.keepData) setState({ status: 'loading' });
     try {
       // The historical cost endpoint may be deployed after the purchasing UI.
       // Degrade only historical costs; never downgrade an authorization failure.
@@ -108,15 +108,18 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
         readJson<{ materials: Material[] }>(productionMaterialsPath(branchId)),
         historicalRequest,
       ]);
-      const materialCostsResult = historical.result;
       if (current !== requestId.current) return;
-      if (!Array.isArray(suppliersResult.suppliers)
-        || !Array.isArray(ordersResult.orders)
-        || !Array.isArray(materialsResult.materials)
-        || !Array.isArray(materialCostsResult.material_costs)
-        || ordersResult.orders.some((order) => !Array.isArray(order.lines))
-        || materialCostsResult.material_costs.some((cost) => (
-          typeof cost.material_id !== 'string'
+      // Historical data is optional until its API is integrated. Validate its
+      // shape independently, including null elements in a successful 200.
+      // No invalid/partial cost is ever displayed as a verified price.
+      const historyValid = historical.available
+        && historical.result !== null
+        && typeof historical.result === 'object'
+        && Array.isArray(historical.result.material_costs)
+        && !historical.result.material_costs.some((cost) => (
+          cost === null
+          || typeof cost !== 'object'
+          || typeof cost.material_id !== 'string'
           || (cost.state !== 'KNOWN' && cost.state !== 'UNKNOWN')
           || (cost.state === 'UNKNOWN' && cost.average_unit_cost !== null)
           || (cost.state === 'KNOWN' && (
@@ -127,15 +130,20 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
           || !/^(0|[1-9][0-9]*)\.[0-9]{6}$/.test(cost.total_quantity)
           || !Number.isSafeInteger(cost.receipt_count)
           || cost.receipt_count < 0
-        ))) {
+        ));
+      const materialCosts = historyValid ? historical.result.material_costs : [];
+      if (!Array.isArray(suppliersResult.suppliers)
+        || !Array.isArray(ordersResult.orders)
+        || !Array.isArray(materialsResult.materials)
+        || ordersResult.orders.some((order) => !Array.isArray(order.lines))) {
         throw new Error('El servidor devolvió una respuesta de compras inválida.');
       }
       const data = {
         suppliers: suppliersResult.suppliers,
         orders: ordersResult.orders,
         materials: materialsResult.materials,
-        materialCosts: materialCostsResult.material_costs,
-        historyStatus: historical.available ? 'verified' as const : 'unavailable' as const,
+        materialCosts,
+        historyStatus: historyValid ? 'verified' as const : 'unavailable' as const,
       };
       setState({ status: 'ready', data });
       setSupplierId((old) => (
@@ -188,7 +196,7 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
         throw new Error(await messageFrom(response));
       }
       setNotice({ kind: 'success', text: success });
-      await load();
+      await load({ keepData: true });
       return true;
     } catch (error) {
       setNotice({
