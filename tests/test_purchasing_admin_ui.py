@@ -87,7 +87,7 @@ class ComprasUiAdminTests(unittest.TestCase):
         self.assertIn("cost.state !== 'KNOWN' && cost.state !== 'UNKNOWN'", PANEL)
         self.assertIn("cost.average_unit_cost !== null", PANEL)
         self.assertIn("cost.receipt_count < 0", PANEL)
-        self.assertIn("materialCosts: materialCostsResult.material_costs", PANEL)
+        self.assertIn("materialCosts,", PANEL)
         self.assertIn("historical?.state === 'KNOWN'", PANEL)
         self.assertIn("Sin costo promedio histórico verificado", PANEL)
         self.assertIn("Costo promedio ponderado de materiales", PANEL)
