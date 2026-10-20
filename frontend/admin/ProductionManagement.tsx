@@ -89,9 +89,23 @@ type ProductionOrder = {
   completed_at: string | null;
 };
 
-type OrderSnapshot = {
-  orders: ProductionOrder[];
+type OrderSnapshot = { orders: ProductionOrder[] };
+
+type OrderCost = {
+  total_cost: string;
+  unit_cost: string;
+  consumptions: Array<{
+    material_id: string;
+    quantity: string;
+    unit_cost: string;
+    line_cost: string;
+  }>;
 };
+type OrderCostState =
+  | { status: 'loading' }
+  | { status: 'unknown' }
+  | { status: 'error' }
+  | { status: 'ready'; data: OrderCost };
 
 type InventorySnapshot = {
   variants: Variant[];
@@ -131,6 +145,83 @@ type BomComponentDraft = {
 
 class ProductionUnavailable extends Error {}
 
+const moneyPattern = /^(?:0|[1-9][0-9]*)\.[0-9]{4}$/;
+const quantityPattern = /^(?:0|[1-9][0-9]*)\.[0-9]{6}$/;
+
+// Money is displayed only from the validated, server-persisted completion snapshot.
+// Never derive historical prices from mutable BOM or current purchasing data.
+function verifiedOrderCost(payload: unknown, orderId: string): OrderCostState {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { status: 'error' };
+  }
+  const response = payload as Record<string, unknown>;
+  if (response.order_id !== orderId) return { status: 'error' };
+  if (response.state === 'UNKNOWN'
+    && response.cost === null && response.snapshot_persisted === false) {
+    return { status: 'unknown' };
+  }
+  if (response.state !== 'ESTIMATED_COST'
+    || response.snapshot_persisted !== true
+    || response.provenance !== 'production_completion_snapshot'
+    || response.cost === null || typeof response.cost !== 'object'
+    || Array.isArray(response.cost)) return { status: 'error' };
+
+  const cost = response.cost as Record<string, unknown>;
+  if (cost.state !== 'ESTIMATED_COST' || cost.order_id !== orderId
+    || typeof cost.total_cost !== 'string' || !moneyPattern.test(cost.total_cost)
+    || typeof cost.unit_cost !== 'string' || !moneyPattern.test(cost.unit_cost)
+    || !Array.isArray(cost.consumptions)
+    || cost.consumptions.some((line: unknown) => {
+      if (line === null || typeof line !== 'object' || Array.isArray(line)) return true;
+      const row = line as Record<string, unknown>;
+      return typeof row.material_id !== 'string' || row.material_id === ''
+        || typeof row.quantity !== 'string' || !quantityPattern.test(row.quantity)
+        || typeof row.unit_cost !== 'string' || !moneyPattern.test(row.unit_cost)
+        || typeof row.line_cost !== 'string' || !moneyPattern.test(row.line_cost);
+    })) return { status: 'error' };
+
+  return { status: 'ready', data: cost as OrderCost };
+}
+
+function copAmount(value: string): string {
+  const [integer, fraction] = value.split('.');
+  return integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + fraction + ' COP';
+}
+
+function OrderCostDetails({
+  cost, materials,
+}: Readonly<{ cost: OrderCostState; materials: ReadonlyMap<string, Material> }>) {
+  if (cost.status === 'loading') {
+    return <p className="muted" role="status">Consultando costo de la orden…</p>;
+  }
+  if (cost.status === 'unknown') {
+    return <p className="muted" role="status">Costo no disponible: sin comprobante verificable.</p>;
+  }
+  if (cost.status === 'error') {
+    return <p role="alert">No fue posible verificar el costo de la orden.</p>;
+  }
+  return (
+    <div className="production-cost-breakdown">
+      <p><strong>Costo total: {copAmount(cost.data.total_cost)}</strong></p>
+      <p>Costo por unidad: {copAmount(cost.data.unit_cost)}</p>
+      <strong>Desglose por material</strong>
+      {cost.data.consumptions.length === 0 ? (
+        <p className="muted" role="status">No se registraron consumos de material.</p>
+      ) : (
+        <ul>
+          {cost.data.consumptions.map((line) => (
+            <li key={line.material_id}>
+              {materials.get(line.material_id)?.name ?? 'Material sin referencia'}:
+              {' '}{line.quantity} × {copAmount(line.unit_cost)}
+              {' '}= {copAmount(line.line_cost)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function ProductionManagement({
   branchId,
   permissions,
@@ -143,6 +234,8 @@ export function ProductionManagement({
   const canDelete = can('inventory.delete');
 
   const [state, setState] = useState<State>({ status: 'loading' });
+  const [orderCosts, setOrderCosts] = useState<Record<string, OrderCostState>>({});
+  const costRequestId = useRef(0);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -178,6 +271,8 @@ export function ProductionManagement({
   >(new Map());
 
   async function loadProduction() {
+    const request = ++costRequestId.current;
+    setOrderCosts({});
     if (!canView) {
       return;
     }
@@ -196,6 +291,7 @@ export function ProductionManagement({
         getJson<InventorySnapshot>(inventoryPath(branchId)),
       ]);
 
+      if (request !== costRequestId.current) return;
       const data = {
         materials,
         boms,
@@ -204,7 +300,24 @@ export function ProductionManagement({
       };
       setState({ status: 'ready', data });
       hydrateSelections(data);
+
+      const completed = orders.orders.filter((order) => order.status === 'completed');
+      setOrderCosts(Object.fromEntries(completed.map((order) => [
+        order.id, { status: 'loading' as const },
+      ])));
+      for (const order of completed) {
+        // Cost failures must not hide the underlying production workflow.
+        void getJson<unknown>(
+          productionOrdersPath(branchId) + '/' + encodeURIComponent(order.id) + '/cost',
+        ).then((payload) => verifiedOrderCost(payload, order.id))
+          .catch((): OrderCostState => ({ status: 'error' }))
+          .then((next) => {
+            if (request !== costRequestId.current) return;
+            setOrderCosts((current) => ({ ...current, [order.id]: next }));
+          });
+      }
     } catch (error) {
+      if (request !== costRequestId.current) return;
       if (error instanceof ProductionUnavailable) {
         setState({ status: 'disabled', message: error.message });
         return;
@@ -267,6 +380,7 @@ export function ProductionManagement({
     if (canView) {
       void loadProduction();
     }
+    return () => { costRequestId.current += 1; };
   }, [branchId, canView]);
 
   const ready = state.status === 'ready' ? state.data : null;
@@ -983,6 +1097,14 @@ export function ProductionManagement({
                             : ' · terminado ' + order.completed_quantity}
                         </span>
                       </div>
+                      {order.status === 'completed' && (
+                        <div className="production-order-cost" aria-label="Costo de orden terminada">
+                          <OrderCostDetails
+                            cost={orderCosts[order.id] ?? { status: 'loading' }}
+                            materials={materialById}
+                          />
+                        </div>
+                      )}
                       {canUpdate && order.status === 'draft' && (
                         <div className="production-complete">
                           <label className="field">
