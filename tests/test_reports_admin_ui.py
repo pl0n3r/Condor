@@ -32,7 +32,7 @@ const output = ts.transpileModule(source, {compilerOptions: {
   module: ts.ModuleKind.CommonJS,
   jsx: ts.JsxEmit.ReactJSX,
 }}).outputText;
-let slots = [], refs = [], index = 0, refIndex = 0;
+let slots = [], refs = [], index = 0, refIndex = 0, effectDeps = [];
 const react = {
   useState(initial) {
     const n = index++;
@@ -44,7 +44,7 @@ const react = {
     if (!(n in refs)) refs[n] = {current: initial};
     return refs[n];
   },
-  useEffect() {}, // stable branch; identity-switch tested via render
+  useEffect(_effect, dependencies) { effectDeps.push(dependencies); }, // capture actual deps
 };
 const jsx = (type, props) => ({type, props: props || {}});
 const mod = new Module(process.argv[1], module);
@@ -148,9 +148,24 @@ const tick = async () => {await new Promise(resolve => realSetTimeout(resolve, 2
   const permissionRevocationBlocked = clicked.length === beforeRevoke
     && downloads.length === fetchedBefore + 1;
 
+  // A parent can re-create an equivalent permissions array on every render.
+  // That must not re-run the cancel effect, but a real capability change must.
+  props = {...props, permissions:['inventory.view']};
+  render();
+  const originalDeps = effectDeps.at(-1);
+  props = {...props, permissions:['inventory.view']};
+  render();
+  const clonedDeps = effectDeps.at(-1);
+  props = {...props, permissions:[]};
+  render();
+  const revokedDeps = effectDeps.at(-1);
+  const stablePermissionDependencies = originalDeps.every((x,i) => Object.is(x, clonedDeps[i]));
+  const reactivePermissionDependencies = originalDeps.some((x,i) => !Object.is(x, revokedDeps[i]));
+
   // Branch context is supplied by the authenticated admin, never query tenant.
   process.stdout.write(JSON.stringify({
     success, saved, denied, empty, staleBlocked, permissionRevocationBlocked,
+    stablePermissionDependencies, reactivePermissionDependencies,
     blobs:blobs.length, revoked:revoked.length,
     urlCount:downloads.length,
   }));
@@ -182,6 +197,8 @@ class ReportesUiAdminTests(unittest.TestCase):
         self.assertTrue(data["empty"])
         self.assertTrue(data["staleBlocked"])
         self.assertTrue(data["permissionRevocationBlocked"])
+        self.assertTrue(data["stablePermissionDependencies"])
+        self.assertTrue(data["reactivePermissionDependencies"])
         self.assertEqual(data["blobs"], data["revoked"])
 
     def test_security_contract_and_negative_states(self):
@@ -197,7 +214,7 @@ class ReportesUiAdminTests(unittest.TestCase):
             self.assertIn(permission, panel)
         self.assertNotIn("purchases.view", panel)
         self.assertIn("credentials: 'same-origin'", panel)
-        self.assertIn("[branchId, permissions]", panel)
+        self.assertIn("[branchId, permissionScope]", panel)
         self.assertIn("permissionsRef.current.includes(requiredPermission)", panel)
         self.assertIn("new URLSearchParams({ from, through })", panel)
         self.assertIn("encodeURIComponent(branchId)", panel)
