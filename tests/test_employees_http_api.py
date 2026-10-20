@@ -363,7 +363,8 @@ echo json_encode([
     'link_audited_once' => $linked['employee']['linked']
         && $relinked['employee']['linked'] && count($store->audit) === 3,
     'foreign_link_denied' => $foreignLink,
-    'replay_stable_id' => $first['event']['id'] === $replay['event']['id'] && count($events->events) === 1,
+    'replay_stable_id' => $first['event']['id'] === $replay['event']['id'] && count(array_filter($events->events, static fn($event) =>
+        $event->tenantId() === $tenantA->id())) === 1,
     'collision_denied' => $collision,
     'biometric_denied' => $biometric,
     'foreign_attendance_denied' => $foreignAttendance,
