@@ -104,12 +104,13 @@ final class PurchasingController extends AbstractController
         );
         $orders = $this->entityManager->getRepository(PurchaseOrder::class)->findBy([
             'tenant' => $tenant,
+            'status' => PurchaseOrder::STATUS_RECEIVED,
         ]);
         $costs = [];
         foreach ($materials as $material) {
             $costs[] = array_merge(
                 ['material_id' => $material->id()],
-                $this->materialCosts->calculate($tenant, $material, $orders),
+                $this->domain(fn (): array => $this->materialCosts->calculate($tenant, $material, $orders)),
             );
         }
 
