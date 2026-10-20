@@ -25,7 +25,6 @@ declare(strict_types=1);
 use App\Domain\Identity\Entity\AccountInvitation;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Tenant;
-use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
@@ -124,11 +123,17 @@ final class InvitationActivationNegativesSmokeTest extends WebTestCase
         // Invalid token format is denied by the route before account lookup.
         $client->request('GET', '/activar-cuenta/not-a-hex-token');
         self::assertResponseStatusCodeSame(404);
-        $em->refresh($userB);
-        $em->refresh($userA);
-        self::assertFalse($userB->isActive());
-        self::assertFalse($userA->isActive());
-        self::assertSame('', $userB->getPassword());
+        // Symfony reboots its kernel between requests; the fixture's original
+        // EntityManager is no longer authoritative. Query managed entities
+        // from the currently active container after the HTTP exchange.
+        $inspectionEm = static::getContainer()->get(EntityManagerInterface::class);
+        $deniedUserB = $inspectionEm->find(User::class, $userB->id());
+        $deniedUserA = $inspectionEm->find(User::class, $userA->id());
+        self::assertInstanceOf(User::class, $deniedUserB);
+        self::assertInstanceOf(User::class, $deniedUserA);
+        self::assertFalse($deniedUserB->isActive());
+        self::assertFalse($deniedUserA->isActive());
+        self::assertSame('', $deniedUserB->getPassword());
 
         // Actually activate A through HTTP with its real form CSRF token.
         // A second request with the same token must now be rejected (replay).
@@ -143,11 +148,14 @@ final class InvitationActivationNegativesSmokeTest extends WebTestCase
             '_csrf_token' => $csrf,
         ]);
         self::assertResponseRedirects();
-        $em->refresh($userA);
-        $em->refresh($inviteA);
-        self::assertTrue($userA->isActive());
-        self::assertNotSame('', $userA->getPassword());
-        self::assertNotNull($inviteA->consumedAt());
+        $activatedEm = static::getContainer()->get(EntityManagerInterface::class);
+        $activatedUserA = $activatedEm->find(User::class, $userA->id());
+        $activatedInviteA = $activatedEm->find(AccountInvitation::class, $inviteA->id());
+        self::assertInstanceOf(User::class, $activatedUserA);
+        self::assertInstanceOf(AccountInvitation::class, $activatedInviteA);
+        self::assertTrue($activatedUserA->isActive());
+        self::assertNotSame('', $activatedUserA->getPassword());
+        self::assertNotNull($activatedInviteA->consumedAt());
 
         foreach (['GET', 'POST'] as $method) {
             $client->request($method, $validA, [
@@ -159,11 +167,14 @@ final class InvitationActivationNegativesSmokeTest extends WebTestCase
                 'NOMBRE_A_', (string) $client->getResponse()->getContent(),
             );
         }
-        $em->refresh($userB);
-        $em->refresh($inviteB);
-        self::assertFalse($userB->isActive());
-        self::assertSame('', $userB->getPassword());
-        self::assertNull($inviteB->consumedAt());
+        $finalEm = static::getContainer()->get(EntityManagerInterface::class);
+        $untouchedUserB = $finalEm->find(User::class, $userB->id());
+        $untouchedInviteB = $finalEm->find(AccountInvitation::class, $inviteB->id());
+        self::assertInstanceOf(User::class, $untouchedUserB);
+        self::assertInstanceOf(AccountInvitation::class, $untouchedInviteB);
+        self::assertFalse($untouchedUserB->isActive());
+        self::assertSame('', $untouchedUserB->getPassword());
+        self::assertNull($untouchedInviteB->consumedAt());
     }
 }
 """
