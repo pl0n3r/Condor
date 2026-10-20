@@ -135,9 +135,9 @@ final class OrderIsolationControllerTest extends WebTestCase
         // Anonymous HTTP requests must fail without a tenant context.
         $client->restart();
         $client->request('GET', $urlA);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(401);
         $client->request('POST', $urlA.'/'.$orderB->id().'/cancel', server: $headers);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(401);
 
         $manager->refresh($orderB);
         self::assertSame(Order::STATUS_OPEN, $orderB->orderStatus());
