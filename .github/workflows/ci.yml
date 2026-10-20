@@ -594,6 +594,9 @@ jobs:
       - name: Ejecutar negativas HTTP de inventario en Symfony/MariaDB (#730)
         run: python3 tests/test_inventory_http_negatives.py -v
 
+      - name: Ejecutar aceptación HTTP RRHH sintética (#718)
+        run: python3 -m unittest tests/test_employees_http_api.py -v
+
       - name: Probar onboarding transaccional
         run: |
           set -euo pipefail
