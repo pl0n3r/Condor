@@ -15,6 +15,7 @@ use App\Domain\Attendance\AttendanceAdapter;
 use App\Domain\Attendance\AttendanceEvent;
 use App\Domain\Attendance\AttendanceEventStore;
 use App\Domain\Attendance\AttendanceService;
+use App\Domain\Attendance\AttendanceMark;
 use App\Domain\Audit\Entity\AuditEvent;
 use App\Domain\Catalog\Entity\Product;
 use App\Domain\Catalog\Entity\ProductVariant;
@@ -180,7 +181,7 @@ final class NewModulesTenantIsolationTest extends TestCase
         $mark = [
             'external_event_id' => 'evt-1001',
             'occurred_at' => '2026-10-20T12:00:00Z',
-            'type' => 'check_in',
+            'type' => AttendanceMark::CHECK_IN,
         ];
         self::denied(
             fn () => $service->recordPayload($beta, $employeeA, $reader, $mark, $now),
