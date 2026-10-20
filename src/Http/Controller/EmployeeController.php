@@ -256,8 +256,7 @@ final class EmployeeController extends AbstractController
         $earliest = $since->format('Y-m-d\TH:i:s\Z');
         $latest = $now->format('Y-m-d\TH:i:s\Z');
         foreach ($items as $event) {
-            if (!$event instanceof AttendanceEvent
-                || $event->tenantId() !== $tenant->id()
+            if ($event->tenantId() !== $tenant->id()
                 || $event->employeeId() !== $employee->id()
                 || $event->occurredAt() < $earliest
                 || $event->occurredAt() > $latest) {
