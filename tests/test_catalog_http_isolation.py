@@ -186,8 +186,18 @@ final class CatalogHttpTenantIsolationSmokeTest extends WebTestCase
             'name' => 'Cambio variante denegado',
         ], $viewerHeaders);
         self::assertResponseStatusCodeSame(403);
+        // Read-only permission must also prohibit soft-deleting own records.
+        $client->request('DELETE', $ownBase.'/'.$created, [], [], $viewerHeaders);
+        self::assertResponseStatusCodeSame(403);
+        $client->request(
+            'DELETE', $ownBase.'/'.$created.'/variants/'.$newVariant,
+            [], [], $viewerHeaders,
+        );
+        self::assertResponseStatusCodeSame(403);
         $em->refresh($createdProduct);
         $em->refresh($createdVariant);
+        self::assertTrue($createdProduct->isActive());
+        self::assertTrue($createdVariant->isActive());
         self::assertSame('Actualizado local', $createdProduct->name());
         self::assertSame('Variante actualizada', $createdVariant->name());
         self::assertNull($em->getRepository(Product::class)->findOneBy([
