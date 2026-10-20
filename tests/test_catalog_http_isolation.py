@@ -231,6 +231,9 @@ class CatalogoAislamientoHttpTests(unittest.TestCase):
                 [str(phpunit), str(fixture)], cwd=ROOT,
                 capture_output=True, text=True, check=False, timeout=180,
             )
+            # Publish real PHPUnit evidence when AC-01 is executed in an authorized runner.
+            if result.stdout or result.stderr:
+                print(result.stdout + result.stderr, end="")
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
             self.assertRegex(result.stdout + result.stderr, r"OK\s*\(\s*1 test,")
 
