@@ -73,11 +73,7 @@ final class ProductionCostController extends AbstractController
             );
         }
 
-        // Compatibilidad durante la integración serial de #738: si todavía
-        // no existe el productor de comprobantes, nunca inferir un costo.
-        if (!method_exists($order, 'costSnapshot')) {
-            return $this->unknownCost($order->id());
-        }
+        // #738 ya está integrado: solo existe la lectura del snapshot guardado.
         $saved = $order->costSnapshot();
         if ($saved === null) {
             return $this->unknownCost($order->id());
