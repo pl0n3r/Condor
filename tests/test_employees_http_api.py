@@ -23,6 +23,7 @@ require $argv[1].'/src/Http/Controller/EmployeeController.php';
 use App\Domain\Audit\Entity\AuditEvent;
 use App\Domain\Attendance\AttendanceEvent;
 use App\Domain\Attendance\AttendanceEventStore;
+use App\Domain\Attendance\AttendanceMark;
 use App\Domain\HumanResources\Employee;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\User;
@@ -175,13 +176,13 @@ $foreignLink = rejected(
 $payload = [
     'external_event_id' => 'clock-001',
     'occurred_at' => gmdate('Y-m-d\TH:i:s\Z', time() - 120),
-    'type' => 'CHECK_IN',
+    'type' => AttendanceMark::CHECK_IN,
 ];
 $first = body(invokeAction($api, 'attendanceWithinTenant', $tenantA, $owner, $employeeId, req($payload)));
 $replay = body(invokeAction($api, 'attendanceWithinTenant', $tenantA, $owner, $employeeId, req($payload)));
 $collision = rejected(
     fn() => invokeAction($api, 'attendanceWithinTenant', $tenantA, $owner,
-        $employeeId, req([...$payload, 'type' => 'CHECK_OUT'])),
+        $employeeId, req([...$payload, 'type' => AttendanceMark::CHECK_OUT])),
     UnprocessableEntityHttpException::class,
 );
 $biometric = rejected(
