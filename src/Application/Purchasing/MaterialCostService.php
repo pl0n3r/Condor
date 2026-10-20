@@ -25,8 +25,8 @@ final readonly class MaterialCostService
             throw new DomainException('El material no pertenece al tenant solicitado.');
         }
 
-        $quantityTotal = 0;
-        $weightedTotal = 0;
+        $quantityTotal = '0';
+        $weightedTotal = '0';
         $receiptCount = 0;
         $seen = [];
 
@@ -50,27 +50,21 @@ final readonly class MaterialCostService
                     continue;
                 }
 
-                $quantity = self::scaledInteger($line->quantity(), 6);
-                $unitCost = self::scaledInteger($line->unitCost(), 4);
-                if ($quantity === 0) {
+                $quantity = self::scaledDigits($line->quantity(), 6);
+                $unitCost = self::scaledDigits($line->unitCost(), 4);
+                if ($quantity === '0') {
                     throw new DomainException('La cantidad recibida debe ser positiva.');
                 }
-                if ($unitCost !== 0 && $quantity > intdiv(PHP_INT_MAX, $unitCost)) {
-                    throw new DomainException('El costo histórico supera el rango permitido.');
-                }
-                $weighted = $quantity * $unitCost;
-                if ($quantityTotal > PHP_INT_MAX - $quantity
-                    || $weightedTotal > PHP_INT_MAX - $weighted
-                ) {
-                    throw new DomainException('El costo histórico acumulado supera el rango permitido.');
-                }
-                $quantityTotal += $quantity;
-                $weightedTotal += $weighted;
+                $quantityTotal = self::addDigits($quantityTotal, $quantity);
+                $weightedTotal = self::addDigits(
+                    $weightedTotal,
+                    self::multiplyDigits($quantity, $unitCost),
+                );
                 $receiptCount++;
             }
         }
 
-        if ($quantityTotal === 0) {
+        if ($quantityTotal === '0') {
             return [
                 'state' => 'UNKNOWN',
                 'average_unit_cost' => null,
@@ -79,12 +73,9 @@ final readonly class MaterialCostService
             ];
         }
 
-        // Divide cantidades ponderadas en enteros, redondeando half-up a 4 decimales.
-        $cost = intdiv($weightedTotal, $quantityTotal);
-        $remainder = $weightedTotal % $quantityTotal;
-        if ($remainder >= intdiv($quantityTotal, 2) + ($quantityTotal % 2)) {
-            $cost++;
-        }
+        // El producto tiene escala 10; la cantidad escala 6.
+        // División entera decimal con redondeo half-up: costo escala 4.
+        $cost = self::divideHalfUp($weightedTotal, $quantityTotal);
 
         return [
             'state' => 'KNOWN',
@@ -94,27 +85,110 @@ final readonly class MaterialCostService
         ];
     }
 
-    private static function scaledInteger(string $value, int $scale): int
+    private static function scaledDigits(string $value, int $scale): string
     {
-        $pattern = '/^(0|[1-9][0-9]*)(?:\\.[0-9]{1,'.$scale.'})?$/D';
+        $pattern = '/^(0|[1-9][0-9]*)(?:\.[0-9]{1,'.$scale.'})?$/D';
         if (preg_match($pattern, $value) !== 1) {
             throw new DomainException('Cantidad o costo histórico decimal inválido.');
         }
         [$whole, $fraction] = array_pad(explode('.', $value, 2), 2, '');
-        $digits = ltrim($whole.str_pad($fraction, $scale, '0'), '0');
-        $digits = $digits === '' ? '0' : $digits;
-        $max = (string) PHP_INT_MAX;
-        if (strlen($digits) > strlen($max)
-            || (strlen($digits) === strlen($max) && strcmp($digits, $max) > 0)
-        ) {
-            throw new DomainException('Decimal histórico fuera del rango permitido.');
-        }
-        return (int) $digits;
+        return self::trimDigits($whole.str_pad($fraction, $scale, '0'));
     }
 
-    private static function formatScaled(int $value, int $scale): string
+    private static function trimDigits(string $digits): string
     {
-        $divisor = 10 ** $scale;
-        return intdiv($value, $divisor).'.'.str_pad((string) ($value % $divisor), $scale, '0', STR_PAD_LEFT);
+        $trimmed = ltrim($digits, '0');
+        return $trimmed === '' ? '0' : $trimmed;
+    }
+
+    private static function compareDigits(string $left, string $right): int
+    {
+        $left = self::trimDigits($left);
+        $right = self::trimDigits($right);
+        return strlen($left) <=> strlen($right) ?: strcmp($left, $right);
+    }
+
+    private static function addDigits(string $left, string $right): string
+    {
+        $a = strlen($left) - 1;
+        $b = strlen($right) - 1;
+        $carry = 0;
+        $result = '';
+        while ($a >= 0 || $b >= 0 || $carry > 0) {
+            $sum = $carry;
+            if ($a >= 0) {
+                $sum += (int) $left[$a--];
+            }
+            if ($b >= 0) {
+                $sum += (int) $right[$b--];
+            }
+            $result = (string) ($sum % 10).$result;
+            $carry = intdiv($sum, 10);
+        }
+        return self::trimDigits($result);
+    }
+
+    private static function subtractDigits(string $left, string $right): string
+    {
+        $a = strlen($left) - 1;
+        $b = strlen($right) - 1;
+        $borrow = 0;
+        $result = '';
+        while ($a >= 0) {
+            $digit = (int) $left[$a--] - $borrow - ($b >= 0 ? (int) $right[$b--] : 0);
+            $borrow = $digit < 0 ? 1 : 0;
+            $result = (string) ($digit + ($borrow === 1 ? 10 : 0)).$result;
+        }
+        return self::trimDigits($result);
+    }
+
+    private static function multiplyDigits(string $left, string $right): string
+    {
+        if ($left === '0' || $right === '0') {
+            return '0';
+        }
+        $aLength = strlen($left);
+        $bLength = strlen($right);
+        $result = array_fill(0, $aLength + $bLength, 0);
+        for ($a = $aLength - 1; $a >= 0; $a--) {
+            $carry = 0;
+            for ($b = $bLength - 1; $b >= 0; $b--) {
+                $index = $a + $b + 1;
+                $product = (int) $left[$a] * (int) $right[$b] + $result[$index] + $carry;
+                $result[$index] = $product % 10;
+                $carry = intdiv($product, 10);
+            }
+            $result[$a] += $carry;
+        }
+        return self::trimDigits(implode('', $result));
+    }
+
+    private static function divideHalfUp(string $numerator, string $denominator): string
+    {
+        if ($denominator === '0') {
+            throw new DomainException('Cantidad histórica total inválida.');
+        }
+        $quotient = '';
+        $remainder = '0';
+        foreach (str_split($numerator) as $digit) {
+            $remainder = self::trimDigits($remainder.$digit);
+            $nextDigit = 0;
+            while (self::compareDigits($remainder, $denominator) >= 0) {
+                $remainder = self::subtractDigits($remainder, $denominator);
+                $nextDigit++;
+            }
+            $quotient .= (string) $nextDigit;
+        }
+        $quotient = self::trimDigits($quotient);
+        if (self::compareDigits(self::addDigits($remainder, $remainder), $denominator) >= 0) {
+            $quotient = self::addDigits($quotient, '1');
+        }
+        return $quotient;
+    }
+
+    private static function formatScaled(string $value, int $scale): string
+    {
+        $padded = str_pad($value, $scale + 1, '0', STR_PAD_LEFT);
+        return substr($padded, 0, -$scale).'.'.substr($padded, -$scale);
     }
 }
