@@ -51,7 +51,10 @@ interface AttendanceHttpReadStore extends AttendanceEventStore
 {
     /** @return list<AttendanceEvent> Newest-first events inside the requested retention window. */
     public function listForEmployee(
-        Tenant $tenant, Employee $employee, DateTimeImmutable $since, int $limit,
+        Tenant $tenant,
+        Employee $employee,
+        DateTimeImmutable $since,
+        int $limit,
     ): array;
 }
 
@@ -119,7 +122,11 @@ final class EmployeeController extends AbstractController
         return $this->attendanceWithinTenant($tenant, $actor, $employeeId, $request);
     }
 
-    #[Route('/api/v1/hr/employees/{employeeId}/attendance', name: 'api_hr_employees_attendance_history', methods: ['GET'])]
+    #[Route(
+        '/api/v1/hr/employees/{employeeId}/attendance',
+        name: 'api_hr_employees_attendance_history',
+        methods: ['GET'],
+    )]
     public function attendanceHistory(string $employeeId): JsonResponse
     {
         [$tenant, $actor] = $this->scope();
@@ -209,8 +216,12 @@ final class EmployeeController extends AbstractController
     }
 
     private function attendanceWithinTenant(
-        Tenant $tenant, User $actor, string $id, Request $request,
-    ): JsonResponse {
+        Tenant $tenant,
+        User $actor,
+        string $id,
+        Request $request,
+    ): JsonResponse
+    {
         $employee = $this->ownedEmployee($tenant, $actor, $id);
         if (!$this->attendanceEvents instanceof AttendanceEventStore) {
             throw new ServiceUnavailableHttpException(0, 'Persistencia de asistencia no habilitada.');
@@ -218,12 +229,21 @@ final class EmployeeController extends AbstractController
         $payload = $this->strictPayload($request, ['external_event_id', 'occurred_at', 'type']);
         // No source key or raw device/sensor-sensitive data is accepted from the client.
         $adapter = new class implements AttendanceAdapter {
-            public function sourceKey(): string { return 'manual-http'; }
-            public function normalizedMarks(): iterable { return []; }
+            public function sourceKey(): string
+            {
+                return 'manual-http';
+            }
+            public function normalizedMarks(): iterable
+            {
+                return [];
+            }
         };
         try {
             $event = (new AttendanceService($this->attendanceEvents))->recordPayload(
-                $tenant, $employee, $adapter, $payload,
+                $tenant,
+                $employee,
+                $adapter,
+                $payload,
                 new DateTimeImmutable('now', new DateTimeZone('UTC')),
             );
         } catch (DomainException $exception) {
@@ -269,8 +289,7 @@ final class EmployeeController extends AbstractController
                 'type' => $event->type(),
             ];
         }
-        usort($events, static fn (array $a, array $b): int =>
-            strcmp($b['occurred_at'], $a['occurred_at']));
+        usort($events, static fn (array $a, array $b): int => strcmp($b['occurred_at'], $a['occurred_at']));
         return $this->privateJson(['events' => $events]);
     }
 
