@@ -79,8 +79,7 @@ final class ProductionCostController extends AbstractController
             return $this->unknownCost($order->id());
         }
         if (
-            !is_array($saved)
-            || ($saved['source_id'] ?? null) !== $source->id()
+            ($saved['source_id'] ?? null) !== $source->id()
         ) {
             throw new UnprocessableEntityHttpException(
                 'El comprobante de costo guardado no es verificable.',
