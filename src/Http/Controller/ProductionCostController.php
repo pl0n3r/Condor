@@ -9,7 +9,6 @@ use App\Application\Identity\CurrentTenantForUser;
 use App\Application\Production\ProductionCostService;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Production\Entity\ProductionOrder;
-use App\Domain\Purchasing\Entity\PurchaseOrder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -18,9 +17,9 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
- * Lectura de costo de una orden terminada dentro de su tenant y sede.
- * No confunde un costo histórico reconstruido con un snapshot persistido:
- * la escritura al completar la orden aún necesita un contrato propio.
+ * Consulta de costo persistido de una orden terminada, por tenant y sede.
+ * Jamás reconstruir un precio histórico al consultar: las órdenes antiguas
+ * sin comprobante guardado siguen teniendo costo UNKNOWN.
  */
 final class ProductionCostController extends AbstractController
 {
@@ -57,7 +56,7 @@ final class ProductionCostController extends AbstractController
             throw new NotFoundHttpException('Fuente de inventario no encontrada.');
         }
 
-        // El ULID ajeno no debe revelar si existe la orden en otro tenant o sede.
+        // Un ULID de otro tenant o sede jamás revela si la orden existe.
         $order = $this->entityManager
             ->getRepository(ProductionOrder::class)
             ->findOneBy([
@@ -74,33 +73,49 @@ final class ProductionCostController extends AbstractController
             );
         }
 
-        // Recibos posteriores no deben revalorar una orden ya terminada.
-        // La compra recibida es inmutable según el contrato del dominio.
-        // Esta reconstrucción NO es todavía un snapshot guardado.
-        $receipts = $this->entityManager
-            ->getRepository(PurchaseOrder::class)
-            ->createQueryBuilder('p')
-            ->andWhere('p.tenant = :tenant')
-            ->andWhere('p.legalEntity = :legalEntity')
-            ->andWhere('p.status = :received')
-            ->andWhere('p.receivedAt <= :completion')
-            ->setParameter('tenant', $tenant)
-            ->setParameter('legalEntity', $source->legalEntity())
-            ->setParameter('received', PurchaseOrder::STATUS_RECEIVED)
-            ->setParameter('completion', $order->completedAt())
-            ->getQuery()
-            ->getResult();
+        // Compatibilidad durante la integración serial de #738: si todavía
+        // no existe el productor de comprobantes, nunca inferir un costo.
+        if (!method_exists($order, 'costSnapshot')) {
+            return $this->unknownCost($order->id());
+        }
+        $saved = $order->costSnapshot();
+        if ($saved === null) {
+            return $this->unknownCost($order->id());
+        }
+        if (
+            !is_array($saved)
+            || ($saved['source_id'] ?? null) !== $source->id()
+        ) {
+            throw new UnprocessableEntityHttpException(
+                'El comprobante de costo guardado no es verificable.',
+            );
+        }
 
-        $snapshot = $this->domain(fn (): array => $this->productionCosts->calculate(
+        // Validar contra tenant, orden, BOM, cantidades, precios y totales
+        // usando el comprobante inmutable: cero consultas a precios actuales.
+        $verified = $this->domain(fn (): array => $this->productionCosts->calculate(
             $tenant,
             $order,
-            $receipts,
+            [],
+            $saved,
         ));
 
         return $this->json([
             'order_id' => $order->id(),
-            'cost' => $snapshot,
-            'provenance' => 'historical_receipts_as_of_completion',
+            'state' => 'ESTIMATED_COST',
+            'cost' => $verified,
+            'provenance' => 'production_completion_snapshot',
+            'snapshot_persisted' => true,
+        ]);
+    }
+
+    private function unknownCost(string $orderId): JsonResponse
+    {
+        return $this->json([
+            'order_id' => $orderId,
+            'state' => 'UNKNOWN',
+            'cost' => null,
+            'provenance' => 'none',
             'snapshot_persisted' => false,
         ]);
     }
