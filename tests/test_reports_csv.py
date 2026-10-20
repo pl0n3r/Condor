@@ -48,8 +48,6 @@ try {
             with self.subTest(kind=kind):
                 def row(record_id, tenant, date):
                     result = dict(zip(fields, [record_id, date, "test,source", 'quote"and,comma', "12", "3"]))
-                    for field in fields[6:]:
-                        result[field] = "3"
                     result["tenant_id"] = tenant
                     result["occurred_at"] = date
                     return result
@@ -68,7 +66,9 @@ try {
                 self.assertEqual(tuple(parsed[0]), fields)
                 self.assertEqual([row[0] for row in parsed[1:]], ["first", "last"])
                 self.assertNotIn("other-tenant", data["body"])
-                self.assertIn("test,source", data["body"])
+                for parsed_row in parsed[1:]:
+                    self.assertEqual(parsed_row[2], "test,source")
+                    self.assertEqual(parsed_row[3], 'quote"and,comma')
                 empty = self.run_php(kind, "tenant-a", "2026-09-01", "2026-09-30", rows)
                 self.assertTrue(empty["ok"])
                 self.assertEqual(list(csv.reader(io.StringIO(empty["data"]["body"]))), [list(fields)])
@@ -90,6 +90,22 @@ try {
         parsed = list(csv.reader(io.StringIO(data["data"]["body"])))
         self.assertTrue(parsed[1][0].startswith("'="))
         self.assertTrue(parsed[1][-1].startswith("'@"))
+
+    def test_numeric_values_remain_numeric_and_expressions_are_neutralized(self):
+        inventory = [{"tenant_id": "tenant-a", "record_id": "-5+1",
+                      "occurred_at": "2026-10-19", "source_id": "=1+1",
+                      "variant_id": "@SUM(1)", "quantity": "-1.25",
+                      "reserved_quantity": "+5"}]
+        response = self.run_php("inventory", "tenant-a", "2026-10-19", "2026-10-19", inventory)
+        self.assertTrue(response["ok"])
+        parsed = list(csv.reader(io.StringIO(response["data"]["body"])))
+        self.assertEqual(parsed[1], ["'-5+1", "2026-10-19", "'=1+1", "'@SUM(1)", "-1.25", "+5"])
+        sales = [{"tenant_id": "tenant-a", "order_id": "id",
+                  "occurred_at": "2026-10-19", "currency": "COP",
+                  "total_amount_minor": "-5", "payment_status": "paid"}]
+        sales_csv = self.run_php("sales", "tenant-a", "2026-10-19", "2026-10-19", sales)
+        self.assertTrue(sales_csv["ok"])
+        self.assertEqual(list(csv.reader(io.StringIO(sales_csv["data"]["body"])))[1][3], "-5")
 
     def test_invalid_records_or_kind_fail_closed(self):
         for kind, tenant, rows in (("unknown", "a", []), ("inventory", "", []),

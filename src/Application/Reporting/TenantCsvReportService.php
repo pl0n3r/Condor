@@ -109,6 +109,10 @@ final class TenantCsvReportService
     {
         // Spreadsheet readers may execute formulas prefixed by leading spaces,
         // control characters, '=', '+', '-', or '@'. Protect untrusted labels.
+        // Preserve complete signed numeric values; reject formula expressions.
+        if (preg_match('/^[+-]?[0-9]+(?:\.[0-9]+)?$/D', $value) === 1) {
+            return $value;
+        }
         if (preg_match('/^[\x00-\x20]*[=+\-@]/', $value) === 1) {
             return "'" . $value;
         }
