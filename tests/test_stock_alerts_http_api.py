@@ -286,7 +286,13 @@ class AlertasStockApiTests(unittest.TestCase):
         self.assertIn("visibleInbox($membership, $candidateDeliveries)", controller)
         self.assertIn("NotificationDelivery::STATUS_PENDING", controller)
         self.assertIn("NotificationCatalog::CHANNEL_IN_APP", controller)
-        self.assertIn("'status' => [", controller)
+        # Assert the SQL-side active-state filter and serialized result.
+        # The controller binds explicit status parameters; it does not use
+        # a Doctrine findBy(['status' => [...]]) array predicate.
+        self.assertIn("d.status IN (:pending, :delivered)", controller)
+        self.assertIn("'pending' => NotificationDelivery::STATUS_PENDING", controller)
+        self.assertIn("'delivered' => NotificationDelivery::STATUS_DELIVERED", controller)
+        self.assertIn("'status' => $delivery->status()", controller)
 
         # Minimums survive requests via tenant-scoped append-only records, not
         # process memory or client-supplied tenant IDs.
