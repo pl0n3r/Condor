@@ -51,7 +51,7 @@ class FrontendArtifactClaimsTests(unittest.TestCase):
                                REPO, BRANCH, SHA)
 
     def test_denied_staged_bundle_fails_reproducibility_gate(self):
-        workflow = (SCRIPT.parents[0] / ".github" / "workflows" / "ci.yml").read_text()
+        workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text()
         self.assertIn("run: git diff HEAD --exit-code -- public/build", workflow)
         self.assertIn("if ! python3 scripts/ci_frontend_claim_guard.py; then", workflow)
         self.assertIn("if: always()", workflow)
