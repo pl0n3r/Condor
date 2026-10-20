@@ -295,6 +295,10 @@ class AlertasStockApiTests(unittest.TestCase):
         # branches. A bounded read must reject overflow, not silently create
         # another audit record after losing the previous branch setting.
         self.assertIn("ROW_NUMBER() OVER", controller)
+        self.assertIn("SELECT latest.variant_id, latest.context", controller)
+        self.assertIn("$variantId = $row['variant_id'] ?? null;", controller)
+        self.assertNotIn("$row['entityId']", controller)
+
         self.assertIn("JSON_UNQUOTE(JSON_EXTRACT(a.context, '$.source_id')) = :source", controller)
         self.assertIn("JSON_UNQUOTE(JSON_EXTRACT(d.payload, '$.tenant_id')) = :tenant", controller)
         self.assertIn("LIMIT 201", controller)
