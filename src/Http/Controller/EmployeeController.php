@@ -149,7 +149,7 @@ final class EmployeeController extends AbstractController
         $store = $this->requireOwner($tenant, $actor);
         $items = [];
         foreach ($store->listForTenant($tenant) as $employee) {
-            if (!$employee instanceof Employee || $employee->tenant()->id() !== $tenant->id()) {
+            if ($employee->tenant()->id() !== $tenant->id()) {
                 throw new AccessDeniedHttpException('La consulta devolvió datos ajenos al tenant.');
             }
             $items[] = self::employeePayload($employee);
