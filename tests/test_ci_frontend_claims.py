@@ -176,6 +176,28 @@ class FrontendArtifactClaimsTests(unittest.TestCase):
              patch.object(guard, "gh_api", side_effect=[pr, issue, {"bad": "page"}]):
             self.assertEqual(guard.run_guard(), 1)
 
+    def test_malformed_github_snapshots_fail_closed(self):
+        """The helpers must reject unexpected API shapes without raising."""
+        from copy import deepcopy
+
+        for mutation in (
+            lambda pr: pr.update(base="main"),
+            lambda pr: pr.update(head="trabajo/issue-673"),
+            lambda pr: pr["head"].update(repo=[]),
+            lambda pr: pr["head"].update(repo={"owner": None}),
+            lambda pr: pr.update(user=None),
+            lambda pr: pr.update(body=None),
+        ):
+            pr, issue, comments = context()
+            mutation(pr)
+            with self.subTest(snapshot=pr):
+                self.assertFalse(self.authorized(ctx=(pr, issue, comments)))
+
+        pr, issue, comments = context()
+        for invalid in (None, {}, ["invalid"], [None], [{"body": "bad"}]):
+            with self.subTest(comments=invalid):
+                self.assertFalse(self.authorized(ctx=(pr, issue, invalid)))
+
     def test_unclaimed_bundle_never_pushes(self):
         from copy import deepcopy
         no_bundle = deepcopy(TASK)
