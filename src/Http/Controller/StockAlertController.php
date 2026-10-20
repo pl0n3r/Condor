@@ -134,7 +134,7 @@ final class StockAlertController extends AbstractController
         foreach ($rows as $row) {
             $context = self::auditContext($row['context'] ?? null);
             $variantId = $row['entityId'] ?? null;
-            if (!is_string($variantId) || !is_array($context)
+            if (!is_string($variantId)
                 || ($context['source_id'] ?? null) !== $source->id()
                 || ($context['branch_id'] ?? null) !== $branch->id()) {
                 continue;
