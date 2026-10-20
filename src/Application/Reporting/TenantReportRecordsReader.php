@@ -74,7 +74,8 @@ final readonly class TenantReportRecordsReader
         if (!$value instanceof DateTimeInterface) {
             throw new DomainException('REPORT_DATE_INVALID');
         }
-        return $value->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d');
+        return DateTimeImmutable::createFromInterface($value)
+            ->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d');
     }
 
     /** @param list<array<string, mixed>> $rows */
