@@ -68,8 +68,7 @@ final class ManagementDashboardController extends AbstractController
                 'tenant' => $tenant,
                 'inventorySource' => $source,
             ]) as $order) {
-                if (!$order instanceof Order
-                    || $order->createdAt() < $from
+                if ($order->createdAt() < $from
                     || $order->createdAt() >= $through->modify('+1 day')
                     || $order->paymentStatus() !== Order::PAYMENT_PAID
                     || $order->orderStatus() === Order::STATUS_CANCELLED
@@ -97,9 +96,6 @@ final class ManagementDashboardController extends AbstractController
                 'tenant' => $tenant,
                 'source' => $source,
             ]) as $balance) {
-                if (!$balance instanceof InventoryBalance) {
-                    continue;
-                }
                 $inventory[] = [
                     'id' => $balance->id(),
                     'variant_id' => $balance->variant()->id(),
@@ -115,8 +111,7 @@ final class ManagementDashboardController extends AbstractController
                 'tenant' => $tenant,
                 'source' => $source,
             ]) as $order) {
-                if (!$order instanceof ProductionOrder
-                    || !$order->isCompleted()
+                if (!$order->isCompleted()
                     || $order->completedAt() === null
                     || $order->completedAt() < $from
                     || $order->completedAt() >= $through->modify('+1 day')
@@ -128,7 +123,7 @@ final class ManagementDashboardController extends AbstractController
                 $production[] = [
                     'id' => $order->id(),
                     'cost_state' => $valid ? 'ESTIMATED_COST' : 'UNKNOWN',
-                    'estimated_total_cost' => $valid ? $saved['total_cost'] : null,
+                    'estimated_total_cost' => $valid ? ($saved['total_cost'] ?? null) : null,
                     'currency' => null,
                     'source_url' => $this->sourceUrl($branchId, 'production', $order->id()),
                 ];
@@ -229,7 +224,7 @@ final class ManagementDashboardController extends AbstractController
             return $this->json([
                 'kind' => 'production', 'id' => $order->id(),
                 'cost_state' => $valid ? 'ESTIMATED_COST' : 'UNKNOWN',
-                'estimated_total_cost' => $valid ? $saved['total_cost'] : null,
+                'estimated_total_cost' => $valid ? ($saved['total_cost'] ?? null) : null,
                 'currency' => null,
             ]);
         }
