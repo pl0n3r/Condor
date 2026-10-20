@@ -293,6 +293,30 @@ final class SaasControlCenterReadControllerTest extends WebTestCase
         }
     }
 
+    /** The owner-only commercial surface must never accept write verbs. */
+    public function testCommercialReadRouteRejectsWriteMethods(): void
+    {
+        $client = static::createClient();
+        $em = $this->entityManager();
+        $owner = new User(
+            'saas-readonly-owner@example.test', 'Owner', [User::ROLE_PLATFORM_OWNER]
+        );
+        $tenant = new Tenant('Read-only SaaS tenant', 'saas-readonly-integration');
+        $em->persist($owner);
+        $em->persist($tenant);
+        $em->flush();
+        $client->loginUser($owner);
+        $route = '/adminpl0n3r/api/tenants/'.$tenant->id().'/saas-control-center';
+
+        // The canonical GET exists, so a 405 is not a missing route artifact.
+        $client->request('GET', $route);
+        self::assertResponseIsSuccessful();
+        foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+            $client->request($method, $route);
+            self::assertResponseStatusCodeSame(405);
+        }
+    }
+
     public function testNonOwnerAndUnknownTenantFailClosed(): void
     {
         $client = static::createClient();

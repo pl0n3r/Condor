@@ -59,6 +59,8 @@ class SaasControlCenterUiIntegrationTests(unittest.TestCase):
         self.php_test("testQuoteRequiredCatalogKeepsExplicitUnknownPrices")
 
     def test_auth_and_cross_tenant_fail_closed(self) -> None:
+        # Actual Symfony routing: the owner cannot turn a read-only GET into a write.
+        self.php_test("testCommercialReadRouteRejectsWriteMethods")
         self.php_test("testNonOwnerAndUnknownTenantFailClosed")
         self.php_test("testUnresolvedCommercialConfigurationIsNotReportedAsAllowed")
         self.php_test("testUnexpectedCommercialAdapterFailureIsSanitized")
