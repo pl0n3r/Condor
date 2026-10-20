@@ -82,13 +82,16 @@ final class EmployeeController extends AbstractController
     {
         $this->requireCsrf($request);
         [$tenant, $actor] = $this->scope();
+        // Authorize employee and tenant before resolving any user identifier.
+        $this->ownedEmployee($tenant, $actor, $employeeId);
         $data = $this->strictPayload($request, ['user_id']);
         $id = $this->requiredString($data, 'user_id', 26);
         if ($this->entityManager === null) {
             throw new ServiceUnavailableHttpException(0, 'Almacén de usuarios no configurado.');
         }
         $target = $this->entityManager->getRepository(User::class)->find($id);
-        if (!$target instanceof User) {
+        if (!$target instanceof User
+            || !$this->store()->membership($tenant, $target) instanceof Membership) {
             throw new NotFoundHttpException('Usuario no encontrado.');
         }
         return $this->linkWithinTenant($tenant, $actor, $employeeId, $target);
