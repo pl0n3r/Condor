@@ -21,26 +21,60 @@ TASK = {
     "order": 2, "owner": "pl0n3r", "roles": ["frontend", "qa"],
     "depends_on": [640], "paths": ["frontend/admin/PlatformOwnerApp.tsx", "public/build/admin.js"],
 }
-LEASE = {
-    "version": 3, "active": True, "branch": BRANCH, "owner": "pl0n3r",
-    "reason": "tomar", "reservation_id": ID, "task_depends_on": [640],
-    "task_paths": TASK["paths"], "acceptance_sha256": "b" * 64,
-    "task_marker_sha256": "c" * 64,
+MACHINE = {
+    "version": 1,
+    "criteria": [
+        {"id": "AC-01", "kind": "test",
+         "target": "tests/test_ci_frontend_claims.py::FrontendArtifactClaimsTests::test_unclaimed_bundle_never_pushes"},
+        {"id": "AC-02", "kind": "test",
+         "target": "tests/test_ci_frontend_claims.py::FrontendArtifactClaimsTests::test_verified_claim_can_reconcile"},
+    ],
 }
 
 
-def context():
+def issue_body(task=TASK):
+    """A full, valid Factory acceptance contract with canonical task marker."""
     import json
+    return (
+        "### Contexto\nContrato V3 aislado\n"
+        "### Alcance\nAutorizar solo artefactos exactos\n"
+        "### Fuera de alcance\nSin deploy\n"
+        "### Criterios de aceptación\n"
+        "- [ ] [AC-01] No push without exact claims\n"
+        "- [ ] [AC-02] Verify bot lease and its fingerprints\n"
+        "### Contrato ejecutable\n"
+        "<!-- factory-acceptance " + json.dumps(MACHINE) + " -->\n"
+        "### Rutas reclamadas\n"
+        "- public/build/admin.js\n"
+        "<!-- factory-plan-task " + json.dumps(task) + " -->"
+    )
+
+
+def bot_comment(lease):
+    import json
+    return {"user": {"login": "github-actions[bot]"},
+            "body": "<!-- condor-reserva " + json.dumps(lease) + " -->"}
+
+
+def context(task=None):
+    from copy import deepcopy
+    scoped = deepcopy(TASK if task is None else task)
+    body = issue_body(scoped)
+    lease = {
+        "version": 3, "active": True, "branch": BRANCH, "owner": "pl0n3r",
+        "reason": "tomar", "reservation_id": ID,
+        "task_depends_on": scoped["depends_on"],
+        "task_paths": scoped["paths"],
+        "acceptance_sha256": guard.contract_fingerprint(body),
+        "task_marker_sha256": guard.task_marker_fingerprint(scoped),
+    }
     pr = {
         "state": "open", "draft": True, "body": "<!-- condor-reserva-id: " + ID + " -->",
         "head": {"ref": BRANCH, "sha": SHA, "repo": {"name": "Condor", "owner": {"login": "pl0n3r"}}},
         "base": {"ref": "main"}, "user": {"login": "pl0n3r"},
     }
-    issue = {"number": 673, "state": "open",
-             "body": "<!-- factory-plan-task " + json.dumps(TASK) + " -->"}
-    bot = {"user": {"login": "github-actions[bot]"},
-           "body": "<!-- condor-reserva " + json.dumps(LEASE) + " -->"}
-    return pr, issue, [bot]
+    issue = {"number": 673, "state": "open", "body": body}
+    return pr, issue, [bot_comment(lease)]
 
 
 class FrontendArtifactClaimsTests(unittest.TestCase):
@@ -94,16 +128,16 @@ class FrontendArtifactClaimsTests(unittest.TestCase):
             )
 
     def test_unclaimed_bundle_never_pushes(self):
-        pr, issue, comments = context()
-        import json
-        TASK["paths"].remove("public/build/admin.js")
-        try:
-            issue["body"] = "<!-- factory-plan-task " + json.dumps(TASK) + " -->"
-            comments[0]["body"] = "<!-- condor-reserva " + json.dumps({
-                **LEASE, "task_paths": TASK["paths"]}) + " -->"
-            self.assertFalse(self.authorized(ctx=(pr, issue, comments)))
-        finally:
-            TASK["paths"].append("public/build/admin.js")
+        from copy import deepcopy
+        no_bundle = deepcopy(TASK)
+        no_bundle["paths"].remove("public/build/admin.js")
+        pr, issue, comments = context(no_bundle)
+        self.assertFalse(self.authorized(ctx=(pr, issue, comments)))
+        # The guard does not infer V3 coverage from adjacent paths, and
+        # cannot accept an entire directory in place of concrete claims.
+        directory = deepcopy(TASK)
+        directory["paths"][-1] = "public/build/"
+        self.assertFalse(self.authorized(ctx=context(directory)))
         for path in ("public/build/admin.css", "public/build/chunks/runtime.js",
                      "scripts/private.py", "public/build/../secrets"):
             self.assertFalse(self.authorized(files=["public/build/admin.js", path]))
@@ -111,8 +145,35 @@ class FrontendArtifactClaimsTests(unittest.TestCase):
         self.assertFalse(self.authorized(files=["public/build/admin.js"] * 2))
 
     def test_verified_claim_can_reconcile(self):
+        import json
         pr, issue, comments = context()
         self.assertTrue(self.authorized())
+        # Hashes must represent the live *canonical* task and acceptance.
+        # A SHA256-shaped but forged digest must not confer authority.
+        lease = json.loads(guard.LEASE.findall(comments[0]["body"])[0])
+        self.assertFalse(self.authorized(ctx=(pr, issue, [bot_comment({
+            **lease, "acceptance_sha256": "b" * 64})])))
+        self.assertFalse(self.authorized(ctx=(pr, issue, [bot_comment({
+            **lease, "task_marker_sha256": "c" * 64})])))
+        # Same reservation ID and claims, but altered current Issue AC:
+        # the previously valid bot marker becomes stale.
+        changed_ac = issue_body().replace(
+            "No push without exact claims", "No push without exact claims or races")
+        self.assertFalse(self.authorized(ctx=(pr, {**issue, "body": changed_ac}, comments)))
+        # Changing an unrelated task field is still marker fingerprint drift.
+        from copy import deepcopy
+        altered_task = deepcopy(TASK)
+        altered_task["task_key"] = "CONDOR_SAAS_CC_UI_V2"
+        self.assertFalse(self.authorized(
+            ctx=(pr, {**issue, "body": issue_body(altered_task)}, comments)))
+        # Same claim but directory authority is never accepted.
+        folder_task = deepcopy(TASK)
+        folder_task["paths"][-1] = "public/build/"
+        self.assertFalse(self.authorized(ctx=context(folder_task)))
+        # Duplicate/ambiguous markers must deny rather than permit.
+        self.assertFalse(self.authorized(
+            ctx=(pr, {**issue, "body": issue["body"] + "\n" +
+                 guard.TASK.search(issue["body"]).group(0)}, comments)))
         pr["head"]["sha"] = "d" * 40  # HEAD moved, cannot push.
         self.assertFalse(self.authorized(ctx=(pr, issue, comments)))
         pr["head"]["sha"] = SHA
@@ -124,12 +185,11 @@ class FrontendArtifactClaimsTests(unittest.TestCase):
         self.assertFalse(self.authorized(ctx=(pr, issue, [fake])))
         old = {"user": {"login": "github-actions[bot]"},
                "body": comments[0]["body"]}
-        import json
-        invalid = {"user": {"login": "github-actions[bot]"},
-                   "body": "<!-- condor-reserva " + json.dumps({
-                       **LEASE, "active": False}) + " -->"}
+        invalid = bot_comment({**lease, "active": False})
         self.assertFalse(self.authorized(ctx=(pr, issue, [old, invalid])))
-        self.assertFalse(self.authorized(ctx=(pr, issue, [old, {"user": {"login": "github-actions[bot]"}, "body": "<!-- condor-reserva broken -->"}])))
+        self.assertFalse(self.authorized(
+            ctx=(pr, issue, [old, {"user": {"login": "github-actions[bot]"},
+                                   "body": "<!-- condor-reserva broken -->"}])))
         pr["body"] = "<!-- condor-reserva-id: 00000000-0000-4000-8000-000000000000 -->"
         self.assertFalse(self.authorized(ctx=(pr, issue, comments)))
         pr["body"] = "<!-- condor-reserva-id: " + ID + " -->"
