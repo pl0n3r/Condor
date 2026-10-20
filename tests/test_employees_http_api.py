@@ -30,6 +30,7 @@ use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Tenant;
 use App\Http\Controller\EmployeeController;
 use App\Http\Controller\EmployeeHttpStore;
+use App\Http\Controller\AttendanceHttpReadStore;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -92,9 +93,31 @@ final class MemoryEmployeeHttpStore implements EmployeeHttpStore
     }
 }
 
-final class MemoryAttendanceStore implements AttendanceEventStore
+final class MemoryAttendanceStore implements AttendanceHttpReadStore
 {
     public array $events = [];
+    public bool $leakOnRead = false;
+    public bool $overLimit = false;
+    public function listForEmployee(Tenant $tenant, Employee $employee, DateTimeImmutable $since, int $limit): array
+    {
+        $earliest = $since->format('Y-m-d\TH:i:s\Z');
+        $items = array_values(array_filter($this->events, static fn($event) =>
+            $event->tenantId() === $tenant->id()
+            && $event->employeeId() === $employee->id()
+            && $event->occurredAt() >= $earliest));
+        if ($this->leakOnRead) {
+            foreach ($this->events as $event) {
+                if ($event->tenantId() !== $tenant->id()) {
+                    $items[] = $event;
+                    break;
+                }
+            }
+        }
+        if ($this->overLimit && $items !== []) {
+            return array_fill(0, $limit + 1, $items[0]);
+        }
+        return array_slice($items, 0, $limit);
+    }
     public function recordOnce(AttendanceEvent $event, DateTimeImmutable $expireBefore): AttendanceEvent
     {
         foreach ($this->events as $key => $stored) {
@@ -198,6 +221,45 @@ $viewerAttendanceDenied = rejected(
     fn() => invokeAction($api, 'attendanceWithinTenant', $tenantA, $viewer, $employeeId, req($payload)),
     AccessDeniedHttpException::class,
 );
+// History is owner-only, tenant-bound, within retention, bounded and private.
+// Insert a foreign tenant event to prove the controller rejects a leaky adapter.
+invokeAction($api, 'attendanceWithinTenant', $tenantB, $owner, $otherId,
+    req([...$payload, 'external_event_id' => 'clock-foreign']));
+$historyResponse = invokeAction($api, 'attendanceHistoryWithinTenant',
+    $tenantA, $owner, $employeeId);
+$history = body($historyResponse)['events'];
+$foreignHistoryDenied = rejected(
+    fn() => invokeAction($api, 'attendanceHistoryWithinTenant', $tenantB, $owner, $employeeId),
+    NotFoundHttpException::class,
+);
+$viewerHistoryDenied = rejected(
+    fn() => invokeAction($api, 'attendanceHistoryWithinTenant', $tenantA, $viewer, $employeeId),
+    AccessDeniedHttpException::class,
+);
+$events->leakOnRead = true;
+$leakyHistoryDenied = rejected(
+    fn() => invokeAction($api, 'attendanceHistoryWithinTenant', $tenantA, $owner, $employeeId),
+    AccessDeniedHttpException::class,
+);
+$events->leakOnRead = false;
+$events->overLimit = true;
+$unboundedHistoryDenied = rejected(
+    fn() => invokeAction($api, 'attendanceHistoryWithinTenant', $tenantA, $owner, $employeeId),
+    AccessDeniedHttpException::class,
+);
+$events->overLimit = false;
+$writeOnly = new class implements AttendanceEventStore {
+    public function recordOnce(AttendanceEvent $event, DateTimeImmutable $expireBefore): AttendanceEvent
+    {
+        return $event;
+    }
+};
+$writeOnlyApi = new EmployeeController($store, $writeOnly);
+$historyWithoutAdapterDenied = rejected(
+    fn() => invokeAction($writeOnlyApi, 'attendanceHistoryWithinTenant',
+        $tenantA, $owner, $employeeId),
+    ServiceUnavailableHttpException::class,
+);
 $extraFieldDenied = rejected(
     fn() => invokeAction($api, 'createWithinTenant', $tenantA, $owner,
         req(['code' => 'NO', 'salary' => '1000000'])),
@@ -246,6 +308,9 @@ $anonymousListDenied = rejected(
 $anonymousShowDenied = rejected(
     fn() => $anonymousApi->show($employeeId), AccessDeniedHttpException::class,
 );
+$anonymousHistoryDenied = rejected(
+    fn() => $anonymousApi->attendanceHistory($employeeId), AccessDeniedHttpException::class,
+);
 // Route attributes are part of the public HTTP contract, not an implementation detail.
 $expectedRoutes = [
     'index' => ['/api/v1/hr/employees', 'GET'],
@@ -253,6 +318,7 @@ $expectedRoutes = [
     'show' => ['/api/v1/hr/employees/{employeeId}', 'GET'],
     'link' => ['/api/v1/hr/employees/{employeeId}/link', 'POST'],
     'attendance' => ['/api/v1/hr/employees/{employeeId}/attendance', 'POST'],
+    'attendanceHistory' => ['/api/v1/hr/employees/{employeeId}/attendance', 'GET'],
 ];
 $routesCorrect = true;
 foreach ($expectedRoutes as $method => [$path, $httpMethod]) {
@@ -276,8 +342,9 @@ $privateHrResponses = [
     invokeAction($api, 'showWithinTenant', $tenantA, $owner, $employeeId),
     invokeAction($api, 'linkWithinTenant', $tenantA, $owner, $employeeId, $viewer),
     invokeAction($api, 'attendanceWithinTenant', $tenantA, $owner, $employeeId, req($payload)),
+    $historyResponse,
 ];
-$privateResponsesNotCached = count($privateHrResponses) === 5;
+$privateResponsesNotCached = count($privateHrResponses) === 6;
 foreach ($privateHrResponses as $response) {
     $cache = (string) $response->headers->get('Cache-Control', '');
     $privateResponsesNotCached = $privateResponsesNotCached
@@ -301,6 +368,15 @@ echo json_encode([
     'biometric_denied' => $biometric,
     'foreign_attendance_denied' => $foreignAttendance,
     'viewer_attendance_denied' => $viewerAttendanceDenied,
+    'history_safe_bounded_projection' => count($history) === 1
+        && array_keys($history[0]) === ['id', 'employee_id', 'occurred_at', 'type']
+        && $history[0]['id'] === $first['event']['id']
+        && $history[0]['employee_id'] === $employeeId,
+    'foreign_history_denied' => $foreignHistoryDenied,
+    'viewer_history_denied' => $viewerHistoryDenied,
+    'leaky_read_adapter_denied' => $leakyHistoryDenied,
+    'unbounded_history_denied' => $unboundedHistoryDenied,
+    'history_read_adapter_required' => $historyWithoutAdapterDenied,
     'sensitive_extra_field_denied' => $extraFieldDenied,
     'oversized_json_denied' => $oversizedJson,
     'malformed_json_denied' => $malformedJson,
@@ -309,6 +385,7 @@ echo json_encode([
     'unwired_api_disabled' => $failClosed,
     'public_anonymous_list_denied' => $anonymousListDenied,
     'public_anonymous_show_denied' => $anonymousShowDenied,
+    'public_anonymous_history_denied' => $anonymousHistoryDenied,
     'http_route_attributes_exact' => $routesCorrect,
     'hr_responses_never_cached' => $privateResponsesNotCached,
     'minimal_safe_json' => !str_contains($responseJson, 'owner@example.test')
@@ -345,7 +422,7 @@ class EmpleadosApiTests(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         evidence = json.loads(result.stdout)
-        self.assertEqual(len(evidence), 23)
+        self.assertEqual(len(evidence), 30)
         for name, passes in evidence.items():
             with self.subTest(case=name):
                 self.assertTrue(passes, name)

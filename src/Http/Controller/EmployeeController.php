@@ -8,6 +8,7 @@ use App\Application\HumanResources\EmployeeService;
 use App\Application\HumanResources\EmployeeStore;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Attendance\AttendanceAdapter;
+use App\Domain\Attendance\AttendanceEvent;
 use App\Domain\Attendance\AttendanceEventStore;
 use App\Domain\Attendance\AttendanceService;
 use App\Domain\HumanResources\Employee;
@@ -40,6 +41,18 @@ interface EmployeeHttpStore extends EmployeeStore
 {
     /** @return list<Employee> */
     public function listForTenant(Tenant $tenant): array;
+}
+
+/**
+ * Optional read-only port for the #725 admin attendance history.
+ * No persistent implementation is authorized until the #742 legal gate.
+ */
+interface AttendanceHttpReadStore extends AttendanceEventStore
+{
+    /** @return list<AttendanceEvent> Newest-first events inside the requested retention window. */
+    public function listForEmployee(
+        Tenant $tenant, Employee $employee, DateTimeImmutable $since, int $limit,
+    ): array;
 }
 
 /**
@@ -104,6 +117,13 @@ final class EmployeeController extends AbstractController
         $this->requireCsrf($request);
         [$tenant, $actor] = $this->scope();
         return $this->attendanceWithinTenant($tenant, $actor, $employeeId, $request);
+    }
+
+    #[Route('/api/v1/hr/employees/{employeeId}/attendance', name: 'api_hr_employees_attendance_history', methods: ['GET'])]
+    public function attendanceHistory(string $employeeId): JsonResponse
+    {
+        [$tenant, $actor] = $this->scope();
+        return $this->attendanceHistoryWithinTenant($tenant, $actor, $employeeId);
     }
 
     /** @return array{0: Tenant, 1: User} */
@@ -214,6 +234,45 @@ final class EmployeeController extends AbstractController
             'id' => $event->id(), 'employee_id' => $event->employeeId(),
             'occurred_at' => $event->occurredAt(), 'type' => $event->type(),
         ]]);
+    }
+
+    /**
+     * Authorized, bounded history only. An unavailable read adapter stays 503
+     * rather than manufacturing history from the latest POST receipt.
+     */
+    private function attendanceHistoryWithinTenant(Tenant $tenant, User $actor, string $id): JsonResponse
+    {
+        $employee = $this->ownedEmployee($tenant, $actor, $id);
+        if (!$this->attendanceEvents instanceof AttendanceHttpReadStore) {
+            throw new ServiceUnavailableHttpException(0, 'Consulta de asistencia no habilitada.');
+        }
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $since = $now->modify('-30 days');
+        $items = $this->attendanceEvents->listForEmployee($tenant, $employee, $since, 50);
+        if (count($items) > 50) {
+            throw new AccessDeniedHttpException('Consulta de asistencia fuera de límites.');
+        }
+        $events = [];
+        $earliest = $since->format('Y-m-d\TH:i:s\Z');
+        $latest = $now->format('Y-m-d\TH:i:s\Z');
+        foreach ($items as $event) {
+            if (!$event instanceof AttendanceEvent
+                || $event->tenantId() !== $tenant->id()
+                || $event->employeeId() !== $employee->id()
+                || $event->occurredAt() < $earliest
+                || $event->occurredAt() > $latest) {
+                throw new AccessDeniedHttpException('Datos de asistencia fuera de alcance.');
+            }
+            $events[] = [
+                'id' => $event->id(),
+                'employee_id' => $event->employeeId(),
+                'occurred_at' => $event->occurredAt(),
+                'type' => $event->type(),
+            ];
+        }
+        usort($events, static fn (array $a, array $b): int =>
+            strcmp($b['occurred_at'], $a['occurred_at']));
+        return $this->privateJson(['events' => $events]);
     }
 
     private function ownedEmployee(Tenant $tenant, User $actor, string $id): Employee
