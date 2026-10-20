@@ -18,7 +18,13 @@ SERVICE = ROOT / "src/Application/Reporting/TenantCsvReportService.php"
 # React hooks/DOM. No browser traffic, tenant PII or external services.
 HARNESS = r"""
 const fs = require('fs');
-const ts = require('typescript');
+let ts;
+try { ts = require('typescript'); } catch {
+  // CI acceptance runs in a separate Python job without npm ci.
+  const {execFileSync} = require('child_process');
+  const globalRoot = execFileSync('npm', ['root', '-g'], {encoding:'utf8'}).trim();
+  ts = require(globalRoot + '/typescript');
+}
 const Module = require('module');
 const source = fs.readFileSync(process.argv[1], 'utf8');
 const output = ts.transpileModule(source, {compilerOptions: {
