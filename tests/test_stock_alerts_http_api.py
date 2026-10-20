@@ -284,6 +284,8 @@ class AlertasStockApiTests(unittest.TestCase):
                 cwd=ROOT, text=True, capture_output=True, timeout=180, check=False,
             )
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            # Exit code 0 alone cannot prove PHPUnit discovered the HTTP test.
+            self.assertRegex(result.stdout + result.stderr, r"OK\s*\(\s*1 test,")
 
 
 if __name__ == "__main__":
