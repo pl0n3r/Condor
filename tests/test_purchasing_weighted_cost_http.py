@@ -16,7 +16,9 @@ BRANCH_SUPPORT = ROOT / "src/Http/Controller/BranchApiSupport.php"
 PHP_SMOKE = r'''<?php
 declare(strict_types=1);
 
+use App\Domain\Identity\Entity\BranchRoleAssignment;
 use App\Domain\Identity\Entity\Membership;
+use App\Domain\Identity\Entity\Role;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Organization\Entity\Branch;
@@ -56,6 +58,11 @@ final class PurchasingMaterialCostSmokeTest extends WebTestCase
 
         $owner = new User('cost-owner-'.$suffix.'@example.test', 'Owner');
         $membership = new Membership($tenantA, $owner, Membership::ROLE_OWNER);
+        $restricted = new Branch($tenantA, 'Limitada', 'limitada-'.$suffix, $legalA);
+        $viewer = new User('cost-viewer-'.$suffix.'@example.test', 'Viewer');
+        $viewerMember = new Membership($tenantA, $viewer, 'ADMIN');
+        $viewerRole = new Role($tenantA, 'Solo sede limitada '.$suffix, ['inventory.view']);
+        $viewerAssignment = new BranchRoleAssignment($viewerMember, $restricted, $viewerRole);
 
         $first = new PurchaseOrder($tenantA, $legalA, $supplierA);
         $first->addLine($known, '2', '10');
@@ -71,7 +78,8 @@ final class PurchasingMaterialCostSmokeTest extends WebTestCase
         foreach ([
             $tenantA, $legalA, $branchA, $sourceA, $supplierA,
             $known, $unknown, $tenantB, $legalB, $branchB, $foreign,
-            $owner, $membership, $first, $second, $pending,
+            $owner, $membership, $restricted, $viewer, $viewerMember,
+            $viewerRole, $viewerAssignment, $first, $second, $pending,
         ] as $entity) {
             $manager->persist($entity);
         }
@@ -103,6 +111,11 @@ final class PurchasingMaterialCostSmokeTest extends WebTestCase
             '/api/v1/branches/'.$branchB->id().'/purchasing/material-costs',
         );
         self::assertResponseStatusCodeSame(404);
+
+        // Same tenant, but inventory.view was granted for another branch only.
+        $client->loginUser($viewer);
+        $client->request('GET', $url);
+        self::assertResponseStatusCodeSame(403);
     }
 }
 '''
@@ -115,6 +128,8 @@ class PurchasingWeightedCostHttpTests(unittest.TestCase):
         self.assertIn("/purchasing/material-costs", controller)
         self.assertIn("public function materialCosts(", controller)
         self.assertIn("$this->materialCosts->calculate($tenant, $material, $orders)", controller)
+        self.assertIn("'status' => PurchaseOrder::STATUS_RECEIVED", controller)
+        self.assertIn("$this->domain(fn (): array =>", controller)
         self.assertIn("'material_costs' => $costs", controller)
         self.assertIn("'material_id' => $material->id()", controller)
         self.assertIn("average_unit_cost", service)
