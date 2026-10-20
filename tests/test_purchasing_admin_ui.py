@@ -6,6 +6,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 APP = (ROOT / "frontend/admin/AdminApp.tsx").read_text(encoding="utf-8")
 PANEL = (ROOT / "frontend/admin/PurchasingManagement.tsx").read_text(encoding="utf-8")
+BUNDLE = (ROOT / "public/build/admin.js").read_text(encoding="utf-8")
 CONTROLLER = (ROOT / "src/Http/Controller/PurchasingController.php").read_text(encoding="utf-8")
 
 
@@ -54,7 +55,6 @@ class ComprasUiAdminTests(unittest.TestCase):
         self.assertIn("error.message === 'PERMISSION_DENIED'", PANEL)
         self.assertIn("throw error;", PANEL)
         self.assertIn("historyStatus: 'verified' | 'unavailable'", PANEL)
-        self.assertIn("historyStatus: historical.available", PANEL)
         self.assertIn("data.historyStatus === 'unavailable'", PANEL)
         self.assertIn("data.historyStatus === 'verified'", PANEL)
         self.assertIn("const historyValid = historical.available", PANEL)
@@ -71,6 +71,14 @@ class ComprasUiAdminTests(unittest.TestCase):
         self.assertIn("Los proveedores y órdenes siguen disponibles", PANEL)
         self.assertNotIn("average_unit_cost: '0'", PANEL)
         self.assertNotIn("average_unit_cost: 0", PANEL)
+
+    def test_compiled_admin_contains_purchasing_and_fail_closed_messages(self):
+        """La entrega compilada realmente incorpora la UI y los estados seguros."""
+        self.assertIn("Proveedores, órdenes y recepción", BUNDLE)
+        self.assertIn("No se pudo verificar el costo histórico.", BUNDLE)
+        self.assertIn("Sin costo promedio histórico verificado", BUNDLE)
+        self.assertIn("Recepción registrada sin duplicar stock.", BUNDLE)
+        self.assertNotIn("historyStatus: historical.available", PANEL)
 
     def test_mutation_refresh_keeps_form_focus(self):
         """Recargar tras POST no desmonta formularios ni pierde el foco."""
