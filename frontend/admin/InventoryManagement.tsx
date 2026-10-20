@@ -121,8 +121,13 @@ export function InventoryManagement({
 
   async function loadInventory() {
     const requestId = ++inventoryRequestId.current;
-    // Invalidate pending scans when the authoritative branch snapshot refreshes.
+    // Invalidate pending scans and their selection before refreshing the snapshot.
+    // A previously scanned variant might no longer belong to this inventory.
     scanRequestId.current += 1;
+    setScannedVariantId(null);
+    setScanStatus('idle');
+    setScanMessage('');
+    setScanCode('');
     if (!canView) {
       return;
     }

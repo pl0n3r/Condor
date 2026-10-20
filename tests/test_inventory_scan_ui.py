@@ -56,6 +56,17 @@ class EscaneoUiInventarioTests(unittest.TestCase):
         self.assertIn("if (requestId !== inventoryRequestId.current)", PANEL)
         self.assertIn("inventoryRequestId.current += 1;", PANEL)
 
+    def test_inventory_refresh_clears_obsolete_scan_selection(self) -> None:
+        # The reset is inside loadInventory, not only branch-switch useEffect.
+        block = PANEL.split("async function loadInventory() {", 1)[1].split(
+            "setState({ status: 'loading' });", 1
+        )[0]
+        self.assertIn("scanRequestId.current += 1;", block)
+        self.assertIn("setScannedVariantId(null);", block)
+        self.assertIn("setScanStatus('idle');", block)
+        self.assertIn("setScanMessage('');", block)
+        self.assertIn("setScanCode('');", block)
+
     def test_authoritative_api_is_branch_and_tenant_scoped(self) -> None:
         self.assertIn(
             "$this->authorizedBranchScope($branchId, 'inventory.view')",
