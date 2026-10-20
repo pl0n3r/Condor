@@ -84,6 +84,12 @@ class CostoOrdenUiTests(unittest.TestCase):
         self.assertIn("status: 'loading'", PANEL)
         self.assertIn("Consultando costo de la orden…", PANEL)
         self.assertIn("No se registraron consumos de material.", PANEL)
+        self.assertIn("for (let end = integer.length; end > 0; end -= 3)", PANEL)
+        self.assertIn("groups.reverse().join('.')", PANEL)
+        self.assertIn('<output className="muted">Consultando costo de la orden…</output>', PANEL)
+        self.assertIn('<output className="muted">Costo no disponible: sin comprobante verificable.</output>', PANEL)
+        self.assertIn('<output className="muted">No se registraron consumos de material.</output>', PANEL)
+        self.assertNotIn("integer.replace(", PANEL)
 
     def test_only_completed_order_read_isolated_from_branch_switches(self) -> None:
         self.assertIn("orders.orders.filter((order) => order.status === 'completed')", PANEL)

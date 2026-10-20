@@ -145,8 +145,8 @@ type BomComponentDraft = {
 
 class ProductionUnavailable extends Error {}
 
-const moneyPattern = /^(?:0|[1-9][0-9]*)\.[0-9]{4}$/;
-const quantityPattern = /^(?:0|[1-9][0-9]*)\.[0-9]{6}$/;
+const moneyPattern = /^(?:0|[1-9]\d*)\.\d{4}$/;
+const quantityPattern = /^(?:0|[1-9]\d*)\.\d{6}$/;
 
 // Money is displayed only from the validated, server-persisted completion snapshot.
 // Never derive historical prices from mutable BOM or current purchasing data.
@@ -185,17 +185,22 @@ function verifiedOrderCost(payload: unknown, orderId: string): OrderCostState {
 
 function copAmount(value: string): string {
   const [integer, fraction] = value.split('.');
-  return integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + fraction + ' COP';
+  // Linear grouping avoids backtracking on large values from the cost snapshot.
+  const groups: string[] = [];
+  for (let end = integer.length; end > 0; end -= 3) {
+    groups.push(integer.slice(Math.max(0, end - 3), end));
+  }
+  return groups.reverse().join('.') + ',' + fraction + ' COP';
 }
 
 function OrderCostDetails({
   cost, materials,
 }: Readonly<{ cost: OrderCostState; materials: ReadonlyMap<string, Material> }>) {
   if (cost.status === 'loading') {
-    return <p className="muted" role="status">Consultando costo de la orden…</p>;
+    return <output className="muted">Consultando costo de la orden…</output>;
   }
   if (cost.status === 'unknown') {
-    return <p className="muted" role="status">Costo no disponible: sin comprobante verificable.</p>;
+    return <output className="muted">Costo no disponible: sin comprobante verificable.</output>;
   }
   if (cost.status === 'error') {
     return <p role="alert">No fue posible verificar el costo de la orden.</p>;
@@ -206,7 +211,7 @@ function OrderCostDetails({
       <p>Costo por unidad: {copAmount(cost.data.unit_cost)}</p>
       <strong>Desglose por material</strong>
       {cost.data.consumptions.length === 0 ? (
-        <p className="muted" role="status">No se registraron consumos de material.</p>
+        <output className="muted">No se registraron consumos de material.</output>
       ) : (
         <ul>
           {cost.data.consumptions.map((line) => (
