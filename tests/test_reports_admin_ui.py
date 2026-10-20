@@ -124,10 +124,14 @@ const tick = async () => {await new Promise(resolve => realSetTimeout(resolve, 2
   await tick();
   const staleBlocked = clicked.length === before;
 
-  // Permission changes within the same branch must also invalidate a pending CSV.
+  // The fake useEffect does not run the real branch-reset effect; reset its
+  // fourth hook (status) explicitly before testing a new permission fetch.
+  slots[3] = 'idle';
+  // Permission changes within the same branch must invalidate a pending CSV.
   fetchPromise = new Promise(resolve => {resolveFetch = resolve;});
   props = {...props, permissions:['inventory.view']};
   tree = render();
+  const fetchedBefore = downloads.length;
   elements(tree, 'form')[0].props.onSubmit({preventDefault() {}});
   const beforeRevoke = clicked.length;
   props = {...props, permissions:[]};
@@ -135,7 +139,8 @@ const tick = async () => {await new Promise(resolve => realSetTimeout(resolve, 2
   resolveFetch({ok:true,status:200,headers:{get:()=>contentType},
     blob:async()=>new Blob([csv],{type:'text/csv'})});
   await tick();
-  const permissionRevocationBlocked = clicked.length === beforeRevoke;
+  const permissionRevocationBlocked = clicked.length === beforeRevoke
+    && downloads.length === fetchedBefore + 1;
 
   // Branch context is supplied by the authenticated admin, never query tenant.
   process.stdout.write(JSON.stringify({
