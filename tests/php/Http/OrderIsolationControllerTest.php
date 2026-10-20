@@ -139,10 +139,13 @@ final class OrderIsolationControllerTest extends WebTestCase
         $client->request('POST', $urlA.'/'.$orderB->id().'/cancel', server: $headers);
         self::assertResponseStatusCodeSame(401);
 
-        $manager->refresh($orderB);
-        self::assertSame(Order::STATUS_OPEN, $orderB->orderStatus());
-        self::assertSame(Order::FULFILLMENT_RESERVED, $orderB->fulfillmentStatus());
-        self::assertSame(1, $manager->getRepository(Order::class)->count([
+        $verificationManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $verificationManager);
+        $persisted = $verificationManager->getRepository(Order::class)->find($orderB->id());
+        self::assertInstanceOf(Order::class, $persisted);
+        self::assertSame(Order::STATUS_OPEN, $persisted->orderStatus());
+        self::assertSame(Order::FULFILLMENT_RESERVED, $persisted->fulfillmentStatus());
+        self::assertSame(1, $verificationManager->getRepository(Order::class)->count([
             'tenant' => $tenantB, 'id' => $orderB->id(),
         ]));
     }
