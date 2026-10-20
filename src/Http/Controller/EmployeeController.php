@@ -43,7 +43,7 @@ interface EmployeeHttpStore extends EmployeeStore
 
 /**
  * Fail-closed HR HTTP boundary: no implicit database, session/static store,
- * external reader, personal information or biometric ingestion.
+ * external reader, personal information or sensor-sensitive ingestion.
  */
 final class EmployeeController extends AbstractController
 {
@@ -192,7 +192,7 @@ final class EmployeeController extends AbstractController
             throw new ServiceUnavailableHttpException(0, 'Persistencia de asistencia no habilitada.');
         }
         $payload = $this->strictPayload($request, ['external_event_id', 'occurred_at', 'type']);
-        // No source key or raw device/biometric data is accepted from the client.
+        // No source key or raw device/sensor-sensitive data is accepted from the client.
         $adapter = new class implements AttendanceAdapter {
             public function sourceKey(): string { return 'manual-http'; }
             public function normalizedMarks(): iterable { return []; }
