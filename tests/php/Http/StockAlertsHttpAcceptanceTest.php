@@ -6,59 +6,36 @@ namespace App\Tests\Http;
 
 use PHPUnit\Framework\TestCase;
 
-/**
- * Run #717 AC-01 in the disposable Symfony/MariaDB CI runner.
- * The fixture uses synthetic tenants only; no production access or secrets.
- */
+/** Validate #717 through a real disposable Symfony/MariaDB HTTP acceptance. */
 final class StockAlertsHttpAcceptanceTest extends TestCase
 {
     public function testStockAlertHttpContractRunsAgainstMariaDb(): void
     {
-        $root = dirname(__DIR__, 3);
-        self::assertFileExists(
-            $root.'/tests/test_stock_alerts_http_api.py',
-            'The stock-alert HTTP AC-01 contract is missing.',
-        );
-        self::assertTrue(
-            function_exists('proc_open'),
-            'The disposable CI runner must support proc_open.',
-        );
+        $checkout = dirname(__DIR__, 3);
+        self::assertFileExists($checkout.'/tests/test_stock_alerts_http_api.py');
+        self::assertTrue(function_exists('proc_open'), 'PHP proc_open is required');
 
-        // Array arguments avoid shell interpolation and credential leakage.
-        $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
+        $command = [
+            'python3', '-m', 'unittest',
+            'tests.test_stock_alerts_http_api.AlertasStockApiTests.test_acceptance', '-v',
         ];
-        $process = proc_open(
-            [
-                'python3', '-m', 'unittest', '-v',
-                'tests.test_stock_alerts_http_api.AlertasStockApiTests.test_acceptance',
-            ],
-            $descriptors,
-            $pipes,
-            $root,
+        $streams = [];
+        $child = proc_open(
+            $command, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $streams, $checkout,
         );
-        self::assertIsResource($process, 'Could not start stock-alert AC-01.');
+        self::assertIsResource($child, 'Failed to start AC-01 HTTP acceptance');
 
-        fclose($pipes[0]);
-        $stdout = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        $code = proc_close($process);
-        $output = (string) $stdout.(string) $stderr;
+        fclose($streams[0]);
+        $output = (string) stream_get_contents($streams[1]);
+        $output .= (string) stream_get_contents($streams[2]);
+        foreach ([$streams[1], $streams[2]] as $stream) {
+            fclose($stream);
+        }
+        $exit = proc_close($child);
 
-        self::assertSame(0, $code, 'Stock-alert HTTP AC-01 failed: '.$output);
-        self::assertMatchesRegularExpression(
-            '/Ran 1 test\b/',
-            $output,
-            'AC-01 must actually discover and execute one Python test.',
-        );
-        self::assertMatchesRegularExpression(
-            '/\bOK\b/',
-            $output,
-            'AC-01 must complete successfully, not skip its HTTP fixture.',
-        );
+        self::assertSame(0, $exit, 'AC-01 failed: '.$output);
+        self::assertMatchesRegularExpression('/Ran 1 test\b/', $output);
+        self::assertMatchesRegularExpression('/\bOK\b/', $output);
     }
 }

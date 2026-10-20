@@ -174,11 +174,15 @@ final class StockAlertsScopeSmokeTest extends WebTestCase
         $rows = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR)['minimums'];
         self::assertSame([['variant_id' => $variantA->id(), 'source_id' => $sourceA->id(), 'minimum' => 3]], $rows);
 
+        // Reacquire managed associations after Symfony HTTP requests reset Doctrine.
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $managedTenantA = $em->find(Tenant::class, $tenantA->id());
+        self::assertInstanceOf(Tenant::class, $managedTenantA);
         // Append 510 other-branch revisions for this same tenant/variant:
         // neither reads nor repeated idempotent PUTs should start failing.
         for ($i = 0; $i < 510; ++$i) {
             $em->persist(new AuditEvent(
-                $tenantA, $owner->id(), 'inventory.stock_minimum.set',
+                $managedTenantA, $owner->id(), 'inventory.stock_minimum.set',
                 ProductVariant::class, $variantA->id(),
                 ['source_id' => $sourceA2->id(), 'branch_id' => $branchA2->id(), 'minimum' => 7],
             ));
@@ -196,13 +200,23 @@ final class StockAlertsScopeSmokeTest extends WebTestCase
             'tenant' => $tenantA, 'action' => 'inventory.stock_minimum.set',
         ]));
 
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $managedTenantA = $em->find(Tenant::class, $tenantA->id());
+        $managedSourceA = $em->find(InventorySource::class, $sourceA->id());
+        $managedVariantA = $em->find(ProductVariant::class, $variantA->id());
+        $managedOwnerMember = $em->find(Membership::class, $ownerMember->id());
+        self::assertInstanceOf(Tenant::class, $managedTenantA);
+        self::assertInstanceOf(InventorySource::class, $managedSourceA);
+        self::assertInstanceOf(ProductVariant::class, $managedVariantA);
+        self::assertInstanceOf(Membership::class, $managedOwnerMember);
         $movementA = new InventoryMovement(
-            $tenantA, $sourceA, $variantA, InventoryMovement::TYPE_ADJUSTMENT_OUT, -4, 2, $owner->id(),
+            $managedTenantA, $managedSourceA, $managedVariantA,
+            InventoryMovement::TYPE_ADJUSTMENT_OUT, -4, 2, $owner->id(),
         );
         $alerts = StockAlertService::fromPreferences(static::getContainer()->get(NotificationPreferenceService::class));
-        $delivery = $alerts->onMovement($ownerMember, $movementA, 3);
+        $delivery = $alerts->onMovement($managedOwnerMember, $movementA, 3);
         self::assertNotNull($delivery);
-        self::assertNull($alerts->onMovement($ownerMember, $movementA, 3));
+        self::assertNull($alerts->onMovement($managedOwnerMember, $movementA, 3));
         $em->persist($movementA);
         $em->persist($delivery);
         $em->flush();
@@ -218,9 +232,12 @@ final class StockAlertsScopeSmokeTest extends WebTestCase
         // Persist more than the API page limit to catch a filter-after-limit
         // regression; a valid pending stock.low alert must remain visible.
         usleep(1_100_000);
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $managedOwner = $em->find(User::class, $owner->id());
+        self::assertInstanceOf(User::class, $managedOwner);
         for ($i = 0; $i < 205; ++$i) {
             $failed = new NotificationDelivery(
-                $owner,
+                $managedOwner,
                 NotificationCatalog::EVENT_STOCK_LOW,
                 NotificationCatalog::CHANNEL_IN_APP,
                 ['tenant_id' => $tenantA->id()],
@@ -237,9 +254,12 @@ final class StockAlertsScopeSmokeTest extends WebTestCase
 
         // 205 newer active alerts for a different source must not hide
         // the previously persisted pending alert in the requested branch.
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $managedOwner = $em->find(User::class, $owner->id());
+        self::assertInstanceOf(User::class, $managedOwner);
         for ($i = 0; $i < 205; ++$i) {
             $em->persist(new NotificationDelivery(
-                $owner, NotificationCatalog::EVENT_STOCK_LOW,
+                $managedOwner, NotificationCatalog::EVENT_STOCK_LOW,
                 NotificationCatalog::CHANNEL_IN_APP,
                 [
                     'tenant_id' => $tenantA->id(), 'source_id' => $sourceA2->id(),
