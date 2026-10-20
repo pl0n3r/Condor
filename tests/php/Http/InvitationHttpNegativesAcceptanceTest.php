@@ -5,33 +5,42 @@ declare(strict_types=1);
 namespace App\Tests\Http;
 
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Process\Process;
 
 /**
- * Executes the real #759 HTTP acceptance in the disposable CI MariaDB runner.
- * The Python target generates a temporary Symfony WebTestCase and invokes
- * the installed PHPUnit binary. No external service, live data or secrets.
+ * Runs #759 AC-01 from the real MariaDB/PHPUnit CI job, without requiring
+ * symfony/process: Condor's locked Composer dependencies do not include it.
  */
 final class InvitationHttpNegativesAcceptanceTest extends TestCase
 {
     public function testPythonAcceptanceActuallyExecutesOneHttpScenario(): void
     {
         $root = dirname(__DIR__, 3);
-        $process = new Process(
-            [
-                'python3',
-                '-m',
-                'unittest',
-                'tests.test_invitation_http_negatives.InvitacionesNegativasHttpTests.test_acceptance',
-                '-v',
-            ],
-            $root,
-        );
-        $process->setTimeout(240);
-        $process->run();
+        // Array argv is passed directly to PHP proc_open (no shell expansion).
+        $argv = [
+            'python3',
+            '-m',
+            'unittest',
+            'tests.test_invitation_http_negatives.InvitacionesNegativasHttpTests.test_acceptance',
+            '-v',
+        ];
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $pipes = [];
+        $process = proc_open($argv, $descriptors, $pipes, $root);
+        self::assertIsResource($process, 'No se pudo iniciar la prueba HTTP');
 
-        $evidence = $process->getOutput().$process->getErrorOutput();
-        self::assertTrue($process->isSuccessful(), $evidence);
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($process);
+
+        $evidence = $stdout.$stderr;
+        self::assertSame(0, $exit, $evidence);
         self::assertMatchesRegularExpression('/Ran 1 test\b/', $evidence);
         self::assertMatchesRegularExpression('/\bOK\b/', $evidence);
     }
