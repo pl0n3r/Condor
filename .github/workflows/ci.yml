@@ -585,6 +585,9 @@ jobs:
       - name: Aplicar migraciones en MariaDB descartable
         run: php bin/console doctrine:migrations:migrate --no-interaction
 
+      - name: Ejecutar aceptación HTTP gerencial tenant A/B (#695)
+        run: python3 -m unittest tests/test_management_dashboard.py -v
+
       - name: Ejecutar pruebas PHP
         run: vendor/bin/simple-phpunit
 
