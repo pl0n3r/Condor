@@ -6,6 +6,8 @@ namespace App\Tests\Domain\Production;
 
 use App\Application\Commercial\EntitlementSnapshot;
 use App\Application\Inventory\InventoryService;
+use App\Application\Purchasing\MaterialCostService;
+use App\Application\Production\ProductionCostService;
 use App\Application\Production\MaterialInventoryService;
 use App\Application\Production\ProductionOrderService;
 use App\Domain\Catalog\Entity\Product;
@@ -46,6 +48,7 @@ final class ProductionOrderTest extends KernelTestCase
             $entityManager,
             $this->materials,
             new InventoryService($entityManager),
+            new ProductionCostService(new MaterialCostService()),
         );
     }
 
