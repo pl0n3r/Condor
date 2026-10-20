@@ -223,6 +223,12 @@ class AlertasStockApiTests(unittest.TestCase):
         # Minimums survive requests via tenant-scoped append-only records, not
         # process memory or client-supplied tenant IDs.
         self.assertIn("$em->persist(new AuditEvent(", controller)
+        # A busy tenant can have many revisions for the same variant across
+        # branches. A bounded read must reject overflow, not silently create
+        # another audit record after losing the previous branch setting.
+        self.assertIn("if (count($latest) > self::MAX_REVISIONS)", controller)
+        self.assertEqual(2, controller.count("->setMaxResults(self::MAX_REVISIONS + 1)"))
+        self.assertNotIn("->setMaxResults(200)\n                ->getQuery()->getArrayResult()", controller)
         self.assertIn("'inventory.stock_minimum.set'", controller)
         self.assertIn("LockMode::PESSIMISTIC_WRITE", controller)
         self.assertIn("$this->entityManager->wrapInTransaction(", controller)

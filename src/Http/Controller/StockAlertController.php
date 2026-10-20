@@ -177,8 +177,17 @@ final class StockAlertController extends AbstractController
                 ->setParameter('id', $variant->id())
                 ->orderBy('a.createdAt', 'DESC')
                 ->addOrderBy('a.id', 'DESC')
-                ->setMaxResults(200)
+                ->setMaxResults(self::MAX_REVISIONS + 1)
                 ->getQuery()->getArrayResult();
+            // Other branches share a variant's audit history. Never treat a
+            // truncated search as "no prior setting": that would break the
+            // idempotent PUT contract for this branch.
+            if (count($latest) > self::MAX_REVISIONS) {
+                throw new ServiceUnavailableHttpException(
+                    null,
+                    'Historial de mínimos excede el límite verificable.',
+                );
+            }
             $previous = null;
             foreach ($latest as $row) {
                 $c = $row['context'] ?? null;
