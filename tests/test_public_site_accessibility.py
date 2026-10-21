@@ -36,27 +36,112 @@ KNOWN_DEBT = {
 }
 
 
+class _Node:
+    """Árbol HTML mínimo para comprobar relaciones reales de selectores CSS."""
+
+    def __init__(self, tag: str, attrs: dict[str, str | None],
+                 parent: _Node | None = None) -> None:
+        self.tag = tag
+        self.attrs = attrs
+        self.parent = parent
+        self.children: list[_Node] = []
+        self.text: list[str] = []
+
+
+def _descendants(node: _Node) -> list[_Node]:
+    result: list[_Node] = []
+    for child in node.children:
+        result.append(child)
+        result.extend(_descendants(child))
+    return result
+
+
+def _text_content(node: _Node) -> str:
+    return "".join(node.text) + "".join(_text_content(c) for c in node.children)
+
+
+def _has_class(node: _Node, cls: str) -> bool:
+    return cls in (node.attrs.get("class") or "").split()
+
+
 class _Markup(HTMLParser):
+    VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input",
+            "link", "meta", "param", "source", "track", "wbr"}
+
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.headings: list[int] = []
-        self.inputs: list[dict[str, str | None]] = []
-        self.labels: set[str] = set()
+        self.inputs: list[_Node] = []
+        self.labels: dict[str, list[_Node]] = {}
         self.images: list[dict[str, str | None]] = []
         self.svgs: list[dict[str, str | None]] = []
+        self.root = _Node("root", {})
+        self.stack = [self.root]
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
+        node = _Node(tag, attributes, self.stack[-1])
+        self.stack[-1].children.append(node)
         if re.fullmatch(r"h[1-6]", tag):
             self.headings.append(int(tag[1]))
         elif tag == "input" and attributes.get("type") in {"radio", "checkbox"}:
-            self.inputs.append(attributes)
+            self.inputs.append(node)
         elif tag == "label" and attributes.get("for"):
-            self.labels.add(str(attributes["for"]))
+            self.labels.setdefault(str(attributes["for"]), []).append(node)
         elif tag == "img":
             self.images.append(attributes)
         elif tag == "svg":
             self.svgs.append(attributes)
+        if tag not in self.VOID:
+            self.stack.append(node)
+
+    def handle_startendtag(self, tag: str,
+                           attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag not in self.VOID:
+            self.handle_endtag(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        for index in range(len(self.stack) - 1, 0, -1):
+            if self.stack[index].tag == tag:
+                del self.stack[index:]
+                break
+
+    def handle_data(self, data: str) -> None:
+        self.stack[-1].text.append(data)
+
+
+def _focus_reaches_label(control: _Node, control_id: str, target: str) -> bool:
+    """Comprueba combinadores + y ~ contra los hermanos reales del input."""
+    parent = control.parent
+    if parent is None:
+        return False
+    siblings = parent.children
+    later = siblings[siblings.index(control) + 1:]
+    target = target.strip()
+    if re.fullmatch(r"\+\s*label", target):
+        return bool(later and later[0].tag == "label"
+                    and later[0].attrs.get("for") == control_id)
+
+    # Selectores reales: ~ .mk-qlist label[for="id"] y
+    # ~ .mk-sw label[for="id"] .mk-tg (outline en el conmutador).
+    relation = re.fullmatch(
+        r'~\s*\.([\w-]+)\s+label\[for="([^"]+)"\](\s+\.mk-tg)?',
+        target,
+    )
+    if relation is None or relation.group(2) != control_id:
+        return False
+    container_class, _, toggle = relation.groups()
+    for sibling in later:
+        if not _has_class(sibling, container_class):
+            continue
+        for label in _descendants(sibling):
+            if label.tag != "label" or label.attrs.get("for") != control_id:
+                continue
+            if not toggle or any(_has_class(n, "mk-tg")
+                                 for n in _descendants(label)):
+                return True
+    return False
 
 
 def _audit_markup(name: str, html: str, css: str) -> set[str]:
@@ -71,33 +156,46 @@ def _audit_markup(name: str, html: str, css: str) -> set[str]:
 
     seen: set[str] = set()
     for control in doc.inputs:
-        control_id = str(control.get("id") or "")
+        attrs = control.attrs
+        control_id = str(attrs.get("id") or "")
         if not control_id or control_id in seen:
             problems.add(f"controls:{name}:id-missing-or-duplicated")
             continue
         seen.add(control_id)
-        if control_id not in doc.labels:
+        labels = doc.labels.get(control_id, [])
+        if not labels:
             problems.add(f"controls:{name}:{control_id}:missing-label")
-        # Los radios/checkboxes .mk-vh son transparentes: el foco debe
-        # hacerse visible EN su label, no solo sobre el input oculto.
-        # El foco puede pintarse en el label, en su .mk-tg interno,
-        # o sobre el label adyacente (+) del cuestionario CSS-only.
-        focused_label = (
-            rf'~\s*[^{{}}]*?label\[for="{re.escape(control_id)}"\]'
-            rf'(?:\s+\.mk-tg)?'
-            r'|\+\s*label'
-        )
-        selector = (
+        # for=id solo asocia una etiqueta, pero esta también debe nombrar
+        # al control, salvo nombre accesible alternativo explícito.
+        other_name = bool((attrs.get("aria-label") or "").strip()
+                          or (attrs.get("title") or "").strip())
+        ids = (attrs.get("aria-labelledby") or "").split()
+        referenced = [
+            node for node in _descendants(doc.root)
+            if node.attrs.get("id") in ids and _text_content(node).strip()
+        ]
+        if not (other_name or referenced or any(
+                _text_content(label).strip()
+                or (label.attrs.get("aria-label") or "").strip()
+                for label in labels)):
+            problems.add(f"controls:{name}:{control_id}:missing-accessible-name")
+
+        # El foco en .mk-vh ha de pintar un label realmente alcanzable en DOM.
+        # Limitar la expresión evita patrones CSS dinámicos arbitrarios.
+        focus_rules = re.finditer(
             rf"#{re.escape(control_id)}:focus-visible\s*"
-            rf"(?:{focused_label})\s*\{{\s*outline:\s*[1-9]"
+            r"(?P<target>[^{}]{0,160})\{\s*outline:\s*[1-9]",
+            css, re.IGNORECASE,
         )
-        if not re.search(selector, css, re.IGNORECASE):
+        if not any(_focus_reaches_label(control, control_id,
+                                        match.group("target"))
+                   for match in focus_rules):
             problems.add(f"focus:{name}:{control_id}:invisible")
 
     for image in doc.images:
-        alt = image.get("alt")
-        if alt is None or (not alt.strip() and image.get("aria-hidden") != "true"
-                           and image.get("role") not in {"none", "presentation"}):
+        # alt="" es la anotación semántica válida de una imagen decorativa.
+        # En imágenes informativas se exige un alt no vacío.
+        if image.get("alt") is None:
             problems.add(f"images:{name}:missing-informative-alt")
     for svg in doc.svgs:
         if svg.get("role") == "img" and not (
@@ -241,12 +339,55 @@ class AccesibilidadSitioPublicoTests(unittest.TestCase):
         ))
         html = (
             '<h1>Prueba</h1>'
-            '<input type="radio" id="s1"><label for="s1">Uno</label>'
-            '<input type="checkbox" id="m1"><label for="m1">'
-            '<span class="mk-tg">Dos</span></label>'
-            '<input type="radio" id="q1"><label for="q1">Tres</label>'
+            '<div><input type="radio" id="s1"><div class="mk-seg">'
+            '<label for="s1">Uno</label></div></div>'
+            '<div><input type="checkbox" id="m1"><ul class="mk-sw">'
+            '<li><label for="m1"><span class="mk-tg"></span>'
+            '<span>Dos</span></label></li></ul></div>'
+            '<div><input type="radio" id="q1"><label for="q1">Tres</label></div>'
         )
         self.assertEqual(set(), _audit_markup("fixture", html, css))
+
+    def test_rechaza_etiqueta_vacia_sin_nombre_accesible(self) -> None:
+        css = '#x:focus-visible + label { outline: 3px solid blue; }'
+        html = '<h1>Prueba</h1><input type="radio" id="x"><label for="x"></label>'
+        self.assertIn(
+            "controls:fixture:x:missing-accessible-name",
+            _audit_markup("fixture", html, css),
+        )
+        named = html.replace('id="x"', 'id="x" aria-label="Opción uno"')
+        self.assertEqual(set(), _audit_markup("fixture", named, css))
+
+    def test_rechaza_selector_adyacente_sin_hermano_label(self) -> None:
+        css = '#x:focus-visible + label { outline: 3px solid blue; }'
+        html = ('<h1>Prueba</h1><input type="radio" id="x">'
+                '<span>Intercalado</span><label for="x">Opción</label>')
+        self.assertIn(
+            "focus:fixture:x:invisible",
+            _audit_markup("fixture", html, css),
+        )
+        self.assertNotIn(
+            "controls:fixture:x:missing-label",
+            _audit_markup("fixture", html, css),
+        )
+
+    def test_rechaza_contenedor_equivocado_para_foco(self) -> None:
+        css = '#x:focus-visible ~ .mk-sw label[for="x"] { outline: 3px solid blue; }'
+        html = ('<h1>Prueba</h1><div><input type="checkbox" id="x">'
+                '<div class="otro"><label for="x">Opción</label></div></div>')
+        self.assertIn(
+            "focus:fixture:x:invisible",
+            _audit_markup("fixture", html, css),
+        )
+
+    def test_acepta_alt_decorativo_y_detecta_alt_ausente(self) -> None:
+        decorative = '<h1>Prueba</h1><img src="icono.svg" alt="">'
+        self.assertEqual(set(), _audit_markup("fixture", decorative, ""))
+        lacking = '<h1>Prueba</h1><img src="noticia.png">'
+        self.assertIn(
+            "images:fixture:missing-informative-alt",
+            _audit_markup("fixture", lacking, ""),
+        )
 
     def test_calculo_wcag_y_transparencia(self) -> None:
         self.assertAlmostEqual(21, _contrast(_rgb("#000000"), _rgb("#ffffff")))
