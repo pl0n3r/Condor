@@ -126,23 +126,31 @@ def _focus_reaches_label(control: _Node, control_id: str, target: str) -> bool:
     # Selectores reales: ~ .mk-qlist label[for="id"] y
     # ~ .mk-sw label[for="id"] .mk-tg (outline en el conmutador).
     relation = re.fullmatch(
-        r'~\s*\.([\w-]+)\s+label\[for="([^"]+)"\](\s+\.mk-tg)?',
+        r'~\s*((?:\.[\w-]+\s+){1,3})label\[for="([^"]+)"\](\s+\.mk-tg)?',
         target,
     )
     if relation is None or relation.group(2) != control_id:
         return False
-    container_class, _, toggle = relation.groups()
+    ancestor_classes = re.findall(r"\.([\w-]+)", relation.group(1))
+    toggle = relation.group(3)
     for sibling in later:
-        if not _has_class(sibling, container_class):
+        if not _has_class(sibling, ancestor_classes[0]):
             continue
-        for label in _descendants(sibling):
-            if label.tag != "label" or label.attrs.get("for") != control_id:
-                continue
-            if not toggle or any(_has_class(n, "mk-tg")
-                                 for n in _descendants(label)):
-                return True
+        containers = [sibling]
+        # Una ruta ".mk-section .mk-tablist" exige anidación real,
+        # nunca solo que los nombres estén presentes en el CSS.
+        for cls in ancestor_classes[1:]:
+            containers = [child for container in containers
+                          for child in _descendants(container)
+                          if _has_class(child, cls)]
+        for container in containers:
+            for label in _descendants(container):
+                if label.tag != "label" or label.attrs.get("for") != control_id:
+                    continue
+                if not toggle or any(_has_class(n, "mk-tg")
+                                     for n in _descendants(label)):
+                    return True
     return False
-
 
 def _audit_markup(name: str, html: str, css: str) -> set[str]:
     doc = _Markup()
@@ -378,6 +386,19 @@ class AccesibilidadSitioPublicoTests(unittest.TestCase):
         self.assertIn(
             "focus:fixture:x:invisible",
             _audit_markup("fixture", html, css),
+        )
+
+    def test_foco_de_producto_exige_ambos_contenedores(self) -> None:
+        css = ('#x:focus-visible ~ .mk-section .mk-tablist '
+               'label[for="x"] { outline: 3px solid blue; }')
+        html = ('<h1>Prueba</h1><div><input type="radio" id="x">'
+                '<section class="mk-section"><div class="mk-tablist">'
+                '<label for="x">Módulo</label></div></section></div>')
+        self.assertEqual(set(), _audit_markup("fixture", html, css))
+        broken = html.replace('class="mk-tablist"', 'class="otra"')
+        self.assertIn(
+            "focus:fixture:x:invisible",
+            _audit_markup("fixture", broken, css),
         )
 
     def test_acepta_alt_decorativo_y_detecta_alt_ausente(self) -> None:
