@@ -48,7 +48,7 @@ class ConocimientoAdminPermisosHttpTests(unittest.TestCase):
         )
         log = result.stdout + result.stderr
         self.assertEqual(0, result.returncode, log)
-        self.assertRegex(log, r"OK\\s*\\(\\s*1 test,", "No se ejecutó el test HTTP")
+        self.assertRegex(log, r"OK\s*\(\s*1 test,", "No se ejecutó el test HTTP")
 
 
 if __name__ == "__main__":
