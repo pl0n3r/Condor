@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import unittest
+from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,16 +43,56 @@ def mail_templates() -> list[Path]:
     )
 
 
-def has_unsubscribe_link(source: str) -> bool:
-    anchors = re.findall(r"<a\b[^>]*>", source, flags=re.IGNORECASE | re.DOTALL)
-    return any(
-        re.search(r"\bhref\s*=\s*['\"][^'\"]*(?:unsubscribe|baja)", anchor,
-                  flags=re.IGNORECASE) is not None
-        and re.search(r"(?:unsubscribe|baja|suscripci[oó]n)",
-                      anchor, flags=re.IGNORECASE) is not None
-        for anchor in anchors
-    )
+class _UnsubscribeLinkParser(HTMLParser):
+    """Extrae enlaces reales; no toma HTML comentado por una plantilla."""
 
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.found = False
+        self._anchor: dict[str, object] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a":
+            return
+        attributes = {name.lower(): value or "" for name, value in attrs}
+        style = attributes.get("style", "")
+        hidden = (
+            "hidden" in attributes
+            or attributes.get("aria-hidden", "").lower() == "true"
+            or re.search(r"(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\b", style,
+                         flags=re.IGNORECASE) is not None
+        )
+        self._anchor = {
+            "href": attributes.get("href", ""),
+            "label": [attributes.get("aria-label", "")],
+            "hidden": hidden,
+        }
+
+    def handle_data(self, data: str) -> None:
+        if self._anchor is not None:
+            self._anchor["label"].append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag != "a" or self._anchor is None:
+            return
+        anchor = self._anchor
+        self._anchor = None
+        href = str(anchor["href"])
+        label = " ".join(anchor["label"])
+        if (
+            not anchor["hidden"]
+            and re.search(r"(?:unsubscribe|baja)", href, flags=re.IGNORECASE)
+            and re.search(r"(?:unsubscribe|baja|suscripci[oó]n)", label,
+                          flags=re.IGNORECASE)
+        ):
+            self.found = True
+
+
+def has_unsubscribe_link(source: str) -> bool:
+    parser = _UnsubscribeLinkParser()
+    parser.feed(source)
+    parser.close()
+    return parser.found
 
 class LegalBajaComunicacionesTests(unittest.TestCase):
     def test_acceptance(self) -> None:
@@ -93,6 +134,33 @@ class LegalBajaComunicacionesTests(unittest.TestCase):
         self.assertTrue(has_unsubscribe_link(
             '<p>Novedades</p>'
             '<a href="{{ unsubscribe_url }}">Cancelar suscripción</a>'
+        ))
+
+    def test_rechaza_enlace_sin_nombre_visible_u_oculto(self) -> None:
+        self.assertFalse(has_unsubscribe_link(
+            '<a href="/unsubscribe">Ir al inicio</a>'
+        ))
+        self.assertFalse(has_unsubscribe_link(
+            '<a href="/unsubscribe" style="display:none">Cancelar suscripción</a>'
+        ))
+        self.assertFalse(has_unsubscribe_link(
+            '<a href="/unsubscribe" aria-hidden="true">Dar de baja</a>'
+        ))
+        self.assertFalse(has_unsubscribe_link(
+            '<!-- <a href="/unsubscribe">Cancelar suscripción</a> -->'
+        ))
+        self.assertFalse(has_unsubscribe_link(
+            '<a href="/unsubscribe">Sin etiqueta de baja</a>'.replace(
+                'Sin etiqueta de baja', 'Más información'
+            )
+        ))
+
+    def test_admite_nombre_accesible_y_contenido_anidado(self) -> None:
+        self.assertTrue(has_unsubscribe_link(
+            '<a href="/unsubscribe" aria-label="Dar de baja"><svg></svg></a>'
+        ))
+        self.assertTrue(has_unsubscribe_link(
+            '<a href="/unsubscribe"><span>Cancelar suscripción</span></a>'
         ))
 
 
