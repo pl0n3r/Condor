@@ -49,7 +49,7 @@ final readonly class ProductCsvImporter
                 throw new DomainException('CSV sin encabezados.');
             }
             $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) $header[0]) ?? '';
-            $header = array_map(static fn (string $item): string => strtolower(trim($item)), $header);
+            $header = array_map(static fn (?string $item): string => strtolower(trim((string) $item)), $header);
             if (count(array_unique($header)) !== count($header)
                 || array_diff(self::REQUIRED, $header) !== []
                 || array_diff($header, [...self::REQUIRED, ...self::OPTIONAL]) !== []) {
