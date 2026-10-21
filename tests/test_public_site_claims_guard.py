@@ -6,8 +6,8 @@ no acredita clientes, resultados, certificaciones ni testimonios reales.
 """
 from __future__ import annotations
 
-import html
 import re
+from html.parser import HTMLParser
 import unittest
 from collections import Counter
 from pathlib import Path
@@ -69,19 +69,34 @@ CLIENT_LOGO = re.compile(
 
 
 def clean_source(source: str) -> str:
-    """Quitar comentarios y recursos ejecutables, sin inventar render Twig."""
-    source = re.sub(r"\{#.*?#\}|<!--.*?-->", " ", source, flags=re.DOTALL)
-    source = re.sub(
-        r"<(?:script|style)\b[^>]*>.*?</(?:script|style)>",
-        " ", source, flags=re.DOTALL | re.IGNORECASE,
-    )
-    return source
+    """Quitar solo comentarios Twig; el parser procesa HTML real."""
+    return re.sub(r"\{#.*?#\}", " ", source, flags=re.DOTALL)
+
+
+class _VisibleText(HTMLParser):
+    """Extraer texto sin confundir cierres HTML ni contenido de scripts."""
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.hidden = 0
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"script", "style"}:
+            self.hidden += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"script", "style"} and self.hidden:
+            self.hidden -= 1
+
+    def handle_data(self, data: str) -> None:
+        if not self.hidden:
+            self.parts.append(data)
 
 
 def visible_text(source: str) -> str:
-    return " ".join(
-        html.unescape(re.sub(r"<[^>]+>", " ", source)).split()
-    )
+    parser = _VisibleText()
+    parser.feed(source)
+    return " ".join(" ".join(parser.parts).split())
 
 
 def scan_claims(page: str, source: str) -> tuple[list[str], Counter[str]]:
