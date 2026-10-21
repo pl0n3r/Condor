@@ -166,7 +166,9 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
     let configured = false;
     let entitlementReads = 0;
     let tenantRefreshes = 0;
-    let globalReads = 0;
+    // StrictMode may fetch the initial context twice; navigation is semantic,
+    // never inferred from a request count.
+    let returnToGlobal = false;
     let releaseOldContext;
     const oldContextGate = new Promise((resolve) => {
       releaseOldContext = resolve;
@@ -198,10 +200,9 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
           }
           return context(true);
         }
-        globalReads += 1;
-        return globalReads === 1
-          ? context(false)
-          : { ...context(true), mode: 'global', selected_tenant: null };
+        return returnToGlobal
+          ? { ...context(true), mode: 'global', selected_tenant: null }
+          : context(false);
       },
       'empresas',
     );
@@ -212,6 +213,7 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
     await oldContextStarted;
 
     // The commercial refresh leaves the prior tenant view mounted while pending.
+    returnToGlobal = true;
     await page.getByRole('button', { name: 'Volver al centro global' }).click();
     await expect(page.getByRole('button', { name: 'Ver como propietario' })).toBeVisible();
 
