@@ -67,14 +67,11 @@ final class CustomerHistoryController extends AbstractController
         $branches = $this->entityManager->getRepository(Branch::class)
             ->findBy(['tenant' => $tenant]);
         foreach ($branches as $branch) {
-            if (
-                $branch instanceof Branch
-                && in_array(
-                    'customers.view',
-                    $this->authorization->permissions($user, $tenant, $branch),
-                    true,
-                )
-            ) {
+            if (in_array(
+                'customers.view',
+                $this->authorization->permissions($user, $tenant, $branch),
+                true,
+            )) {
                 $authorizedBranches[] = $branch;
             }
         }
