@@ -126,7 +126,8 @@ class SaasControlCenterUiIntegrationTests(unittest.TestCase):
         self.assertTrue(browser_spec.is_file(), "AC-03 exige navegador real")
         browser_cases = browser_spec.read_text()
         for case in ("HTTP 403", "HTTP 404", "HTTP 5xx", "empty declara UNKNOWN",
-                     "ready representa plan", "POST comercial exitoso"):
+                     "ready representa plan", "POST comercial exitoso",
+                     "un contexto antiguo no sustituye al global"):
             self.assertIn(case, browser_cases)
         ci_workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         self.assertIn("npm run test:e2e", ci_workflow)
