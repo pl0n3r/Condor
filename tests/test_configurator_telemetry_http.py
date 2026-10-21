@@ -71,12 +71,15 @@ final class ConfiguratorTelemetryHttpSmokeTest extends WebTestCase
             [['cycle' => 'monthly'], 422],
             [['event' => 'start'.str_repeat(' ', 8192)], 413],
         ];
-        foreach ($invalidCases as [$body, $expected]) {
-            $client->jsonRequest('POST', $route, $body, server: $headersA);
+        foreach ($invalidCases as $index => [$body, $expected]) {
+            $client->jsonRequest('POST', $route, $body, server: [
+                'REMOTE_ADDR' => '198.51.100.'.(190 + $index),
+                'HTTP_X_TENANT_ID' => $tenantA->id(),
+            ]);
             self::assertResponseStatusCodeSame($expected);
         }
         $client->request(
-            'POST', $route, [], [], ['CONTENT_TYPE' => 'application/json'] + $headersA,
+            'POST', $route, [], [], ['CONTENT_TYPE' => 'application/json', 'REMOTE_ADDR' => '198.51.100.200'] + $headersA,
             '{this is not JSON',
         );
         self::assertResponseStatusCodeSame(400);
