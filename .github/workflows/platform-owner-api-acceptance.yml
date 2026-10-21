@@ -1,0 +1,71 @@
+name: Plataforma Owner API - aceptación HTTP #774
+
+on:
+  pull_request:
+    paths:
+      - tests/test_platform_owner_api_permissions.py
+      - .github/workflows/platform-owner-api-acceptance.yml
+  push:
+    branches: [main]
+    paths:
+      - tests/test_platform_owner_api_permissions.py
+      - .github/workflows/platform-owner-api-acceptance.yml
+
+permissions:
+  contents: read
+
+jobs:
+  owner-api-http:
+    name: AC-01 HTTP propietario plataforma
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: condor_owner_http_test
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      APP_ENV: test
+      APP_DEBUG: '0'
+      DATABASE_URL: mysql://root@127.0.0.1:3306/condor_owner_http_test?serverVersion=mariadb-11.4.0&charset=utf8mb4
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Preparar PHP 8.5
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Generar secreto efímero de pruebas
+        run: |
+          set -euo pipefail
+          app_secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$app_secret"
+          echo "APP_SECRET=$app_secret" >> "$GITHUB_ENV"
+
+      - name: Instalar dependencias bloqueadas de Composer
+        run: |
+          set -euo pipefail
+          python3 scripts/ci_retry.py \
+            --attempts 3 \
+            --base-delay 3 \
+            --label "composer install (HTTP owner)" \
+            -- composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Migrar MariaDB descartable
+        run: php bin/console doctrine:migrations:migrate --no-interaction
+
+      - name: Ejecutar AC-01 HTTP real y negativas de roles
+        run: python3 -m unittest tests/test_platform_owner_api_permissions.py -v
