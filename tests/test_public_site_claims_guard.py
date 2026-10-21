@@ -109,6 +109,10 @@ class _VisibleText(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
+        # No unir etiquetas de bloques separados ("Empresas" / "10:00")
+        # como si formaran una sola afirmación cuantificada.
+        if tag in {"li", "p", "tr", "td", "th", "h1", "h2", "h3", "h4", "article", "section"}:
+            self.parts.append(" | ")
         if tag in {"script", "style"}:
             self.hidden += 1
         elif tag == "blockquote":
@@ -133,6 +137,8 @@ class _VisibleText(HTMLParser):
         self.handle_starttag(tag, attrs)
 
     def handle_endtag(self, tag: str) -> None:
+        if tag in {"li", "p", "tr", "td", "th", "h1", "h2", "h3", "h4", "article", "section"}:
+            self.parts.append(" | ")
         if tag in {"script", "style"} and self.hidden:
             self.hidden -= 1
 
@@ -248,6 +254,15 @@ class AfirmacionesSitioPublicoTests(unittest.TestCase):
                 "marketing/nueva/oferta.html.twig", page.read_text(encoding="utf-8")
             )
             self.assertTrue(any(f.startswith("superlativo:") for f in findings))
+
+    def test_bloques_separados_no_forman_cifras_falsas(self) -> None:
+        fixture = (
+            "<ol><li><small>Empresas</small></li>"
+            "<li><time>10:00</time><p>Ejemplo de horario</p></li></ol>"
+        )
+        findings, counts = scan_claims("marketing/soluciones.html.twig", fixture)
+        self.assertEqual([], findings)
+        self.assertEqual(Counter(), counts)
 
     def test_porcentaje_demo_solo_en_contexto_autorizado(self) -> None:
         # Misma página, mismo porcentaje, mismas tres apariciones:
