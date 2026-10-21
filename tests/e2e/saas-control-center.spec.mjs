@@ -69,7 +69,7 @@ async function fulfillJson(route, status, body) {
 
 async function renderOwner(page, commercialRead, contextRead = () => context()) {
   await page.route('**/adminpl0n3r/api/context*', async (route) => {
-    await fulfillJson(route, 200, contextRead());
+    await fulfillJson(route, 200, await contextRead(route.request().url()));
   });
   await page.route('**/adminpl0n3r/api/tenants/*/saas-control-center', async (route) => {
     const { status, body } = commercialRead();
@@ -161,4 +161,74 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
     await expect.poll(() => rightsReads).toBe(2);
     expect(configured).toBe(true);
   });
+  test('un contexto antiguo no sustituye al global ni refresca derechos obsoletos', async ({ page }) => {
+    let configured = false;
+    let entitlementReads = 0;
+    let tenantRefreshes = 0;
+    let globalReads = 0;
+    let releaseOldContext;
+    const oldContextGate = new Promise((resolve) => {
+      releaseOldContext = resolve;
+    });
+    let signalOldContext;
+    const oldContextStarted = new Promise((resolve) => {
+      signalOldContext = resolve;
+    });
+
+    await page.route('**/adminpl0n3r/api/tenants/*/commercial-subscription', async (route) => {
+      expect(route.request().method()).toBe('POST');
+      configured = true;
+      await fulfillJson(route, 200, { status: 'ok' });
+    });
+    const panel = await renderOwner(
+      page,
+      () => {
+        entitlementReads += 1;
+        return configured
+          ? { status: 200, body: ready() }
+          : { status: 200, body: { state: 'empty', tenant_id: TENANT } };
+      },
+      async (url) => {
+        if (new URL(url).searchParams.has('tenant')) {
+          tenantRefreshes += 1;
+          if (tenantRefreshes === 1) {
+            signalOldContext();
+            await oldContextGate;
+          }
+          return context(true);
+        }
+        globalReads += 1;
+        return globalReads === 1
+          ? context(false)
+          : { ...context(true), mode: 'global', selected_tenant: null };
+      },
+    );
+
+    await expect(panel).toContainText('No hay un plan canónico configurado');
+    await page.getByRole('combobox', { name: 'Plan vigente' }).selectOption('pv-v1');
+    await page.getByRole('button', { name: 'Crear suscripción', exact: true }).click();
+    await oldContextStarted;
+
+    // The commercial refresh leaves the prior tenant view mounted while pending.
+    await page.getByRole('button', { name: 'Volver al centro global' }).click();
+    await expect(page.getByRole('button', { name: 'Ver como propietario' })).toBeVisible();
+
+    // Deliver the old tenant refresh after the newer global response.
+    const oldResponse = page.waitForResponse((response) =>
+      response.url().includes('/adminpl0n3r/api/context?tenant=')
+      && response.status() === 200,
+    );
+    releaseOldContext();
+    await oldResponse;
+    await expect(page.getByRole('button', { name: 'Ver como propietario' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Volver al centro global' })).toHaveCount(0);
+    expect(entitlementReads).toBe(1);
+
+    // Only an explicit new selection may remount and fetch tenant entitlements.
+    await page.getByRole('button', { name: 'Ver como propietario' }).click();
+    await expect(panel).toContainText('Permitido');
+    await expect.poll(() => entitlementReads).toBe(2);
+    expect(tenantRefreshes).toBe(2);
+  });
+
 });
