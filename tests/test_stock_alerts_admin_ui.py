@@ -111,6 +111,15 @@ class AlertasUiAdminTests(unittest.TestCase):
         self.assertIn("aria-live=\"polite\"", PANEL)
 
 
+    def test_duplicate_alerts_use_newest_ulid_independent_of_server_order(self):
+        """An unsorted inbox must never replace a newer alert with an older one."""
+        self.assertIn("existing?.alert && existing.alert.id >= alert.id", PANEL)
+        self.assertIn("if (existing?.alert && existing.alert.id >= alert.id) continue;", PANEL)
+        id_factory = (ROOT / "src/Shared/Id/UlidFactory.php").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("new Ulid()", id_factory)
+
     def test_save_rejects_invalid_or_stale_receipts(self):
         """A PUT success requires an exact tenant-scoped response and live request."""
         # 401/403 never fall through to an editable success state.

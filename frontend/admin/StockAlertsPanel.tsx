@@ -196,6 +196,8 @@ export function StockAlertsPanel({ branchId, permissions, csrfToken }: Props) {
     }
     for (const alert of ready?.alerts ?? []) {
       const existing = values.get(alert.variant_id);
+      // Delivery IDs are ULIDs, so the latest alert wins regardless of API order.
+      if (existing?.alert && existing.alert.id >= alert.id) continue;
       values.set(alert.variant_id, {
         variantId: alert.variant_id,
         minimum: existing?.minimum ?? alert.minimum,
