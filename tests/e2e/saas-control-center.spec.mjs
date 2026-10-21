@@ -67,7 +67,7 @@ async function fulfillJson(route, status, body) {
   });
 }
 
-async function renderOwner(page, commercialRead, contextRead = () => context()) {
+async function renderOwner(page, commercialRead, contextRead = () => context(), section = 'control') {
   await page.route('**/adminpl0n3r/api/context*', async (route) => {
     await fulfillJson(route, 200, await contextRead(route.request().url()));
   });
@@ -78,7 +78,8 @@ async function renderOwner(page, commercialRead, contextRead = () => context()) 
   await page.goto('/');
   await page.setContent(
     '<div id="condor-platform-root" data-version="0.1.194" ' +
-      'data-logout-token="synthetic-token" data-subscription-token="synthetic-token"></div>' +
+      'data-section="' + section + '" data-logout-token="synthetic-token" ' +
+      'data-subscription-token="synthetic-token"></div>' +
       '<script type="module" src="/build/admin.js"></script>',
   );
   return page.locator('.platform-section').filter({
@@ -202,6 +203,7 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
           ? context(false)
           : { ...context(true), mode: 'global', selected_tenant: null };
       },
+      'empresas',
     );
 
     await expect(panel).toContainText('No hay un plan canónico configurado');
