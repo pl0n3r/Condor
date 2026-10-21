@@ -29,7 +29,11 @@ class ProductCategoryModelTests(unittest.TestCase):
     def test_additive_migration(self):
         text = MIGRATION.read_text(encoding="utf-8")
         self.assertIn("CREATE TABLE condor_product_category", text)
+        self.assertIn("UNIQUE INDEX uniq_product_category_tenant_name (tenant_id, name)", text)
         self.assertIn("UNIQUE INDEX uniq_product_category_tenant_slug (tenant_id, slug)", text)
+        self.assertIn("CREATE INDEX idx_product_category_id ON condor_product (category_id)", text)
+        self.assertIn("FOREIGN KEY (category_id)", text)
+        self.assertIn("FOREIGN KEY (tenant_id, category_id)", text)
         self.assertIn("ADD category_id VARCHAR(26) DEFAULT NULL", text)
         self.assertIn("FOREIGN KEY (tenant_id, category_id)", text)
         up_sql = text.split("public function up", 1)[1].split("public function down", 1)[0]

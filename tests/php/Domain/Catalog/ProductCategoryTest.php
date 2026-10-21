@@ -52,6 +52,24 @@ final class ProductCategoryTest extends TestCase
         new ProductCategory($tenant, 'Ropa', 'precio externo');
     }
 
+    public function testTenantScopedUniquenessHasDoctrineMetadata(): void
+    {
+        $attributes = (new \ReflectionClass(ProductCategory::class))
+            ->getAttributes(\Doctrine\ORM\Mapping\UniqueConstraint::class);
+        $constraints = array_map(
+            static fn (\ReflectionAttribute $attribute): array => $attribute->getArguments(),
+            $attributes,
+        );
+        self::assertContains([
+            'name' => 'uniq_product_category_tenant_name',
+            'columns' => ['tenant_id', 'name'],
+        ], $constraints);
+        self::assertContains([
+            'name' => 'uniq_product_category_tenant_slug',
+            'columns' => ['tenant_id', 'slug'],
+        ], $constraints);
+    }
+
     public function testLegacyProductCategoryIsNull(): void
     {
         $tenant = new Tenant('Empresa A', 'empresa-a');

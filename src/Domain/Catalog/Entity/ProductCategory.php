@@ -10,6 +10,7 @@ use DomainException;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_product_category')]
+#[ORM\UniqueConstraint(name: 'uniq_product_category_tenant_name', columns: ['tenant_id', 'name'])]
 #[ORM\UniqueConstraint(name: 'uniq_product_category_tenant_slug', columns: ['tenant_id', 'slug'])]
 #[ORM\UniqueConstraint(name: 'uniq_product_category_tenant_id', columns: ['tenant_id', 'id'])]
 final class ProductCategory extends CatalogItem
