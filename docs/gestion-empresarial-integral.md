@@ -100,7 +100,7 @@ Reglas comunes: autorización antes de leer y escribir; separación solicitante/
 
 ## Referencias normativas colombianas y método de actualización
 
-El catálogo normativo se construye con fuentes oficiales, texto consolidado y revisión de profesional competente. Referencia inicial, no exhaustiva: Código Sustantivo del Trabajo y Ley 2466 de 2025; Decreto 1072 de 2015; Resolución 0312 de 2019; Ley 1562 de 2012; Ley 1581 de 2012; Ley 1480 de 2011; normas DIAN aplicables y resoluciones laborales relevantes. La fuente, artículo, emisor, versión, fecha de verificación, vigencia, condición y responsable de revisión son campos obligatorios. Una norma condicionada por CIIU, municipio, sector, tamaño, riesgo, régimen, ingresos, activos o forma jurídica nunca se modela como universal.
+El catálogo normativo se construye con fuentes oficiales, texto consolidado y revisión de profesional competente. Referencia inicial, no exhaustiva: [Código Sustantivo del Trabajo y Ley 2466 de 2025](https://www1.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=260676), [Decreto 1072 de 2015](https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?emergente=1&i=72173), [Resolución 0312 de 2019](https://www1.funcionpublica.gov.co/documents/34645357/34703621/Resolucion_0312_de_2019.pdf/3c93008d-dd8e-8b0d-e5ea-ec6699db86e7), Ley 1562 de 2012, Ley 1581 de 2012, Ley 1480 de 2011, normas DIAN aplicables y resoluciones laborales relevantes. La fuente, artículo, emisor, versión, fecha de verificación, vigencia, condición y responsable de revisión son campos obligatorios. Una norma condicionada por CIIU, municipio, sector, tamaño, riesgo, régimen, ingresos, activos o forma jurídica nunca se modela como universal.
 
 ## Fases y backlog de desarrollo
 
