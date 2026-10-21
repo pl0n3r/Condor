@@ -84,6 +84,17 @@ final class ConfiguratorTelemetryHttpSmokeTest extends WebTestCase
         );
         self::assertResponseStatusCodeSame(400);
 
+        // Límite inclusivo: 4096 bytes de JSON válido pasan; 8192 falló 413.
+        $minimalBody = '{"event":"start"}';
+        $boundaryBody = '{"event":"start'.str_repeat(' ', 4096 - strlen($minimalBody)).'"}';
+        self::assertSame(4096, strlen($boundaryBody));
+        $client->request(
+            'POST', $route, [], [],
+            ['CONTENT_TYPE' => 'application/json', 'REMOTE_ADDR' => '198.51.100.183'],
+            $boundaryBody,
+        );
+        self::assertResponseStatusCodeSame(202);
+
         // Una carga válida se guarda sin correo, IP, tenant ni headers.
         $event = [
             'event' => 'plan_selected',
@@ -114,7 +125,7 @@ final class ConfiguratorTelemetryHttpSmokeTest extends WebTestCase
                 $newSignals[] = $signal;
             }
         }
-        self::assertCount(3, $newSignals, 'Rechazos y rate limit no deben generar señales.');
+        self::assertCount(4, $newSignals, 'Rechazos y rate limit no deben generar señales.');
         $contexts = [];
         foreach ($newSignals as $signal) {
             self::assertNull($signal->tenantId(), 'Telemetry pública nunca ata tenant.');
