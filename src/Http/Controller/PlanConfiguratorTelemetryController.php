@@ -84,7 +84,7 @@ final class PlanConfiguratorTelemetryController extends AbstractController
                 $limit->getRetryAfter()->getTimestamp() - time(),
             );
             throw new TooManyRequestsHttpException(
-                $retryAfter,
+                (string) $retryAfter,
                 'Demasiados eventos del configurador.',
             );
         }
