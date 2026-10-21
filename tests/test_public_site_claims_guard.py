@@ -58,9 +58,6 @@ UNSUPPORTED = {
         re.IGNORECASE
     ),
 }
-IMG = re.compile(r"<img\b[^>]*>", re.IGNORECASE | re.DOTALL)
-SVG = re.compile(r"<svg\b[^>]*>", re.IGNORECASE | re.DOTALL)
-BLOCKQUOTE = re.compile(r"<blockquote\b", re.IGNORECASE)
 CLIENT_LOGO = re.compile(
     r"\b(?:logo|logotipo)\s+(?:de\s+)?(?:un\s+)?(?:cliente|empresa|"
     r"marca\s+cliente)\b|\b(?:client[-_]?logo|customer[-_]?logo|"
@@ -74,15 +71,25 @@ def clean_source(source: str) -> str:
 
 
 class _VisibleText(HTMLParser):
-    """Extraer texto sin confundir cierres HTML ni contenido de scripts."""
+    """Analizar etiquetas HTML con parser, nunca con expresiones regulares."""
+
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.hidden = 0
         self.parts: list[str] = []
+        self.has_blockquote = False
+        self.has_client_logo = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag in {"script", "style"}:
             self.hidden += 1
+        elif tag == "blockquote":
+            self.has_blockquote = True
+        elif tag in {"img", "svg"}:
+            # HTMLParser maneja cierres espaciados, comillas y ">" en atributos.
+            values = " ".join(value or "" for _, value in attrs)
+            if CLIENT_LOGO.search(values):
+                self.has_client_logo = True
 
     def handle_endtag(self, tag: str) -> None:
         if tag in {"script", "style"} and self.hidden:
@@ -93,15 +100,19 @@ class _VisibleText(HTMLParser):
             self.parts.append(data)
 
 
-def visible_text(source: str) -> str:
+def parse_markup(source: str) -> tuple[str, bool, bool]:
     parser = _VisibleText()
     parser.feed(source)
-    return " ".join(" ".join(parser.parts).split())
+    return (
+        " ".join(" ".join(parser.parts).split()),
+        parser.has_blockquote,
+        parser.has_client_logo,
+    )
 
 
 def scan_claims(page: str, source: str) -> tuple[list[str], Counter[str]]:
     clean = clean_source(source)
-    text = visible_text(clean)
+    text, has_blockquote, has_client_logo = parse_markup(clean)
     findings: list[str] = []
     examples: Counter[str] = Counter()
     approved = ALLOWED_DEMO_PERCENTAGES.get(page, Counter())
@@ -118,11 +129,10 @@ def scan_claims(page: str, source: str) -> tuple[list[str], Counter[str]]:
 
     # En páginas comerciales, un testimonio debe tener procedencia aprobada;
     # no se acepta siquiera un bloque de cita identificado como cliente real.
-    if BLOCKQUOTE.search(clean):
+    if has_blockquote:
         findings.append("testimonio_blockquote_sin_respaldo")
-    for tag in (*IMG.findall(clean), *SVG.findall(clean)):
-        if CLIENT_LOGO.search(tag):
-            findings.append("logotipo_cliente_sin_respaldo")
+    if has_client_logo:
+        findings.append("logotipo_cliente_sin_respaldo")
     return findings, examples
 
 
@@ -170,6 +180,28 @@ class AfirmacionesSitioPublicoTests(unittest.TestCase):
         self.assertEqual([], problems)
         self.assertEqual(Counter(), examples)
 
+
+    def test_parser_html_detecta_variantes_y_evade_falsos_positivos(self) -> None:
+        # Los cierres espaciados y atributos complejos no deben burlar el guard.
+        fixtures = (
+            '<IMG alt="Logo de cliente" src="/logos/clientes/acme.png" >',
+            '<svg aria-label="Logo de cliente" />',
+            '<script >var n = 12;</script   ><p>500 clientes</p>',
+            '<style >.x:before{content:"100 %";}</style ><p>El mejor servicio</p>',
+            '<blockquote class="comentario">Cliente satisfecho</blockquote>',
+        )
+        for fixture in fixtures:
+            with self.subTest(html=fixture):
+                findings, _ = scan_claims("home/index.html.twig", fixture)
+                self.assertTrue(findings, f"No se detectó: {fixture}")
+        invisible = (
+            '<script >const claim = "500 clientes";</script >'
+            '<style>.demo { content: "100 %"; }</style >'
+            '<p>10 productos</p>'
+        )
+        findings, metrics = scan_claims("home/index.html.twig", invisible)
+        self.assertEqual([], findings)
+        self.assertEqual(Counter(), metrics)
 
 if __name__ == "__main__":
     unittest.main()
