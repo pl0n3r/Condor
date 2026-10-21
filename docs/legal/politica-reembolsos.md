@@ -18,7 +18,7 @@ El **artículo 47 de la Ley 1480 de 2011** (Estatuto del Consumidor) contempla e
 
 La **Ley 2439 de 2024, artículo 3**, modificó el artículo 47: cuando procede el retracto y se cumplen las obligaciones legales pertinentes (incluidos datos suficientes para procesar el pago y devolución del bien cuando aplique), la **devolución del dinero no puede exceder quince (15) días calendario**. La **Sentencia C-192 de 2026** de la Corte Constitucional precisó que ese plazo máximo de **15 días calendario** rige uniformemente en las modalidades de contratación contempladas por el artículo 47; no se conserva aquí el plazo histórico de 30 días para el retracto.
 
-La restitución deberá informarse claramente y aplicarse al instrumento o medio de pago correspondiente o al medio acordado, según el marco aplicable. **POR DEFINIR POR EL DUEÑO:** proveedor de pagos realmente contratado, medios y alternativas de restitución disponibles, procedimiento técnico y responsables de tramitarla. Esta propuesta **no afirma** que Condor ya disponga de una API de reembolsos ni que ejecute transacciones reales.
+La restitución deberá informarse claramente y aplicarse al instrumento o medio de pago correspondiente o al medio acordado, según el marco aplicable al retracto del artículo 47. **De manera diferenciada del trámite de retracto**, cuando la devolución de dinero por parte del proveedor o productor quede comprendida en el **artículo 5 de la Ley 2439 de 2024**, esa devolución deberá realizarse **a través del medio de pago que prefiera el consumidor**. Esta obligación no supone que Condor disponga de medios de pago o reintegros ya implementados. **POR DEFINIR POR EL DUEÑO:** proveedor de pagos realmente contratado, medios y alternativas de restitución disponibles, procedimiento técnico y responsables de tramitarla. Esta propuesta **no afirma** que Condor ya disponga de una API de reembolsos ni que ejecute transacciones reales.
 
 ## 4. Cómo solicitar el retracto o una revisión de reembolso
 
@@ -39,5 +39,5 @@ La **reversión de pago** del artículo 51 de la Ley 1480 de 2011 tiene supuesto
 ## 7. Fuentes normativas de consulta (Colombia)
 
 - [Ley 1480 de 2011, art. 47 y art. 51 (compilación)](https://normograma.crcom.gov.co/crc/compilacion/docs/ley_1480_2011.htm).
-- [Ley 2439 de 2024, arts. 3 y 4](https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=257116).
+- [Ley 2439 de 2024, arts. 3, 4 y 5](https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=257116).
 - [Sentencia C-192/26, comunicado de la Corte Constitucional de 24 de junio de 2026, reflejado en la compilación del art. 47](https://normograma.crcom.gov.co/crc/compilacion/docs/ley_1480_2011.htm).
