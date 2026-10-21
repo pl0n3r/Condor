@@ -4,14 +4,14 @@ import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PHPUNIT = ROOT / "vendor" / "bin" / "phpunit"
+PHPUNIT = ROOT / "vendor" / "bin" / "simple-phpunit"
 PHP_TEST = "tests/php/Domain/Catalog/ProductCategoryTest.php"
 MIGRATION = ROOT / "migrations" / "Version20261021230000.php"
 
 
 class ProductCategoryModelTests(unittest.TestCase):
     def run_phpunit(self, filter_name=None):
-        self.assertTrue(PHPUNIT.is_file(), "Se necesita vendor/bin/phpunit real")
+        self.assertTrue(PHPUNIT.is_file(), "Se necesita vendor/bin/simple-phpunit real")
         command = [str(PHPUNIT), PHP_TEST]
         if filter_name:
             command += ["--filter", filter_name]
