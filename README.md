@@ -30,7 +30,8 @@ Condor App es un SaaS modular **multi-tenant** para empresas colombianas. En `ma
 
 - **Catálogo, variantes y precios:** [CatalogController](https://github.com/pl0n3r/Condor/blob/main/src/Http/Controller/CatalogController.php) y [PricingController](https://github.com/pl0n3r/Condor/blob/main/src/Http/Controller/PricingController.php).
 - **Tienda y checkout:** [StorefrontCheckoutController](https://github.com/pl0n3r/Condor/blob/main/src/Http/Controller/StorefrontCheckoutController.php); no implica pagos habilitados.
-- **Pedidos y clientes:** [OrderController](https://github.com/pl0n3r/Condor/blob/main/src/Http/Controller/OrderController.php) y [CustomerController](https://github.com/pl0n3r/Condor/blob/main/src/Http/Controller/CustomerController.php).
+- **Pedidos y ventas:** [OrderController](https://github.com/pl0n3r/Condor/blob/main/src/Http/Controller/OrderController.php).
+- **Clientes y categorías:** [CustomerController](https://github.com/pl0n3r/Condor/blob/main/src/Http/Controller/CustomerController.php).
 - **Inventario por sede:** [InventoryController](https://github.com/pl0n3r/Condor/blob/main/src/Http/Controller/InventoryController.php).
 - **Compras y proveedores:** [PurchasingController](https://github.com/pl0n3r/Condor/blob/main/src/Http/Controller/PurchasingController.php).
 - **Producción y materiales:** [ProductionOperationsController](https://github.com/pl0n3r/Condor/blob/main/src/Http/Controller/ProductionOperationsController.php).

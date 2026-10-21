@@ -42,6 +42,22 @@ class ReadmeContractAdoptionTests(unittest.TestCase):
         positions=[text.index(f"## {section}") for section in SECTIONS]
         self.assertEqual(sorted(positions),positions)
 
+    def test_product_areas_match_eight_operational_modules(self):
+        text=self.read("README.md")
+        product=text.split("## Qué hace el producto",1)[1].split("## Arquitectura en 60 segundos",1)[0]
+        entries=[line for line in product.splitlines() if line.startswith("- **")]
+        expected=(
+            "Catálogo, variantes y precios", "Tienda y checkout",
+            "Pedidos y ventas", "Clientes y categorías",
+            "Inventario por sede", "Compras y proveedores",
+            "Producción y materiales", "Reportes CSV tenant-safe",
+        )
+        self.assertEqual(8,len(entries))
+        for actual,area in zip(entries,expected):
+            self.assertTrue(actual.startswith(f"- **{area}:**"),actual)
+        self.assertIn("OrderController.php",entries[2])
+        self.assertIn("CustomerController.php",entries[3])
+
     def test_readme_caller_only_on_document_changes(self):
         """F2B: preserve exact reusable README validation on documentation edits."""
         workflow=self.read(".github/workflows/readme-contract.yml")
