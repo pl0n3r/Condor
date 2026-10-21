@@ -82,7 +82,7 @@ final class OrderReceiptController extends AbstractController
         $total = 0;
         $items = [];
         foreach ($lines as $line) {
-            if (!$line instanceof OrderLine || $line->currency() !== $order->currency()) {
+            if ($line->currency() !== $order->currency()) {
                 throw new ConflictHttpException('Los importes del pedido no son consistentes.');
             }
             $amount = $line->lineTotalMinor();
