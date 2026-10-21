@@ -21,21 +21,26 @@ class ReadmeContractAdoptionTests(unittest.TestCase):
         self.assertEqual("Condor App",data["name"]); self.assertEqual("construction",data["phase"])
         self.assertEqual("https://github.com/pl0n3r/Condor/issues/1",data["roadmap"])
 
-    def test_readme_has_contract_v1_anatomy(self):
+    def test_readme_has_contract_v2_anatomy(self):
         text=self.read("README.md"); pos=[]
         self.assertEqual("# Condor App",text.splitlines()[0])
         for section in SECTIONS:
             heading=f"## {section}"; self.assertEqual(1,text.count(heading),heading); pos.append(text.index(heading))
         self.assertEqual(sorted(pos),pos)
 
-    def test_derived_blocks_fail_closed_without_evidence(self):
+    def test_readme_is_contract_v2_without_unknown_blocks(self):
         text=self.read("README.md")
-        for marker in (*STATUS,*PROGRESS): self.assertEqual(1,text.count(marker),marker)
-        status=text.split(STATUS[0],1)[1].split(STATUS[1],1)[0]
-        progress=text.split(PROGRESS[0],1)[1].split(PROGRESS[1],1)[0]
-        self.assertNotIn("GREEN",status); self.assertNotIn("DEGRADED",status)
-        self.assertIn("| main SHA | UNKNOWN |",status)
-        self.assertIn("| Readiness | UNKNOWN |",progress)
+        cockpit=text.split("## Operational Cockpit",1)[1].split("\n## ",1)[0]
+        for stale in (*STATUS,*PROGRESS,"UNKNOWN","Progress + Readiness"):
+            self.assertNotIn(stale,text)
+        self.assertNotIn("| Señal | Estado |",cockpit)
+        self.assertIn("https://github.com/pl0n3r/Condor/actions/workflows/ci.yml",cockpit)
+        self.assertIn("badge.svg?branch=main",cockpit)
+        self.assertIn("https://github.com/pl0n3r/Condor/releases",cockpit)
+        self.assertIn("img.shields.io/github/v/release/pl0n3r/Condor",cockpit)
+        self.assertIn("https://control.condorapp.com.co/",cockpit)
+        positions=[text.index(f"## {section}") for section in SECTIONS]
+        self.assertEqual(sorted(positions),positions)
 
     def test_readme_caller_only_on_document_changes(self):
         """F2B: preserve exact reusable README validation on documentation edits."""
