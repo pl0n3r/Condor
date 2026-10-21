@@ -76,7 +76,7 @@ class ContextoApiHttpTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, output)
         self.assertRegex(
             output,
-            rf"OK\\s*\\(\\s*{len(HTTP_CASES)} tests?,",
+            rf"OK\s*\(\s*{len(HTTP_CASES)} tests?,",
             "Las siete pruebas HTTP de contexto/aislamiento no se ejecutaron",
         )
 
