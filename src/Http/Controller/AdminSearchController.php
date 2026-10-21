@@ -98,8 +98,7 @@ final class AdminSearchController extends AbstractController
                     ->findBy(['tenant' => $tenant]) as $branch
             ) {
                 if (
-                    $branch instanceof Branch
-                    && in_array(
+                    in_array(
                         'orders.view',
                         $this->authorization->permissions($user, $tenant, $branch),
                         true,
@@ -117,9 +116,7 @@ final class AdminSearchController extends AbstractController
                             'active' => true,
                         ]) as $source
                 ) {
-                    if ($source instanceof InventorySource) {
-                        $sources[] = $source;
-                    }
+                    $sources[] = $source;
                 }
             }
         }
