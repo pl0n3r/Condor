@@ -229,7 +229,7 @@ class AccesibilidadSitioPublicoTests(unittest.TestCase):
     def test_calculo_wcag_y_transparencia(self) -> None:
         self.assertAlmostEqual(21, _contrast(_rgb("#000000"), _rgb("#ffffff")))
         white, black = _rgb("#ffffff"), _rgb("#000000")
-        self.assertLess(_contrast(black, _blend(black, white, .10)), 4.5)
+        self.assertLess(_contrast(white, _blend(black, white, .10)), 4.5)
 
 
 if __name__ == "__main__":
