@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Condor #775: HTTP acceptance for scoped, expiring diagnostic-share links.
 
-Runs Symfony WebTestCase against the test database with two synthetic tenants.
-No production credentials, external calls, customer records, or live writes.
+Runs the real controller, share service and sanitizer with bounded PHP
+transport/ORM doubles. If vendor/bin/simple-phpunit exists, a separate,
+explicitly reported Symfony/Doctrine WebTestCase exercises the test database.
+All tenants and data are synthetic; no production credentials or live writes.
 """
 from __future__ import annotations
 
@@ -367,26 +369,31 @@ class DiagnosticoCompartidoHttpTests(unittest.TestCase):
             self.assertEqual(0, run.returncode, run.stdout + run.stderr)
             self.assertIn("PASS: real controller/service/sanitizer", run.stdout)
 
-            # Environments with Composer also run the actual Symfony HTTP
-            # kernel and Doctrine test DB. The lightweight CI job has no
-            # vendor directory, so never claim it executed that layer.
-            if RUNNER.is_file():
-                web = Path(temp) / "SharedDiagnosticHttpGeneratedTest.php"
-                web.write_text(PHP_FIXTURE, encoding="utf-8")
-                lint_web = subprocess.run(
-                    [php, "-l", str(web)], cwd=ROOT,
-                    capture_output=True, text=True, timeout=25, check=False,
-                )
-                self.assertEqual(
-                    0, lint_web.returncode, lint_web.stdout + lint_web.stderr
-                )
-                tested = subprocess.run(
-                    [str(RUNNER), "--filter", "testBearerLinksAreScopedAndFailClosed", str(web)],
-                    cwd=ROOT, capture_output=True, text=True, check=False, timeout=180,
-                )
-                self.assertEqual(
-                    0, tested.returncode, tested.stdout + tested.stderr
-                )
+
+    @unittest.skipUnless(
+        RUNNER.is_file(),
+        "vendor/bin/simple-phpunit ausente: capa Symfony/Doctrine NO ejecutada",
+    )
+    def test_symfony_webtestcase(self) -> None:
+        php = shutil.which("php")
+        self.assertIsNotNone(php, "PHP CLI required for Symfony WebTestCase")
+        with tempfile.TemporaryDirectory(prefix="condor-shared-diagnostic-web-") as temp:
+            web = Path(temp) / "SharedDiagnosticHttpGeneratedTest.php"
+            web.write_text(PHP_FIXTURE, encoding="utf-8")
+            lint_web = subprocess.run(
+                [php, "-l", str(web)], cwd=ROOT,
+                capture_output=True, text=True, timeout=25, check=False,
+            )
+            self.assertEqual(
+                0, lint_web.returncode, lint_web.stdout + lint_web.stderr
+            )
+            tested = subprocess.run(
+                [str(RUNNER), "--filter", "testBearerLinksAreScopedAndFailClosed", str(web)],
+                cwd=ROOT, capture_output=True, text=True, check=False, timeout=180,
+            )
+            self.assertEqual(
+                0, tested.returncode, tested.stdout + tested.stderr
+            )
 
 
 if __name__ == "__main__":
