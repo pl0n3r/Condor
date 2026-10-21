@@ -92,6 +92,9 @@ class NormativeApplicabilityTests(unittest.TestCase):
             conditions={"sector": "tecnologia", "ciiu": "6201", "municipio": "bogota", "riesgo": "iv"},
         )
         self.assertEqual("OBLIGATORIO", evaluate(different, b)["kind"])
+        for dimension, other in (("sector", "comercio"), ("ciiu", "4711"),
+                                 ("municipio", "pereira"), ("riesgo", "ii")):
+            self.assertEqual("NO_APLICA", evaluate(different, {**b, dimension: other})["kind"])
         self.assertEqual("REQUIERE_REVISION", evaluate(different, a)["kind"])
         for date in ("2025-12-31", "2027-01-01", "2026-02-30", "tomorrow"):
             self.assertEqual("REQUIERE_REVISION", evaluate(rule(), a, date)["kind"])
