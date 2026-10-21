@@ -157,7 +157,8 @@ class ClientesImportCsvApiTests(unittest.TestCase):
         contact = next(
             item for item in privacy["treatments"] if item["id"] == "customer_contact"
         )
-        self.assertIn("authenticated_admin_csv_import", contact["collection_channels"])
+        self.assertTrue({"name", "email", "phone", "notes"}.issubset(contact["fields"]))
+        self.assertNotIn("document", contact["fields"])
         self.assertEqual("customer_management", contact["purpose"])
         for marker in (
             "'/api/customers/import/preview'",

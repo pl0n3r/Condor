@@ -57,6 +57,7 @@
     {
       "id": "customer_contact",
       "category": "contact",
+      "purpose": "customer_management",
       "fields": [
         "name",
         "email",
@@ -64,15 +65,10 @@
         "notes",
         "commercial_category_id"
       ],
-      "purpose": "customer_management",
       "basis": "review_required",
       "retention": "review_required",
       "consent": "review_required",
-      "providers": [],
-      "collection_channels": [
-        "authenticated_admin_api",
-        "authenticated_admin_csv_import"
-      ]
+      "providers": []
     },
     {
       "id": "account_invitation",
