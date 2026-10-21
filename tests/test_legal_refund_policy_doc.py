@@ -25,7 +25,7 @@ def check_policy(document: str) -> list[str]:
         "excepción servicios iniciados": r"prestación de servicios que haya comenzado con acuerdo del consumidor",
         "restitución 15 días": r"quince\s*\(15\)\s*días calendario",
         "ley de devolución": r"ley 2439 de 2024",
-        "medio de pago preferido, art. 5": r"artículo 5 de la ley 2439 de 2024[\\s\\S]{0,180}medio de pago que prefiera el consumidor",
+        "medio de pago preferido, art. 5": r"artículo 5 de la ley 2439 de 2024[\s\S]{0,180}medio de pago que prefiera el consumidor",
         "control constitucional": r"c-192\s*(?:de\s*)?2026",
         "solicitud": r"cómo solicitar",
         "respuesta": r"tiempo de respuesta",
