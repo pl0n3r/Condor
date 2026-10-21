@@ -77,10 +77,16 @@ class _UnsubscribeLinkParser(HTMLParser):
             return
         anchor = self._anchor
         self._anchor = None
-        href = str(anchor["href"])
+        href = str(anchor["href"]).strip()
         label = " ".join(anchor["label"])
+        unsafe_href = (
+            href.lower().startswith(("javascript:", "data:", "mailto:", "#"))
+            or re.match(r"(?:https?://[^/]+)?/login(?:[/?#]|$)", href,
+                        flags=re.IGNORECASE) is not None
+        )
         if (
             not anchor["hidden"]
+            and not unsafe_href
             and re.search(r"(?:unsubscribe|baja)", href, flags=re.IGNORECASE)
             and re.search(r"(?:unsubscribe|baja|suscripci[oó]n)", label,
                           flags=re.IGNORECASE)
@@ -93,6 +99,7 @@ def has_unsubscribe_link(source: str) -> bool:
     parser.feed(source)
     parser.close()
     return parser.found
+
 
 class LegalBajaComunicacionesTests(unittest.TestCase):
     def test_acceptance(self) -> None:
@@ -150,9 +157,13 @@ class LegalBajaComunicacionesTests(unittest.TestCase):
             '<!-- <a href="/unsubscribe">Cancelar suscripción</a> -->'
         ))
         self.assertFalse(has_unsubscribe_link(
-            '<a href="/unsubscribe">Sin etiqueta de baja</a>'.replace(
-                'Sin etiqueta de baja', 'Más información'
-            )
+            '<a href="/unsubscribe">Más información</a>'
+        ))
+        self.assertFalse(has_unsubscribe_link(
+            '<a href="/login?next=/unsubscribe">Cancelar suscripción</a>'
+        ))
+        self.assertFalse(has_unsubscribe_link(
+            '<a href="javascript:go(\'/unsubscribe\')">Cancelar suscripción</a>'
         ))
 
     def test_admite_nombre_accesible_y_contenido_anidado(self) -> None:
