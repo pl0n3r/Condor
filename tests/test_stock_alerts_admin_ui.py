@@ -5,6 +5,8 @@ does not manufacture alerts when the backend reports none, and fails closed.
 The TypeScript build and browser E2E gates remain separate prerequisites.
 """
 import re
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -119,6 +121,42 @@ class AlertasUiAdminTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("new Ulid()", id_factory)
+
+    def test_runtime_prefers_latest_alert_on_both_api_orderings(self):
+        """Execute the real panel reducer in Node, not a copy of its logic."""
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("Node runtime is not installed in this environment")
+        start = "  const displayed = useMemo(() => {\n"
+        end = "  }, [ready]);"
+        self.assertEqual(PANEL.count(start), 1)
+        expression = PANEL.split(start, 1)[1].split(end, 1)[0]
+        typed_map = (
+            "new Map<string, { variantId: string; minimum: number; "
+            "alert?: StockAlert }>()"
+        )
+        self.assertIn(typed_map, expression)
+        expression = expression.replace(typed_map, "new Map()")
+        script = (
+            "import assert from 'node:assert/strict';\n"
+            "function displayed(ready) {\n" + expression + "\n}\n"
+            "const old = {id:'01J00000000000000000000000',"
+            "variant_id:'variant-1',minimum:4,quantity:2};\n"
+            "const recent = {...old,id:'01K00000000000000000000000',quantity:1};\n"
+            "for (const alerts of [[old,recent],[recent,old]]) {\n"
+            "  const result=displayed({alerts,minimums:[{variant_id:'variant-1',minimum:7}]});\n"
+            "  assert.equal(result.length,1);\n"
+            "  assert.equal(result[0].alert.id,recent.id);\n"
+            "  assert.equal(result[0].minimum,7);\n"
+            "}\n"
+            "const empty=displayed({alerts:[],minimums:[]});\n"
+            "assert.equal(empty.length,0);\n"
+        )
+        result = subprocess.run(
+            [node, "--input-type=module", "-e", script],
+            text=True, capture_output=True, timeout=15, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_save_rejects_invalid_or_stale_receipts(self):
         """A PUT success requires an exact tenant-scoped response and live request."""
