@@ -131,9 +131,13 @@ final class CommercialPricingHttpSmokeTest extends WebTestCase
             self::assertPrivateNamesAbsent($client, [$privateA, $privateB]);
         }
 
-        // Un método no definido no se convierte en escritura de precios.
-        $client->request('POST', '/precios', ['monthly_amount' => '1']);
-        self::assertResponseStatusCodeSame(405);
+        // La ruta de catálogo solo acepta GET. Ningún verbo mutante puede
+        // convertir precios enviados por el usuario en importes persistidos.
+        foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+            $client->request($method, '/precios', ['monthly_amount' => '1']);
+            self::assertResponseStatusCodeSame(405);
+            self::assertPrivateNamesAbsent($client, [$privateA, $privateB]);
+        }
         $client->restart();
         $client->request('GET', '/precios');
         self::assertResponseStatusCodeSame(200);
