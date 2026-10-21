@@ -53,7 +53,7 @@ class PlanConfiguratorHttpCiDiscoveryTests(unittest.TestCase):
         self.assertIn("name: Backend PHP / MariaDB", ci)
         self.assertIn("run: vendor/bin/simple-phpunit", ci)
         self.assertIn("MARIADB_DATABASE: condor_test", ci)
-        self.assertIn('path.startswith("tests/php/")', classifier)
+        self.assertIn('path.startswith("tests/php/")', classifier.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
