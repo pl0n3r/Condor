@@ -80,9 +80,16 @@ def _audit_markup(name: str, html: str, css: str) -> set[str]:
             problems.add(f"controls:{name}:{control_id}:missing-label")
         # Los radios/checkboxes .mk-vh son transparentes: el foco debe
         # hacerse visible EN su label, no solo sobre el input oculto.
+        # El foco puede pintarse en el label, en su .mk-tg interno,
+        # o sobre el label adyacente (+) del cuestionario CSS-only.
+        focused_label = (
+            rf'~\s*[^{{}}]*?label\[for="{re.escape(control_id)}"\]'
+            rf'(?:\s+\.mk-tg)?'
+            r'|\+\s*label'
+        )
         selector = (
-            rf"#{re.escape(control_id)}:focus-visible\s*~[^{{}}]*"
-            rf'label\[for="{re.escape(control_id)}"\]\s*\{{\s*outline:\s*[1-9]'
+            rf"#{re.escape(control_id)}:focus-visible\s*"
+            rf"(?:{focused_label})\s*\{{\s*outline:\s*[1-9]"
         )
         if not re.search(selector, css, re.IGNORECASE):
             problems.add(f"focus:{name}:{control_id}:invisible")
@@ -225,6 +232,21 @@ class AccesibilidadSitioPublicoTests(unittest.TestCase):
         self.assertIn("heading:fixture:h1-to-h3", result)
         self.assertIn("controls:fixture:x:missing-label", result)
         self.assertIn("focus:fixture:x:invisible", result)
+
+    def test_reconoce_foco_en_label_y_conmutador(self) -> None:
+        css = "\n".join((
+            '#s1:focus-visible ~ .mk-seg label[for="s1"] { outline: 3px solid blue; }',
+            '#m1:focus-visible ~ .mk-sw label[for="m1"] .mk-tg { outline: 3px solid blue; }',
+            '.mk-qs #q1:focus-visible + label { outline: 3px solid blue; }',
+        ))
+        html = (
+            '<h1>Prueba</h1>'
+            '<input type="radio" id="s1"><label for="s1">Uno</label>'
+            '<input type="checkbox" id="m1"><label for="m1">'
+            '<span class="mk-tg">Dos</span></label>'
+            '<input type="radio" id="q1"><label for="q1">Tres</label>'
+        )
+        self.assertEqual(set(), _audit_markup("fixture", html, css))
 
     def test_calculo_wcag_y_transparencia(self) -> None:
         self.assertAlmostEqual(21, _contrast(_rgb("#000000"), _rgb("#ffffff")))
