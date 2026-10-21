@@ -23,6 +23,10 @@ class Product extends CatalogItem
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $description;
 
+    #[ORM\ManyToOne(targetEntity: ProductCategory::class)]
+    #[ORM\JoinColumn(name: 'category_id', referencedColumnName: 'id', nullable: true, onDelete: 'RESTRICT')]
+    private ?ProductCategory $category = null;
+
     #[ORM\Column(name: 'allow_backorder', type: 'boolean', options: ['default' => false])]
     private bool $allowBackorder = false;
 
@@ -53,6 +57,26 @@ class Product extends CatalogItem
     public function description(): ?string
     {
         return $this->description;
+    }
+
+    public function category(): ?ProductCategory
+    {
+        return $this->category;
+    }
+
+    public function assignCategory(?ProductCategory $category): void
+    {
+        if ($category !== null && $category->tenant()->id() !== $this->tenant()->id()) {
+            throw new DomainException('La categoría del producto debe pertenecer al mismo tenant.');
+        }
+        if ($category !== null && !$category->isActive()) {
+            throw new DomainException('No se puede asignar una categoría desactivada.');
+        }
+        if ($this->category === $category) {
+            return;
+        }
+        $this->category = $category;
+        $this->touch();
     }
 
     public function allowsBackorder(): bool
