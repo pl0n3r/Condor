@@ -70,7 +70,7 @@ final class NormativeApplicability
         $until = self::date($rule['effective_until']);
         $verified = self::date($rule['verified_on']);
         $asOf = self::date($referenceDate);
-        if ($start === null || $until === null || $verified === null || $asOf === null
+        if ($start === null || $until === null || $verified === null
             || $start > $until || $asOf < $start || $asOf > $until || $verified > $asOf
         ) {
             return self::review('Vigencia o fecha de revisión no verificables.');
