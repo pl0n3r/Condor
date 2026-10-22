@@ -158,6 +158,25 @@ final class CatalogImportSyntheticHttpTest extends WebTestCase
         ]);
         self::assertResponseStatusCodeSame(404);
 
+        // Aislamiento positivo: la empresa B puede importar los mismos SKU y
+        // slug en su sede sin reutilizar ni modificar el catálogo de A.
+        $client->jsonRequest('POST', '/api/catalog/import/commit', [
+            'branch_id' => $branchB->id(), 'csv' => $csv,
+        ], ['HTTP_X_CSRF_TOKEN' => $this->csrf($client)]);
+        self::assertResponseIsSuccessful();
+        $tenantBImport = $this->json($client);
+        self::assertSame(2, $tenantBImport['created']);
+        self::assertSame(1, $tenantBImport['errors']);
+        self::assertInstanceOf(Product::class, $em->getRepository(Product::class)->findOneBy([
+            'tenant' => $tenantB, 'slug' => 'cami',
+        ]));
+        self::assertCount(2, $em->getRepository(ProductVariant::class)->findBy([
+            'tenant' => $tenantB, 'active' => true,
+        ]));
+        self::assertCount(2, $em->getRepository(ProductVariant::class)->findBy([
+            'tenant' => $tenantA, 'active' => true,
+        ]));
+
         // El mismo slug solo admite atributos idénticos. Las variantes válidas
         // pueden compartirlo, pero los conflictos no deben persistir en commit.
         $client->loginUser($ownerA);
