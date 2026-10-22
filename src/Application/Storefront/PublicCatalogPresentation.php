@@ -56,7 +56,9 @@ final readonly class PublicCatalogPresentation
      *     page:int,
      *     page_size:int,
      *     has_previous:bool,
-     *     has_next:bool
+     *     has_next:bool,
+     *     previous_href:?string,
+     *     next_href:?string
      *   }
      * }
      */
@@ -352,12 +354,16 @@ final readonly class PublicCatalogPresentation
     /**
      * @return array{
      *   channel:null,
+     *   filters:array{q:string,categoria:string},
+     *   categories:list<never>,
      *   products:list<never>,
      *   pagination:array{
      *     page:int,
      *     page_size:int,
      *     has_previous:bool,
-     *     has_next:bool
+     *     has_next:bool,
+     *     previous_href:?string,
+     *     next_href:?string
      *   }
      * }
      */

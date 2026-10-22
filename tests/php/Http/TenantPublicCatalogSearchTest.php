@@ -100,7 +100,15 @@ final class TenantPublicCatalogSearchTest extends WebTestCase
         self::assertResponseStatusCodeSame(200);
         self::assertStringNotContainsString('Camisa 01', (string) $client->getResponse()->getContent());
 
-        foreach (['?pagina=0', '?pagina=1001', '?q%5B%5D=Camisa', '?categoria=../tenant', '?page=0'] as $invalid) {
+        foreach ([
+            '?pagina=0',
+            '?pagina=1001',
+            '?pagina=2.0',
+            '?q%5B%5D=Camisa',
+            '?categoria%5B%5D=ropa',
+            '?categoria=../tenant',
+            '?page=0',
+        ] as $invalid) {
             $client->request('GET', $path.$invalid, server: $host);
             self::assertResponseStatusCodeSame(400);
         }
