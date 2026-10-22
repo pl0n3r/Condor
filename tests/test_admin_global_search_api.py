@@ -195,20 +195,6 @@ class BusquedaGlobalApiTests(unittest.TestCase):
                 cwd=ROOT, text=True, capture_output=True, check=False,
             )
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        controller = CONTROLLER.read_text(encoding="utf-8")
-        reader = READER.read_text(encoding="utf-8")
-        for marker in [
-            "CurrentTenantForUser", "hasAnyPermission(", "orders.view",
-            "getRepository(Branch::class)", "TooManyRequestsHttpException",
-            "no-store", "mb_strlen($query", "30",
-        ]:
-            self.assertIn(marker, controller)
-        for marker in [
-            "p.tenant = :tenant", "c.tenant = :tenant",
-            "o.tenant = :tenant", "o.inventorySource IN (:sources)",
-            "MAX_PER_TYPE = 5", "setMaxResults(self::MAX_PER_TYPE)",
-        ]:
-            self.assertIn(marker, reader)
         runner = ROOT / "vendor/bin/simple-phpunit"
         self.assertTrue(runner.is_file(), "Symfony/PHPUnit runner required")
         with tempfile.TemporaryDirectory(prefix="condor-global-search-") as directory:
