@@ -51,6 +51,10 @@ final class AdminGlobalSearchGeneratedTest extends WebTestCase
             $tenant, $legal, 'Privada', 'privada-source-'.$suffix,
             InventorySource::TYPE_BRANCH, $restricted,
         );
+        $logicalSource = new InventorySource(
+            $tenant, $legal, 'Virtual', 'logical-source-'.$suffix,
+            InventorySource::TYPE_LOGICAL,
+        );
         $owner = new User('search-owner-'.$suffix.'@example.test', 'Dueño');
         $ownerMembership = new Membership($tenant, $owner, Membership::ROLE_OWNER);
         $catalogUser = new User('search-catalog-'.$suffix.'@example.test', 'Catálogo');
@@ -64,6 +68,9 @@ final class AdminGlobalSearchGeneratedTest extends WebTestCase
 
         $order = new Order($tenant, $source, null, null, null, 'search-a-'.$suffix, 'COP', 1200);
         $otherOrder = new Order($tenant, $restrictedSource, null, null, null, 'search-b-'.$suffix, 'COP', 2400);
+        $logicalOrder = new Order(
+            $tenant, $logicalSource, null, null, null, 'search-logical-'.$suffix, 'COP', 1600,
+        );
         $needle = substr($order->id(), 0, 6);
         $product = new Product($tenant, 'Producto '.$needle, 'search-product-'.$suffix);
         $customer = new Customer($tenant, 'Cliente '.$needle);
@@ -85,6 +92,7 @@ final class AdminGlobalSearchGeneratedTest extends WebTestCase
 
         foreach ([
             $tenant, $legal, $branch, $source, $restricted, $restrictedSource,
+            $logicalSource, $logicalOrder,
             $owner, $ownerMembership, $catalogUser, $catalogMembership,
             $catalogRole, $catalogAssignment, $ordersUser, $ordersMembership,
             $ordersRole, $ordersAssignment, $order, $otherOrder, $product, $customer,
@@ -110,6 +118,7 @@ final class AdminGlobalSearchGeneratedTest extends WebTestCase
         self::assertContains($product->id(), array_column($results['products'], 'id'));
         self::assertContains($customer->id(), array_column($results['customers'], 'id'));
         self::assertContains($order->id(), array_column($results['orders'], 'id'));
+        self::assertContains($logicalOrder->id(), array_column($results['orders'], 'id'));
         foreach (['products', 'customers', 'orders'] as $group) {
             self::assertLessThanOrEqual(5, count($results[$group]));
             foreach ($results[$group] as $item) {
@@ -142,6 +151,7 @@ final class AdminGlobalSearchGeneratedTest extends WebTestCase
         self::assertSame([], $onlyOrders['customers']);
         self::assertContains($order->id(), array_column($onlyOrders['orders'], 'id'));
         self::assertNotContains($otherOrder->id(), array_column($onlyOrders['orders'], 'id'));
+        self::assertNotContains($logicalOrder->id(), array_column($onlyOrders['orders'], 'id'));
 
         $client->loginUser($foreignOwner);
         $client->request('GET', $url);
@@ -150,6 +160,7 @@ final class AdminGlobalSearchGeneratedTest extends WebTestCase
         self::assertStringNotContainsString($product->id(), $foreignResults);
         self::assertStringNotContainsString($customer->id(), $foreignResults);
         self::assertStringNotContainsString($order->id(), $foreignResults);
+        self::assertStringNotContainsString($logicalOrder->id(), $foreignResults);
 
         $client->loginUser($owner);
         foreach (['a', '%', str_repeat('z', 65), 'ab%_', '  '] as $invalid) {

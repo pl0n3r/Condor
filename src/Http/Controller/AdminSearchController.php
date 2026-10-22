@@ -92,6 +92,11 @@ final class AdminSearchController extends AbstractController
         // grant in one branch must not reveal another branch's orders.
         $sources = [];
         if ($permissions['orders']) {
+            // Owner access includes active logical inventory sources (no branch).
+            // Staff access remains restricted to permitted physical branches.
+            $owner = $this->authorization->isOwner(
+                $this->authorization->membership($user, $tenant),
+            );
             $allowedBranches = [];
             foreach (
                 $this->entityManager->getRepository(Branch::class)
@@ -107,14 +112,16 @@ final class AdminSearchController extends AbstractController
                     $allowedBranches[] = $branch;
                 }
             }
-            if ($allowedBranches !== []) {
+            if ($owner || $allowedBranches !== []) {
+                // The owner can search logical and branch-backed orders alike.
+                // Every other role receives only sources from allowed branches.
+                $criteria = ['tenant' => $tenant, 'active' => true];
+                if (!$owner) {
+                    $criteria['branch'] = $allowedBranches;
+                }
                 foreach (
                     $this->entityManager->getRepository(InventorySource::class)
-                        ->findBy([
-                            'tenant' => $tenant,
-                            'branch' => $allowedBranches,
-                            'active' => true,
-                        ]) as $source
+                        ->findBy($criteria) as $source
                 ) {
                     $sources[] = $source;
                 }
