@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import subprocess
 import sys
+from contextlib import redirect_stdout
+from io import StringIO
+from unittest.mock import patch
 import tempfile
 import unittest
 from pathlib import Path
@@ -28,13 +30,23 @@ class D043PhaseResolutionTests(unittest.TestCase):
 
     def test_construction_phase_is_independent_of_closed_go_live_issue(self) -> None:
         self.assertEqual(self.phase(phase="construccion"), "construccion")
-        # No hay dependencia de una consulta a GitHub/#389 en la API o CLI.
+        # No hay comandos de shell o rutas del usuario en el resolver.
+        self.assertNotIn("issues/389", SCRIPT.read_text(encoding="utf-8"))
+        self.assertNotIn("subprocess", SCRIPT.read_text(encoding="utf-8"))
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "datos.yml"
-            path.write_text(json.dumps({"version": 1, "project": "pl0n3r/Condor", "phase": "construccion"}), encoding="utf-8")
-            result = subprocess.run([sys.executable, str(SCRIPT), "--source", str(path), "--repository", "pl0n3r/Condor"], capture_output=True, text=True, check=False)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), "construccion")
+            base = Path(tmp)
+            (base / "datos.yml").write_text(json.dumps({"version": 1, "project": "pl0n3r/Condor", "phase": "construccion"}), encoding="utf-8")
+            import os
+            old_cwd = Path.cwd()
+            try:
+                os.chdir(base)
+                output = StringIO()
+                with patch.object(sys, "argv", [str(SCRIPT), "--source", "datos.yml", "--repository", "pl0n3r/Condor"]), redirect_stdout(output):
+                    exit_code = module.main()
+            finally:
+                os.chdir(old_cwd)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(output.getvalue().strip(), "construccion")
 
     def test_live_and_unknown_fail_closed(self) -> None:
         self.assertEqual(self.phase(phase="live"), "live")

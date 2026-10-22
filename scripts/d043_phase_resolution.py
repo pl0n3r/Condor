@@ -49,10 +49,10 @@ def resolve_phase(source: Path, repository: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument("--source", choices=["datos.yml"], required=True)
     parser.add_argument("--repository", required=True)
     args = parser.parse_args()
-    print(resolve_phase(args.source, args.repository))
+    print(resolve_phase(Path("datos.yml"), args.repository))
     return 0
 
 
