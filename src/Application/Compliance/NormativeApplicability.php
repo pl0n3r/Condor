@@ -16,8 +16,9 @@ final class NormativeApplicability
         'reviewer_ref', 'source', 'tenant_ref', 'verified_on',
     ];
     private const SOURCE_KEYS = ['article', 'issuer', 'kind', 'official_url', 'version'];
-    private const CONTEXT_KEYS = ['ciiu', 'municipio', 'riesgo', 'sector', 'tenant_ref'];
-    private const CONDITION_KEYS = ['ciiu', 'municipio', 'riesgo', 'sector'];
+    private const CONTEXT_KEYS = ['ciiu', 'municipio', 'regimen', 'riesgo', 'sector', 'tamano_empresa', 'tenant_ref'];
+    private const CONDITION_KEYS = ['ciiu', 'municipio', 'regimen', 'riesgo', 'sector', 'tamano_empresa'];
+    private const UNKNOWN_MARKERS = ['unknown', 'desconocido', 'pendiente', 'sin_dato', 'no_definido'];
 
     /**
      * @param array<string, mixed> $rule
@@ -34,7 +35,7 @@ final class NormativeApplicability
         }
 
         foreach (self::CONTEXT_KEYS as $key) {
-            if (!self::identifier($context[$key])) {
+            if (!self::knownDimension($context[$key])) {
                 return self::review('Perfil empresarial incompleto.');
             }
         }
@@ -77,12 +78,12 @@ final class NormativeApplicability
         }
 
         $conditions = $rule['conditions'];
-        if (!is_array($conditions) || $conditions === [] || count($conditions) > 4) {
+        if (!is_array($conditions) || $conditions === [] || count($conditions) > 6) {
             return self::review('Condiciones de aplicabilidad incompletas.');
         }
         foreach ($conditions as $field => $expected) {
             if (!is_string($field) || !in_array($field, self::CONDITION_KEYS, true)
-                || !self::identifier($expected)
+                || !self::knownDimension($expected)
             ) {
                 return self::review('Condición no reconocida.');
             }
@@ -119,6 +120,12 @@ final class NormativeApplicability
     private static function identifier(mixed $value): bool
     {
         return is_string($value) && preg_match('/^[a-z0-9][a-z0-9:_-]{0,63}$/iD', $value) === 1;
+    }
+
+    private static function knownDimension(mixed $value): bool
+    {
+        return self::identifier($value)
+            && !in_array(strtolower($value), self::UNKNOWN_MARKERS, true);
     }
 
     private static function date(mixed $value): ?\DateTimeImmutable

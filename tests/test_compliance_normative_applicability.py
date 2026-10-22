@@ -14,7 +14,8 @@ DOC = ROOT / "docs/legal/COMPLIANCE-NORMATIVE-F0.md"
 
 def profile(tenant: str = "tenant-a", **overrides: str) -> dict[str, str]:
     result = {"tenant_ref": tenant, "sector": "comercio", "ciiu": "4711",
-              "municipio": "pereira", "riesgo": "ii"}
+              "municipio": "pereira", "riesgo": "ii",
+              "tamano_empresa": "micro", "regimen": "regimen-a"}
     result.update(overrides)
     return result
 
@@ -32,7 +33,8 @@ def rule(tenant: str = "tenant-a", **overrides: object) -> dict[str, object]:
         },
         "effective_from": "2026-01-01", "effective_until": "2026-12-31",
         "verified_on": "2026-02-01",
-        "conditions": {"sector": "comercio", "ciiu": "4711", "municipio": "pereira", "riesgo": "ii"},
+        "conditions": {"sector": "comercio", "ciiu": "4711", "municipio": "pereira",
+                       "riesgo": "ii", "tamano_empresa": "micro", "regimen": "regimen-a"},
     }
     base.update(overrides)
     return base
@@ -89,11 +91,13 @@ class NormativeApplicabilityTests(unittest.TestCase):
         self.assertEqual("REQUIERE_REVISION", evaluate(rule(), b)["kind"])
         different = rule(
             tenant="tenant-b",
-            conditions={"sector": "tecnologia", "ciiu": "6201", "municipio": "bogota", "riesgo": "iv"},
+            conditions={"sector": "tecnologia", "ciiu": "6201", "municipio": "bogota",
+                        "riesgo": "iv", "tamano_empresa": "micro", "regimen": "regimen-a"},
         )
         self.assertEqual("OBLIGATORIO", evaluate(different, b)["kind"])
         for dimension, other in (("sector", "comercio"), ("ciiu", "4711"),
-                                 ("municipio", "pereira"), ("riesgo", "ii")):
+                                 ("municipio", "pereira"), ("riesgo", "ii"),
+                                 ("tamano_empresa", "grande"), ("regimen", "regimen-b")):
             self.assertEqual("NO_APLICA", evaluate(different, {**b, dimension: other})["kind"])
         self.assertEqual("REQUIERE_REVISION", evaluate(different, a)["kind"])
         for date in ("2025-12-31", "2027-01-01", "2026-02-30", "tomorrow"):
@@ -101,6 +105,47 @@ class NormativeApplicabilityTests(unittest.TestCase):
         self.assertEqual("REQUIERE_REVISION", evaluate(rule(verified_on="2026-11-01"), a)["kind"])
         self.assertEqual("REQUIERE_REVISION", evaluate(rule(conditions={"biometrics": "yes"}), a)["kind"])
         self.assertEqual("REQUIERE_REVISION", evaluate(rule(), {**a, "email": "sensitive"})["kind"])
+
+    def test_business_size_and_regime_are_scoped_and_fail_closed(self) -> None:
+        """AC-05: tamaño y régimen sintéticos son condiciones, no cumplimiento."""
+        context = profile()
+        item = rule(conditions={"tamano_empresa": "micro", "regimen": "regimen-a"})
+        matched = evaluate(item, context)
+        self.assertEqual("OBLIGATORIO", matched["kind"])
+        self.assertEqual("APLICA", matched["applicability"])
+        self.assertEqual(item["source"], matched["source"])
+
+        for dimension, other in (("tamano_empresa", "grande"), ("regimen", "regimen-b")):
+            with self.subTest(dimension=dimension, other=other):
+                unmatched = evaluate(item, {**context, dimension: other})
+                self.assertEqual("NO_APLICA", unmatched["kind"])
+                self.assertEqual("NO_APLICA", unmatched["applicability"])
+
+        for dimension in ("tamano_empresa", "regimen"):
+            incomplete = dict(context)
+            del incomplete[dimension]
+            self.assertEqual("REQUIERE_REVISION", evaluate(item, incomplete)["kind"])
+            for unknown in ("unknown", "desconocido", "pendiente", "sin_dato"):
+                with self.subTest(dimension=dimension, unknown=unknown):
+                    self.assertEqual(
+                        "REQUIERE_REVISION",
+                        evaluate(item, {**context, dimension: unknown})["kind"],
+                    )
+            self.assertEqual(
+                "REQUIERE_REVISION",
+                evaluate(rule(conditions={dimension: "desconocido"}), context)["kind"],
+            )
+
+        self.assertEqual(
+            "REQUIERE_REVISION", evaluate(item, profile(tenant="tenant-b"))["kind"]
+        )
+        self.assertEqual(
+            "REQUIERE_REVISION", evaluate(item, context, "2027-01-01")["kind"]
+        )
+        self.assertEqual(
+            "REQUIERE_REVISION",
+            evaluate(rule(verified_on="2026-11-01"), context)["kind"],
+        )
 
     def test_documentation_declares_no_operational_activation(self) -> None:
         body = DOC.read_text(encoding="utf-8")
