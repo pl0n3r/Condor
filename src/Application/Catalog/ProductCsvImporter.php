@@ -57,14 +57,16 @@ final readonly class ProductCsvImporter
             }
 
             $rows = [];
+            $record = 1;
             while (($cells = fgetcsv($handle, 0, ',', '"', '')) !== false) {
+                ++$record;
                 if (count($cells) === 1 && trim((string) $cells[0]) === '') {
                     continue;
                 }
                 if (count($rows) >= self::MAX_ROWS) {
                     throw new DomainException('El CSV admite máximo 500 filas.');
                 }
-                $row = ['row' => count($rows) + 2];
+                $row = ['row' => $record];
                 if (count($cells) !== count($header)) {
                     $row['parse_error'] = 'Cantidad de columnas inválida.';
                 } else {
@@ -87,6 +89,7 @@ final readonly class ProductCsvImporter
     {
         $rows = [];
         $seenSku = [];
+        $seenSlug = [];
         $valid = 0;
         $existing = 0;
         $errors = 0;
@@ -117,6 +120,10 @@ final readonly class ProductCsvImporter
                     throw new DomainException('SKU repetido dentro del archivo.');
                 }
                 $seenSku[$sku] = true;
+                $productKey = [$draft->name(), $draft->description(), $draft->allowsBackorder()];
+                if (isset($seenSlug[$slug]) && $seenSlug[$slug] !== $productKey) {
+                    throw new DomainException('El slug aparece en el archivo con otros datos de producto.');
+                }
 
                 $storedProduct = $this->entityManager->getRepository(Product::class)
                     ->findOneBy(['tenant' => $tenant, 'slug' => $slug]);
@@ -138,6 +145,7 @@ final readonly class ProductCsvImporter
                     $status = 'valid';
                     ++$valid;
                 }
+                $seenSlug[$slug] = $productKey;
                 $rows[] = [
                     'row' => $line,
                     'sku' => $sku,
