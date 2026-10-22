@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow,noarchive">
+    <title>Comprobante de pedido {{ receipt.id }}</title>
+</head>
+<body>
+<main>
+    <header>
+        <h1>Comprobante de pedido</h1>
+        <p><strong>{{ receipt.company }}</strong>{% if receipt.nit %} · NIT {{ receipt.nit }}{% endif %}</p>
+        <p>Sede: {{ receipt.branch }}</p>
+        <p>Pedido: <strong>{{ receipt.id }}</strong></p>
+        <p>Fecha (Colombia): <time>{{ receipt.date }}</time></p>
+        <p>Cliente: {{ receipt.customer }}</p>
+        <p>Estado: {{ receipt.status }}</p>
+    </header>
+
+    <section aria-labelledby="detail-heading">
+        <h2 id="detail-heading">Detalle del pedido</h2>
+        <table>
+            <caption>Importes en {{ receipt.currency }}</caption>
+            <thead>
+            <tr><th scope="col">Producto</th><th scope="col">SKU</th><th scope="col">Cantidad</th><th scope="col">Precio unitario</th><th scope="col">Subtotal</th></tr>
+            </thead>
+            <tbody>
+            {% for item in receipt.items %}
+                <tr><td>{{ item.name }}</td><td>{{ item.sku }}</td><td>{{ item.quantity }}</td><td>{{ item.unit }}</td><td>{{ item.subtotal }}</td></tr>
+            {% else %}
+                <tr><td colspan="5">Este pedido no tiene líneas.</td></tr>
+            {% endfor %}
+            </tbody>
+            <tfoot><tr><th colspan="4" scope="row">Total {{ receipt.currency }}</th><td><strong>{{ receipt.total }}</strong></td></tr></tfoot>
+        </table>
+    </section>
+    <footer><p>Documento informativo del pedido, no sustituye la factura electrónica.</p></footer>
+</main>
+</body>
+</html>
