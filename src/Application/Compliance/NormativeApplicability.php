@@ -124,7 +124,8 @@ final class NormativeApplicability
 
     private static function knownDimension(mixed $value): bool
     {
-        return self::identifier($value)
+        return is_string($value)
+            && self::identifier($value)
             && !in_array(strtolower($value), self::UNKNOWN_MARKERS, true);
     }
 
