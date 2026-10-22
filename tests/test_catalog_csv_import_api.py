@@ -109,6 +109,30 @@ final class CatalogImportSyntheticHttpTest extends WebTestCase
             'tenant' => $tenantA, 'active' => true,
         ]));
 
+        // Un slug ya almacenado con otra descripción o política no puede
+        // aceptar nuevas variantes como si esos atributos fueran equivalentes.
+        $existingConflictCsv = "sku,product_name,product_slug,variant_name,description,allow_backorder\n"
+            ."SKU-CONFLICT,Camiseta,cami,Distinta,Descripcion diferente,1\n";
+        $existingConflict = ['branch_id' => $branchA->id(), 'csv' => $existingConflictCsv];
+        $client->jsonRequest('POST', '/api/catalog/import/preview', $existingConflict, [
+            'HTTP_X_CSRF_TOKEN' => $csrf,
+        ]);
+        self::assertResponseIsSuccessful();
+        $existingPreview = $this->json($client);
+        self::assertSame(0, $existingPreview['valid']);
+        self::assertSame(1, $existingPreview['errors']);
+        self::assertSame('error', $existingPreview['rows'][0]['status']);
+        $client->jsonRequest('POST', '/api/catalog/import/commit', $existingConflict, [
+            'HTTP_X_CSRF_TOKEN' => $csrf,
+        ]);
+        self::assertResponseIsSuccessful();
+        $existingCommit = $this->json($client);
+        self::assertSame(0, $existingCommit['created']);
+        self::assertSame(1, $existingCommit['errors']);
+        self::assertCount(2, $em->getRepository(ProductVariant::class)->findBy([
+            'tenant' => $tenantA, 'active' => true,
+        ]));
+
         $client->jsonRequest('POST', '/api/catalog/import/commit', [
             'branch_id' => $branchB->id(), 'csv' => $csv,
         ], ['HTTP_X_CSRF_TOKEN' => $csrf]);

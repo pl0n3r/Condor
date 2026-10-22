@@ -128,8 +128,11 @@ final readonly class ProductCsvImporter
                 $storedProduct = $this->entityManager->getRepository(Product::class)
                     ->findOneBy(['tenant' => $tenant, 'slug' => $slug]);
                 if ($storedProduct instanceof Product
-                    && (!$storedProduct->isActive() || $storedProduct->name() !== $draft->name())) {
-                    throw new DomainException('Producto inactivo o slug asociado a otro nombre.');
+                    && (!$storedProduct->isActive()
+                        || $storedProduct->name() !== $draft->name()
+                        || $storedProduct->description() !== $draft->description()
+                        || $storedProduct->allowsBackorder() !== $draft->allowsBackorder())) {
+                    throw new DomainException('Producto inactivo o slug asociado a otros datos.');
                 }
                 $storedVariant = $this->entityManager->getRepository(ProductVariant::class)
                     ->findOneBy(['tenant' => $tenant, 'sku' => $sku]);
