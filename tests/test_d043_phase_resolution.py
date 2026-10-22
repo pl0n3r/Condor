@@ -64,7 +64,7 @@ class D043PhaseResolutionTests(unittest.TestCase):
         self.assertIn("scripts/d043_phase_resolution.py", step)
         self.assertIn("--source datos.yml", step)
         self.assertIn("--repository", step)
-        self.assertIn('"echo '+ '"value=$phase" >> "$GITHUB_OUTPUT"', step)
+        self.assertIn('echo "value=$phase" >> "$GITHUB_OUTPUT"', step)
         self.assertNotIn("issues/389", step)
         self.assertIn("for issue_number in 1 389; do", text[end:])
         self.assertIn('FASE_CONDOR: $' + '{{ steps.fase.outputs.value }}', text[end:])
