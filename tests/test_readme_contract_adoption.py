@@ -111,7 +111,7 @@ class ReadmeContractAdoptionTests(unittest.TestCase):
         self.assertEqual(1,len(now))
         self.assertNotIn("#824",now[0])
         self.assertNotIn("/issues/824",now[0])
-        links=re.findall(r"\\]\\((https://github\\.com/pl0n3r/Condor/issues\\?q=[^)]+)\\)",now[0])
+        links=re.findall(r"\]\((https://github\.com/pl0n3r/Condor/issues\?q=[^)]+)\)",now[0])
         self.assertEqual(2,now[0].count("]("))
         self.assertEqual(2,len(links))
         queries=[parse_qs(urlsplit(link).query)["q"][0] for link in links]
