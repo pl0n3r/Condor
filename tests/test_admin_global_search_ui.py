@@ -33,6 +33,20 @@ class BusquedaGlobalUiTests(unittest.TestCase):
         self.assertIn('role="alert"', SHELL)
         self.assertIn("Sin resultados.", SHELL)
 
+    def test_escape_closes_results_after_refocusing_input(self) -> None:
+        """Focus can reopen the dropdown: close it only after the focus transition."""
+        escape_handler = re.search(
+            r"if \(event\.key === 'Escape'\) \{(?P<body>.*?)\breturn;",
+            SHELL,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(escape_handler)
+        body = escape_handler.group("body")
+        self.assertLess(
+            body.index("inputRef.current?.focus();"),
+            body.index("setVisible(false);"),
+        )
+
     def test_safe_requests_and_stale_response_protection(self) -> None:
         self.assertIn("credentials: 'same-origin'", SHELL)
         self.assertIn("new AbortController()", SHELL)

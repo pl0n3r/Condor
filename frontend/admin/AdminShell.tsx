@@ -157,8 +157,8 @@ function AdminGlobalSearch() {
 
   function onKeyboard(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Escape') {
-      setVisible(false);
       inputRef.current?.focus();
+      setVisible(false);
       return;
     }
     const links = Array.from(
