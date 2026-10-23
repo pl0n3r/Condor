@@ -121,7 +121,20 @@ class ReadmeContractAdoptionTests(unittest.TestCase):
         ],queries)
 
     def test_work_queue_now_excludes_closed_824(self):
-        self.assert_work_queue_now_is_dynamic(self.read("README.md"))
+        text=self.read("README.md")
+        self.assert_work_queue_now_is_dynamic(text)
+        stale=text.replace(
+            "[Issues reservados](https://github.com/pl0n3r/Condor/issues?q=is%3Aissue+is%3Aopen+label%3A%22estado%3A+reservado%22)",
+            "[#824 cerrado](https://github.com/pl0n3r/Condor/issues/824)",1,
+        )
+        self.assertNotEqual(text,stale)
+        with self.assertRaises(AssertionError):
+            self.assert_work_queue_now_is_dynamic(stale)
+        not_open=text.replace("is%3Aopen+label%3A%22estado%3A+reservado%22",
+                              "label%3A%22estado%3A+reservado%22",1)
+        self.assertNotEqual(text,not_open)
+        with self.assertRaises(AssertionError):
+            self.assert_work_queue_now_is_dynamic(not_open)
 
     def test_work_queue_links_canonical_roadmap(self):
         text=self.read("README.md")
