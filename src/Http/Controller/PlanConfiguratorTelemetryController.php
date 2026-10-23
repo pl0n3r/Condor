@@ -15,6 +15,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
@@ -22,6 +23,8 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class PlanConfiguratorTelemetryController extends AbstractController
 {
+    private const MAX_PAYLOAD_BYTES = 4096;
+
     /** @var list<string> */
     private const ALLOWED_FIELDS = [
         'event',
@@ -81,7 +84,7 @@ final class PlanConfiguratorTelemetryController extends AbstractController
                 $limit->getRetryAfter()->getTimestamp() - time(),
             );
             throw new TooManyRequestsHttpException(
-                $retryAfter,
+                (string) $retryAfter,
                 'Demasiados eventos del configurador.',
             );
         }
@@ -173,9 +176,18 @@ final class PlanConfiguratorTelemetryController extends AbstractController
     /** @return array<string, mixed> */
     private static function payload(Request $request): array
     {
+        $body = (string) $request->getContent();
+        // Rechazar bytes excesivos antes de decodificar y de persistir señales.
+        if (strlen($body) > self::MAX_PAYLOAD_BYTES) {
+            throw new HttpException(
+                Response::HTTP_REQUEST_ENTITY_TOO_LARGE,
+                'Carga de telemetría demasiado grande.',
+            );
+        }
+
         try {
             $decoded = json_decode(
-                (string) $request->getContent(),
+                $body,
                 true,
                 64,
                 JSON_THROW_ON_ERROR,

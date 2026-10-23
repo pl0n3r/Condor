@@ -546,6 +546,17 @@ export function OrdersManagement({
                     {money(order.total_amount_minor, order.currency)}
                   </p>
                 </div>
+                {canView && (
+                  <a
+                    className="button button-secondary"
+                    href={`/api/orders/${encodeURIComponent(order.id)}/receipt`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Abrir comprobante del pedido ${order.id} en una pestaña nueva`}
+                  >
+                    Comprobante
+                  </a>
+                )}
                 {canUpdate
                   && order.order_status === 'open'
                   && order.fulfillment_status === 'reserved' && (
