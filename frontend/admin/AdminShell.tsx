@@ -192,7 +192,7 @@ function AdminGlobalSearch() {
           type="search"
           aria-label="Búsqueda global"
           aria-keyshortcuts="/"
-          aria-controls={resultsId}
+          aria-controls={visible && query.trim().length >= 2 ? resultsId : undefined}
           autoComplete="off"
           maxLength={64}
           placeholder="Productos, clientes o pedidos"
