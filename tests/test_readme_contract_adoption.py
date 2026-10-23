@@ -1,6 +1,8 @@
 import json
+import re
 import unittest
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 ROOT=Path(__file__).resolve().parents[1]
 SECTIONS=(
@@ -103,11 +105,30 @@ class ReadmeContractAdoptionTests(unittest.TestCase):
         self.assertIn("cancel-in-progress: true",workflow)
         self.assertIn("github.event.pull_request.draft == false",workflow)
 
+    def assert_work_queue_now_is_dynamic(self, text):
+        work_queue=text.split("## Work Queue",1)[1].split("## Qué hace el producto",1)[0]
+        now=[line for line in work_queue.splitlines() if line.startswith("- **NOW:** ")]
+        self.assertEqual(1,len(now))
+        self.assertNotIn("#824",now[0])
+        self.assertNotIn("/issues/824",now[0])
+        links=re.findall(r"\\]\\((https://github\\.com/pl0n3r/Condor/issues\\?q=[^)]+)\\)",now[0])
+        self.assertEqual(2,now[0].count("]("))
+        self.assertEqual(2,len(links))
+        queries=[parse_qs(urlsplit(link).query)["q"][0] for link in links]
+        self.assertEqual([
+            'is:issue is:open label:"estado: reservado"',
+            'is:issue is:open label:"estado: en revisión"',
+        ],queries)
+
+    def test_work_queue_now_excludes_closed_824(self):
+        self.assert_work_queue_now_is_dynamic(self.read("README.md"))
+
     def test_work_queue_links_canonical_roadmap(self):
         text=self.read("README.md")
         q=text.split("## Work Queue",1)[1].split("## Qué hace el producto",1)[0]
         for label in ("NOW","NEXT","LATER","BLOCKED"): self.assertEqual(1,q.count(f"**{label}:**"))
         self.assertIn("https://github.com/pl0n3r/Condor/issues/1",q)
+        self.assert_work_queue_now_is_dynamic(text)
 
     def test_factory_map_preserves_roles(self):
         text=self.read("README.md").split("## Mapa de la fábrica",1)[1]
