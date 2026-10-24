@@ -33,6 +33,14 @@ final readonly class WorkflowRepository
         if ($definition->tenantId !== $tenantId) {
             throw new DomainException('La definición pertenece a otro tenant.');
         }
+        // La definición es configuración, pero nunca admite argumentos de
+        // acciones: podrían contener datos personales o secretos del disparador.
+        // Rechazar en vez de truncar silenciosamente el workflow del caller.
+        foreach ($definition->actions as $action) {
+            if (array_keys($action) !== ['type']) {
+                throw new DomainException('La persistencia rechaza argumentos y metadatos de acciones.');
+            }
+        }
         $time = self::utc($now);
 
         return (int) $this->connection->transactional(function () use ($definition, $tenantId, $actorId, $time): int {
