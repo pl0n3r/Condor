@@ -55,6 +55,12 @@ class AlertasUiAdminTests(unittest.TestCase):
         self.assertIn("Guardar mínimo", BUNDLE)
         self.assertIn("Acceso denegado a las alertas de esta sede.", BUNDLE)
 
+        # A compiled panel must ship its branch-scoped read/write HTTP routes.
+        # Source-only assertions can pass even when the generated bundle is stale.
+        self.assertIn("/inventory/stock-alerts", BUNDLE)
+        self.assertIn("/minimums", BUNDLE)
+        self.assertIn('method:"PUT"', BUNDLE)
+
     def test_branch_context_and_permissions(self):
         """Identity and active branch come from authenticated AdminApp context."""
         self.assertIn("import { StockAlertsPanel } from './StockAlertsPanel';", APP)
