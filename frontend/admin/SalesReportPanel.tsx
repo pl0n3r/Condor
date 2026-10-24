@@ -59,9 +59,9 @@ function validMoneyRow(value: unknown): value is CurrencyTotal {
   const row = value as Record<string, unknown>;
   return typeof row.currency === 'string'
     && /^[A-Z]{3}$/.test(row.currency)
-    && Number.isSafeInteger(row.units) && (row.units as number) >= 0
-    && Number.isSafeInteger(row.revenue_minor)
-    && (row.revenue_minor as number) >= 0;
+    && typeof row.units === 'number' && Number.isSafeInteger(row.units) && row.units >= 0
+    && typeof row.revenue_minor === 'number'
+    && Number.isSafeInteger(row.revenue_minor) && row.revenue_minor >= 0;
 }
 
 function productRow(value: unknown): value is ProductRow {
@@ -69,9 +69,10 @@ function productRow(value: unknown): value is ProductRow {
   const row = value as unknown as Record<string, unknown>;
   return ['product_id', 'variant_id', 'product_name', 'variant_name', 'sku']
     .every((key) => typeof row[key] === 'string')
+    && typeof row.participation_bps === 'number'
     && Number.isInteger(row.participation_bps)
-    && (row.participation_bps as number) >= 0
-    && (row.participation_bps as number) <= 10000;
+    && row.participation_bps >= 0
+    && row.participation_bps <= 10000;
 }
 
 function monthRow(value: unknown): value is MonthRow {
@@ -108,7 +109,7 @@ async function report<T>(
     || !data.currency_totals.every(validMoneyRow)) {
     throw new Error('Respuesta de reportes inválida.');
   }
-  return data as Report<T>;
+  return data as unknown as Report<T>;
 }
 
 function money(amountMinor: number, currency: string): string {
