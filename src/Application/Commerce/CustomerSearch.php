@@ -121,7 +121,8 @@ final readonly class CustomerSearch
                 static fn (Customer $customer): bool =>
                     str_contains(self::fold($customer->name()), $needle)
                     || str_contains(self::fold($customer->email() ?? ''), $needle)
-                    || str_contains(self::fold($customer->phone() ?? ''), $needle),
+                    || str_contains(self::fold($customer->phone() ?? ''), $needle)
+                    || str_contains(self::fold($customer->documentNumber() ?? ''), $needle),
             ));
         }
 

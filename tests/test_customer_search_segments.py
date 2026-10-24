@@ -39,6 +39,7 @@ class ClientesBusquedaSegmentosTests(unittest.TestCase):
             "createdAt()",
             "mb_strtolower",
             "str_contains",
+            "documentNumber()",
         ):
             self.assertIn(required, source, f"Falta control: {required}")
 
@@ -49,6 +50,9 @@ class ClientesBusquedaSegmentosTests(unittest.TestCase):
             "testInvalidFiltersFailClosedWithoutReadingRepositories",
         ):
             self.assertIn(f"function {required}(", cases)
+
+        self.assertIn("102.0", cases)
+        self.assertIn("documentNumber: 'CC-102.030'", cases)
 
         php = shutil.which("php")
         self.assertIsNotNone(php, "Se requiere PHP real para validar sintaxis")

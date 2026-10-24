@@ -26,9 +26,15 @@ final class CustomerSearchTest extends TestCase
     {
         $tenant = $this->tenant('local');
         $foreign = $this->tenant('foreign');
-        $angela = new Customer($tenant, 'Ángela Pérez', 'angela@example.test', '300 123 4567');
+        $angela = new Customer(
+            $tenant, 'Ángela Pérez', 'angela@example.test', '300 123 4567',
+            documentNumber: 'CC-102.030',
+        );
         $pablo = new Customer($tenant, 'Pablo Ñúñez', 'pablo@example.test', '310 999 1234');
-        $secret = new Customer($foreign, 'Ángela extranjera', 'foreign@example.test', '300 123 4567');
+        $secret = new Customer(
+            $foreign, 'Ángela extranjera', 'foreign@example.test', '300 123 4567',
+            documentNumber: 'CC-102.030',
+        );
         $inactive = new Customer($tenant, 'Ángela antigua');
         $inactive->deactivate();
         // Incluso si el repositorio subyacente devolviera un registro ajeno,
@@ -37,6 +43,8 @@ final class CustomerSearchTest extends TestCase
 
         self::assertSame([$angela->id()], $this->ids($service->search($tenant, 'ANGELA')));
         self::assertSame([$angela->id()], $this->ids($service->search($tenant, 'perez')));
+        self::assertSame([$angela->id()], $this->ids($service->search($tenant, '102.0')));
+        self::assertSame([$angela->id()], $this->ids($service->search($tenant, 'cc-102')));
         self::assertSame([$pablo->id()], $this->ids($service->search($tenant, 'nunez')));
         self::assertSame([$pablo->id()], $this->ids($service->search($tenant, '999')));
         self::assertEqualsCanonicalizing(
