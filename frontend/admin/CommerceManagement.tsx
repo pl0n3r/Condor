@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { AdminCsvImport } from './CatalogManagement';
 import {
   categoryPriceListPath,
   commercialCategoriesPath,
@@ -429,6 +430,11 @@ export function CommerceManagement({
         >
           {notice.text}
         </output>
+      )}
+
+      {canCreateCustomers && (
+        <AdminCsvImport key={branchId} kind="customers" branchId={branchId}
+          csrfToken={csrfToken} onCompleted={() => void loadCommerce()} />
       )}
 
       {state.status === 'loading' && (

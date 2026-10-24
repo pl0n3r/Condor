@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import {
   catalogProductPath,
   catalogProductsPath,
@@ -397,6 +397,11 @@ export function CatalogManagement({
         </output>
       )}
 
+      {canCreate && (
+        <AdminCsvImport key={branchId} kind="catalog" branchId={branchId}
+          csrfToken={csrfToken} onCompleted={() => void loadCatalog()} />
+      )}
+
       {productEditorOpen && (
         <form className="catalog-editor" onSubmit={saveProduct}>
           <div className="section-heading compact">
@@ -724,6 +729,186 @@ export function CatalogManagement({
         </div>
       )}
     </section>
+  );
+}
+
+type CsvRow = { row: number; status: 'valid' | 'existing' | 'error'; errors?: string[] };
+type CsvPreview = {
+  rows: CsvRow[];
+  total: number;
+  valid: number;
+  existing: number;
+  errors: number;
+};
+type CsvImportProps = Readonly<{
+  kind: 'catalog' | 'customers';
+  branchId: string;
+  csrfToken: string;
+  onCompleted: () => void;
+}>;
+
+/** The preview never writes. Only an explicit, second action calls commit. */
+export function AdminCsvImport({
+  kind, branchId, csrfToken, onCompleted,
+}: CsvImportProps) {
+  const [file, setFile] = useState<File | null>(null);
+  const [csv, setCsv] = useState<string | null>(null);
+  const [preview, setPreview] = useState<CsvPreview | null>(null);
+  const [phase, setPhase] = useState<'preview' | 'commit' | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [fileKey, setFileKey] = useState(0);
+  const title = kind === 'catalog' ? 'productos' : 'clientes';
+  const endpoint = kind === 'catalog'
+    ? '/api/catalog/import'
+    : '/api/customers/import';
+
+  function selectCsv(event: ChangeEvent<HTMLInputElement>) {
+    setFile(event.currentTarget.files?.[0] ?? null);
+    setPreview(null);
+    setCsv(null);
+    setNotice(null);
+  }
+
+  async function requestPreview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!file || phase !== null) return;
+    setPhase('preview');
+    setPreview(null);
+    setCsv(null);
+    setNotice(null);
+    try {
+      if (file.size === 0 || file.size > 262144) {
+        throw new Error('Selecciona un CSV de máximo 256 KiB, no vacío.');
+      }
+      const text = await file.text();
+      if (!text.trim()) throw new Error('El CSV está vacío.');
+      const response = await fetch(endpoint + '/preview', {
+        method: 'POST', credentials: 'same-origin',
+        headers: mutationHeaders(csrfToken),
+        body: JSON.stringify({ branch_id: branchId, csv: text }),
+      });
+      if (!response.ok) {
+        throw new Error(await responseMessage(response, 'No fue posible previsualizar.'));
+      }
+      const data = await response.json() as CsvPreview;
+      if (!Array.isArray(data.rows) ||
+          !Number.isInteger(data.total) ||
+          !Number.isInteger(data.valid) ||
+          !Number.isInteger(data.existing) ||
+          !Number.isInteger(data.errors) ||
+          data.total !== data.rows.length) {
+        throw new Error('Respuesta de vista previa inválida.');
+      }
+      setCsv(text);
+      setPreview(data);
+    } catch (error) {
+      setNotice({ kind: 'error', text: error instanceof Error
+        ? error.message : 'No fue posible leer el archivo.' });
+    } finally {
+      setPhase(null);
+    }
+  }
+
+  async function confirmImport() {
+    if (!preview || csv === null || preview.valid === 0 || phase !== null) return;
+    setPhase('commit');
+    setNotice(null);
+    try {
+      const response = await fetch(endpoint + '/commit', {
+        method: 'POST', credentials: 'same-origin',
+        headers: mutationHeaders(csrfToken),
+        body: JSON.stringify({ branch_id: branchId, csv }),
+      });
+      if (!response.ok) {
+        throw new Error(await responseMessage(response, 'No fue posible importar.'));
+      }
+      const result = await response.json() as {
+        created: number; existing: number; errors: number;
+      };
+      setPreview(null);
+      setCsv(null);
+      setFile(null);
+      setFileKey((current) => current + 1);
+      setNotice({ kind: 'success',
+        text: 'Importación completada: ' + result.created + ' nuevos, ' +
+          result.existing + ' existentes y ' + result.errors + ' errores.' });
+      onCompleted();
+    } catch (error) {
+      // A failed/ambiguous commit must never be blindly repeated.
+      setPreview(null);
+      setCsv(null);
+      setNotice({ kind: 'error', text: error instanceof Error
+        ? error.message : 'No fue posible importar.' });
+    } finally {
+      setPhase(null);
+    }
+  }
+
+  return (
+    <article className="catalog-card" aria-label={'Importar ' + title + ' desde CSV'}>
+      <div>
+        <span className="eyebrow">Importación masiva</span>
+        <h3>Importar {title} desde CSV</h3>
+        <p className="muted">Sube el CSV, revisa errores por fila y confirma.
+          La vista previa no guarda datos.</p>
+      </div>
+      <form className="catalog-editor"
+        onSubmit={(event) => void requestPreview(event)}>
+        <label className="field">
+          <span>Archivo CSV (máximo 256 KiB y 500 filas)</span>
+          <input key={fileKey} type="file" accept=".csv,text/csv"
+            onChange={selectCsv} disabled={phase !== null} />
+        </label>
+        <button className="button button-secondary" type="submit"
+          disabled={!file || phase !== null}>
+          {phase === 'preview' ? 'Validando CSV…' : 'Generar vista previa'}
+        </button>
+      </form>
+      {notice && (
+        <output aria-live="polite"
+          role={notice.kind === 'error' ? 'alert' : 'status'}
+          className={notice.kind === 'error'
+            ? 'catalog-notice catalog-notice-error' : 'catalog-notice'}>
+          {notice.text}
+        </output>
+      )}
+      {preview && (
+        <div className="catalog-editor">
+          <h4>Vista previa de {title}</h4>
+          <p role="status" aria-live="polite">
+            {preview.total} filas: {preview.valid} nuevas, {preview.existing}
+            {' '}existentes y {preview.errors} con error.
+          </p>
+          <div className="catalog-table-scroll">
+            <table>
+              <caption>Validación y errores por fila del CSV</caption>
+              <thead><tr><th scope="col">Fila</th><th scope="col">Estado</th>
+                <th scope="col">Observaciones</th></tr></thead>
+              <tbody>
+                {preview.rows.map((row, index) => (
+                  <tr key={row.row + '-' + index}>
+                    <td>{row.row}</td>
+                    <td>{row.status === 'valid' ? 'Nueva' :
+                      row.status === 'existing' ? 'Existente' : 'Error'}</td>
+                    <td>{row.errors?.join('; ') || 'Sin errores'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {preview.errors > 0 && (
+            <p className="muted" role="status">
+              Las filas con errores se omitirán; revisa el archivo antes de confirmar.
+            </p>
+          )}
+          <button type="button" className="button"
+            disabled={phase !== null || preview.valid === 0}
+            onClick={() => void confirmImport()}>
+            {phase === 'commit' ? 'Importando…' : 'Confirmar importación'}
+          </button>
+        </div>
+      )}
+    </article>
   );
 }
 
