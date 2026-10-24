@@ -48,7 +48,8 @@ final class CustomerSearchTest extends TestCase
 
     public function testNewAndWithoutRecentPurchasesAreDeterministicAndScoped(): void
     {
-        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $now = (new DateTimeImmutable('now', new DateTimeZone('UTC')))
+            ->modify('+1 minute');
         $tenant = $this->tenant('local');
         $other = $this->tenant('other');
         $recent = new Customer($tenant, 'Compra reciente');
@@ -81,7 +82,8 @@ final class CustomerSearchTest extends TestCase
 
     public function testTopPurchasersAreCountedWithoutCancelledOrForeignOrders(): void
     {
-        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $now = (new DateTimeImmutable('now', new DateTimeZone('UTC')))
+            ->modify('+1 minute');
         $tenant = $this->tenant('top');
         $foreign = $this->tenant('foreign');
         $top = new Customer($tenant, 'Top de compras');
