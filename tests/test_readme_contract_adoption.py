@@ -1,6 +1,8 @@
 import json
+import re
 import unittest
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 ROOT=Path(__file__).resolve().parents[1]
 SECTIONS=(
@@ -21,21 +23,42 @@ class ReadmeContractAdoptionTests(unittest.TestCase):
         self.assertEqual("Condor App",data["name"]); self.assertEqual("construction",data["phase"])
         self.assertEqual("https://github.com/pl0n3r/Condor/issues/1",data["roadmap"])
 
-    def test_readme_has_contract_v1_anatomy(self):
+    def test_readme_has_contract_v2_anatomy(self):
         text=self.read("README.md"); pos=[]
         self.assertEqual("# Condor App",text.splitlines()[0])
         for section in SECTIONS:
             heading=f"## {section}"; self.assertEqual(1,text.count(heading),heading); pos.append(text.index(heading))
         self.assertEqual(sorted(pos),pos)
 
-    def test_derived_blocks_fail_closed_without_evidence(self):
+    def test_readme_is_contract_v2_without_unknown_blocks(self):
         text=self.read("README.md")
-        for marker in (*STATUS,*PROGRESS): self.assertEqual(1,text.count(marker),marker)
-        status=text.split(STATUS[0],1)[1].split(STATUS[1],1)[0]
-        progress=text.split(PROGRESS[0],1)[1].split(PROGRESS[1],1)[0]
-        self.assertNotIn("GREEN",status); self.assertNotIn("DEGRADED",status)
-        self.assertIn("| main SHA | UNKNOWN |",status)
-        self.assertIn("| Readiness | UNKNOWN |",progress)
+        cockpit=text.split("## Operational Cockpit",1)[1].split("\n## ",1)[0]
+        for stale in (*STATUS,*PROGRESS,"UNKNOWN","Progress + Readiness"):
+            self.assertNotIn(stale,text)
+        self.assertNotIn("| Señal | Estado |",cockpit)
+        self.assertIn("https://github.com/pl0n3r/Condor/actions/workflows/ci.yml",cockpit)
+        self.assertIn("badge.svg?branch=main",cockpit)
+        self.assertIn("https://github.com/pl0n3r/Condor/releases",cockpit)
+        self.assertIn("img.shields.io/github/v/release/pl0n3r/Condor",cockpit)
+        self.assertIn("https://control.condorapp.com.co/",cockpit)
+        positions=[text.index(f"## {section}") for section in SECTIONS]
+        self.assertEqual(sorted(positions),positions)
+
+    def test_product_areas_match_eight_operational_modules(self):
+        text=self.read("README.md")
+        product=text.split("## Qué hace el producto",1)[1].split("## Arquitectura en 60 segundos",1)[0]
+        entries=[line for line in product.splitlines() if line.startswith("- **")]
+        expected=(
+            "Catálogo, variantes y precios", "Tienda y checkout",
+            "Pedidos y ventas", "Clientes y categorías",
+            "Inventario por sede", "Compras y proveedores",
+            "Producción y materiales", "Reportes CSV tenant-safe",
+        )
+        self.assertEqual(8,len(entries))
+        for actual,area in zip(entries,expected):
+            self.assertTrue(actual.startswith(f"- **{area}:**"),actual)
+        self.assertIn("OrderController.php",entries[2])
+        self.assertIn("CustomerController.php",entries[3])
 
     def test_readme_caller_only_on_document_changes(self):
         """F2B: preserve exact reusable README validation on documentation edits."""
@@ -82,11 +105,43 @@ class ReadmeContractAdoptionTests(unittest.TestCase):
         self.assertIn("cancel-in-progress: true",workflow)
         self.assertIn("github.event.pull_request.draft == false",workflow)
 
+    def assert_work_queue_now_is_dynamic(self, text):
+        work_queue=text.split("## Work Queue",1)[1].split("## Qué hace el producto",1)[0]
+        now=[line for line in work_queue.splitlines() if line.startswith("- **NOW:** ")]
+        self.assertEqual(1,len(now))
+        self.assertNotIn("#824",now[0])
+        self.assertNotIn("/issues/824",now[0])
+        links=re.findall(r"\]\((https://github\.com/pl0n3r/Condor/issues\?q=[^)]+)\)",now[0])
+        self.assertEqual(2,now[0].count("]("))
+        self.assertEqual(2,len(links))
+        queries=[parse_qs(urlsplit(link).query)["q"][0] for link in links]
+        self.assertEqual([
+            'is:issue is:open label:"estado: reservado"',
+            'is:issue is:open label:"estado: en revisión"',
+        ],queries)
+
+    def test_work_queue_now_excludes_closed_824(self):
+        text=self.read("README.md")
+        self.assert_work_queue_now_is_dynamic(text)
+        stale=text.replace(
+            "[Issues reservados](https://github.com/pl0n3r/Condor/issues?q=is%3Aissue+is%3Aopen+label%3A%22estado%3A+reservado%22)",
+            "[#824 cerrado](https://github.com/pl0n3r/Condor/issues/824)",1,
+        )
+        self.assertNotEqual(text,stale)
+        with self.assertRaises(AssertionError):
+            self.assert_work_queue_now_is_dynamic(stale)
+        not_open=text.replace("is%3Aopen+label%3A%22estado%3A+reservado%22",
+                              "label%3A%22estado%3A+reservado%22",1)
+        self.assertNotEqual(text,not_open)
+        with self.assertRaises(AssertionError):
+            self.assert_work_queue_now_is_dynamic(not_open)
+
     def test_work_queue_links_canonical_roadmap(self):
         text=self.read("README.md")
         q=text.split("## Work Queue",1)[1].split("## Qué hace el producto",1)[0]
         for label in ("NOW","NEXT","LATER","BLOCKED"): self.assertEqual(1,q.count(f"**{label}:**"))
         self.assertIn("https://github.com/pl0n3r/Condor/issues/1",q)
+        self.assert_work_queue_now_is_dynamic(text)
 
     def test_factory_map_preserves_roles(self):
         text=self.read("README.md").split("## Mapa de la fábrica",1)[1]
