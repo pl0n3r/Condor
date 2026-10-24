@@ -79,6 +79,89 @@ if ($a['entitlements'][0]['allowed']!==true || $c['entitlements'][0]['allowed']!
         self.assertNotIn('12500', SOURCE.read_text())
         self.assertNotIn('98765', SOURCE.read_text())
 
+
+    def test_quote_required_null_prices_keep_ready_projection(self):
+        result = run_php(r'''
+$quote = $catalog('tenant-a');
+$quote['plan']['price_minor'] = null;
+$quote['add_ons'][0]['price_minor'] = null;
+$reader = new SaasControlCenterReader(fn($t) => $quote, $usage, $ents);
+$projection = $reader->read('ROLE_PLATFORM_OWNER', 'tenant-a', 'tenant-a');
+if ($projection['state'] !== 'ready' || $projection['tenant_id'] !== 'tenant-a'
+    || !array_key_exists('price_minor', $projection['plan'])
+    || $projection['plan']['price_minor'] !== null
+    || count($projection['add_ons']) !== 1
+    || !array_key_exists('price_minor', $projection['add_ons'][0])
+    || $projection['add_ons'][0]['price_minor'] !== null
+    || $projection['usage'][0]['used'] !== 3
+    || $projection['entitlements'][0]['allowed'] !== true) exit(81);
+$json = json_encode($projection, JSON_THROW_ON_ERROR);
+if (!str_contains($json, '"price_minor":null')) exit(82);
+// A mixed catalog keeps the known price unchanged while the other is quoted.
+$onlyPlanQuoted = $catalog('tenant-a');
+$onlyPlanQuoted['plan']['price_minor'] = null;
+$a = (new SaasControlCenterReader(fn($t) => $onlyPlanQuoted, $usage, $ents))
+    ->read('ROLE_PLATFORM_OWNER', 'tenant-a', 'tenant-a');
+if ($a['plan']['price_minor'] !== null || $a['add_ons'][0]['price_minor'] !== 2500) exit(90);
+$onlyAddonQuoted = $catalog('tenant-a');
+$onlyAddonQuoted['add_ons'][0]['price_minor'] = null;
+$b = (new SaasControlCenterReader(fn($t) => $onlyAddonQuoted, $usage, $ents))
+    ->read('ROLE_PLATFORM_OWNER', 'tenant-a', 'tenant-a');
+if ($b['plan']['price_minor'] !== 12500 || $b['add_ons'][0]['price_minor'] !== null) exit(91);
+try {
+    $reader->read('ROLE_PLATFORM_OWNER', 'tenant-b', 'tenant-a');
+    exit(83);
+} catch (DomainException $e) {
+    if ($e->getMessage() !== 'Acceso a tenant no autorizado.') exit(84);
+}
+''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_nullable_prices_reject_missing_and_invalid_payloads(self):
+        result = run_php(r'''
+$invalid = [
+    ['plan', 'missing'], ['addon', 'missing'],
+    ['plan', -1], ['addon', -1],
+    ['plan', 'unknown'], ['addon', 'unknown'],
+    ['plan', 1.2], ['addon', 1.2],
+    ['plan', 9007199254740992], ['addon', 9007199254740992],
+];
+foreach ($invalid as [$target, $value]) {
+    $bad = $catalog('tenant-a');
+    if ($target === 'plan') {
+        if ($value === 'missing') unset($bad['plan']['price_minor']);
+        else $bad['plan']['price_minor'] = $value;
+    } else {
+        if ($value === 'missing') unset($bad['add_ons'][0]['price_minor']);
+        else $bad['add_ons'][0]['price_minor'] = $value;
+    }
+    $reads = 0;
+    $spy = function($tenant) use (&$reads) {$reads++; return [];};
+    try {
+        (new SaasControlCenterReader(fn($t) => $bad, $spy, $spy))
+            ->read('ROLE_PLATFORM_OWNER', 'tenant-a', 'tenant-a');
+        exit(85);
+    } catch (DomainException $e) {
+        if ($reads !== 0) exit(86);
+        $expected = $target === 'plan'
+            ? 'Plan comercial inválido.' : 'Add-on comercial inválido.';
+        if ($e->getMessage() !== $expected) exit(87);
+    }
+}
+$priceUnknown = $catalog('tenant-a');
+$priceUnknown['plan']['price_minor'] = null;
+$badUsage = $usage('tenant-a');
+$badUsage[0]['used'] = null;
+try {
+    (new SaasControlCenterReader(fn($t) => $priceUnknown, fn($t) => $badUsage, $ents))
+        ->read('ROLE_PLATFORM_OWNER', 'tenant-a', 'tenant-a');
+    exit(88);
+} catch (DomainException $e) {
+    if ($e->getMessage() !== 'Uso comercial inválido.') exit(89);
+}
+''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_unauthorized_or_cross_tenant_calls_fail_closed(self):
         result = run_php(r'''
 $hits=0;
