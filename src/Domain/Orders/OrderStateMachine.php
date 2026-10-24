@@ -107,7 +107,7 @@ final class OrderStateMachine
             throw new DomainException('ORDER_STATE_INVALID_LABEL_STATE');
         }
         $label = $tenantLabels[$dimension][$state] ?? self::DEFAULT_LABELS[$dimension][$state];
-        if (!is_string($label) || $label !== trim($label)
+        if ($label !== trim($label)
             || $label === '' || (preg_match_all('/./us', $label) ?: 0) > 80
             || preg_match('/[<>\x00-\x1F\x7F]/u', $label) !== 0) {
             throw new DomainException('ORDER_STATE_INVALID_LABEL');

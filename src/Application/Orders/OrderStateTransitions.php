@@ -44,6 +44,9 @@ final readonly class OrderStateTransitions
         $this->machine->assertTransition($snapshot, $dimension, $target);
         $next = $snapshot;
         $from = $next[$dimension];
+        if (!is_string($from)) {
+            throw new DomainException('ORDER_STATE_INVALID_SNAPSHOT');
+        }
         $next[$dimension] = $target;
         $this->append($next, $dimension, $from, $target, $actorId, $at);
 
