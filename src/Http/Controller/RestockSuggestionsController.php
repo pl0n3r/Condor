@@ -90,9 +90,6 @@ final class RestockSuggestionsController extends AbstractController
             $items = [];
             foreach ($this->entityManager->getRepository(InventoryBalance::class)
                 ->findBy(['tenant' => $tenant, 'source' => $source]) as $balance) {
-                if (!$balance instanceof InventoryBalance) {
-                    continue;
-                }
                 $variant = $balance->variant();
                 if (!$variant->isActive() || !$variant->product()->isActive()) {
                     continue;
