@@ -114,6 +114,26 @@ final class PlatformStaffManagerTest extends KernelTestCase
         }
     }
 
+    public function testTenantAdminCannotReplacePlatformStaffGrants(): void
+    {
+        self::bootKernel();
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $manager = new PlatformStaffManager(
+            $entityManager,
+            new PlatformInvitationSecurity($entityManager),
+        );
+        // A tenant admin has no platform authority even if the target user is staff.
+        $tenantAdmin = new User('unauthorized@example.test', 'Unauthorized admin');
+        $staff = new User('platform-staff@example.test', 'Platform staff', [User::ROLE_PLATFORM_STAFF]);
+        $this->expectException(AccessDeniedException::class);
+        $manager->replaceGrants($tenantAdmin, $staff, [[
+            'tenant_id' => null,
+            'module' => 'orders',
+            'actions' => ['view'],
+        ]]);
+    }
+
     public function testTenantAdminCannotInvitePlatformStaff(): void
     {
         self::bootKernel();

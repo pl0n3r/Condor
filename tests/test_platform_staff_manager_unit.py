@@ -36,8 +36,8 @@ class PlatformStaffManagerUnitTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertRegex(
             result.stdout + result.stderr,
-            r"OK\s*\(\s*2 tests?,",
-            "Both PHP regression tests must execute successfully",
+            r"OK\s*\(\s*3 tests?,",
+            "All three PHP regression tests must execute successfully",
         )
 
 
