@@ -59,6 +59,11 @@ namespace {
     $time=new \DateTimeImmutable('2026-10-24T12:00:00+00:00');
     $a=new WorkflowDefinition('tenant-A','stock','inventory.low_stock',[],[['type'=>'inventory.restock']]);
     $b=new WorkflowDefinition('tenant-B','stock','inventory.low_stock',[],[['type'=>'inventory.restock']]);
+    $forbidden=new WorkflowDefinition('tenant-A','private','inventory.low_stock',[],[
+        ['type'=>'inventory.restock','arguments'=>['private'=>'synthetic_sensitive_marker_856']]
+    ]);
+    denied(fn()=>$repo->save($forbidden,'tenant-A','actor-A',$time),'action arguments must not persist');
+    check((int)$db->fetchOne('SELECT COUNT(*) FROM condor_workflow_definition WHERE workflow_id = ?', ['private'])===0,'no partial action persistence');
     check($repo->save($a,'tenant-A','actor-A',$time)===1,'version 1');
     check($repo->save($b,'tenant-B','actor-B',$time)===1,'partitioned version');
     check($repo->save($a,'tenant-A','actor-A',$time)===2,'version 2');
