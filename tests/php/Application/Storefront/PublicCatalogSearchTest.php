@@ -7,7 +7,6 @@ namespace App\Tests\Application\Storefront;
 use App\Application\Storefront\PublicCatalogSearch;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
-use PHPUnit\Framework\Attributes\DataProvider;
 
 final class PublicCatalogSearchTest extends TestCase
 {
@@ -37,7 +36,7 @@ final class PublicCatalogSearchTest extends TestCase
         self::assertSame('?q=%25_%20%3Cscript%3E&pagina=2', $search->pageHref(2));
     }
 
-    #[DataProvider('invalidQueries')]
+    /** @dataProvider invalidQueries */
     public function testInvalidQueryFailsClosed(array $query): void
     {
         $this->expectException(InvalidArgumentException::class);

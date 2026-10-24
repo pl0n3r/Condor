@@ -112,12 +112,10 @@ final readonly class PublicCatalogPresentation
             ['name' => 'ASC', 'id' => 'ASC'],
             100,
         ) as $categoryOption) {
-            if ($categoryOption instanceof ProductCategory) {
-                $categoryOptions[] = [
-                    'name' => $categoryOption->name(),
-                    'slug' => $categoryOption->slug(),
-                ];
-            }
+            $categoryOptions[] = [
+                'name' => $categoryOption->name(),
+                'slug' => $categoryOption->slug(),
+            ];
         }
 
         $productQuery = $this->entityManager->createQueryBuilder()

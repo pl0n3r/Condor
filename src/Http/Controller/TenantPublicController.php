@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
+use App\Application\Storefront\PublicCatalogPresentation;
 use App\Application\Storefront\PublicCatalogSearch;
 use App\Application\Storefront\StorefrontPresentation;
 use App\Domain\Organization\Entity\Tenant;
