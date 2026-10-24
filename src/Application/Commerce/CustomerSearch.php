@@ -55,8 +55,7 @@ final readonly class CustomerSearch
                 ['tenant' => $tenant, 'active' => true],
                 ['name' => 'ASC', 'id' => 'ASC'],
             ),
-            static fn (mixed $item): bool => $item instanceof Customer
-                && $item->tenant()->id() === $tenant->id()
+            static fn (Customer $item): bool => $item->tenant()->id() === $tenant->id()
                 && $item->isActive(),
         ));
 
@@ -76,8 +75,7 @@ final readonly class CustomerSearch
             $cutoff = $asOf->modify('-90 days');
             foreach ($this->entityManager->getRepository(Order::class)
                 ->findBy(['tenant' => $tenant]) as $order) {
-                if (!$order instanceof Order
-                    || $order->tenant()->id() !== $tenant->id()
+                if ($order->tenant()->id() !== $tenant->id()
                     || $order->orderStatus() === Order::STATUS_CANCELLED
                     || $order->createdAt() > $asOf) {
                     continue;
