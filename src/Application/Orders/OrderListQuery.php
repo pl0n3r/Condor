@@ -39,8 +39,7 @@ final class OrderListQuery
             return $empty;
         }
         foreach ($authorizedSources as $source) {
-            if (!$source instanceof InventorySource
-                || $source->tenant()->id() !== $tenant->id()
+            if ($source->tenant()->id() !== $tenant->id()
                 || $source->legalEntity()->id() !== $legalEntity->id()) {
                 throw new DomainException('ORDER_LIST_INVALID_SCOPE');
             }
