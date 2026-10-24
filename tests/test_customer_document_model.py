@@ -61,6 +61,14 @@ class CustomerDocumentModelTests(unittest.TestCase):
         source = CUSTOMER.read_text(encoding="utf-8")
         self.assertNotIn("LoggerInterface", source)
         self.assertNotIn("error_log(", source)
+        for path in (
+            ROOT / "docs/privacidad/politica-tratamiento.md",
+            ROOT / "docs/privacidad/aviso-privacidad.md",
+            ROOT / "docs/privacidad/registro-tratamientos.md",
+        ):
+            self.assertTrue(path.is_file())
+            doc = path.read_text(encoding="utf-8")
+            self.assertIn("document_number", doc)
 
     @staticmethod
     def _treatment() -> dict:
