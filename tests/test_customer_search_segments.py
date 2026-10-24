@@ -15,12 +15,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SERVICE = ROOT / "src/Application/Commerce/CustomerSearch.php"
 PHP_TEST = ROOT / "tests/php/Application/Commerce/CustomerSearchTest.php"
+RECORD = ROOT / "src/Domain/Commerce/Entity/CommercialRecord.php"
 
 
 class ClientesBusquedaSegmentosTests(unittest.TestCase):
     def test_acceptance(self) -> None:
         self.assertTrue(SERVICE.is_file(), "Falta la consulta tenant-scoped")
         self.assertTrue(PHP_TEST.is_file(), "Faltan pruebas PHPUnit efectivas")
+        self.assertTrue(RECORD.is_file(), "Falta el origen de fecha de creación")
+        self.assertIn("function createdAt(): DateTimeImmutable", RECORD.read_text(encoding="utf-8"))
         source = SERVICE.read_text(encoding="utf-8")
         cases = PHP_TEST.read_text(encoding="utf-8")
 
