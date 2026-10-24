@@ -232,7 +232,7 @@ final readonly class OrderService
             return false;
         }
         foreach ($lines as $line) {
-            if (!$line instanceof OrderLine || !$line->variant()->product()->isService()) {
+            if (!$line->variant()->product()->isService()) {
                 return false;
             }
         }
