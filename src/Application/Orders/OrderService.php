@@ -67,7 +67,7 @@ final readonly class OrderService
                 }
 
                 $reservations = $this->reservationsForOrder($order);
-                if ($reservations === []) {
+                if ($reservations === [] && !$this->isServiceOnlyOrder($order)) {
                     throw new DomainException(
                         'El pedido reservado no tiene reservas asociadas.',
                     );
@@ -126,7 +126,7 @@ final readonly class OrderService
                 }
 
                 $reservations = $this->reservationsForOrder($order);
-                if ($reservations === []) {
+                if ($reservations === [] && !$this->isServiceOnlyOrder($order)) {
                     throw new DomainException(
                         'El pedido reservado no tiene reservas asociadas.',
                     );
@@ -184,7 +184,7 @@ final readonly class OrderService
                 }
 
                 $reservations = $this->reservationsForOrder($order);
-                if ($reservations === []) {
+                if ($reservations === [] && !$this->isServiceOnlyOrder($order)) {
                     throw new DomainException(
                         'El pedido reservado no tiene reservas asociadas.',
                     );
@@ -220,6 +220,24 @@ final readonly class OrderService
                 return $order;
             },
         );
+    }
+
+    /** A service-only order is valid without physical inventory reservations. */
+    private function isServiceOnlyOrder(Order $order): bool
+    {
+        $lines = $this->entityManager->getRepository(OrderLine::class)->findBy([
+            'order' => $order,
+        ]);
+        if ($lines === []) {
+            return false;
+        }
+        foreach ($lines as $line) {
+            if (!$line instanceof OrderLine || !$line->variant()->product()->isService()) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /** @return list<InventoryReservation> */
@@ -384,10 +402,12 @@ final readonly class OrderService
                             $price->ruleId,
                         );
                         $entityManager->persist($line);
-                        $this->inventory->reserveOrderLine(
-                            $line,
-                            'reserve:'.$order->id().':'.$line->id(),
-                        );
+                        if (!$line->variant()->product()->isService()) {
+                            $this->inventory->reserveOrderLine(
+                                $line,
+                                'reserve:'.$order->id().':'.$line->id(),
+                            );
+                        }
                     }
 
                     $entityManager->persist(new OrderEvent(
