@@ -130,16 +130,26 @@ final readonly class StockCsvAdjuster
         foreach ($parsed['rows'] as $row) {
             try {
                 [$source, $variant] = $this->resolve($tenant, $actor, $row);
+                $key = self::rowKey($tenant->id(), $parsed['sha256'], $row['line']);
+                // Validate normal business conflicts before opening an ORM
+                // transaction. A failed wrapInTransaction closes the EM and
+                // would otherwise prevent processing later valid CSV rows.
+                $prior = $commit
+                    ? $this->entityManager->getRepository(InventoryMovement::class)->findOneBy([
+                        'tenant' => $tenant, 'idempotencyKey' => $key,
+                    ])
+                    : null;
+                $balance = $this->balance($tenant, $source, $variant);
+                if (!$prior instanceof InventoryMovement) {
+                    self::assertTargetAllowed($variant, $balance, $row['quantity']);
+                }
                 if ($commit) {
                     $item = $this->commitRow(
                         $tenant, $actor, $source, $variant, $row,
-                        self::rowKey($tenant->id(), $parsed['sha256'], $row['line']),
-                        $parsed['sha256'],
+                        $key, $parsed['sha256'],
                     );
                 } else {
-                    $balance = $this->balance($tenant, $source, $variant);
                     $current = $balance?->quantity() ?? 0;
-                    self::assertTargetAllowed($variant, $balance, $row['quantity']);
                     $item = [
                         'line' => $row['line'], 'sku' => $row['sku'],
                         'branch_id' => $row['branch_id'], 'status' => 'valid',
