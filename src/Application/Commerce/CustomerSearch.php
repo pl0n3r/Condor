@@ -142,6 +142,6 @@ final readonly class CustomerSearch
 
         // Unicode NFD: una tilde combinada debe buscar igual que NFC (p. ej., e + U+0301).
         // preg_replace devuelve null ante UTF-8 inválido: nunca ampliar un filtro corrupto.
-        return preg_replace('/\\p{Mn}+/u', '', $folded) ?? $folded;
+        return preg_replace('/\p{Mn}+/u', '', $folded) ?? $folded;
     }
 }

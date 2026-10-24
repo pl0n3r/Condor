@@ -31,7 +31,7 @@ final class CustomerSearchTest extends TestCase
             documentNumber: 'CC-102.030',
         );
         $pablo = new Customer($tenant, 'Pablo Ñúñez', 'pablo@example.test', '310 999 1234');
-        $decomposed = new Customer($tenant, "Jose\\u{0301} García");
+        $decomposed = new Customer($tenant, "Jose\u{0301} García");
         $secret = new Customer(
             $foreign, 'Ángela extranjera', 'foreign@example.test', '300 123 4567',
             documentNumber: 'CC-102.030',
@@ -43,7 +43,7 @@ final class CustomerSearchTest extends TestCase
         $service = $this->service([$angela, $pablo, $secret, $inactive, $decomposed]);
 
         self::assertSame([$angela->id()], $this->ids($service->search($tenant, 'ANGELA')));
-        self::assertSame([$angela->id()], $this->ids($service->search($tenant, "A\\u{0301}NGELA")));
+        self::assertSame([$angela->id()], $this->ids($service->search($tenant, "A\u{0301}NGELA")));
         self::assertSame([$decomposed->id()], $this->ids($service->search($tenant, 'jose garcia')));
         self::assertSame([$angela->id()], $this->ids($service->search($tenant, 'perez')));
         self::assertSame([$angela->id()], $this->ids($service->search($tenant, '102.0')));
