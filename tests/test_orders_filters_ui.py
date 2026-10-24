@@ -64,7 +64,24 @@ class UiPedidosFiltrosTests(unittest.TestCase):
         self.assertIn("o.inventorySource IN (:sources)", QUERY)
         self.assertIn("'per_page' => $perPage", QUERY)
         self.assertIn("'has_more' => $page * $perPage < $total", QUERY)
-        self.assertIn("ORDER_LIST_INVALID_FILTER", QUERY)
+        # La API conserva límites y validaciones aunque la UI haya cambiado:
+        # evita consultas sin límites, rangos inválidos y filtros arbitrarios.
+        for guard in (
+            "ORDER_LIST_UNKNOWN_FILTER",
+            "ORDER_LIST_INVALID_FILTER",
+            "ORDER_LIST_INVALID_CUSTOMER",
+            "ORDER_LIST_INVALID_SEARCH",
+            "ORDER_LIST_INVALID_DATE",
+            "ORDER_LIST_INVALID_RANGE",
+            "ORDER_LIST_INVALID_PAGINATION",
+            "->setFirstResult(($page - 1) * $perPage)",
+            "->setMaxResults($perPage)",
+            "->addOrderBy('o.id',",
+        ):
+            with self.subTest(guard=guard):
+                self.assertIn(guard, QUERY)
+        self.assertIn("ordersPath(branchId) + '?' + params.toString()", PANEL)
+        self.assertNotIn("tenant_id:", PANEL)
 
 
 if __name__ == "__main__":
