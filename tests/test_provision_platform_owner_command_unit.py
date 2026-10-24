@@ -39,6 +39,7 @@ class ProvisionPlatformOwnerCommandUnitTests(unittest.TestCase):
             "testNewOwnerIsProvisionedAndPasswordIsNeverPrinted",
             "testRepeatedProvisioningKeepsTheSameOwnerAndRotatesHash",
             "testSecondOwnerIsRejectedAndTransactionRollsBackWithoutLeakingPassword",
+            "testDatabaseFailureReturnsFailureWithoutPrintingPassword",
         ):
             self.assertIn(f"function {method}(", suite)
         for essential in (

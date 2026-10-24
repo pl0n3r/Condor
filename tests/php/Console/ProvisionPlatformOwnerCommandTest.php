@@ -190,4 +190,24 @@ final class ProvisionPlatformOwnerCommandTest extends TestCase
         self::assertStringContainsString('propietario de plataforma distinto', $tester->getDisplay());
         self::assertStringNotContainsString(self::PASSWORD, $tester->getDisplay());
     }
+
+    public function testDatabaseFailureReturnsFailureWithoutPrintingPassword(): void
+    {
+        putenv(self::ENV.'='.self::PASSWORD);
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager->expects(self::once())->method('getConnection')
+            ->willThrowException(new \RuntimeException('Synthetic storage is temporarily unavailable'));
+        $hasher = $this->createMock(UserPasswordHasherInterface::class);
+        $hasher->expects(self::never())->method('hashPassword');
+        $tester = new CommandTester(new ProvisionPlatformOwnerCommand(
+            new ProvisionPlatformOwner($entityManager, $hasher),
+        ));
+        self::assertSame(Command::FAILURE, $tester->execute([
+            '--email' => 'owner@example.test',
+            '--name' => 'Owner',
+            '--password-env' => self::ENV,
+        ]));
+        self::assertStringContainsString('Synthetic storage is temporarily unavailable', $tester->getDisplay());
+        self::assertStringNotContainsString(self::PASSWORD, $tester->getDisplay());
+    }
 }
