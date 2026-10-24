@@ -15,8 +15,8 @@ use DomainException;
 /**
  * Consulta interna de clientes existentes, siempre limitada al tenant.
  *
- * No almacena términos ni registra datos personales. Los clientes no tienen
- * todavía atributo de documento: no se suplanta con notas o identificadores.
+ * No almacena términos ni registra datos personales. El documento sólo se lee
+ * desde Customer::documentNumber(), provisto por la hoja separada #889.
  */
 final readonly class CustomerSearch
 {
@@ -131,7 +131,7 @@ final readonly class CustomerSearch
 
     private static function fold(string $value): string
     {
-        return strtr(mb_strtolower(trim($value), 'UTF-8'), [
+        $folded = strtr(mb_strtolower(trim($value), 'UTF-8'), [
             'á' => 'a', 'à' => 'a', 'ä' => 'a', 'â' => 'a',
             'é' => 'e', 'è' => 'e', 'ë' => 'e', 'ê' => 'e',
             'í' => 'i', 'ì' => 'i', 'ï' => 'i', 'î' => 'i',
@@ -139,5 +139,9 @@ final readonly class CustomerSearch
             'ú' => 'u', 'ù' => 'u', 'ü' => 'u', 'û' => 'u',
             'ñ' => 'n',
         ]);
+
+        // Unicode NFD: una tilde combinada debe buscar igual que NFC (p. ej., e + U+0301).
+        // preg_replace devuelve null ante UTF-8 inválido: nunca ampliar un filtro corrupto.
+        return preg_replace('/\\p{Mn}+/u', '', $folded) ?? $folded;
     }
 }
