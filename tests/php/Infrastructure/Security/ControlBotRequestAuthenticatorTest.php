@@ -176,4 +176,17 @@ final class ControlBotRequestAuthenticatorTest extends KernelTestCase
             self::assertSame(0, $this->claimedNonces());
         }
     }
+
+    public function testDifferentKeyIdFailsWithoutClaimingNonce(): void
+    {
+        $request = $this->signedRequest();
+        $request->headers->set('X-Factory-Key-Id', 'untrusted-client');
+        try {
+            $this->authenticator()->authenticate($request);
+            self::fail('A foreign signing key identifier must be rejected.');
+        } catch (UnauthorizedHttpException) {
+            self::assertSame(0, $this->claimedNonces());
+        }
+    }
+
 }
