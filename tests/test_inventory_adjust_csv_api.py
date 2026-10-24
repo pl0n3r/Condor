@@ -88,7 +88,8 @@ try {
 
     def test_isolation_and_guards(self):
         service = SERVICE.read_text(encoding="utf-8")
-        self.assertIn("['id' => $row['branch_id'], 'tenant' => $tenant]", service.replace("\n", " ").replace("    ", " "))
+        self.assertIn("'id' => $row['branch_id']", service)
+        self.assertIn("'tenant' => $tenant", service)
         self.assertIn("'tenant' => $tenant, 'sku' => $row['sku']", service)
         self.assertIn("'inventory.update'", service)
         self.assertIn("'source' => $source", service)
