@@ -104,8 +104,7 @@ final readonly class ServiceItemService
 
         $pricesByVariant = [];
         foreach ($prices as $price) {
-            if ($price instanceof VariantPrice
-                && $price->priceList()->tenant()->id() === $tenant->id()
+            if ($price->priceList()->tenant()->id() === $tenant->id()
                 && $price->priceList()->isActive()
                 && $price->variant()->tenant()->id() === $tenant->id()) {
                 $pricesByVariant[$price->variant()->id()][] = [
@@ -118,8 +117,7 @@ final readonly class ServiceItemService
 
         $byProduct = [];
         foreach ($variants as $variant) {
-            if (!$variant instanceof ProductVariant
-                || $variant->tenant()->id() !== $tenant->id()
+            if ($variant->tenant()->id() !== $tenant->id()
                 || !$variant->product()->isService()) {
                 continue;
             }
@@ -133,8 +131,7 @@ final readonly class ServiceItemService
 
         $items = [];
         foreach ($products as $product) {
-            if (!$product instanceof Product
-                || $product->tenant()->id() !== $tenant->id()
+            if ($product->tenant()->id() !== $tenant->id()
                 || !$product->isService()) {
                 continue;
             }
