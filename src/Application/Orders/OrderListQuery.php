@@ -87,8 +87,8 @@ final class OrderListQuery
 
         $counter = clone $query;
         $total = (int) $counter->select('COUNT(o.id)')->getQuery()->getSingleScalarResult();
-        $rows = $query->orderBy('o.createdAt', 'DESC')
-            ->addOrderBy('o.id', 'DESC')
+        $rows = $query->orderBy('o.createdAt', \SortDirection::Descending)
+            ->addOrderBy('o.id', \SortDirection::Descending)
             ->setFirstResult(($page - 1) * $perPage)
             ->setMaxResults($perPage)
             ->getQuery()->getResult();

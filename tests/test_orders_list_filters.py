@@ -36,7 +36,7 @@ class PedidosFiltrosTests(unittest.TestCase):
         for required in (
             "'o.tenant = :tenant'", "'o.legalEntity = :legalEntity'",
             "'o.inventorySource IN (:sources)'", "COUNT(o.id)",
-            "addOrderBy('o.id', 'DESC')", "setMaxResults($perPage)",
+            "addOrderBy('o.id', \\SortDirection::Descending)", "setMaxResults($perPage)",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, service)
