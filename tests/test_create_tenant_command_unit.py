@@ -30,6 +30,8 @@ class CreateTenantCommandUnitTests(unittest.TestCase):
             "testDuplicateOwnerEmailAlsoPreventsTransaction",
             "testSuccessfulProvisioningReturnsIdsButNeverThePassword",
         }.issubset(scenarios))
+        self.assertIn("new CreateTenant(", suite)
+        self.assertIn("new FunctionalSignalRecorder(", suite)
         self.assertIn("self::SECRET", suite)
         self.assertIn("wrapInTransaction", suite)
         self.assertIn("assertStringNotContainsString", suite)
