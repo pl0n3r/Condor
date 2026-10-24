@@ -20,6 +20,29 @@ final class ProvisionPlatformOwnerCommandTest extends TestCase
     private const ENV = 'CONDOR_TEST_PLATFORM_OWNER_PASSWORD_845';
     private const PASSWORD = 'synthetic-test-password-123456';
 
+
+    private function command(
+        EntityManagerInterface $entityManager,
+        ?UserPasswordHasherInterface $hasher = null,
+    ): ProvisionPlatformOwnerCommand {
+        return new ProvisionPlatformOwnerCommand(new ProvisionPlatformOwner(
+            $entityManager,
+            $hasher ?? $this->createMock(UserPasswordHasherInterface::class),
+        ));
+    }
+
+    private function runCommand(
+        CommandTester $tester,
+        string $email = 'owner@example.test',
+        string $name = 'Owner',
+    ): int {
+        return $tester->execute([
+            '--email' => $email,
+            '--name' => $name,
+            '--password-env' => self::ENV,
+        ]);
+    }
+
     protected function tearDown(): void
     {
         putenv(self::ENV);
@@ -30,18 +53,11 @@ final class ProvisionPlatformOwnerCommandTest extends TestCase
     {
         $entityManager = $this->createMock(EntityManagerInterface::class);
         $entityManager->expects(self::never())->method('getConnection');
-        $command = new ProvisionPlatformOwnerCommand(new ProvisionPlatformOwner(
-            $entityManager,
-            $this->createMock(UserPasswordHasherInterface::class),
-        ));
+        $command = $this->command($entityManager);
         foreach ([false, ''] as $value) {
             $value === false ? putenv(self::ENV) : putenv(self::ENV.'='.$value);
             $tester = new CommandTester($command);
-            self::assertSame(Command::FAILURE, $tester->execute([
-                '--email' => 'owner@example.test',
-                '--name' => 'Owner',
-                '--password-env' => self::ENV,
-            ]));
+            self::assertSame(Command::FAILURE, $this->runCommand($tester, 'owner@example.test', 'Owner'));
             self::assertStringContainsString('Define '.self::ENV, $tester->getDisplay());
             self::assertStringNotContainsString(self::PASSWORD, $tester->getDisplay());
         }
@@ -51,10 +67,7 @@ final class ProvisionPlatformOwnerCommandTest extends TestCase
     {
         $entityManager = $this->createMock(EntityManagerInterface::class);
         $entityManager->expects(self::never())->method('getConnection');
-        $command = new ProvisionPlatformOwnerCommand(new ProvisionPlatformOwner(
-            $entityManager,
-            $this->createMock(UserPasswordHasherInterface::class),
-        ));
+        $command = $this->command($entityManager);
         $cases = [
             ['bad-email', 'Owner', self::PASSWORD, 'correo del propietario no es válido'],
             ['owner@example.test', ' ', self::PASSWORD, 'nombre del propietario es obligatorio'],
@@ -63,11 +76,7 @@ final class ProvisionPlatformOwnerCommandTest extends TestCase
         foreach ($cases as [$email, $name, $password, $message]) {
             putenv(self::ENV.'='.$password);
             $tester = new CommandTester($command);
-            self::assertSame(Command::FAILURE, $tester->execute([
-                '--email' => $email,
-                '--name' => $name,
-                '--password-env' => self::ENV,
-            ]));
+            self::assertSame(Command::FAILURE, $this->runCommand($tester, $email, $name));
             self::assertStringContainsString($message, $tester->getDisplay());
             self::assertStringNotContainsString($password, $tester->getDisplay());
         }
@@ -104,14 +113,8 @@ final class ProvisionPlatformOwnerCommandTest extends TestCase
         $passwordHasher->expects(self::once())->method('hashPassword')
             ->with(self::isInstanceOf(User::class), self::PASSWORD)
             ->willReturn('fake-hash-without-the-plaintext');
-        $tester = new CommandTester(new ProvisionPlatformOwnerCommand(
-            new ProvisionPlatformOwner($entityManager, $passwordHasher),
-        ));
-        self::assertSame(Command::SUCCESS, $tester->execute([
-            '--email' => ' OWNER@EXAMPLE.TEST ',
-            '--name' => 'Owner',
-            '--password-env' => self::ENV,
-        ]));
+        $tester = new CommandTester($this->command($entityManager, $passwordHasher));
+        self::assertSame(Command::SUCCESS, $this->runCommand($tester, ' OWNER@EXAMPLE.TEST ', 'Owner'));
         self::assertStringContainsString('owner@example.test', $tester->getDisplay());
         self::assertStringNotContainsString(self::PASSWORD, $tester->getDisplay());
         self::assertStringNotContainsString('fake-hash', $tester->getDisplay());
@@ -145,14 +148,10 @@ final class ProvisionPlatformOwnerCommandTest extends TestCase
 
                 return 'synthetic-hash-'.$hashCalls;
             });
-        $command = new ProvisionPlatformOwnerCommand(new ProvisionPlatformOwner($entityManager, $hasher));
+        $command = $this->command($entityManager, $hasher);
         foreach (range(1, 2) as $attempt) {
             $tester = new CommandTester($command);
-            self::assertSame(Command::SUCCESS, $tester->execute([
-                '--email' => $owner->email(),
-                '--name' => 'Updated Owner',
-                '--password-env' => self::ENV,
-            ]));
+            self::assertSame(Command::SUCCESS, $this->runCommand($tester, $owner->email(), 'Updated Owner'));
             self::assertStringNotContainsString(self::PASSWORD, $tester->getDisplay());
             self::assertSame('synthetic-hash-'.$attempt, $owner->getPassword());
             self::assertTrue($owner->hasRole(User::ROLE_PLATFORM_OWNER));
@@ -179,14 +178,8 @@ final class ProvisionPlatformOwnerCommandTest extends TestCase
         $entityManager->expects(self::never())->method('persist');
         $hasher = $this->createMock(UserPasswordHasherInterface::class);
         $hasher->expects(self::never())->method('hashPassword');
-        $tester = new CommandTester(new ProvisionPlatformOwnerCommand(
-            new ProvisionPlatformOwner($entityManager, $hasher),
-        ));
-        self::assertSame(Command::FAILURE, $tester->execute([
-            '--email' => 'second@example.test',
-            '--name' => 'Second',
-            '--password-env' => self::ENV,
-        ]));
+        $tester = new CommandTester($this->command($entityManager, $hasher));
+        self::assertSame(Command::FAILURE, $this->runCommand($tester, 'second@example.test', 'Second'));
         self::assertStringContainsString('propietario de plataforma distinto', $tester->getDisplay());
         self::assertStringNotContainsString(self::PASSWORD, $tester->getDisplay());
     }
@@ -199,14 +192,8 @@ final class ProvisionPlatformOwnerCommandTest extends TestCase
             ->willThrowException(new \RuntimeException('Synthetic storage is temporarily unavailable'));
         $hasher = $this->createMock(UserPasswordHasherInterface::class);
         $hasher->expects(self::never())->method('hashPassword');
-        $tester = new CommandTester(new ProvisionPlatformOwnerCommand(
-            new ProvisionPlatformOwner($entityManager, $hasher),
-        ));
-        self::assertSame(Command::FAILURE, $tester->execute([
-            '--email' => 'owner@example.test',
-            '--name' => 'Owner',
-            '--password-env' => self::ENV,
-        ]));
+        $tester = new CommandTester($this->command($entityManager, $hasher));
+        self::assertSame(Command::FAILURE, $this->runCommand($tester, 'owner@example.test', 'Owner'));
         self::assertStringContainsString('Synthetic storage is temporarily unavailable', $tester->getDisplay());
         self::assertStringNotContainsString(self::PASSWORD, $tester->getDisplay());
     }
