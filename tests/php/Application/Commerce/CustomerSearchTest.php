@@ -39,7 +39,10 @@ final class CustomerSearchTest extends TestCase
         self::assertSame([$angela->id()], $this->ids($service->search($tenant, 'perez')));
         self::assertSame([$pablo->id()], $this->ids($service->search($tenant, 'nunez')));
         self::assertSame([$pablo->id()], $this->ids($service->search($tenant, '999')));
-        self::assertSame([$angela->id()], $this->ids($service->search($tenant, 'EXAMPLE.TEST', CustomerSearch::SEGMENT_ALL))[0] === $angela->id() ? [$angela->id()] : []);
+        self::assertEqualsCanonicalizing(
+            [$angela->id(), $pablo->id()],
+            $this->ids($service->search($tenant, 'EXAMPLE.TEST')),
+        );
         self::assertSame([], $service->search($tenant, 'extranjera'));
     }
 
