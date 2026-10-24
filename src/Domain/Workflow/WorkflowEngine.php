@@ -16,8 +16,7 @@ final readonly class WorkflowEngine
     public function __construct(private array $registeredActions)
     {
         foreach ($registeredActions as $type => $permission) {
-            if (!is_string($type) || !is_string($permission)
-                || preg_match('/^[a-z][a-z0-9_-]*\.[a-z][a-z0-9_-]*$/D', $type) !== 1
+            if (preg_match('/^[a-z][a-z0-9_-]*\.[a-z][a-z0-9_-]*$/D', $type) !== 1
                 || trim($permission) === '') {
                 throw new DomainException('Registro de acciones inválido.');
             }
@@ -67,10 +66,11 @@ final readonly class WorkflowEngine
         foreach ($definition->conditions as $condition) {
             [$found, $actual] = self::lookup($eventPayload, $condition['field']);
             $matched = match ($condition['operator']) {
-                'eq' => $found && $actual === $condition['value'],
-                'neq' => $found && $actual !== $condition['value'],
-                'in' => $found && in_array($actual, $condition['value'], true),
+                'eq' => $found && $actual === ($condition['value'] ?? null),
+                'neq' => $found && $actual !== ($condition['value'] ?? null),
+                'in' => $found && in_array($actual, (array) ($condition['value'] ?? []), true),
                 'exists' => $found && $actual !== null,
+                default => throw new DomainException('Operador no permitido.'),
             };
             $checks[] = ['field' => $condition['field'], 'matched' => $matched];
             if (!$matched) {
@@ -88,7 +88,10 @@ final readonly class WorkflowEngine
         );
     }
 
-    /** @param array<string, mixed> $payload @return array{bool, mixed} */
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{bool, mixed}
+     */
     private static function lookup(array $payload, string $field): array
     {
         $cursor = $payload;

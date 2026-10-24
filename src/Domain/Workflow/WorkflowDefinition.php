@@ -32,9 +32,7 @@ final readonly class WorkflowDefinition
             throw new DomainException('Un workflow requiere acciones explícitas.');
         }
         foreach ($conditions as $condition) {
-            if (!is_array($condition) || !isset($condition['field'], $condition['operator'])
-                || !is_string($condition['field']) || !is_string($condition['operator'])
-                || preg_match('/^[a-zA-Z][a-zA-Z0-9_.-]*$/D', $condition['field']) !== 1
+            if (preg_match('/^[a-zA-Z][a-zA-Z0-9_.-]*$/D', $condition['field']) !== 1
                 || !in_array($condition['operator'], ['eq', 'neq', 'in', 'exists'], true)
             ) {
                 throw new DomainException('Condición de workflow no permitida.');
@@ -48,9 +46,7 @@ final readonly class WorkflowDefinition
             }
         }
         foreach ($actions as $action) {
-            if (!is_array($action) || !isset($action['type']) || !is_string($action['type'])
-                || preg_match('/^[a-z][a-z0-9_-]*\.[a-z][a-z0-9_-]*$/D', $action['type']) !== 1
-                || (isset($action['arguments']) && !is_array($action['arguments']))) {
+            if (preg_match('/^[a-z][a-z0-9_-]*\.[a-z][a-z0-9_-]*$/D', $action['type']) !== 1) {
                 throw new DomainException('Acción de workflow no permitida.');
             }
         }
