@@ -8,6 +8,7 @@ use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Application\Orders\OrderConflictException;
 use App\Application\Orders\OrderService;
+use App\Application\Orders\OrderListQuery;
 use App\Domain\Catalog\Entity\ProductVariant;
 use App\Domain\Commerce\Entity\Customer;
 use App\Domain\Commerce\Entity\PriceList;
@@ -22,11 +23,13 @@ use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
+use DomainException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -51,7 +54,7 @@ final class OrderController extends AbstractController
         name: 'api_orders',
         methods: ['GET'],
     )]
-    public function index(string $branchId): JsonResponse
+    public function index(string $branchId, Request $request, OrderListQuery $query): JsonResponse
     {
         [$user, $tenant, $branch, $membership] = $this->authorizedBranchScope(
             $branchId,
@@ -65,19 +68,24 @@ final class OrderController extends AbstractController
             $membership,
         );
 
-        $orders = $sources === []
-            ? []
-            : $this->entityManager->getRepository(Order::class)->findBy(
-                [
-                    'tenant' => $tenant,
-                    'legalEntity' => $legalEntity,
-                    'inventorySource' => $sources,
-                ],
-                ['createdAt' => 'DESC'],
-                50,
+        try {
+            $listed = $query->fetch(
+                $this->entityManager,
+                $tenant,
+                $legalEntity,
+                $sources,
+                $request->query->all(),
             );
+        } catch (DomainException $exception) {
+            throw new BadRequestHttpException(
+                'Los filtros de pedidos no son válidos.',
+                $exception,
+            );
+        }
+        $orders = $listed['orders'];
 
         return $this->json([
+            'pagination' => $listed['pagination'],
             'orders' => array_map(
                 fn (Order $order): array => $this->orderPayload($order),
                 $orders,
