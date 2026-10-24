@@ -66,6 +66,7 @@ final readonly class SalesReportReader
         }
 
         // Never accept a tenant or source selector from the HTTP request.
+        /** @var list<array<string, mixed>> $rows */
         $rows = $this->entityManager->createQueryBuilder()
             ->select(
                 'IDENTITY(l.tenant) AS tenant_id',
@@ -184,8 +185,8 @@ final readonly class SalesReportReader
             if (!isset($groups[$key])) {
                 $groups[$key] = $shape;
             } elseif ($dimension === 'product'
-                && ($groups[$key]['product_id'] !== $row['product_id']
-                    || $groups[$key]['sku'] !== $row['sku'])) {
+                && (($groups[$key]['product_id'] ?? null) !== $row['product_id']
+                    || ($groups[$key]['sku'] ?? null) !== $row['sku'])) {
                 throw new DomainException('REPORT_PRODUCT_INVALID');
             }
             $groups[$key]['units'] += $qty;
