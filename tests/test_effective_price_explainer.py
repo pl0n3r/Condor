@@ -120,7 +120,7 @@ namespace {
     $expired = new \DateTimeImmutable('2026-01-01T00:00:00+00:00');
     $r1 = new PriceRule($a, $listA, 'Descuento fijo A', 20, PriceRule::TYPE_FIXED, 1000, null, $from, $until);
     $r2 = new PriceRule($a, $listA, 'Descuento fijo B', 20, PriceRule::TYPE_FIXED, 1800, null, $from, $until);
-    $rExpired = new PriceRule($a, $listA, 'Expirado', 99, PriceRule::TYPE_FIXED, 9500, null, $from, $expired);
+    $rExpired = new PriceRule($a, $listA, 'Expirado', 99, PriceRule::TYPE_FIXED, 9500, null, new \DateTimeImmutable('2025-01-01T00:00:00+00:00'), $expired);
     $rForeign = new PriceRule($b, $listB, 'No filtrar', 100, PriceRule::TYPE_FIXED, 5000);
     $ruleRepo = new MemoryRepo([$rForeign, $r2, $rExpired, $r1]);
     $manager = new MemoryManager([
