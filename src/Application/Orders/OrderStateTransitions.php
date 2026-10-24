@@ -24,7 +24,15 @@ final readonly class OrderStateTransitions
     }
 
     /**
-     * @param array{tenant_id:string,order:string,payment:string,fulfillment:string,total_minor:int,paid_minor:int,history:list<array<string,string|int>>} $snapshot
+     * @param array{
+     *   tenant_id:string,
+     *   order:string,
+     *   payment:string,
+     *   fulfillment:string,
+     *   total_minor:int,
+     *   paid_minor:int,
+     *   history:list<array<string,string|int>>
+     * } $snapshot
      * @return array<string,mixed>
      */
     public function change(
@@ -61,7 +69,15 @@ final readonly class OrderStateTransitions
     }
 
     /**
-     * @param array{tenant_id:string,order:string,payment:string,fulfillment:string,total_minor:int,paid_minor:int,history:list<array<string,string|int>>} $snapshot
+     * @param array{
+     *   tenant_id:string,
+     *   order:string,
+     *   payment:string,
+     *   fulfillment:string,
+     *   total_minor:int,
+     *   paid_minor:int,
+     *   history:list<array<string,string|int>>
+     * } $snapshot
      * @return array<string,mixed>
      */
     public function recordPayment(
@@ -97,7 +113,15 @@ final readonly class OrderStateTransitions
         return $next;
     }
 
-    /** @param array{tenant_id:string,order:string,payment:string,fulfillment:string,total_minor:int,paid_minor:int,history:list<array<string,string|int>>} $snapshot */
+    /** @param array{
+     *   tenant_id:string,
+     *   order:string,
+     *   payment:string,
+     *   fulfillment:string,
+     *   total_minor:int,
+     *   paid_minor:int,
+     *   history:list<array<string,string|int>>
+     * } $snapshot */
     public function pendingBalance(array $snapshot): int
     {
         $this->machine->assertSnapshot($snapshot);
@@ -116,8 +140,13 @@ final readonly class OrderStateTransitions
      * @param array<string,mixed> $snapshot
      */
     private function append(
-        array &$snapshot, string $dimension, string $from, string $to,
-        string $actorId, DateTimeImmutable $at, int $amountMinor = 0,
+        array &$snapshot,
+        string $dimension,
+        string $from,
+        string $to,
+        string $actorId,
+        DateTimeImmutable $at,
+        int $amountMinor = 0,
     ): void {
         $snapshot['history'][] = [
             'dimension' => $dimension,

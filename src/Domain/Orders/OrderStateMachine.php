@@ -33,7 +33,15 @@ final class OrderStateMachine
         ],
     ];
 
-    /** @return array{tenant_id:string,order:string,payment:string,fulfillment:string,total_minor:int,paid_minor:int,history:list<array<string,string|int>>} */
+    /** @return array{
+     *   tenant_id:string,
+     *   order:string,
+     *   payment:string,
+     *   fulfillment:string,
+     *   total_minor:int,
+     *   paid_minor:int,
+     *   history:list<array<string,string|int>>
+     * } */
     public function initial(string $tenantId, int $totalMinor): array
     {
         if ($tenantId === '' || $totalMinor < 0 || $totalMinor > 9007199254740991) {
@@ -78,7 +86,9 @@ final class OrderStateMachine
     {
         $this->assertSnapshot($snapshot);
         if (!isset(self::NEXT[$dimension]) || !in_array(
-            $target, self::NEXT[$dimension][$snapshot[$dimension]], true,
+            $target,
+            self::NEXT[$dimension][$snapshot[$dimension]],
+            true,
         )) {
             throw new DomainException('ORDER_STATE_TRANSITION_DENIED');
         }
