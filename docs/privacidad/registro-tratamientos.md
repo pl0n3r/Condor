@@ -123,3 +123,13 @@ Producto: `pl0n3r/Condor`
 - Consentimiento: `review_required`
 - Proveedores: ninguno_declarado
 - Retención: `review_required`
+
+## workflow_executions
+
+- Categoría: `usage`
+- Campos de software: `tenant_id`, `workflow_id`, `definition_version`, `actor_user_id`, `result`, `created_at`
+- Finalidad: `workflow_execution_audit`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
