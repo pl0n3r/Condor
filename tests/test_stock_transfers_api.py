@@ -163,9 +163,27 @@ final class StockTransfersApiSmokeTest extends WebTestCase
         ]), ['HTTP_X_CSRF_TOKEN' => $ownerCsrf]);
         self::assertResponseStatusCodeSame(422);
         self::assertSame(2, $movementCount());
+        // No phantom movement, transfer record, destination quantity or audit
+        // may survive a rejected/overdrawn branch transfer.
+        self::assertSame(2, (int) $conn->fetchOne(
+            'SELECT COUNT(*) FROM condor_inventory_movement WHERE tenant_id = ?',
+            [$tenant->id()],
+        ));
+        self::assertSame(1, (int) $conn->fetchOne(
+            'SELECT COUNT(*) FROM condor_inventory_transfer WHERE tenant_id = ?',
+            [$tenant->id()],
+        ));
+        self::assertSame(1, (int) $conn->fetchOne(
+            'SELECT COUNT(*) FROM condor_audit_event WHERE tenant_id = ? AND action = ?',
+            [$tenant->id(), 'inventory.transferred'],
+        ));
         self::assertSame(1, (int) $conn->fetchOne(
             'SELECT quantity FROM condor_inventory_balance WHERE tenant_id = ? AND source_id = ?',
             [$tenant->id(), $from->id()],
+        ));
+        self::assertSame(2, (int) $conn->fetchOne(
+            'SELECT quantity FROM condor_inventory_balance WHERE tenant_id = ? AND source_id = ?',
+            [$tenant->id(), $to->id()],
         ));
     }
 }
