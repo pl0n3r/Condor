@@ -57,7 +57,7 @@ final class OrderCsvExporter
         }
         $allowed = [];
         foreach ($authorizedSourceIds as $sourceId) {
-            if (!is_string($sourceId) || $sourceId === '') {
+            if ($sourceId === '') {
                 throw new DomainException('ORDER_CSV_SCOPE_INVALID');
             }
             $allowed[$sourceId] = true;

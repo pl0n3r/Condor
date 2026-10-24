@@ -72,9 +72,6 @@ final class OrderExportController extends AbstractController
                 ->findBy(['tenant' => $tenant, 'active' => true]);
             $authorizedSources = [];
             foreach ($sources as $source) {
-                if (!$source instanceof InventorySource) {
-                    continue;
-                }
                 if ($membership->roleKey() === Membership::ROLE_OWNER) {
                     $authorizedSources[] = $source;
                     continue;
