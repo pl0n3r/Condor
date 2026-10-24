@@ -212,6 +212,23 @@
       "retention": "review_required",
       "consent": "review_required",
       "providers": []
+    },
+    {
+      "id": "workflow_executions",
+      "category": "usage",
+      "fields": [
+        "tenant_id",
+        "workflow_id",
+        "definition_version",
+        "actor_user_id",
+        "result",
+        "created_at"
+      ],
+      "purpose": "workflow_execution_audit",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
     }
   ]
 }
