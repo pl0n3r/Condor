@@ -13,6 +13,7 @@ use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Inventory\Entity\InventoryTransfer;
 use App\Domain\Organization\Entity\Tenant;
 use App\Domain\Organization\Entity\LegalEntity;
+use App\Domain\Organization\Entity\Branch;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -71,11 +72,15 @@ final class StockTransferController extends AbstractController
         }
         if (!$this->authorization->isOwner($membership)) {
             foreach ([$from, $to] as $source) {
+                $sourceBranch = $source->branch();
+                if (!$sourceBranch instanceof Branch) {
+                    throw new NotFoundHttpException('La fuente no está vinculada a una sede.');
+                }
                 try {
                     $this->authorization->require(
                         $user,
                         $tenant,
-                        $source->branch(),
+                        $sourceBranch,
                         'inventory.update',
                     );
                 } catch (AccessDeniedException $exception) {
