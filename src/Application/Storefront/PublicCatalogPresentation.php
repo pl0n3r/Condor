@@ -6,6 +6,7 @@ namespace App\Application\Storefront;
 
 use App\Application\Commerce\PricingService;
 use App\Domain\Catalog\Entity\Product;
+use App\Domain\Catalog\Entity\ProductCategory;
 use App\Domain\Catalog\Entity\ProductMedia;
 use App\Domain\Catalog\Entity\ProductVariant;
 use App\Domain\Commerce\Entity\SalesChannel;
@@ -29,6 +30,8 @@ final readonly class PublicCatalogPresentation
     /**
      * @return array{
      *   channel: null|array{id:string,name:string,slug:string,type:string},
+     *   filters: array{q:string,categoria:string},
+     *   categories: list<array{name:string,slug:string}>,
      *   products: list<array{
      *     id:string,
      *     name:string,
@@ -53,12 +56,19 @@ final readonly class PublicCatalogPresentation
      *     page:int,
      *     page_size:int,
      *     has_previous:bool,
-     *     has_next:bool
+     *     has_next:bool,
+     *     previous_href:?string,
+     *     next_href:?string
      *   }
      * }
      */
-    public function catalog(Tenant $tenant, int $page = 1): array
-    {
+    public function catalog(
+        Tenant $tenant,
+        int $page = 1,
+        ?PublicCatalogSearch $search = null,
+    ): array {
+        $search ??= new PublicCatalogSearch(page: $page);
+        $page = $search->page();
         if ($page < 1 || $page > self::MAX_PAGE) {
             throw new InvalidArgumentException(
                 'La página del catálogo está fuera del rango permitido.',
@@ -66,7 +76,7 @@ final readonly class PublicCatalogPresentation
         }
 
         if (!$this->salesChannelSchemaReady()) {
-            return $this->emptyCatalog($page);
+            return $this->emptyCatalog($search);
         }
 
         $channel = $this->entityManager
@@ -81,7 +91,7 @@ final readonly class PublicCatalogPresentation
             !$channel instanceof SalesChannel
             || !$channel->isPublishable()
         ) {
-            return $this->emptyCatalog($page);
+            return $this->emptyCatalog($search);
         }
 
         $offset = ($page - 1) * self::PAGE_SIZE;
@@ -95,20 +105,60 @@ final readonly class PublicCatalogPresentation
             ->andWhere('publishable_variant.product = product')
             ->andWhere('publishable_variant.active = true');
 
+        // Category names and identities always come from this tenant.
+        $categoryOptions = [];
+        foreach ($this->entityManager->getRepository(ProductCategory::class)->findBy(
+            ['tenant' => $tenant, 'active' => true],
+            ['name' => 'ASC', 'id' => 'ASC'],
+            100,
+        ) as $categoryOption) {
+            if ($categoryOption instanceof ProductCategory) {
+                $categoryOptions[] = [
+                    'name' => $categoryOption->name(),
+                    'slug' => $categoryOption->slug(),
+                ];
+            }
+        }
+
+        $productQuery = $this->entityManager->createQueryBuilder()
+            ->select('product')
+            ->from(Product::class, 'product')
+            ->where('product.tenant = :tenant')
+            ->andWhere('product.active = true')
+            ->andWhere(
+                $this->entityManager
+                    ->createQueryBuilder()
+                    ->expr()
+                    ->exists($publishablePrice->getDQL()),
+            )
+            ->setParameter('tenant', $tenant)
+            ->setParameter('price_list', $channel->priceList());
+
+        if ($search->term() !== null) {
+            // LOCATE treats % and _ as literal characters, not SQL wildcards.
+            $productQuery
+                ->andWhere('(LOCATE(LOWER(:search_term), LOWER(product.name)) > 0 OR LOCATE(LOWER(:search_term), LOWER(product.description)) > 0)')
+                ->setParameter('search_term', $search->term());
+        }
+        if ($search->categorySlug() !== null) {
+            $category = $this->entityManager->getRepository(ProductCategory::class)
+                ->findOneBy([
+                    'tenant' => $tenant,
+                    'slug' => $search->categorySlug(),
+                    'active' => true,
+                ]);
+            if ($category instanceof ProductCategory) {
+                $productQuery
+                    ->andWhere('product.category = :selected_category')
+                    ->setParameter('selected_category', $category);
+            } else {
+                // Unknown, foreign or inactive categories cannot widen results.
+                $productQuery->andWhere('1 = 0');
+            }
+        }
+
         $products = array_values(array_filter(
-            $this->entityManager->createQueryBuilder()
-                ->select('product')
-                ->from(Product::class, 'product')
-                ->where('product.tenant = :tenant')
-                ->andWhere('product.active = true')
-                ->andWhere(
-                    $this->entityManager
-                        ->createQueryBuilder()
-                        ->expr()
-                        ->exists($publishablePrice->getDQL()),
-                )
-                ->setParameter('tenant', $tenant)
-                ->setParameter('price_list', $channel->priceList())
+            $productQuery
                 ->orderBy('product.name', \SortDirection::Ascending)
                 ->addOrderBy('product.id', \SortDirection::Ascending)
                 ->setFirstResult($offset)
@@ -245,11 +295,16 @@ final readonly class PublicCatalogPresentation
                 'type' => $channel->type(),
             ],
             'products' => $payload,
+            'filters' => $search->filters(),
+            'categories' => $categoryOptions,
             'pagination' => [
                 'page' => $page,
                 'page_size' => self::PAGE_SIZE,
                 'has_previous' => $page > 1,
-                'has_next' => $hasNext,
+                'has_next' => $hasNext && $page < self::MAX_PAGE,
+                'previous_href' => $page > 1 ? $search->pageHref($page - 1) : null,
+                'next_href' => $hasNext && $page < self::MAX_PAGE
+                    ? $search->pageHref($page + 1) : null,
             ],
         ];
     }
@@ -299,25 +354,34 @@ final readonly class PublicCatalogPresentation
     /**
      * @return array{
      *   channel:null,
+     *   filters:array{q:string,categoria:string},
+     *   categories:list<never>,
      *   products:list<never>,
      *   pagination:array{
      *     page:int,
      *     page_size:int,
      *     has_previous:bool,
-     *     has_next:bool
+     *     has_next:bool,
+     *     previous_href:?string,
+     *     next_href:?string
      *   }
      * }
      */
-    private function emptyCatalog(int $page): array
+    private function emptyCatalog(PublicCatalogSearch $search): array
     {
+        $page = $search->page();
         return [
             'channel' => null,
+            'filters' => $search->filters(),
+            'categories' => [],
             'products' => [],
             'pagination' => [
                 'page' => $page,
                 'page_size' => self::PAGE_SIZE,
                 'has_previous' => $page > 1,
                 'has_next' => false,
+                'previous_href' => $page > 1 ? $search->pageHref($page - 1) : null,
+                'next_href' => null,
             ],
         ];
     }
