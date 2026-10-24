@@ -173,8 +173,8 @@ namespace {
     ];
     try {
         $explainer->explain($a, $variantA, $channelA, 2, $now);
-        throw new \\RuntimeException('Overflow monetario no rechazado');
-    } catch (\\DomainException $expected) {
+        throw new \RuntimeException('Overflow monetario no rechazado');
+    } catch (\DomainException $expected) {
         // Fail closed without returning an unsafe amount.
     }
 
