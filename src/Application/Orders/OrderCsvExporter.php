@@ -33,7 +33,7 @@ final class OrderCsvExporter
         $bogota = new DateTimeZone('America/Bogota');
         $start = new DateTimeImmutable($from.' 00:00:00', $bogota);
         $last = new DateTimeImmutable($to.' 00:00:00', $bogota);
-        if ($start > $last || $start->diff($last)->days > 366) {
+        if ($start > $last || $start->diff($last)->days >= 366) {
             throw new DomainException('INVALID_ORDER_CSV_RANGE');
         }
         $utc = new DateTimeZone('UTC');
@@ -126,7 +126,10 @@ final class OrderCsvExporter
         return $text;
     }
 
-    /** @param resource $handle @param list<string> $fields */
+    /**
+     * @param resource $handle
+     * @param list<string> $fields
+     */
     private static function writeRow($handle, array $fields): void
     {
         if (fputcsv($handle, $fields, ',', '"', '') === false) {
