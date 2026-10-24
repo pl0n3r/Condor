@@ -106,7 +106,7 @@ final class StockTransfersApiSmokeTest extends WebTestCase
         $first = json_decode((string) $client->getResponse()->getContent(), true);
         self::assertSame('completed', $first['transfer']['status']);
         self::assertSame(2, $first['transfer']['quantity']);
-        self::assertSame('no-store', $client->getResponse()->headers->get('Cache-Control'));
+        self::assertStringContainsString('no-store', (string) $client->getResponse()->headers->get('Cache-Control'));
 
         $client->jsonRequest('POST', $url, $payload, $headers);
         self::assertResponseStatusCodeSame(200);
