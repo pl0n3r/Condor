@@ -9,7 +9,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PANEL = (ROOT / "frontend/admin/CommerceManagement.tsx").read_text(encoding="utf-8")
 HISTORY = (ROOT / "src/Http/Controller/CustomerHistoryController.php").read_text(encoding="utf-8")
-SEARCH = (ROOT / "src/Application/Commerce/CustomerSearch.php")
 
 
 class UiClientesBusquedaTests(unittest.TestCase):
@@ -59,7 +58,9 @@ class UiClientesBusquedaTests(unittest.TestCase):
 
     def test_backend_search_is_not_faked(self) -> None:
         # The separate backend #852 must provide a real HTTP endpoint before merge.
-        self.assertIn("CustomerSearch", SEARCH.read_text(encoding="utf-8"))
+        self.assertIn("customersPath(branchId) + '/search?'", PANEL)
+        self.assertNotIn("customers.customers.filter(", PANEL)
+        self.assertIn("signal: controller.signal", PANEL)
         self.assertIn("status: 'error'", PANEL)
         self.assertIn("La búsqueda avanzada aún no está disponible.", PANEL)
 
