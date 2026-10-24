@@ -99,7 +99,7 @@ echo 'OK';
             self.assertIn(needle, service)
         self.assertIn("!is_int($amount)", controller)
         self.assertIn("!is_int($duration)", controller)
-        self.assertIn("['id' => $priceListId,", controller.replace("\n", " "))
+        self.assertIn("'id' => $priceListId", controller)
         self.assertIn("assertSameOrderRequest(", orders)
         self.assertIn("self::normalizeItems($tenant, $items)", orders)
 
