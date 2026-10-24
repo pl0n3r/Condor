@@ -17,7 +17,7 @@ Las insignias se actualizan desde sus fuentes vivas al abrir esta página, sin c
 
 ## Work Queue
 
-- **NOW:** [#824 — migración del README a Contract v2](https://github.com/pl0n3r/Condor/issues/824) y [trabajos en revisión](https://github.com/pl0n3r/Condor/issues?q=is%3Aissue+is%3Aopen+label%3A%22estado%3A+en+revisi%C3%B3n%22).
+- **NOW:** [Issues reservados](https://github.com/pl0n3r/Condor/issues?q=is%3Aissue+is%3Aopen+label%3A%22estado%3A+reservado%22) y [trabajos en revisión](https://github.com/pl0n3r/Condor/issues?q=is%3Aissue+is%3Aopen+label%3A%22estado%3A+en+revisi%C3%B3n%22).
 - **NEXT:** [Issues críticos disponibles](https://github.com/pl0n3r/Condor/issues?q=is%3Aissue+is%3Aopen+label%3A%22prioridad%3A+cr%C3%ADtica%22+label%3A%22estado%3A+disponible%22), respetando reservas y dependencias.
 - **LATER:** [Roadmap canónico #1](https://github.com/pl0n3r/Condor/issues/1) y [módulos operativos](https://github.com/pl0n3r/Condor/blob/main/docs/modulos-operativos.md).
 - **BLOCKED:** [Issues bloqueados](https://github.com/pl0n3r/Condor/issues?q=is%3Aissue+is%3Aopen+label%3A%22estado%3A+bloqueado%22); cada Issue conserva la causa y condición de desbloqueo.
