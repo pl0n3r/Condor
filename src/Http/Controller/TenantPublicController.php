@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Storefront\PublicCatalogPresentation;
+use App\Application\Storefront\PublicCatalogSearch;
 use App\Application\Storefront\StorefrontPresentation;
 use App\Domain\Organization\Entity\Tenant;
 use App\Infrastructure\Tenancy\TenantContext;
 use App\Infrastructure\Tenancy\TenantResolver;
 use App\Shared\Version\AppVersion;
 use Doctrine\ORM\EntityManagerInterface;
+use InvalidArgumentException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -51,25 +53,17 @@ final class TenantPublicController extends AbstractController
             throw new NotFoundHttpException();
         }
 
+        try {
+            $search = PublicCatalogSearch::fromQuery($request->query->all());
+        } catch (InvalidArgumentException $exception) {
+            throw new BadRequestHttpException('Los filtros del catálogo no son válidos.', $exception);
+        }
+
         return $this->render('tenant/index.html.twig', [
             'app_version' => $version->human(),
             'storefront' => $storefront->publicIdentity($tenant),
-            'catalog' => $catalog->catalog(
-                $tenant,
-                self::catalogPage($request),
-            ),
+            'catalog' => $catalog->catalog($tenant, $search->page(), $search),
         ]);
     }
 
-    private static function catalogPage(Request $request): int
-    {
-        $page = $request->query->getInt('page', 1);
-        if ($page < 1 || $page > PublicCatalogPresentation::MAX_PAGE) {
-            throw new BadRequestHttpException(
-                'La página solicitada no es válida.',
-            );
-        }
-
-        return $page;
-    }
 }
