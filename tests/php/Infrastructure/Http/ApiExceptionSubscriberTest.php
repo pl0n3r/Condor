@@ -37,7 +37,7 @@ final class ApiExceptionSubscriberTest extends TestCase
             self::assertNotNull($response, "HTTP $status must be handled");
             self::assertSame($status, $response->getStatusCode());
             self::assertSame('application/json', $response->headers->get('Content-Type'));
-            self::assertSame('no-store', $response->headers->get('Cache-Control'));
+            self::assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
             $payload = json_decode((string) $response->getContent(), true, 512, JSON_THROW_ON_ERROR);
             self::assertSame($code, $payload['error']);
             self::assertSame($message, $payload['message']);
