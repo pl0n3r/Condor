@@ -165,6 +165,19 @@ namespace {
             // Cross-tenant access rejected even in direct service calls.
         }
     }
+    // The selected unit price can be valid but multiplying the quantity must
+    // not overflow the JSON-safe monetary range.
+    $manager->repositories[VariantPrice::class]->items = [
+        new VariantPrice($a, $listA, $variantA, 9007199254740991),
+        $priceB,
+    ];
+    try {
+        $explainer->explain($a, $variantA, $channelA, 2, $now);
+        throw new \\RuntimeException('Overflow monetario no rechazado');
+    } catch (\\DomainException $expected) {
+        // Fail closed without returning an unsafe amount.
+    }
+
     echo "PHP pricing explanation deterministic, quantity-safe, tenant-isolated: OK\n";
 }
 """
