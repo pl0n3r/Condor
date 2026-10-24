@@ -71,14 +71,15 @@ final readonly class EffectivePriceExplainer
             'tenant' => $tenant,
             'priceList' => $list,
         ]);
-        $rules = array_values(array_filter(
-            $rows,
-            static fn (mixed $rule): bool => (
-                $rule instanceof PriceRule
-                && $rule->tenant()->id() === $tenant->id()
+        $rules = [];
+        foreach ($rows as $rule) {
+            if (
+                $rule->tenant()->id() === $tenant->id()
                 && $rule->priceList()->id() === $list->id()
-            ),
-        ));
+            ) {
+                $rules[] = $rule;
+            }
+        }
         usort(
             $rules,
             static fn (PriceRule $a, PriceRule $b): int => (
