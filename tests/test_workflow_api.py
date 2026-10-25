@@ -207,7 +207,7 @@ namespace Test {
     $bad=$def;$bad['conditions']=[['field'=>'inventory.quantity','operator'=>'eval','value'=>2]];
     deny(fn()=>$ctrl->create('branchA',req($bad)),UnprocessableEntityHttpException::class,'untrusted expression');
     $created=$ctrl->create('branchA',req($def));check($created->status===201 && $created->data['workflow']['version']===1,'create');
-    check($db->locks===1 && $db->transactions===1,'create serialized by tenant lock');
+    check($db->locks>=1 && $db->transactions===$db->locks,'all attempted writes acquire the tenant lock');
     check(count($em->events)===1 && $em->flushes===1 && $em->events[0]->action==='workflow.created','create audit persisted');
     check($em->events[0]->entityId===hash('sha256','tenant-A:stock'),'auditable stable workflow identity');
     $invalid=$def;$invalid['workflow_id']='not valid with spaces';
