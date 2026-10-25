@@ -248,7 +248,7 @@ namespace Test {
     $unauthorized=new WorkflowController($ctx,new BranchAuthorization(false),$em,$repo,new Connection($repo));
     deny(fn()=>$unauthorized->index('branchA'),\Symfony\Component\Security\Core\Exception\AccessDeniedException::class,'role permissions');
     $onlySettings=new WorkflowController($ctx,new BranchAuthorization(true,['settings.update']),$em,$repo,new Connection($repo));
-    $bad=$def;$bad['workflow_id']='no-stock-permission';
+    $bad=$def;$bad['workflow_id']='no_stock_permission';
     deny(fn()=>$onlySettings->create('branchA',req($bad)),UnprocessableEntityHttpException::class,'registered action permission');
     check(count($repo->versions['tenant-A'])===1,'no unauthorized writes');
     echo 'WORKFLOW_API_OK';
