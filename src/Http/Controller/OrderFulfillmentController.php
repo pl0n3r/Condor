@@ -1,0 +1,136 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controller;
+
+use App\Application\Identity\BranchAuthorization;
+use App\Application\Identity\CurrentTenantForUser;
+use App\Application\Orders\OrderFulfillmentService;
+use App\Domain\Orders\Entity\Order;
+use App\Domain\Identity\Entity\Membership;
+use App\Domain\Identity\Entity\User;
+use App\Domain\Inventory\Entity\InventorySource;
+use App\Domain\Organization\Entity\LegalEntity;
+use App\Domain\Organization\Entity\Branch;
+use App\Domain\Organization\Entity\Tenant;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Component\Routing\Attribute\Route;
+
+final class OrderFulfillmentController extends AbstractController
+{
+    use BranchApiSupport;
+
+    public function __construct(
+        private readonly CurrentTenantForUser $currentTenantForUser,
+        private readonly BranchAuthorization $authorization,
+        private readonly EntityManagerInterface $entityManager,
+        private readonly OrderFulfillmentService $fulfillment,
+    ) {
+    }
+
+    #[Route('/api/v1/branches/{branchId}/orders/{orderId}/delivery',
+        name: 'api_order_delivery_show', methods: ['GET'])]
+    public function show(string $branchId, string $orderId): JsonResponse
+    {
+        [$actor, $tenant, $branch, $membership] = $this->authorizedBranchScope($branchId, 'orders.view');
+
+        return $this->respond($this->fulfillment->current($this->order($tenant, $branch, $orderId, $actor, $membership)));
+    }
+
+    #[Route('/api/v1/branches/{branchId}/orders/{orderId}/delivery',
+        name: 'api_order_delivery_configure', methods: ['POST'])]
+    public function configure(string $branchId, string $orderId, Request $request): JsonResponse
+    {
+        $this->requireCsrf($request);
+        [$actor, $tenant, $branch, $membership] = $this->authorizedBranchScope($branchId, 'orders.update');
+        $data = $this->payload($request, ['method', 'tracking_number']);
+        if (!is_string($data['method'] ?? null)
+            || (isset($data['tracking_number']) && !is_string($data['tracking_number']))) {
+            throw new UnprocessableEntityHttpException('Datos de entrega inválidos.');
+        }
+
+        return $this->respond($this->domain(fn (): array => $this->fulfillment->configure(
+            $this->order($tenant, $branch, $orderId, $actor, $membership), $tenant->id(), $actor->id(),
+            $data['method'], $data['tracking_number'] ?? null,
+        )));
+    }
+
+    #[Route('/api/v1/branches/{branchId}/orders/{orderId}/delivery/transition',
+        name: 'api_order_delivery_transition', methods: ['POST'])]
+    public function transition(string $branchId, string $orderId, Request $request): JsonResponse
+    {
+        $this->requireCsrf($request);
+        [$actor, $tenant, $branch, $membership] = $this->authorizedBranchScope($branchId, 'orders.update');
+        $data = $this->payload($request, ['status']);
+        if (!is_string($data['status'] ?? null)) {
+            throw new UnprocessableEntityHttpException('Estado de entrega inválido.');
+        }
+
+        return $this->respond($this->domain(fn (): array => $this->fulfillment->transition(
+            $this->order($tenant, $branch, $orderId, $actor, $membership), $tenant->id(), $actor->id(), $data['status'],
+        )));
+    }
+
+    private function order(
+        Tenant $tenant,
+        Branch $branch,
+        string $orderId,
+        User $actor,
+        Membership $membership,
+    ): Order {
+        $legalEntity = $branch->legalEntity();
+        if (!$legalEntity instanceof LegalEntity) {
+            throw new NotFoundHttpException('Pedido no encontrado.');
+        }
+
+        // Match OrderController's visibility: only active tenant/legal-entity
+        // sources that this principal may use, including owners' logical sources.
+        $sources = $this->entityManager->getRepository(InventorySource::class)->findBy([
+            'tenant' => $tenant,
+            'legalEntity' => $legalEntity,
+            'active' => true,
+        ]);
+        $isOwner = $this->authorization->isOwner($membership);
+        $sources = array_values(array_filter(
+            $sources,
+            function (InventorySource $source) use ($actor, $tenant, $isOwner): bool {
+                if ($isOwner) {
+                    return true;
+                }
+                $sourceBranch = $source->branch();
+
+                return $sourceBranch instanceof Branch
+                    && $this->authorization->canAccessBranch($actor, $tenant, $sourceBranch);
+            },
+        ));
+        if ($sources === []) {
+            throw new NotFoundHttpException('Pedido no encontrado.');
+        }
+        $order = $this->entityManager->getRepository(Order::class)->findOneBy([
+            'id' => $orderId,
+            'tenant' => $tenant,
+            'legalEntity' => $legalEntity,
+            'inventorySource' => $sources,
+        ]);
+        if (!$order instanceof Order) {
+            throw new NotFoundHttpException('Pedido no encontrado.');
+        }
+
+        return $order;
+    }
+
+    /** @param array<string, mixed> $delivery */
+    private function respond(array $delivery): JsonResponse
+    {
+        $response = $this->json(['delivery' => $delivery]);
+        $response->headers->set('Cache-Control', 'no-store');
+
+        return $response;
+    }
+}
