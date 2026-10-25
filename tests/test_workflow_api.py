@@ -17,7 +17,7 @@ namespace Symfony\Component\HttpKernel\Exception {
     class AccessDeniedHttpException extends \RuntimeException {}
     class NotFoundHttpException extends \RuntimeException {}
     class BadRequestHttpException extends \RuntimeException {}
-    class UnprocessableEntityHttpException extends \RuntimeException {}
+    class UnprocessableEntityHttpException extends \RuntimeException { public function __construct(string $message='', ?\Throwable $previous=null){parent::__construct($message,0,$previous);} }
     class ConflictHttpException extends \RuntimeException {}
 }
 namespace Symfony\Component\Security\Core\Exception {
