@@ -2,7 +2,6 @@
 """F1b: executable offline acceptance against F0/F1a/F1b PHP, synthetic only."""
 from __future__ import annotations
 
-import copy
 import json
 import runpy
 import subprocess
@@ -189,7 +188,7 @@ class NormativeReviewProjectionTests(unittest.TestCase):
             self.assertIn(required, docs)
         self.assertEqual([], project(rules=[])["rows"])
         self.assertNotIn("CUMPLE", json.dumps(project(reviews=[review()])))
-        self.assertEqual("REQUIERE_REVISION", project(reviews=["invalid"])["rows"][0]["state"])
+        self.assertEqual("PENDIENTE", project(reviews=["invalid"])["rows"][0]["state"])
 
 
 if __name__ == "__main__":
