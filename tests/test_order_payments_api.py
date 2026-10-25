@@ -85,6 +85,8 @@ namespace Test {
     $denyService = new \App\Application\Orders\OrderPaymentService($em);
     $deny(fn () => $denyService->record($a, 'tenant-b', 'actor', 10000, 'cash', 'k1'), 'cross tenant');
     $deny(fn () => $denyService->record($a, 'tenant-a', 'actor', 2000, 'cash', 'k1'), 'partial default');
+    $deny(fn () => $denyService->record($a, 'tenant-a', 'actor', 0, 'cash', 'zero'), 'zero amount');
+    $deny(fn () => $denyService->record($a, 'tenant-a', 'actor', 10000, 'cash', 'x;sql'), 'unsafe key');
     $assert($em->writes === 0, 'write on failed authorization');
 
     $service = new \App\Application\Orders\OrderPaymentService($em, [
@@ -100,6 +102,8 @@ namespace Test {
     $deny(fn () => $service->record($a, 'tenant-a', 'actor', 9000, 'cash', 'k2'), 'overpay');
     $second = $service->record($a, 'tenant-a', 'actor', 8000, 'transfer', 'k2');
     $assert($second['pending_minor'] === 0 && $second['payment_status'] === 'paid', 'settlement');
+    $settledRetry = $service->record($a, 'tenant-a', 'actor', 8000, 'transfer', 'k2');
+    $assert($settledRetry['idempotent'] === true && $em->writes === 2, 'settlement replay');
     $assert($service->balance($a, 'tenant-a')['paid_minor'] === 10000, 'server ledger');
     $deny(fn () => $service->record($a, 'tenant-b', 'actor', 1, 'cash', 'zzz'), 'foreign order');
     $deny(fn () => $service->record($a, 'tenant-a', 'actor', 1, 'cash', 'k3'), 'settled order overpayment');
