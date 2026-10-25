@@ -56,7 +56,7 @@ class IndexNowAdaptadorTests(unittest.TestCase):
         $check(count($queued) === 3 && count($delivered) === 0, 'Publication made outbound HTTP');
         foreach (['/admin', '/admin/orders', '/api/private', '/login', '/borrador/item',
                  '/%2e%2e/admin', '//evil.example', '/items?token=abc', '/items#secret',
-                 '/productos/../cuenta', '/api%2fprivate'] as $bad) {
+                 '/productos/../cuenta', '/api%2fprivate', '/%2561dmin', '/%252e%252e/preview'] as $bad) {
             $check($n->queuePublication('a', $bad, 'unique'.$bad, true, true) === null,
                    'Private URL accepted: '.$bad);
         }
@@ -77,6 +77,22 @@ class IndexNowAdaptadorTests(unittest.TestCase):
         $failing = true;
         $check($n->deliver($queued[1]) === false, 'Failed transport claimed success');
         $check(count($delivered) === 5, 'Unbounded retries');
+        // A transient resolver/queue outage must not break the publication.
+        $resolverDown = new \App\Application\Seo\IndexNowNotifier(
+            static function (string $tenant): ?string { throw new RuntimeException('resolver down'); },
+            static fn(array $job): bool => true,
+            static fn(string $tenant, string $url, int $attempt): bool => true,
+        );
+        $check($resolverDown->queuePublication('a', '/productos/mesa', 'rev3', true, true) === null,
+               'Resolver outage blocked publication');
+        $check($resolverDown->deliver($queued[0]) === false, 'Resolver outage threw in worker');
+        $queueDown = new \App\Application\Seo\IndexNowNotifier(
+            static fn(string $tenant): ?string => $origins[$tenant] ?? null,
+            static function (array $job): bool { throw new RuntimeException('queue down'); },
+            static fn(string $tenant, string $url, int $attempt): bool => true,
+        );
+        $check($queueDown->queuePublication('a', '/productos/mesa', 'rev3', true, true) === null,
+               'Queue outage blocked publication');
         echo "AC-01: OK\n";
         '''
         run = subprocess.run([php, "-r", script, str(KEY), str(NOTIFIER)],

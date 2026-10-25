@@ -49,7 +49,12 @@ final readonly class IndexNowNotifier
             return null;
         }
 
-        $origin = $this->publicOrigin($tenantId);
+        try {
+            $origin = $this->publicOrigin($tenantId);
+        } catch (Throwable) {
+            // IndexNow failures must never abort the content publication.
+            return null;
+        }
         if ($origin === null || !$this->isPublicPath($publicPath)) {
             return null;
         }
@@ -58,7 +63,12 @@ final readonly class IndexNowNotifier
         $key = IndexNowOperationKey::fromPublication($tenantId, $url, $revision);
         $job = ['tenant' => $tenantId, 'url' => $url, 'revision' => $revision, 'key' => $key];
 
-        return ($this->enqueueIfAbsent)($job) ? $key : null;
+        try {
+            return ($this->enqueueIfAbsent)($job) ? $key : null;
+        } catch (Throwable) {
+            // Queue outages cannot roll back the publishing transaction.
+            return null;
+        }
     }
 
     /**
@@ -80,7 +90,11 @@ final readonly class IndexNowNotifier
             return false;
         }
 
-        $origin = $this->publicOrigin($tenantId);
+        try {
+            $origin = $this->publicOrigin($tenantId);
+        } catch (Throwable) {
+            return false;
+        }
         if ($origin === null || !str_starts_with($url, $origin.'/')) {
             return false;
         }
@@ -127,7 +141,7 @@ final readonly class IndexNowNotifier
             || filter_var($parts['host'], FILTER_VALIDATE_IP)
             || filter_var($parts['host'], FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false
             || !str_contains($parts['host'], '.')
-            || preg_match('/(?:\.local|\.internal|\.test)$/i', $parts['host']) === 1
+            || preg_match('/(?:\.local|\.localhost|\.internal|\.test)$/i', $parts['host']) === 1
         ) {
             return null;
         }
@@ -144,7 +158,7 @@ final readonly class IndexNowNotifier
             return false;
         }
         $decoded = rawurldecode($path);
-        if (str_contains($decoded, '//') || str_contains($decoded, '\\')
+        if (str_contains($decoded, '%') || str_contains($decoded, '//') || str_contains($decoded, '\\')
             || str_contains($decoded, '?') || str_contains($decoded, '#')
             || preg_match('/[\x00-\x1f\x7f]/', $decoded) === 1
         ) {
