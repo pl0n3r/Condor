@@ -83,22 +83,26 @@ final class WorkflowController extends AbstractController
     {
         $this->requireCsrf($request);
         [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.update');
-        if (strlen((string) $request->getContent()) > 8192) {
-            throw new UnprocessableEntityHttpException('Definición demasiado extensa.');
-        }
+        $this->requireSmallBody($request);
         $data = $this->payload($request, ['workflow_id', 'trigger', 'conditions', 'actions', 'active']);
         $id = $this->requiredString($data, 'workflow_id');
-        if ($this->workflows->latest($tenant->id(), $id) !== null) {
-            throw new ConflictHttpException('Workflow ya registrado.');
-        }
-        $definition = $this->validatedDefinition($data, $tenant->id(), $id, $user, $tenant, $branch);
-        $version = $this->domain(fn (): int => $this->workflows->save(
-            $definition, $tenant->id(), $user->id(), new DateTimeImmutable('now'),
-        ));
-        return $this->json(['workflow' => self::description(['definition' => $definition, 'version' => $version])], Response::HTTP_CREATED);
+        $created = $this->withWorkflowLock($tenant->id(), function () use ($data, $id, $user, $tenant, $branch): array {
+            if ($this->domain(fn (): ?array => $this->workflows->latest($tenant->id(), $id)) !== null) {
+                throw new ConflictHttpException('Workflow ya registrado.');
+            }
+            $definition = $this->validatedDefinition($data, $tenant->id(), $id, $user, $tenant, $branch);
+            $version = $this->domain(fn (): int => $this->workflows->save(
+                $definition, $tenant->id(), $user->id(), new DateTimeImmutable('now'),
+            ));
+            $this->auditWorkflow($tenant, $user, $branch->id(), $id, 'workflow.created', $version);
+
+            return ['definition' => $definition, 'version' => $version];
+        });
+
+        return $this->json(['workflow' => self::description($created)], Response::HTTP_CREATED);
     }
 
-    #[Route('/api/v1/branches/{branchId}/workflows/{workflowId}', name: 'api_workflows_show', methods: ['GET'])]
+        #[Route('/api/v1/branches/{branchId}/workflows/{workflowId}', name: 'api_workflows_show', methods: ['GET'])]
     public function show(string $branchId, string $workflowId): JsonResponse
     {
         [, $tenant] = $this->authorizedBranchScope($branchId, 'settings.update');
@@ -110,37 +114,46 @@ final class WorkflowController extends AbstractController
     {
         $this->requireCsrf($request);
         [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.update');
-        if (strlen((string) $request->getContent()) > 8192) {
-            throw new UnprocessableEntityHttpException('Definición demasiado extensa.');
-        }
+        $this->requireSmallBody($request);
         $data = $this->payload($request, ['expected_version', 'trigger', 'conditions', 'actions', 'active']);
-        $current = $this->existing($tenant->id(), $workflowId);
-        if (!is_int($data['expected_version'] ?? null) || $data['expected_version'] !== $current['version']) {
-            throw new ConflictHttpException('Versión esperada inválida o desactualizada.');
-        }
-        $definition = $this->validatedDefinition($data, $tenant->id(), $workflowId, $user, $tenant, $branch);
-        $version = $this->domain(fn (): int => $this->workflows->save(
-            $definition, $tenant->id(), $user->id(), new DateTimeImmutable('now'),
-        ));
-        return $this->json(['workflow' => self::description(['definition' => $definition, 'version' => $version])]);
+        $updated = $this->withWorkflowLock($tenant->id(), function () use ($data, $workflowId, $user, $tenant, $branch): array {
+            $current = $this->existing($tenant->id(), $workflowId);
+            if (!is_int($data['expected_version'] ?? null) || $data['expected_version'] !== $current['version']) {
+                throw new ConflictHttpException('Versión esperada inválida o desactualizada.');
+            }
+            $definition = $this->validatedDefinition($data, $tenant->id(), $workflowId, $user, $tenant, $branch);
+            $version = $this->domain(fn (): int => $this->workflows->save(
+                $definition, $tenant->id(), $user->id(), new DateTimeImmutable('now'),
+            ));
+            $this->auditWorkflow($tenant, $user, $branch->id(), $workflowId, 'workflow.updated', $version);
+
+            return ['definition' => $definition, 'version' => $version];
+        });
+
+        return $this->json(['workflow' => self::description($updated)]);
     }
 
-    /** Soft-delete: deactivation retains prior definitions and execution history for audit. */
+        /** Soft-delete: deactivation retains prior definitions and execution history for audit. */
     #[Route('/api/v1/branches/{branchId}/workflows/{workflowId}', name: 'api_workflows_delete', methods: ['DELETE'])]
     public function delete(string $branchId, string $workflowId, Request $request): Response
     {
         $this->requireCsrf($request);
-        [$user, $tenant] = $this->authorizedBranchScope($branchId, 'settings.update');
+        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.update');
+        $this->requireSmallBody($request);
         $data = $this->payload($request, ['expected_version']);
-        $current = $this->existing($tenant->id(), $workflowId);
-        if (!is_int($data['expected_version'] ?? null) || $data['expected_version'] !== $current['version']) {
-            throw new ConflictHttpException('Versión esperada inválida o desactualizada.');
-        }
-        $this->domain(fn (): null => $this->deactivate($tenant->id(), $workflowId, $current['version'], $user->id()));
+        $this->withWorkflowLock($tenant->id(), function () use ($data, $workflowId, $user, $tenant, $branch): void {
+            $current = $this->existing($tenant->id(), $workflowId);
+            if (!is_int($data['expected_version'] ?? null) || $data['expected_version'] !== $current['version']) {
+                throw new ConflictHttpException('Versión esperada inválida o desactualizada.');
+            }
+            $this->domain(fn (): null => $this->deactivate($tenant->id(), $workflowId, $current['version'], $user->id()));
+            $this->auditWorkflow($tenant, $user, $branch->id(), $workflowId, 'workflow.deactivated', $current['version']);
+        });
+
         return new Response('', Response::HTTP_NO_CONTENT);
     }
 
-    #[Route('/api/v1/branches/{branchId}/workflows/{workflowId}/history', name: 'api_workflows_history', methods: ['GET'])]
+        #[Route('/api/v1/branches/{branchId}/workflows/{workflowId}/history', name: 'api_workflows_history', methods: ['GET'])]
     public function history(string $branchId, string $workflowId, Request $request): JsonResponse
     {
         [, $tenant] = $this->authorizedBranchScope($branchId, 'settings.update');
@@ -159,10 +172,11 @@ final class WorkflowController extends AbstractController
     {
         $this->requireCsrf($request);
         [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.update');
+        $this->requireSmallBody($request);
         $data = $this->payload($request, ['event_type', 'event']);
         $eventType = $this->requiredString($data, 'event_type');
         $rawEvent = $data['event'] ?? null;
-        if (!$rawEvent instanceof \stdClass || strlen((string) $request->getContent()) > 8192) {
+        if (!$rawEvent instanceof \stdClass) {
             throw new UnprocessableEntityHttpException('Evento sintético inválido o excesivo.');
         }
         /** @var array<string, mixed> $event */
@@ -173,6 +187,58 @@ final class WorkflowController extends AbstractController
             $current['definition'], $tenant->id(), $eventType, $event, $permissions,
         )->toArray());
         return $this->json(['trace' => $trace, 'persisted' => false]);
+    }
+
+    private function requireSmallBody(Request $request): void
+    {
+        if (strlen((string) $request->getContent()) > 8192) {
+            throw new UnprocessableEntityHttpException('Cuerpo JSON demasiado extenso.');
+        }
+    }
+
+    /**
+     * Every API mutation locks the durable tenant row before reading the latest
+     * workflow version, including the first insert with no workflow row to lock.
+     * The DBAL write and ORM audit flush share the same database transaction.
+     *
+     * @template T
+     * @param callable(): T $operation
+     * @return T
+     */
+    private function withWorkflowLock(string $tenantId, callable $operation): mixed
+    {
+        return $this->connection->transactional(function () use ($tenantId, $operation): mixed {
+            $id = $this->connection->fetchOne(
+                'SELECT id FROM condor_tenant WHERE id = ? FOR UPDATE',
+                [$tenantId],
+            );
+            if ($id === false) {
+                throw new ConflictHttpException('Tenant no disponible para escritura.');
+            }
+
+            return $operation();
+        });
+    }
+
+    private function auditWorkflow(
+        \App\Domain\Organization\Entity\Tenant $tenant,
+        \App\Domain\Identity\Entity\User $user,
+        string $branchId,
+        string $workflowId,
+        string $action,
+        int $version,
+    ): void {
+        // AuditEvent.entity_id is limited to 64 chars; hash avoids truncating
+        // workflow IDs (up to 128) and keeps synthetic/event payloads out.
+        $this->audit(
+            $tenant,
+            $user,
+            $action,
+            WorkflowDefinition::class,
+            hash('sha256', $tenant->id().':'.$workflowId),
+            ['branch_id' => $branchId, 'version' => $version],
+        );
+        $this->entityManager->flush();
     }
 
     /** @param array<string, mixed> $payload */
