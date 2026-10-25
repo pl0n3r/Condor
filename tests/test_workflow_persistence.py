@@ -63,6 +63,8 @@ namespace {
         ['type'=>'inventory.restock','arguments'=>['private'=>'synthetic_sensitive_marker_856']]
     ]);
     denied(fn()=>$repo->save($forbidden,'tenant-A','actor-A',$time),'action arguments must not persist');
+    $invalidId=new WorkflowDefinition('tenant-A','invalid workflow id','inventory.low_stock',[],[['type'=>'inventory.restock']]);
+    denied(fn()=>$repo->save($invalidId,'tenant-A','actor-A',$time),'persisted workflow id must be round-trippable');
     check((int)$db->fetchOne('SELECT COUNT(*) FROM condor_workflow_definition WHERE workflow_id = ?', ['private'])===0,'no partial action persistence');
     check($repo->save($a,'tenant-A','actor-A',$time)===1,'version 1');
     check($repo->save($b,'tenant-B','actor-B',$time)===1,'partitioned version');

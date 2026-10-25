@@ -30,6 +30,7 @@ final readonly class WorkflowRepository
     ): int {
         self::identity($tenantId, 26);
         self::identity($actorId, 26);
+        self::identity($definition->workflowId, 128);
         if ($definition->tenantId !== $tenantId) {
             throw new DomainException('La definición pertenece a otro tenant.');
         }
