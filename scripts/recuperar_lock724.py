@@ -50,21 +50,29 @@ def valid_global(api) -> None:
            "kill switch no RUNNING")
 
 
+def _lease_from_bot_comment(item: dict) -> dict | None:
+    """Rechazar marcadores múltiples o corruptos del bot sin confiar en texto humano."""
+    if (item.get("user") or {}).get("login") != BOT:
+        return None
+    markers = LEASE_RE.findall(str(item.get("body") or ""))
+    demand(len(markers) <= 1, "recibo V3 duplicado")
+    if not markers:
+        return None
+    try:
+        return json.loads(markers[0])
+    except (ValueError, TypeError) as exc:
+        raise Denied("recibo V3 ilegible") from exc
+
+
 def latest_lease(api) -> dict:
     found = None
     for page in range(1, 11):
         data = api.get(f"/repos/{REPO}/issues/{ISSUE}/comments?per_page=100&page={page}")
         demand(type(data) is list, "comentarios ilegibles")
         for item in data:
-            if (item.get("user") or {}).get("login") != BOT:
-                continue
-            markers = LEASE_RE.findall(str(item.get("body") or ""))
-            demand(len(markers) <= 1, "recibo V3 duplicado")
-            if markers:
-                try:
-                    found = json.loads(markers[0])
-                except (ValueError, TypeError) as exc:
-                    raise Denied("recibo V3 ilegible") from exc
+            receipt = _lease_from_bot_comment(item)
+            if receipt is not None:
+                found = receipt
         if len(data) < 100:
             return found or {}
     raise Denied("paginación V3 sin cota")
@@ -223,7 +231,7 @@ def main() -> int:
         recover(GitHubApi(token), datetime.now(timezone.utc), run_id)
         print("CAS exitoso. Solicitar una V3 nueva antes de cualquier escritura en #724.")
         return 0
-    except (Denied, HTTPError, URLError, KeyError, OSError, ValueError, TypeError) as exc:
+    except (Denied, KeyError, OSError, ValueError, TypeError) as exc:
         # Nunca imprimir token, PII, URLs de credenciales ni respuesta bruta.
         print("RECOVERY DENIED: " + type(exc).__name__, file=sys.stderr)
         return 1
