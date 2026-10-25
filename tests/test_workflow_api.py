@@ -59,8 +59,24 @@ namespace App\Domain\Organization\Entity {
         public function id():string{return $this->id;}public function tenant():Tenant{return $this->tenant;}
     }
 }
+namespace App\Domain\Audit\Entity {
+    class AuditEvent {
+        public function __construct(
+            public \App\Domain\Organization\Entity\Tenant $tenant,
+            public ?string $actor,
+            public string $action,
+            public string $entityType,
+            public string $entityId,
+            public array $context = [],
+        ) {}
+    }
+}
 namespace Doctrine\ORM {
-    interface EntityManagerInterface {public function getRepository(string $s):object;}
+    interface EntityManagerInterface {
+        public function getRepository(string $s): object;
+        public function persist(object $entity): void;
+        public function flush(): void;
+    }
 }
 namespace App\Application\Identity {
     use App\Domain\Identity\Entity\User;
@@ -82,7 +98,18 @@ namespace App\Application\Identity {
 }
 namespace Doctrine\DBAL {
     class Connection {
+        public int $locks=0;
+        public int $transactions=0;
         public function __construct(private \App\Infrastructure\Persistence\WorkflowRepository $repo){}
+        public function transactional(callable $operation):mixed {
+            $this->transactions++;
+            return $operation($this);
+        }
+        public function fetchOne(string $sql,array $params):mixed {
+            if($sql!=='SELECT id FROM condor_tenant WHERE id = ? FOR UPDATE')throw new \RuntimeException('missing tenant row lock');
+            $this->locks++;
+            return $params[0];
+        }
         public function fetchFirstColumn(string $sql,array $params):array {
             if(!str_contains($sql,'WHERE tenant_id = ?'))throw new \RuntimeException('unscoped SQL');
             return $this->repo->ids($params[0]);
@@ -137,7 +164,13 @@ namespace Test {
     use Symfony\Component\HttpFoundation\Request;
     use Symfony\Component\HttpKernel\Exception\{UnprocessableEntityHttpException,NotFoundHttpException,AccessDeniedHttpException,ConflictHttpException};
     class Em implements EntityManagerInterface {
+        public array $events=[]; public int $flushes=0;
         public function __construct(private array $branches){}
+        public function persist(object $event):void {
+            if(!$event instanceof \App\Domain\Audit\Entity\AuditEvent)throw new \RuntimeException('audit event required');
+            $this->events[]=$event;
+        }
+        public function flush():void {$this->flushes++;}
         public function getRepository(string $s):object{return new class($this->branches) {
             public function __construct(private array $branches){}
             public function findOneBy(array $where):?Branch{
@@ -160,7 +193,7 @@ namespace Test {
     $a=new Tenant('tenant-A');$b=new Tenant('tenant-B');$repo=new WorkflowRepository();
     $auth=new BranchAuthorization();$ctx=new CurrentTenantForUser($a);
     $em=new Em(['branchA'=>new Branch('branchA',$a),'branchB'=>new Branch('branchB',$b)]);
-    $ctrl=new WorkflowController($ctx,$auth,$em,$repo,new Connection($repo));
+    $db=new Connection($repo);$ctrl=new WorkflowController($ctx,$auth,$em,$repo,$db);
     AbstractController::$actor=new User('actor-A');
     $def=['workflow_id'=>'stock','trigger'=>'inventory.low_stock','conditions'=>[
         ['field'=>'inventory.quantity','operator'=>'eq','value'=>2],
@@ -174,6 +207,11 @@ namespace Test {
     $bad=$def;$bad['conditions']=[['field'=>'inventory.quantity','operator'=>'eval','value'=>2]];
     deny(fn()=>$ctrl->create('branchA',req($bad)),UnprocessableEntityHttpException::class,'untrusted expression');
     $created=$ctrl->create('branchA',req($def));check($created->status===201 && $created->data['workflow']['version']===1,'create');
+    check($db->locks===1 && $db->transactions===1,'create serialized by tenant lock');
+    check(count($em->events)===1 && $em->flushes===1 && $em->events[0]->action==='workflow.created','create audit persisted');
+    check($em->events[0]->entityId===hash('sha256','tenant-A:stock'),'auditable stable workflow identity');
+    $invalid=$def;$invalid['workflow_id']='not valid with spaces';
+    deny(fn()=>$ctrl->create('branchA',req($invalid)),UnprocessableEntityHttpException::class,'invalid id sanitized');
     check(count($ctrl->index('branchA')->data['workflows'])===1,'scoped listing');
     check($ctrl->actions('branchA')->data['actions']===['inventory.restock','notifications.queue'],'allowlisted actions');
     deny(fn()=>$ctrl->create('branchA',req($def)),ConflictHttpException::class,'duplicate');
@@ -187,10 +225,17 @@ namespace Test {
     deny(fn()=>$ctrl->update('branchA','stock',req($bad)),ConflictHttpException::class,'stale update');
     $bad['expected_version']=1;$bad['trigger']='inventory.threshold';
     $updated=$ctrl->update('branchA','stock',req($bad));check($updated->data['workflow']['version']===2,'versioned update');
+    check(count($em->events)===2 && $em->flushes===2 && $em->events[1]->action==='workflow.updated','update audit persisted');
+    check($db->locks>=3,'version rechecked under row lock');
     $hist=$ctrl->history('branchA','stock',req([],true,['limit'=>'50']));check($hist->data['executions']===[],'audit history');
     deny(fn()=>$ctrl->history('branchA','stock',req([],true,['limit'=>'101'])),UnprocessableEntityHttpException::class,'history cap');
     deny(fn()=>$ctrl->delete('branchA','stock',req(['expected_version'=>1])),ConflictHttpException::class,'delete stale');
     check($ctrl->delete('branchA','stock',req(['expected_version'=>2]))->status===204,'soft delete');
+    check(count($em->events)===3 && $em->flushes===3 && $em->events[2]->action==='workflow.deactivated','deactivation audit persisted');
+    check($em->events[2]->context['version']===2,'deactivation records version');
+    $huge=req(['event_type'=>'inventory.threshold','event'=>['filler'=>str_repeat('a',9000)]]);
+    deny(fn()=>$ctrl->dryRun('branchA','stock',$huge),UnprocessableEntityHttpException::class,'size limit before decode');
+    deny(fn()=>$ctrl->delete('branchA','stock',req(['expected_version'=>2,'filler'=>str_repeat('a',9000)])),UnprocessableEntityHttpException::class,'delete size limit');
     $skipped=$ctrl->dryRun('branchA','stock',req(['event_type'=>'inventory.threshold','event'=>['inventory'=>['quantity'=>2]]]));
     check($skipped->data['trace']['reason']==='inactive','disabled dry-run');
     check($repo->writes===$before+2,'update and deactivate audit writes');
