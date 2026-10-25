@@ -24,7 +24,7 @@ final class NormativeReviewProjection
     /**
      * @param list<mixed> $rules Synthetic F0 rules only
      * @param array<string, mixed> $context Synthetic tenant profile
-     * @param list<mixed> $reviews Opaque synthetic review references, not attachments
+     * @param array<array-key,mixed> $reviews Opaque synthetic review references, not attachments
      * @return array{tenant_ref:?string,municipio:?string,rows:list<array<string,mixed>>}
      */
     public static function evaluate(
@@ -70,7 +70,7 @@ final class NormativeReviewProjection
 
         $rows = [];
         foreach ($matrix['rows'] as $index => $source) {
-            if (!is_array($source) || !is_array($source['source'] ?? null)
+            if (!is_array($source['source'] ?? null)
                 || !self::date($source['verified_on'] ?? null)
                 || !self::date($source['effective_from'] ?? null)
                 || !self::date($source['effective_until'] ?? null)
@@ -113,7 +113,7 @@ final class NormativeReviewProjection
             $starts = self::date($source['effective_from']);
             $ends = self::date($source['effective_until']);
             $reference = self::date($referenceDate);
-            if ($at === null || $verified === null || $starts === null
+            if ($at === null || $starts === null
                 || $ends === null || $reference === null
                 || $at < $verified || $at < $starts || $at > $ends || $at > $reference
             ) {
@@ -171,7 +171,10 @@ final class NormativeReviewProjection
             : null;
     }
 
-    /** @param array<array-key,mixed> $payload @param list<string> $expected */
+    /**
+     * @param array<array-key,mixed> $payload
+     * @param list<string> $expected
+     */
     private static function exactKeys(array $payload, array $expected): bool
     {
         $a = array_keys($payload);
