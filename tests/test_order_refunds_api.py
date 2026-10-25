@@ -24,7 +24,8 @@ namespace App\Domain\Orders\Entity {
     class Tenant { public function __construct(private string $id) {} public function id(): string {return $this->id;} }
     class Source {}
     class Order {
-        public const STATUS_OPEN = 'open'; public const FULFILLMENT_CONSUMED = 'consumed';
+        public const STATUS_OPEN = 'open'; public const STATUS_CANCELLED = 'cancelled';
+        public const FULFILLMENT_CONSUMED = 'consumed'; public const FULFILLMENT_RELEASED = 'released';
         public function __construct(private string $id,private Tenant $tenant,private string $state='open',private string $fulfillment='consumed') {}
         public function id(): string{return $this->id;}
         public function tenant(): Tenant{return $this->tenant;}
@@ -109,6 +110,15 @@ namespace Test {
     $em->persist(new OrderEvent($notConsumed,'manual_payment_recorded','actor',['idempotency_key'=>'p2','amount_minor'=>100,'currency'=>'COP']));
     $em->lines[]=new OrderLine('line2',$notConsumed,1);
     $deny(fn()=>$svc->refund($notConsumed,'tenant-a','actor','p2',20,'customer_return','k2','line2',1),'not-consumed stock');
+    // A paid order may be cancelled before fulfillment. Its payment must
+    // remain refundable, but already-released stock must not be added again.
+    $cancelled = new Order('cancelled-order',new Tenant('tenant-a'),'cancelled','released');
+    $em->persist(new OrderEvent($cancelled,'manual_payment_recorded','actor',[
+        'idempotency_key'=>'cancelpay','amount_minor'=>100,'currency'=>'COP',
+    ]));
+    $ref = $svc->refund($cancelled,'tenant-a','actor','cancelpay',100,'order_cancelled','cancelrefund');
+    $check($ref['refundable_minor']===0 && $ref['restocked']===false, 'cancelled order refund');
+    $deny(fn()=>$svc->refund($cancelled,'tenant-a','actor','cancelpay',100,'order_cancelled','otherrefund'), 'refund cancelled twice');
     echo json_encode(['ok'=>true,'refunds'=>5,'restocks'=>count($inventory->movements)]);
 }
 '''

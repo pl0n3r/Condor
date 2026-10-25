@@ -115,7 +115,10 @@ final readonly class OrderRefundService
                 }
                 return self::response($paymentKey, $refunded, $paid - $refunded, $restockLineId !== null, true);
             }
-            if ($order->orderStatus() !== Order::STATUS_OPEN || $amountMinor > $paid - $refunded) {
+            if (($order->orderStatus() !== Order::STATUS_OPEN
+                && !($order->orderStatus() === Order::STATUS_CANCELLED
+                    && $order->fulfillmentStatus() === Order::FULFILLMENT_RELEASED))
+                || $amountMinor > $paid - $refunded) {
                 throw new DomainException('REFUND_NOT_ALLOWED_OR_OVERPAID');
             }
             if ($restockLineId !== null) {
