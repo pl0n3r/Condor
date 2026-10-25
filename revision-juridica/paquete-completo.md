@@ -31,12 +31,14 @@ Estado: documented_not_legally_approved. Documentos fuente íntegros a continuac
 | audit_events | usage | actor_user_id, action, entity_type, entity_id, context, created_at | security_audit | review_required | review_required | ninguno_declarado | review_required |
 | condor_password_reset | authentication | user_id, token_hash, expires_at, consumed_at, revoked_at | account_recovery | review_required | review_required | ninguno_declarado | password_reset_lifecycle |
 | controlbot_staff_operations | usage | action, actor_key_id, target_staff_user_id, result, request_id, request_nonce_hash, request_ip, created_at, context | staff_administration_audit | review_required | review_required | ninguno_declarado | review_required |
-| customer_contact | contact | name, email, phone, notes, commercial_category_id | customer_management | review_required | review_required | ninguno_declarado | review_required |
+| customer_contact | contact | name, email, phone, document_number, notes, commercial_category_id | customer_management | review_required | review_required | ninguno_declarado | review_required |
 | diagnostic_shares | authentication | token_hash, expires_at, revoked_at, created_at | support_diagnostics | review_required | review_required | ninguno_declarado | diagnostic_share_lifecycle |
 | error_incidents | usage | request_id, status, method, route_name, exception_class, message, fingerprint, version, release_sha, trace, occurred_at | error_diagnostics | review_required | review_required | sentry | review_required |
 | notification_delivery | usage | user_id, event_key, channel_key, payload, status, attempt_count, last_error, available_at, delivered_at | notification_delivery | review_required | review_required | ninguno_declarado | review_required |
 | notification_preferences | usage | user_id, event_key, channel_key, enabled | notification_preferences | review_required | review_required | ninguno_declarado | account_lifecycle |
 | self_service_trial_application | contact | email, trial_quote_id, trial_consent_recorded_at | self_service_trial_application | review_required | review_required | ninguno_declarado | review_required |
+| workflow_definitions | usage | tenant_id, workflow_id, trigger_name, conditions_json, actions_json, created_by_user_id, updated_by_user_id, created_at, updated_at | workflow_definition_management | review_required | review_required | ninguno_declarado | review_required |
+| workflow_executions | usage | tenant_id, workflow_id, definition_version, actor_user_id, result, created_at | workflow_execution_audit | review_required | review_required | ninguno_declarado | review_required |
 
 ## Autorización técnica pendiente
 
@@ -98,12 +100,14 @@ El canal debe permitir solicitudes de acceso, corrección, actualización, supre
 | audit_events | usage | actor_user_id, action, entity_type, entity_id, context, created_at | security_audit | review_required | review_required | ninguno_declarado | review_required |
 | condor_password_reset | authentication | user_id, token_hash, expires_at, consumed_at, revoked_at | account_recovery | review_required | review_required | ninguno_declarado | password_reset_lifecycle |
 | controlbot_staff_operations | usage | action, actor_key_id, target_staff_user_id, result, request_id, request_nonce_hash, request_ip, created_at, context | staff_administration_audit | review_required | review_required | ninguno_declarado | review_required |
-| customer_contact | contact | name, email, phone, notes, commercial_category_id | customer_management | review_required | review_required | ninguno_declarado | review_required |
+| customer_contact | contact | name, email, phone, document_number, notes, commercial_category_id | customer_management | review_required | review_required | ninguno_declarado | review_required |
 | diagnostic_shares | authentication | token_hash, expires_at, revoked_at, created_at | support_diagnostics | review_required | review_required | ninguno_declarado | diagnostic_share_lifecycle |
 | error_incidents | usage | request_id, status, method, route_name, exception_class, message, fingerprint, version, release_sha, trace, occurred_at | error_diagnostics | review_required | review_required | sentry | review_required |
 | notification_delivery | usage | user_id, event_key, channel_key, payload, status, attempt_count, last_error, available_at, delivered_at | notification_delivery | review_required | review_required | ninguno_declarado | review_required |
 | notification_preferences | usage | user_id, event_key, channel_key, enabled | notification_preferences | review_required | review_required | ninguno_declarado | account_lifecycle |
 | self_service_trial_application | contact | email, trial_quote_id, trial_consent_recorded_at | self_service_trial_application | review_required | review_required | ninguno_declarado | review_required |
+| workflow_definitions | usage | tenant_id, workflow_id, trigger_name, conditions_json, actions_json, created_by_user_id, updated_by_user_id, created_at, updated_at | workflow_definition_management | review_required | review_required | ninguno_declarado | review_required |
+| workflow_executions | usage | tenant_id, workflow_id, definition_version, actor_user_id, result, created_at | workflow_execution_audit | review_required | review_required | ninguno_declarado | review_required |
 
 ## Derechos y revisión
 
@@ -182,7 +186,7 @@ Producto: `pl0n3r/Condor`
 ## customer_contact
 
 - Categoría: `contact`
-- Campos de software: `name`, `email`, `phone`, `notes`, `commercial_category_id`
+- Campos de software: `name`, `email`, `phone`, `document_number`, `notes`, `commercial_category_id`
 - Finalidad: `customer_management`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
@@ -239,6 +243,26 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `review_required`
 
+## workflow_definitions
+
+- Categoría: `usage`
+- Campos de software: `tenant_id`, `workflow_id`, `trigger_name`, `conditions_json`, `actions_json`, `created_by_user_id`, `updated_by_user_id`, `created_at`, `updated_at`
+- Finalidad: `workflow_definition_management`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
+## workflow_executions
+
+- Categoría: `usage`
+- Campos de software: `tenant_id`, `workflow_id`, `definition_version`, `actor_user_id`, `result`, `created_at`
+- Finalidad: `workflow_execution_audit`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ---
 
 ## Documento fuente: docs/privacidad/retencion.md
@@ -263,6 +287,8 @@ Producto: `pl0n3r/Condor`
 | notification_delivery | usage | review_required | review_required |
 | notification_preferences | usage | account_lifecycle | review_required |
 | self_service_trial_application | contact | review_required | review_required |
+| workflow_definitions | usage | review_required | review_required |
+| workflow_executions | usage | review_required | review_required |
 
 ---
 
