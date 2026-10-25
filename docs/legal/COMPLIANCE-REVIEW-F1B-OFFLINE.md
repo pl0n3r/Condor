@@ -12,7 +12,7 @@
 - `NO_APLICA`: solo si el motor F1a acredita por condiciones explícitas una no aplicabilidad en el mismo tenant y municipio.
 - **Nunca** se emite `CUMPLE`, ni se confiere permiso operativo por enviar un adjunto o estado.
 
-Una revisión entrante lleva exclusivamente `tenant_ref`, `municipio`, `row_index`, `state=EN_REVISION`, `evidence_ref`, `reviewer_ref` y `reviewed_on`. Se ignoran sin revelar los recibos de otros ámbitos; duplicados y errores del mismo ámbito llevan a `REQUIERE_REVISION`. Referencias opacas solo apuntan a fixtures; **no almacenar ni cargar el contenido** de documentos. Fechas posteriores al corte, anteriores a revisión de fuente o fuera de vigencia no son válidas.
+Una revisión entrante lleva exclusivamente `tenant_ref`, `municipio`, `row_index`, `state=EN_REVISION`, `evidence_ref`, `reviewer_ref` y `reviewed_on`. Solo se ignoran sin revelar los recibos con **otro tenant o municipio explícito y verificable**. Una entrada sin ámbito comprobable (incluyendo un valor no estructurado) o con índice de fila ausente, negativo, no entero o fuera de rango en el ámbito propio genera **`REQUIERE_REVISION` para todas las reglas aplicables que podrían verse afectadas**, aun cuando exista una referencia válida adicional. No se convierte silenciosamente en `PENDIENTE`. Duplicados y otros errores del mismo ámbito también fallan cerrado. Referencias opacas solo apuntan a fixtures; **no almacenar ni cargar el contenido** de documentos. Fechas posteriores al corte, anteriores a revisión de fuente o fuera de vigencia no son válidas.
 
 ## Amenazas y límites
 
@@ -25,4 +25,4 @@ Una revisión entrante lleva exclusivamente `tenant_ref`, `municipio`, `row_inde
 
 ## Pruebas y reversión
 
-`python3 -m unittest tests.test_compliance_normative_review_projection -v` ejecuta cuatro criterios de aceptación F1b mediante el **PHP real**, con referencias y contextos inventados. Las pruebas incluyen fuentes inválidas, límites tenant/municipio, fechas, replays deterministas, inexistencia de `CUMPLE` y ausencia de efectos de proveedor. El cambio se revierte eliminando únicamente los tres archivos nuevos de #916: no hay esquema, configuración ni datos que revertir.
+`python3 -m unittest tests.test_compliance_normative_review_projection -v` ejecuta los cuatro criterios originales de F1b más tres regresiones de #921 mediante el **PHP real**, con referencias y contextos inventados. Las pruebas incluyen fuentes inválidas, límites tenant/municipio, fechas, replays deterministas, inexistencia de `CUMPLE` y ausencia de efectos de proveedor. El cambio se revierte eliminando únicamente los tres archivos nuevos de #916: no hay esquema, configuración ni datos que revertir.
