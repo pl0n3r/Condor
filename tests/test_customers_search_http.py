@@ -33,7 +33,7 @@ class CustomerSearchHttpTests(unittest.TestCase):
             "assertResponseStatusCodeSame(200)", "assertResponseStatusCodeSame(400)",
             "assertResponseStatusCodeSame(403)", "assertResponseStatusCodeSame(404)",
             "assertResponseStatusCodeSame(401)", "'?term[]=x'",
-            "'without_purchases_90_days'", "'top_20_purchases'",
+            "'without_purchases_90_days'", "'?segment=top_20_purchases'",
             "'Cache-Control'", "assertStringNotContainsString($foreign->id()",
         ):
             self.assertIn(expected, php_test)
