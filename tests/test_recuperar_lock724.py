@@ -122,6 +122,24 @@ class OrphanLockRecoveryTests(unittest.TestCase):
         self.assertEqual(update["afterOid"], module.ZERO)
         self.assertNotIn("trabajo/issue", str(update))
 
+    def test_cas_failure_is_not_a_success_receipt(self):
+        class DeniedGraphql(Fake):
+            def post(self, path, body):
+                if path == "/graphql":
+                    self.calls.append(("POST", path, body))
+                    return {"errors": [{"message": "CAS rejected"}]}
+                return super().post(path, body)
+        api = DeniedGraphql()
+        with self.assertRaises(module.Denied):
+            module.recover(api, NOW, "1234")
+        self.assertEqual(
+            api.data["/repos/pl0n3r/Condor/git/ref/heads/coordinacion/lock-issue-724"]["object"]["sha"],
+            module.EXPECTED_NONCE,
+        )
+        self.assertFalse(any(
+            x[0] == "POST" and x[1].endswith("/comments") for x in api.calls
+        ))
+
     def test_workflow_only_owner_exact_comment_and_main(self):
         s = (ROOT / ".github/workflows/recuperar-lock724.yml").read_text(encoding="utf-8")
         for expected in (
