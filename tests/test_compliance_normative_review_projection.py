@@ -206,6 +206,12 @@ class NormativeReviewProjectionTests(unittest.TestCase):
         self.assertEqual("REQUIERE_REVISION", row["state"])
         self.assertIsNone(row["evidence_ref"])
 
+        # Invalid own-scope indices may refer to any of several applicable rules.
+        multi = project(rules=[rule(), rule()], reviews=[review(row_index=999)])
+        self.assertEqual(2, len(multi["rows"]))
+        self.assertEqual(["REQUIERE_REVISION"] * 2,
+                         [item["state"] for item in multi["rows"]])
+
     def test_explicit_foreign_scope_stays_isolated(self) -> None:
         foreign_tenant = review(tenant_ref="tenant-b", evidence_ref="fixture:evidence/foreign")
         foreign_municipio = review(municipio="bogota", evidence_ref="fixture:evidence/foreign")
