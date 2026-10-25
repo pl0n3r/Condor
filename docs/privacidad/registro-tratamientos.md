@@ -67,7 +67,7 @@ Producto: `pl0n3r/Condor`
 ## customer_contact
 
 - Categoría: `contact`
-- Campos de software: `name`, `email`, `phone`, `notes`, `commercial_category_id`
+- Campos de software: `name`, `email`, `phone`, `document_number`, `notes`, `commercial_category_id`
 - Finalidad: `customer_management`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
