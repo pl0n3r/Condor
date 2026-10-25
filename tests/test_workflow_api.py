@@ -127,6 +127,8 @@ namespace App\Infrastructure\Persistence {
             $this->versions[$tenant][$d->workflowId][$v]=$d;$this->writes++;return $v;
         }
         public function latest(string $tenant,string $id):?array {
+            if(strlen($id)<1 || strlen($id)>128 || preg_match('/^[a-zA-Z0-9_.:-]+$/D',$id)!==1)
+                throw new \DomainException('invalid identity');
             if(!isset($this->versions[$tenant][$id]))return null;
             $v=count($this->versions[$tenant][$id]);return ['definition'=>$this->versions[$tenant][$id][$v],'version'=>$v];
         }
