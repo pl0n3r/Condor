@@ -67,7 +67,7 @@ Producto: `pl0n3r/Condor`
 ## customer_contact
 
 - Categoría: `contact`
-- Campos de software: `name`, `email`, `phone`, `notes`, `commercial_category_id`
+- Campos de software: `name`, `email`, `phone`, `document_number`, `notes`, `commercial_category_id`
 - Finalidad: `customer_management`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
@@ -119,6 +119,26 @@ Producto: `pl0n3r/Condor`
 - Categoría: `contact`
 - Campos de software: `email`, `trial_quote_id`, `trial_consent_recorded_at`
 - Finalidad: `self_service_trial_application`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
+## workflow_definitions
+
+- Categoría: `usage`
+- Campos de software: `tenant_id`, `workflow_id`, `trigger_name`, `conditions_json`, `actions_json`, `created_by_user_id`, `updated_by_user_id`, `created_at`, `updated_at`
+- Finalidad: `workflow_definition_management`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
+## workflow_executions
+
+- Categoría: `usage`
+- Campos de software: `tenant_id`, `workflow_id`, `definition_version`, `actor_user_id`, `result`, `created_at`
+- Finalidad: `workflow_execution_audit`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
 - Proveedores: ninguno_declarado
