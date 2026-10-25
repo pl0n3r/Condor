@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 
+# Keep TestCase out of module globals: unittest discover must collect only this bridge.
 from tests import test_channel_inventory_source as channel_inventory_source
 
 
