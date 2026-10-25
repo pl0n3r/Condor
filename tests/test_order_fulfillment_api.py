@@ -64,7 +64,7 @@ class CumplimientoEntregaApiTests(unittest.TestCase):
         for needle in ("authorizedBranchScope($branchId, 'orders.view')",
                        "authorizedBranchScope($branchId, 'orders.update')",
                        "requireCsrf($request)", "'tenant' => $tenant",
-                       "inventorySource()->branch()", "Cache-Control",
+                       "canAccessBranch(", "Cache-Control",
                        "['method', 'tracking_number']", "['status']"):
             self.assertIn(needle, controller)
         for needle in ("PESSIMISTIC_WRITE", "wrapInTransaction(", "new OrderEvent(",
