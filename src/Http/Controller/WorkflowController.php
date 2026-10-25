@@ -72,10 +72,10 @@ final class WorkflowController extends AbstractController
     {
         [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.update');
         $permissions = $this->authorization->permissions($user, $tenant, $branch);
-        return $this->json(['actions' => array_values(array_keys(array_filter(
+        return $this->json(['actions' => array_keys(array_filter(
             self::ACTIONS,
             static fn (string $permission): bool => in_array($permission, $permissions, true),
-        )))]);
+        ))]);
     }
 
     #[Route('/api/v1/branches/{branchId}/workflows', name: 'api_workflows_create', methods: ['POST'])]
@@ -146,7 +146,7 @@ final class WorkflowController extends AbstractController
         [, $tenant] = $this->authorizedBranchScope($branchId, 'settings.update');
         $this->existing($tenant->id(), $workflowId);
         $limit = $request->query->get('limit', '50');
-        if (!is_string($limit) || preg_match('/^(?:[1-9]|[1-9][0-9]|100)$/D', $limit) !== 1) {
+        if (preg_match('/^(?:[1-9]|[1-9][0-9]|100)$/D', $limit) !== 1) {
             throw new UnprocessableEntityHttpException('Límite de historial inválido.');
         }
         $history = $this->domain(fn (): array => $this->workflows->history($tenant->id(), $workflowId, (int) $limit));
@@ -234,7 +234,10 @@ final class WorkflowController extends AbstractController
         return null;
     }
 
-    /** @return array{workflow_id: string, trigger: string, conditions: array, actions: array, active: bool, version: int} */
+    /**
+     * @param array{definition: WorkflowDefinition, version: int} $latest
+     * @return array{workflow_id: string, trigger: string, conditions: list<array{field: string, operator: string, value?: mixed}>, actions: list<array{type: string, arguments?: array<string, scalar|null>}>, active: bool, version: int}
+     */
     private static function description(array $latest): array
     {
         $def = $latest['definition'];
