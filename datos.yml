@@ -62,6 +62,7 @@
         "name",
         "email",
         "phone",
+        "document_number",
         "notes",
         "commercial_category_id"
       ],
