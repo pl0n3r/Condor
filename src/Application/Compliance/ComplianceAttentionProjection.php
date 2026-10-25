@@ -182,7 +182,10 @@ final class ComplianceAttentionProjection
             ? $date : null;
     }
 
-    /** @param array<array-key,mixed> $payload @param list<string> $expected */
+    /**
+     * @param array<array-key,mixed> $payload
+     * @param list<string> $expected
+     */
     private static function exactKeys(array $payload, array $expected): bool
     {
         $actual = array_keys($payload);
