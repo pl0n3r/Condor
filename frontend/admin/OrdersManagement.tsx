@@ -45,8 +45,32 @@ type Variant = {
   product_name: string;
 };
 
+type OrdersPagination = {
+  page: number;
+  per_page: number;
+  total: number;
+  has_more: boolean;
+};
+
+type OrdersFilters = {
+  status: string;
+  from: string;
+  to: string;
+  customerId: string;
+  q: string;
+};
+
+const EMPTY_FILTERS: OrdersFilters = {
+  status: '',
+  from: '',
+  to: '',
+  customerId: '',
+  q: '',
+};
+
 type Snapshot = {
   orders: Order[];
+  pagination: OrdersPagination;
   sources: Source[];
   price_lists: PriceList[];
   customers: Customer[];
@@ -127,6 +151,10 @@ export function OrdersManagement({
   const canUpdate = can('orders.update');
 
   const [state, setState] = useState<State>({ status: 'loading' });
+  const [draftFilters, setDraftFilters] = useState<OrdersFilters>({ ...EMPTY_FILTERS });
+  const [filters, setFilters] = useState<OrdersFilters>({ ...EMPTY_FILTERS });
+  const [page, setPage] = useState(1);
+  const latestRequest = useRef(0);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
   const [sourceId, setSourceId] = useState('');
@@ -142,13 +170,21 @@ export function OrdersManagement({
     if (!canView) {
       return;
     }
+    const requestId = ++latestRequest.current;
+    setState({ status: 'loading' });
 
-    setState((current) => (
-      current.status === 'ready' ? current : { status: 'loading' }
-    ));
+    const params = new URLSearchParams({
+      page: String(page),
+      per_page: '20',
+    });
+    if (filters.status) params.set('status', filters.status);
+    if (filters.from) params.set('from', filters.from);
+    if (filters.to) params.set('to', filters.to);
+    if (filters.customerId) params.set('customer_id', filters.customerId);
+    if (filters.q.trim()) params.set('q', filters.q.trim());
 
     try {
-      const response = await fetch(ordersPath(branchId), {
+      const response = await fetch(ordersPath(branchId) + '?' + params.toString(), {
         credentials: 'same-origin',
         headers: { Accept: 'application/json' },
       });
@@ -160,6 +196,7 @@ export function OrdersManagement({
       }
 
       const data = await response.json() as Snapshot;
+      if (requestId !== latestRequest.current) return;
       setState({ status: 'ready', data });
       setSourceId((current) => current || data.sources[0]?.id || '');
       setPriceListId(
@@ -171,6 +208,7 @@ export function OrdersManagement({
           : { ...line, variantId: data.variants[0]?.id || '' }
       )));
     } catch (error) {
+      if (requestId !== latestRequest.current) return;
       setState({
         status: 'error',
         message: error instanceof Error
@@ -182,8 +220,31 @@ export function OrdersManagement({
 
   useEffect(() => {
     pendingCreate.current = null;
-    void loadOrders();
+    setDraftFilters({ ...EMPTY_FILTERS });
+    setFilters({ ...EMPTY_FILTERS });
+    setPage(1);
   }, [branchId]);
+
+  useEffect(() => {
+    void loadOrders();
+    return () => { latestRequest.current += 1; };
+  }, [branchId, canView, filters, page]);
+
+  function updateFilter(field: keyof OrdersFilters, value: string) {
+    setDraftFilters((current) => ({ ...current, [field]: value }));
+  }
+
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPage(1);
+    setFilters({ ...draftFilters });
+  }
+
+  function clearFilters() {
+    setDraftFilters({ ...EMPTY_FILTERS });
+    setPage(1);
+    setFilters({ ...EMPTY_FILTERS });
+  }
 
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -257,7 +318,11 @@ export function OrdersManagement({
         text: 'Pedido creado y stock reservado.',
       });
       setLines([draftLine(state.data.variants[0]?.id || '')]);
-      await loadOrders();
+      if (page === 1) {
+        await loadOrders();
+      } else {
+        setPage(1);
+      }
     } catch (error) {
       setNotice({
         kind: 'error',
@@ -367,6 +432,10 @@ export function OrdersManagement({
             onClick={() => void loadOrders()}
           >
             Reintentar
+          </button>
+          <button type="button" className="button button-secondary"
+            onClick={clearFilters}>
+            Limpiar filtros
           </button>
         </div>
       )}
@@ -529,9 +598,61 @@ export function OrdersManagement({
       )}
 
       {ready && (
+        <form className="catalog-card" onSubmit={applyFilters} aria-label="Filtros de pedidos">
+          <div>
+            <h3>Filtrar pedidos</h3>
+            <p className="muted">Los resultados pertenecen a la sede seleccionada.</p>
+          </div>
+          <div className="catalog-form-grid">
+            <label className="field">
+              <span>Estado del pedido</span>
+              <select value={draftFilters.status}
+                onChange={(event) => updateFilter('status', event.target.value)}>
+                <option value="">Todos los estados</option>
+                <option value="open">Abierto</option>
+                <option value="cancelled">Cancelado</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Desde</span>
+              <input type="date" value={draftFilters.from} max={draftFilters.to || undefined}
+                onChange={(event) => updateFilter('from', event.target.value)} />
+            </label>
+            <label className="field">
+              <span>Hasta</span>
+              <input type="date" value={draftFilters.to} min={draftFilters.from || undefined}
+                onChange={(event) => updateFilter('to', event.target.value)} />
+            </label>
+            <label className="field">
+              <span>Cliente</span>
+              <select value={draftFilters.customerId}
+                onChange={(event) => updateFilter('customerId', event.target.value)}>
+                <option value="">Todos los clientes</option>
+                {ready.customers.map((customer) => (
+                  <option value={customer.id} key={customer.id}>{customer.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Buscar por ID o cliente</span>
+              <input type="search" maxLength={100} value={draftFilters.q}
+                onChange={(event) => updateFilter('q', event.target.value)} />
+            </label>
+          </div>
+          <div className="catalog-actions">
+            <button className="button" type="submit">Aplicar filtros</button>
+            <button className="button button-secondary" type="button"
+              onClick={clearFilters}>Limpiar filtros</button>
+          </div>
+        </form>
+      )}
+
+      {ready && (
         <div className="catalog-list">
           {ready.orders.length === 0 ? (
-            <p className="muted">Todavía no hay pedidos en esta razón social.</p>
+            <p className="muted" role="status">
+              No hay pedidos que coincidan con los filtros en esta sede.
+            </p>
           ) : ready.orders.map((order) => (
             <article className="catalog-card" key={order.id}>
               <div className="section-heading">
@@ -620,6 +741,24 @@ export function OrdersManagement({
             </article>
           ))}
         </div>
+      )}
+
+      {ready && (
+        <nav className="catalog-actions" aria-label="Paginación de pedidos">
+          <button type="button" className="button button-secondary"
+            disabled={ready.pagination.page <= 1}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}>
+            Anterior
+          </button>
+          <output aria-live="polite">
+            Página {ready.pagination.page} · {ready.pagination.total} pedidos
+          </output>
+          <button type="button" className="button button-secondary"
+            disabled={!ready.pagination.has_more}
+            onClick={() => setPage((current) => current + 1)}>
+            Siguiente
+          </button>
+        </nav>
       )}
     </section>
   );

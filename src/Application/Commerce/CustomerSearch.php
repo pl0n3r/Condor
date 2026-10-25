@@ -110,7 +110,8 @@ final readonly class CustomerSearch
                         ?: (strcmp(self::fold($a->name()), self::fold($b->name()))
                             ?: strcmp($a->id(), $b->id())),
                 );
-                $customers = array_slice($customers, 0, 20);
+                // La búsqueda se aplica antes del límite: no ocultar coincidencias
+                // situadas después del top 20 global.
             }
         }
 
@@ -124,6 +125,10 @@ final readonly class CustomerSearch
                     || str_contains(self::fold($customer->phone() ?? ''), $needle)
                     || str_contains(self::fold($customer->documentNumber() ?? ''), $needle),
             ));
+        }
+
+        if ($segment === self::SEGMENT_TOP) {
+            return array_slice($customers, 0, 20);
         }
 
         return $customers;

@@ -124,6 +124,35 @@ final class CustomerSearchTest extends TestCase
         );
     }
 
+    public function testTopPurchasersFilterBeforeTakingTwenty(): void
+    {
+        $now = (new DateTimeImmutable('now', new DateTimeZone('UTC')))
+            ->modify('+1 minute');
+        $tenant = $this->tenant('top-search');
+        $customers = [];
+        $orders = [];
+        $last = null;
+
+        // Orden alfabético desempata 21 clientes con una compra cada uno.
+        // El cliente buscado está deliberadamente fuera del top 20 global.
+        for ($i = 1; $i <= 21; ++$i) {
+            $name = $i === 21 ? 'Zeta Única' : sprintf('Cliente %02d', $i);
+            $customer = new Customer($tenant, $name);
+            $customers[] = $customer;
+            $orders[] = $this->order($tenant, $customer, 'order-'.$i);
+            if ($i === 21) {
+                $last = $customer;
+            }
+        }
+        $service = $this->service($customers, $orders);
+
+        self::assertCount(20, $service->search($tenant, '', CustomerSearch::SEGMENT_TOP, $now));
+        self::assertSame(
+            [$last->id()],
+            $this->ids($service->search($tenant, 'UNICA', CustomerSearch::SEGMENT_TOP, $now)),
+        );
+    }
+
     public function testInvalidFiltersFailClosedWithoutReadingRepositories(): void
     {
         $tenant = $this->tenant('invalid');
