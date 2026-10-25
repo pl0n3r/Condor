@@ -165,21 +165,29 @@ final class ComplianceAttentionProjection
 
     private static function identifier(mixed $value): bool
     {
-        return is_string($value)
-            && preg_match('/^[a-z0-9][a-z0-9:_-]{0,63}$/iD', $value) === 1
-            && !in_array(strtolower($value), [
-                'unknown', 'desconocido', 'pendiente', 'sin_dato', 'no_definido',
-            ], true);
+        if (!is_string($value) || strlen($value) > 64) {
+            return false;
+        }
+        $disallowed = ['unknown', 'desconocido', 'pendiente', 'sin_dato', 'no_definido'];
+        if (in_array(strtolower($value), $disallowed, true)) {
+            return false;
+        }
+        return preg_match('/^[a-z0-9][a-z0-9:_-]*$/iD', $value) === 1;
     }
 
     private static function date(mixed $value): ?\DateTimeImmutable
     {
-        if (!is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) !== 1) {
+        if (!is_string($value)) {
             return null;
         }
-        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value, new \DateTimeZone('UTC'));
-        return $date instanceof \DateTimeImmutable && $date->format('Y-m-d') === $value
-            ? $date : null;
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) !== 1) {
+            return null;
+        }
+        $valueDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $value, new \DateTimeZone('UTC'));
+        if (!$valueDate instanceof \DateTimeImmutable) {
+            return null;
+        }
+        return $valueDate->format('Y-m-d') === $value ? $valueDate : null;
     }
 
     /**
@@ -188,9 +196,14 @@ final class ComplianceAttentionProjection
      */
     private static function exactKeys(array $payload, array $expected): bool
     {
-        $actual = array_keys($payload);
-        sort($actual);
-        sort($expected);
-        return $actual === $expected;
+        if (count($payload) !== count($expected)) {
+            return false;
+        }
+        foreach ($expected as $key) {
+            if (!array_key_exists($key, $payload)) {
+                return false;
+            }
+        }
+        return true;
     }
 }
