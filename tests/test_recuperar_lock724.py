@@ -51,7 +51,7 @@ class Fake:
                 "parents": [{"sha": module.EXPECTED_PARENT}],
             },
             "/repos/pl0n3r/Condor": {
-                "full_name": module.REPO, "node_id": "R_012345",
+                "name": "Condor", "owner": {"login": "pl0n3r"}, "node_id": "R_012345",
             },
         }
         for state in ("in_progress", "queued", "waiting", "pending", "requested"):

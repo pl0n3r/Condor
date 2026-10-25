@@ -130,7 +130,7 @@ def prepare(api, now: datetime, run_id: str) -> str:
     verify_nonce(api, now)
     identity = api.get(f"/repos/{REPO}")
     rid = identity.get("node_id")
-    demand(identity.get("full_name") == REPO and isinstance(rid, str) and rid,
+    demand(identity.get("name") == "Condor" and (identity.get("owner") or {}).get("login") == "pl0n3r" and isinstance(rid, str) and rid,
            "identidad del repo ilegible")
     return rid
 
