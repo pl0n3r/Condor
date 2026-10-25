@@ -114,7 +114,6 @@ final readonly class IndexNowNotifier
         if (!is_array($parts)
             || ($parts['scheme'] ?? null) !== 'https'
             || !isset($parts['host'])
-            || !is_string($parts['host'])
             || ($parts['host'] === '')
             || isset($parts['user'], $parts['pass'])
             || isset($parts['query']) || isset($parts['fragment'])
