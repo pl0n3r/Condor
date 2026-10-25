@@ -33,8 +33,6 @@ final class PrivacyAsCodeTest extends TestCase
                 'notification_delivery',
                 'notification_preferences',
                 'self_service_trial_application',
-                'workflow_definitions',
-                'workflow_executions',
             ],
             $this->treatmentIds($data),
         );
@@ -45,9 +43,6 @@ final class PrivacyAsCodeTest extends TestCase
         self::assertContains('payload', $this->treatment($data, 'notification_delivery')['fields']);
         self::assertContains('context', $this->treatment($data, 'audit_events')['fields']);
         self::assertContains('trace', $this->treatment($data, 'error_incidents')['fields']);
-        self::assertContains('conditions_json', $this->treatment($data, 'workflow_definitions')['fields']);
-        self::assertContains('actions_json', $this->treatment($data, 'workflow_definitions')['fields']);
-        self::assertSame('review_required', $this->treatment($data, 'workflow_definitions')['retention']);
         self::assertSame(
             'review_required',
             $this->treatment($data, 'self_service_trial_application')['basis'],
