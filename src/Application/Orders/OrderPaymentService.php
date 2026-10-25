@@ -124,17 +124,11 @@ final readonly class OrderPaymentService
     /** @return list<OrderEvent> */
     private function events(EntityManagerInterface $em, Order $order): array
     {
-        $events = $em->getRepository(OrderEvent::class)->findBy([
+        return $em->getRepository(OrderEvent::class)->findBy([
             'tenant' => $order->tenant(),
             'order' => $order,
             'type' => self::EVENT,
         ]);
-        foreach ($events as $event) {
-            if (!$event instanceof OrderEvent) {
-                throw new DomainException('PAYMENT_LEDGER_INVALID');
-            }
-        }
-        return array_values($events);
     }
 
     /**
