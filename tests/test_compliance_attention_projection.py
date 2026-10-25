@@ -185,7 +185,13 @@ class ComplianceAttentionProjectionTests(unittest.TestCase):
             self.assertIn(phrase, doc)
         # Independent, deterministic real-PHP executions without network access.
         self.assertEqual([], project(upstream={"tenant_ref": "tenant-a", "municipio": "pereira", "rows": []}, deadlines=[])["rows"])
-        self.assertEqual(project(), project())
+        first = project()
+        second = project()
+        self.assertEqual(first, second)
+        self.assertEqual("tenant-a", first["tenant_ref"])
+        self.assertEqual("pereira", first["municipio"])
+        self.assertEqual("EN_REVISION", first["rows"][0]["state"])
+        self.assertTrue(first["rows"][0]["attention_candidate"])
         self.assertNotIn("tenant-b", json.dumps(project(deadlines=[deadline(tenant_ref="tenant-b")])))
 
 
