@@ -106,9 +106,6 @@ final readonly class OrderFulfillmentService
             ['createdAt' => 'ASC', 'id' => 'ASC'],
         );
         foreach ($events as $event) {
-            if (!$event instanceof OrderEvent) {
-                throw new DomainException('DELIVERY_HISTORY_INVALID');
-            }
             $context = $event->context();
             $actor = $context['actor'] ?? null;
             $value = $context['value'] ?? null;
