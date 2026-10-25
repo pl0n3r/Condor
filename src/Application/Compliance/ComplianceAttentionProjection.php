@@ -127,8 +127,22 @@ final class ComplianceAttentionProjection
     {
         $source = $row['source'] ?? null;
         if (!is_array($source)
-            || !self::identifier($source['version'] ?? null)
+            || !self::exactKeys($source, [
+                'article', 'issuer', 'kind', 'official_url', 'version',
+            ])
+            || $source['kind'] !== 'official'
+            || !self::identifier($source['article'])
+            || !self::identifier($source['issuer'])
+            || !self::identifier($source['version'])
             || !self::identifier($row['normative_reviewer_ref'] ?? null)
+        ) {
+            return false;
+        }
+        // This offline slice permits only reserved synthetic source domains.
+        $url = $source['official_url'];
+        $host = is_string($url) ? parse_url($url, PHP_URL_HOST) : null;
+        if (!is_string($url) || !str_starts_with($url, 'https://')
+            || !is_string($host) || !str_ends_with($host, '.invalid')
         ) {
             return false;
         }

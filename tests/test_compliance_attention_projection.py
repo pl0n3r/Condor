@@ -136,6 +136,10 @@ class ComplianceAttentionProjectionTests(unittest.TestCase):
             {"reviewed_on": "2027-01-01"},
             {"reviewer_ref": None},
             {"source": {"version": "unknown"}},
+            {"source": {"version": "v1"}},  # partial source used to fabricate attention
+            {"source": {**upstream["rows"][0]["source"], "kind": "unofficial"}},
+            {"source": {**upstream["rows"][0]["source"], "issuer": "unknown"}},
+            {"source": {**upstream["rows"][0]["source"], "official_url": "https://external.example.com/norm"}},
         ):
             changed = copy.deepcopy(upstream)
             changed["rows"][0].update(patch)
