@@ -113,8 +113,7 @@ final class NormativeReviewProjection
             $starts = self::date($source['effective_from']);
             $ends = self::date($source['effective_until']);
             $reference = self::date($referenceDate);
-            if ($at === null || $starts === null
-                || $ends === null || $reference === null
+            if ($at === null
                 || $at < $verified || $at < $starts || $at > $ends || $at > $reference
             ) {
                 $rows[] = self::row('REQUIERE_REVISION');
