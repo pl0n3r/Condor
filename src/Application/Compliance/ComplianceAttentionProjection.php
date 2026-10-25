@@ -50,10 +50,14 @@ final class ComplianceAttentionProjection
         $ambiguous = [];
         foreach ($deadlines as $candidate) {
             if (!is_array($candidate)
-                || ($candidate['tenant_ref'] ?? null) !== $tenant
-                || ($candidate['municipio'] ?? null) !== $municipio
+                || !self::identifier($candidate['tenant_ref'] ?? null)
+                || !self::identifier($candidate['municipio'] ?? null)
             ) {
-                // Foreign and unscoped references are neither returned nor counted.
+                // Missing or invalid scope cannot be safely treated as foreign.
+                return [...$scope, 'rows' => [self::attention('REQUIERE_REVISION')]];
+            }
+            if ($candidate['tenant_ref'] !== $tenant || $candidate['municipio'] !== $municipio) {
+                // Only well-scoped foreign records are excluded without disclosure.
                 continue;
             }
             $index = $candidate['row_index'] ?? null;

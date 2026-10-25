@@ -113,6 +113,20 @@ class ComplianceAttentionProjectionTests(unittest.TestCase):
         result = project(deadlines=[foreign_tenant, foreign_municipio, deadline()])
         self.assertEqual("EN_REVISION", result["rows"][0]["state"])
         self.assertNotIn("private", json.dumps(result))
+
+        # Unknown scope is NOT a known foreign scope, even with a valid deadline.
+        for invalid in (
+            {"row_index": 0, "due_on": "2026-10-21"},
+            deadline(tenant_ref="unknown"),
+            deadline(municipio="unknown"),
+            None,
+        ):
+            with self.subTest(invalid_scope=invalid):
+                row = project(deadlines=[deadline(), invalid])["rows"][0]
+                self.assertEqual("REQUIERE_REVISION", row["state"])
+                self.assertFalse(row["attention_candidate"])
+                self.assertIsNone(row["deadline_ref"])
+                self.assertIsNone(row["due_on"])
         self.assertEqual(
             "REQUIERE_REVISION",
             project(deadlines=[deadline(row_index=10)])["rows"][0]["state"],

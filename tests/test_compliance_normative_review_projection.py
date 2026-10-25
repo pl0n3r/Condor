@@ -171,6 +171,61 @@ class NormativeReviewProjectionTests(unittest.TestCase):
             project(as_of="bad-date")["rows"][0]["state"],
         )
 
+    def test_missing_scope_review_fails_closed(self) -> None:
+        missing_tenant = review()
+        missing_tenant.pop("tenant_ref")
+        missing_municipio = review()
+        missing_municipio.pop("municipio")
+        for candidate in (
+            "invalid", None, {},
+            missing_tenant, missing_municipio,
+            review(tenant_ref="unknown"),
+            review(municipio="sin_dato"),
+        ):
+            with self.subTest(candidate=candidate):
+                row = project(reviews=[candidate])["rows"][0]
+                self.assertEqual("REQUIERE_REVISION", row["state"])
+                self.assertIsNone(row["source"])
+                self.assertIsNone(row["evidence_ref"])
+
+    def test_invalid_same_scope_index_fails_closed(self) -> None:
+        missing_index = review()
+        missing_index.pop("row_index")
+        for candidate in (
+            missing_index, review(row_index=None),
+            review(row_index=-1), review(row_index=999),
+            review(row_index="0"), review(row_index=True),
+        ):
+            with self.subTest(candidate=candidate):
+                row = project(reviews=[candidate])["rows"][0]
+                self.assertEqual("REQUIERE_REVISION", row["state"])
+                self.assertIsNone(row["evidence_ref"])
+
+        # A valid review cannot erase uncertainty from another same-scope input.
+        row = project(reviews=[review(), review(row_index=-1)])["rows"][0]
+        self.assertEqual("REQUIERE_REVISION", row["state"])
+        self.assertIsNone(row["evidence_ref"])
+
+        # Invalid own-scope indices may refer to any of several applicable rules.
+        multi = project(rules=[rule(), rule()], reviews=[review(row_index=999)])
+        self.assertEqual(2, len(multi["rows"]))
+        self.assertEqual(["REQUIERE_REVISION"] * 2,
+                         [item["state"] for item in multi["rows"]])
+
+    def test_explicit_foreign_scope_stays_isolated(self) -> None:
+        foreign_tenant = review(tenant_ref="tenant-b", evidence_ref="fixture:evidence/foreign")
+        foreign_municipio = review(municipio="bogota", evidence_ref="fixture:evidence/foreign")
+        for candidate in (foreign_tenant, foreign_municipio):
+            with self.subTest(candidate=candidate):
+                pending = project(reviews=[candidate])["rows"][0]
+                self.assertEqual("PENDIENTE", pending["state"])
+                self.assertNotIn("foreign", json.dumps(pending))
+
+                local = project(reviews=[candidate, review()])["rows"][0]
+                self.assertEqual("EN_REVISION", local["state"])
+                self.assertEqual("fixture:evidence/document-1", local["evidence_ref"])
+                self.assertNotIn("foreign", json.dumps(local))
+
     def test_offline_no_data_or_provider_side_effects(self) -> None:
         php = F1B.read_text(encoding="utf-8").lower()
         docs = DOC.read_text(encoding="utf-8").lower()
@@ -188,7 +243,7 @@ class NormativeReviewProjectionTests(unittest.TestCase):
             self.assertIn(required, docs)
         self.assertEqual([], project(rules=[])["rows"])
         self.assertNotIn("CUMPLE", json.dumps(project(reviews=[review()])))
-        self.assertEqual("PENDIENTE", project(reviews=["invalid"])["rows"][0]["state"])
+        self.assertEqual("REQUIERE_REVISION", project(reviews=["invalid"])["rows"][0]["state"])
 
 
 if __name__ == "__main__":

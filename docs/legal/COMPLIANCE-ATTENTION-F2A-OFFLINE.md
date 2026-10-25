@@ -15,7 +15,7 @@ Los plazos son fixtures con **exactamente** `tenant_ref`, `municipio`, `row_inde
 
 ## Aislamiento y pruebas
 
-**Sin datos personales**: usar `tenant-a`, `pereira`, revisores y fuentes inventadas de dominio `.invalid`; no incorporar RRHH, datos de trabajadores, documentos, historial médico ni PII de clientes. Las referencias de otro tenant/municipio se ignoran sin revelar su existencia; una entrada malformada del mismo ámbito invalida conservadoramente el resultado. **Sin BD, API ni UI**, sin proveedores, sin SQL, sin red, sin scheduler y sin escrituras persistentes. El código PHP es puro en memoria.
+**Sin datos personales**: usar `tenant-a`, `pereira`, revisores y fuentes inventadas de dominio `.invalid`; no incorporar RRHH, datos de trabajadores, documentos, historial médico ni PII de clientes. Las referencias **explícitamente ajenas y con tenant/municipio válidos** se ignoran sin revelar su existencia; un plazo sin ámbito verificable (incluidos tenant/municipio desconocidos, campos ausentes o entrada no estructurada) invalida conservadoramente la proyección completa, incluso si otro plazo es correcto. Una entrada malformada del mismo ámbito también la invalida. **Sin BD, API ni UI**, sin proveedores, sin SQL, sin red, sin scheduler y sin escrituras persistentes. El código PHP es puro en memoria.
 
 `python3 -m unittest tests.test_compliance_attention_projection -v` ejecuta los cuatro criterios contra el **PHP real** con `php -n` y `allow_url_fopen=0`. La suite verifica la incertidumbre de F1b, procedencia, límites tenant/municipio, fechas inválidas, duplicados y ausencia de efectos no autorizados. No sustituir los tests por búsqueda de textos o mocks del algoritmo.
 

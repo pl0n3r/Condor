@@ -49,16 +49,28 @@ final class NormativeReviewProjection
 
         $matching = [];
         $ambiguous = [];
+        $unattributableReview = false;
         foreach ($reviews as $candidate) {
-            if (!is_array($candidate)
-                || ($candidate['tenant_ref'] ?? null) !== $scope['tenant_ref']
-                || ($candidate['municipio'] ?? null) !== $scope['municipio']
+            $tenant = is_array($candidate) ? ($candidate['tenant_ref'] ?? null) : null;
+            $municipio = is_array($candidate) ? ($candidate['municipio'] ?? null) : null;
+            if ((self::identifier($tenant) && $tenant !== $scope['tenant_ref'])
+                || (self::identifier($municipio) && $municipio !== $scope['municipio'])
             ) {
-                // Never disclose that another tenant or municipality submitted a review.
+                // Explicitly foreign scopes are excluded, without disclosing them.
+                continue;
+            }
+            if (!is_array($candidate)
+                || $tenant !== $scope['tenant_ref']
+                || $municipio !== $scope['municipio']
+            ) {
+                // Unknown or incomplete scope cannot establish absence of reviews.
+                $unattributableReview = true;
                 continue;
             }
             $index = $candidate['row_index'] ?? null;
             if (!is_int($index) || $index < 0 || $index >= count($matrix['rows'])) {
+                // Same-scope review with no valid target may refer to any row.
+                $unattributableReview = true;
                 continue;
             }
             if (array_key_exists($index, $matching)) {
@@ -89,7 +101,7 @@ final class NormativeReviewProjection
                 $rows[] = self::row('REQUIERE_REVISION');
                 continue;
             }
-            if (isset($ambiguous[$index])) {
+            if ($unattributableReview || isset($ambiguous[$index])) {
                 $rows[] = self::row('REQUIERE_REVISION');
                 continue;
             }
