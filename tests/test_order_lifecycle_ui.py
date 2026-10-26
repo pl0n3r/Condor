@@ -35,6 +35,12 @@ class UiCicloPedidoTests(unittest.TestCase):
         self.assertIn("canUpdate={canUpdate}", LIST)
         self.assertIn("csrfToken={csrfToken}", LIST)
         self.assertIn("onChanged={loadOrders}", LIST)
+        # Compatibilidad E2E del flujo histórico: las acciones de stock no
+        # deben requerir expandir el nuevo panel de ciclo del pedido.
+        self.assertIn("async function transition(path: string, success: string)", LIST)
+        self.assertIn("Pedido cancelado y reserva liberada.", LIST)
+        self.assertIn(">Cancelar</button>", LIST)
+        self.assertIn(">Consumir inventario</button>", LIST)
         self.assertIn("cancelPath={orderCancelPath(branchId, order.id)}", LIST)
         self.assertIn("consumePath={orderConsumePath(branchId, order.id)}", LIST)
         self.assertIn("export function ordersPath(branchId: string)", API)
