@@ -45,6 +45,12 @@ abstract class CommercialRecord
         return $this->id;
     }
 
+    /** Fecha de alta inmutable ya almacenada; no altera el esquema. */
+    final public function createdAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
     final public function tenant(): Tenant
     {
         return $this->tenant;
