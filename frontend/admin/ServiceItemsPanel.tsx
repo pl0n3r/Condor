@@ -215,6 +215,15 @@ export function ServiceItemsPanel({ branchId, permissions, csrfToken }: Props) {
         await checkedMutation(catalogProductPath(branchId, draft.id as string), 'PATCH', {
           name, slug, description: draft.description.trim() || null,
         }, 'No fue posible actualizar el servicio.');
+        const previous = state.services.find(service => service.id === draft.id);
+        if (previous && duration !== previous.duration_minutes) {
+          // #939: duration belongs to the service endpoint, not generic products.
+          const endpoint = catalogProductPath(branchId, draft.id as string)
+            .replace('/products/', '/services/');
+          await checkedMutation(endpoint, 'PATCH', {
+            duration_minutes: duration,
+          }, 'Se guardaron los datos, pero no se pudo actualizar la duración.');
+        }
         if (draft.variantId !== null) {
           await checkedMutation(catalogVariantPath(branchId, draft.id as string, draft.variantId), 'PATCH', {
             sku, name,
@@ -324,10 +333,8 @@ export function ServiceItemsPanel({ branchId, permissions, csrfToken }: Props) {
                 </label>
                 <label className="field"><span>Duración opcional (minutos)</span>
                   <input type="number" min={1} max={525600} step={1} value={draft.duration}
-                    disabled={draft.id !== null}
                     onChange={event => change('duration', event.target.value)} />
                 </label>
-                {draft.id !== null && <p className="muted">La API actual no permite cambiar la duración de un servicio existente.</p>}
                 <label className="field catalog-form-wide"><span>Descripción</span>
                   <textarea rows={3} maxLength={5000} value={draft.description}
                     onChange={event => change('description', event.target.value)} />
