@@ -45,8 +45,8 @@ final class OccupationalSafetyPrecheckProjection
             || $profile['workers_max'] > self::MAX_WORKERS
             || !is_string($profile['risk_category'])
             || !in_array($profile['risk_category'], self::RISK_CATEGORIES, true)
-            || self::date($referenceDate) === null
-            || self::date($profile['reference_date']) === null
+            || !self::validDate($referenceDate)
+            || !self::validDate($profile['reference_date'])
             || $profile['reference_date'] !== $referenceDate
         ) {
             return $result;
@@ -73,14 +73,15 @@ final class OccupationalSafetyPrecheckProjection
             && preg_match('~^fixture:' . $type . '/[a-z0-9][a-z0-9_-]{0,47}$~D', $value) === 1;
     }
 
-    private static function date(mixed $value): ?\DateTimeImmutable
+    private static function validDate(mixed $value): bool
     {
-        if (!is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) !== 1) {
-            return null;
+        // Parse the shape and calendar separately: DateTime normalizes invalid dates.
+        if (!is_string($value)
+            || preg_match('/^(\d{4})-(\d{2})-(\d{2})$/D', $value, $parts) !== 1
+        ) {
+            return false;
         }
-        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value, new \DateTimeZone('UTC'));
-        return $date instanceof \DateTimeImmutable && $date->format('Y-m-d') === $value
-            ? $date : null;
+        return checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1]);
     }
 
     /**
@@ -89,9 +90,7 @@ final class OccupationalSafetyPrecheckProjection
      */
     private static function exactKeys(array $payload, array $expected): bool
     {
-        $keys = array_keys($payload);
-        sort($keys);
-        sort($expected);
-        return $keys === $expected;
+        return count($payload) === count($expected)
+            && array_diff(array_keys($payload), $expected) === [];
     }
 }
