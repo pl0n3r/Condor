@@ -387,7 +387,7 @@ type State =
       diagnostic?: OwnerDiagnostic;
     };
 
-type PlatformOwnerSection = 'control' | 'empresas' | 'staff';
+type PlatformOwnerSection = 'control' | 'empresas' | 'staff' | 'suscripciones' | 'catalogo';
 
 function selectedTenantFromState(state: State): SelectedTenant | null {
   return state.status === 'ready' ? state.data.selected_tenant : null;
@@ -506,6 +506,14 @@ export function PlatformOwnerApp({
     void loadContext();
   }, []);
 
+  // main.tsx still passes "control" for unrecognized sections; derive the two
+  // owner-only navigation destinations here without widening another claim.
+  const currentSection: PlatformOwnerSection =
+    window.location.pathname === '/adminpl0n3r/suscripciones'
+      ? 'suscripciones'
+      : window.location.pathname === '/adminpl0n3r/catalogo'
+        ? 'catalogo'
+        : section;
   const selected = selectedTenantFromState(state);
 
   useEffect(() => {
@@ -641,17 +649,27 @@ export function PlatformOwnerApp({
         {
           href: '/adminpl0n3r',
           label: 'Centro de control',
-          current: section === 'control',
+          current: currentSection === 'control',
         },
         {
           href: '/adminpl0n3r/empresas',
           label: 'Empresas',
-          current: section === 'empresas',
+          current: currentSection === 'empresas',
+        },
+        {
+          href: '/adminpl0n3r/suscripciones',
+          label: 'Plan y suscripciones',
+          current: currentSection === 'suscripciones',
+        },
+        {
+          href: '/adminpl0n3r/catalogo',
+          label: 'Catálogo comercial',
+          current: currentSection === 'catalogo',
         },
         {
           href: '/adminpl0n3r/staff',
           label: 'Staff',
-          current: section === 'staff',
+          current: currentSection === 'staff',
         },
         {
           href: '/adminpl0n3r/diagnosticos',
@@ -778,7 +796,7 @@ export function PlatformOwnerApp({
             </div>
           </div>
 
-          {!selected && section === 'control' && (
+          {!selected && currentSection === 'control' && (
             <>
               <OverviewGrid
                 ariaLabel="Métricas globales de Condor"
@@ -810,7 +828,11 @@ export function PlatformOwnerApp({
               <FunctionalSignalsPanel
                 signals={state.data.signals_last_30_days}
               />
+            </>
+          )}
 
+          {!selected && currentSection === 'catalogo' && (
+            <>
               <section
                 className="platform-section"
                 aria-labelledby="commercial-portfolio-title"
@@ -954,7 +976,7 @@ export function PlatformOwnerApp({
             </>
           )}
 
-          {!selected && section === 'empresas' && (
+          {!selected && currentSection === 'empresas' && (
             <>
               <PlatformTenantCreationPanel
                 csrfToken={tenantToken}
@@ -1057,19 +1079,80 @@ export function PlatformOwnerApp({
             </>
           )}
 
-          {!selected && section === 'staff' && (
+          {!selected && currentSection === 'staff' && (
             <PlatformStaffPanel
               csrfToken={staffToken}
               refreshKey={platformRevision}
             />
           )}
 
+          {!selected && currentSection === 'suscripciones' && (
+            <section className="platform-section" aria-labelledby="platform-subscriptions-title">
+              <div className="section-heading compact">
+                <div>
+                  <span className="eyebrow">Suscripciones</span>
+                  <h2 id="platform-subscriptions-title">Selecciona una empresa</h2>
+                </div>
+              </div>
+              {state.data.tenants.length === 0 ? (
+                <div className="platform-empty">No hay empresas en esta página.</div>
+              ) : (
+                <div className="tenant-grid">
+                  {state.data.tenants.map((tenant) => (
+                    <article className="tenant-card" key={tenant.id}>
+                      <span className="tenant-slug">{tenant.slug}</span>
+                      <h3>{tenant.name}</h3>
+                      <button
+                        className="button button-secondary tenant-open"
+                        type="button"
+                        onClick={() => void loadContext(
+                          tenant.id,
+                          state.data.tenant_pagination.page,
+                        )}
+                      >
+                        Ver suscripción
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              )}
+              <nav className="tenant-pagination" aria-label="Paginación de suscripciones">
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  disabled={!state.data.tenant_pagination.has_previous}
+                  onClick={() => void loadContext(
+                    undefined, state.data.tenant_pagination.page - 1,
+                  )}
+                >
+                  Anterior
+                </button>
+                <span className="muted">
+                  Página {state.data.tenant_pagination.page}
+                </span>
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  disabled={!state.data.tenant_pagination.has_next}
+                  onClick={() => void loadContext(
+                    undefined, state.data.tenant_pagination.page + 1,
+                  )}
+                >
+                  Siguiente
+                </button>
+              </nav>
+            </section>
+          )}
+
           {selected && (
             <>
+              {currentSection === 'suscripciones' && (
               <SaasControlCenterReadPanel
                 key={`${selected.id}:${saasPanelRevision}`}
                 tenantId={selected.id}
               />
+              )}
+              {currentSection === 'empresas' && (
               <OverviewGrid
                 ariaLabel="Resumen de empresa seleccionada"
                 variant="control"
@@ -1094,7 +1177,9 @@ export function PlatformOwnerApp({
                   },
                 ]}
               />
-
+              )}
+              {currentSection === 'suscripciones' && (
+                <>
               <section
                 className="platform-section"
                 aria-labelledby="commercial-subscription-title"
@@ -1333,7 +1418,10 @@ export function PlatformOwnerApp({
                   </div>
                 )}
               </section>
+                </>
+              )}
 
+              {currentSection === 'empresas' && (
               <section className="platform-section" aria-labelledby="branch-list-title">
                 <div className="section-heading compact">
                   <div>
@@ -1418,12 +1506,11 @@ export function PlatformOwnerApp({
                 </section>
 
                 <div className="platform-readonly-note" role="note">
-                  Este contexto sigue siendo mayormente de solo lectura.
-                  La creación inicial de suscripción es la única acción
-                  comercial habilitada; los demás módulos se incorporarán
-                  cuando sus contratos server-side estén listos.
+                  Este contexto muestra sedes y productos en modo de consulta.
+                  Para gestionar una suscripción, abre Plan y suscripciones.
                 </div>
               </section>
+              )}
             </>
           )}
         </>
