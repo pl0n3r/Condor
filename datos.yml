@@ -2,6 +2,10 @@
   "version": 1,
   "project": "pl0n3r/Condor",
   "phase": "construccion",
+  "d063_attestation": {
+    "nothing_live": true,
+    "no_real_customer_data": true
+  },
   "controller": {
     "name": "[COMPLETAR POR EL DUEÑO]",
     "identifier": "[COMPLETAR POR EL DUEÑO]",
