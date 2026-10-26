@@ -91,7 +91,7 @@ class UiCicloPedidoTests(unittest.TestCase):
             self.assertIn(transition, UI)
         self.assertIn("deliveryPath + '/transition'", UI)
         self.assertIn("tracking_number", CONTROLLERS["delivery"])
-        self.assertIn("order_status !== 'open'", UI.replace("order.order_status === 'open'", "order_status !== 'open'"))
+        self.assertIn("order.order_status === 'open'", UI)
         self.assertIn("DELIVERY_NEXT[delivery.method]?.[delivery.status]", UI)
         self.assertIn("reason", CONTROLLERS["refund"])
         for reason in ("customer_return", "payment_correction", "order_cancelled", "other"):
