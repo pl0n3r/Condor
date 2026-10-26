@@ -244,7 +244,7 @@ export function OrderLifecyclePanel({
     && ready !== null && ready.payment.pending_minor > 0;
 
   return (
-    <section className="catalog-card" aria-label={'Ciclo del pedido ' + order.id}>
+    <section id={'order-lifecycle-' + order.id} className="catalog-card" aria-label={'Ciclo del pedido ' + order.id}>
       <div>
         <span className="eyebrow">Detalle del pedido</span>
         <h4>Ciclo del pedido</h4>
