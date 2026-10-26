@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 final class PrivacyAsCodeTest extends TestCase
 {
     private const PLACEHOLDER = '[COMPLETAR POR EL DUEÑO]';
-    private const FACTORY_SHA = '68eef82e3b21939143a4cbea23b7df2615534e77';
+    private const FACTORY_SHA = '1072b8b26582d4285f4b8215ce5098548b4a03d8';
     private const FACTORY_AUDIT_REF = 'v1';
 
     /** Verifica que el mapa represente únicamente tratamientos observados. */
@@ -19,6 +19,11 @@ final class PrivacyAsCodeTest extends TestCase
         $data = $this->data();
         self::assertSame('pl0n3r/Condor', $data['project']);
         self::assertSame('construccion', $data['phase']);
+        // #924/A acredita hechos de construcción, no aprobación jurídica ni live.
+        self::assertSame(
+            ['nothing_live' => true, 'no_real_customer_data' => true],
+            $data['d063_attestation'] ?? null,
+        );
         self::assertSame(
             [
                 'account_identity',
@@ -317,10 +322,13 @@ final class PrivacyAsCodeTest extends TestCase
             '',
             '## Derechos y revisión',
             '',
-            'Las solicitudes de acceso, corrección, actualización, supresión o revocación '
-                .'se canalizan mediante el canal de derechos indicado arriba. Las finalidades, '
-                .'bases, consentimientos, proveedores y retenciones aquí documentadas requieren '
-                .'la revisión jurídica aplicable antes de declararse aprobadas.',
+            'Las solicitudes de acceso, rectificación/corrección, actualización, portabilidad, '
+                .'supresión/eliminación o revocación del consentimiento, cuando corresponda, '
+                .'se canalizan mediante el canal de derechos indicado arriba, previa verificación '
+                .'de identidad y legitimación. La portabilidad no implica que exista un servicio '
+                .'automatizado de exportación. Las finalidades, bases, consentimientos, proveedores '
+                .'y retenciones aquí documentadas requieren la revisión jurídica aplicable '
+                .'antes de declararse aprobadas.',
             '',
         ]);
 
@@ -409,9 +417,12 @@ final class PrivacyAsCodeTest extends TestCase
                 .' — deben ser definidos con revisión jurídica; '
                 .'este kit no inventa un plazo legal.',
             '',
-            'El canal debe permitir solicitudes de acceso, corrección, actualización, supresión o '
-                .'revocación según corresponda. Este documento describe una frontera técnica y no '
-                .'constituye aprobación jurídica.',
+            'El canal debe contemplar solicitudes de acceso, rectificación/corrección, actualización, '
+                .'portabilidad, supresión/eliminación o revocación del consentimiento cuando '
+                .'corresponda. La identidad, legitimación y representación deben verificarse antes '
+                .'de tramitar solicitudes; los procedimientos y plazos siguen sujetos a revisión '
+                .'jurídica. Este documento describe una frontera técnica y no constituye '
+                .'aprobación jurídica.',
             '',
         ]);
 
