@@ -179,8 +179,19 @@ export function StockCsvAdjust({ canUpdate, csrfToken, onCommitted }: Props) {
       if (data.file_sha256 !== expectedHash) {
         throw new Error('El archivo cambió desde la vista previa.');
       }
+      // The server applies independent CSV rows and can return partial errors
+      // if stock changed since preview; never display an all-green receipt.
+      const partialFailure = data.rows.some((row) => (
+        Boolean(row.error)
+        || (row.status !== 'applied'
+          && row.status !== 'replayed'
+          && row.status !== 'unchanged')
+      ));
       setResult(data);
-      setStatus('done');
+      setStatus(partialFailure ? 'error' : 'done');
+      if (partialFailure) {
+        setMessage('El resultado contiene filas no aplicadas. Revisa cada fila y los movimientos antes de repetir.');
+      }
       setConfirmed(false);
       onCommitted();
     } catch (error) {
@@ -291,7 +302,12 @@ export function StockCsvAdjust({ canUpdate, csrfToken, onCommitted }: Props) {
               </button>
             </div>
           )}
-          {result && (
+          {result && !result.rows.some((row) => (
+            Boolean(row.error)
+            || (row.status !== 'applied'
+              && row.status !== 'replayed'
+              && row.status !== 'unchanged')
+          )) && (
             <output className="alert alert-success" aria-live="polite">
               Ajustes aplicados: {result.applied}. Repetidos: {result.replayed}.
               Sin cambios: {result.unchanged}.

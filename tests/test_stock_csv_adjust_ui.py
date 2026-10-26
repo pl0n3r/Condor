@@ -57,6 +57,23 @@ class UiAjusteCsvInventarioTests(unittest.TestCase):
         self.assertIn("status !== 'ready'", block)
         self.assertIn("!canUpdate", block)
 
+    def test_partial_commit_result_is_not_a_success_receipt(self):
+        panel = PANEL.read_text(encoding="utf-8")
+        commit = panel.split("async function commitCsv()", 1)[1].split(
+            "if (!canUpdate)", 1
+        )[0]
+        self.assertIn("const partialFailure = data.rows.some", commit)
+        self.assertIn("Boolean(row.error)", commit)
+        self.assertIn("row.status !== 'applied'", commit)
+        self.assertIn("row.status !== 'replayed'", commit)
+        self.assertIn("row.status !== 'unchanged'", commit)
+        self.assertIn("setStatus(partialFailure ? 'error' : 'done')", commit)
+        self.assertIn("Revisa cada fila y los movimientos antes de repetir", commit)
+        self.assertIn("setConfirmed(false)", commit)
+        self.assertIn("onCommitted()", commit)
+        self.assertIn("{result && !result.rows.some((row) => (", panel)
+        self.assertIn('className="alert alert-success"', panel)
+
     def test_new_file_invalidates_stale_preview(self):
         panel = PANEL.read_text(encoding="utf-8")
         select = panel.split("async function selectFile(", 1)[1].split(
