@@ -157,6 +157,7 @@ export function OrdersManagement({
   const [page, setPage] = useState(1);
   const latestRequest = useRef(0);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sourceId, setSourceId] = useState('');
   const [priceListId, setPriceListId] = useState('');
@@ -221,6 +222,7 @@ export function OrdersManagement({
 
   useEffect(() => {
     pendingCreate.current = null;
+    setExpandedOrderId(null);
     setDraftFilters({ ...EMPTY_FILTERS });
     setFilters({ ...EMPTY_FILTERS });
     setPage(1);
@@ -677,6 +679,13 @@ export function OrdersManagement({
                   );
                 })}
               </div>
+              <button type="button" className="button button-secondary"
+                aria-expanded={expandedOrderId === order.id}
+                aria-controls={'order-lifecycle-' + order.id}
+                onClick={() => setExpandedOrderId((current) => current === order.id ? null : order.id)}>
+                {expandedOrderId === order.id ? 'Ocultar ciclo del pedido' : 'Ver ciclo del pedido'}
+              </button>
+              {expandedOrderId === order.id && (
               <OrderLifecyclePanel
                 branchId={branchId}
                 order={order}
@@ -686,6 +695,7 @@ export function OrdersManagement({
                 consumePath={orderConsumePath(branchId, order.id)}
                 onChanged={loadOrders}
               />
+              )}
             </article>
           ))}
         </div>
