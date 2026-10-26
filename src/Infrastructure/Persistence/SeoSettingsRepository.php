@@ -81,11 +81,7 @@ final readonly class SeoSettingsRepository
             }
 
             $next = $mutation($this->snapshot($tenantId, $branchId, $channelId));
-            if (!is_bool($next['indexnow_enabled'] ?? null)
-                || !is_bool($next['gtm_enabled'] ?? null)
-                || (!is_string($next['gtm_container_id'] ?? null) && ($next['gtm_container_id'] ?? null) !== null)
-                || (($next['gtm_container_id'] ?? null) === null && $next['gtm_enabled'])
-            ) {
+            if ($next['gtm_container_id'] === null && $next['gtm_enabled']) {
                 throw new DomainException('Configuración SEO inconsistente.');
             }
             if ($next['gtm_container_id'] !== null
