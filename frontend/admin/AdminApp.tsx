@@ -5,6 +5,7 @@ import { InventoryManagement } from './InventoryManagement';
 import { StockAlertsPanel } from './StockAlertsPanel';
 import { StockTransferPanel } from './StockTransferPanel';
 import { WorkflowsPanel } from './WorkflowsPanel';
+import { SeoSettingsPanel } from './SeoSettingsPanel';
 import { CommerceManagement } from './CommerceManagement';
 import { CmsManagement } from './CmsManagement';
 import { OrdersManagement } from './OrdersManagement';
@@ -149,6 +150,7 @@ export function AdminApp({
         { href: '/admin#stock-alerts', label: 'Alertas de stock' },
         { href: '/admin#stock-transfers', label: 'Transferencias' },
         { href: '/admin#workflows', label: 'Workflows' },
+        { href: '/admin#seo-settings', label: 'SEO' },
         { href: '/admin#production', label: 'Producción' },
         { href: '/admin#purchasing', label: 'Compras' },
         { href: '/admin#commerce', label: 'Comercial' },
@@ -310,6 +312,13 @@ export function AdminApp({
 
           <WorkflowsPanel
             key={'workflows-' + context.data.active_branch.id}
+            branchId={context.data.active_branch.id}
+            permissions={context.data.permissions}
+            csrfToken={accessToken}
+          />
+
+          <SeoSettingsPanel
+            key={'seo-settings-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}
