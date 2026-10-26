@@ -8,6 +8,7 @@ type Workflow = {
   active: boolean;
   version: number;
 };
+type ConditionDraft = { field: string; operator: 'eq' | 'neq' | 'in' | 'exists'; value: string };
 type Execution = {
   id: string;
   definition_version: number;
@@ -22,6 +23,7 @@ type Props = Readonly<{ branchId: string; permissions: string[]; csrfToken: stri
 
 const BRANCH_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const WORKFLOW_ID = /^[a-zA-Z0-9_.:-]{1,128}$/;
+const CONDITION_FIELD = /^[a-zA-Z][a-zA-Z0-9_.-]*$/;
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -125,6 +127,7 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
   const [workflowId, setWorkflowId] = useState('');
   const [trigger, setTrigger] = useState('');
   const [actionType, setActionType] = useState('');
+  const [conditions, setConditions] = useState<ConditionDraft[]>([]);
   const [selected, setSelected] = useState('');
   const [history, setHistory] = useState<Execution[] | null>(null);
   const [trace, setTrace] = useState<string | null>(null);
@@ -162,6 +165,7 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
     setNotice(null);
     setWorkflowId('');
     setTrigger('');
+    setConditions([]);
     if (allowed) void load();
     return () => {
       latest.current += 1;
@@ -173,10 +177,14 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
   const current = ready?.workflows.find((item) => item.workflow_id === selected);
   const validNewId = WORKFLOW_ID.test(workflowId.trim());
   const validTrigger = trigger.trim().length > 0 && trigger.trim().length <= 128;
+  const validConditions = conditions.length <= 20 && conditions.every((item) => (
+    CONDITION_FIELD.test(item.field.trim())
+    && (item.operator === 'exists' || item.value.trim().length > 0)
+  ));
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!allowed || busy || !validNewId || !validTrigger
+    if (!allowed || busy || !validNewId || !validTrigger || !validConditions
       || !ready?.actions.includes(actionType)) {
       setNotice('Ingresa un identificador, disparador y acción válidos.');
       return;
@@ -188,7 +196,14 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
       const result = await request(workflowPath(branchId), 'POST', csrfToken, {
         workflow_id: workflowId.trim(),
         trigger: trigger.trim(),
-        conditions: [],
+        conditions: conditions.map((item) => ({
+          field: item.field.trim(), operator: item.operator,
+          ...(item.operator === 'exists' ? {} : {
+            value: item.operator === 'in'
+              ? item.value.split(',').map((value) => value.trim())
+              : item.value.trim(),
+          }),
+        })),
         actions: [{ type: actionType }],
         active: false,
       });
@@ -199,6 +214,7 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
       setSelected(result.workflow.workflow_id);
       setWorkflowId('');
       setTrigger('');
+      setConditions([]);
       setHistory(null);
       setTrace(null);
       setNotice('Workflow creado desactivado. Actívalo cuando esté listo.');
@@ -321,9 +337,48 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
                 <option value={action} key={action}>{action}</option>
               ))}
             </select>
+            <fieldset>
+              <legend>Condiciones del disparador (opcionales)</legend>
+              {conditions.map((condition, index) => (
+                <div key={index}>
+                  <label htmlFor={'workflow-condition-field-' + index}>Campo del evento</label>
+                  <input id={'workflow-condition-field-' + index} value={condition.field}
+                    aria-invalid={!CONDITION_FIELD.test(condition.field.trim())}
+                    onChange={(event) => setConditions((items) => items.map((item, i) => (
+                      i === index ? { ...item, field: event.target.value } : item
+                    )))} />
+                  <label htmlFor={'workflow-condition-operator-' + index}>Operador</label>
+                  <select id={'workflow-condition-operator-' + index} value={condition.operator}
+                    onChange={(event) => setConditions((items) => items.map((item, i) => (
+                      i === index ? { ...item, operator: event.target.value as ConditionDraft['operator'] } : item
+                    )))}>
+                    <option value="eq">Igual a</option>
+                    <option value="neq">Diferente de</option>
+                    <option value="in">En lista</option>
+                    <option value="exists">Existe</option>
+                  </select>
+                  {condition.operator !== 'exists' && (
+                    <>
+                      <label htmlFor={'workflow-condition-value-' + index}>Valor {condition.operator === 'in' ? '(separado por comas)' : ''}</label>
+                      <input id={'workflow-condition-value-' + index} value={condition.value}
+                        onChange={(event) => setConditions((items) => items.map((item, i) => (
+                          i === index ? { ...item, value: event.target.value } : item
+                        )))} />
+                    </>
+                  )}
+                  <button type="button" onClick={() => setConditions((items) => (
+                    items.filter((_, i) => i !== index)
+                  ))}>Quitar condición</button>
+                </div>
+              ))}
+              <button type="button" disabled={conditions.length >= 20}
+                onClick={() => setConditions((items) => [...items, { field: '', operator: 'eq', value: '' }])}>
+                Agregar condición
+              </button>
+            </fieldset>
             <p className="muted">Se crea desactivado. No se ejecutan acciones al guardar.</p>
             <button type="submit" disabled={busy || !validNewId || !validTrigger
-              || !ready.actions.includes(actionType)}>Crear desactivado</button>
+              || !validConditions || !ready.actions.includes(actionType)}>Crear desactivado</button>
           </form>
           <h3>Workflows configurados</h3>
           {ready.workflows.length === 0 ? (
