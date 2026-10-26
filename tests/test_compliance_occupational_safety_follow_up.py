@@ -174,6 +174,10 @@ class OccupationalSafetyFollowUpTests(unittest.TestCase):
             followup(actions=[action(action_ref="fixture:sgsst-action/a@b")]),
             followup(actions=[action(action_ref="fixture:sgsst-action/" + "a" * 100)]),
             followup(actions=[action(status=True)]),
+            followup(actions=[{"action_ref": "fixture:sgsst-action/action-1",
+                               "status": "PENDIENTE"}]),
+            followup(actions=[action(checklist_ref=None)]),
+            followup(fixture_ref="fixture:sgsst-followup/not@opaque"),
             followup(actions=[action(status="PENDIENTE", medical_record={"x": "secret"})]),
             followup(actions={"0": action()}),
         ]
@@ -216,6 +220,9 @@ class OccupationalSafetyFollowUpTests(unittest.TestCase):
             {"state": "PENDIENTE", "requires_professional_review": True,
              "synthetic_only": True, "structurally_reviewable": True,
              "evidence_count": 1, "person": "private"},
+            {"state": "REQUIERE_REVISION", "requires_professional_review": True,
+             "synthetic_only": True, "structurally_reviewable": False,
+             "evidence_count": 0},
         ]
         for invalid in invalid_summaries:
             with self.subTest(summary=invalid):
