@@ -10,6 +10,7 @@ import { CommerceManagement } from './CommerceManagement';
 import { CmsManagement } from './CmsManagement';
 import { OrdersManagement } from './OrdersManagement';
 import { SalesReportPanel } from './SalesReportPanel';
+import { ReportsDownloads } from './ReportsDownloads';
 import { ProductionManagement } from './ProductionManagement';
 import { PurchasingManagement } from './PurchasingManagement';
 import { AdminShell } from './AdminShell';
@@ -156,6 +157,7 @@ export function AdminApp({
         { href: '/admin#commerce', label: 'Comercial' },
         { href: '/admin#orders', label: 'Pedidos' },
         { href: '/admin#sales-reports', label: 'Reportes de ventas' },
+        { href: '/admin#reports-downloads', label: 'Descargas CSV' },
         { href: '/admin#roles', label: 'Roles y permisos' },
       ]}
     >
@@ -356,6 +358,12 @@ export function AdminApp({
 
           <SalesReportPanel
             key={'sales-reports-' + context.data.active_branch.id}
+            permissions={context.data.permissions}
+          />
+
+          <ReportsDownloads
+            key={'reports-downloads-' + context.data.active_branch.id}
+            branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
           />
 
