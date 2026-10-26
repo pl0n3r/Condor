@@ -74,7 +74,7 @@ class UiTransferenciasSedesTests(unittest.TestCase):
         self.assertIn("movement.delta === -amount", PANEL)
         self.assertIn("movement.delta === amount", PANEL)
         self.assertIn("El historial reciente no muestra los dos movimientos.", PANEL)
-        self.assertIn("No fue posible actualizar los movimientos.", PANEL)
+        self.assertIn("no fue posible actualizar los movimientos.", PANEL)
         self.assertIn("transfer_id === receipt.id", PANEL)
         self.assertNotIn("Math.random()", PANEL)
         self.assertNotIn("style={{", PANEL)
