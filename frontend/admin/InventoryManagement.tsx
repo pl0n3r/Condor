@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { StockCsvAdjust } from './StockCsvAdjust';
 import {
   inventoryAdjustmentPath,
   inventoryPath,
@@ -628,6 +629,15 @@ export function InventoryManagement({
               </article>
             ))}
           </div>
+
+          {canUpdate && (
+            <StockCsvAdjust
+              key={branchId}
+              canUpdate={canUpdate}
+              csrfToken={csrfToken}
+              onCommitted={() => { void loadInventory(); }}
+            />
+          )}
 
           {canUpdate && ready.sources.length > 0 && ready.variants.length > 0 && (
             <div className="catalog-list">
