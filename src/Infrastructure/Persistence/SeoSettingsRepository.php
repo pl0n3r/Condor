@@ -81,7 +81,12 @@ final readonly class SeoSettingsRepository
             }
 
             $next = $mutation($this->snapshot($tenantId, $branchId, $channelId));
-            if ($next['gtm_container_id'] === null && $next['gtm_enabled']) {
+            if (!is_bool($next['indexnow_enabled'] ?? null)
+                || !is_bool($next['gtm_enabled'] ?? null)
+                || !array_key_exists('gtm_container_id', $next)
+                || (!is_string($next['gtm_container_id']) && $next['gtm_container_id'] !== null)
+                || ($next['gtm_container_id'] === null && $next['gtm_enabled'])
+            ) {
                 throw new DomainException('Configuración SEO inconsistente.');
             }
             if ($next['gtm_container_id'] !== null
@@ -95,7 +100,11 @@ final readonly class SeoSettingsRepository
                 [$tenantId, $branchId, $channelId, (int) $next['indexnow_enabled'], $next['gtm_container_id'], (int) $next['gtm_enabled']],
             );
 
-            return $next;
+            return [
+                'indexnow_enabled' => $next['indexnow_enabled'],
+                'gtm_container_id' => $next['gtm_container_id'],
+                'gtm_enabled' => $next['gtm_enabled'],
+            ];
         });
     }
 
