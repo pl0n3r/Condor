@@ -159,6 +159,10 @@ export function OrdersManagement({
   const [notice, setNotice] = useState<Notice | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [exportFrom, setExportFrom] = useState('');
+  const [exportTo, setExportTo] = useState('');
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [sourceId, setSourceId] = useState('');
   const [priceListId, setPriceListId] = useState('');
   const [channelId, setChannelId] = useState('');
@@ -223,6 +227,9 @@ export function OrdersManagement({
   useEffect(() => {
     pendingCreate.current = null;
     setExpandedOrderId(null);
+    setExportFrom('');
+    setExportTo('');
+    setExportError(null);
     setDraftFilters({ ...EMPTY_FILTERS });
     setFilters({ ...EMPTY_FILTERS });
     setPage(1);
@@ -247,6 +254,52 @@ export function OrdersManagement({
     setDraftFilters({ ...EMPTY_FILTERS });
     setPage(1);
     setFilters({ ...EMPTY_FILTERS });
+  }
+
+  async function exportOrders(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canView || exportBusy) return;
+
+    const days = (Date.parse(exportTo) - Date.parse(exportFrom)) / 86400000;
+    if (!exportFrom || !exportTo || !Number.isFinite(days)
+      || days < 0 || days >= 366) {
+      setExportError('Selecciona un rango válido de máximo 366 días.');
+      return;
+    }
+
+    setExportBusy(true);
+    setExportError(null);
+    try {
+      // The API derives tenant and authorized branches from the session.
+      // Only the two allowlisted date parameters may be sent.
+      const query = new URLSearchParams({ from: exportFrom, to: exportTo });
+      const response = await fetch('/api/orders/export.csv?' + query.toString(), {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: { Accept: 'text/csv' },
+      });
+      if (!response.ok
+        || !response.headers.get('content-type')?.toLowerCase().startsWith('text/csv')) {
+        throw new Error('No fue posible exportar pedidos. Revisa las fechas y tus permisos.');
+      }
+      const csv = await response.blob();
+      const url = URL.createObjectURL(csv);
+      try {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'pedidos-' + exportFrom + '-' + exportTo + '.csv';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } finally {
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch {
+      // Never reflect response bodies, private rows, SQL or identifiers into the UI.
+      setExportError('No fue posible exportar pedidos. Revisa las fechas y tus permisos.');
+    } finally {
+      setExportBusy(false);
+    }
   }
 
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
@@ -585,6 +638,43 @@ export function OrdersManagement({
               Crear pedido
             </button>
           </div>
+        </form>
+      )}
+
+      {ready && canView && (
+        <form
+          className="catalog-card"
+          onSubmit={(event) => void exportOrders(event)}
+          aria-label="Exportar pedidos a CSV"
+        >
+          <div>
+            <h3>Exportar CSV</h3>
+            <p className="muted">
+              Incluye los pedidos de todas tus sedes autorizadas, no solo la sede seleccionada.
+              El período máximo es de 366 días.
+            </p>
+          </div>
+          <div className="catalog-form-grid">
+            <label className="field">
+              <span>Desde</span>
+              <input type="date" required value={exportFrom} max={exportTo || undefined}
+                disabled={exportBusy}
+                onChange={(event) => { setExportFrom(event.target.value); setExportError(null); }} />
+            </label>
+            <label className="field">
+              <span>Hasta</span>
+              <input type="date" required value={exportTo} min={exportFrom || undefined}
+                disabled={exportBusy}
+                onChange={(event) => { setExportTo(event.target.value); setExportError(null); }} />
+            </label>
+          </div>
+          <div className="catalog-actions">
+            <button className="button" type="submit" disabled={exportBusy || !exportFrom || !exportTo}>
+              {exportBusy ? 'Preparando CSV…' : 'Exportar CSV'}
+            </button>
+          </div>
+          {exportBusy && <p className="muted" role="status">Preparando descarga…</p>}
+          {exportError && <p className="catalog-state catalog-error" role="alert">{exportError}</p>}
         </form>
       )}
 

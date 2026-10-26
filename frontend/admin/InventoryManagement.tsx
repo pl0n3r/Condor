@@ -66,6 +66,7 @@ type State =
   | { status: 'error'; message: string };
 
 type Notice = { kind: 'success' | 'error'; text: string };
+type ScanStatus = 'idle' | 'loading' | 'found' | 'not-found' | 'error';
 type IdempotencyState = { signature: string; key: string };
 
 const MOVEMENT_TYPE_LABELS: Readonly<Record<string, string>> = {
@@ -88,6 +89,13 @@ export function InventoryManagement({
   const [state, setState] = useState<State>({ status: 'loading' });
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scanCode, setScanCode] = useState('');
+  const [scanStatus, setScanStatus] = useState<ScanStatus>('idle');
+  const [scanMessage, setScanMessage] = useState('');
+  const [scannedVariantId, setScannedVariantId] = useState<string | null>(null);
+  const scanRequestId = useRef(0);
+  const inventoryRequestId = useRef(0);
+  const movementHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const adjustmentIdempotency = useRef<IdempotencyState>({
     signature: '',
     key: '',
@@ -112,6 +120,17 @@ export function InventoryManagement({
   const [transferQuantity, setTransferQuantity] = useState('1');
 
   async function loadInventory() {
+    const requestId = ++inventoryRequestId.current;
+    // Invalidate pending scans and their selection before refreshing the snapshot.
+    // A previously scanned variant might no longer belong to this inventory.
+    scanRequestId.current += 1;
+    setScannedVariantId(null);
+    // Never keep a scanned mutation target across an inventory refresh.
+    setAdjustVariant('');
+    setTransferVariant('');
+    setScanStatus('idle');
+    setScanMessage('');
+    setScanCode('');
     if (!canView) {
       return;
     }
@@ -130,6 +149,17 @@ export function InventoryManagement({
       }
 
       const data = await response.json() as Snapshot;
+      if (requestId !== inventoryRequestId.current) {
+        return;
+      }
+      if (data.branch?.id !== branchId) {
+        // Do not keep the loader spinning on a wrong-scope response.
+        setState({
+          status: 'error',
+          message: 'El inventario recibido no corresponde a esta sede.',
+        });
+        return;
+      }
       setState({ status: 'ready', data });
 
       const firstSource = data.sources[0]?.id ?? '';
@@ -141,6 +171,9 @@ export function InventoryManagement({
       setTransferTo((current) => current || secondSource);
       setTransferVariant((current) => current || firstVariant);
     } catch (error) {
+      if (requestId !== inventoryRequestId.current) {
+        return;
+      }
       setState({
         status: 'error',
         message: error instanceof Error
@@ -152,6 +185,12 @@ export function InventoryManagement({
 
   useEffect(() => {
     setNotice(null);
+    scanRequestId.current += 1;
+    inventoryRequestId.current += 1;
+    setScanCode('');
+    setScanStatus('idle');
+    setScanMessage('');
+    setScannedVariantId(null);
     setState({ status: 'loading' });
     setSourceName('');
     setSourceSlug('');
@@ -186,6 +225,106 @@ export function InventoryManagement({
     }
     return map;
   }, [ready]);
+
+  const visibleMovements = useMemo(() => (
+    scannedVariantId === null
+      ? ready?.movements ?? []
+      : (ready?.movements ?? []).filter(
+        (movement) => movement.variant_id === scannedVariantId,
+      )
+  ), [ready, scannedVariantId]);
+
+  async function scanVariant(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canView || state.status !== 'ready') {
+      return;
+    }
+
+    const code = scanCode.trim();
+    const attempt = ++scanRequestId.current;
+    // A failed follow-up scan must not leave the previous scanned SKU
+    // selected in adjustment or transfer forms.
+    if (scannedVariantId !== null) {
+      setAdjustVariant('');
+      setTransferVariant('');
+    }
+    setScannedVariantId(null);
+    setScanMessage('');
+    if (code.length < 4 || code.length > 64) {
+      setScanStatus('error');
+      setScanMessage('El código debe contener entre 4 y 64 caracteres.');
+      return;
+    }
+
+    setScanStatus('loading');
+    try {
+      const response = await fetch(
+        inventoryPath(branchId) + '/scan/' + encodeURIComponent(code),
+        {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        },
+      );
+      if (attempt !== scanRequestId.current) {
+        return;
+      }
+      if (response.status === 404) {
+        setScanStatus('not-found');
+        setScanMessage('Código no encontrado en esta sede.');
+        return;
+      }
+      if (!response.ok) {
+        throw new Error('No fue posible consultar el código.');
+      }
+
+      const result = await response.json() as {
+        code: string;
+        variant: Variant;
+      };
+      if (attempt !== scanRequestId.current) {
+        return;
+      }
+      // Never trust a variant ID outside the active branch's inventory snapshot.
+      const variant = state.data.variants.find(
+        (item) => item.id === result.variant?.id,
+      );
+      if (!variant) {
+        setScanStatus('not-found');
+        setScanMessage('Código no disponible en el inventario de esta sede.');
+        return;
+      }
+
+      setScanCode(result.code);
+      setScannedVariantId(variant.id);
+      setAdjustVariant(variant.id);
+      setTransferVariant(variant.id);
+      setScanStatus('found');
+      setScanMessage(variant.product_name + ' · ' + variant.sku);
+      requestAnimationFrame(() => {
+        if (scanRequestId.current === attempt) {
+          movementHeadingRef.current?.focus();
+        }
+      });
+    } catch {
+      if (attempt !== scanRequestId.current) {
+        return;
+      }
+      setScanStatus('error');
+      setScanMessage('No fue posible consultar el código. Intenta de nuevo.');
+    }
+  }
+
+  function clearScanSelection() {
+    scanRequestId.current += 1;
+    if (scannedVariantId !== null) {
+      setAdjustVariant('');
+      setTransferVariant('');
+    }
+    setScanCode('');
+    setScanStatus('idle');
+    setScanMessage('');
+    setScannedVariantId(null);
+  }
 
   async function createSource(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -426,6 +565,53 @@ export function InventoryManagement({
             </form>
           )}
 
+          <form className="catalog-editor" onSubmit={(event) => void scanVariant(event)}>
+            <h3>Buscar variante por código</h3>
+            <p className="muted">Puedes escribir, pegar o usar un lector de código tipo teclado.</p>
+            <label className="field">
+              <span>Código SKU</span>
+              <input
+                type="text"
+                autoComplete="off"
+                maxLength={64}
+                required
+                value={scanCode}
+                onChange={(event) => {
+                  scanRequestId.current += 1;
+                  if (scannedVariantId !== null) {
+                    setAdjustVariant('');
+                    setTransferVariant('');
+                  }
+                  setScanCode(event.target.value);
+                  setScannedVariantId(null);
+                  setScanStatus('idle');
+                  setScanMessage('');
+                }}
+                placeholder="Código de la variante"
+              />
+            </label>
+            <div>
+              <button
+                type="submit"
+                className="button"
+                disabled={busy || scanStatus === 'loading'}
+              >
+                {scanStatus === 'loading' ? 'Buscando…' : 'Buscar código'}
+              </button>
+              {scanStatus === 'found' && (
+                <button type="button" className="button" onClick={clearScanSelection}>
+                  Ver todos los movimientos
+                </button>
+              )}
+            </div>
+            {scanStatus === 'found' && (
+              <output aria-live="polite">{scanMessage}</output>
+            )}
+            {(scanStatus === 'error' || scanStatus === 'not-found') && (
+              <div className="alert alert-error" role="alert">{scanMessage}</div>
+            )}
+          </form>
+
           <div className="catalog-list">
             {ready.balances.length === 0 ? (
               <p className="muted">No hay saldos registrados todavía.</p>
@@ -571,13 +757,21 @@ export function InventoryManagement({
             <article className="catalog-card">
               <div>
                 <span className="eyebrow">Trazabilidad</span>
-                <h3>Movimientos recientes</h3>
+                <h3 tabIndex={-1} ref={movementHeadingRef}>
+                  {scannedVariantId === null
+                    ? 'Movimientos recientes'
+                    : 'Movimientos de la variante seleccionada'}
+                </h3>
               </div>
-              {ready.movements.length === 0 ? (
-                <p className="muted">No hay movimientos registrados.</p>
+              {visibleMovements.length === 0 ? (
+                <p className="muted">
+                  {scannedVariantId === null
+                    ? 'No hay movimientos registrados.'
+                    : 'Esta variante no tiene movimientos recientes.'}
+                </p>
               ) : (
                 <div className="catalog-variant-list">
-                  {ready.movements.map((movement) => {
+                  {visibleMovements.map((movement) => {
                     const variant = variantById.get(movement.variant_id);
                     const source = sourceById.get(movement.source_id);
                     const reason = movement.context.reason;
