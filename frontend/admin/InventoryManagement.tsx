@@ -504,6 +504,15 @@ export function InventoryManagement({
         </div>
       )}
 
+      {canUpdate && (
+        <StockCsvAdjust
+          key={branchId}
+          canUpdate={canUpdate}
+          csrfToken={csrfToken}
+          onCommitted={() => { void loadInventory(); }}
+        />
+      )}
+
       {ready && (
         <>
           <div className="catalog-list">
@@ -629,15 +638,6 @@ export function InventoryManagement({
               </article>
             ))}
           </div>
-
-          {canUpdate && (
-            <StockCsvAdjust
-              key={branchId}
-              canUpdate={canUpdate}
-              csrfToken={csrfToken}
-              onCommitted={() => { void loadInventory(); }}
-            />
-          )}
 
           {canUpdate && ready.sources.length > 0 && ready.variants.length > 0 && (
             <div className="catalog-list">
