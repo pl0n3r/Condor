@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
+import { SystemHealthPanel } from './SystemHealthPanel';
 import { SaasControlCenterReadPanel } from './SaasControlCenterReadPanel';
 import {
   FunctionalSignalsPanel,
@@ -824,6 +825,8 @@ export function PlatformOwnerApp({
                   },
                 ]}
               />
+
+              <SystemHealthPanel />
 
               <FunctionalSignalsPanel
                 signals={state.data.signals_last_30_days}
