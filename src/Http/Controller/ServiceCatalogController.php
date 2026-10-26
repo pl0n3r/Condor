@@ -144,6 +144,71 @@ final class ServiceCatalogController extends AbstractController
         ], Response::HTTP_CREATED);
     }
 
+    #[Route(
+        '/api/v1/branches/{branchId}/catalog/services/{serviceId}',
+        name: 'api_catalog_service_duration_update',
+        methods: ['PATCH'],
+    )]
+    public function updateDuration(
+        string $branchId,
+        string $serviceId,
+        Request $request,
+    ): JsonResponse {
+        $this->requireCsrf($request);
+        [$user, $tenant, $branch] = $this->authorizedBranchScope(
+            $branchId,
+            'catalog.update',
+        );
+        $payload = $this->payload($request, ['duration_minutes']);
+        if (!array_key_exists('duration_minutes', $payload)) {
+            throw new UnprocessableEntityHttpException(
+                'Debes especificar la duración del servicio o null.',
+            );
+        }
+
+        $duration = $payload['duration_minutes'];
+        if ($duration !== null && !is_int($duration)) {
+            throw new UnprocessableEntityHttpException(
+                'La duración debe ser un número entero de minutos o null.',
+            );
+        }
+
+        $service = $this->entityManager->getRepository(Product::class)->findOneBy([
+            'id' => $serviceId,
+            'tenant' => $tenant,
+            'itemKind' => Product::KIND_SERVICE,
+            'active' => true,
+        ]);
+        if (!$service instanceof Product) {
+            throw new NotFoundHttpException(
+                'Servicio no encontrado en la empresa.',
+            );
+        }
+
+        $this->domain(static function () use ($service, $duration): null {
+            $service->updateServiceDuration($duration);
+
+            return null;
+        });
+        $this->audit(
+            $tenant,
+            $user,
+            'catalog.service.duration_updated',
+            Product::class,
+            $service->id(),
+            ['branch_id' => $branch->id(), 'duration_minutes' => $duration],
+        );
+        $this->entityManager->flush();
+
+        return $this->json([
+            'service' => [
+                'id' => $service->id(),
+                'kind' => $service->kind(),
+                'duration_minutes' => $service->durationMinutes(),
+            ],
+        ]);
+    }
+
     /** @param array<string, mixed> $payload */
     private function requiredText(array $payload, string $name): string
     {
