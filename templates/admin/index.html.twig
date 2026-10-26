@@ -4,7 +4,7 @@
 
 {% block head %}
 <meta name="robots" content="noindex,nofollow">
-<link rel="stylesheet" href="/build/admin.css">
+<link rel="stylesheet" href="/build/admin.css?v={{ app_version|url_encode }}">
 {% endblock %}
 
 {% block body %}
@@ -33,5 +33,5 @@
         </div>
     </section>
 </div>
-<script type="module" src="/build/admin.js"></script>
+<script type="module" src="/build/admin.js?v={{ app_version|url_encode }}"></script>
 {% endblock %}
