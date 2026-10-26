@@ -31,6 +31,17 @@ class EscaneoUiInventarioTests(unittest.TestCase):
         self.assertIn("value={scanCode}", PANEL)
         self.assertNotIn("tenant_id:", PANEL)
 
+    def test_invalid_scan_length_fails_before_network_request(self) -> None:
+        """Out-of-range keyboard or pasted codes never trigger a scoped API read."""
+        submit = PANEL.split(
+            "async function scanVariant(event: FormEvent<HTMLFormElement>) {", 1
+        )[1].split("setScanStatus('loading');", 1)[0]
+        self.assertIn("const code = scanCode.trim();", submit)
+        self.assertIn("if (code.length < 4 || code.length > 64)", submit)
+        self.assertIn("setScanStatus('error');", submit)
+        self.assertIn("El código debe contener entre 4 y 64 caracteres.", submit)
+        self.assertNotIn("await fetch(", submit)
+
     def test_unknown_codes_and_errors_do_not_leave_a_stale_selection(self) -> None:
         self.assertIn("if (response.status === 404)", PANEL)
         self.assertIn("setScanStatus('not-found')", PANEL)
