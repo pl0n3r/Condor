@@ -25,6 +25,20 @@
     <span class="eyebrow">Catálogo</span>
     <h2 id="catalog-heading">{{ catalog.channel.name }}</h2>
 
+    <form method="get" class="storefront-catalog-filters" role="search">
+        <label for="catalog-q">Buscar productos</label>
+        <input id="catalog-q" type="search" name="q" maxlength="80"
+               value="{{ catalog.filters.q }}" placeholder="Nombre o descripción">
+        <label for="catalog-category">Categoría</label>
+        <select id="catalog-category" name="categoria">
+            <option value="">Todas las categorías</option>
+            {% for category in catalog.categories %}
+                <option value="{{ category.slug }}" {% if category.slug == catalog.filters.categoria %}selected{% endif %}>{{ category.name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Buscar</button>
+    </form>
+
     {% for product in catalog.products %}
         <article class="storefront-product" data-product-slug="{{ product.slug }}">
             <h3>{{ product.name }}</h3>
@@ -58,11 +72,11 @@
     {% if catalog.pagination.has_previous or catalog.pagination.has_next %}
         <nav class="storefront-pagination" aria-label="Paginación del catálogo">
             {% if catalog.pagination.has_previous %}
-                <a href="?page={{ catalog.pagination.page - 1 }}">Anterior</a>
+                <a href="{{ catalog.pagination.previous_href }}">Anterior</a>
             {% endif %}
             <span>Página {{ catalog.pagination.page }}</span>
             {% if catalog.pagination.has_next %}
-                <a href="?page={{ catalog.pagination.page + 1 }}">Siguiente</a>
+                <a href="{{ catalog.pagination.next_href }}">Siguiente</a>
             {% endif %}
         </nav>
     {% endif %}

@@ -34,6 +34,9 @@ class Customer extends CommercialItem
     #[ORM\Column(type: 'string', length: 40, nullable: true)]
     private ?string $phone;
 
+    #[ORM\Column(name: 'document_number', type: 'string', length: 40, nullable: true)]
+    private ?string $documentNumber;
+
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $notes;
 
@@ -44,11 +47,13 @@ class Customer extends CommercialItem
         ?string $phone = null,
         ?string $notes = null,
         ?CommercialCategory $commercialCategory = null,
+        ?string $documentNumber = null,
     ) {
         parent::__construct($tenant);
         $this->name = self::normalizeName($name);
         $this->email = self::normalizeEmail($email);
         $this->phone = self::normalizePhone($phone);
+        $this->documentNumber = self::normalizeDocumentNumber($documentNumber);
         $this->notes = self::normalizeNotes($notes);
         $this->commercialCategory = null;
         $this->assignCommercialCategory($commercialCategory);
@@ -67,6 +72,11 @@ class Customer extends CommercialItem
     public function phone(): ?string
     {
         return $this->phone;
+    }
+
+    public function documentNumber(): ?string
+    {
+        return $this->documentNumber;
     }
 
     public function notes(): ?string
@@ -89,6 +99,12 @@ class Customer extends CommercialItem
         $this->email = self::normalizeEmail($email);
         $this->phone = self::normalizePhone($phone);
         $this->notes = self::normalizeNotes($notes);
+        $this->touch();
+    }
+
+    public function changeDocumentNumber(?string $documentNumber): void
+    {
+        $this->documentNumber = self::normalizeDocumentNumber($documentNumber);
         $this->touch();
     }
 
@@ -155,6 +171,21 @@ class Customer extends CommercialItem
         }
 
         return $phone;
+    }
+
+    private static function normalizeDocumentNumber(?string $documentNumber): ?string
+    {
+        if ($documentNumber === null || trim($documentNumber) === '') {
+            return null;
+        }
+
+        $normalized = mb_strtoupper(trim($documentNumber), 'UTF-8');
+        if (mb_strlen($normalized, 'UTF-8') > 40
+            || preg_match('/\\A[\\p{L}\\p{N}][\\p{L}\\p{N} .-]*\\z/u', $normalized) !== 1) {
+            throw new DomainException('El documento del cliente tiene formato o longitud inválida.');
+        }
+
+        return $normalized;
     }
 
     private static function normalizeNotes(?string $notes): ?string

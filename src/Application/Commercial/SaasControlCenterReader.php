@@ -66,7 +66,8 @@ final readonly class SaasControlCenterReader
             || !self::key($plan['key'] ?? null)
             || !self::key($plan['version'] ?? null)
             || !self::key($plan['currency'] ?? null)
-            || !self::nonNegative($plan['price_minor'] ?? null)) {
+            || !array_key_exists('price_minor', $plan)
+            || !self::nullableNonNegative($plan['price_minor'])) {
             throw new DomainException('Plan comercial inválido.');
         }
         $preSeen = [];
@@ -74,7 +75,8 @@ final readonly class SaasControlCenterReader
         foreach ($addons as $row) {
             if (!is_array($row) || ($row['tenant_id'] ?? null) !== $tenantId
                 || !self::key($row['key'] ?? null)
-                || !self::nonNegative($row['price_minor'] ?? null)
+                || !array_key_exists('price_minor', $row)
+                || !self::nullableNonNegative($row['price_minor'])
                 || !is_bool($row['active'] ?? null) || isset($preSeen[$row['key']])) {
                 throw new DomainException('Add-on comercial inválido.');
             }
@@ -142,6 +144,12 @@ final readonly class SaasControlCenterReader
     private static function key(mixed $value): bool
     {
         return is_string($value) && preg_match('/\A[a-zA-Z0-9][a-zA-Z0-9._:-]{0,79}\z/D', $value) === 1;
+    }
+
+    private static function nullableNonNegative(mixed $value): bool
+    {
+        // Quote-required products have no catalog price; require an explicit null.
+        return $value === null || self::nonNegative($value);
     }
 
     private static function nonNegative(mixed $value): bool

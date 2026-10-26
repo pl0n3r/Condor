@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { AccessManagement } from './AccessManagement';
 import { CatalogManagement } from './CatalogManagement';
 import { InventoryManagement } from './InventoryManagement';
+import { StockAlertsPanel } from './StockAlertsPanel';
 import { CommerceManagement } from './CommerceManagement';
 import { CmsManagement } from './CmsManagement';
 import { OrdersManagement } from './OrdersManagement';
+import { SalesReportPanel } from './SalesReportPanel';
 import { ProductionManagement } from './ProductionManagement';
 import { PurchasingManagement } from './PurchasingManagement';
 import { AdminShell } from './AdminShell';
@@ -142,10 +144,12 @@ export function AdminApp({
         { href: '/admin/sitio', label: 'Sitio', current: section === 'site' },
         { href: '/admin#catalog', label: 'Catálogo' },
         { href: '/admin#inventory', label: 'Inventario' },
+        { href: '/admin#stock-alerts', label: 'Alertas de stock' },
         { href: '/admin#production', label: 'Producción' },
         { href: '/admin#purchasing', label: 'Compras' },
         { href: '/admin#commerce', label: 'Comercial' },
         { href: '/admin#orders', label: 'Pedidos' },
+        { href: '/admin#sales-reports', label: 'Reportes de ventas' },
         { href: '/admin#roles', label: 'Roles y permisos' },
       ]}
     >
@@ -286,6 +290,13 @@ export function AdminApp({
             csrfToken={accessToken}
           />
 
+          <StockAlertsPanel
+            key={'stock-alerts-' + context.data.active_branch.id}
+            branchId={context.data.active_branch.id}
+            permissions={context.data.permissions}
+            csrfToken={accessToken}
+          />
+
           {context.data.permissions.includes('inventory.view') && (
             <ProductionManagement
               key={'production-' + context.data.active_branch.id}
@@ -314,6 +325,11 @@ export function AdminApp({
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}
+          />
+
+          <SalesReportPanel
+            key={'sales-reports-' + context.data.active_branch.id}
+            permissions={context.data.permissions}
           />
 
           <AccessManagement
