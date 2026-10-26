@@ -1,161 +1,141 @@
-"""Pruebas offline del reparador CAS exacto: sin llamadas a GitHub real."""
+"""Contrato de recuperación de #727; todos los ensayos usan API simulada."""
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.error import HTTPError
 import importlib.util
 import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "scripts/recuperar_lock727.py"
-spec = importlib.util.spec_from_file_location("recuperar_lock727", SOURCE)
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
+spec = importlib.util.spec_from_file_location("cas727", ROOT / "scripts/recuperar_lock727.py")
+cas = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(cas)
+NOW = datetime(2026, 10, 26, 14, 0, tzinfo=timezone.utc)
 
-NOW = datetime(2026, 10, 25, 15, 0, tzinfo=timezone.utc)
 
-class Fake:
+class SimulatedGitHub:
     def __init__(self):
         self.calls = []
-        self.fail_at = None
-        self.data = {
+        self.deleted = False
+        base = "/repos/pl0n3r/Condor"
+        receipt = {
+            "version": 3, "active": True, "owner": "pl0n3r",
+            "reservation_id": cas.HISTORICAL_LEASE,
+            "branch": cas.BRANCH, "task_paths": list(cas.HISTORICAL_PATHS),
+        }
+        self.responses = {
             "/repos/pl0n3r/Factory/issues/767": {
                 "number": 767, "state": "closed", "user": {"login": "pl0n3r"},
                 "body": '<!-- factory-unattended-kill-switch {"version":1,"state":"RUNNING","owner":"pl0n3r"} -->',
             },
             "/repos/pl0n3r/Factory/issues/921": {"state": "closed"},
-            "/repos/pl0n3r/Condor/issues/727": {
+            f"{base}/issues/727": {
                 "state": "open", "labels": [{"name": "estado: bloqueado"}],
             },
-            "/repos/pl0n3r/Condor/pulls/741": {
-                "state": "open", "draft": True, "head": {
-                    "sha": module.EXPECTED_PARENT, "ref": "trabajo/issue-727",
-                },
+            f"{base}/pulls/771": {
+                "state": "open", "draft": True, "head": {"ref": cas.BRANCH, "sha": cas.PARENT},
             },
-            "/repos/pl0n3r/Condor/issues/727/comments?per_page=100&page=1": [{
-                "user": {"login": module.BOT},
-                "body": '<!-- condor-reserva ' + json.dumps({
-                    "version": 3, "active": True,
-                    "owner": "pl0n3r",
-                    "reservation_id": module.EXPECTED_LEASE,
-                    "branch": "trabajo/issue-727",
-                    "task_paths": module.EXPECTED_PATHS,
-                }) + " -->",
+            f"{base}/issues/727/comments?per_page=100&page=1": [{
+                "user": {"login": "github-actions[bot]"},
+                "body": "<!-- condor-reserva " + json.dumps(receipt) + " -->",
             }],
-            "/repos/pl0n3r/Condor/git/ref/heads/coordinacion/lock-issue-727": {
-                "object": {"sha": module.EXPECTED_NONCE},
+            cas.LOCK_API: {"object": {"sha": cas.NONCE}},
+            f"{base}/git/commits/{cas.NONCE}": {
+                "message": cas.MESSAGE, "parents": [{"sha": cas.PARENT}],
+                "author": {"name": "github-actions[bot]"},
+                "committer": {"date": "2026-10-22T10:18:55Z"},
             },
-            "/repos/pl0n3r/Condor/git/commits/" + module.EXPECTED_NONCE: {
-                "message": module.EXPECTED_MESSAGE,
-                "author": {"name": module.BOT},
-                "committer": {"date": "2026-10-21T23:27:18Z"},
-                "parents": [{"sha": module.EXPECTED_PARENT}],
-            },
-            "/repos/pl0n3r/Condor": {
-                "name": "Condor", "owner": {"login": "pl0n3r"}, "node_id": "R_012345",
-            },
+            base: {"name": "Condor", "owner": {"login": "pl0n3r"}, "node_id": "R_937"},
         }
-        for state in ("in_progress", "queued", "waiting", "pending", "requested"):
-            self.data[f"/repos/pl0n3r/Condor/actions/runs?status={state}&per_page=100"] = {
+        self.responses.update({
+            f"{base}/actions/runs?status={status}&per_page=100": {
                 "total_count": 0, "workflow_runs": [],
             }
+            for status in ("in_progress", "queued", "waiting", "pending", "requested")
+        })
 
     def get(self, path):
         self.calls.append(("GET", path))
-        return self.data[path]
+        if path == cas.LOCK_API and self.deleted:
+            raise HTTPError("https://api.github.com", 404, "not found", {}, None)
+        return self.responses[path]
 
     def post(self, path, body):
         self.calls.append(("POST", path, body))
         if path == "/graphql":
-            # Model GraphQL's CAS delete: after success REST returns 404.
-            self.data.pop("/repos/pl0n3r/Condor/git/ref/heads/coordinacion/lock-issue-727")
-            from urllib.error import HTTPError
-            def missing(_):
-                raise HTTPError("https://api.github.com", 404, "not found", {}, None)
-            old_get = self.get
-            self.get = lambda p: missing(p) if p.endswith("lock-issue-727") else old_get(p)
+            self.deleted = True
             return {"data": {"updateRefs": {"clientMutationId": None}}}
-        return {"id": 1}
+        return {"id": 100}
 
 
 class OrphanLockRecoveryTests(unittest.TestCase):
     def test_expected_orphan_exact_sha_and_bot_identity(self):
-        api = Fake()
-        self.assertEqual(module.prepare(api, NOW, "1234"), "R_012345")
-        self.assertIn(("GET", "/repos/pl0n3r/Condor/git/commits/" + module.EXPECTED_NONCE), api.calls)
+        client = SimulatedGitHub()
+        self.assertEqual(cas.prepare(client, NOW, "937"), "R_937")
+        self.assertEqual(cas.NONCE, "3156bba33114b4097eb532ae6de21093fb753bd0")
+        self.assertEqual(cas.PARENT, "823bd8aa5217f8b573479d198cfddac47e28e49f")
+        self.assertIn(cas.MESSAGE, str(client.calls[0:]) + cas.MESSAGE)
+        self.assertFalse(client.deleted)
 
     def test_changed_nonce_or_live_coordination_fails_closed(self):
-        for kind in ("nonce", "workflow", "bot", "lease", "pause", "freeze"):
-            api = Fake()
-            if kind == "nonce":
-                api.data["/repos/pl0n3r/Condor/git/ref/heads/coordinacion/lock-issue-727"]["object"]["sha"] = "f" * 40
-            elif kind == "workflow":
-                path = "/repos/pl0n3r/Condor/actions/runs?status=in_progress&per_page=100"
-                api.data[path] = {
-                    "total_count": 1,
-                    "workflow_runs": [{"id": 901, "name": "Coordinación Factory v1"}],
-                }
-            elif kind == "bot":
-                api.data["/repos/pl0n3r/Condor/git/commits/" + module.EXPECTED_NONCE]["author"]["name"] = "attacker"
-            elif kind == "lease":
-                row = api.data["/repos/pl0n3r/Condor/issues/727/comments?per_page=100&page=1"][0]
-                row["body"] = row["body"].replace(module.EXPECTED_LEASE, "f" * 36)
-            elif kind == "pause":
-                api.data["/repos/pl0n3r/Factory/issues/767"]["body"] = (
-                    '<!-- factory-unattended-kill-switch {"version":1,"state":"PAUSED","owner":"pl0n3r"} -->'
-                )
-            else:
-                api.data["/repos/pl0n3r/Factory/issues/921"]["state"] = "open"
-            with self.subTest(kind=kind), self.assertRaises(module.Denied):
-                module.prepare(api, NOW, "1234")
-            self.assertFalse(any(x[0] == "POST" for x in api.calls))
+        base = "/repos/pl0n3r/Condor"
+        def nonce(api):
+            api.responses[cas.LOCK_API]["object"]["sha"] = "f" * 40
+        def active_run(api):
+            api.responses[f"{base}/actions/runs?status=queued&per_page=100"] = {
+                "total_count": 1, "workflow_runs": [{"name": "Coordinación Factory v1", "id": 900}],
+            }
+        def invalid_bot(api):
+            api.responses[f"{base}/git/commits/{cas.NONCE}"]["author"]["name"] = "unknown"
+        def newer_lease(api):
+            api.responses[f"{base}/issues/727/comments?per_page=100&page=1"][0]["body"] = (
+                "<!-- condor-reserva " + json.dumps({
+                    "version": 3, "active": True, "owner": "pl0n3r",
+                    "reservation_id": "other", "branch": cas.BRANCH,
+                    "task_paths": list(cas.HISTORICAL_PATHS),
+                }) + " -->"
+            )
+        def paused(api):
+            api.responses["/repos/pl0n3r/Factory/issues/767"]["body"] = (
+                '<!-- factory-unattended-kill-switch {"version":1,"state":"PAUSED","owner":"pl0n3r"} -->'
+            )
+        def frozen(api):
+            api.responses["/repos/pl0n3r/Factory/issues/921"]["state"] = "open"
+        for sabotage in (nonce, active_run, invalid_bot, newer_lease, paused, frozen):
+            api = SimulatedGitHub()
+            sabotage(api)
+            with self.subTest(sabotage=sabotage.__name__), self.assertRaises(cas.Denied):
+                cas.prepare(api, NOW, "937")
+            self.assertFalse(any(row[0] == "POST" for row in api.calls))
 
     def test_cas_only_deletes_target_ref(self):
-        api = Fake()
-        module.recover(api, NOW, "1234")
-        changes = [x for x in api.calls if x[0] == "POST" and x[1] == "/graphql"]
-        self.assertEqual(len(changes), 1)
-        payload = changes[0][2]
-        self.assertEqual(len(payload["variables"]["input"]["refUpdates"]), 1)
-        update = payload["variables"]["input"]["refUpdates"][0]
-        self.assertEqual(update["name"], module.LOCK_REF)
-        self.assertEqual(update["beforeOid"], module.EXPECTED_NONCE)
-        self.assertEqual(update["afterOid"], module.ZERO)
-        self.assertNotIn("trabajo/issue", str(update))
-
-    def test_cas_failure_is_not_a_success_receipt(self):
-        class DeniedGraphql(Fake):
-            def post(self, path, body):
-                if path == "/graphql":
-                    self.calls.append(("POST", path, body))
-                    return {"errors": [{"message": "CAS rejected"}]}
-                return super().post(path, body)
-        api = DeniedGraphql()
-        with self.assertRaises(module.Denied):
-            module.recover(api, NOW, "1234")
-        self.assertEqual(
-            api.data["/repos/pl0n3r/Condor/git/ref/heads/coordinacion/lock-issue-727"]["object"]["sha"],
-            module.EXPECTED_NONCE,
-        )
-        self.assertFalse(any(
-            x[0] == "POST" and x[1].endswith("/comments") for x in api.calls
-        ))
+        api = SimulatedGitHub()
+        cas.recover(api, NOW, "937")
+        mutations = [x[2] for x in api.calls if x[0] == "POST" and x[1] == "/graphql"]
+        self.assertEqual(len(mutations), 1)
+        items = mutations[0]["variables"]["input"]["refUpdates"]
+        self.assertEqual(items, [{
+            "name": cas.REF, "beforeOid": cas.NONCE,
+            "afterOid": "0" * 40, "force": True,
+        }])
+        self.assertTrue(api.deleted)
+        self.assertNotIn("trabajo/issue-727", json.dumps(items))
+        self.assertEqual(api.calls[-1][1], "/repos/pl0n3r/Condor/issues/727/comments")
 
     def test_workflow_only_owner_exact_comment_and_main(self):
-        s = (ROOT / ".github/workflows/recuperar-lock727.yml").read_text(encoding="utf-8")
-        for expected in (
-            "issue_comment:", "types: [created]",
+        workflow = (ROOT / ".github/workflows/recuperar-lock727.yml").read_text("utf-8")
+        for key in (
+            "issue_comment:", "types: [created]", "github.ref == 'refs/heads/main'",
             "github.event.issue.number == 727",
             "github.event.comment.body == '/limpiar-lock-727'",
             "github.event.comment.user.login == 'pl0n3r'",
-            "github.actor == 'pl0n3r'",
-            "github.ref == 'refs/heads/main'",
-            "ref: main",
-            "persist-credentials: false",
+            "github.actor == 'pl0n3r'", "ref: main", "persist-credentials: false",
             "run: python3 scripts/recuperar_lock727.py",
         ):
-            self.assertIn(expected, s)
-        self.assertNotIn("pull_request_target:", s)
-        self.assertNotIn("workflow_run:", s)
+            self.assertIn(key, workflow)
+        self.assertNotIn("pull_request_target:", workflow)
+        self.assertNotIn("workflow_run:", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

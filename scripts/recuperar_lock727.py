@@ -1,239 +1,177 @@
-"""Reparación puntual del nonce huérfano de Condor #727. Fail closed, CAS only.
+"""Recuperación de un único lock de Coordinación (#727), sin afectar otras refs.
 
-Este archivo NO da autoridad para escribir en #727: solo el bot V3 la concede
-tras el /tomar legítimo posterior. No ejecutar como solución a otros locks.
+Usa las validaciones globales y el transporte probados por el reparador #724,
+pero conserva aquí los parámetros inmutables y las comprobaciones particulares
+del nonce de #727. Ninguna reserva se crea en este procedimiento.
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
 import os
-import re
+from pathlib import Path
 import sys
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import recuperar_lock724 as shared
+
+Denied = shared.Denied
+demand = shared.demand
 REPO = "pl0n3r/Condor"
 ISSUE = 727
 PR = 771
-LOCK_REF = "refs/heads/coordinacion/lock-issue-727"
-EXPECTED_NONCE = "3156bba33114b4097eb532ae6de21093fb753bd0"
-EXPECTED_PARENT = "823bd8aa5217f8b573479d198cfddac47e28e49f"
-EXPECTED_MESSAGE = "lock coordinacion Issue #727 d0fe7d7a-5dd2-42c2-8776-922f21fde7d5"
-EXPECTED_LEASE = "95d9734c-6e4e-4d74-a2b6-25b19c0dbda3"
-EXPECTED_PATHS = ["frontend/admin/ReportsDownloads.tsx", "tests/test_reports_admin_ui.py", "tests/test_ci_reports_admin_ui.py"]
-BOT = "github-actions[bot]"
-ZERO = "0" * 40
-MARKER_RE = re.compile(r"<!--\s*factory-unattended-kill-switch\s+(\{[^\n]*\})\s*-->")
-LEASE_RE = re.compile(r"<!--\s*condor-reserva\s+(\{[^\n]*\})\s*-->")
-
-class Denied(RuntimeError):
-    """No autoridad para modificar la ref; no iniciar una mutación parcial."""
-
-
-def demand(condition: bool, reason: str) -> None:
-    if not condition:
-        raise Denied(reason)
+BRANCH = "trabajo/issue-727"
+REF = "refs/heads/coordinacion/lock-issue-727"
+NONCE = "3156bba33114b4097eb532ae6de21093fb753bd0"
+PARENT = "823bd8aa5217f8b573479d198cfddac47e28e49f"
+MESSAGE = "lock coordinacion Issue #727 d0fe7d7a-5dd2-42c2-8776-922f21fde7d5"
+HISTORICAL_LEASE = "95d9734c-6e4e-4d74-a2b6-25b19c0dbda3"
+HISTORICAL_PATHS = (
+    "frontend/admin/ReportsDownloads.tsx",
+    "tests/test_reports_admin_ui.py",
+    "tests/test_ci_reports_admin_ui.py",
+)
+LOCK_API = f"/repos/{REPO}/git/ref/heads/coordinacion/lock-issue-727"
 
 
-def valid_global(api) -> None:
-    issue = api.get("/repos/pl0n3r/Factory/issues/767")
-    markers = MARKER_RE.findall(str(issue.get("body") or ""))
-    demand(issue.get("number") == 767 and issue.get("state") == "closed"
-           and (issue.get("user") or {}).get("login") == "pl0n3r"
-           and len(markers) == 1, "kill switch no canónico")
-    try:
-        value = json.loads(markers[0])
-    except (TypeError, ValueError) as exc:
-        raise Denied("kill switch malformado") from exc
-    demand(value == {"version": 1, "state": "RUNNING", "owner": "pl0n3r"},
-           "kill switch no RUNNING")
-
-
-def _lease_from_bot_comment(item: dict) -> dict | None:
-    """Rechazar marcadores múltiples o corruptos del bot sin confiar en texto humano."""
-    if (item.get("user") or {}).get("login") != BOT:
-        return None
-    markers = LEASE_RE.findall(str(item.get("body") or ""))
-    demand(len(markers) <= 1, "recibo V3 duplicado")
-    if not markers:
-        return None
-    try:
-        return json.loads(markers[0])
-    except (ValueError, TypeError) as exc:
-        raise Denied("recibo V3 ilegible") from exc
-
-
-def latest_lease(api) -> dict:
+def newest_receipt(api) -> dict:
+    """Solo recibos V3 del bot, paginación acotada; no usar marcadores humanos."""
     found = None
     for page in range(1, 11):
-        data = api.get(f"/repos/{REPO}/issues/{ISSUE}/comments?per_page=100&page={page}")
-        demand(type(data) is list, "comentarios ilegibles")
-        for item in data:
-            receipt = _lease_from_bot_comment(item)
+        comments = api.get(f"/repos/{REPO}/issues/{ISSUE}/comments?per_page=100&page={page}")
+        demand(isinstance(comments, list), "comentarios V3 ilegibles")
+        for comment in comments:
+            receipt = shared._lease_from_bot_comment(comment)
             if receipt is not None:
                 found = receipt
-        if len(data) < 100:
+        if len(comments) < 100:
             return found or {}
-    raise Denied("paginación V3 sin cota")
+    raise Denied("más de diez páginas de recibos V3")
 
 
-def no_live_coordination(api, current_run_id: str) -> None:
-    # Rechazar cualquier proceso de Coordinación aún vivo; nunca borrar un lock
-    # durante una ejecución que pudiera poseerlo. Fallar si hay más de 100 runs.
-    for status in ("in_progress", "queued", "waiting", "pending", "requested"):
-        page = api.get(f"/repos/{REPO}/actions/runs?status={status}&per_page=100")
-        demand(type(page) is dict and type(page.get("workflow_runs")) is list
-               and type(page.get("total_count")) is int
-               and page["total_count"] <= 100, "observación de workflows incompleta")
-        for run in page["workflow_runs"]:
-            if str(run.get("id")) == current_run_id:
-                continue
-            name = str(run.get("name") or "")
-            demand(not ("coordinaci" in name.lower() or "coordination" in name.lower()),
-                   "hay coordinador activo")
-
-
-def verify_nonce(api, now: datetime) -> None:
-    lock = api.get(f"/repos/{REPO}/git/ref/heads/coordinacion/lock-issue-727")
-    demand((lock.get("object") or {}).get("sha") == EXPECTED_NONCE,
-           "nonce cambió o es ilegible")
-    commit = api.get(f"/repos/{REPO}/git/commits/{EXPECTED_NONCE}")
-    demand(commit.get("message") == EXPECTED_MESSAGE
-           and len(commit.get("parents") or []) == 1
-           and commit["parents"][0].get("sha") == EXPECTED_PARENT
-           and (commit.get("author") or {}).get("name") == BOT,
-           "nonce no fue emitido por el bot sobre el HEAD previsto")
-    created = (commit.get("committer") or {}).get("date")
-    demand(isinstance(created, str), "nonce sin fecha")
+def check_nonce(api, now: datetime) -> None:
+    item = api.get(LOCK_API)
+    demand((item.get("object") or {}).get("sha") == NONCE, "lock cambió")
+    commit = api.get(f"/repos/{REPO}/git/commits/{NONCE}")
+    parents = commit.get("parents")
+    demand(
+        commit.get("message") == MESSAGE
+        and isinstance(parents, list) and len(parents) == 1
+        and parents[0].get("sha") == PARENT
+        and (commit.get("author") or {}).get("name") == "github-actions[bot]",
+        "autor, padre o mensaje del lock no corresponden",
+    )
+    timestamp = (commit.get("committer") or {}).get("date")
+    demand(isinstance(timestamp, str), "lock sin fecha")
     try:
-        at = datetime.fromisoformat(created.replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise Denied("fecha nonce inválida") from exc
-    demand(at.tzinfo is not None and (now - at).total_seconds() >= 3600,
-           "el lock no es huérfano por antigüedad")
+        then = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        age = (now - then).total_seconds()
+    except (ValueError, TypeError) as exc:
+        raise Denied("fecha del lock inválida") from exc
+    demand(then.tzinfo is not None and age >= 3600, "lock no huérfano o fecha futura")
 
 
 def prepare(api, now: datetime, run_id: str) -> str:
-    valid_global(api)
-    freeze = api.get("/repos/pl0n3r/Factory/issues/921")
-    demand(freeze.get("state") == "closed", "freeze global")
-    current = api.get(f"/repos/{REPO}/issues/{ISSUE}")
-    demand(current.get("state") == "open"
-           and any(x.get("name") == "estado: bloqueado" for x in current.get("labels", [])),
-           "issue #727 no está bloqueado y abierto")
-    pr = api.get(f"/repos/{REPO}/pulls/{PR}")
-    demand(pr.get("state") == "open" and pr.get("draft") is True
-           and (pr.get("head") or {}).get("sha") == EXPECTED_PARENT
-           and (pr.get("head") or {}).get("ref") == "trabajo/issue-727",
-           "PR/HEAD de rescate cambiados")
-    lease = latest_lease(api)
-    demand(lease.get("version") == 3 and lease.get("active") is True
-           and lease.get("owner") == "pl0n3r"
-           and lease.get("reservation_id") == EXPECTED_LEASE
-           and lease.get("branch") == "trabajo/issue-727"
-           and lease.get("task_paths") == EXPECTED_PATHS,
-           "reserva V3 no es la última esperada")
-    no_live_coordination(api, run_id)
-    verify_nonce(api, now)
-    identity = api.get(f"/repos/{REPO}")
-    rid = identity.get("node_id")
-    demand(identity.get("name") == "Condor" and (identity.get("owner") or {}).get("login") == "pl0n3r" and isinstance(rid, str) and rid,
-           "identidad del repo ilegible")
-    return rid
+    shared.valid_global(api)
+    frozen = api.get("/repos/pl0n3r/Factory/issues/921")
+    demand(frozen.get("state") == "closed", "freeze Factory activa")
+    issue = api.get(f"/repos/{REPO}/issues/{ISSUE}")
+    demand(
+        issue.get("state") == "open"
+        and {row.get("name") for row in issue.get("labels", [])}.__contains__("estado: bloqueado"),
+        "issue #727 no está abierto y bloqueado",
+    )
+    pull = api.get(f"/repos/{REPO}/pulls/{PR}")
+    head = pull.get("head") or {}
+    demand(
+        pull.get("state") == "open" and pull.get("draft") is True
+        and head.get("sha") == PARENT and head.get("ref") == BRANCH,
+        "PR #771 ha cambiado",
+    )
+    receipt = newest_receipt(api)
+    demand(
+        receipt.get("version") == 3 and receipt.get("active") is True
+        and receipt.get("owner") == "pl0n3r"
+        and receipt.get("reservation_id") == HISTORICAL_LEASE
+        and receipt.get("branch") == BRANCH
+        and receipt.get("task_paths") == list(HISTORICAL_PATHS),
+        "última V3 no coincide con el recibo histórico",
+    )
+    shared.no_live_coordination(api, run_id)
+    check_nonce(api, now)
+    repo = api.get(f"/repos/{REPO}")
+    node = repo.get("node_id")
+    demand(
+        repo.get("name") == "Condor"
+        and (repo.get("owner") or {}).get("login") == "pl0n3r"
+        and isinstance(node, str) and bool(node),
+        "repositorio no canónico",
+    )
+    return node
 
 
 def recover(api, now: datetime, run_id: str) -> None:
-    repo_id = prepare(api, now, run_id)
-    # Última comprobación fail-closed antes de la única mutación: el CAS
-    # beforeOid impide borrar una generación de lock que cambió.
-    valid_global(api)
-    verify_nonce(api, now)
-    payload = {
+    repo_node_id = prepare(api, now, run_id)
+    shared.valid_global(api)
+    check_nonce(api, now)
+    api_response = api.post("/graphql", {
         "query": "mutation($input:UpdateRefsInput!){updateRefs(input:$input){clientMutationId}}",
         "variables": {"input": {
-            "repositoryId": repo_id,
+            "repositoryId": repo_node_id,
             "refUpdates": [{
-                "name": LOCK_REF, "beforeOid": EXPECTED_NONCE,
-                "afterOid": ZERO, "force": True,
+                "name": REF,
+                "beforeOid": NONCE,
+                "afterOid": "0" * 40,
+                "force": True,
             }],
         }},
-    }
-    result = api.post("/graphql", payload)
-    demand(isinstance(result, dict) and not result.get("errors")
-           and isinstance((result.get("data") or {}).get("updateRefs"), dict),
-           "CAS GraphQL denegado; estado UNKNOWN")
-    # La autoridad proviene del borrado exacto, NO del comentario o de CI.
+    })
+    demand(
+        isinstance(api_response, dict) and not api_response.get("errors")
+        and isinstance((api_response.get("data") or {}).get("updateRefs"), dict),
+        "CAS rechazado: resultado desconocido",
+    )
     try:
-        api.get(f"/repos/{REPO}/git/ref/heads/coordinacion/lock-issue-727")
+        api.get(LOCK_API)
     except HTTPError as exc:
-        demand(exc.code == 404, "no se puede corroborar ausencia del lock")
+        demand(exc.code == 404, "ausencia de ref no acreditada")
     else:
-        raise Denied("el lock sigue presente tras CAS")
+        raise Denied("el lock continúa presente")
     api.post(f"/repos/{REPO}/issues/{ISSUE}/comments", {
         "body": (
-            "CAS auténtico del lock huérfano ejecutado por workflow autorizado: "
-            f"{LOCK_REF}@{EXPECTED_NONCE} -> eliminado, verificado 404. "
-            "No se tocó trabajo/issue-727 ni PR #741. "
-            "Esta reparación NO emite V3: enviar /tomar para recuperar la "
-            "reserva con los tres paths, y reconstruir el bundle antes de CI."
-        )
+            f"Reparación CAS de ref huérfana confirmada: {REF}@{NONCE} eliminada (GET=404). "
+            "La rama trabajo/issue-727 y PR #771 no se tocaron. "
+            "Solicitar /tomar para emitir una nueva V3 antes de editar o fusionar."
+        ),
     })
-
-
-class GitHubApi:
-    def __init__(self, token: str):
-        self.token = token
-
-    def request(self, method: str, path: str, body=None):
-        if path == "/graphql":
-            url = "https://api.github.com/graphql"
-        else:
-            demand(path.startswith("/repos/"), "ruta no autorizada")
-            url = "https://api.github.com" + path
-        headers = {
-            "Authorization": "Bearer " + self.token,
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-        }
-        data = None
-        if body is not None:
-            data = json.dumps(body, separators=(",", ":")).encode("utf-8")
-            headers["Content-Type"] = "application/json"
-        with urlopen(Request(url, data=data, method=method, headers=headers), timeout=20) as response:
-            return json.load(response)
-
-    def get(self, path: str):
-        return self.request("GET", path)
-
-    def post(self, path: str, body):
-        return self.request("POST", path, body)
 
 
 def main() -> int:
     try:
-        demand(os.getenv("GITHUB_REPOSITORY") == REPO
-               and os.getenv("GITHUB_ACTOR") == "pl0n3r"
-               and os.getenv("GITHUB_EVENT_NAME") == "issue_comment",
-               "evento no autorizado")
-        with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as handle:
-            event = json.load(handle)
-        demand((event.get("issue") or {}).get("number") == ISSUE
-               and (event.get("issue") or {}).get("pull_request") is None
-               and (event.get("comment") or {}).get("body") == "/limpiar-lock-727"
-               and (event.get("comment") or {}).get("user", {}).get("login") == "pl0n3r",
-               "comando diferente")
-        token = os.environ.get("GITHUB_TOKEN")
-        run_id = os.environ.get("GITHUB_RUN_ID")
-        demand(isinstance(token, str) and bool(token)
-               and isinstance(run_id, str) and run_id.isdigit(),
-               "token o run_id ausentes")
-        recover(GitHubApi(token), datetime.now(timezone.utc), run_id)
-        print("CAS exitoso. Solicitar una V3 nueva antes de cualquier escritura en #727.")
+        demand(
+            os.environ.get("GITHUB_REPOSITORY") == REPO
+            and os.environ.get("GITHUB_ACTOR") == "pl0n3r"
+            and os.environ.get("GITHUB_EVENT_NAME") == "issue_comment",
+            "identidad del evento no autorizada",
+        )
+        event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+        issue = event.get("issue") or {}
+        comment = event.get("comment") or {}
+        demand(
+            issue.get("number") == ISSUE and issue.get("pull_request") is None
+            and comment.get("body") == "/limpiar-lock-727"
+            and (comment.get("user") or {}).get("login") == "pl0n3r",
+            "comentario no autorizado",
+        )
+        token, run_id = os.environ.get("GITHUB_TOKEN"), os.environ.get("GITHUB_RUN_ID")
+        demand(bool(token) and isinstance(run_id, str) and run_id.isdigit(),
+               "token o run_id no disponibles")
+        recover(shared.GitHubApi(token), datetime.now(timezone.utc), run_id)
+        print("Lock exacto de #727 eliminado mediante CAS; solicitar nueva V3.")
         return 0
-    except (Denied, KeyError, OSError, ValueError, TypeError) as exc:
-        # Nunca imprimir token, PII, URLs de credenciales ni respuesta bruta.
-        print("RECOVERY DENIED: " + type(exc).__name__, file=sys.stderr)
+    except (Denied, KeyError, OSError, ValueError, TypeError):
+        print("RECOVERY DENIED: identidad o fuente no verificable", file=sys.stderr)
         return 1
 
 
