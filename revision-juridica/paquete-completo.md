@@ -69,7 +69,7 @@ Producto: `pl0n3r/Condor`
 - Flujo interno de atención: [COMPLETAR POR EL DUEÑO] — revisión jurídica requerida.
 - Plazos aplicables: [COMPLETAR POR EL DUEÑO] — deben ser definidos con revisión jurídica; este kit no inventa un plazo legal.
 
-El canal debe permitir solicitudes de acceso, corrección, actualización, supresión o revocación según corresponda. Este documento describe una frontera técnica y no constituye aprobación jurídica.
+El canal debe contemplar solicitudes de acceso, rectificación/corrección, actualización, portabilidad, supresión/eliminación o revocación del consentimiento cuando corresponda. La identidad, legitimación y representación deben verificarse antes de tramitar solicitudes; los procedimientos y plazos siguen sujetos a revisión jurídica. Este documento describe una frontera técnica y no constituye aprobación jurídica.
 
 ---
 
@@ -111,7 +111,7 @@ El canal debe permitir solicitudes de acceso, corrección, actualización, supre
 
 ## Derechos y revisión
 
-Las solicitudes de acceso, corrección, actualización, supresión o revocación se canalizan mediante el canal de derechos indicado arriba. Las finalidades, bases, consentimientos, proveedores y retenciones aquí documentadas requieren la revisión jurídica aplicable antes de declararse aprobadas.
+Las solicitudes de acceso, rectificación/corrección, actualización, portabilidad, supresión/eliminación o revocación del consentimiento, cuando corresponda, se canalizan mediante el canal de derechos indicado arriba, previa verificación de identidad y legitimación. La portabilidad no implica que exista un servicio automatizado de exportación. Las finalidades, bases, consentimientos, proveedores y retenciones aquí documentadas requieren la revisión jurídica aplicable antes de declararse aprobadas.
 
 ---
 
