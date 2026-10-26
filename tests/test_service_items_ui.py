@@ -60,9 +60,12 @@ class UiServiciosCatalogoTests(unittest.TestCase):
         self.assertIn("methods: ['PATCH']", products)
         self.assertIn("methods: ['PUT']", pricing)
 
-        # No se inventa un endpoint PATCH de servicios (duración sigue no editable).
-        self.assertIn("methods: ['POST']", services)
+        # La duración existente se actualiza mediante el PATCH incorporado por #939.
+        self.assertIn("api_catalog_service_duration_update", services)
+        self.assertIn("methods: ['PATCH']", services)
+        self.assertIn("$service->updateServiceDuration($duration)", services)
         self.assertIn("duration !== previous.duration_minutes", panel)
+        self.assertIn(".replace('/products/', '/services/')", panel)
         self.assertIn("duration_minutes: duration", panel)
         self.assertNotIn("allow_backorder:", panel)
         self.assertNotIn("inventoryPath(", panel)
