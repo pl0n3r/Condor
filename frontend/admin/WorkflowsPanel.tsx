@@ -207,7 +207,7 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
       if (epoch === latest.current) setNotice(error instanceof Error
         ? error.message : 'No fue posible crear el workflow.');
     } finally {
-      if (epoch === latest.current) setBusy(false);
+      setBusy(false);
     }
   }
 
@@ -239,7 +239,7 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
         await load(); // También refresca después de un 409; nunca sobrescribe la versión.
       }
     } finally {
-      if (epoch === latest.current) setBusy(false);
+      setBusy(false);
     }
   }
 
