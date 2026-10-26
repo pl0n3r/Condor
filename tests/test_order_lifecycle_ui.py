@@ -79,6 +79,12 @@ class UiCicloPedidoTests(unittest.TestCase):
         self.assertIn("idempotency_key: key", UI)
         self.assertIn("paymentAttempt.current", UI)
         self.assertIn("refundAttempt.current", UI)
+        # A successful payment must keep its reference visible; refreshing the
+        # entire parent list unmounts the detail and loses that reference.
+        self.assertIn("setPaymentKey(key)", UI)
+        self.assertIn("Referencia del último pago:", UI)
+        self.assertIn("if (refreshOrder) await onChanged();", UI)
+        self.assertIn("undefined, true", UI)
         self.assertIn("payment_key", CONTROLLERS["refund"])
         self.assertIn("'amount_minor', 'method', 'idempotency_key'", CONTROLLERS["payment"])
         self.assertIn("methods: ['POST']", CONTROLLERS["refund"])
