@@ -179,7 +179,9 @@ class OccupationalSafetyFollowUpTests(unittest.TestCase):
             followup(actions=[action(checklist_ref=None)]),
             followup(fixture_ref="fixture:sgsst-followup/not@opaque"),
             followup(actions=[action(status="PENDIENTE", medical_record={"x": "secret"})]),
-            followup(actions={"0": action()}),
+            # PHP json_decode(..., true) normalizes {"0": ...} into a list.
+            # Use a non-numeric key to verify associative maps fail closed.
+            followup(actions={"named": action()}),
         ]
         for bad in bad_cases:
             with self.subTest(case=bad):
