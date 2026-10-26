@@ -61,9 +61,9 @@ class UiServiciosCatalogoTests(unittest.TestCase):
         self.assertIn("methods: ['PUT']", pricing)
 
         # No se inventa un endpoint PATCH de servicios (duración sigue no editable).
-        self.assertNotIn("methods: ['PATCH']", services)
-        self.assertIn("disabled={draft.id !== null}", panel)
-        self.assertIn("La API actual no permite cambiar la duración", panel)
+        self.assertIn("methods: ['POST']", services)
+        self.assertIn("duration !== previous.duration_minutes", panel)
+        self.assertIn("duration_minutes: duration", panel)
         self.assertNotIn("allow_backorder:", panel)
         self.assertNotIn("inventoryPath(", panel)
         self.assertNotRegex(panel, r"\bstyle\s*=\s*\{")
