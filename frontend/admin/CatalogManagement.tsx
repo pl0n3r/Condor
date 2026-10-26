@@ -1,4 +1,5 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import { ServiceItemsPanel } from './ServiceItemsPanel';
 import {
   catalogProductPath,
   catalogProductsPath,
@@ -88,7 +89,8 @@ export function CatalogManagement({
     setState({ status: 'loading' });
 
     try {
-      const response = await fetch(catalogProductsPath(branchId), {
+      const productEndpoint = catalogProductsPath(branchId);
+      const response = await fetch(productEndpoint, {
         credentials: 'same-origin',
         headers: { Accept: 'application/json' },
       });
@@ -100,7 +102,32 @@ export function CatalogManagement({
       }
 
       const payload = await response.json() as { products: Product[] };
-      setState({ status: 'ready', products: payload.products });
+      if (!Array.isArray(payload.products)) {
+        throw new Error('La respuesta del catálogo no es válida.');
+      }
+      // El endpoint de productos también devuelve ítems de servicio, sin kind.
+      // Excluirlos de la interfaz física usando el catálogo de servicios real.
+      const serviceResponse = await fetch(
+        productEndpoint.replace(/\/products$/, '/services'),
+        { credentials: 'same-origin', headers: { Accept: 'application/json' } },
+      );
+      if (!serviceResponse.ok) {
+        throw new Error(await responseMessage(
+          serviceResponse,
+          'No se pudo distinguir productos de servicios.',
+        ));
+      }
+      const servicePayload = await serviceResponse.json() as {
+        services?: Array<{ id: string }>;
+      };
+      if (!Array.isArray(servicePayload.services)) {
+        throw new Error('No se pudo distinguir productos de servicios.');
+      }
+      const serviceIds = new Set(servicePayload.services.map(service => service.id));
+      setState({
+        status: 'ready',
+        products: payload.products.filter(product => !serviceIds.has(product.id)),
+      });
     } catch (error) {
       setState({
         status: 'error',
@@ -362,7 +389,7 @@ export function CatalogManagement({
     >
       <div className="section-heading">
         <div>
-          <span className="eyebrow">Productos</span>
+          <span className="eyebrow">Productos físicos</span>
           <h2 id="catalog-title">Catálogo</h2>
           <p className="muted">
             Define productos, variantes y su política de backorder.
@@ -516,7 +543,7 @@ export function CatalogManagement({
 
       {state.status === 'ready' && state.products.length === 0 && (
         <div className="catalog-state catalog-empty">
-          <strong>Aún no hay productos.</strong>
+          <strong>Aún no hay productos físicos.</strong>
           <span className="muted">
             Crea el primer producto para empezar a construir el catálogo
             de esta empresa.
@@ -728,6 +755,11 @@ export function CatalogManagement({
           ))}
         </div>
       )}
+      <ServiceItemsPanel
+        branchId={branchId}
+        permissions={permissions}
+        csrfToken={csrfToken}
+      />
     </section>
   );
 }
