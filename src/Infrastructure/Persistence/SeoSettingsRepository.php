@@ -60,7 +60,7 @@ final readonly class SeoSettingsRepository
      * Lock the tenant row to serialize even the first insert; no read-modify-
      * write races or cross-tenant conflict resolution by a bare branch ID.
      *
-     * @param callable(array{indexnow_enabled:bool,gtm_container_id:?string,gtm_enabled:bool}):array{indexnow_enabled:bool,gtm_container_id:?string,gtm_enabled:bool} $mutation
+     * @param callable(array{indexnow_enabled:bool,gtm_container_id:?string,gtm_enabled:bool}):array<string, mixed> $mutation
      * @return array{indexnow_enabled:bool,gtm_container_id:?string,gtm_enabled:bool}
      */
     public function update(

@@ -118,7 +118,10 @@ final class SeoSettingsController extends AbstractController
         return $this->noStore(self::present($record));
     }
 
-    /** @param list<string> $allowed @return array<string,mixed> */
+    /**
+     * @param list<string> $allowed
+     * @return array<string, mixed>
+     */
     private static function fields(stdClass $value, array $allowed): array
     {
         $data = get_object_vars($value);
