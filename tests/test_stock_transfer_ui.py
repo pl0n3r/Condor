@@ -79,6 +79,16 @@ class UiTransferenciasSedesTests(unittest.TestCase):
         self.assertNotIn("Math.random()", PANEL)
         self.assertNotIn("style={{", PANEL)
 
+    def test_quantities_are_safe_and_retries_idempotent(self):
+        """Reject zero, fractional or unsafe quantities and reuse retry keys."""
+        self.assertIn("if (!/^[1-9][0-9]*$/.test(value)) return null;", PANEL)
+        self.assertIn("return Number.isSafeInteger(number) ? number : null;", PANEL)
+        self.assertIn("parsedQuantity <= available", PANEL)
+        self.assertIn("crypto.randomUUID()", PANEL)
+        self.assertIn(
+            "JSON.stringify([branchId, from, to, variant, amount])", PANEL,
+        )
+
     def test_reachable_and_accessible_from_admin(self):
         self.assertIn("import { StockTransferPanel } from './StockTransferPanel';", APP)
         self.assertIn("href: '/admin#stock-transfers'", APP)
