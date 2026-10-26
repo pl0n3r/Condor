@@ -57,14 +57,15 @@
     {
       "id": "customer_contact",
       "category": "contact",
+      "purpose": "customer_management",
       "fields": [
         "name",
         "email",
         "phone",
+        "document_number",
         "notes",
         "commercial_category_id"
       ],
-      "purpose": "customer_management",
       "basis": "review_required",
       "retention": "review_required",
       "consent": "review_required",
@@ -208,6 +209,43 @@
         "trial_consent_recorded_at"
       ],
       "purpose": "self_service_trial_application",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
+      "id": "workflow_definitions",
+      "category": "usage",
+      "fields": [
+        "tenant_id",
+        "workflow_id",
+        "trigger_name",
+        "conditions_json",
+        "actions_json",
+        "created_by_user_id",
+        "updated_by_user_id",
+        "created_at",
+        "updated_at"
+      ],
+      "purpose": "workflow_definition_management",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
+      "id": "workflow_executions",
+      "category": "usage",
+      "fields": [
+        "tenant_id",
+        "workflow_id",
+        "definition_version",
+        "actor_user_id",
+        "result",
+        "created_at"
+      ],
+      "purpose": "workflow_execution_audit",
       "basis": "review_required",
       "retention": "review_required",
       "consent": "review_required",

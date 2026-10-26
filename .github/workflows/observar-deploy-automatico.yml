@@ -121,23 +121,11 @@ jobs:
 
       - name: Resolver fase D-043 desde la puerta canónica
         id: fase
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api "repos/${GITHUB_REPOSITORY}/issues/389" > /tmp/d043-phase-gate.json
-          phase="$(
-            jq -r '
-              if .state == "open"
-                 and ([.labels[].name] | index("estado: bloqueado")) != null
-              then "construccion"
-              else "desconocida"
-              end
-            ' /tmp/d043-phase-gate.json
-          )"
+          phase="$(python3 scripts/d043_phase_resolution.py --source datos.yml --repository "${GITHUB_REPOSITORY}")"
           echo "value=$phase" >> "$GITHUB_OUTPUT"
-          echo "Fase D-043 resuelta desde #389: $phase" >> "$GITHUB_STEP_SUMMARY"
-
+          echo "Fase D-043 resuelta desde datos.yml: $phase" >> "$GITHUB_STEP_SUMMARY"
       - name: Auto-validar baseline D-043 previa en construcción
         if: ${{ (steps.version.outputs.bootstrap_only == 'true' || steps.version.outputs.bootstrap_previous == 'true') && steps.version.outputs.version_unchanged != 'true' }}
         env:

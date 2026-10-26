@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { AdminCsvImport } from './CatalogManagement';
 import {
   categoryPriceListPath,
   commercialCategoriesPath,
@@ -75,6 +76,42 @@ type LoadState =
     }
   | { status: 'error'; message: string };
 
+
+type CustomerSegment = 'all' | 'new_this_month'
+  | 'without_purchases_90_days' | 'top_20_purchases';
+type CustomerSearchFilters = { term: string; segment: CustomerSegment };
+type CustomerSearchState =
+  | { status: 'idle' | 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; customers: Customer[] };
+
+type CustomerHistorySnapshot = {
+  customer_id: string;
+  orders: Array<{
+    id: string;
+    status: string;
+    payment_status: string;
+    currency: string;
+    total_amount_minor: number;
+    created_at: string;
+  }>;
+  summary: {
+    order_count: number;
+    total_purchased_by_currency_minor: Record<string, string>;
+    last_purchase_at: string | null;
+  };
+  pagination: {
+    page: number;
+    page_size: number;
+    has_previous: boolean;
+    has_next: boolean;
+  };
+};
+type CustomerHistoryState =
+  | { status: 'idle' | 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; data: CustomerHistorySnapshot };
+
 type Notice = { kind: 'success' | 'error'; text: string };
 
 type CategoryDraft = {
@@ -125,6 +162,18 @@ export function CommerceManagement({
   const canDeletePricing = can('pricing.delete');
 
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchSegment, setSearchSegment] = useState<CustomerSegment>('all');
+  const [activeSearch, setActiveSearch] = useState<CustomerSearchFilters>({
+    term: '', segment: 'all',
+  });
+  const [searchResult, setSearchResult] = useState<CustomerSearchState>({ status: 'idle' });
+  const [customerRevision, setCustomerRevision] = useState(0);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyRetry, setHistoryRetry] = useState(0);
+  const [historyResult, setHistoryResult] = useState<CustomerHistoryState>({ status: 'idle' });
+
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
   const [categoryDraft, setCategoryDraft] =
@@ -137,13 +186,13 @@ export function CommerceManagement({
   const [priceVariantId, setPriceVariantId] = useState('');
   const [pricePesos, setPricePesos] = useState('');
 
-  async function loadCommerce() {
+  async function loadCommerce(reset = false) {
     if (!canViewCustomers && !canViewPricing) {
       return;
     }
 
     setState((current) => (
-      current.status === 'ready' ? current : { status: 'loading' }
+      !reset && current.status === 'ready' ? current : { status: 'loading' }
     ));
     try {
       const customerRequest = canViewCustomers
@@ -184,6 +233,7 @@ export function CommerceManagement({
         : null;
 
       setState({ status: 'ready', customers, pricing });
+      setCustomerRevision((current) => current + 1);
       setPriceListId((current) => (
         pricing?.price_lists.some((list) => list.id === current)
           ? current
@@ -206,6 +256,13 @@ export function CommerceManagement({
 
   useEffect(() => {
     setNotice(null);
+    setSearchTerm('');
+    setSearchSegment('all');
+    setActiveSearch({ term: '', segment: 'all' });
+    setSearchResult({ status: 'idle' });
+    setSelectedCustomerId(null);
+    setHistoryPage(1);
+    setHistoryResult({ status: 'idle' });
     setCategoryDraft(emptyCategory);
     setCustomerDraft(emptyCustomer);
     setListDraft(emptyList);
@@ -214,9 +271,99 @@ export function CommerceManagement({
     setPricePesos('');
 
     if (canViewCustomers || canViewPricing) {
-      void loadCommerce();
+      void loadCommerce(true);
     }
   }, [branchId, canViewCustomers, canViewPricing]);
+
+
+  // Search and segment results must come from an authenticated backend route.
+  // Never infer top purchasers or recent customers from a partial UI snapshot.
+  useEffect(() => {
+    if (!canViewCustomers || (activeSearch.term === '' && activeSearch.segment === 'all')) {
+      setSearchResult({ status: 'idle' });
+      return;
+    }
+    const controller = new AbortController();
+    setSearchResult({ status: 'loading' });
+    const params = new URLSearchParams();
+    if (activeSearch.term) {
+      params.set('term', activeSearch.term);
+    }
+    params.set('segment', activeSearch.segment);
+    void (async () => {
+      try {
+        const response = await fetch(
+          customersPath(branchId) + '/search?' + params.toString(),
+          {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok) {
+          throw new Error(await responseMessage(
+            response, 'La búsqueda avanzada aún no está disponible.',
+          ));
+        }
+        const body = await response.json() as { customers?: unknown };
+        if (!Array.isArray(body.customers)) {
+          throw new Error('La búsqueda devolvió un formato desconocido.');
+        }
+        if (!controller.signal.aborted) {
+          setSearchResult({ status: 'ready', customers: body.customers as Customer[] });
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setSearchResult({
+            status: 'error',
+            message: error instanceof Error ? error.message : 'Error al buscar clientes.',
+          });
+        }
+      }
+    })();
+    return () => controller.abort();
+  }, [branchId, canViewCustomers, activeSearch, customerRevision]);
+
+  useEffect(() => {
+    if (!canViewCustomers || selectedCustomerId === null) {
+      setHistoryResult({ status: 'idle' });
+      return;
+    }
+    const controller = new AbortController();
+    setHistoryResult({ status: 'loading' });
+    void (async () => {
+      try {
+        const response = await fetch(
+          '/api/customers/' + encodeURIComponent(selectedCustomerId)
+          + '/history?page=' + historyPage,
+          {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok) {
+          throw new Error(await responseMessage(response, 'No se pudo consultar el historial.'));
+        }
+        const body = await response.json() as CustomerHistorySnapshot;
+        if (!Array.isArray(body.orders) || body.customer_id !== selectedCustomerId
+          || !body.summary || !body.pagination) {
+          throw new Error('El historial devolvió un formato desconocido.');
+        }
+        if (!controller.signal.aborted) {
+          setHistoryResult({ status: 'ready', data: body });
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setHistoryResult({
+            status: 'error',
+            message: error instanceof Error ? error.message : 'Error al consultar historial.',
+          });
+        }
+      }
+    })();
+    return () => controller.abort();
+  }, [branchId, canViewCustomers, selectedCustomerId, historyPage, historyRetry]);
 
   async function saveCategory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -400,6 +547,9 @@ export function CommerceManagement({
   const ready = state.status === 'ready' ? state : null;
   const customers = ready?.customers;
   const pricing = ready?.pricing;
+  const visibleCustomers = searchResult.status === 'ready'
+    ? searchResult.customers
+    : searchResult.status === 'idle' ? customers?.customers ?? [] : [];
 
   return (
     <section
@@ -429,6 +579,11 @@ export function CommerceManagement({
         >
           {notice.text}
         </output>
+      )}
+
+      {canCreateCustomers && (
+        <AdminCsvImport key={branchId} kind="customers" branchId={branchId}
+          csrfToken={csrfToken} onCompleted={() => void loadCommerce()} />
       )}
 
       {state.status === 'loading' && (
@@ -579,6 +734,69 @@ export function CommerceManagement({
               <h3>Clientes</h3>
             </div>
 
+            <form
+              className="catalog-editor"
+              aria-label="Búsqueda y segmentos de clientes"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setSelectedCustomerId(null);
+                setHistoryPage(1);
+                setActiveSearch({ term: searchTerm.trim(), segment: searchSegment });
+              }}
+            >
+              <div className="catalog-form-grid">
+                <label className="field">
+                  <span>Buscar clientes</span>
+                  <input
+                    type="search"
+                    maxLength={120}
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder="Nombre, correo o teléfono"
+                  />
+                </label>
+                <label className="field">
+                  <span>Segmento de clientes</span>
+                  <select
+                    value={searchSegment}
+                    onChange={(event) => setSearchSegment(event.target.value as CustomerSegment)}
+                  >
+                    <option value="all">Todos</option>
+                    <option value="new_this_month">Nuevos este mes</option>
+                    <option value="without_purchases_90_days">Sin compras en 90 días</option>
+                    <option value="top_20_purchases">20 con más compras</option>
+                  </select>
+                </label>
+              </div>
+              <div className="catalog-actions">
+                <button type="submit" className="button">Aplicar búsqueda</button>
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSearchSegment('all');
+                    setActiveSearch({ term: '', segment: 'all' });
+                    setSelectedCustomerId(null);
+                  }}
+                >Limpiar búsqueda</button>
+              </div>
+            </form>
+            {searchResult.status === 'loading' && (
+              <output role="status" aria-live="polite">Buscando clientes…</output>
+            )}
+            {searchResult.status === 'error' && (
+              <div className="catalog-state catalog-error" role="alert">
+                <span>{searchResult.message}</span>
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={() => setCustomerRevision((current) => current + 1)}
+                >Reintentar búsqueda</button>
+              </div>
+            )}
+
+
             {(canCreateCustomers || customerDraft.id) && (
               <form className="catalog-editor" onSubmit={saveCustomer}>
                 <div className="catalog-form-grid">
@@ -664,13 +882,13 @@ export function CommerceManagement({
               </form>
             )}
 
-            {customers.customers.length === 0 ? (
+            {visibleCustomers.length === 0 && searchResult.status !== 'error' && searchResult.status !== 'loading' ? (
               <p className="catalog-variant-empty muted">
-                Todavía no hay clientes activos.
+                {searchResult.status === 'idle' ? 'Todavía no hay clientes activos.' : 'No hay clientes que coincidan con los filtros.'}
               </p>
             ) : (
               <div className="catalog-variant-list">
-                {customers.customers.map((customer) => {
+                {visibleCustomers.map((customer) => {
                   const category = customers.categories.find(
                     (candidate) => (
                       candidate.id === customer.commercial_category_id
@@ -692,6 +910,21 @@ export function CommerceManagement({
                         )}
                       </div>
                       <div className="catalog-actions">
+
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          aria-expanded={selectedCustomerId === customer.id}
+                          onClick={() => {
+                            setHistoryPage(1);
+                            setHistoryResult({ status: 'idle' });
+                            setSelectedCustomerId((current) => (
+                              current === customer.id ? null : customer.id
+                            ));
+                          }}
+                        >
+                          {selectedCustomerId === customer.id ? 'Ocultar historial' : 'Ver historial'}
+                        </button>
                         {canUpdateCustomers && (
                           <button
                             type="button"
@@ -723,6 +956,71 @@ export function CommerceManagement({
                           </button>
                         )}
                       </div>
+
+                      {selectedCustomerId === customer.id && (
+                        <section className="catalog-editor" aria-label={'Historial de ' + customer.name}>
+                          {historyResult.status === 'loading' && (
+                            <output role="status" aria-live="polite">Cargando historial…</output>
+                          )}
+                          {historyResult.status === 'error' && (
+                            <div role="alert" className="catalog-state catalog-error">
+                              <span>{historyResult.message}</span>
+                              <button
+                                type="button"
+                                className="button button-secondary"
+                                onClick={() => setHistoryRetry((current) => current + 1)}
+                              >Reintentar historial</button>
+                            </div>
+                          )}
+                          {historyResult.status === 'ready' && (
+                            <>
+                              <strong>{'Pedidos: ' + historyResult.data.summary.order_count}</strong>
+                              <div className="muted">
+                                {historyResult.data.summary.last_purchase_at
+                                  ? 'Última compra: ' + new Date(
+                                    historyResult.data.summary.last_purchase_at,
+                                  ).toLocaleDateString('es-CO')
+                                  : 'Sin compras registradas'}
+                              </div>
+                              {Object.entries(
+                                historyResult.data.summary.total_purchased_by_currency_minor,
+                              ).map(([currency, amount]) => (
+                                <div key={currency} className="muted">
+                                  {'Total ' + currency + ': ' + formatMinorAmount(amount)}
+                                </div>
+                              ))}
+                              {historyResult.data.orders.length === 0 ? (
+                                <p className="muted">Sin compras en esta página.</p>
+                              ) : (
+                                <ul>
+                                  {historyResult.data.orders.map((order) => (
+                                    <li key={order.id}>
+                                      {order.created_at + ' · ' + order.status + ' · '
+                                        + order.payment_status + ' · ' + order.currency + ' '
+                                        + formatMinorAmount(String(order.total_amount_minor))}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              <div className="catalog-actions">
+                                <button
+                                  type="button"
+                                  className="button button-secondary"
+                                  disabled={!historyResult.data.pagination.has_previous}
+                                  onClick={() => setHistoryPage((current) => Math.max(1, current - 1))}
+                                >Anterior</button>
+                                <span>{'Página ' + historyResult.data.pagination.page}</span>
+                                <button
+                                  type="button"
+                                  className="button button-secondary"
+                                  disabled={!historyResult.data.pagination.has_next}
+                                  onClick={() => setHistoryPage((current) => current + 1)}
+                                >Siguiente</button>
+                              </div>
+                            </>
+                          )}
+                        </section>
+                      )}
                     </div>
                   );
                 })}
@@ -924,6 +1222,16 @@ export function CommerceManagement({
       )}
     </section>
   );
+}
+
+
+function formatMinorAmount(amountMinor: string): string {
+  // Preserve monetary precision: never coerce bigint strings into JS number.
+  if (!/^[0-9]{1,18}$/.test(amountMinor)) {
+    return 'Importe no disponible';
+  }
+  const padded = amountMinor.padStart(3, '0');
+  return padded.slice(0, -2) + ',' + padded.slice(-2);
 }
 
 function formatCop(amountMinor: number): string {
