@@ -151,7 +151,9 @@ export function OrderLifecyclePanel({
     return () => { latest.current += 1; };
   }, [branchId, order.id]);
 
-  async function submit(url: string, success: string, body?: Record<string, unknown>): Promise<boolean> {
+  async function submit(
+    url: string, success: string, body?: Record<string, unknown>, refreshOrder = false,
+  ): Promise<boolean> {
     if (!canUpdate || busy || remote.status !== 'ready') return false;
     setBusy(true);
     setNotice(null);
@@ -167,7 +169,7 @@ export function OrderLifecyclePanel({
       });
       if (!response.ok) throw new Error(await errorMessage(response));
       setNotice({ error: false, message: success });
-      await onChanged();
+      if (refreshOrder) await onChanged();
       await load();
       return true;
     } catch (error) {
@@ -260,11 +262,11 @@ export function OrderLifecyclePanel({
       {canUpdate && orderCanCancel && (
         <div className="catalog-actions" aria-label="Transiciones permitidas del pedido">
           <button type="button" className="button button-secondary" disabled={busy || !ready}
-            onClick={() => void submit(cancelPath, 'Pedido cancelado; reserva liberada.')}>
+            onClick={() => void submit(cancelPath, 'Pedido cancelado; reserva liberada.', undefined, true)}>
             Cancelar pedido
           </button>
           <button type="button" className="button button-secondary" disabled={busy || !ready}
-            onClick={() => void submit(consumePath, 'Inventario consumido.')}>
+            onClick={() => void submit(consumePath, 'Inventario consumido.', undefined, true)}>
             Consumir inventario
           </button>
         </div>
@@ -311,6 +313,7 @@ export function OrderLifecyclePanel({
               <button type="submit" className="button" disabled={busy}>Registrar pago</button>
             </form>
           )}
+          {paymentKey && <p className="muted">Referencia del último pago: <code>{paymentKey}</code></p>}
           {ready.payment.paid_minor === 0 && (
             <p role="status" className="muted">Este pedido todavía no tiene pagos registrados.</p>
           )}
