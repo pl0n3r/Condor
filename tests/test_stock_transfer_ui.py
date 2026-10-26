@@ -23,6 +23,8 @@ class UiTransferenciasSedesTests(unittest.TestCase):
         self.assertIn("Stock registrado en origen", PANEL)
         self.assertIn("parsedQuantity <= available", PANEL)
         self.assertIn("disabled={!canTransfer}", PANEL)
+        self.assertIn("validQuantity && result === null", PANEL)
+        self.assertIn("Preparar otra transferencia", PANEL)
         self.assertIn("result.movements.length === 2", PANEL)
         self.assertIn("movement.transfer_id === receipt.id", PANEL)
         self.assertIn("movement.type === 'transfer_out'", PANEL)

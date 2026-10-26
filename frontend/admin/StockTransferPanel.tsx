@@ -198,7 +198,8 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
   const validQuantity = parsedQuantity !== null && parsedQuantity <= available;
   const canTransfer = canView && canUpdate && !busy && ready !== null
     && Boolean(selectedOrigin && selectedDestination && selectedVariant)
-    && validQuantity && selectedOrigin?.id !== selectedDestination?.id;
+    && validQuantity && result === null
+    && selectedOrigin?.id !== selectedDestination?.id;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -399,6 +400,14 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
         <section aria-labelledby="transfer-result-title" className="catalog-list">
           <h3 id="transfer-result-title">Resultado de la transferencia</h3>
           <p>Comprobante: <strong>{result.receipt.id}</strong></p>
+          <button type="button" className="button" onClick={() => {
+            setResult(null);
+            setNotice(null);
+            setQuantity('1');
+            idempotency.current = { signature: '', key: '' };
+          }}>
+            Preparar otra transferencia
+          </button>
           <p>Estado: {result.receipt.status === 'completed' ? 'Completada' : 'Pendiente'}</p>
           {result.movements.length === 2 ? result.movements.map((movement) => (
             <article className="catalog-card" key={movement.id}>
