@@ -19,6 +19,11 @@ final class PrivacyAsCodeTest extends TestCase
         $data = $this->data();
         self::assertSame('pl0n3r/Condor', $data['project']);
         self::assertSame('construccion', $data['phase']);
+        // #924/A acredita hechos de construcción, no aprobación jurídica ni live.
+        self::assertSame(
+            ['nothing_live' => true, 'no_real_customer_data' => true],
+            $data['d063_attestation'] ?? null,
+        );
         self::assertSame(
             [
                 'account_identity',
