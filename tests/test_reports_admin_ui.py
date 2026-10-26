@@ -31,7 +31,7 @@ const output = ts.transpileModule(source, {compilerOptions: {
   module: ts.ModuleKind.CommonJS,
   jsx: ts.JsxEmit.ReactJSX,
 }}).outputText;
-let slots = [], refs = [], index = 0, refIndex = 0, effectDeps = [];
+let slots = [], refs = [], index = 0, refIndex = 0, effectDeps = [], layoutEffects = [];
 const react = {
   useState(initial) {
     const n = index++;
@@ -43,7 +43,11 @@ const react = {
     if (!(n in refs)) refs[n] = {current: initial};
     return refs[n];
   },
-  useEffect(_effect, dependencies) { effectDeps.push(dependencies); }, // capture actual deps
+  useEffect(_effect, dependencies) { effectDeps.push(dependencies); },
+  useLayoutEffect(effect, dependencies) {
+    effectDeps.push(dependencies);
+    layoutEffects.push(effect);
+  },
 };
 const jsx = (type, props) => ({type, props: props || {}});
 const mod = new Module(process.argv[1], module);
@@ -129,7 +133,7 @@ const tick = async () => {await new Promise(resolve => realSetTimeout(resolve, 2
   await tick();
   const staleBlocked = clicked.length === before;
 
-  // The fake useEffect does not run the real branch-reset effect; reset its
+  // The fake hooks do not run the real branch-reset effect; reset its
   // fourth hook (status) explicitly before testing a new permission fetch.
   slots[3] = 'idle';
   // Permission changes within the same branch must invalidate a pending CSV.
@@ -161,10 +165,30 @@ const tick = async () => {await new Promise(resolve => realSetTimeout(resolve, 2
   const stablePermissionDependencies = originalDeps.every((x,i) => Object.is(x, clonedDeps[i]));
   const reactivePermissionDependencies = originalDeps.some((x,i) => !Object.is(x, revokedDeps[i]));
 
+  // Simulate the layout cleanup on an authenticated tab unmount while a
+  // prior CSV response remains unresolved. A passive effect would not have
+  // been registered in layoutEffects and cannot pass this regression.
+  props = {...props, permissions:['inventory.view']};
+  slots[3] = 'idle';
+  render();
+  const layoutEffect = layoutEffects.at(-1);
+  if (typeof layoutEffect !== 'function') throw Error('Missing layout-phase cleanup');
+  const cleanup = layoutEffect();
+  if (typeof cleanup !== 'function') throw Error('Missing synchronous unmount cleanup');
+  fetchPromise = new Promise(resolve => {resolveFetch = resolve;});
+  tree = render();
+  const beforeUnmount = clicked.length;
+  elements(tree, 'form')[0].props.onSubmit({preventDefault() {}});
+  cleanup();
+  resolveFetch({ok:true,status:200,headers:{get:()=>contentType},
+    blob:async()=>new Blob([csv],{type:'text/csv'})});
+  await tick();
+  const unmountBlocked = clicked.length === beforeUnmount;
+
   // Branch context is supplied by the authenticated admin, never query tenant.
   process.stdout.write(JSON.stringify({
     success, saved, denied, empty, staleBlocked, permissionRevocationBlocked,
-    stablePermissionDependencies, reactivePermissionDependencies,
+    unmountBlocked, stablePermissionDependencies, reactivePermissionDependencies,
     blobs:blobs.length, revoked:revoked.length,
     urlCount:downloads.length,
   }));
@@ -196,6 +220,7 @@ class ReportesUiAdminTests(unittest.TestCase):
         self.assertTrue(data["empty"])
         self.assertTrue(data["staleBlocked"])
         self.assertTrue(data["permissionRevocationBlocked"])
+        self.assertTrue(data["unmountBlocked"])
         self.assertTrue(data["stablePermissionDependencies"])
         self.assertTrue(data["reactivePermissionDependencies"])
         self.assertEqual(data["blobs"], data["revoked"])
@@ -214,6 +239,7 @@ class ReportesUiAdminTests(unittest.TestCase):
         self.assertNotIn("purchases.view", panel)
         self.assertIn("credentials: 'same-origin'", panel)
         self.assertIn("[branchId, permissionScope]", panel)
+        self.assertIn("useLayoutEffect", panel)
         self.assertIn("permissionsRef.current.includes(requiredPermission)", panel)
         self.assertIn("new URLSearchParams({ from, through })", panel)
         self.assertIn("encodeURIComponent(branchId)", panel)

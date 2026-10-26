@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 type Kind = 'inventory' | 'sales' | 'purchases';
 type Status = 'idle' | 'loading' | 'success' | 'empty'
@@ -50,7 +50,7 @@ export function ReportsDownloads({ branchId, permissions }: Props) {
     setStatus('idle');
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     cancel();
     return () => {
       sequence.current += 1;
