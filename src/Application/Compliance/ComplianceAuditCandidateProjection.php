@@ -136,7 +136,10 @@ final class ComplianceAuditCandidateProjection
             ? $date : null;
     }
 
-    /** @param array<array-key,mixed> $payload @param list<string> $expected */
+    /**
+     * @param array<array-key,mixed> $payload
+     * @param list<string> $expected
+     */
     private static function exactKeys(array $payload, array $expected): bool
     {
         $keys = array_keys($payload);
