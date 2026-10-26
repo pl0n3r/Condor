@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { StockCsvAdjust } from './StockCsvAdjust';
+import { RestockSuggestions } from './RestockSuggestions';
 import {
   inventoryAdjustmentPath,
   inventoryPath,
@@ -512,6 +513,12 @@ export function InventoryManagement({
           onCommitted={() => { void loadInventory(); }}
         />
       )}
+
+      <RestockSuggestions
+        key={'restock-' + branchId}
+        branchId={branchId}
+        permissions={permissions}
+      />
 
       {ready && (
         <>
