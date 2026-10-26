@@ -669,6 +669,17 @@ export function OrdersManagement({
                     Comprobante
                   </a>
                 )}
+                {canUpdate && order.order_status === 'open'
+                  && order.fulfillment_status === 'reserved' && (
+                  <div className="catalog-actions">
+                    <button type="button" className="button button-secondary" disabled={busy}
+                      onClick={() => void transition(orderCancelPath(branchId, order.id),
+                        'Pedido cancelado y reserva liberada.')}>Cancelar</button>
+                    <button type="button" className="button" disabled={busy}
+                      onClick={() => void transition(orderConsumePath(branchId, order.id),
+                        'Inventario consumido.')}>Consumir inventario</button>
+                  </div>
+                )}
               </div>
 
               <div className="catalog-variant-list">
