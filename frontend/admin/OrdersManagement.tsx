@@ -339,6 +339,28 @@ export function OrdersManagement({
   }
 
 
+  async function transition(path: string, success: string) {
+    if (busy) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await fetch(path, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-CSRF-Token': csrfToken },
+      });
+      if (!response.ok) throw new Error(await responseMessage(response, 'No fue posible actualizar el pedido.'));
+      setNotice({ kind: 'success', text: success });
+      await loadOrders();
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        text: error instanceof Error ? error.message : 'No fue posible actualizar el pedido.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
   if (!canView) {
     return (
       <section id="orders" className="catalog-panel">
