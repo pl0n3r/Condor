@@ -38,6 +38,12 @@ class UiCicloPedidoTests(unittest.TestCase):
         self.assertIn("cancelPath={orderCancelPath(branchId, order.id)}", LIST)
         self.assertIn("consumePath={orderConsumePath(branchId, order.id)}", LIST)
         self.assertIn("export function ordersPath(branchId: string)", API)
+        # Details load lazily to avoid a GET pair for every row in the list.
+        # Expand/collapse must retain an accessible relationship to the panel.
+        self.assertIn("aria-expanded={expandedOrderId === order.id}", LIST)
+        self.assertIn("aria-controls={'order-lifecycle-' + order.id}", LIST)
+        self.assertIn("expandedOrderId === order.id && (", LIST)
+        self.assertIn("id={'order-lifecycle-' + order.id}", UI)
 
         # Displayed statuses are independent; do not incorrectly equate delivery to stock.
         for dimension in ("order.order_status", "order.payment_status",
