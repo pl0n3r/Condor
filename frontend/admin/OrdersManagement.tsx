@@ -1,3 +1,4 @@
+import { OrderLifecyclePanel } from './OrderLifecyclePanel';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import {
   orderCancelPath,
@@ -156,6 +157,7 @@ export function OrdersManagement({
   const [page, setPage] = useState(1);
   const latestRequest = useRef(0);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sourceId, setSourceId] = useState('');
   const [priceListId, setPriceListId] = useState('');
@@ -220,6 +222,7 @@ export function OrdersManagement({
 
   useEffect(() => {
     pendingCreate.current = null;
+    setExpandedOrderId(null);
     setDraftFilters({ ...EMPTY_FILTERS });
     setFilters({ ...EMPTY_FILTERS });
     setPage(1);
@@ -335,41 +338,29 @@ export function OrdersManagement({
     }
   }
 
-  async function transition(
-    path: string,
-    success: string,
-  ) {
+
+  async function transition(path: string, success: string) {
+    if (busy) return;
     setBusy(true);
     setNotice(null);
     try {
       const response = await fetch(path, {
         method: 'POST',
         credentials: 'same-origin',
-        headers: {
-          Accept: 'application/json',
-          'X-CSRF-Token': csrfToken,
-        },
+        headers: { Accept: 'application/json', 'X-CSRF-Token': csrfToken },
       });
-      if (!response.ok) {
-        throw new Error(await responseMessage(
-          response,
-          'No fue posible actualizar el pedido.',
-        ));
-      }
+      if (!response.ok) throw new Error(await responseMessage(response, 'No fue posible actualizar el pedido.'));
       setNotice({ kind: 'success', text: success });
       await loadOrders();
     } catch (error) {
       setNotice({
         kind: 'error',
-        text: error instanceof Error
-          ? error.message
-          : 'No fue posible actualizar el pedido.',
+        text: error instanceof Error ? error.message : 'No fue posible actualizar el pedido.',
       });
     } finally {
       setBusy(false);
     }
   }
-
   if (!canView) {
     return (
       <section id="orders" className="catalog-panel">
@@ -678,32 +669,15 @@ export function OrdersManagement({
                     Comprobante
                   </a>
                 )}
-                {canUpdate
-                  && order.order_status === 'open'
+                {canUpdate && order.order_status === 'open'
                   && order.fulfillment_status === 'reserved' && (
                   <div className="catalog-actions">
-                    <button
-                      type="button"
-                      className="button button-secondary"
-                      disabled={busy}
-                      onClick={() => void transition(
-                        orderCancelPath(branchId, order.id),
-                        'Pedido cancelado y reserva liberada.',
-                      )}
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      className="button"
-                      disabled={busy}
-                      onClick={() => void transition(
-                        orderConsumePath(branchId, order.id),
-                        'Inventario consumido.',
-                      )}
-                    >
-                      Consumir inventario
-                    </button>
+                    <button type="button" className="button button-secondary" disabled={busy}
+                      onClick={() => void transition(orderCancelPath(branchId, order.id),
+                        'Pedido cancelado y reserva liberada.')}>Cancelar</button>
+                    <button type="button" className="button" disabled={busy}
+                      onClick={() => void transition(orderConsumePath(branchId, order.id),
+                        'Inventario consumido.')}>Consumir inventario</button>
                   </div>
                 )}
               </div>
@@ -738,6 +712,23 @@ export function OrdersManagement({
                   );
                 })}
               </div>
+              <button type="button" className="button button-secondary"
+                aria-expanded={expandedOrderId === order.id}
+                aria-controls={'order-lifecycle-' + order.id}
+                onClick={() => setExpandedOrderId((current) => current === order.id ? null : order.id)}>
+                {expandedOrderId === order.id ? 'Ocultar ciclo del pedido' : 'Ver ciclo del pedido'}
+              </button>
+              {expandedOrderId === order.id && (
+              <OrderLifecyclePanel
+                branchId={branchId}
+                order={order}
+                csrfToken={csrfToken}
+                canUpdate={canUpdate}
+                cancelPath={orderCancelPath(branchId, order.id)}
+                consumePath={orderConsumePath(branchId, order.id)}
+                onChanged={loadOrders}
+              />
+              )}
             </article>
           ))}
         </div>
