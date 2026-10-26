@@ -121,9 +121,12 @@ export function ServiceItemsPanel({ branchId, permissions, csrfToken }: Props) {
   const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
-    let current = true;
     setDraft(null);
     setNotice(null);
+  }, [branchId]);
+
+  useEffect(() => {
+    let current = true;
     if (!canView) return () => { current = false; };
     setState({ status: 'loading' });
     void (async () => {
@@ -344,7 +347,7 @@ export function ServiceItemsPanel({ branchId, permissions, csrfToken }: Props) {
                     {state.lists.map(list => <option value={list.id} key={list.id}>{list.name} ({list.currency})</option>)}
                   </select>
                 </label>
-                <label className="field"><span>Precio en COP (sin separador de miles)</span>
+                <label className="field"><span>Precio en la moneda de la lista (sin miles)</span>
                   <input required={draft.id === null || !!draft.priceListId} inputMode="decimal"
                     placeholder="25000,00" pattern="[0-9]+([,.][0-9]{1,2})?"
                     disabled={draft.id !== null && !canUpdatePrices}
