@@ -241,6 +241,8 @@ class ReportesUiAdminTests(unittest.TestCase):
         self.assertIn("key={'reports-downloads-' + context.data.active_branch.id}", source)
         self.assertIn("branchId={context.data.active_branch.id}", source)
         self.assertIn("permissions={context.data.permissions}", source)
+        bundle = (ROOT / "public/build/admin.js").read_text(encoding="utf-8")
+        self.assertIn("reports-downloads", bundle, "La vista CSV no está en el artefacto publicado")
 
 
 if __name__ == "__main__":
