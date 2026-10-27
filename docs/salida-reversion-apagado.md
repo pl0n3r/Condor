@@ -4,7 +4,7 @@
 
 ## Propósito, alcance y límites
 
-Definir quién decide y cómo responder ante un despliegue defectuoso, una migración incompatible, una caída general o una emergencia de **un tenant**. Distinguir **reversión de código** (cambiar el release activo), **forward-fix de esquema** (migración aditiva nueva), **restauración** (recuperación de datos desde respaldo autorizado) y **apagado** (cortar acceso/escrituras). Son operaciones distintas: restaurar un backup no es revertir un commit, y volver al PHP anterior **no** deshace automáticamente una migración.
+Definir quién decide y cómo responder ante un despliegue defectuoso, una migración incompatible, una caída general o una emergencia de **un tenant**. Distinguir **reversión de código** (cambiar el release activo), **forward-fix de esquema** (migración aditiva nueva), **restauración** (recuperación de datos desde respaldo autorizado) y **apagado** (cortar acceso/escrituras). Son operaciones distintas: restaurar un backup no es revertir un commit, y volver al PHP anterior no deshace automáticamente una migración.
 
 El adaptador existente `ops/factory/adapter.py` implementa `deploy` y `rollback` para releases versionados de Hostinger. El workflow `.github/workflows/deploy-factory.yml` está inactivo salvo habilitación explícita de `FACTORY_DEPLOY_ENABLED`; su presencia no acredita que el transport SSH, la ruta release ni el rollback estén configurados u operativos. La aplicación es multiempresa: esconder una vista de React **no** revoca sesiones ni impide escrituras al backend.
 
