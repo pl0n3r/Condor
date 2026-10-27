@@ -39,6 +39,8 @@ class EmpleadosUiAdminTests(unittest.TestCase):
         self.assertIn("csrfToken={accessToken}", APP)
         self.assertIn("Empleados y asistencia", BUNDLE)
         self.assertIn("Crear empleado", BUNDLE)
+        # The compiled entrypoint must actually carry the fail-closed HR API contract.
+        self.assertIn("/api/v1/hr/employees", BUNDLE)
 
     def test_validation_and_stale_responses_fail_closed(self):
         for fragment in (
