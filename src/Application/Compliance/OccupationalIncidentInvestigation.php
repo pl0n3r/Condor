@@ -28,11 +28,11 @@ final class OccupationalIncidentInvestigation
             self::exact($row, ['tenant_ref', 'incident_ref', 'kind', 'occurred_on', 'reported_on', 'summary_ref']);
             $scope = self::ref($row['tenant_ref'], 'tenant');
             $id = self::ref($row['incident_ref'], 'incident');
-            $summary = self::ref($row['summary_ref'], 'summary');
+            self::ref($row['summary_ref'], 'summary');
             $occurred = self::date($row['occurred_on']);
             $reported = self::date($row['reported_on']);
             if (!in_array($row['kind'], ['INCIDENT', 'ACCIDENT', 'NEAR_MISS'], true)
-                || $reported < $occurred || $reported > $reference || $summary === '') {
+                || $reported < $occurred || $reported > $reference) {
                 self::reject();
             }
             if ($scope !== $tenant) {
@@ -134,7 +134,10 @@ final class OccupationalIncidentInvestigation
         return $value;
     }
 
-    /** @param array<array-key,mixed> $value @param list<string> $keys */
+    /**
+     * @param array<array-key,mixed> $value
+     * @param list<string> $keys
+     */
     private static function exact(array $value, array $keys): void
     {
         if (count($value) !== count($keys)) {

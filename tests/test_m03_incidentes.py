@@ -138,12 +138,14 @@ class OccupationalIncidentInvestigationTests(unittest.TestCase):
         self.assertEqual(missing['actions'], [])
 
     def test_falla_cerrado_ante_plazos_o_referencias_ambiguos(self):
-        for change in ('date', 'duplicate', 'unknown', 'action', 'badlist'):
+        for change in ('date', 'duplicate', 'duplicate_incident', 'unknown', 'action', 'badlist'):
             data = fixture()
             if change == 'date':
                 data['investigations'][0]['due_on'] = '2026-02-30'
             elif change == 'duplicate':
                 data['investigations'].append(copy.deepcopy(data['investigations'][0]))
+            elif change == 'duplicate_incident':
+                data['incidents'].append(copy.deepcopy(data['incidents'][0]))
             elif change == 'unknown':
                 data['investigations'][0]['incident_ref'] = 'fixture:incident/noexiste'
             elif change == 'action':
