@@ -146,7 +146,10 @@ final class PayrollSurchargesBenefits
         return is_array($value) && array_is_list($value) && count($value) <= self::MAX_ITEMS;
     }
 
-    /** @param array<array-key,mixed> $value @param list<string> $expected */
+    /**
+     * @param array<array-key,mixed> $value
+     * @param list<string> $expected
+     */
     private static function keys(array $value, array $expected): bool
     {
         if (count($value) !== count($expected)) {
