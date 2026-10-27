@@ -21,7 +21,10 @@ final readonly class ManualSubscriptionOperations
     ) {
     }
 
-    /** @param array<string,mixed> $command @return array<string,mixed> */
+    /**
+     * @param array<string,mixed> $command
+     * @return array<string,mixed>
+     */
     public function adjust(string $tenantId, string $ownerId, array $command): array
     {
         if (!self::fixture($tenantId, 72) || preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/D', $ownerId) !== 1) {
@@ -65,7 +68,7 @@ final readonly class ManualSubscriptionOperations
         $connection = $this->entityManager->getConnection();
 
         return $connection->transactional(function () use (
-            $connection, $tenantId, $ownerId, $eventKey, $fingerprint,
+            $connection, $tenantId, $ownerId, $eventKey,
             $auditReason, $planVersion, $ids, $renewal,
         ): array {
             // Serialize all manual adjustments per tenant, including replays.
@@ -76,12 +79,12 @@ final readonly class ManualSubscriptionOperations
             $changes = $this->entityManager->getRepository(SubscriptionChangeRecord::class)
                 ->findBy(['tenantId' => $tenantId]);
             foreach ($changes as $change) {
-                if (!$change instanceof SubscriptionChangeRecord || $change->tenantId() !== $tenantId) {
+                if ($change->tenantId() !== $tenantId) {
                     throw new DomainException('Auditoría comercial incompatible con la empresa.');
                 }
                 $audit = $change->audit();
                 $stored = $audit['reason'] ?? '';
-                if (!is_string($stored) || !str_contains($stored, '|'.$eventKey.'|sha256:')) {
+                if (!str_contains($stored, '|'.$eventKey.'|sha256:')) {
                     continue;
                 }
                 if ($stored !== $auditReason || ($audit['requested_by'] ?? null) !== $ownerId) {
