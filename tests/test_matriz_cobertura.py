@@ -50,14 +50,14 @@ class MatrizCoberturaTests(unittest.TestCase):
                     row = next(r for r in self.rows if r["id"] == key)
                     self.assertIn(submodule, row["requirement"])
         # Comprobar también la granularidad de subapartados, límites, flujos y AC.
-        specs_sections = re.findall(r"(?m)^#### ([^\\n]+)$", spec)
-        self.assertGreaterEqual(len([id for id in self.ids if re.match(r"D-\\d{3}-S\\d{2}$", id)]), len(specs_sections))
-        enterprise_limits = re.search(r"## Límites no negociables([\\s\\S]*?)## Catálogo de módulos", enterprise).group(1)
+        specs_sections = re.findall(r"(?m)^#### ([^\n]+)$", spec)
+        self.assertGreaterEqual(len([id for id in self.ids if re.match(r"D-\d{3}-S\d{2}$", id)]), len(specs_sections))
+        enterprise_limits = re.search(r"## Límites no negociables([\s\S]*?)## Catálogo de módulos", enterprise).group(1)
         for n, _ in enumerate(re.findall(r"(?m)^- ", enterprise_limits), 1):
             self.assertIn(f"GEST-LIM-{n:02d}", self.ids)
         for n in range(1, 6):
             self.assertIn(f"GEST-FLUJO-{n}", self.ids)
-        enterprise_acceptance = re.search(r"## Criterios de aceptación transversales([\\s\\S]*?)## Trazabilidad", enterprise).group(1)
+        enterprise_acceptance = re.search(r"## Criterios de aceptación transversales([\s\S]*?)## Trazabilidad", enterprise).group(1)
         for n, _ in enumerate(re.findall(r"(?m)^- ", enterprise_acceptance), 1):
             self.assertIn(f"GEST-AC-{n:02d}", self.ids)
         for phase in range(7):
