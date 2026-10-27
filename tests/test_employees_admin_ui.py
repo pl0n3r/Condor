@@ -83,6 +83,11 @@ class EmpleadosUiAdminTests(unittest.TestCase):
         self.assertIn("if (createdEmployee !== null)", PANEL)
         self.assertIn("!s.employees.some(e => e.id === createdEmployee?.id)", PANEL)
         self.assertIn("Empleado creado; no se pudo confirmar el vínculo opcional.", PANEL)
+        self.assertIn("let createReceiptReceived = false;", PANEL)
+        self.assertIn("createReceiptReceived = true;", PANEL)
+        self.assertIn("El servidor respondió 201, pero no se pudo verificar el empleado.", PANEL)
+        self.assertIn("El servidor respondió 201, pero no se pudo leer el recibo.", PANEL)
+        self.assertIn("else if (createReceiptReceived)", PANEL)
 
 
     def test_branch_switch_and_invalid_link_preserve_ui(self):
