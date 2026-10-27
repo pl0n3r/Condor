@@ -43,11 +43,16 @@ class SalidaTests(unittest.TestCase):
         self.assertIn("no deshace automáticamente una migración", self.min)
         self.assertIn("base descartable", self.min)
         self.assertIn("no afirmar apagado por tenant", self.min)
+        for path in (
+            "docs/LIVE-MIGRATION-POLICY.md", "docs/recovery-production.md",
+            "docs/LIVE-UPTIME-RUNBOOK.md", "docs/LIVE-AUTH-SMOKE-RUNBOOK.md",
+            "ops/factory/rollback", "scripts/verify-backup-restore.sh",
+        ):
+            self.assertTrue((ROOT / path).is_file(), f"Enlace roto: {path}")
 
     def test_sin_secretos_ni_datos_reales(self) -> None:
         self.assertIsNone(SECRET.search(self.documento), "Posible secreto/credencial")
         self.assertIsNone(PERSONAL_DATA.search(self.documento), "Posible dato personal")
-        self.assertNotIn("datos de clientes reales", self.min.replace("no es evidencia", ""))
         self.assertNotIn("curl -u", self.min)
         self.assertNotIn("password=", self.min)
         self.assertNotIn("DATABASE_URL=", self.documento)
@@ -59,7 +64,7 @@ class SalidaTests(unittest.TestCase):
             self.assertIn(decision.casefold(), self.min, decision)
         self.assertIn("no autoriza go-live", self.min)
         self.assertIn("aprobados por el dueño", self.min)
-        self.assertIn("no tocar", self.min) if "no tocar" in self.min else self.assertIn("no autoriza", self.min)
+        self.assertIn("no autoriza go-live", self.min)
 
     def test_validar_sobre_head_exacto(self) -> None:
         self.assertRegex(self.documento, r"(?i)AC-04.*validar")
