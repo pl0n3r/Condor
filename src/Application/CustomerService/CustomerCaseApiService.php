@@ -136,15 +136,8 @@ final class CustomerCaseApiService
      */
     private static function exactKeys(array $data, array $keys): bool
     {
-        if (count($data) !== count($keys)) {
-            return false;
-        }
-        foreach ($keys as $key) {
-            if (!array_key_exists($key, $data)) {
-                return false;
-            }
-        }
-        return true;
+        return count($data) === count($keys)
+            && array_diff_key(array_flip($keys), $data) === [];
     }
 
     private static function validRecord(mixed $record): bool
