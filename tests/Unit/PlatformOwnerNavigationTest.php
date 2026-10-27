@@ -28,6 +28,10 @@ final class PlatformOwnerNavigationTest extends WebTestCase
             $client->loginUser($other);
             $client->request('GET', $route);
             self::assertResponseStatusCodeSame(403);
+            self::assertStringNotContainsString(
+                'data-section="'.$section.'"',
+                (string) $client->getResponse()->getContent(),
+            );
 
             $client->loginUser($owner);
             $client->request('GET', $route);
@@ -36,6 +40,10 @@ final class PlatformOwnerNavigationTest extends WebTestCase
                 'data-section="'.$section.'"',
                 (string) $client->getResponse()->getContent(),
             );
+
+            // Las secciones de navegación son GET-only: no crean APIs mutantes.
+            $client->request('POST', $route);
+            self::assertResponseStatusCodeSame(405);
         }
     }
 
