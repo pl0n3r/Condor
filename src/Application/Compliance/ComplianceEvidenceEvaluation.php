@@ -159,24 +159,39 @@ final class ComplianceEvidenceEvaluation
 
     private static function fixture(mixed $value, string $type): bool
     {
-        return is_string($value)
-            && preg_match('~^fixture:' . $type . '/[a-z0-9][a-z0-9_-]{0,47}$~D', $value) === 1;
+        if (!is_string($value)) {
+            return false;
+        }
+        $prefix = 'fixture:' . $type . '/';
+        if (!str_starts_with($value, $prefix)) {
+            return false;
+        }
+        $reference = substr($value, strlen($prefix));
+        return strlen($reference) <= 48
+            && preg_match('/^[a-z0-9][a-z0-9_-]*$/D', $reference) === 1;
     }
 
     private static function date(mixed $value): ?\DateTimeImmutable
     {
-        if (!is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) !== 1) {
+        if (!is_string($value)
+            || preg_match('/^(\d{4})-(\d{2})-(\d{2})$/D', $value, $parts) !== 1
+            || !checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])
+        ) {
             return null;
         }
-        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value, new \DateTimeZone('UTC'));
-        return $date instanceof \DateTimeImmutable && $date->format('Y-m-d') === $value
-            ? $date : null;
+        return new \DateTimeImmutable($value, new \DateTimeZone('UTC'));
     }
 
-    /** @param array<array-key,mixed> $payload @param list<string> $expected */
+    /**
+     * @param array<array-key,mixed> $payload
+     * @param list<string> $expected
+     */
     private static function exactKeys(array $payload, array $expected): bool
     {
-        return count($payload) === count($expected)
-            && array_diff(array_keys($payload), $expected) === [];
+        $actual = array_keys($payload);
+        sort($actual);
+        $expectedKeys = $expected;
+        sort($expectedKeys);
+        return $actual === $expectedKeys;
     }
 }
