@@ -102,6 +102,12 @@ final class FinanceReconciliationBudget
         $movements = [];
         $unmatchedCount = 0;
         $ordered = $payload['bank_movements'];
+        // Malformed list members must fail closed before PHP's typed comparator runs.
+        foreach ($ordered as $candidate) {
+            if (!is_array($candidate)) {
+                return self::rejected();
+            }
+        }
         usort($ordered, static fn (array $a, array $b): int =>
             strcmp((string) ($a['movement_ref'] ?? ''), (string) ($b['movement_ref'] ?? '')));
         foreach ($ordered as $record) {

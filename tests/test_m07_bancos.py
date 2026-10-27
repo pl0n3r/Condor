@@ -126,6 +126,7 @@ class FinanceReconciliationBudgetTests(unittest.TestCase):
             fixture(periods=[period(starts_on="2026-02-30")]),
             fixture(bank_movements=[movement(movement_ref="fixture:finance-movement/2345678901")]),
             fixture(ledger_entries=[entry(), entry()]),
+            fixture(bank_movements=[None, movement()]),
         ):
             with self.subTest(bad=bad):
                 result = project(bad)
