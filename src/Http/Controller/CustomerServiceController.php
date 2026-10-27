@@ -67,8 +67,8 @@ final class CustomerServiceController extends AbstractController
         $result = $this->domain(fn (): array => CustomerCaseApiService::createRecord(
             $this->store($request), $this->scope($tenant->id(), $branch->id()), $payload,
         ));
-        $request->getSession()->set('condor_customer_service_synthetic', $result['store']);
         $this->recordAudit($tenant, $user, 'customer_service.synthetic.created', $result['record']['case_ref']);
+        $request->getSession()->set('condor_customer_service_synthetic', $result['store']);
         return $this->json(['case' => $result['record']], Response::HTTP_CREATED);
     }
 
@@ -84,8 +84,8 @@ final class CustomerServiceController extends AbstractController
             $this->store($request), $this->scope($tenant->id(), $branch->id()), $ref,
             is_string($payload['state'] ?? null) ? $payload['state'] : '',
         ));
-        $request->getSession()->set('condor_customer_service_synthetic', $result['store']);
         $this->recordAudit($tenant, $user, 'customer_service.synthetic.state_changed', $ref);
+        $request->getSession()->set('condor_customer_service_synthetic', $result['store']);
         return $this->json(['case' => $result['record']]);
     }
 
