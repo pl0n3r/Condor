@@ -11,6 +11,7 @@ import { CmsManagement } from './CmsManagement';
 import { OrdersManagement } from './OrdersManagement';
 import { SalesReportPanel } from './SalesReportPanel';
 import { ReportsDownloads } from './ReportsDownloads';
+import { EmployeesManagement } from './EmployeesManagement';
 import { ProductionManagement } from './ProductionManagement';
 import { PurchasingManagement } from './PurchasingManagement';
 import { AdminShell } from './AdminShell';
@@ -159,6 +160,7 @@ export function AdminApp({
         { href: '/admin#sales-reports', label: 'Reportes de ventas' },
         { href: '/admin#reports-downloads', label: 'Descargas CSV' },
         { href: '/admin#roles', label: 'Roles y permisos' },
+        { href: '/admin#employees-management', label: 'Empleados y asistencia' },
       ]}
     >
       <span className="eyebrow">Administrador</span>
@@ -371,6 +373,12 @@ export function AdminApp({
             key={'access-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
+            csrfToken={accessToken}
+          />
+
+          <EmployeesManagement
+            key={'employees-' + context.data.active_branch.id}
+            branchId={context.data.active_branch.id}
             csrfToken={accessToken}
           />
             </>
