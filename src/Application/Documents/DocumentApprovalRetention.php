@@ -131,29 +131,31 @@ final class DocumentApprovalRetention
      */
     private static function keys(array $data, array $expected): bool
     {
-        $actual = array_keys($data);
-        sort($actual);
-        sort($expected);
-        return $actual === $expected;
+        return count($data) === count($expected)
+            && array_diff(array_keys($data), $expected) === [];
     }
 
     private static function tenant(mixed $value): bool
     {
-        return is_string($value) && preg_match('/^tenant-(?:test-)?[a-z][a-z0-9-]{0,31}$/D', $value) === 1;
+        if (!is_string($value)) {
+            return false;
+        }
+        return preg_match('/^tenant-(test-)?[a-z][a-z0-9-]{0,31}$/D', $value) === 1;
     }
 
     private static function ref(mixed $value, string $kind): bool
     {
-        return is_string($value)
-            && preg_match('~^fixture:' . preg_quote($kind, '~') . '/[a-z][a-z0-9_-]{0,47}$~D', $value) === 1;
+        if (!is_string($value)) {
+            return false;
+        }
+        $regex = sprintf('~^fixture:%s/[a-z][a-z0-9_-]{0,47}$~D', preg_quote($kind, '~'));
+        return preg_match($regex, $value) === 1;
     }
 
     private static function date(mixed $value): bool
     {
-        if (!is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) !== 1) {
-            return false;
-        }
-        [$year, $month, $day] = array_map('intval', explode('-', $value));
-        return checkdate($month, $day, $year);
+        return is_string($value)
+            && preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) === 1
+            && checkdate((int) substr($value, 5, 2), (int) substr($value, 8, 2), (int) substr($value, 0, 4));
     }
 }
