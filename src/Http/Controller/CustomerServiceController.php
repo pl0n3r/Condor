@@ -5,15 +5,12 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\CustomerService\CustomerCaseApiService;
-use App\Application\Identity\BranchAuthorization;
-use App\Application\Identity\CurrentTenantForUser;
+use App\Application\Identity\{BranchAuthorization, CurrentTenantForUser};
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\{JsonResponse, Request, Response};
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
