@@ -110,6 +110,7 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
     writer.current = controller;
     setSaving(true); setNotice('');
     let createdEmployee: Employee | null = null;
+    let createReceiptReceived = false;
     try {
       const response = await fetch(endpoint, { method: 'POST', credentials: 'same-origin',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
@@ -121,9 +122,12 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
           : response.status === 503 ? 'RR. HH. no está habilitado.'
             : 'El servidor rechazó la creación.'); return;
       }
+      createReceiptReceived = true;
       const payload: unknown = await response.json();
+      if (current !== sequence.current || controller.signal.aborted) return;
       if (!object(payload) || !validEmployee(payload.employee)) {
-        setNotice('No se pudo verificar el empleado.'); return;
+        setCode('');
+        setNotice('El servidor respondió 201, pero no se pudo verificar el empleado. Recarga la lista antes de reintentar.'); return;
       }
       let employee = payload.employee;
       createdEmployee = employee;
@@ -135,13 +139,16 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
         });
         if (current !== sequence.current || controller.signal.aborted) return;
         if (!link.ok) {
+          setCode('');
           setState(s => s.status === 'ready' ? { ...s, employees: [...s.employees, employee] } : s);
           setNotice('Empleado creado; no se confirmó el vínculo.'); return;
         }
         const linked: unknown = await link.json();
+        if (current !== sequence.current || controller.signal.aborted) return;
         if (!object(linked) || !validEmployee(linked.employee)
           || linked.employee.id !== employee.id || !linked.employee.linked) {
           // The create receipt was valid even if linking returned an invalid receipt.
+          setCode('');
           setState(s => s.status === 'ready' ? { ...s, employees: [...s.employees, employee] } : s);
           setNotice('Empleado creado; vínculo de usuario no verificable.'); return;
         }
@@ -154,9 +161,13 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
       if (current === sequence.current && !controller.signal.aborted) {
         if (createdEmployee !== null) {
           // The create receipt is confirmed; the optional link may have lost its response.
+          setCode('');
           setState(s => s.status === 'ready' && !s.employees.some(e => e.id === createdEmployee?.id)
             ? { ...s, employees: [...s.employees, createdEmployee as Employee] } : s);
           setNotice('Empleado creado; no se pudo confirmar el vínculo opcional.');
+        } else if (createReceiptReceived) {
+          setCode('');
+          setNotice('El servidor respondió 201, pero no se pudo leer el recibo. Recarga la lista antes de reintentar.');
         } else {
           setNotice('No se completó la operación.');
         }
