@@ -126,9 +126,14 @@ final class RiskRegisterControls
         }
         foreach ($rows as $row) {
             $category = $row['category'];
-            $summary[$category]['count']++;
-            $summary[$category]['inherent_total'] += $row['inherent_score'];
-            $summary[$category]['residual_total'] += $row['residual_score'];
+            $previous = $summary[$category] ?? [
+                'count' => 0, 'inherent_total' => 0, 'residual_total' => 0,
+            ];
+            $summary[$category] = [
+                'count' => $previous['count'] + 1,
+                'inherent_total' => $previous['inherent_total'] + $row['inherent_score'],
+                'residual_total' => $previous['residual_total'] + $row['residual_score'],
+            ];
         }
         return $summary;
     }
