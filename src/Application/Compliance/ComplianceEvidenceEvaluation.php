@@ -162,20 +162,28 @@ final class ComplianceEvidenceEvaluation
         if (!is_string($value)) {
             return false;
         }
-        $prefix = 'fixture:' . $type . '/';
-        if (!str_starts_with($value, $prefix)) {
+        $parts = explode('/', $value, 2);
+        if (count($parts) !== 2 || $parts[0] !== 'fixture:' . $type) {
             return false;
         }
-        $reference = substr($value, strlen($prefix));
-        return strlen($reference) <= 48
-            && preg_match('/^[a-z0-9][a-z0-9_-]*$/D', $reference) === 1;
+        $identifier = $parts[1];
+        return preg_match('/\A[a-z0-9][a-z0-9_-]{0,47}\z/', $identifier) === 1;
     }
 
     private static function date(mixed $value): ?\DateTimeImmutable
     {
-        if (!is_string($value)
-            || preg_match('/^(\d{4})-(\d{2})-(\d{2})$/D', $value, $parts) !== 1
-            || !checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])
+        if (!is_string($value) || strlen($value) !== 10) {
+            return null;
+        }
+        $fragments = explode('-', $value);
+        if (count($fragments) !== 3
+            || strlen($fragments[0]) !== 4
+            || strlen($fragments[1]) !== 2
+            || strlen($fragments[2]) !== 2
+            || !ctype_digit($fragments[0])
+            || !ctype_digit($fragments[1])
+            || !ctype_digit($fragments[2])
+            || !checkdate((int) $fragments[1], (int) $fragments[2], (int) $fragments[0])
         ) {
             return null;
         }
@@ -188,10 +196,14 @@ final class ComplianceEvidenceEvaluation
      */
     private static function exactKeys(array $payload, array $expected): bool
     {
-        $actual = array_keys($payload);
-        sort($actual);
-        $expectedKeys = $expected;
-        sort($expectedKeys);
-        return $actual === $expectedKeys;
+        if (count($payload) !== count($expected)) {
+            return false;
+        }
+        foreach ($expected as $key) {
+            if (!array_key_exists($key, $payload)) {
+                return false;
+            }
+        }
+        return true;
     }
 }
