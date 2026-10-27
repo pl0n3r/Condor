@@ -105,7 +105,8 @@ final class GovernanceController extends AbstractController
 
     private function syntheticOnly(): void
     {
-        $environment = (string) $this->getParameter('kernel.environment');
+        $rawEnvironment = $this->getParameter('kernel.environment');
+        $environment = is_string($rawEnvironment) ? $rawEnvironment : '';
         if ($environment !== 'test'
             && ($environment !== 'dev' || getenv('CONDOR_GOVERNANCE_SYNTHETIC_API') !== '1')
         ) {
