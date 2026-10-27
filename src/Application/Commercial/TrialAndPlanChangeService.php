@@ -10,7 +10,10 @@ namespace App\Application\Commercial;
  */
 final class TrialAndPlanChangeService
 {
-    /** @param array<string,mixed> $input @return array<string,mixed> */
+    /**
+     * @param array<string,mixed> $input
+     * @return array<string,mixed>
+     */
     public static function evaluate(array $input): array
     {
         $denied = [
@@ -78,6 +81,11 @@ final class TrialAndPlanChangeService
             || $quote['amount_minor'] > 1000000000
             || $quote['quote_required'] !== false
             || !is_bool($subscription['usage_compatible'])
+            || ($subscription['renews_on'] !== null && (
+                !is_string($subscription['renews_on'])
+                || !preg_match('/^\d{4}-\d{2}-\d{2}$/D', $subscription['renews_on'])
+                || !self::calendarDate($subscription['renews_on'])
+            ))
             || !in_array($subscription['state'], [
                 'not_configured', 'trialing', 'active',
             ], true)
@@ -152,7 +160,10 @@ final class TrialAndPlanChangeService
         ];
     }
 
-    /** @param array<string,mixed> $value @param list<string> $allowed */
+    /**
+     * @param array<string,mixed> $value
+     * @param list<string> $allowed
+     */
     private static function keys(array $value, array $allowed): bool
     {
         $actual = array_keys($value);
