@@ -72,7 +72,22 @@ function moneyValue(value: unknown): value is Money {
 }
 
 function rows(value: unknown, max: number, valid: (item: unknown) => boolean): boolean {
-  return Array.isArray(value) && value.length <= max && value.every(valid);
+  if (!Array.isArray(value) || value.length > max) return false;
+  const seen = new Set<string>();
+  return value.every((item: unknown) => {
+    if (!valid(item) || !record(item) || !safeKey(item.key) || seen.has(item.key)) {
+      return false;
+    }
+    seen.add(item.key);
+    return true;
+  });
+}
+
+function validRenewal(value: unknown): boolean {
+  if (value === null) return true;
+  if (typeof value !== 'string' || !SYNTHETIC_RENEWAL.test(value)) return false;
+  const date = new Date(value + 'T00:00:00Z');
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 /**
@@ -103,9 +118,7 @@ export function validSubscriptionSnapshot(
       || !record(value.permissions)
       || !exactKeys(value.permissions, ['can_request_plan_change'])
       || typeof value.permissions.can_request_plan_change !== 'boolean'
-      || !(value.renewal_at === null
-        || (typeof value.renewal_at === 'string'
-          && SYNTHETIC_RENEWAL.test(value.renewal_at)))) {
+      || !validRenewal(value.renewal_at)) {
     return false;
   }
 
@@ -157,7 +170,7 @@ export function SubscriptionPortal({ tenantId, csrfToken, api }: Props) {
   const [submission, setSubmission] = useState<Submission>({ status: 'idle' });
   const [selectedPlan, setSelectedPlan] = useState('');
   const [reload, setReload] = useState(0);
-  const inFlight = useRef(false);
+  const inFlight = useRef<string | null>(null);
   const currentTenant = useRef(tenantId);
   currentTenant.current = tenantId;
 
@@ -166,7 +179,7 @@ export function SubscriptionPortal({ tenantId, csrfToken, api }: Props) {
     setState({ status: 'loading' });
     setSelectedPlan('');
     setSubmission({ status: 'idle' });
-    inFlight.current = false;
+    inFlight.current = null;
 
     if (!TENANT_ID.test(tenantId)) {
       setState({ status: 'error' });
@@ -193,13 +206,15 @@ export function SubscriptionPortal({ tenantId, csrfToken, api }: Props) {
     return () => controller.abort();
   }, [api, tenantId, reload]);
 
-  const snapshot = state.status === 'ready' ? state.snapshot : null;
+  // An obsolete tenant response must never render even for a single React frame.
+  const snapshot = state.status === 'ready' && state.snapshot.tenant_id === tenantId
+    ? state.snapshot : null;
   const canRequest = snapshot?.permissions.can_request_plan_change === true;
   const available = snapshot?.allowed_plan_changes ?? [];
 
   async function requestChange(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (inFlight.current || state.status !== 'ready'
+    if (inFlight.current !== null || snapshot === null
         || !canRequest || !csrfToken
         || currentTenant.current !== tenantId
         || !available.some((option) => option.key === selectedPlan)) {
@@ -207,10 +222,10 @@ export function SubscriptionPortal({ tenantId, csrfToken, api }: Props) {
       return;
     }
 
-    inFlight.current = true;
-    setSubmission({ status: 'sending' });
     const requestedTenant = tenantId;
     const requestedPlan = selectedPlan;
+    inFlight.current = requestedTenant;
+    setSubmission({ status: 'sending' });
     const controller = new AbortController();
     try {
       // Solo se solicita el cambio. El servidor valida permisos, datos y audita.
@@ -234,7 +249,7 @@ export function SubscriptionPortal({ tenantId, csrfToken, api }: Props) {
           : 'No se pudo verificar la solicitud. Estado: UNKNOWN.',
       });
     } finally {
-      inFlight.current = false;
+      if (inFlight.current === requestedTenant) inFlight.current = null;
     }
   }
 
