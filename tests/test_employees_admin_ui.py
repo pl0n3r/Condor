@@ -58,6 +58,18 @@ class EmpleadosUiAdminTests(unittest.TestCase):
         self.assertNotIn("EmployeesManagement", app)
         self.assertIn("Persistencia de empleados no habilitada.", API)
 
+    def test_mutation_dedup_and_lost_link_receipt(self):
+        """A confirmed create is not lost when the optional link rejects or sends invalid JSON."""
+        self.assertIn("writer.current !== null", PANEL)
+        self.assertIn("writer.current = null;", PANEL)
+        self.assertIn("if (writer.current === controller) writer.current = null;", PANEL)
+        self.assertIn("let createdEmployee: Employee | null = null;", PANEL)
+        self.assertIn("createdEmployee = employee;", PANEL)
+        self.assertIn("if (createdEmployee !== null)", PANEL)
+        self.assertIn("!s.employees.some(e => e.id === createdEmployee?.id)", PANEL)
+        self.assertIn("Empleado creado; no se pudo confirmar el vínculo opcional.", PANEL)
+
+
     def test_branch_switch_and_invalid_link_preserve_ui(self):
         """Aborted operations release the form and invalid linking keeps the created row."""
         self.assertIn("setSaving(false); setCode(''); setUserId(''); setNotice('');", PANEL)
