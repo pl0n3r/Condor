@@ -120,6 +120,13 @@ class SgsstAttentionPreviewTests(unittest.TestCase):
             {"plan": followup(actions=[action(legal_entity_ref="fixture:legal-entity/demo-b")])},
             {"plan": followup(actions=[action(checklist_ref="fixture:sgsst-checklist/other")])},
             {"plan": followup(checklist_ref="fixture:sgsst-checklist/other")},
+            # Internally consistent but linked to a DIFFERENT valid checklist:
+            # both F3b and F3c independently accept these without the F3d link guard.
+            {"plan": followup(
+                checklist_ref="fixture:sgsst-checklist/other",
+                actions=[action(checklist_ref="fixture:sgsst-checklist/other")],
+            )},
+            {"checklist": evidence(fixture_ref="fixture:sgsst-checklist/other")},
             {"checklist": evidence(evidence=[])},
             {"plan": followup(actions=[])},
             {"checklist": evidence(evidence=[

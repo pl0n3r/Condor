@@ -42,6 +42,9 @@ final class OccupationalSafetyAttentionPreview
         // rendered as an accepted or completed attention item.
         if ($evidence['structurally_reviewable'] !== true
             || $actions['structurally_reviewable'] !== true
+            // F3b/F3c validate their own payloads, not their cross-object link.
+            || !isset($checklist['fixture_ref'], $followUp['checklist_ref'])
+            || $checklist['fixture_ref'] !== $followUp['checklist_ref']
             || $evidence['evidence_count'] < 1
             || $actions['action_count'] < 1
             || !in_array($evidence['state'], ['PENDIENTE', 'REQUIERE_REVISION'], true)
