@@ -12,7 +12,10 @@ final class OrganizationStructureProjection
 {
     private const MAX_ROWS = 100;
 
-    /** @param array<string,mixed> $data @return array<string,mixed> */
+    /**
+     * @param array<string,mixed> $data
+     * @return array<string,mixed>
+     */
     public static function project(array $data): array
     {
         $invalid = self::empty();
@@ -26,7 +29,7 @@ final class OrganizationStructureProjection
         $tenant = $data['tenant_ref'];
         $company = $data['company_ref'];
         $lookup = [];
-        $collections = [];
+        $collections = ['areas' => [], 'sites' => [], 'positions' => []];
         foreach (['areas', 'sites', 'positions'] as $group) {
             $rows = $data[$group];
             if (!is_array($rows) || !array_is_list($rows) || count($rows) > self::MAX_ROWS) {
@@ -168,7 +171,10 @@ final class OrganizationStructureProjection
         return checkdate($month, $day, $year);
     }
 
-    /** @param array<string,mixed> $row @param list<string> $schema */
+    /**
+     * @param array<string,mixed> $row
+     * @param list<string> $schema
+     */
     private static function keys(array $row, array $schema): bool
     {
         $keys = array_keys($row);
