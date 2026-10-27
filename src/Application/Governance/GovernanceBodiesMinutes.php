@@ -114,10 +114,10 @@ final class GovernanceBodiesMinutes
                 'state' => 'REQUIERE_REVISION',
             ];
         }
-        foreach ([&$bodies, &$minutes, &$powers] as &$collection) {
-            usort($collection, static fn (array $a, array $b): int => strcmp($a['ref'], $b['ref']));
-        }
-        unset($collection);
+        $byFixtureRef = static fn (array $a, array $b): int => strcmp($a['ref'], $b['ref']);
+        usort($bodies, $byFixtureRef);
+        usort($minutes, $byFixtureRef);
+        usort($powers, $byFixtureRef);
 
         return [
             'valid' => true,
