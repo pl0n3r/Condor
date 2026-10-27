@@ -106,7 +106,8 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
       setNotice('Comprueba el código, usuario opcional y permisos.'); return;
     }
     const current = sequence.current, controller = new AbortController();
-    writer.current?.abort(); writer.current = controller;
+    // The early guard rejects concurrent writes; the writer is known to be empty.
+    writer.current = controller;
     setSaving(true); setNotice('');
     let createdEmployee: Employee | null = null;
     try {
