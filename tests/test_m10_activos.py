@@ -36,12 +36,12 @@ use App\Application\Assets\AssetRegisterLifecycle;
 $input = json_decode($argv[2], true, 32, JSON_THROW_ON_ERROR);
 echo json_encode(AssetRegisterLifecycle::project($input), JSON_THROW_ON_ERROR);
 """
-    result = subprocess.run(
+    raw = subprocess.check_output(
         ["php", "-n", "-d", "allow_url_fopen=0", "-r", script,
-         str(CLASS), json.dumps(data)],
-        cwd=ROOT, capture_output=True, text=True, check=True, timeout=20,
+         str(CLASS), json.dumps(data, separators=(",", ":"))],
+        cwd=ROOT, stderr=subprocess.PIPE, text=True, timeout=20,
     )
-    return json.loads(result.stdout)
+    return json.loads(raw)
 
 
 class AssetRegisterLifecycleTests(unittest.TestCase):
