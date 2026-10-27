@@ -130,7 +130,10 @@ final class CustomerCaseApiService
         }
     }
 
-    /** @param array<array-key,mixed> $data @param list<string> $keys */
+    /**
+     * @param array<array-key,mixed> $data
+     * @param list<string> $keys
+     */
     private static function exactKeys(array $data, array $keys): bool
     {
         if (count($data) !== count($keys)) {
