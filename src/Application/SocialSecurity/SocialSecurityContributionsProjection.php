@@ -11,7 +11,10 @@ final class SocialSecurityContributionsProjection
 {
     private const MAX_ROWS = 100;
 
-    /** @param array<string,mixed> $input @return array<string,mixed> */
+    /**
+     * @param array<string,mixed> $input
+     * @return array<string,mixed>
+     */
     public static function project(array $input): array
     {
         self::keys($input, ['tenant_ref', 'policy', 'affiliations', 'novelties']);
@@ -97,7 +100,10 @@ final class SocialSecurityContributionsProjection
         ];
     }
 
-    /** @param array<string,mixed> $data @param list<string> $required */
+    /**
+     * @param array<string,mixed> $data
+     * @param list<string> $required
+     */
     private static function keys(array $data, array $required): void
     {
         $keys = array_keys($data);
