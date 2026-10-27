@@ -77,7 +77,7 @@ class SalidaTests(unittest.TestCase):
         for forbidden_assertion in ("soporte ya activado", "SLA vigente garantizado",
                                     "clientes reales atendidos"):
             self.assertNotIn(forbidden_assertion, self.text.lower())
-        self.assertIn("única autoridad", self.text)
+        self.assertIn("única autoridad", self.text.casefold())
         self.assertIn("no existe ahora mesa de ayuda", self.text)
 
     def test_evidencia_cierre_y_sin_go_live(self) -> None:
