@@ -30,12 +30,16 @@ final class CustomerCaseApiService
             if (!self::validRecord($record)) {
                 throw new DomainException('Caso sintético inválido.');
             }
-            $ref = $record['case_ref'];
+            $ref = (string) $record['case_ref'];
             if (isset($seen[$ref])) {
                 throw new DomainException('Referencia sintética duplicada.');
             }
             $seen[$ref] = true;
-            $out[] = $record;
+            $out[] = [
+                'case_ref' => $ref,
+                'type' => (string) $record['type'],
+                'state' => (string) $record['state'],
+            ];
         }
         usort($out, static fn (array $a, array $b): int => strcmp($a['case_ref'], $b['case_ref']));
         return $out;
