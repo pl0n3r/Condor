@@ -53,6 +53,8 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
     reader.current = controller;
     setState({ status: 'loading', employees: [] });
     setHistory({ status: 'idle', events: [] }); setSelected('');
+    // A previous branch's aborted mutation must not leave the new form locked.
+    setSaving(false); setCode(''); setUserId(''); setNotice('');
     void (async () => {
       try {
         const response = await fetch(endpoint, { credentials: 'same-origin',
@@ -135,7 +137,9 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
         const linked: unknown = await link.json();
         if (!object(linked) || !validEmployee(linked.employee)
           || linked.employee.id !== employee.id || !linked.employee.linked) {
-          setNotice('Vínculo de usuario no verificable.'); return;
+          // The create receipt was valid even if linking returned an invalid receipt.
+          setState(s => s.status === 'ready' ? { ...s, employees: [...s.employees, employee] } : s);
+          setNotice('Empleado creado; vínculo de usuario no verificable.'); return;
         }
         employee = linked.employee;
       }
