@@ -56,8 +56,14 @@ final class Version20261109120000 extends AbstractMigration // NOSONAR -- Doctri
 
     public function down(Schema $schema): void
     {
-        // Data and audit trails must never be discarded without an explicit
-        // verified recovery decision; a code revert leaves unused tables.
-        throw new IrreversibleMigration('Esquema aditivo: revertir código; revisar datos y auditoría antes de revertir tablas.');
+        // Only an empty synthetic schema can be reverted without losing case
+        // history. Non-empty schema is never removed by an automated rollback.
+        $cases = (int) $this->connection->fetchOne('SELECT COUNT(*) FROM condor_customer_case_record');
+        $events = (int) $this->connection->fetchOne('SELECT COUNT(*) FROM condor_customer_case_audit');
+        if ($cases > 0 || $events > 0) {
+            throw new IrreversibleMigration('Reversión denegada: casos o auditorías presentes; verificar backup.');
+        }
+        $this->addSql('DROP TABLE condor_customer_case_audit');
+        $this->addSql('DROP TABLE condor_customer_case_record');
     }
 }
