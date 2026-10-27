@@ -172,19 +172,13 @@ final class ComplianceEvidenceEvaluation
 
     private static function date(mixed $value): ?\DateTimeImmutable
     {
-        if (!is_string($value) || strlen($value) !== 10) {
+        if (!is_string($value)
+            || preg_match('/\A[0-9]{4}-[0-9]{2}-[0-9]{2}\z/', $value) !== 1
+        ) {
             return null;
         }
         $fragments = explode('-', $value);
-        if (count($fragments) !== 3
-            || strlen($fragments[0]) !== 4
-            || strlen($fragments[1]) !== 2
-            || strlen($fragments[2]) !== 2
-            || !ctype_digit($fragments[0])
-            || !ctype_digit($fragments[1])
-            || !ctype_digit($fragments[2])
-            || !checkdate((int) $fragments[1], (int) $fragments[2], (int) $fragments[0])
-        ) {
+        if (!checkdate((int) $fragments[1], (int) $fragments[2], (int) $fragments[0])) {
             return null;
         }
         return new \DateTimeImmutable($value, new \DateTimeZone('UTC'));
