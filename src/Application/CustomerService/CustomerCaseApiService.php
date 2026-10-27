@@ -50,12 +50,9 @@ final class CustomerCaseApiService
     public static function viewRecord(array $store, string $scope, string $ref): ?array
     {
         self::assertRef($ref);
-        foreach (self::listRecords($store, $scope) as $record) {
-            if ($record['case_ref'] === $ref) {
-                return $record;
-            }
-        }
-        return null;
+        $records = self::listRecords($store, $scope);
+        $index = array_search($ref, array_column($records, 'case_ref'), true);
+        return is_int($index) ? $records[$index] : null;
     }
 
     /**

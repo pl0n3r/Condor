@@ -98,21 +98,21 @@ class ModuloTests(unittest.TestCase):
             self.assertNotIn(forbidden, SERVICE.read_text(encoding='utf-8').lower())
 
     def test_estados_explicitos(self) -> None:
-        record = {'case_ref': 'fixture:case/pqrs-a', 'type': 'PQRS'}
-        out = execute([
-            op('POST', payload=record),
-            op('PATCH', ref=record['case_ref'], state='EN_REVISION'),
-            op('PATCH', ref=record['case_ref'], state='CERRADO'),
-            op('PATCH', ref=record['case_ref'], state='APROBADO'),
-            op('VIEW', ref=record['case_ref']),
-        ])
-        self.assertEqual('PENDIENTE', out[0]['state'])
-        self.assertEqual('EN_REVISION', out[1]['state'])
-        self.assertEqual({'error': 'denied'}, out[2])
-        self.assertEqual({'error': 'denied'}, out[3])
-        self.assertEqual('EN_REVISION', out[4]['state'])
-        self.assertNotIn('CERRADO', json.dumps(out))
-        self.assertNotIn('APROBADO', json.dumps(out))
+        ref = 'fixture:case/pqrs-a'
+        sequence = [
+            op('POST', payload={'case_ref': ref, 'type': 'PQRS'}),
+            *(op('PATCH', ref=ref, state=state)
+              for state in ('EN_REVISION', 'CERRADO', 'APROBADO')),
+            op('VIEW', ref=ref),
+        ]
+        responses = execute(sequence)
+        actual_states = [value.get('state', 'denied') for value in responses]
+        self.assertEqual(
+            ['PENDIENTE', 'EN_REVISION', 'denied', 'denied', 'EN_REVISION'],
+            actual_states,
+        )
+        self.assertNotIn('CERRADO', json.dumps(responses))
+        self.assertNotIn('APROBADO', json.dumps(responses))
 
 
 if __name__ == '__main__':

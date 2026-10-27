@@ -44,9 +44,11 @@ final class CustomerServiceController extends AbstractController
         $this->syntheticOnly();
         [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'customers.view');
         $ref = 'fixture:case/'.$slug;
-        $record = $this->domain(fn (): ?array => CustomerCaseApiService::viewRecord(
-            $this->store($request), $this->scope($tenant->id(), $branch->id()), $ref,
-        ));
+        $scope = $this->scope($tenant->id(), $branch->id());
+        $records = $this->store($request);
+        $record = $this->domain(
+            static fn (): ?array => CustomerCaseApiService::viewRecord($records, $scope, $ref),
+        );
         if ($record === null) {
             throw new NotFoundHttpException('Caso sintético no encontrado.');
         }
