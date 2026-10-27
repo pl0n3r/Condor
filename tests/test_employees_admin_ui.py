@@ -4,6 +4,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PANEL = (ROOT / "frontend/admin/EmployeesManagement.tsx").read_text(encoding="utf-8")
+APP = (ROOT / "frontend/admin/AdminApp.tsx").read_text(encoding="utf-8")
+BUNDLE = (ROOT / "public/build/admin.js").read_text(encoding="utf-8")
 API = (ROOT / "src/Http/Controller/EmployeeController.php").read_text(encoding="utf-8")
 
 TSX_HARNESS = "\nconst fs = require('fs');\nconst {Module} = require('module');\nlet ts;\ntry { ts = require('typescript'); } catch {\n  const {execFileSync} = require('child_process');\n  ts = require(execFileSync('npm', ['root', '-g'], {encoding:'utf8'}).trim() + '/typescript');\n}\nconst file = process.argv[1];\nconst output = ts.transpileModule(fs.readFileSync(file,'utf8'), {\n  compilerOptions: {target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX},\n  reportDiagnostics:true,\n});\nconst errors = (output.diagnostics || []).filter(x => x.category === ts.DiagnosticCategory.Error);\nif (errors.length) throw Error('TypeScript transpile errors: ' + errors.map(x => x.messageText).join(', '));\nconst mod = new Module(file, module);\nmod.filename = file;\nmod.require = name => {\n  if(name === 'react') return {};\n  if(name === 'react/jsx-runtime') return {jsx:()=>null,jsxs:()=>null};\n  return require(name);\n};\nmod._compile(output.outputText + '\\nmodule.exports.__validators = {readEmployees,readHistory};', file);\nconst {readEmployees,readHistory} = mod.exports.__validators;\nconst id = '01ARZ3NDEKTSV4RRFFQ69G5FAV';\nconst other = '01ARZ3NDEKTSV4RRFFQ69G5FAW';\nconst eventId = '01ARZ3NDEKTSV4RRFFQ69G5FAX';\nconst person = {id,code:'EMP-01',linked:false};\nconst mark = {id:eventId,employee_id:id,occurred_at:'2026-10-25T12:30:00Z',type:'check_in'};\nconst reject = (fn,reason) => { let blocked = false; try { fn(); } catch {blocked = true;} if(!blocked) throw Error(reason); };\nif(readEmployees({employees:[person]}).length !== 1) throw Error('valid list');\nreject(()=>readEmployees({employees:[person,person]}),'duplicate list accepted');\nreject(()=>readEmployees({employees:[{...person,linked:'false'}]}),'invalid link accepted');\nreject(()=>readEmployees({employees:[{...person,id:other.toLowerCase()}]}),'invalid identifier accepted');\nif(readHistory({events:[mark]},id).length !== 1) throw Error('valid history');\nreject(()=>readHistory({events:[mark]},other),'cross-employee history accepted');\nreject(()=>readHistory({events:[{...mark,type:'unknown'}]},id),'invalid mark accepted');\nreject(()=>readHistory({events:Array.from({length:51},()=>mark)},id),'excess history accepted');\nconsole.log('HR synthetic contract: valid and adversarial payloads passed');\n"
@@ -29,6 +31,14 @@ class EmpleadosUiAdminTests(unittest.TestCase):
         self.assertIn("CurrentTenantForUser", API)
         self.assertIn("private function requireCsrf", API)
         self.assertIn("private function ownedEmployee", API)
+        # Administrative context routes into the synthetic/fail-closed HR panel.
+        self.assertIn("import { EmployeesManagement } from './EmployeesManagement';", APP)
+        self.assertIn("href: '/admin#employees-management'", APP)
+        self.assertIn("<EmployeesManagement", APP)
+        self.assertIn("branchId={context.data.active_branch.id}", APP)
+        self.assertIn("csrfToken={accessToken}", APP)
+        self.assertIn("Empleados y asistencia", BUNDLE)
+        self.assertIn("Crear empleado", BUNDLE)
 
     def test_validation_and_stale_responses_fail_closed(self):
         for fragment in (
@@ -53,10 +63,12 @@ class EmpleadosUiAdminTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_no_premature_mount_before_bundle_lease(self):
-        app = (ROOT / "frontend/admin/AdminApp.tsx").read_text(encoding="utf-8")
-        self.assertNotIn("EmployeesManagement", app)
+    def test_mounted_only_with_fail_closed_server_boundary(self):
+        """The admin navigation uses the branch and the backend still refuses absent stores."""
+        self.assertIn("<EmployeesManagement", APP)
+        self.assertIn("key={'employees-' + context.data.active_branch.id}", APP)
         self.assertIn("Persistencia de empleados no habilitada.", API)
+
 
     def test_mutation_dedup_and_lost_link_receipt(self):
         """A confirmed create is not lost when the optional link rejects or sends invalid JSON."""
