@@ -41,7 +41,7 @@ Fuentes de código o documentación ya disponibles: `docs/knowledge-support-doma
 | `S3` medio | Función degradada con alternativa manual documentada y sin exposición de información | 1 día hábil durante cobertura aprobada | Soporte + equipo funcional |
 | `S4` bajo | Consulta, sugerencia o solicitud de documentación sin falla operativa | 3 días hábiles durante cobertura aprobada | Soporte; crear gap minimizado según Knowledge v1 |
 
-**Los tiempos anteriores son objetivos propuestos, no SLA firmado, disponibilidad de personal ni garantía.** El OWNER debe aprobar o reemplazar valores, canal, calendario y mecanismo de cronometraje antes de ofrecerlos comercialmente. El reloj de primera respuesta empieza solo con una recepción auténtica por canal aprobado; no se calcula desde un mensaje sin acuse. Reconocer un mensaje no equivale a resolver el incidente.
+**Los tiempos anteriores son objetivos propuestos, no SLA firmado, disponibilidad de personal ni garantía.** El OWNER debe aprobar o reemplazar valores, canal, calendario y mecanismo de cronometraje antes de ofrecerlos comercialmente. El reloj de primera respuesta **comienza al recibir el reporte en el canal aprobado**, con fecha/hora verificable de recepción, y termina cuando el operador autorizado emite el acuse. **El tiempo de espera previo al acuse sí cuenta** para el objetivo de primera respuesta, aunque la recepción permanezca sin acuse. Un reporte sin acuse sigue pendiente y no demuestra cumplimiento; nunca se inicia el reloj recién al acusar recibo. Reconocer un mensaje no equivale a resolver el incidente.
 
 Si la telemetría de `docs/LIVE-UPTIME-RUNBOOK.md` es ausente, tardía o contradictoria, el estado es `UNKNOWN` y **jamás `HEALTHY` por omisión**. Un workflow de GitHub terminado en verde no acredita el estado de un cliente ni el smoke productivo.
 
@@ -81,8 +81,8 @@ La ficha técnica **sanitizada** (no CRM ni ticket con PII) debe conservar solo 
 | Campo permitido | Regla de validación |
 | --- | --- |
 | `incident_ref` | Referencia opaca generada por soporte, sin identidad ni prefijo de empresa |
-| `severity` | `S1|S2|S3|S4`, más categoría técnica cerrada |
-| `phase` | `received|triage|investigating|mitigated|resolved|UNKNOWN` |
+| `severity` | `S1\|S2\|S3\|S4`, más categoría técnica cerrada |
+| `phase` | `received\|triage\|investigating\|mitigated\|resolved\|UNKNOWN` |
 | `observed_at_utc`, `updated_at_utc` | Instantes verificables, sin inferencia de ejecución |
 | `module`, `evidence_ref` | Módulo allowlisted y referencia opaca sin parámetros privados |
 | `release_sha`, `version` | Identidad técnica únicamente cuando la fuente exacta esté verificada |
