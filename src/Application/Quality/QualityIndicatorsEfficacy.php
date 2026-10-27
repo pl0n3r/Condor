@@ -217,7 +217,10 @@ final class QualityIndicatorsEfficacy
             && checkdate((int) substr($value, 5, 2), (int) substr($value, 8, 2), $year);
     }
 
-    /** @param array<array-key, mixed> $row @param list<string> $keys */
+    /**
+     * @param array<array-key, mixed> $row
+     * @param list<string> $keys
+     */
     private static function exactKeys(array $row, array $keys): bool
     {
         return count($row) === count($keys)
