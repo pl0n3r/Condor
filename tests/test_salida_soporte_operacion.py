@@ -14,7 +14,7 @@ SENSITIVE = (
     re.compile(r"ghp_[A-Za-z0-9]{20,}"),
     re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
     re.compile(r"AKIA[0-9A-Z]{16}"),
-    re.compile(r"(?i)(?:password|api[_-]?key|secret|token)\s*[:=]\s*['\"]?[A-Za-z0-9+/]{18,}"),
+    re.compile(r"(?i)(?:password|api[_-]?key|secret|token)\s*[:=]\s*['\"]?[A-Za-z0-9+/_!@#$%^&*?.:~-]{18,}"),
     re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
     re.compile(r"(?<!\d)\+57[-\s]?[0-9]{10}(?!\d)"),
 )
@@ -50,6 +50,30 @@ class SalidaTests(unittest.TestCase):
                 self.assertIn(topic.casefold(), self.text.casefold())
         self.assertIn("propuestas no activadas", self.text)
         self.assertIn("no representan", self.text.lower().replace("no representa", "no representan"))
+        self.assertIn("comienza al recibir el reporte en el canal aprobado", self.text.lower())
+        self.assertIn("el tiempo de espera previo al acuse sí cuenta", self.text.lower())
+        self.assertIn("nunca se inicia el reloj recién al acusar recibo", self.text.lower())
+        self.assertNotIn("no se calcula desde un mensaje sin acuse", self.text.lower())
+
+    def test_tabla_evidencia_columnas(self) -> None:
+        """Cada fila Markdown tiene dos columnas; los pipes de valores se escapan."""
+        section = self.text.split("## 7. Registro de evidencias", 1)[1].split(
+            "## 8. Rutina diaria", 1
+        )[0]
+        rows = [row for row in section.splitlines() if row.startswith("|")]
+        self.assertGreaterEqual(len(rows), 8)
+        for row in rows:
+            with self.subTest(row=row[:45]):
+                columns = re.split(r"(?<!\\)\\|", row)
+                self.assertEqual(len(columns), 4, "Fila con separadores extra")
+                self.assertTrue(columns[1].strip())
+                self.assertTrue(columns[2].strip())
+        for key in ("S1\\|S2\\|S3\\|S4",
+                    "received\\|triage\\|investigating\\|mitigated\\|resolved\\|UNKNOWN"):
+            self.assertIn(key, section)
+        # Caso negativo: el separador sin escapar rompería las dos columnas.
+        invalid = "| `severity` | `S1|S2|S3|S4` |"
+        self.assertNotEqual(len(re.split(r"(?<!\\)\\|", invalid)), 4)
 
     def test_sin_secretos_ni_datos_reales(self) -> None:
         for pattern in SENSITIVE:
@@ -66,6 +90,12 @@ class SalidaTests(unittest.TestCase):
         for synthetic in samples:
             with self.subTest(synthetic_type=synthetic[:4]):
                 self.assertTrue(any(p.search(synthetic) for p in SENSITIVE))
+        # Caso Minor de CodeRabbit: guiones y puntuación en contraseña ficticia.
+        for sample in ('password = "Clave-super-segura-2026!"',
+                       'password = "ClaveSuperSecreta2026"',
+                       'api_key: "Valor-Ficticio-Largo-2026!"'):
+            with self.subTest(credential_form=sample[:12]):
+                self.assertTrue(any(pattern.search(sample) for pattern in SENSITIVE))
 
     def test_marca_decisiones_del_dueno(self) -> None:
         self.assertGreaterEqual(self.text.count("PENDIENTE_OWNER"), 8)
