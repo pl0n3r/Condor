@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 
 /**
  * Portal de suscripción de la empresa. Slice de interfaz, exclusivamente
@@ -197,7 +197,7 @@ export function SubscriptionPortal({ tenantId, csrfToken, api }: Props) {
   const canRequest = snapshot?.permissions.can_request_plan_change === true;
   const available = snapshot?.allowed_plan_changes ?? [];
 
-  async function requestChange(event: React.FormEvent<HTMLFormElement>) {
+  async function requestChange(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (inFlight.current || state.status !== 'ready'
         || !canRequest || !csrfToken
