@@ -58,5 +58,13 @@ class EmpleadosUiAdminTests(unittest.TestCase):
         self.assertNotIn("EmployeesManagement", app)
         self.assertIn("Persistencia de empleados no habilitada.", API)
 
+    def test_branch_switch_and_invalid_link_preserve_ui(self):
+        """Aborted operations release the form and invalid linking keeps the created row."""
+        self.assertIn("setSaving(false); setCode(''); setUserId(''); setNotice('');", PANEL)
+        self.assertIn("// A previous branch's aborted mutation must not leave the new form locked.", PANEL)
+        self.assertIn("Empleado creado; vínculo de usuario no verificable.", PANEL)
+        self.assertIn("setState(s => s.status === 'ready' ? { ...s, employees: [...s.employees, employee] } : s);", PANEL)
+
+
 if __name__ == "__main__":
     unittest.main()
