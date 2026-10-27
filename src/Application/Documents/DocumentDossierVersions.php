@@ -116,7 +116,10 @@ final class DocumentDossierVersions
         ];
     }
 
-    /** @param array<string, mixed> $data @param list<string> $expected */
+    /**
+     * @param array<string, mixed> $data
+     * @param list<string> $expected
+     */
     private static function keys(array $data, array $expected): bool
     {
         $actual = array_keys($data);
