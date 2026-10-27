@@ -87,7 +87,10 @@ final class CustomerCaseSla
         return self::result($needsReview ? 'REQUIERE_REVISION' : 'PENDIENTE', true, $cases);
     }
 
-    /** @param list<array<string,mixed>> $cases @return array<string,mixed> */
+    /**
+     * @param list<array<string,mixed>> $cases
+     * @return array<string,mixed>
+     */
     private static function result(string $state, bool $reviewable, array $cases): array
     {
         return [
@@ -106,7 +109,10 @@ final class CustomerCaseSla
             && preg_match('~^fixture:' . $type . '/[a-z0-9][a-z0-9_-]{0,47}$~D', $value) === 1;
     }
 
-    /** @param array<array-key,mixed> $value @param list<string> $expected */
+    /**
+     * @param array<array-key,mixed> $value
+     * @param list<string> $expected
+     */
     private static function keys(array $value, array $expected): bool
     {
         return count($value) === count($expected)
