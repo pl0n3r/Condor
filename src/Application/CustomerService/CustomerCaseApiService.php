@@ -24,25 +24,23 @@ final class CustomerCaseApiService
         if (!is_array($records) || !array_is_list($records) || count($records) > self::MAX_CASES) {
             throw new DomainException('Casos sintéticos inválidos.');
         }
-        $out = [];
-        $seen = [];
-        foreach ($records as $record) {
-            if (!self::validRecord($record)) {
+        $byRef = [];
+        foreach ($records as $value) {
+            if (!self::validRecord($value)) {
                 throw new DomainException('Caso sintético inválido.');
             }
-            $ref = (string) $record['case_ref'];
-            if (isset($seen[$ref])) {
+            $key = (string) $value['case_ref'];
+            if (array_key_exists($key, $byRef)) {
                 throw new DomainException('Referencia sintética duplicada.');
             }
-            $seen[$ref] = true;
-            $out[] = [
-                'case_ref' => $ref,
-                'type' => (string) $record['type'],
-                'state' => (string) $record['state'],
+            $byRef[$key] = [
+                'case_ref' => $key,
+                'type' => (string) $value['type'],
+                'state' => (string) $value['state'],
             ];
         }
-        usort($out, static fn (array $a, array $b): int => strcmp($a['case_ref'], $b['case_ref']));
-        return $out;
+        ksort($byRef, SORT_STRING);
+        return array_values($byRef);
     }
 
     /**
@@ -77,10 +75,8 @@ final class CustomerCaseApiService
         if (count($records) >= self::MAX_CASES) {
             throw new DomainException('Límite de casos sintéticos alcanzado.');
         }
-        foreach ($records as $record) {
-            if ($record['case_ref'] === $payload['case_ref']) {
-                throw new DomainException('Referencia sintética duplicada.');
-            }
+        if (in_array($payload['case_ref'], array_column($records, 'case_ref'), true)) {
+            throw new DomainException('Referencia sintética duplicada.');
         }
         $created = ['case_ref' => $payload['case_ref'], 'type' => $payload['type'], 'state' => 'PENDIENTE'];
         $records[] = $created;
@@ -101,14 +97,15 @@ final class CustomerCaseApiService
             throw new DomainException('La aprobación o cierre no están permitidos.');
         }
         $records = self::listRecords($store, $scope);
-        foreach ($records as $i => $record) {
-            if ($record['case_ref'] === $ref) {
-                $records[$i]['state'] = $next;
-                $store[$scope] = $records;
-                return ['store' => $store, 'record' => $records[$i]];
-            }
+        $index = array_search($ref, array_column($records, 'case_ref'), true);
+        if (!is_int($index)) {
+            throw new DomainException('Caso sintético no encontrado.');
         }
-        throw new DomainException('Caso sintético no encontrado.');
+        $record = $records[$index];
+        $record['state'] = $next;
+        $records[$index] = $record;
+        $store[$scope] = $records;
+        return ['store' => $store, 'record' => $record];
     }
 
     private static function assertScope(string $scope): void
