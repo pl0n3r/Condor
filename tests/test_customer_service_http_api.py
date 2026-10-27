@@ -80,6 +80,9 @@ class ModuloTests(unittest.TestCase):
         self.assertIn("getenv('CONDOR_CUSTOMER_SERVICE_SYNTHETIC_API')", src)
         self.assertIn("getenv('CONDOR_PRODUCTION_STAGE')", src)
         self.assertIn("hash('sha256', $tenantId.'|'.$branchId)", src)
+        writes = "$request->getSession()->set('condor_customer_service_synthetic'"
+        self.assertLess(src.index("'customer_service.synthetic.created'"), src.index(writes))
+        self.assertLess(src.index("'customer_service.synthetic.state_changed'"), src.rindex(writes))
 
     def test_sin_datos_reales(self) -> None:
         for payload in (
