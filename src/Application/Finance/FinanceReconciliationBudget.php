@@ -19,7 +19,10 @@ final class FinanceReconciliationBudget
     private const PERIOD_KEYS = ['period_ref', 'tenant_ref', 'legal_entity_ref',
         'starts_on', 'ends_on', 'state'];
 
-    /** @param array<array-key,mixed> $payload @return array<string,mixed> */
+    /**
+     * @param array<array-key,mixed> $payload
+     * @return array<string,mixed>
+     */
     public static function project(array $payload, string $tenantRef, string $entityRef): array
     {
         if (!self::fixture($tenantRef, 'tenant') || !self::fixture($entityRef, 'legal-entity')
@@ -173,14 +176,20 @@ final class FinanceReconciliationBudget
         ];
     }
 
-    /** @param array<array-key,mixed> $record @param list<string> $expected */
+    /**
+     * @param array<array-key,mixed> $record
+     * @param list<string> $expected
+     */
     private static function keys(array $record, array $expected): bool
     {
         return count($record) === count($expected)
             && array_diff(array_keys($record), $expected) === [];
     }
 
-    /** @param array<array-key,mixed> $record @param list<string> $expected */
+    /**
+     * @param array<array-key,mixed> $record
+     * @param list<string> $expected
+     */
     private static function row(array $record, array $expected, string $idKey, string $idType, string $tenant, string $entity): bool
     {
         return self::keys($record, $expected) && self::fixture($record[$idKey], $idType)
