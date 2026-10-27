@@ -165,7 +165,10 @@ final class CustomerWarrantySatisfaction
         return is_array($row) && self::tenant($row['tenant_ref'] ?? null);
     }
 
-    /** @param array<array-key,mixed> $candidate @param list<string> $expected */
+    /**
+     * @param array<array-key,mixed> $candidate
+     * @param list<string> $expected
+     */
     private static function keys(array $candidate, array $expected): bool
     {
         return count($candidate) === count($expected)
