@@ -162,7 +162,10 @@ final class GovernanceBodiesMinutes
         return is_array($value) && array_is_list($value) && count($value) <= self::LIMIT;
     }
 
-    /** @param array<array-key,mixed> $value @param list<string> $expected */
+    /**
+     * @param array<array-key,mixed> $value
+     * @param list<string> $expected
+     */
     private static function keys(array $value, array $expected): bool
     {
         if (count($value) !== count($expected)) {
