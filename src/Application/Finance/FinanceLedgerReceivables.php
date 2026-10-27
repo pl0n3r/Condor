@@ -168,7 +168,7 @@ final class FinanceLedgerReceivables
     private static function fixture(mixed $value, string $type): bool
     {
         return is_string($value)
-            && preg_match('~^fixture:' . $type . '/[a-z0-9][a-z0-9_-]{0,47}$~D', $value) === 1;
+            && preg_match('~^fixture:' . $type . '/(?=[a-z0-9_-]*[a-z])[a-z0-9][a-z0-9_-]{0,47}$~D', $value) === 1;
     }
 
     /**
