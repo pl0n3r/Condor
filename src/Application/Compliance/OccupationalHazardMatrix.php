@@ -161,7 +161,10 @@ final class OccupationalHazardMatrix
             && preg_match('~^fixture:' . $type . '/[a-z0-9][a-z0-9_-]{0,47}$~D', $value) === 1;
     }
 
-    /** @param list<string> $required @param array<array-key,mixed> $row */
+    /**
+     * @param array<array-key,mixed> $row
+     * @param list<string> $required
+     */
     private static function exactKeys(array $row, array $required): bool
     {
         return count($row) === count($required)
