@@ -125,7 +125,7 @@
 | `D-046` · `ESPECIFICACIONES.md` | Propietario único de plataforma y administración delegada | `NO_VERIFICABLE` | Falta comprobación integral de comportamiento, prueba y PR del alcance completo; no equivale a despliegue. | #1 |
 | `D-047` · `ESPECIFICACIONES.md` | Diagnóstico seguro y compartible de errores | `NO_VERIFICABLE` | Falta comprobación integral de comportamiento, prueba y PR del alcance completo; no equivale a despliegue. | #1 |
 | `D-048` · `ESPECIFICACIONES.md` | Administración unificada y contexto operativo del propietario de plataforma | `NO_VERIFICABLE` | Falta comprobación integral de comportamiento, prueba y PR del alcance completo; no equivale a despliegue. | #1 |
-| `D-048-S01` · `ESPECIFICACIONES.md` | Navegación seccionada, no acumulación en la página inicial | `NO_VERIFICABLE` | Pendiente validar esta sección normativa con contrato de prueba y evidencia de implementación exact-main. | #1 |
+| `D-048-S01` · `ESPECIFICACIONES.md` | Navegación seccionada, no acumulación en la página inicial | `EN_CURSO` | Hoja #963 y PR #966 DRAFT separan navegación platform owner; no integrada aún en main. | #963 |
 | `D-048-S02` · `ESPECIFICACIONES.md` | Progreso funcional visible | `NO_VERIFICABLE` | Pendiente validar esta sección normativa con contrato de prueba y evidencia de implementación exact-main. | #1 |
 | `D-049` · `ESPECIFICACIONES.md` | Storefront público por slug y dominio personalizado | `NO_VERIFICABLE` | Falta comprobación integral de comportamiento, prueba y PR del alcance completo; no equivale a despliegue. | #1 |
 | `D-049-S01` · `ESPECIFICACIONES.md` | Identidad pública del tenant | `NO_VERIFICABLE` | Pendiente validar esta sección normativa con contrato de prueba y evidencia de implementación exact-main. | #1 |
@@ -158,7 +158,7 @@
 | `SPEC-BASE-3` · `ESPECIFICACIONES.md` | Infraestructura objetivo inicial | `NO_VERIFICABLE` | Contrato transversal; falta evidencia de aceptación normativa completa. | #1 |
 | `SPEC-BASE-4` · `ESPECIFICACIONES.md` | Definición funcional del producto | `NO_VERIFICABLE` | Contrato transversal; falta evidencia de aceptación normativa completa. | #1 |
 | `GEST-M01` · `docs/gestion-empresarial-integral.md` | Módulo 1: Talento humano | `NO_VERIFICABLE` | Falta verificar flujo extremo a extremo, aislamiento y aceptación; límite: Diseño bloqueado por #742; reutiliza 'Employee', no duplica identidad ni usuario. | #802 |
-| `GEST-M01-S01` · `docs/gestion-empresarial-integral.md` | Talento humano / personas trabajadoras | `NO_VERIFICABLE` | Submódulo descrito en el catálogo, sin evidencia suficiente de cobertura integral en main; seguimiento #802. | #802 |
+| `GEST-M01-S01` · `docs/gestion-empresarial-integral.md` | Talento humano / personas trabajadoras | `EN_CURSO` | Hoja #725 y PR #977 DRAFT implementan UI sintética de empleados; no autorizan RR. HH. real por #742/B. | #725 |
 | `GEST-M01-S02` · `docs/gestion-empresarial-integral.md` | Talento humano / cargos | `NO_VERIFICABLE` | Submódulo descrito en el catálogo, sin evidencia suficiente de cobertura integral en main; seguimiento #802. | #802 |
 | `GEST-M01-S03` · `docs/gestion-empresarial-integral.md` | Talento humano / áreas | `NO_VERIFICABLE` | Submódulo descrito en el catálogo, sin evidencia suficiente de cobertura integral en main; seguimiento #802. | #802 |
 | `GEST-M01-S04` · `docs/gestion-empresarial-integral.md` | Talento humano / sedes | `NO_VERIFICABLE` | Submódulo descrito en el catálogo, sin evidencia suficiente de cobertura integral en main; seguimiento #802. | #802 |
@@ -407,10 +407,10 @@
 | Estado | Filas |
 | --- | ---: |
 | CUBIERTO | 16 |
-| EN_CURSO | 0 |
+| EN_CURSO | 2 |
 | SIN_COBERTURA | 0 |
 | DESCARTADO | 0 |
-| NO_VERIFICABLE | 371 |
+| NO_VERIFICABLE | 369 |
 | **TOTAL** | **387** |
 
 **Porcentaje `CUBIERTO`: 4.1 %** (16 de 387 filas). El resto no se promociona sin pruebas funcionales, permisos y evidencia de aceptación específica.
