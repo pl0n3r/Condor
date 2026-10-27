@@ -15,7 +15,10 @@ final class PayrollPeriodsProjection
     private const COLLECTIONS = ['periods', 'concepts', 'novelties', 'hours'];
     private const FORBIDDEN = '/(?:email|e_mail|correo|phone|telefono|teléfono|celular|mobile|documento|document|cedula|cédula|nit|passport|identidad|identity|nombre|apellido|address|dirección|direccion|contacto|employee_name|person_name)/iu';
 
-    /** @param array<string,mixed> $input @return array<string,mixed> */
+    /**
+     * @param array<string,mixed> $input
+     * @return array<string,mixed>
+     */
     public static function project(array $input): array
     {
         $tenant = self::ref($input['tenant_ref'] ?? null, 'tenant');
@@ -139,7 +142,10 @@ final class PayrollPeriodsProjection
         return $result;
     }
 
-    /** @param array<string,mixed> $result @return array<string,mixed> */
+    /**
+     * @param array<string,mixed> $result
+     * @return array<string,mixed>
+     */
     private static function withoutRows(array $result): array
     {
         foreach (self::COLLECTIONS as $group) {
@@ -182,7 +188,10 @@ final class PayrollPeriodsProjection
         return ((int) $whole * 100) + (int) $fraction;
     }
 
-    /** @param array<string,mixed> $item @param list<string> $keys */
+    /**
+     * @param array<string,mixed> $item
+     * @param list<string> $keys
+     */
     private static function exactKeys(array $item, array $keys): bool
     {
         if (count($item) !== count($keys)) {
