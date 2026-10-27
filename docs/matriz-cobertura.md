@@ -1,6 +1,6 @@
 # Matriz de cobertura requisito por requisito — Condor
 
-> Corte verificable: `main@6874f7fa36e3f317ff8fb9d7a15323154175546b` (27-oct-2026; base de reserva de #989). Fase `construccion`. Auditoría de código, tests y PRs; **no certifica producción, permisos reales, datos personales ni go-live**.
+> Corte verificable: `main@768ad2930e31ae6cbc75286db81931a8d4f6e75e` (27-oct-2026; actualización de #989 para PR #977 fusionado). Fase `construccion`. Auditoría de código, tests y PRs; **no certifica producción, permisos reales, datos personales ni go-live**.
 
 ## Método y alcance
 
@@ -8,10 +8,10 @@
 - `CUBIERTO`: **slice básico realmente respaldado por ruta de código, ruta de test y PR confirmado MERGED**. No cubre submódulos ni operación real por extensión implícita.
 - `EN_CURSO`: únicamente hoja ejecutable con `factory-plan-task` y PR abierto; épicos, roadmaps, reservas vencidas o PR ya fusionados no acreditan progreso.
 - Una parte de módulo empresarial no prueba el sistema integral; cada fila mantiene brecha de prueba concreta. Sin evidencias verificables se conserva `NO_VERIFICABLE` bajo Factory #1289, sin crear tickets especulativos.
-- Los PR #966 y #977 poseen reservas V3 ajenas para rutas distintas; sus borradores no acreditan cobertura de main. Las decisiones #742/B y D-063 no autorizan operar datos reales de RR. HH. Ver #802 y #616.
+- PR #966 y PR #977 ahora constan MERGED y su evidencia de main se cuenta solo en slices limitados. La autorización de #742/B para RR. HH. real sigue denegada; #802 y #616 no equivalen a validación de producción.
 
 
-- **Segundo corte #989 · reserva V3 08a08bf8-b700-4427-97f6-a0836313c7d7:** las 54 decisiones D-001…D-054, 16 módulos empresariales y 8 operativos fueron contrastados contra árbol de 1136 archivos y PRs verificados. `D-048-S01` deja de figurar EN_CURSO porque #963/PR #966 ya están fusionados. README/AGENTES desglosados en 85 requisitos. Ninguna fila acredita despliegue.
+- **Segundo corte #989 · reserva V3 08a08bf8-b700-4427-97f6-a0836313c7d7:** las 54 decisiones D-001…D-054, 16 módulos empresariales y 8 operativos fueron contrastados con árbol y PRs. `D-048-S01` pasó a CUBIERTO al fusionarse #966; `GEST-M01-S01` pasó a CUBIERTO **solo UI sintética** al fusionarse #977/#725, sin certificar RR. HH. real. README/AGENTES se desglosan en 85 requisitos. Ninguna fila acredita despliegue.
 
 ## Inventario trazable
 
@@ -161,7 +161,7 @@
 | `SPEC-BASE-3` · `ESPECIFICACIONES.md` | Infraestructura objetivo inicial | `NO_VERIFICABLE` | Falta vincular para SPEC-BASE-3 (subrequisito: Infraestructura objetivo inicial) una evidencia de ejecución sobre SHA exacto, resultado terminal y prueba de fail-closed; no se identificó tríada código+prueba+PR fusionado que acredite **este** alcance. Documento o épico #1 no constituye aceptación ni go-live. | #1 |
 | `SPEC-BASE-4` · `ESPECIFICACIONES.md` | Definición funcional del producto | `NO_VERIFICABLE` | Falta vincular para SPEC-BASE-4 (subrequisito: Definición funcional del producto) una regresión de consistencia entre controlador, persistencia y permisos del tenant; no se identificó tríada código+prueba+PR fusionado que acredite **este** alcance. Documento o épico #1 no constituye aceptación ni go-live. | #1 |
 | `GEST-M01` · `docs/gestion-empresarial-integral.md` | Módulo 1: Talento humano | `NO_VERIFICABLE` | Falta vincular para GEST-M01 (módulo 1: Módulo 1: Talento humano) una aserción de aceptación que ejercite el comportamiento exacto, incluidas sus entradas de error y permisos; no se identificó tríada código+prueba+PR fusionado que acredite **este** alcance. Documento o épico #1 no constituye aceptación ni go-live. | #802 |
-| `GEST-M01-S01` · `docs/gestion-empresarial-integral.md` | Talento humano / personas trabajadoras | `EN_CURSO` | Hoja #725 con factory-plan-task ejecutable y [PR #977 ABIERTO](https://github.com/pl0n3r/Condor/pull/977) para UI sintética de empleados; no implica operación con datos personales, vetada por #742/B. | #725 |
+| `GEST-M01-S01` · `docs/gestion-empresarial-integral.md` | Talento humano / personas trabajadoras | `CUBIERTO` | frontend/admin/EmployeesManagement.tsx + tests/test_employees_admin_ui.py + [PR #977 MERGED](https://github.com/pl0n3r/Condor/pull/977) contrastados en main@768ad2930e31; cobertura **acotada** a interfaz sintética de empleados/asistencia, NO operaciones de RR. HH. ni información personal real (#742/B). | #725 |
 | `GEST-M01-S02` · `docs/gestion-empresarial-integral.md` | Talento humano / cargos | `NO_VERIFICABLE` | Falta vincular para GEST-M01-S02 (módulo 1: Talento humano / cargos) una aserción de aceptación que ejercite el comportamiento exacto, incluidas sus entradas de error y permisos; no se identificó tríada código+prueba+PR fusionado que acredite **este** alcance. Documento o épico #1 no constituye aceptación ni go-live. | #802 |
 | `GEST-M01-S03` · `docs/gestion-empresarial-integral.md` | Talento humano / áreas | `NO_VERIFICABLE` | Falta vincular para GEST-M01-S03 (módulo 1: Talento humano / áreas) una aserción de aceptación que ejercite el comportamiento exacto, incluidas sus entradas de error y permisos; no se identificó tríada código+prueba+PR fusionado que acredite **este** alcance. Documento o épico #1 no constituye aceptación ni go-live. | #802 |
 | `GEST-M01-S04` · `docs/gestion-empresarial-integral.md` | Talento humano / sedes | `NO_VERIFICABLE` | Falta vincular para GEST-M01-S04 (módulo 1: Talento humano / sedes) una regresión de denegación cross-tenant/entidad/sede y prueba de privilegio mínimo; no se identificó tríada código+prueba+PR fusionado que acredite **este** alcance. Documento o épico #1 no constituye aceptación ni go-live. | #802 |
@@ -494,14 +494,14 @@
 
 | Estado | Filas |
 | --- | ---: |
-| CUBIERTO | 22 |
-| EN_CURSO | 1 |
+| CUBIERTO | 23 |
+| EN_CURSO | 0 |
 | SIN_COBERTURA | 0 |
 | DESCARTADO | 0 |
 | NO_VERIFICABLE | 449 |
 | **TOTAL** | **472** |
 
-**Porcentaje `CUBIERTO`: 4.7 %** (22 de 472 filas). Los slices acreditados no prueban ERP integral ni live.
+**Porcentaje `CUBIERTO`: 4.9 %** (23 de 472 filas). Los slices acreditados no prueban ERP integral ni live.
 
 **Hojas nuevas creadas: 0.** No apareció ningún `SIN_COBERTURA` demostrado sin seguimiento; faltas de evidencia se mantuvieron `NO_VERIFICABLE` para no fabricar backlog bajo Factory #1289.
 

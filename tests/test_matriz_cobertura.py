@@ -18,7 +18,7 @@ STATES = {"CUBIERTO", "EN_CURSO", "SIN_COBERTURA", "DESCARTADO", "NO_VERIFICABLE
 SOURCES = {"ESPECIFICACIONES.md", "docs/gestion-empresarial-integral.md",
            "docs/modulos-operativos.md", "README.md", "AGENTES.md"}
 ROWS = re.compile(r"^\| \x60([^|]+)\x60 · \x60([^|]+)\x60 \| (.*?) \| \x60([A-Z_]+)\x60 \| (.*?) \| (.*?) \|$", re.MULTILINE)
-EXECUTABLE_OPEN_LEAVES = frozenset({725})
+EXECUTABLE_OPEN_LEAVES = frozenset()  # corte actual: #725/PR #977 cerrados y fusionados
 PR_LINK = re.compile(r"\[PR #(\d+) MERGED\]\(https://github\.com/pl0n3r/Condor/pull/\1\)")
 
 
@@ -28,11 +28,11 @@ def split_modules(value: str) -> list[str]:
     return [part.strip() for part in text.split(",") if part.strip()]
 
 
-def valid_in_progress(issue: str, evidence: str) -> bool:
+def valid_in_progress(issue: str, evidence: str, open_leaves=EXECUTABLE_OPEN_LEAVES) -> bool:
     if not re.fullmatch(r"#\d+", issue):
         return False
     number = int(issue[1:])
-    return (number in EXECUTABLE_OPEN_LEAVES
+    return (number in open_leaves
             and "factory-plan-task" in evidence
             and bool(re.search(r"PR #\d+ ABIERTO", evidence)))
 
@@ -135,7 +135,10 @@ class MatrizCoberturaTests(unittest.TestCase):
                 self.assertFalse(valid_in_progress(issue, "factory-plan-task PR #999 ABIERTO"))
         self.assertFalse(valid_in_progress("#725", "PR #977 ABIERTO"))
         self.assertFalse(valid_in_progress("#725", "factory-plan-task PR #977 MERGED"))
-        self.assertTrue(valid_in_progress("#725", "factory-plan-task PR #977 ABIERTO"))
+        self.assertFalse(valid_in_progress("#725", "factory-plan-task PR #977 ABIERTO"))
+        # Solo una hoja realmente abierta sería EN_CURSO; fixture positivo puro.
+        self.assertTrue(valid_in_progress("#725", "factory-plan-task PR #977 ABIERTO",
+                                          open_leaves=frozenset({725})))
 
     def test_evidencia_cubierta_con_archivo_pr_y_prueba(self):
         covers = [r for r in self.rows if r["state"] == "CUBIERTO"]
