@@ -13,6 +13,7 @@
     <testsuites>
         <testsuite name="Condor">
             <directory>tests/php</directory>
+            <file>tests/Unit/PlatformOwnerNavigationTest.php</file>
         </testsuite>
     </testsuites>
 </phpunit>

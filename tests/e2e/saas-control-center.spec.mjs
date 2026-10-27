@@ -67,7 +67,7 @@ async function fulfillJson(route, status, body) {
   });
 }
 
-async function renderOwner(page, commercialRead, contextRead = () => context(), section = 'control') {
+async function renderOwner(page, commercialRead, contextRead = () => context(), section = 'suscripciones') {
   await page.route('**/adminpl0n3r/api/context*', async (route) => {
     await fulfillJson(route, 200, await contextRead(route.request().url()));
   });
@@ -76,6 +76,9 @@ async function renderOwner(page, commercialRead, contextRead = () => context(), 
     await fulfillJson(route, status, body);
   });
   await page.goto('/');
+  // Exercise the URL-to-section mapping without using a real owner session.
+  const destination = section === 'control' ? '/adminpl0n3r' : '/adminpl0n3r/' + section;
+  await page.evaluate((path) => window.history.replaceState(null, '', path), destination);
   await page.setContent(
     '<div id="condor-platform-root" data-version="0.1.194" ' +
       'data-section="' + section + '" data-logout-token="synthetic-token" ' +
@@ -89,6 +92,24 @@ async function renderOwner(page, commercialRead, contextRead = () => context(), 
 
 test.describe('SaaS Control Center — navegación y errores reales en Chromium', () => {
   test.skip(!BASE_URL, 'Requiere el servidor E2E y el bundle compilado de Condor.');
+
+  test('ruta /suscripciones muestra el SaaS Control Center y el menú propio', async ({ page }) => {
+    const panel = await renderOwner(page, () => ({ status: 200, body: ready() }));
+    await expect(page).toHaveURL(/adminpl0n3r[/]suscripciones$/);
+    await expect(page.getByRole('link', { name: 'Plan y suscripciones' })).toBeVisible();
+    await expect(panel.getByRole('heading', { name: 'Control SaaS por empresa' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Cartera comercial' })).toHaveCount(0);
+  });
+
+  test('ruta /catalogo muestra cartera y catálogo sin montar SaaS por empresa', async ({ page }) => {
+    const globalContext = () => ({ ...context(), mode: 'global', selected_tenant: null });
+    await renderOwner(page, () => ({ status: 200, body: ready() }), globalContext, 'catalogo');
+    await expect(page).toHaveURL(/adminpl0n3r[/]catalogo$/);
+    await expect(page.getByRole('link', { name: 'Catálogo comercial' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Cartera comercial' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Catálogo vigente' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Control SaaS por empresa' })).toHaveCount(0);
+  });
 
   test('HTTP 403 rechaza el acceso sin mostrar importes ni reintento', async ({ page }) => {
     const panel = await renderOwner(page, () => ({ status: 403, body: {} }));
@@ -204,7 +225,7 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
           ? { ...context(true), mode: 'global', selected_tenant: null }
           : context(false);
       },
-      'empresas',
+      'suscripciones',
     );
 
     await expect(panel).toContainText('No hay un plan canónico configurado');
@@ -215,7 +236,7 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
     // The commercial refresh leaves the prior tenant view mounted while pending.
     returnToGlobal = true;
     await page.getByRole('button', { name: 'Volver al centro global' }).click();
-    await expect(page.getByRole('button', { name: 'Ver como propietario' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ver suscripción' })).toBeVisible();
 
     // Deliver the old tenant refresh after the newer global response.
     const oldResponse = page.waitForResponse((response) =>
@@ -224,12 +245,12 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
     );
     releaseOldContext();
     await oldResponse;
-    await expect(page.getByRole('button', { name: 'Ver como propietario' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ver suscripción' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Volver al centro global' })).toHaveCount(0);
     expect(entitlementReads).toBe(1);
 
     // Only an explicit new selection may remount and fetch tenant entitlements.
-    await page.getByRole('button', { name: 'Ver como propietario' }).click();
+    await page.getByRole('button', { name: 'Ver suscripción' }).click();
     await expect(panel).toContainText('Permitido');
     await expect.poll(() => entitlementReads).toBe(2);
     expect(tenantRefreshes).toBe(2);

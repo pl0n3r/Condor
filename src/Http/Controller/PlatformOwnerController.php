@@ -25,6 +25,18 @@ final class PlatformOwnerController extends AbstractController
         methods: ['GET'],
     )]
     #[Route(
+        '/adminpl0n3r/suscripciones',
+        name: 'app_platform_owner_subscriptions',
+        defaults: ['section' => 'suscripciones'],
+        methods: ['GET'],
+    )]
+    #[Route(
+        '/adminpl0n3r/catalogo',
+        name: 'app_platform_owner_catalog',
+        defaults: ['section' => 'catalogo'],
+        methods: ['GET'],
+    )]
+    #[Route(
         '/adminpl0n3r/staff',
         name: 'app_platform_owner_staff',
         defaults: ['section' => 'staff'],
