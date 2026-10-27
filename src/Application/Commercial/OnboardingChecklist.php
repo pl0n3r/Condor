@@ -166,7 +166,10 @@ final class OnboardingChecklist
         return checkdate($month, $day, $year);
     }
 
-    /** @param array<string,mixed> $row @param list<string> $keys */
+    /**
+     * @param array<string,mixed> $row
+     * @param list<string> $keys
+     */
     private static function keys(array $row, array $keys): bool
     {
         $actual = array_keys($row);
