@@ -40,10 +40,11 @@ foreach ($ops as $op) {
 }
 echo json_encode($out, JSON_THROW_ON_ERROR);
 '''
-    p = subprocess.run(['php', '-n', '-d', 'allow_url_fopen=0', '-r', script,
-                        str(SERVICE), json.dumps(ops)], cwd=ROOT, text=True,
-                       capture_output=True, check=True, timeout=20)
-    return json.loads(p.stdout)
+    output = subprocess.check_output(
+        ['php', '-n', '-d', 'allow_url_fopen=0', '-r', script, str(SERVICE), json.dumps(ops)],
+        cwd=ROOT, stderr=subprocess.PIPE, text=True, timeout=20,
+    )
+    return json.loads(output)
 
 
 def op(method: str, tenant: str = 'tenant-a', branch: str = 'branch-a', **fields: object) -> dict:
