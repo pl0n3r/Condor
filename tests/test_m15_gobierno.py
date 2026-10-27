@@ -49,7 +49,10 @@ echo json_encode(GovernanceBodiesMinutes::project($data), JSON_THROW_ON_ERROR);
 
 class GovernanceBodiesMinutesTests(unittest.TestCase):
     def test_resultado_determinista(self) -> None:
-        self.assertEqual(project(fixture()), project(fixture()))
+        sample = fixture()
+        expected = project(sample)
+        actual = project(copy.deepcopy(sample))
+        self.assertEqual(expected, actual)
         result = project(fixture())
         self.assertTrue(result["valid"])
         self.assertEqual("fixture:minute/min-a", result["minutes"][0]["ref"])
