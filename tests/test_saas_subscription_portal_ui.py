@@ -29,6 +29,8 @@ class SaasTests(unittest.TestCase):
         self.assertIn("state.snapshot.tenant_id === tenantId", source)
         self.assertIn("const seen = new Set<string>()", source)
         self.assertIn("validRenewal(value.renewal_at)", source)
+        self.assertIn("date.toISOString().slice(0, 10) === value", source)
+        self.assertIn("seen.has(item.key)", source)
         self.assertNotIn("localStorage", source)
         self.assertNotIn("sessionStorage", source)
 
