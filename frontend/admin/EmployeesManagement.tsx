@@ -50,6 +50,7 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
     const current = ++sequence.current;
     const controller = new AbortController();
     reader.current?.abort(); writer.current?.abort();
+    writer.current = null;
     reader.current = controller;
     setState({ status: 'loading', employees: [] });
     setHistory({ status: 'idle', events: [] }); setSelected('');
@@ -100,13 +101,14 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const employeeCode = code.trim(), linkedUserId = userId.trim();
-    if (state.status !== 'ready' || saving || !csrfToken || employeeCode.length < 1
+    if (state.status !== 'ready' || saving || writer.current !== null || !csrfToken || employeeCode.length < 1
       || employeeCode.length > 32 || (linkedUserId !== '' && !ulid.test(linkedUserId))) {
       setNotice('Comprueba el código, usuario opcional y permisos.'); return;
     }
     const current = sequence.current, controller = new AbortController();
     writer.current?.abort(); writer.current = controller;
     setSaving(true); setNotice('');
+    let createdEmployee: Employee | null = null;
     try {
       const response = await fetch(endpoint, { method: 'POST', credentials: 'same-origin',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
@@ -123,6 +125,7 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
         setNotice('No se pudo verificar el empleado.'); return;
       }
       let employee = payload.employee;
+      createdEmployee = employee;
       if (linkedUserId) {
         const link = await fetch(endpoint + '/' + encodeURIComponent(employee.id) + '/link', {
           method: 'POST', credentials: 'same-origin',
@@ -147,9 +150,18 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
       setState(s => s.status === 'ready' ? { ...s, employees: [...s.employees, employee] } : s);
       setCode(''); setUserId(''); setNotice('Empleado creado.');
     } catch {
-      if (current === sequence.current && !controller.signal.aborted)
-        setNotice('No se completó la operación.');
+      if (current === sequence.current && !controller.signal.aborted) {
+        if (createdEmployee !== null) {
+          // The create receipt is confirmed; the optional link may have lost its response.
+          setState(s => s.status === 'ready' && !s.employees.some(e => e.id === createdEmployee?.id)
+            ? { ...s, employees: [...s.employees, createdEmployee as Employee] } : s);
+          setNotice('Empleado creado; no se pudo confirmar el vínculo opcional.');
+        } else {
+          setNotice('No se completó la operación.');
+        }
+      }
     } finally {
+      if (writer.current === controller) writer.current = null;
       if (current === sequence.current) setSaving(false);
     }
   }
