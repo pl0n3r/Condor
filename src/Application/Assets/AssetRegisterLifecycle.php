@@ -105,30 +105,41 @@ final class AssetRegisterLifecycle
      */
     private static function keys(array $actual, array $expected): bool
     {
-        $found = array_keys($actual);
-        sort($found);
-        sort($expected);
-        return $found === $expected;
+        if (count($actual) !== count($expected)) {
+            return false;
+        }
+        foreach ($expected as $name) {
+            if (!array_key_exists($name, $actual)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static function tenant(mixed $value): bool
     {
-        return is_string($value)
+        if (!is_string($value)) {
+            return false;
+        }
+        return str_starts_with($value, 'tenant-')
             && preg_match('/^tenant-(?:test-)?[a-z][a-z0-9-]{0,31}$/D', $value) === 1;
     }
 
     private static function ref(mixed $value, string $kind): bool
     {
-        return is_string($value)
-            && preg_match('~^fixture:' . preg_quote($kind, '~') . '/[a-z][a-z0-9_-]{0,47}$~D', $value) === 1;
+        $pattern = sprintf('~^fixture:%s/[a-z][a-z0-9_-]{0,47}$~D', preg_quote($kind, '~'));
+        return is_string($value) && preg_match($pattern, $value) === 1;
     }
 
     private static function date(mixed $value): bool
     {
-        if (!is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) !== 1) {
+        if (!is_string($value) || strlen($value) !== 10) {
             return false;
         }
-        [$year, $month, $day] = array_map('intval', explode('-', $value));
-        return checkdate($month, $day, $year);
+        $parts = explode('-', $value);
+        if (count($parts) !== 3 || preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) !== 1) {
+            return false;
+        }
+        return checkdate((int) $parts[1], (int) $parts[2], (int) $parts[0]);
     }
 }
