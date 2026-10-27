@@ -152,7 +152,12 @@ class FinanceLedgerReceivablesTests(unittest.TestCase):
         invalid = (
             ledger(email="someone@example.com"), ledger(cedula="1234567890"),
             ledger(telefono="3101112233"), ledger(fixture_ref="company.com"),
+            ledger(fixture_ref="fixture:finance-ledger/1234567890"),
             ledger(tenant_ref="company@example.com"),
+            ledger(tenant_ref="fixture:tenant/1234567890"),
+            ledger(legal_entity_ref="fixture:legal-entity/1234567890"),
+            ledger(entries=[entry(entry_ref="fixture:finance-entry/1234567890")]),
+            ledger(accounts=[account(account_ref="fixture:finance-account/1234567890")]),
             ledger(entries=[entry(email="someone@example.com")]),
             ledger(entries=[entry(document_number="1234567890")]),
             ledger(entries=[entry(amount_decimal=100)]),
