@@ -9,7 +9,10 @@ use InvalidArgumentException;
 /** Synthetic-only PILA preparation: never a real filing or submission. */
 final class SocialSecurityPilaPreparation
 {
-    /** @param array<string,mixed> $input @return array<string,mixed> */
+    /**
+     * @param array<string,mixed> $input
+     * @return array<string,mixed>
+     */
     public static function project(array $input): array
     {
         self::keys($input, ['tenant_ref', 'reference_date', 'supports', 'alerts']);
@@ -83,7 +86,10 @@ final class SocialSecurityPilaPreparation
         ];
     }
 
-    /** @param array<string,mixed> $data @param list<string> $required */
+    /**
+     * @param array<string,mixed> $data
+     * @param list<string> $required
+     */
     private static function keys(array $data, array $required): void
     {
         $keys = array_keys($data);
