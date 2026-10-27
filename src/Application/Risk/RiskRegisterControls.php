@@ -113,9 +113,13 @@ final class RiskRegisterControls
         return self::result(true, $rows, self::categories($rows), $requiresReview);
     }
 
-    /** @param list<array<string,mixed>> $rows @return array<string,array{count:int,inherent_total:int,residual_total:int}> */
+    /**
+     * @param list<array<string,mixed>> $rows
+     * @return array<string,array{count:int,inherent_total:int,residual_total:int}>
+     */
     private static function categories(array $rows): array
     {
+        /** @var array<string,array{count:int,inherent_total:int,residual_total:int}> $summary */
         $summary = [];
         foreach (self::CATEGORIES as $category) {
             $summary[$category] = ['count' => 0, 'inherent_total' => 0, 'residual_total' => 0];
@@ -129,7 +133,11 @@ final class RiskRegisterControls
         return $summary;
     }
 
-    /** @param list<array<string,mixed>> $rows @param array<string,mixed> $categories @return array<string,mixed> */
+    /**
+     * @param list<array<string,mixed>> $rows
+     * @param array<string,mixed> $categories
+     * @return array<string,mixed>
+     */
     private static function result(
         bool $valid, array $rows, array $categories, bool $requiresReview = false
     ): array {
@@ -161,7 +169,10 @@ final class RiskRegisterControls
             && preg_match('/[0-9]{7,}/', $value) !== 1;
     }
 
-    /** @param array<array-key,mixed> $payload @param list<string> $expected */
+    /**
+     * @param array<array-key,mixed> $payload
+     * @param list<string> $expected
+     */
     private static function exactKeys(array $payload, array $expected): bool
     {
         return count($payload) === count($expected)
