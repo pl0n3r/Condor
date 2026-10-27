@@ -157,7 +157,8 @@ final class RiskRegisterControls
     private static function fixture(mixed $value, string $type): bool
     {
         return is_string($value)
-            && preg_match('~^fixture:' . $type . '/[a-z0-9][a-z0-9_-]{0,47}$~D', $value) === 1;
+            && preg_match('~^fixture:' . $type . '/[a-z][a-z0-9_-]{0,47}$~D', $value) === 1
+            && preg_match('/[0-9]{7,}/', $value) !== 1;
     }
 
     /** @param array<array-key,mixed> $payload @param list<string> $expected */
