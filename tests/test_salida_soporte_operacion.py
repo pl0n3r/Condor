@@ -64,7 +64,7 @@ class SalidaTests(unittest.TestCase):
         self.assertGreaterEqual(len(rows), 8)
         for row in rows:
             with self.subTest(row=row[:45]):
-                columns = re.split(r"(?<!\\)\\|", row)
+                columns = re.split(r"(?<!\\)\|", row)
                 self.assertEqual(len(columns), 4, "Fila con separadores extra")
                 self.assertTrue(columns[1].strip())
                 self.assertTrue(columns[2].strip())
@@ -73,7 +73,7 @@ class SalidaTests(unittest.TestCase):
             self.assertIn(key, section)
         # Caso negativo: el separador sin escapar rompería las dos columnas.
         invalid = "| `severity` | `S1|S2|S3|S4` |"
-        self.assertNotEqual(len(re.split(r"(?<!\\)\\|", invalid)), 4)
+        self.assertNotEqual(len(re.split(r"(?<!\\)\|", invalid)), 4)
 
     def test_sin_secretos_ni_datos_reales(self) -> None:
         for pattern in SENSITIVE:
