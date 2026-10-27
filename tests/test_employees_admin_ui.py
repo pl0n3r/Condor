@@ -61,6 +61,7 @@ class EmpleadosUiAdminTests(unittest.TestCase):
     def test_mutation_dedup_and_lost_link_receipt(self):
         """A confirmed create is not lost when the optional link rejects or sends invalid JSON."""
         self.assertIn("writer.current !== null", PANEL)
+        self.assertNotIn("writer.current?.abort(); writer.current = controller;", PANEL)
         self.assertIn("writer.current = null;", PANEL)
         self.assertIn("if (writer.current === controller) writer.current = null;", PANEL)
         self.assertIn("let createdEmployee: Employee | null = null;", PANEL)
