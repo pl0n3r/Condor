@@ -32,8 +32,8 @@ class ModuloTests(unittest.TestCase):
             self.assertIn("permissions.includes('" + permission + "')", code)
         for guard in ("if (!canView)", "if (!canCreate", "if (!canUpdate"):
             self.assertIn(guard, code)
-        for action in ("audit(ref, 'created')", "audit(item, 'viewed')",
-                       "audit(selected, 'state_changed')"):
+        for action in ("audit(ref, 'created', actorRef)", "audit(item, 'viewed')",
+                       "audit(selected, 'state_changed', reviewActorRef)"):
             self.assertIn(action, code)
         self.assertIn("Bitácora de demostración (no oficial)", code)
         self.assertIn("no sustituye la auditoría de servidor", code)
