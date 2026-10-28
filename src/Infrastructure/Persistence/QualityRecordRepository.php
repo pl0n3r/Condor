@@ -9,42 +9,45 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use DomainException;
 
-/** M13 fixture-only repository. Never wired into a live customer endpoint. */
+/** DBAL boundary for M13 synthetic quality records, not wired to customer traffic. */
 final readonly class QualityRecordRepository
 {
-    public function __construct(private Connection $connection)
+    public function __construct(private Connection $db)
     {
     }
 
     public function append(
-        QualityRecord $record, string $tenantRef, string $companyRef, string $actorRef, bool $authorized,
+        QualityRecord $record, string $tenantRef, string $companyRef,
+        string $actorRef, bool $authorized,
     ): void {
-        self::permit($tenantRef, $companyRef, $actorRef, $authorized);
-        if ($record->tenantRef() !== $tenantRef || $record->companyRef() !== $companyRef
-            || $record->actorRef() !== $actorRef
+        self::checkAccess($tenantRef, $companyRef, $actorRef, $authorized);
+        if ([$record->tenantRef(), $record->companyRef(), $record->actorRef()]
+            !== [$tenantRef, $companyRef, $actorRef]
         ) {
-            throw new DomainException('Calidad externo a la empresa autorizada.');
+            throw new DomainException('No se admite una escritura fuera de la empresa o el actor.');
         }
 
-        $this->connection->transactional(function () use ($record, $tenantRef, $companyRef, $actorRef): void {
-            $previous = $this->connection->fetchAssociative(
+        $this->db->transactional(function () use ($record, $tenantRef, $companyRef, $actorRef): void {
+            $history = $this->db->fetchAssociative(
                 'SELECT id, state, version FROM condor_quality_record '
                 .'WHERE tenant_ref = ? AND company_ref = ? AND quality_ref = ? '
-                .'ORDER BY version DESC LIMIT 1'.$this->lockClause(),
+                .'ORDER BY version DESC LIMIT 1'.$this->rowLock(),
                 [$tenantRef, $companyRef, $record->qualityRef()],
             );
-            if ($previous === false) {
-                if ($record->version() !== 1 || $record->previousId() !== null) {
-                    throw new DomainException('Falta registro inicial del calidad.');
-                }
-            } elseif ($record->version() !== (int) $previous['version'] + 1
-                || $record->previousId() !== $previous['id']
-                || $record->previousState() !== $previous['state']
-            ) {
-                throw new DomainException('Versión obsoleta o auditoría de calidad inválida.');
+            $newCase = $history === false;
+            if ($newCase && ($record->version() !== 1 || $record->previousId() !== null)) {
+                throw new DomainException('Debe existir la apertura inicial de Calidad.');
             }
-            $this->connection->insert('condor_quality_record', $record->snapshot());
-            $this->audit($tenantRef, $companyRef, $record->qualityRef(), $actorRef, 'synthetic.saved');
+            if (!$newCase && (
+                $record->version() !== (int) $history['version'] + 1
+                || $record->previousId() !== $history['id']
+                || $record->previousState() !== $history['state']
+            )) {
+                throw new DomainException('Historial obsoleto o inconsistente.');
+            }
+
+            $this->db->insert('condor_quality_record', $record->snapshot());
+            $this->journal($tenantRef, $companyRef, $record->qualityRef(), $actorRef, 'synthetic.saved');
         });
     }
 
@@ -52,63 +55,62 @@ final readonly class QualityRecordRepository
     public function forCompany(
         string $tenantRef, string $companyRef, string $actorRef, bool $authorized,
     ): array {
-        self::permit($tenantRef, $companyRef, $actorRef, $authorized);
+        self::checkAccess($tenantRef, $companyRef, $actorRef, $authorized);
 
-        return $this->connection->transactional(function () use ($tenantRef, $companyRef, $actorRef): array {
-            $rows = $this->connection->fetchAllAssociative(
+        return $this->db->transactional(function () use ($tenantRef, $companyRef, $actorRef): array {
+            $entries = $this->db->fetchAllAssociative(
                 'SELECT id, tenant_ref, company_ref, quality_ref, category, state, version, '
                 .'previous_id, previous_state, audit_action, actor_ref, occurred_at, fingerprint '
                 .'FROM condor_quality_record WHERE tenant_ref = ? AND company_ref = ? '
                 .'ORDER BY quality_ref, version',
                 [$tenantRef, $companyRef],
             );
-            foreach ($rows as $row) {
-                if ($row['tenant_ref'] !== $tenantRef || $row['company_ref'] !== $companyRef
-                    || !is_string($row['fingerprint'])
-                    || preg_match('/\A[a-f0-9]{64}\z/D', $row['fingerprint']) !== 1
-                    || !in_array($row['state'], [QualityRecord::PENDING, QualityRecord::REVIEW], true)
-                    || !in_array($row['audit_action'], ['CREADA', 'CAMBIO_EXPLICITO'], true)
+            foreach ($entries as $entry) {
+                if ($entry['tenant_ref'] !== $tenantRef || $entry['company_ref'] !== $companyRef
+                    || !is_string($entry['fingerprint'])
+                    || !in_array($entry['state'], [QualityRecord::PENDING, QualityRecord::REVIEW], true)
+                    || !in_array($entry['audit_action'], ['CREADA', 'CAMBIO_EXPLICITO'], true)
                 ) {
-                    throw new DomainException('Historial de calidad externo o corrupto.');
+                    throw new DomainException('Lectura de Calidad no íntegra o ajena al tenant.');
                 }
-                QualityRecord::assertScope($row['tenant_ref'], $row['company_ref'], $row['actor_ref']);
-                QualityRecord::assertFixture($row['quality_ref'], 'quality');
-                $values = $row;
-                unset($values['fingerprint']);
-                $values['version'] = (int) $values['version'];
-                if (!hash_equals(
-                    $row['fingerprint'], hash('sha256', json_encode($values, JSON_THROW_ON_ERROR))
-                )) {
-                    throw new DomainException('La auditoría de calidad fue alterada.');
+                QualityRecord::assertScope($entry['tenant_ref'], $entry['company_ref'], $entry['actor_ref']);
+                QualityRecord::assertFixture($entry['quality_ref'], 'quality');
+                $payload = $entry;
+                unset($payload['fingerprint']);
+                $payload['version'] = (int) $payload['version'];
+                $digest = hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR));
+                if (!hash_equals($entry['fingerprint'], $digest)) {
+                    throw new DomainException('El histórico de Calidad fue alterado.');
                 }
             }
-            $this->audit($tenantRef, $companyRef, 'fixture:quality/list', $actorRef, 'synthetic.listed');
-            return $rows;
+            $this->journal($tenantRef, $companyRef, 'fixture:quality/list', $actorRef, 'synthetic.listed');
+            return $entries;
         });
     }
 
-    private function lockClause(): string
+    private function rowLock(): string
     {
-        return $this->connection->getDatabasePlatform() instanceof SQLitePlatform ? '' : ' FOR UPDATE';
+        return $this->db->getDatabasePlatform() instanceof SQLitePlatform ? '' : ' FOR UPDATE';
     }
 
-    private static function permit(string $tenant, string $company, string $actor, bool $authorized): void
-    {
-        QualityRecord::assertScope($tenant, $company, $actor);
-        if (!$authorized) {
-            throw new DomainException('Acceso a calidads denegado.');
+    private static function checkAccess(
+        string $tenantRef, string $companyRef, string $actorRef, bool $authorized,
+    ): void {
+        QualityRecord::assertScope($tenantRef, $companyRef, $actorRef);
+        if ($authorized !== true) {
+            throw new DomainException('Acceso al módulo Calidad denegado.');
         }
     }
 
-    private function audit(
-        string $tenant, string $company, string $quality, string $actor, string $event,
+    private function journal(
+        string $tenantRef, string $companyRef, string $caseRef, string $actorRef, string $event,
     ): void {
-        $this->connection->insert('condor_quality_audit', [
+        $this->db->insert('condor_quality_audit', [
             'event_id' => bin2hex(random_bytes(16)),
-            'tenant_ref' => $tenant,
-            'company_ref' => $company,
-            'quality_ref' => $quality,
-            'actor_ref' => $actor,
+            'tenant_ref' => $tenantRef,
+            'company_ref' => $companyRef,
+            'quality_ref' => $caseRef,
+            'actor_ref' => $actorRef,
             'event' => $event,
             'created_at' => gmdate('Y-m-d H:i:s'),
         ]);
