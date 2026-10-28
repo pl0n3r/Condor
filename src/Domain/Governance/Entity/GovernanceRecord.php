@@ -105,21 +105,27 @@ final class GovernanceRecord
     /** @return array<string,string|int|null> */
     public function toRow(): array
     {
-        $attributes = [
-            'entry_id' => $this->entryId,
-            'tenant_ref' => $this->tenantRef,
-            'company_ref' => $this->companyRef,
-            'governance_ref' => $this->governanceRef,
-            'category' => $this->category,
-            'state' => $this->state,
-            'revision' => $this->revision,
-            'prior_id' => $this->priorId,
-            'actor_ref' => $this->actorRef,
-            'action' => $this->action,
-            'recorded_at' => $this->recordedAt->format('Y-m-d H:i:s'),
+        // Explicit column order is shared by DBAL writes and the integrity digest.
+        $columns = [
+            ['entry_id', $this->entryId],
+            ['tenant_ref', $this->tenantRef],
+            ['company_ref', $this->companyRef],
+            ['governance_ref', $this->governanceRef],
+            ['category', $this->category],
+            ['state', $this->state],
+            ['revision', $this->revision],
+            ['prior_id', $this->priorId],
+            ['actor_ref', $this->actorRef],
+            ['action', $this->action],
+            ['recorded_at', $this->recordedAt->format('Y-m-d H:i:s')],
         ];
-        return $attributes + [
-            'fingerprint' => hash('sha256', json_encode($attributes, JSON_THROW_ON_ERROR)),
-        ];
+        /** @var array<string, string|int|null> $row */
+        $row = [];
+        foreach ($columns as [$name, $value]) {
+            $row[$name] = $value;
+        }
+        $row['fingerprint'] = hash('sha256', json_encode($row, JSON_THROW_ON_ERROR));
+
+        return $row;
     }
 }
