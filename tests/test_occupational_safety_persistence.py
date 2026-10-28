@@ -18,12 +18,24 @@ namespace Doctrine\DBAL {
     final class Connection {
         public array $data = [];
         public array $events = [];
+        public bool $failAudit = false;
 
         public function transactional(callable $callback): mixed {
-            return $callback();
+            $savedData = $this->data;
+            $savedEvents = $this->events;
+            try {
+                return $callback();
+            } catch (\Throwable $failure) {
+                $this->data = $savedData;
+                $this->events = $savedEvents;
+                throw $failure;
+            }
         }
         public function insert(string $table, array $values): void {
             if ($table === 'condor_occupational_audit') {
+                if ($this->failAudit) {
+                    throw new \DomainException('audit injection failure');
+                }
                 $this->events[] = $values;
             } elseif ($table === 'condor_occupational_record') {
                 $scope = $values['tenant_ref'];
@@ -73,6 +85,7 @@ namespace {
     $observations = [];
 
     foreach ($input as $step) {
+        $db->failAudit = (bool) ($step['fail_audit'] ?? false);
         $tenant = $step['tenant'] ?? 'tenant-a';
         $record = $step['record'] ?? 'fixture:occupational/inspection';
         $actor = $step['actor'] ?? 'fixture:actor/operator';
@@ -101,6 +114,75 @@ namespace {
         ['observations' => $observations, 'events' => $db->events],
         JSON_THROW_ON_ERROR,
     );
+}
+"""
+
+
+
+# Execute the actual Doctrine migration method against a guarded fake connection.
+# The fake enforces that no DROP or emptiness read can occur outside LOCK TABLES.
+MIGRATION_HARNESS = r"""
+namespace Doctrine\DBAL\Schema {
+    class Schema {}
+}
+namespace Doctrine\Migrations\Exception {
+    class IrreversibleMigration extends \RuntimeException {}
+}
+namespace Doctrine\Migrations {
+    class AbstractMigration {
+        protected object $connection;
+        public function __construct(object $connection) {
+            $this->connection = $connection;
+        }
+        protected function addSql(string $statement): void {
+            throw new \RuntimeException('deferred rollback is unsafe');
+        }
+    }
+}
+namespace {
+    class GuardedDb {
+        public bool $locked = false;
+        public array $events = [];
+        public function __construct(private bool $hasRows) {}
+        public function executeStatement(string $sql): int {
+            if (str_starts_with($sql, 'LOCK TABLES')) {
+                $this->locked = true;
+                $this->events[] = 'lock';
+                return 0;
+            }
+            if ($sql === 'UNLOCK TABLES') {
+                $this->locked = false;
+                $this->events[] = 'unlock';
+                return 0;
+            }
+            if (str_starts_with($sql, 'DROP TABLE')) {
+                if (!$this->locked) {
+                    throw new \RuntimeException('unlocked destructive DDL');
+                }
+                $this->events[] = 'drop';
+                return 0;
+            }
+            throw new \RuntimeException('unexpected SQL');
+        }
+        public function fetchOne(string $sql): int {
+            if (!$this->locked) {
+                throw new \RuntimeException('unlocked emptiness check');
+            }
+            $this->events[] = 'read';
+            return $this->hasRows ? 1 : 0;
+        }
+    }
+
+    require $argv[1];
+    $db = new GuardedDb($argv[2] === '1');
+    $migration = new \DoctrineMigrations\Version20261101120000($db);
+    $denied = false;
+    try {
+        $migration->down(new \Doctrine\DBAL\Schema\Schema());
+    } catch (\Doctrine\Migrations\Exception\IrreversibleMigration $failure) {
+        $denied = true;
+    }
+    echo json_encode(['denied' => $denied, 'events' => $db->events], JSON_THROW_ON_ERROR);
 }
 """
 
@@ -158,6 +240,12 @@ class ModuloTests(unittest.TestCase):
         self.assertEqual({"denied": True}, wrong["observations"][1])
         self.assertEqual(1, len(wrong["events"]))
 
+        # Audit failure must rollback the record write, not leave orphan state.
+        rolled_back = execute(step("create", fail_audit=True), step("list"))
+        self.assertEqual({"denied": True}, rolled_back["observations"][0])
+        self.assertEqual([], rolled_back["observations"][1])
+        self.assertEqual(["synthetic.listed"], [e["event"] for e in rolled_back["events"]])
+
     def test_sin_datos_reales(self) -> None:
         bad = [
             step("create", tenant="1099887766"),
@@ -196,6 +284,18 @@ class ModuloTests(unittest.TestCase):
         self.assertIn("PRIMARY KEY (tenant_ref, record_ref)", migration)
         self.assertIn("IrreversibleMigration", migration)
         self.assertIn("if (max($recordCount, $eventCount) > 0)", migration)
+        for contains_rows, expected in (
+            ("0", ["lock", "read", "read", "drop", "drop", "unlock"]),
+            ("1", ["lock", "read", "read", "unlock"]),
+        ):
+            with self.subTest(contains_rows=contains_rows):
+                process = subprocess.run(
+                    ["php", "-n", "-r", MIGRATION_HARNESS, str(SCHEMA), contains_rows],
+                    cwd=BASE, capture_output=True, text=True, timeout=20, check=True,
+                )
+                outcome = json.loads(process.stdout)
+                self.assertEqual(contains_rows == "1", outcome["denied"])
+                self.assertEqual(expected, outcome["events"])
 
 
 if __name__ == "__main__":

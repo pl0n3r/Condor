@@ -54,22 +54,42 @@ final class Version20261101120000 extends AbstractMigration // NOSONAR -- Doctri
         }
     }
 
+    /**
+     * MySQL/MariaDB DDL commits implicitly: avoid a deceptive migration transaction.
+     * The rollback holds exclusive table locks across counts and immediate DROP.
+     */
+    public function isTransactional(): bool
+    {
+        return false;
+    }
+
     public function down(Schema $schema): void
     {
-        $recordCount = (int) $this->connection->fetchOne(
-            'SELECT COUNT(*) FROM condor_occupational_record',
+        // LOCK TABLES blocks all other sessions from writing either table.
+        // Acquire both locks before checking emptiness, not after the counts.
+        $this->connection->executeStatement(
+            'LOCK TABLES condor_occupational_record WRITE, condor_occupational_audit WRITE',
         );
-        $eventCount = (int) $this->connection->fetchOne(
-            'SELECT COUNT(*) FROM condor_occupational_audit',
-        );
-        if (max($recordCount, $eventCount) > 0) {
-            throw new IrreversibleMigration(
-                'Retirar SG-SST con filas requiere respaldo y autorización separada.',
-            );
-        }
 
-        // Reversible only if both tables are empty. Preserve all existing rows.
-        $this->addSql('DROP TABLE condor_occupational_audit');
-        $this->addSql('DROP TABLE condor_occupational_record');
+        try {
+            $recordCount = (int) $this->connection->fetchOne(
+                'SELECT COUNT(*) FROM condor_occupational_record',
+            );
+            $eventCount = (int) $this->connection->fetchOne(
+                'SELECT COUNT(*) FROM condor_occupational_audit',
+            );
+            if (max($recordCount, $eventCount) > 0) {
+                throw new IrreversibleMigration(
+                    'Retirar SG-SST con filas requiere respaldo y autorización separada.',
+                );
+            }
+
+            // Execute now, inside the exclusive lock. Queuing addSql() would
+            // release control before Doctrine executes the DROP statements.
+            $this->connection->executeStatement('DROP TABLE condor_occupational_audit');
+            $this->connection->executeStatement('DROP TABLE condor_occupational_record');
+        } finally {
+            $this->connection->executeStatement('UNLOCK TABLES');
+        }
     }
 }
