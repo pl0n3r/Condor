@@ -43,7 +43,7 @@ class ModuloTests(unittest.TestCase):
 
     def test_sin_datos_reales(self) -> None:
         code = PANEL.read_text(encoding="utf-8")
-        patterns = re.findall(r"^\s+(affiliation|employee|plan): /(\^fixture:[^;]+)/,", code, re.M)
+        patterns = re.findall(r"^\s+(affiliation|employee|plan): /(\^fixture:[^\n]+?\$)/,", code, re.M)
         self.assertEqual(3, len(patterns))
         for kind, expression in patterns:
             pattern = re.compile(expression.replace(r"\/", "/"))
