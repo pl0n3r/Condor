@@ -406,9 +406,10 @@ export function AdminApp({
             />
           )}
 
-          {import.meta.env.DEV && DevHumanResourcesManagement && DevGovernanceManagement && DevComplianceEvidenceManagement && (
+          {import.meta.env.DEV && DevGovernanceManagement && DevComplianceEvidenceManagement && (
             <>
-              <Suspense fallback={<p role="status">Cargando talento humano ficticio…</p>}>
+              {import.meta.env.DEV && DevHumanResourcesManagement && (
+                <Suspense fallback={<p role="status">Cargando talento humano ficticio…</p>}>
                 <DevHumanResourcesManagement
                   key={'human-resources-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
                   tenantId={context.data.tenant.id}
@@ -417,6 +418,7 @@ export function AdminApp({
                   permissions={context.data.permissions}
                 />
               </Suspense>
+              )}
               <Suspense fallback={<p role="status">Cargando gobierno ficticio…</p>}>
                             <DevGovernanceManagement
                               key={'governance-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
