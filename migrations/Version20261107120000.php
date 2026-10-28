@@ -8,7 +8,7 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 /** Additive M13 fixture-only schema; D-054 guards deployment and backups. */
-final class Version20261106120000 extends AbstractMigration // NOSONAR -- Doctrine naming convention
+final class Version20261107120000 extends AbstractMigration // NOSONAR -- Doctrine naming convention
 {
     public function getDescription(): string
     {
