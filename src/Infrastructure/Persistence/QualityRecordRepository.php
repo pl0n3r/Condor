@@ -31,7 +31,7 @@ final readonly class QualityRecordRepository
             $history = $this->db->fetchAssociative(
                 'SELECT id, state, version FROM condor_quality_record '
                 .'WHERE tenant_ref = ? AND company_ref = ? AND quality_ref = ? '
-                .'ORDER BY version DESC LIMIT 1'.$this->rowLock(),
+                .'ORDER BY version DESC LIMIT 1'.$this->lockClause(),
                 [$tenantRef, $companyRef, $record->qualityRef()],
             );
             $newCase = $history === false;
@@ -88,7 +88,7 @@ final readonly class QualityRecordRepository
         });
     }
 
-    private function rowLock(): string
+    private function lockClause(): string
     {
         return $this->db->getDatabasePlatform() instanceof SQLitePlatform ? '' : ' FOR UPDATE';
     }
