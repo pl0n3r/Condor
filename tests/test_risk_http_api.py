@@ -85,7 +85,7 @@ class ModuloTests(unittest.TestCase):
         self.assertIsNone(got[3])
         self.assertEqual([got[0]], got[4])
         self.assertIn(
-            "hash('sha256', $company->id().'|'.$office->id())",
+            "hash('sha256', sprintf('%s|%s', $company->id(), $office->id()))",
             CONTROLLER.read_text(encoding="utf-8"),
         )
 
@@ -95,7 +95,7 @@ class ModuloTests(unittest.TestCase):
             "'settings.view'", "'settings.create'", "'settings.update'",
             "use BranchApiSupport;", "$this->authorizedBranchScope(",
             "$this->requireCsrf($request);", "$this->audit(", "$this->entityManager->flush()",
-            "'risk.synthetic.'.$event", "methods: ['GET']", "methods: ['POST']",
+            "sprintf('risk.synthetic.%s', $event)", "methods: ['GET']", "methods: ['POST']",
             "methods: ['PATCH']", "getenv('CONDOR_RISK_SYNTHETIC_API')",
             "getenv('CONDOR_PRODUCTION_STAGE')", "kernel.environment",
         ):
@@ -130,7 +130,7 @@ class ModuloTests(unittest.TestCase):
         for forbidden in ("curl_", "httpclient", "file_get_contents(", "document_number"):
             self.assertNotIn(forbidden, text)
         controller = CONTROLLER.read_text(encoding="utf-8")
-        self.assertIn("$environment !== 'dev'", controller)
+        self.assertIn("$environment === 'dev'", controller)
 
     def test_estados_explicitos(self) -> None:
         ref = "fixture:risk/sample"

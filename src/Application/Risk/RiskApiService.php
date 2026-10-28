@@ -17,7 +17,10 @@ final class RiskApiService
     private const STATES = ['PENDIENTE', 'EN_REVISION', 'REQUIERE_REVISION'];
     private const NEXT_STATES = ['EN_REVISION', 'REQUIERE_REVISION'];
 
-    /** @param array<string,mixed> $store @return list<array<string,mixed>> */
+    /**
+     * @param array<string,mixed> $store
+     * @return list<array<string,mixed>>
+     */
     public static function listRecords(array $store, string $scope): array
     {
         $items = self::bucket($store, $scope);
@@ -26,7 +29,10 @@ final class RiskApiService
         return array_values($items);
     }
 
-    /** @param array<string,mixed> $store @return array<string,mixed>|null */
+    /**
+     * @param array<string,mixed> $store
+     * @return array<string,mixed>|null
+     */
     public static function viewRecord(array $store, string $scope, string $ref): ?array
     {
         return self::bucket($store, $scope)[self::reference($ref)] ?? null;
@@ -92,7 +98,10 @@ final class RiskApiService
         return ['store' => $store, 'record' => $items[$ref]];
     }
 
-    /** @param array<string,mixed> $store @return array<string,array<string,mixed>> */
+    /**
+     * @param array<string,mixed> $store
+     * @return array<string,array<string,mixed>>
+     */
     private static function bucket(array $store, string $scope): array
     {
         if (preg_match('/\A[a-f0-9]{64}\z/D', $scope) !== 1) {

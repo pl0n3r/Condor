@@ -95,10 +95,11 @@ final class RiskController extends AbstractController
     private function access(Request $request, string $branchId, string $permission, bool $write = false): array
     {
         $environment = $this->getParameter('kernel.environment');
-        if ($environment !== 'test' && ($environment !== 'dev'
-            || getenv('CONDOR_RISK_SYNTHETIC_API') !== '1'
-            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion'
-        )) {
+        $allowTesting = $environment === 'test';
+        $allowDevelopment = $environment === 'dev'
+            && getenv('CONDOR_RISK_SYNTHETIC_API') === '1'
+            && getenv('CONDOR_PRODUCTION_STAGE') === 'construccion';
+        if (!$allowTesting && !$allowDevelopment) {
             throw new NotFoundHttpException('Riesgos de prueba no disponibles.');
         }
         if ($write) {
@@ -112,21 +113,22 @@ final class RiskController extends AbstractController
     /** @return array<string,mixed> */
     private function getQueue(Request $request): array
     {
-        $value = $request->getSession()->get('condor_risk_synthetic', []);
-        if (!is_array($value)) {
-            throw new NotFoundHttpException('Archivo de prueba no disponible.');
+        $queue = $request->getSession()->get('condor_risk_synthetic', []);
+        if (is_array($queue)) {
+            return $queue;
         }
-        return $value;
+        throw new NotFoundHttpException('Archivo de prueba no disponible.');
     }
 
     private function scope(Tenant $company, Branch $office): string
     {
-        return hash('sha256', $company->id().'|'.$office->id());
+        return hash('sha256', sprintf('%s|%s', $company->id(), $office->id()));
     }
 
     private function auditPreview(Tenant $company, User $actor, string $event, string $ref): void
     {
-        $this->audit($company, $actor, 'risk.synthetic.'.$event, RiskApiService::class, $ref, [
+        $action = sprintf('risk.synthetic.%s', $event);
+        $this->audit($company, $actor, $action, RiskApiService::class, $ref, [
             'synthetic_only' => true,
         ]);
         $this->entityManager->flush();
