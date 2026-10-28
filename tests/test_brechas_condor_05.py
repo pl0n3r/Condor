@@ -110,8 +110,10 @@ def local_signals(sources: object) -> dict[str, str]:
                               and "workflow_run:" not in head
                               and "actions/artifacts?name=$artifact_name" in telemetry
                               and "test_telemetry_is_hourly_not_per_ci_run" in load),
-        "D-006": ("README" in readme and "snapshot" in readme.casefold()
-                  and "CI verde no equivale" in readme
+        "D-006": ("## Operational Cockpit" in readme
+                  and "esta portada no declara producción validada" in readme
+                  and "la [guía de ocho módulos]" in readme
+                  and "README Contract v2 **no** crea una segunda fuente de versiones" in readme
                   and "config/version.php" in readme),
     }
     return {gap: LOCAL_PARTIAL if signal else UNKNOWN for gap, signal in signals.items()}
