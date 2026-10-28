@@ -39,6 +39,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'notification_preferences',
                 'payroll_synthetic_records',
                 'self_service_trial_application',
+                'social_security_synthetic_records',
                 'workflow_definitions',
                 'workflow_executions',
             ],
@@ -195,6 +196,22 @@ final class PrivacyAsCodeTest extends TestCase
     private function root(): string
     {
         return dirname(__DIR__, 3);
+    }
+
+    /** Runs all four M05 synthetic DBAL acceptance cases in Composer-enabled PHP CI. */
+    public function testSocialSecurityPersistenceRealPhp(): void
+    {
+        $process = new \Symfony\Component\Process\Process(
+            ['python3', '-m', 'unittest', 'discover', '-s', 'tests',
+                '-p', 'test_social_security_persistence.py', '-v'],
+            $this->root(),
+        );
+        $process->setTimeout(90);
+        $process->run();
+        self::assertTrue(
+            $process->isSuccessful(),
+            'M05 synthetic acceptance failed: '.$process->getOutput().$process->getErrorOutput(),
+        );
     }
 
     /** @param array<string, mixed> $data
