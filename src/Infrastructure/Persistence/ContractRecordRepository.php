@@ -40,11 +40,9 @@ final class PdoContractRecordStorage implements ContractRecordStorage
         if ($statement === false || !$statement->execute($params)) {
             throw new \RuntimeException('contract_persistence_failed');
         }
+        /** @var array<array<string, mixed>> $rows */
         $rows = $statement->fetchAll(\PDO::FETCH_ASSOC);
-        if (!is_array($rows)) {
-            throw new \RuntimeException('contract_persistence_failed');
-        }
-        return $rows;
+        return array_values($rows);
     }
 }
 
