@@ -53,8 +53,9 @@ class ModuloTests(unittest.TestCase):
                 self.assertIsNone(regex.fullmatch(unsafe))
         self.assertIn("if (!import.meta.env.DEV) return null;", code)
         self.assertIn("import.meta.env.DEV && (", app)
-        for unwanted in ("axios", "httpclient", "token:", "password:"):
-            self.assertNotIn(unwanted, code.lower())
+        for unwanted in ("axios", "httpclient", "token:", "password:",
+                         "navigator.sendBeacon", "new WebSocket(", "XMLHttpRequest("):
+            self.assertNotIn(unwanted.lower(), code.lower())
 
     def test_estados_explicitos(self) -> None:
         code, app = COMPONENT.read_text(), APP.read_text()
