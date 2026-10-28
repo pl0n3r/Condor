@@ -16,22 +16,24 @@ HARNESS = ROOT / "tests/contracts_admin_ui_runtime.mjs"
 
 
 class ContractsAdminBehaviorTests(unittest.TestCase):
-    def _run(self, scenario: str, *, mutated: bool = False) -> subprocess.CompletedProcess[str]:
+    def _run(self, scenario: str, *, mutation: str | None = None) -> subprocess.CompletedProcess[str]:
         self.assertIsNotNone(shutil.which("node"), "Node is required to exercise M02 behavior")
         args = ["node", str(HARNESS), scenario]
-        if mutated:
-            args.append("--mutate-scope")
+        if mutation:
+            args.append(mutation)
         return subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
                               timeout=20, check=False)
 
     def test_tenant_scope_and_mutation_guard(self):
         normal = self._run("scope")
         self.assertEqual(0, normal.returncode, normal.stdout + normal.stderr)
-        bypass = self._run("scope", mutated=True)
-        self.assertNotEqual(0, bypass.returncode,
-                            "scope bypass 'true || entry.scope === scope' must break the test")
-        self.assertIn("isolation", bypass.stderr,
-                      "the mutation must fail on observable cross-scope behavior")
+        for mutation in ("--mutate-scope", "--mutate-transition"):
+            with self.subTest(mutation=mutation):
+                bypass = self._run("scope", mutation=mutation)
+                self.assertNotEqual(0, bypass.returncode,
+                                    "scope bypass must break observed behavior")
+                self.assertIn("isolation", bypass.stderr,
+                              "the mutation must fail on cross-scope behavior")
 
     def test_invalid_permissions_fixtures_duplicates_and_transitions(self):
         result = self._run("validation")
