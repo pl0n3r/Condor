@@ -19,7 +19,7 @@ use Throwable;
 final class UnitEconomicsProjection
 {
     /**
-     * @param list<array{subscription:Subscription,entitlements:EntitlementSnapshot,cost_evidence:array<string,mixed>}> $records
+     * @param array<array-key, mixed> $records
      * @return array{status:string,reason:string|null,rows:list<array<string,mixed>>}
      */
     public static function project(bool $owner, array $records, DateTimeImmutable $now): array
@@ -36,6 +36,9 @@ final class UnitEconomicsProjection
             $rows = [];
             $incomplete = false;
             foreach ($records as $record) {
+                if (!is_array($record)) {
+                    throw new DomainException('invalid_record');
+                }
                 self::exactKeys($record, ['subscription', 'entitlements', 'cost_evidence']);
                 $subscription = $record['subscription'];
                 $entitlements = $record['entitlements'];
@@ -60,23 +63,14 @@ final class UnitEconomicsProjection
                 $seen[$tenant] = true;
 
                 $audits = $entitlements->overrideProvenance();
-                if (!is_array($audits) || !array_is_list($audits)) {
-                    throw new DomainException('invalid_audit');
-                }
                 $seenAudits = [];
                 foreach ($audits as $audit) {
-                    if (!is_array($audit)) {
-                        throw new DomainException('invalid_audit');
-                    }
                     self::exactKeys($audit, ['namespace', 'key', 'value', 'reason', 'actor', 'created_at']);
                     if (!in_array($audit['namespace'], ['addon', 'capability', 'limit'], true)
                         || !self::safeKey($audit['key'])
                         || !self::synthetic($audit['actor'], 'actor')
-                        || !is_string($audit['reason'])
                         || preg_match('/^synthetic_[a-z0-9_]{1,64}$/D', $audit['reason']) !== 1
-                        || !(is_bool($audit['value']) || is_int($audit['value']) || $audit['value'] === null
-                            || (is_string($audit['value']) && preg_match('/^synthetic_[a-z0-9_]{1,64}$/D', $audit['value']) === 1))
-                        || !is_string($audit['created_at'])
+                        || !self::auditValue($audit['value'])
                         || preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{6})?Z$/D', $audit['created_at']) !== 1) {
                         throw new DomainException('invalid_audit');
                     }
@@ -111,7 +105,8 @@ final class UnitEconomicsProjection
                     $unit,
                     $now,
                 );
-                $valid = $read['status'] === 'valid';
+                $metrics = $read['metrics'];
+                $valid = $read['status'] === 'valid' && $metrics !== null;
                 $incomplete = $incomplete || !$valid;
                 $rows[] = [
                     'tenant_ref' => $tenant,
@@ -122,10 +117,10 @@ final class UnitEconomicsProjection
                     'reason' => $valid ? null : 'cost_or_revenue_unknown',
                     'currency' => $valid ? $read['currency'] : null,
                     'source_window' => $valid ? $read['source_window'] : null,
-                    'gross_margin_amount' => $valid ? $read['metrics']['gross_margin_amount'] : null,
-                    'gross_margin_percent' => $valid ? $read['metrics']['gross_margin_percent'] : null,
-                    'contribution_margin_amount' => $valid ? $read['metrics']['contribution_margin_amount'] : null,
-                    'contribution_margin_percent' => $valid ? $read['metrics']['contribution_margin_percent'] : null,
+                    'gross_margin_amount' => $valid ? $metrics['gross_margin_amount'] ?? null : null,
+                    'gross_margin_percent' => $valid ? $metrics['gross_margin_percent'] ?? null : null,
+                    'contribution_margin_amount' => $valid ? $metrics['contribution_margin_amount'] ?? null : null,
+                    'contribution_margin_percent' => $valid ? $metrics['contribution_margin_percent'] ?? null : null,
                     'provenance' => $valid ? $read['provenance'] : null,
                     'audit_count' => count($audits),
                 ];
@@ -137,7 +132,10 @@ final class UnitEconomicsProjection
         }
     }
 
-    /** @param array<string,mixed> $record @param list<string> $expected */
+    /**
+     * @param array<string, mixed> $record
+     * @param list<string> $expected
+     */
     private static function exactKeys(array $record, array $expected): void
     {
         $keys = array_keys($record);
@@ -146,6 +144,12 @@ final class UnitEconomicsProjection
         if ($keys !== $expected) {
             throw new DomainException('invalid_shape');
         }
+    }
+
+    private static function auditValue(bool|int|string|null $value): bool
+    {
+        return !is_string($value)
+            || preg_match('/^synthetic_[a-z0-9_]{1,64}$/D', $value) === 1;
     }
 
     private static function safeKey(mixed $value): bool
