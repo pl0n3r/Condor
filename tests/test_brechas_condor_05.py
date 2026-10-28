@@ -15,6 +15,7 @@ MATRIX = ROOT / "docs/matriz-cobertura.md"
 AGENTS = ROOT / "AGENTES.md"
 README = ROOT / "README.md"
 POST_DEPLOY = ROOT / "scripts/post-deploy.sh"
+POST_DEPLOY_TEST = ROOT / "tests/test_post_deploy.py"
 TELEMETRY = ROOT / ".github/workflows/ci-throughput-telemetry.yml"
 LOAD_TEST = ROOT / "tests/test_github_load_contract.py"
 
@@ -82,17 +83,20 @@ def synthetic_release(snapshot: object, receipt: object) -> str:
 
 def local_signals(sources: object) -> dict[str, str]:
     """Detecta guardas en archivos públicos; faltante nunca implica éxito."""
-    if (not isinstance(sources, dict) or set(sources) != {"agents", "readme", "post", "telemetry", "load"}
+    if (not isinstance(sources, dict) or set(sources) != {"agents", "readme", "post", "post_test", "telemetry", "load"}
             or any(not isinstance(s, str) or not s.strip() for s in sources.values())):
         return {gap: UNKNOWN for gap in GAPS}
     agents, readme, post = sources["agents"], sources["readme"], sources["post"]
+    post_test = sources["post_test"]
     telemetry, load = sources["telemetry"], sources["load"]
     head = telemetry.split("\npermissions:", 1)[0]
     signals = {
         "AGENTES-07-06": ("si backup o validación fallan, se falla cerrado" in agents
                               and "validate_construction_migrations" in post
                               and "cleanup_backup" in post
-                              and "caché no modificada" in post),
+                              and "caché no modificada" in post
+                              and "test_backup_failure_prevents_migration_and_cache" in post_test
+                              and "test_post_migration_schema_recheck_times_out_fail_closed" in post_test),
         "AGENTES-08-03": ("claims de archivo disjuntos" in agents
                               and "reserva V3 válida" in agents
                               and "sin tope fijo de agentes por repo" in agents
@@ -128,6 +132,7 @@ class BrechasCondor05Tests(unittest.TestCase):
         cls.sources = {"agents": AGENTS.read_text(encoding="utf-8"),
                        "readme": README.read_text(encoding="utf-8"),
                        "post": POST_DEPLOY.read_text(encoding="utf-8"),
+                       "post_test": POST_DEPLOY_TEST.read_text(encoding="utf-8"),
                        "telemetry": TELEMETRY.read_text(encoding="utf-8"),
                        "load": LOAD_TEST.read_text(encoding="utf-8")}
         cls.local = local_signals(cls.sources)
@@ -181,7 +186,8 @@ class BrechasCondor05Tests(unittest.TestCase):
     def test_sin_datos_reales(self) -> None:
         """AC-03: solo archivos versionados y recibos sintéticos no secretos."""
         self.assertTrue(all(path.is_file() for path in
-                            (MATRIX, AGENTS, README, POST_DEPLOY, TELEMETRY, LOAD_TEST)))
+                            (MATRIX, AGENTS, README, POST_DEPLOY, POST_DEPLOY_TEST,
+                             TELEMETRY, LOAD_TEST)))
         fixture = {"run": "synthetic-ci-001", "lease": "synthetic-v3-001",
                    "backup": "synthetic-backup-failed", "release": "synthetic-release-001"}
         self.assertTrue(all(v.startswith("synthetic-") for v in fixture.values()))
