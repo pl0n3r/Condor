@@ -222,7 +222,7 @@ class BrechasCondor21Tests(unittest.TestCase):
         for key, src, needle in (
             ("D-052", "transfer", "$sourceFrom->legalEntity()->id() !== $sourceTo->legalEntity()->id()"),
             ("D-053", "post", "esquema pendiente en live"),
-            ("D-054", "post", "run_pre_migration_backup"),
+            ("D-054", "post", "if run_pre_migration_backup; then"),
             ("GEST-AC-01", "normative", "'REQUIERE_REVISION'"),
             ("GEST-AC-02", "evidence", "'state' => 'PENDIENTE'"),
         ):
