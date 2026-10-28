@@ -14,6 +14,7 @@ import { ReportsDownloads } from './ReportsDownloads';
 import { EmployeesManagement } from './EmployeesManagement';
 import { ProductionManagement } from './ProductionManagement';
 import { PurchasingManagement } from './PurchasingManagement';
+import { CustomerServiceManagement } from './CustomerServiceManagement';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
 import { contextPath } from './api';
@@ -155,6 +156,7 @@ export function AdminApp({
         { href: '/admin#seo-settings', label: 'SEO' },
         { href: '/admin#production', label: 'Producción' },
         { href: '/admin#purchasing', label: 'Compras' },
+        ...(import.meta.env.DEV ? [{ href: '/admin#customer-service', label: 'Servicio al cliente (pruebas)' }] : []),
         { href: '/admin#commerce', label: 'Comercial' },
         { href: '/admin#orders', label: 'Pedidos' },
         { href: '/admin#sales-reports', label: 'Reportes de ventas' },
@@ -343,6 +345,15 @@ export function AdminApp({
             permissions={context.data.permissions}
             csrfToken={accessToken}
           />
+
+          {import.meta.env.DEV && (
+            <CustomerServiceManagement
+              key={'customer-service-' + context.data.tenant.id + '-' + context.data.active_branch.id}
+              tenantId={context.data.tenant.id}
+              branchId={context.data.active_branch.id}
+              permissions={context.data.permissions}
+            />
+          )}
 
           <CommerceManagement
             key={'commerce-' + context.data.active_branch.id}
