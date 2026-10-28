@@ -17,7 +17,15 @@ final class Version20261104120000 extends AbstractMigration // NOSONAR -- Doctri
 
     public function up(Schema $schema): void
     {
-        $this->addSql(<<<'SQL'
+        // Separate DDL units keep document integrity and audit structures independently reviewable.
+        $this->addSql($this->documentRecordSql());
+        $this->addSql($this->documentAuditSql());
+    }
+
+    /** Only append new structures; never modify or backfill existing tenant data. */
+    private function documentRecordSql(): string
+    {
+        return <<<'SQL'
             CREATE TABLE condor_document_record (
                 id VARCHAR(26) NOT NULL,
                 tenant_ref VARCHAR(96) NOT NULL,
@@ -39,8 +47,13 @@ final class Version20261104120000 extends AbstractMigration // NOSONAR -- Doctri
                 CONSTRAINT chk_document_class CHECK (classification IN ('PUBLICA', 'INTERNA', 'RESERVADA')),
                 CONSTRAINT chk_document_version CHECK (version >= 1)
             ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
-            SQL);
-        $this->addSql(<<<'SQL'
+            SQL;
+    }
+
+    /** Audit records reference their exact company-scoped document version. */
+    private function documentAuditSql(): string
+    {
+        return <<<'SQL'
             CREATE TABLE condor_document_audit (
                 audit_ref VARCHAR(26) NOT NULL,
                 tenant_ref VARCHAR(96) NOT NULL,
@@ -57,7 +70,7 @@ final class Version20261104120000 extends AbstractMigration // NOSONAR -- Doctri
                     REFERENCES condor_document_record (tenant_ref, legal_entity_ref, record_ref, version)
                     ON DELETE RESTRICT
             ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci ENGINE = InnoDB
-            SQL);
+            SQL;
     }
 
     public function down(Schema $schema): void
