@@ -1,219 +1,176 @@
 /// <reference types="vite/client" />
 import { useState, type FormEvent } from 'react';
 
-/** M02: simulación local de contratación laboral; sin efecto contractual real. */
-type ContractState = 'BORRADOR' | 'REQUIERE_REVISION' | 'EN_REVISION';
-type ContractKind = 'PLANTILLA' | 'CONTRATO' | 'OTROSI';
-type ContractRow = Readonly<{
-  reference: string;
-  personRef: string;
-  templateRef: string;
-  kind: ContractKind;
-  tenantId: string;
-  companyId: string;
-  branchId: string;
-  state: ContractState;
+// M02: demostración local, nunca un contrato de trabajo ejecutable ni una firma.
+type Phase = 'BORRADOR' | 'REQUIERE_REVISION' | 'EN_REVISION';
+type ContractType = 'PLANTILLA' | 'CONTRATO' | 'OTROSI';
+type Draft = Readonly<{
+  ref: string;
+  fictionalPerson: string;
+  sourceTemplate: string;
+  category: ContractType;
+  phase: Phase;
+  scope: string;
 }>;
-type AuditEvent = Readonly<{ scope: string; reference: string; action: 'created' | 'viewed' | 'review_requested' | 'review_started' }>;
+type Note = Readonly<{ scope: string; ref: string; operation: string }>;
 type Props = Readonly<{ tenantId: string; companyId: string; branchId: string; permissions: string[] }>;
 
-const contractsRefPattern = /^fixture:contracts\/(demo|test|sample)-[0-9]{2,3}$/;
-const personRefPattern = /^fixture:person\/(demo|test|sample)-[0-9]{2,3}$/;
-const templateRefPattern = /^fixture:template\/(demo|test|sample)-[0-9]{2,3}$/;
-const kinds: ContractKind[] = ['PLANTILLA', 'CONTRATO', 'OTROSI'];
-const states: ContractState[] = ['BORRADOR', 'REQUIERE_REVISION', 'EN_REVISION'];
+// Fijar referencias sintéticas predecibles; una cadena "fixture:" no basta.
+const permitted = {
+  contract: new RegExp('^fixture:contracts/(demo|test|sample)-[0-9]{2,3}$'),
+  person: new RegExp('^fixture:person/(demo|test|sample)-[0-9]{2,3}$'),
+  template: new RegExp('^fixture:template/(demo|test|sample)-[0-9]{2,3}$'),
+} as const;
+const allowedType: readonly ContractType[] = ['PLANTILLA', 'CONTRATO', 'OTROSI'];
 
-function isFixture(value: string, pattern: RegExp): boolean {
-  return pattern.test(value) && !/[0-9]{7,}/.test(value);
-}
-
-function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
-  const scope = tenantId + '|' + companyId + '|' + branchId;
-  const canView = companyId !== '__unassigned__' && permissions.includes('users.view');
-  const canCreate = canView && permissions.includes('users.create');
-  const canReview = canView && permissions.includes('users.update');
-  const [records, setRecords] = useState<ContractRow[]>([]);
-  const [events, setEvents] = useState<AuditEvent[]>([]);
-  const [reference, setReference] = useState('');
-  const [personRef, setBodyRef] = useState('');
-  const [templateRef, setRepresentativeRef] = useState('');
-  const [kind, setKind] = useState<ContractKind>('PLANTILLA');
-  const [selected, setSelected] = useState('');
-  const [search, setSearch] = useState('');
-  const [kindFilter, setKindFilter] = useState<'TODOS' | ContractKind>('TODOS');
-  const [stateFilter, setStateFilter] = useState<'TODOS' | ContractState>('TODOS');
+function ContractPreview({ tenantId, companyId, branchId, permissions }: Props) {
+  const scope = [tenantId, companyId, branchId].join('|');
+  const canRead = companyId !== '__unassigned__' && permissions.includes('users.view');
+  const canAdd = canRead && permissions.includes('users.create');
+  const canAdvance = canRead && permissions.includes('users.update');
+  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [trail, setTrail] = useState<Note[]>([]);
+  const [ref, setRef] = useState('');
+  const [fictionalPerson, setFictionalPerson] = useState('');
+  const [sourceTemplate, setSourceTemplate] = useState('');
+  const [category, setCategory] = useState<ContractType>('CONTRATO');
+  const [picked, setPicked] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
   const [notice, setNotice] = useState('');
 
-  function audit(item: string, action: AuditEvent['action']) {
-    setEvents(previous => [...previous, { scope, reference: item, action }].slice(-100));
+  const scopedDrafts = drafts.filter(entry => entry.scope === scope);
+  const listing = scopedDrafts.filter(entry => entry.ref.includes(filter.trim().toLowerCase()));
+  const selected = scopedDrafts.find(entry => entry.ref === picked);
+
+  function record(refToRecord: string, operation: string) {
+    setTrail(items => items.concat({ scope, ref: refToRecord, operation }).slice(-80));
   }
 
-  function create(event: FormEvent<HTMLFormElement>) {
+  function createDemo(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canCreate || !isFixture(reference, contractsRefPattern)
-      || !isFixture(personRef, personRefPattern)
-      || !isFixture(templateRef, templateRefPattern)
-      || !kinds.includes(kind) || records.length >= 100
-      || records.some(row => row.reference === reference && row.tenantId === tenantId
-        && row.companyId === companyId && row.branchId === branchId)) {
-      setNotice('Rechazado: revisa permisos, referencias ficticias y duplicados.');
+    const valid = permitted.contract.test(ref) && permitted.person.test(fictionalPerson)
+      && permitted.template.test(sourceTemplate) && allowedType.includes(category);
+    if (!canAdd || !valid || scopedDrafts.length >= 80
+      || scopedDrafts.some(item => item.ref === ref)) {
+      setNotice('Rechazado. Usa solo referencias inventadas, con permiso y sin duplicados.');
       return;
     }
-    setRecords(previous => [...previous, {
-      reference, personRef, templateRef, kind, tenantId, companyId, branchId,
-      state: 'BORRADOR',
-    }]);
-    audit(reference, 'created');
-    setSelected(reference);
-    setReference('');
-    setBodyRef('');
-    setRepresentativeRef('');
-    setNotice('Borrador ficticio creado solo en memoria, sin valor legal.');
+    setDrafts(items => items.concat({
+      ref, fictionalPerson, sourceTemplate, category, scope, phase: 'BORRADOR',
+    }));
+    record(ref, 'borrador_creado');
+    setPicked(ref);
+    setRef('');
+    setFictionalPerson('');
+    setSourceTemplate('');
+    setNotice('Borrador ficticio creado en esta pantalla. Sin valor legal.');
   }
 
-  function view(ref: string) {
-    if (!canView || !isFixture(ref, contractsRefPattern) || !records.some(row =>
-      row.reference === ref && row.tenantId === tenantId
-      && row.companyId === companyId && row.branchId === branchId)) return;
-    setSelected(ref);
-    audit(ref, 'viewed');
+  function inspect(item: Draft) {
+    if (!canRead || item.scope !== scope) return;
+    setPicked(item.ref);
+    record(item.ref, 'consulta_ficticia');
   }
 
-  function changeState(event: FormEvent<HTMLFormElement>) {
+  function advance(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const current = records.find(row => row.reference === selected
-      && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId);
-    if (!canReview || !current || !isFixture(selected, contractsRefPattern)
-      || current.state === 'EN_REVISION') {
-      setNotice('No se cambió el estado: falta permiso o la transición no aplica.');
+    if (!canAdvance || !selected || selected.scope !== scope || selected.phase === 'EN_REVISION') {
+      setNotice('No es posible cambiar el estado con los permisos y el borrador actuales.');
       return;
     }
-    const next: ContractState = current.state === 'BORRADOR' ? 'REQUIERE_REVISION' : 'EN_REVISION';
-    setRecords(previous => previous.map(row =>
-      row.reference === selected && row.tenantId === tenantId
-      && row.companyId === companyId && row.branchId === branchId
-        ? { ...row, state: next } : row));
-    audit(selected, current.state === 'BORRADOR' ? 'review_requested' : 'review_started');
-    setNotice('Transición ficticia explícita; no se aprobó ni cerró ninguna contrato.');
+    const next: Phase = selected.phase === 'BORRADOR' ? 'REQUIERE_REVISION' : 'EN_REVISION';
+    setDrafts(items => items.map(item => item.ref === selected.ref && item.scope === scope
+      ? { ...item, phase: next } : item));
+    record(selected.ref, 'revision_manual_' + next.toLowerCase());
+    setNotice('Se registró una transición de prueba, no una firma ni un cierre.');
   }
 
-  if (!canView) return (
-    <section id="contracts-management" aria-label="Contratación laboral sintético">
-      <p role="alert">No tienes acceso a esta simulación o no hay razón social activa.</p>
-    </section>
+  if (!canRead) return (
+    <section aria-label="Contratación ficticia"><p role="alert">
+      No tienes permiso de lectura de la demostración o no hay empresa seleccionada.
+    </p></section>
   );
 
-  const scoped = records.filter(row => row.tenantId === tenantId
-    && row.companyId === companyId && row.branchId === branchId);
-  const visible = scoped.filter(row =>
-    (kindFilter === 'TODOS' || row.kind === kindFilter)
-    && (stateFilter === 'TODOS' || row.state === stateFilter)
-    && (search.trim() === '' || row.reference.includes(search.toLowerCase().trim())));
-  const current = scoped.find(row => row.reference === selected);
-
   return (
-    <section id="contracts-management" className="catalog-panel" aria-labelledby="contracts-title">
+    <section id="contracts-management" className="catalog-panel" aria-labelledby="m02-title">
       <header>
-        <h2 id="contracts-title">Contratación laboral · simulación M02</h2>
-        <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal ni facultades reales.</p>
-        <p className="muted">Personas, representantes y decisiones de prueba, solo en memoria.</p>
+        <h2 id="m02-title">Contratación laboral · prueba local M02</h2>
+        <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal, sin trámites, sin datos de trabajadores.</p>
       </header>
       {notice && <output role="status" aria-live="polite">{notice}</output>}
       <div className="catalog-grid">
-        <section className="catalog-card" aria-labelledby="contracts-list-title">
-          <h3 id="contracts-list-title">Contratos ficticias</h3>
-          <label>Buscar referencia
-            <input aria-label="Buscar contrato ficticia" value={search} maxLength={80}
-              onChange={event => setSearch(event.target.value)} />
+        <section className="catalog-card" aria-label="Borradores de prueba">
+          <label>Buscar referencia inventada
+            <input value={filter} maxLength={80} onChange={event => setFilter(event.target.value)} />
           </label>
-          <label>Tipo de tipo de contrato
-            <select aria-label="Filtrar por tipo de contrato" value={kindFilter}
-              onChange={event => setKindFilter(event.target.value as typeof kindFilter)}>
-              <option value="TODOS">Todos</option>
-              {kinds.map(item => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
-          <label>Estado
-            <select aria-label="Filtrar por estado" value={stateFilter}
-              onChange={event => setStateFilter(event.target.value as typeof stateFilter)}>
-              <option value="TODOS">Todos</option>
-              {states.map(item => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
-          {visible.length === 0 ? <p role="status">Sin contratos ficticias para el filtro.</p> : (
-            <ul>{visible.map(row => (
-              <li key={row.reference}>
-                <button type="button" onClick={() => view(row.reference)}>
-                  {row.reference} · {row.kind} · {row.state}
-                </button>
-              </li>
-            ))}</ul>
+          {listing.length === 0 ? <p role="status">Sin registros en esta empresa y sede.</p> : (
+            <table aria-label="Contratos sintéticos"><thead><tr>
+              <th>Referencia</th><th>Clase</th><th>Estado</th><th>Acción</th>
+            </tr></thead><tbody>
+              {listing.map(item => <tr key={item.ref}>
+                <td>{item.ref}</td><td>{item.category}</td><td>{item.phase}</td>
+                <td><button type="button" onClick={() => inspect(item)}>Consultar prueba</button></td>
+              </tr>)}
+            </tbody></table>
           )}
         </section>
-        {canCreate && (
-          <section className="catalog-card" aria-labelledby="contracts-create-title">
-            <h3 id="contracts-create-title">Crear contrato de prueba</h3>
-            <form className="catalog-editor" onSubmit={create}>
-              <label>Referencia ficticia
-                <input required maxLength={64} pattern="fixture:contracts/(demo|test|sample)-[0-9]{2,3}"
-                  placeholder="fixture:contracts/demo" value={reference}
-                  onChange={event => setReference(event.target.value)} />
-              </label>
-              <label>Persona ficticio
-                <input required maxLength={64} pattern="fixture:person/(demo|test|sample)-[0-9]{2,3}"
-                  placeholder="fixture:person/demo" value={personRef}
-                  onChange={event => setBodyRef(event.target.value)} />
-              </label>
-              <label>Plantilla ficticio
-                <input required maxLength={64} pattern="fixture:template/(demo|test|sample)-[0-9]{2,3}"
-                  placeholder="fixture:template/demo" value={templateRef}
-                  onChange={event => setRepresentativeRef(event.target.value)} />
-              </label>
-              <label>Clase
-                <select value={kind} onChange={event => setKind(event.target.value as ContractKind)}>
-                  {kinds.map(item => <option key={item} value={item}>{item}</option>)}
-                </select>
-              </label>
-              <button type="submit">Crear borrador ficticio</button>
-            </form>
-          </section>
-        )}
-        <section className="catalog-card" aria-labelledby="contracts-detail-title">
-          <h3 id="contracts-detail-title">Detalle y revisión manual</h3>
-          {current ? <>
-            <dl>
-              <dt>Referencia</dt><dd>{current.reference}</dd>
-              <dt>Persona</dt><dd>{current.personRef}</dd>
-              <dt>Plantilla</dt><dd>{current.templateRef}</dd>
-              <dt>Clase</dt><dd>{current.kind}</dd>
-              <dt>Estado</dt><dd>{current.state}</dd>
-            </dl>
-            {canReview && current.state !== 'EN_REVISION' && (
-              <form className="catalog-editor" onSubmit={changeState}>
-                <button type="submit">{current.state === 'BORRADOR'
-                  ? 'Solicitar revisión ficticia' : 'Iniciar revisión ficticia'}</button>
-              </form>
+        {canAdd && <section className="catalog-card" aria-label="Nuevo borrador de prueba">
+          <form className="catalog-editor" onSubmit={createDemo}>
+            <label>Contrato sintético
+              <input value={ref} required maxLength={64}
+                placeholder="fixture:contracts/demo-01"
+                pattern="fixture:contracts/(demo|test|sample)-[0-9]{2,3}"
+                onChange={event => setRef(event.target.value)} />
+            </label>
+            <label>Persona sintética
+              <input value={fictionalPerson} required maxLength={64}
+                placeholder="fixture:person/demo-01"
+                pattern="fixture:person/(demo|test|sample)-[0-9]{2,3}"
+                onChange={event => setFictionalPerson(event.target.value)} />
+            </label>
+            <label>Plantilla sintética
+              <input value={sourceTemplate} required maxLength={64}
+                placeholder="fixture:template/demo-01"
+                pattern="fixture:template/(demo|test|sample)-[0-9]{2,3}"
+                onChange={event => setSourceTemplate(event.target.value)} />
+            </label>
+            <label>Tipo de borrador
+              <select value={category} onChange={event => setCategory(event.target.value as ContractType)}>
+                {allowedType.map(item => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </label>
+            <button type="submit">Crear borrador ficticio</button>
+          </form>
+        </section>}
+        <section className="catalog-card" aria-label="Ficha del borrador">
+          <h3>Revisión manual de prueba</h3>
+          {!selected ? <p role="status">Selecciona una referencia sintética.</p> : <>
+            <dl><dt>Referencia</dt><dd>{selected.ref}</dd>
+              <dt>Persona ficticia</dt><dd>{selected.fictionalPerson}</dd>
+              <dt>Plantilla ficticia</dt><dd>{selected.sourceTemplate}</dd>
+              <dt>Estado</dt><dd>{selected.phase}</dd></dl>
+            {canAdvance && selected.phase !== 'EN_REVISION' && (
+              <form onSubmit={advance}><button type="submit">
+                {selected.phase === 'BORRADOR' ? 'Solicitar revisión de prueba' : 'Iniciar revisión de prueba'}
+              </button></form>
             )}
-            <p className="muted">Ningún contrato, firma o liquidación se aprueba ni cierra automáticamente.</p>
-          </> : <p role="status">Selecciona una contrato ficticia para el detalle.</p>}
+            <p className="muted">Ningún borrador se aprueba, firma o cierra automáticamente.</p>
+          </>}
         </section>
-        <section className="catalog-card" aria-labelledby="contracts-audit-title">
-          <h3 id="contracts-audit-title">Bitácora de demostración (no oficial)</h3>
-          <p className="muted">Las operaciones reales exigen permisos y auditoría de servidor.</p>
-          {events.filter(row => row.scope === scope).length === 0
-            ? <p role="status">Sin operaciones de prueba.</p>
-            : <ul>{events.filter(row => row.scope === scope).map((row, index) => (
-              <li key={index}>{row.action} · {row.reference}</li>
-            ))}</ul>}
-        </section>
+        <aside className="catalog-card" aria-label="Operaciones del simulador">
+          <h3>Bitácora local de demostración</h3>
+          <p className="muted">No es evidencia ni auditoría de servidor.</p>
+          <ol>{trail.filter(note => note.scope === scope).map((note, index) =>
+            <li key={index}>{note.ref}: {note.operation}</li>)}</ol>
+        </aside>
       </div>
     </section>
   );
 }
 
-/** Nunca habilitar este simulador para clientes reales. */
+// Un montaje por ámbito y solo en DEV. No habilita rutas reales ni persistencia.
 export function ContractsManagement(props: Props) {
   if (!import.meta.env.DEV) return null;
-  return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId}
+  return <ContractPreview key={[props.tenantId, props.companyId, props.branchId].join('|')}
     {...props} />;
 }
