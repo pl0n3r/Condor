@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Application\Commercial;
 
 use App\Domain\Commercial\Entity\SubscriptionChangeRecord;
+use App\Domain\Commercial\Entity\ManualCommercialDecision;
+use App\Infrastructure\Persistence\ManualCommercialDecisionRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
 
@@ -110,6 +112,72 @@ final readonly class ManualSubscriptionOperations
                 'commercial' => $changed,
             ];
         });
+    }
+
+
+    /**
+     * Apply immutable manual terms to an existing synthetic subscription.
+     * Actual tariffs come exclusively from the canonical PlanVersion repository.
+     *
+     * @param array<string,mixed> $command
+     * @return array<string,mixed>
+     */
+    public function recordTerms(
+        string $tenantId,
+        string $ownerId,
+        array $command,
+        ManualCommercialDecisionRepository $repository,
+    ): array {
+        if (!self::fixture($tenantId, 26)
+            || preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/D', $ownerId) !== 1) {
+            throw new DomainException('El dueño y la empresa sintética son obligatorios.');
+        }
+        $expected = [
+            'approval_expires_at', 'approver_id', 'discount_bps', 'event_key',
+            'payment_state', 'plan_version_id', 'reason', 'renews_at',
+            'starts_at', 'subscription_id', 'vertical_id',
+        ];
+        $keys = array_keys($command);
+        sort($keys);
+        if ($keys !== $expected) {
+            throw new DomainException('Faltan términos comerciales o hay atributos no autorizados.');
+        }
+        foreach ($expected as $name) {
+            if ($name !== 'discount_bps' && !is_string($command[$name])) {
+                throw new DomainException('Tipo inválido en decisión comercial.');
+            }
+        }
+        if (!is_int($command['discount_bps'])) {
+            throw new DomainException('El descuento se expresa en puntos básicos enteros.');
+        }
+
+        $decision = new ManualCommercialDecision(
+            $tenantId,
+            $command['subscription_id'],
+            $command['plan_version_id'],
+            $command['vertical_id'],
+            $command['event_key'],
+            $ownerId,
+            $command['approver_id'],
+            $command['reason'],
+            $command['discount_bps'],
+            $command['starts_at'],
+            $command['renews_at'],
+            $command['approval_expires_at'],
+            $command['payment_state'],
+        );
+        $saved = $repository->record($decision, $tenantId, $ownerId, true);
+
+        return [
+            'tenant_ref' => $tenantId,
+            'status' => $saved['recorded'] ? 'recorded' : 'replayed',
+            'event_key' => $command['event_key'],
+            'fingerprint' => $saved['fingerprint'],
+            'effective_monthly_amount' => $saved['effective_monthly_amount'],
+            'payment_state' => $command['payment_state'],
+            'payment_verified' => false,
+            'automatic_charge' => false,
+        ];
     }
 
     private static function fixture(mixed $id, int $limit): bool
