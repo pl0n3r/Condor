@@ -445,6 +445,7 @@ export function AdminApp({
                 />
               </Suspense>
               )}
+              {import.meta.env.DEV && DevSocialSecurityManagement && (                <Suspense fallback={<p role="status">Cargando seguridad social ficticia…</p>}>                  <DevSocialSecurityManagement                    key={'social-security-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}                    tenantId={context.data.tenant.id}                    companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}                    branchId={context.data.active_branch.id}                    permissions={context.data.permissions}                  />                </Suspense>              )}
               <Suspense fallback={<p role="status">Cargando gobierno ficticio…</p>}>
                             <DevGovernanceManagement
                               key={'governance-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
@@ -463,18 +464,6 @@ export function AdminApp({
                             />
                           </Suspense>
             </>
-          )}
-
-          {import.meta.env.DEV && DevSocialSecurityManagement && (
-            <Suspense fallback={<p role="status">Cargando seguridad social ficticia…</p>}>
-              <DevSocialSecurityManagement
-                key={'social-security-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
-                tenantId={context.data.tenant.id}
-                companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
-                branchId={context.data.active_branch.id}
-                permissions={context.data.permissions}
-              />
-            </Suspense>
           )}
 
           {import.meta.env.DEV && DevFinanceManagement && (
