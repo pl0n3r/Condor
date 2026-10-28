@@ -14,6 +14,7 @@ import { ReportsDownloads } from './ReportsDownloads';
 import { EmployeesManagement } from './EmployeesManagement';
 import { ProductionManagement } from './ProductionManagement';
 import { PurchasingManagement } from './PurchasingManagement';
+import { ComplianceManagement } from './ComplianceManagement';
 import { CustomerServiceManagement } from './CustomerServiceManagement';
 import { AssetsManagement } from './AssetsManagement';
 import { PayrollManagement } from './PayrollManagement';
@@ -160,6 +161,7 @@ export function AdminApp({
         { href: '/admin#purchasing', label: 'Compras' },
         ...(import.meta.env.DEV ? [{ href: '/admin#customer-service', label: 'Servicio al cliente (pruebas)' }] : []),
         ...(import.meta.env.DEV ? [{ href: '/admin#assets-management', label: 'Activos (pruebas)' }] : []),
+        ...(import.meta.env.DEV ? [{ href: '/admin#compliance-management', label: 'Cumplimiento (pruebas)' }] : []),
         ...(import.meta.env.DEV ? [{ href: '/admin#payroll-management', label: 'Nómina (pruebas)' }] : []),
         { href: '/admin#commerce', label: 'Comercial' },
         { href: '/admin#orders', label: 'Pedidos' },
@@ -366,6 +368,15 @@ export function AdminApp({
               companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
               branchId={context.data.active_branch.id}
               permissions={context.data.permissions}
+            />
+          )}
+
+          {import.meta.env.DEV && (
+            <ComplianceManagement
+              key={'compliance-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+              branchId={context.data.active_branch.id}
+              permissions={context.data.permissions}
+              csrfToken={accessToken}
             />
           )}
 
