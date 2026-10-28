@@ -320,6 +320,28 @@
       "retention": "review_required",
       "consent": "review_required",
       "providers": []
+    },
+    {
+      "id": "contract_synthetic_records",
+      "category": "usage",
+      "fields": [
+        "tenant_ref",
+        "company_ref",
+        "contract_ref",
+        "worker_ref",
+        "template_ref",
+        "actor_ref",
+        "state",
+        "version",
+        "audit_action",
+        "fingerprint",
+        "created_at"
+      ],
+      "purpose": "review_required",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
     }
   ]
 }
