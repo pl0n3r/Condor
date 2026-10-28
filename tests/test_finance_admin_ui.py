@@ -65,6 +65,18 @@ class ModuloTests(unittest.TestCase):
                             "https://example.com", f"fixture:{kind}/../private",
                             f"fixture:{kind}/user@example.com"):
                 self.assertIsNone(pattern.fullmatch(invalid))
+        # Las máscaras fixture: no legitiman documentos ni teléfonos de longitud real.
+        self.assertIn("function isDemoReference(value: string, format: RegExp)", code)
+        self.assertIn("format.test(value) && !/[0-9]{7,}/.test(value)", code)
+        for use in (
+            "isDemoReference(reference, financeRefPattern)",
+            "isDemoReference(periodRef, periodRefPattern)",
+            "isDemoReference(conceptRef, conceptRefPattern)",
+            "isDemoReference(ref, financeRefPattern)",
+            "isDemoReference(selected, financeRefPattern)",
+        ):
+            with self.subTest(guard=use):
+                self.assertIn(use, code)
         self.assertIn("['0.00', '100.00', '250.00']", code)
         self.assertIn("SOLO DATOS FICTICIOS", code)
         self.assertIn("Sin valor legal", code)
