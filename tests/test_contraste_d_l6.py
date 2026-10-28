@@ -51,7 +51,7 @@ class ContrasteDL6Tests(unittest.TestCase):
         executable = shutil.which("php")
         self.assertIsNotNone(executable, "Sin PHP CLI auténtico no hay evidencia")
         process = subprocess.run(
-            [executable, "-n", "-d", "display_errors=stderr", "-r",
+            [executable, "-d", "display_errors=stderr", "-r",
              PHP_BOOTSTRAP + "\n" + scenario + '\necho "OK\\n";'],
             cwd=ROOT, capture_output=True, text=True, check=False, timeout=30,
         )
