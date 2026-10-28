@@ -76,6 +76,12 @@ class BrechasCondor15Tests(unittest.TestCase):
                         restore.index("DROP DATABASE IF EXISTS"))
         self.assertLess(restore.index("CONDOR_ALLOW_DESTRUCTIVE_RESTORE"),
                         restore.index("DROP DATABASE IF EXISTS"))
+        for guard in ("CONDOR_RESTORE_EXPECT_TENANT_SLUG",
+                      "CONDOR_RESTORE_EXPECT_USER_EMAIL",
+                      'if [ ! -f "$dump_file" ]; then'):
+            with self.subTest(guard=guard):
+                self.assertLess(restore.index(guard),
+                                restore.index("DROP DATABASE IF EXISTS"))
         self.assertIn("doctrine_migration_versions", restore)
 
         # S04: existe captación acotada, no prueba de Core Web Vitals real.
