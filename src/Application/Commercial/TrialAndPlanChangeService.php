@@ -178,7 +178,9 @@ final class TrialAndPlanChangeService
             && (bool) preg_match(
                 '/^fixture:' . preg_quote($kind, '/') . '\/[a-z][a-z0-9_-]{0,47}$/D',
                 $value,
-            );
+            )
+            // A fixture prefix must never camouflage a phone/NIT/document number.
+            && preg_match('/[0-9]{7,}/', $value) !== 1;
     }
 
     private static function calendarDate(string $date): bool
