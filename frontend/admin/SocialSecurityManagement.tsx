@@ -1,215 +1,147 @@
 /// <reference types="vite/client" />
 import { useState, type FormEvent } from 'react';
 
-/** M05: simulación local de Seguridad social; no administra personas reales. */
-type SocialState = 'BORRADOR' | 'REQUIERE_REVISION' | 'EN_REVISION';
-type SocialKind = 'AFILIACION' | 'NOVEDAD' | 'CAMBIO_FICTICIO';
-type SocialRecord = Readonly<{
-  reference: string;
-  employeeRef: string;
-  planRef: string;
-  kind: SocialKind;
-  state: SocialState;
-  tenantId: string;
-  companyId: string;
-  branchId: string;
-}>;
-type AuditEvent = Readonly<{ scope: string; reference: string; action: 'created' | 'viewed' | 'review_requested' | 'review_started' }>;
+// M05 es una maqueta: no almacena datos, procesa PILA ni representa trámites reales.
+type Stage = 'BORRADOR' | 'REQUIERE_REVISION' | 'EN_REVISION';
+type ReferenceType = 'affiliation' | 'employee' | 'plan';
+type Entry = { id: string; worker: string; plan: string; stage: Stage; scope: string };
+type Event = { key: number; message: string; scope: string };
 type Props = Readonly<{ tenantId: string; companyId: string; branchId: string; permissions: string[] }>;
 
-const recordPattern = /^fixture:affiliation\/[a-z][a-z0-9_-]{0,47}$/;
-const employeePattern = /^fixture:employee\/[a-z][a-z0-9_-]{0,47}$/;
-const planPattern = /^fixture:plan\/[a-z][a-z0-9_-]{0,47}$/;
-const kinds: SocialKind[] = ['AFILIACION', 'NOVEDAD', 'CAMBIO_FICTICIO'];
-const states: SocialState[] = ['BORRADOR', 'REQUIERE_REVISION', 'EN_REVISION'];
+const allowed: Readonly<Record<ReferenceType, RegExp>> = {
+  affiliation: /^fixture:affiliation\/[a-z][a-z0-9_-]{0,47}$/,
+  employee: /^fixture:employee\/[a-z][a-z0-9_-]{0,47}$/,
+  plan: /^fixture:plan\/[a-z][a-z0-9_-]{0,47}$/,
+};
+const steps: Readonly<Record<Stage, Stage | null>> = {
+  BORRADOR: 'REQUIERE_REVISION',
+  REQUIERE_REVISION: 'EN_REVISION',
+  EN_REVISION: null,
+};
 
-function isFixture(value: string, pattern: RegExp): boolean {
-  return pattern.test(value) && !/[0-9]{7,}/.test(value);
+function synthetic(type: ReferenceType, input: string): boolean {
+  return allowed[type].test(input) && !/[0-9]{7,}/.test(input);
 }
 
-function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
-  const scope = tenantId + '|' + companyId + '|' + branchId;
+function Demo({ tenantId, companyId, branchId, permissions }: Props) {
+  const scope = [tenantId, companyId, branchId].join('|');
   const canView = companyId !== '__unassigned__' && permissions.includes('users.view');
   const canCreate = canView && permissions.includes('users.create');
   const canReview = canView && permissions.includes('users.update');
-  const [records, setRecords] = useState<SocialRecord[]>([]);
-  const [events, setEvents] = useState<AuditEvent[]>([]);
-  const [reference, setReference] = useState('');
-  const [employeeRef, setEmployeeRef] = useState('');
-  const [planRef, setPlanRef] = useState('');
-  const [kind, setKind] = useState<SocialKind>('AFILIACION');
-  const [selected, setSelected] = useState('');
-  const [search, setSearch] = useState('');
-  const [kindFilter, setKindFilter] = useState<'TODOS' | SocialKind>('TODOS');
-  const [stateFilter, setStateFilter] = useState<'TODOS' | SocialState>('TODOS');
-  const [notice, setNotice] = useState('');
+  const [items, setItems] = useState<Entry[]>([]);
+  const [history, setHistory] = useState<Event[]>([]);
+  const [form, setForm] = useState({ id: '', worker: '', plan: '' });
+  const [active, setActive] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
+  const [message, setMessage] = useState('');
+  const visible = items.filter(item => item.scope === scope);
+  const picked = visible.find(item => item.id === active);
 
-  function audit(item: string, action: AuditEvent['action']) {
-    setEvents(previous => [...previous, { scope, reference: item, action }].slice(-100));
+  function log(messageText: string) {
+    setHistory(previous => [...previous, {
+      key: (previous.at(-1)?.key ?? 0) + 1, message: messageText, scope,
+    }].slice(-100));
   }
 
-  function create(event: FormEvent<HTMLFormElement>) {
+  function register(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canCreate || !isFixture(reference, recordPattern)
-      || !isFixture(employeeRef, employeePattern)
-      || !isFixture(planRef, planPattern)
-      || !kinds.includes(kind) || records.length >= 100
-      || records.some(row => row.reference === reference && row.tenantId === tenantId
-        && row.companyId === companyId && row.branchId === branchId)) {
-      setNotice('Rechazado: verifica permisos, duplicados y referencias de demostración.');
+    const { id, worker, plan } = form;
+    const valid = synthetic('affiliation', id) && synthetic('employee', worker)
+      && synthetic('plan', plan);
+    if (!canCreate || !valid || visible.length >= 100 || visible.some(item => item.id === id)) {
+      setMessage('No se creó la afiliación: permisos, referencias ficticias o duplicados inválidos.');
       return;
     }
-    setRecords(previous => [...previous, {
-      reference, employeeRef, planRef, kind, state: 'BORRADOR',
-      tenantId, companyId, branchId,
-    }]);
-    audit(reference, 'created');
-    setSelected(reference);
-    setReference('');
-    setEmployeeRef('');
-    setPlanRef('');
-    setNotice('Borrador de prueba creado solo en memoria. Sin valor legal.');
+    setItems(existing => existing.concat({ id, worker, plan, stage: 'BORRADOR', scope }));
+    log('Creación manual de ' + id);
+    setActive(id);
+    setForm({ id: '', worker: '', plan: '' });
+    setMessage('Registro de demostración en memoria. No tiene valor legal.');
   }
 
-  function view(ref: string) {
-    if (!canView || !isFixture(ref, recordPattern) || !records.some(row =>
-      row.reference === ref && row.tenantId === tenantId
-      && row.companyId === companyId && row.branchId === branchId)) return;
-    setSelected(ref);
-    audit(ref, 'viewed');
+  function inspect(id: string) {
+    if (!canView || !synthetic('affiliation', id) || !visible.some(item => item.id === id)) return;
+    setActive(id);
+    log('Consulta manual de ' + id);
   }
 
-  function changeState(event: FormEvent<HTMLFormElement>) {
+  function move(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const current = records.find(row => row.reference === selected
-      && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId);
-    if (!canReview || !current || !isFixture(selected, recordPattern)
-      || current.state === 'EN_REVISION') {
-      setNotice('No se cambió el estado: falta permiso o transición manual válida.');
-      return;
-    }
-    const next: SocialState = current.state === 'BORRADOR' ? 'REQUIERE_REVISION' : 'EN_REVISION';
-    setRecords(previous => previous.map(row =>
-      row.reference === selected && row.tenantId === tenantId
-      && row.companyId === companyId && row.branchId === branchId
-        ? { ...row, state: next } : row));
-    audit(selected, current.state === 'BORRADOR' ? 'review_requested' : 'review_started');
-    setNotice('Se registró una revisión ficticia. No hay aprobación ni cierre automáticos.');
+    if (!canReview || !picked || !synthetic('affiliation', picked.id)) return;
+    const next = steps[picked.stage];
+    if (next === null) return;
+    setItems(existing => existing.map(item => item.id === picked.id && item.scope === scope
+      ? { ...item, stage: next } : item));
+    log('Cambio manual de estado: ' + picked.id + ' → ' + next);
+    setMessage('Revisión ficticia registrada. Ningún estado se cierra automáticamente.');
   }
 
-  if (!canView) return (
-    <section id="social-security-management" aria-label="Talento humano sintético">
-      <p role="alert">No tienes permiso para la demostración o no hay empresa activa.</p>
-    </section>
-  );
-
-  const scopeRecords = records.filter(row => row.tenantId === tenantId
-    && row.companyId === companyId && row.branchId === branchId);
-  const visible = scopeRecords.filter(row =>
-    (kindFilter === 'TODOS' || row.kind === kindFilter)
-    && (stateFilter === 'TODOS' || row.state === stateFilter)
-    && (search.trim() === '' || row.reference.includes(search.trim().toLowerCase())));
-  const current = scopeRecords.find(row => row.reference === selected);
+  if (!canView) {
+    return <section id="social-security-management" role="alert">
+      Demostración no disponible: empresa o permiso de consulta ausente.
+    </section>;
+  }
 
   return (
-    <section id="social-security-management" className="catalog-panel" aria-labelledby="social-security-title">
-      <header>
-        <h2 id="social-security-title">Seguridad social · simulación M05</h2>
-        <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal. No ingresar nombres ni documentos reales.</p>
-        <p className="muted">Operaciones locales de demostración. Sin conexión, almacenamiento ni trámites oficiales.</p>
-      </header>
-      {notice && <output role="status" aria-live="polite">{notice}</output>}
+    <section id="social-security-management" className="catalog-panel">
+      <h2>Seguridad Social M05 · laboratorio ficticio</h2>
+      <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal. No introducir información personal.</p>
+      <p className="muted">No se realizan afiliaciones, liquidaciones, pagos ni envíos a PILA.</p>
+      {message && <output role="status" aria-live="polite">{message}</output>}
       <div className="catalog-grid">
-        <section className="catalog-card" aria-labelledby="social-security-list-title">
-          <h3 id="social-security-list-title">Registros ficticios</h3>
-          <label>Buscar referencia
-            <input aria-label="Buscar registro ficticio" maxLength={80} value={search}
-              onChange={event => setSearch(event.target.value)} />
+        {canCreate && <form className="catalog-card" onSubmit={register}>
+          <h3>Nueva afiliación de prueba</h3>
+          {(['id', 'worker', 'plan'] as const).map(field => {
+            const type: ReferenceType = field === 'id' ? 'affiliation' : field === 'worker' ? 'employee' : 'plan';
+            return <label key={field}>{field === 'id' ? 'Afiliación' : field === 'worker' ? 'Colaborador' : 'Plan'} ficticio
+              <input required maxLength={68} value={form[field]}
+                placeholder={'fixture:' + type + '/demo'}
+                onChange={event => setForm(previous => ({ ...previous, [field]: event.target.value }))} />
+            </label>;
+          })}
+          <button type="submit">Guardar borrador ficticio</button>
+        </form>}
+        <section className="catalog-card">
+          <h3>Afiliaciones del ámbito activo</h3>
+          <label>Filtrar por referencia
+            <input aria-label="Filtrar afiliaciones" value={filter} maxLength={68}
+              onChange={event => setFilter(event.target.value)} />
           </label>
-          <label>Tipo de novedad
-            <select aria-label="Filtrar tipo" value={kindFilter}
-              onChange={event => setKindFilter(event.target.value as typeof kindFilter)}>
-              <option value="TODOS">Todos</option>
-              {kinds.map(value => <option value={value} key={value}>{value}</option>)}
-            </select>
-          </label>
-          <label>Estado
-            <select aria-label="Filtrar estado" value={stateFilter}
-              onChange={event => setStateFilter(event.target.value as typeof stateFilter)}>
-              <option value="TODOS">Todos</option>
-              {states.map(value => <option value={value} key={value}>{value}</option>)}
-            </select>
-          </label>
-          {visible.length === 0 ? <p role="status">No hay registros ficticios para el filtro.</p> : (
-            <ul>{visible.map(row => <li key={row.reference}>
-              <button type="button" onClick={() => view(row.reference)}>
-                {row.reference} · {row.kind} · {row.state}
-              </button>
+          <ul>{visible.filter(item => item.id.includes(filter.trim().toLowerCase())).map(item =>
+            <li key={item.id}>
+              <button type="button" onClick={() => inspect(item.id)}>{item.id} · {item.stage}</button>
             </li>)}</ul>
-          )}
+          {visible.length === 0 && <p role="status">No hay registros ficticios.</p>}
         </section>
-        {canCreate && (
-          <section className="catalog-card" aria-labelledby="social-security-create-title">
-            <h3 id="social-security-create-title">Crear registro de prueba</h3>
-            <form className="catalog-editor" onSubmit={create}>
-              <label>Referencia ficticia
-                <input required maxLength={64} pattern="fixture:affiliation/[a-z][a-z0-9_-]{0,47}"
-                  placeholder="fixture:affiliation/demo" value={reference}
-                  onChange={event => setReference(event.target.value)} />
-              </label>
-              <label>Colaborador ficticio
-                <input required maxLength={64} pattern="fixture:employee/[a-z][a-z0-9_-]{0,47}"
-                  placeholder="fixture:employee/demo" value={employeeRef}
-                  onChange={event => setEmployeeRef(event.target.value)} />
-              </label>
-              <label>Plan ficticio
-                <input required maxLength={64} pattern="fixture:plan/[a-z][a-z0-9_-]{0,47}"
-                  placeholder="fixture:plan/demo" value={planRef}
-                  onChange={event => setPlanRef(event.target.value)} />
-              </label>
-              <label>Tipo de registro
-                <select value={kind} onChange={event => setKind(event.target.value as SocialKind)}>
-                  {kinds.map(value => <option value={value} key={value}>{value}</option>)}
-                </select>
-              </label>
-              <button type="submit">Crear borrador ficticio</button>
-            </form>
-          </section>
-        )}
-        <section className="catalog-card" aria-labelledby="social-security-detail-title">
-          <h3 id="social-security-detail-title">Detalle y revisión manual</h3>
-          {current ? <>
+        <section className="catalog-card">
+          <h3>Revisión manual</h3>
+          {!picked ? <p role="status">Selecciona una afiliación ficticia.</p> : <div>
             <dl>
-              <dt>Referencia</dt><dd>{current.reference}</dd>
-              <dt>Colaborador</dt><dd>{current.employeeRef}</dd>
-              <dt>Plan</dt><dd>{current.planRef}</dd>
-              <dt>Novedad</dt><dd>{current.kind}</dd>
-              <dt>Estado</dt><dd>{current.state}</dd>
+              <dt>Afiliación</dt><dd>{picked.id}</dd>
+              <dt>Colaborador</dt><dd>{picked.worker}</dd>
+              <dt>Plan</dt><dd>{picked.plan}</dd>
+              <dt>Estado</dt><dd>{picked.stage}</dd>
             </dl>
-            {canReview && current.state !== 'EN_REVISION' && (
-              <form className="catalog-editor" onSubmit={changeState}>
-                <button type="submit">{current.state === 'BORRADOR'
-                  ? 'Solicitar revisión ficticia' : 'Iniciar revisión ficticia'}</button>
-              </form>
-            )}
-            <p className="muted">Ninguna afiliación ni novedad se aprueba, paga o cierra automáticamente.</p>
-          </> : <p role="status">Selecciona un registro ficticio para ver el detalle.</p>}
+            {canReview && steps[picked.stage] !== null &&
+              <form onSubmit={move}>
+                <button type="submit">Registrar siguiente revisión ficticia</button>
+              </form>}
+          </div>}
+          <p className="muted">Sin aprobación, pago, envío ni cierre automático.</p>
         </section>
-        <section className="catalog-card" aria-labelledby="social-security-audit-title">
-          <h3 id="social-security-audit-title">Bitácora de demostración (no oficial)</h3>
-          <p className="muted">Las operaciones reales requieren permisos y auditoría de servidor.</p>
-          {events.filter(row => row.scope === scope).length === 0
-            ? <p role="status">Sin operaciones de prueba.</p>
-            : <ul>{events.filter(row => row.scope === scope).map((row, index) =>
-              <li key={index}>{row.action} · {row.reference}</li>)}</ul>}
+        <section className="catalog-card">
+          <h3>Auditoría local de demostración (no oficial)</h3>
+          <p>Solo eventos de esta sesión. Las operaciones reales exigen auditoría de servidor.</p>
+          <ul>{history.filter(entry => entry.scope === scope).map(entry =>
+            <li key={entry.key}>{entry.message}</li>)}</ul>
+          {history.length === 0 && <p role="status">Sin eventos ficticios.</p>}
         </section>
       </div>
     </section>
   );
 }
 
-/** Exclusivo de Vite DEV: no montar ni ejecutar contra clientes reales. */
 export function SocialSecurityManagement(props: Props) {
   if (!import.meta.env.DEV) return null;
-  return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId} {...props} />;
+  return <Demo key={[props.tenantId, props.companyId, props.branchId].join('|')} {...props} />;
 }
