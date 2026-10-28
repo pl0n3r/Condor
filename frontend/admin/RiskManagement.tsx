@@ -38,9 +38,11 @@ const categories: RiskCategory[] = ['operativo', 'financiero', 'legal', 'tecnolo
 const states: RiskState[] = ['PENDIENTE', 'REQUIERE_REVISION'];
 const validFixture = (reference: string, pattern: RegExp): boolean =>
   pattern.test(reference) && !digitSequencePattern.test(reference);
-const searchPattern = /^[a-z0-9:_/-]{0,70}$/;
+const searchPrefix = 'fixture:risk/';
 const validSearch = (value: string): boolean =>
-  searchPattern.test(value) && !digitSequencePattern.test(value);
+  (searchPrefix.startsWith(value)
+    || (value.startsWith(searchPrefix) && validFixture(value, riskRefPattern)))
+  && !digitSequencePattern.test(value);
 
 function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   // Company comes exclusively from the authenticated admin context; never from form input.
