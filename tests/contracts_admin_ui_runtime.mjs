@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../frontend/admin/ContractsManagement.tsx', import.meta.url), 'utf8');
 const scenario = process.argv[2];
-const mutation = process.argv[3] === '--mutate-scope';
+const mutation = process.argv[3] ?? '';
 const constantsStart = source.indexOf('const permitted = {');
 const functionStart = source.indexOf('function ContractPreview(');
 const functionEnd = source.indexOf('  if (!canRead) return (', functionStart);
@@ -22,7 +22,10 @@ let handlers = source.slice(functionStart, functionEnd)
   .replace('const next: Phase =', 'const next =');
 const originalFilter = 'drafts.filter(entry => entry.scope === scope)';
 assert.ok(handlers.includes(originalFilter), 'scope filter must remain testable');
-if (mutation) handlers = handlers.replace(originalFilter, 'drafts.filter(entry => true || entry.scope === scope)');
+const transitionGuard = 'item.ref === selected.ref && item.scope === scope';
+assert.ok(handlers.includes(transitionGuard), 'transition scope guard must remain testable');
+if (mutation === '--mutate-scope') handlers = handlers.replace(originalFilter, 'drafts.filter(entry => true || entry.scope === scope)');
+if (mutation === '--mutate-transition') handlers = handlers.replace(transitionGuard, 'item.ref === selected.ref && (true || item.scope === scope)');
 handlers += '  return { scope, canRead, canAdd, canAdvance, drafts, scopedDrafts, listing, selected,\n' +
   '    trail, notice, setRef, setFictionalPerson, setSourceTemplate, setCategory,\n' +
   '    createDemo, inspect, advance };\n}\n';
@@ -72,8 +75,16 @@ function testScope() {
   b = render(other);
   assert.equal(b.trail.filter(note => note.scope === b.scope).length, 0,
     'isolation: no cross-scope audit of foreign records');
+  // Same synthetic reference in B is allowed, but cannot affect A. This also
+  // kills a mutation of the transition guard: true || item.scope === scope.
+  fill(render, other).createDemo(event);
+  b = render(other);
+  assert.equal(b.scopedDrafts.length, 1, 'B owns only its newly created draft');
+  assert.notEqual(b.scopedDrafts[0], foreign, 'A and B must own distinct records');
+  b.advance(event);
+  assert.equal(render(other).selected.phase, 'REQUIERE_REVISION');
   a = render(full);
-  assert.equal(a.selected.phase, 'BORRADOR', 'scope B cannot transition A');
+  assert.equal(a.selected.phase, 'BORRADOR', 'isolation: advancing B cannot change A');
   a.inspect(foreign);
   a = render(full);
   assert.equal(a.trail.at(-1).operation, 'consulta_ficticia');
@@ -87,7 +98,8 @@ function testScope() {
   a.advance(event);
   assert.equal(render(full).trail.length, before, 'terminal test phase cannot advance');
   b = render(other);
-  assert.equal(b.scopedDrafts.length, 0, 'isolation: transitions do not leak to B');
+  assert.equal(b.scopedDrafts.length, 1, 'B retains its own draft');
+  assert.equal(b.scopedDrafts[0].phase, 'REQUIERE_REVISION', 'isolation: A transitions do not leak to B');
 }
 function testValidation() {
   const render = mount();
