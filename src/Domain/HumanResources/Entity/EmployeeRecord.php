@@ -88,7 +88,7 @@ final class EmployeeRecord
         $this->actor = $actor;
         $this->category = $category;
         $this->state = $state;
-        $this->version = ($previous?->version ?? 0) + 1;
+        $this->version = $previous === null ? 1 : $previous->version + 1;
         $this->previousId = $previous?->id;
         $this->previousState = $previous?->state;
         $this->action = $previous === null ? 'CREADA' : 'CAMBIO_EXPLICITO';
