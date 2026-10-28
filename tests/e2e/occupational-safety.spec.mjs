@@ -29,8 +29,11 @@ function fixturePlugin() {
     configureServer(vite) {
       vite.middlewares.use('/__sgsst_fixture__', (req, res, next) => {
         if (req.url && req.url !== '/') return next();
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.end('<!doctype html><html lang="es"><body><main id="root"></main><script type="module" src="/__sgsst_entry__.js"></script></body></html>');
+        const html = '<!doctype html><html lang="es"><body><main id="root"></main><script type="module" src="/__sgsst_entry__.js"></script></body></html>';
+        vite.transformIndexHtml('/__sgsst_fixture__', html).then(transformed => {
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.end(transformed);
+        }).catch(next);
       });
     },
   };
