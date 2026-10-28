@@ -195,7 +195,7 @@ class ModuloTests(unittest.TestCase):
         self.assertIn("CREATE TABLE condor_occupational_audit", migration)
         self.assertIn("PRIMARY KEY (tenant_ref, record_ref)", migration)
         self.assertIn("IrreversibleMigration", migration)
-        self.assertIn("if ($auditCount !== 0 || $recordCount !== 0)", migration)
+        self.assertIn("if (max($recordCount, $eventCount) > 0)", migration)
 
 
 if __name__ == "__main__":
