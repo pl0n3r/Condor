@@ -70,6 +70,13 @@ function testScope() {
   assert.equal(b.scopedDrafts.length, 0, 'isolation: scope B must never list A');
   assert.equal(b.listing.length, 0, 'isolation: scope B cannot query A');
   assert.equal(b.selected, undefined, 'isolation: scope B cannot select A');
+  for (const offScope of [{ ...full, tenantId: 'other-tenant' },
+    { ...full, branchId: 'other-branch' }]) {
+    const denied = render(offScope);
+    assert.equal(denied.scopedDrafts.length, 0, 'isolation: tenant/branch mismatch cannot list A');
+    assert.equal(denied.selected, undefined, 'isolation: tenant/branch mismatch cannot select A');
+    denied.advance(event);
+  }
   b.inspect(foreign); // bypass attempt using the real source handler
   b.advance(event); // bypass attempt against A's stale selection
   b = render(other);
