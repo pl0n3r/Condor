@@ -77,8 +77,45 @@ namespace App\Application\Commercial {
         }
     }
 }
+namespace App\Infrastructure\Persistence {
+    class ManualCommercialDecisionRepository {
+        public array $rows = [];
+        public function record(
+            \App\Domain\Commercial\Entity\ManualCommercialDecision $decision,
+            string $tenant,
+            string $actor,
+            bool $allowed,
+        ): array {
+            $row = $decision->snapshot();
+            if (!$allowed || $row['tenant_id'] !== $tenant || $row['actor_ref'] !== $actor) {
+                throw new \DomainException('Forbidden manual terms');
+            }
+            $key = $tenant.'|'.$row['event_key'];
+            $fingerprint = hash('sha256', json_encode($row, JSON_THROW_ON_ERROR));
+            $effective = intdiv(120000 * (10000 - $row['discount_bps']), 10000);
+            if (isset($this->rows[$key])) {
+                if ($this->rows[$key]['fingerprint'] !== $fingerprint) {
+                    throw new \DomainException('Conflicting event');
+                }
+                return ['recorded' => false, 'fingerprint' => $fingerprint,
+                    'effective_monthly_amount' => $effective];
+            }
+            $this->rows[$key] = ['fingerprint' => $fingerprint, ...$row];
+            return ['recorded' => true, 'fingerprint' => $fingerprint,
+                'effective_monthly_amount' => $effective];
+        }
+        public function forTenant(string $tenant, string $actor, bool $allowed): array {
+            if (!$allowed || strlen($actor) !== 26) {
+                throw new \DomainException('Forbidden list');
+            }
+            return array_values(array_filter($this->rows,
+                static fn (array $row): bool => $row['tenant_id'] === $tenant));
+        }
+    }
+}
 namespace {
 require $argv[1];
+require $argv[2];
 use Fake\Connection;
 use Fake\Repository;
 use Fake\EntityManager;
@@ -86,6 +123,7 @@ use App\Application\Commercial\PlatformCommercialAdjustmentManager;
 use App\Application\Commercial\ManualSubscriptionOperations;
 $repo = new Repository();
 $manager = new PlatformCommercialAdjustmentManager($repo);
+$termRepo = new \App\Infrastructure\Persistence\ManualCommercialDecisionRepository();
 $service = new ManualSubscriptionOperations(
     new EntityManager(new Connection(['fixture-alpha', 'fixture-beta']), $repo), $manager,
 );
@@ -93,6 +131,21 @@ function command(string $event = 'fixture-event-one'): array {
     return ['event_key' => $event, 'reason' => 'fixture-manual-adjustment',
         'target_plan_version_id' => str_repeat('B', 26),
         'add_on_ids' => [str_repeat('C', 26)], 'renews_at' => null];
+}
+function terms(): array {
+    return [
+        'approval_expires_at' => '2026-12-01T12:00:00Z',
+        'approver_id' => str_repeat('A',26),
+        'discount_bps' => 1000,
+        'event_key' => 'fixture-approved-one',
+        'payment_state' => 'MANUAL_UNVERIFIED',
+        'plan_version_id' => str_repeat('P',26),
+        'reason' => 'fixture-approved-discount',
+        'renews_at' => '2026-11-01T12:00:00Z',
+        'starts_at' => '2026-10-01T12:00:00Z',
+        'subscription_id' => str_repeat('S',26),
+        'vertical_id' => str_repeat('V',26),
+    ];
 }
 function denied(callable $run): bool {
     try { $run(); return false; } catch (\DomainException $e) { return true; }
@@ -103,7 +156,7 @@ function denied(callable $run): bool {
 def run_php(code: str) -> dict:
     proc = subprocess.run(
         ["php", "-n", "-d", "allow_url_fopen=0", "-r", PHP_BOOT + code + "\n}" ,
-         str(OPERATIONS)], cwd=ROOT, capture_output=True, text=True, timeout=20,
+         str(OPERATIONS), str(ROOT / 'src/Domain/Commercial/Entity/ManualCommercialDecision.php')], cwd=ROOT, capture_output=True, text=True, timeout=20,
     )
     if proc.returncode:
         raise AssertionError(proc.stdout + proc.stderr)
@@ -112,6 +165,16 @@ def run_php(code: str) -> dict:
 
 class SaasTests(unittest.TestCase):
     def test_aislamiento_por_empresa(self):
+        decisions = run_php(r'''
+$first=$service->recordTerms('fixture-alpha', str_repeat('A',26), terms(), $termRepo);
+$other=$service->recordTerms('fixture-beta', str_repeat('A',26), terms(), $termRepo);
+$replay=$service->recordTerms('fixture-alpha', str_repeat('A',26), terms(), $termRepo);
+echo json_encode(['a'=>$first['status'], 'b'=>$other['status'],
+  'repeat'=>$replay['status'], 'alpha'=>count($termRepo->forTenant('fixture-alpha',str_repeat('A',26),true)),
+  'beta'=>count($termRepo->forTenant('fixture-beta',str_repeat('A',26),true))]);
+''')
+        self.assertEqual((decisions["a"], decisions["b"], decisions["repeat"]), ("recorded", "recorded", "replayed"))
+        self.assertEqual((decisions["alpha"], decisions["beta"]), (1, 1))
         outcome = run_php(r'''
 $a = $service->adjust('fixture-alpha', str_repeat('A',26), command());
 $b = $service->adjust('fixture-beta', str_repeat('A',26), command());
@@ -129,6 +192,24 @@ echo json_encode(['a'=>$a['tenant_ref'], 'b'=>$b['tenant_ref'],
         self.assertEqual(outcome["records"], 2)
 
     def test_auditoria_y_permisos(self):
+        terms = run_php(r'''
+$deniedActor=denied(fn()=> $service->recordTerms('fixture-alpha','bad-actor',terms(),$termRepo));
+$wrongApprover=terms(); $wrongApprover['approver_id']=str_repeat('B',26);
+$deniedApproval=denied(fn()=> $service->recordTerms('fixture-alpha',str_repeat('A',26),$wrongApprover,$termRepo));
+$ok=$service->recordTerms('fixture-alpha',str_repeat('A',26),terms(),$termRepo);
+$repeat=$service->recordTerms('fixture-alpha',str_repeat('A',26),terms(),$termRepo);
+$changed=terms(); $changed['discount_bps']=2000;
+$rejected=denied(fn()=> $service->recordTerms('fixture-alpha',str_repeat('A',26),$changed,$termRepo));
+echo json_encode(['deniedActor'=>$deniedActor,'deniedApproval'=>$deniedApproval,
+ 'recorded'=>$ok['status'],'replay'=>$repeat['status'],'conflict'=>$rejected,
+ 'amount'=>$ok['effective_monthly_amount'],'verified'=>$ok['payment_verified']]);
+''')
+        self.assertTrue(terms["deniedActor"] and terms["deniedApproval"] and terms["conflict"])
+        self.assertEqual((terms["recorded"], terms["replay"]), ("recorded", "replayed"))
+        self.assertEqual(terms["amount"], 108000)
+        self.assertFalse(terms["verified"])
+        self.assertIn("manual-subscription-terms", CONTROLLER.read_text())
+        self.assertIn("requireManagementCsrf", CONTROLLER.read_text())
         outcome = run_php(r'''
 $denied = denied(fn () => $service->adjust('fixture-alpha', 'fake-actor', command()));
 $first = $service->adjust('fixture-alpha', str_repeat('A',26), command());
@@ -153,6 +234,17 @@ echo json_encode(['denied'=>$denied, 'first'=>$first['status'],
             self.assertIn(guard, controller)
 
     def test_sin_datos_reales(self):
+        decisions = run_php(r'''
+$bad=terms(); $bad['reason']='real.person@example.com';
+$email=denied(fn()=> $service->recordTerms('fixture-alpha',str_repeat('A',26),$bad,$termRepo));
+$bad=terms(); $bad['event_key']='3011234567';
+$phone=denied(fn()=> $service->recordTerms('fixture-alpha',str_repeat('A',26),$bad,$termRepo));
+$bad=terms(); $bad['customer_phone']='3101112233';
+$field=denied(fn()=> $service->recordTerms('fixture-alpha',str_repeat('A',26),$bad,$termRepo));
+echo json_encode(['email'=>$email,'phone'=>$phone,'extra'=>$field,'writes'=>count($termRepo->rows)]);
+''')
+        self.assertTrue(all(decisions[k] for k in ("email", "phone", "extra")))
+        self.assertEqual(decisions["writes"], 0)
         result = run_php(r'''
 $c = command(); $c['reason'] = 'person@example.com';
 $rejectEmail = denied(fn () => $service->adjust('fixture-alpha', str_repeat('A',26), $c));
@@ -168,6 +260,22 @@ echo json_encode(['email'=>$rejectEmail,'phone'=>$rejectPhone,
         self.assertEqual(result["writes"], 0)
 
     def test_fail_closed(self):
+        terms = run_php(r'''
+$bad=terms(); unset($bad['approval_expires_at']);
+$missing=denied(fn()=> $service->recordTerms('fixture-alpha',str_repeat('A',26),$bad,$termRepo));
+$bad=terms(); $bad['discount_bps']=6500;
+$discount=denied(fn()=> $service->recordTerms('fixture-alpha',str_repeat('A',26),$bad,$termRepo));
+$bad=terms(); $bad['payment_state']='PAID';
+$payment=denied(fn()=> $service->recordTerms('fixture-alpha',str_repeat('A',26),$bad,$termRepo));
+$bad=terms(); $bad['starts_at']='2026-11-02T12:00:00Z';
+$dates=denied(fn()=> $service->recordTerms('fixture-alpha',str_repeat('A',26),$bad,$termRepo));
+$bad=terms(); $bad['discount_bps']='10';
+$type=denied(fn()=> $service->recordTerms('fixture-alpha',str_repeat('A',26),$bad,$termRepo));
+echo json_encode(['invalid'=>$missing&&$discount&&$payment&&$dates&&$type,
+ 'writes'=>count($termRepo->rows)]);
+''')
+        self.assertTrue(terms["invalid"])
+        self.assertEqual(terms["writes"], 0)
         result = run_php(r'''
 $invalid = [];
 $c = command(); unset($c['event_key']);
