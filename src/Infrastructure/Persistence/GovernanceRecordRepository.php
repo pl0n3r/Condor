@@ -44,13 +44,20 @@ final readonly class GovernanceRecordRepository
     ): array {
         $this->authorize($tenant, $company, $actor, $authorized);
         return $this->connection->transactional(function () use ($tenant, $company, $actor): array {
-            $records = $this->connection->fetchAllAssociative(
-                'SELECT entry_id, tenant_ref, company_ref, governance_ref, category, state, '
-                .'revision, prior_id, actor_ref, action, recorded_at, fingerprint '
-                .'FROM condor_governance_entry WHERE tenant_ref = ? AND company_ref = ? '
-                .'ORDER BY governance_ref, revision',
-                [$tenant, $company],
+            $query = $this->connection->createQueryBuilder();
+            $query->select(
+                'entry_id', 'tenant_ref', 'company_ref', 'governance_ref',
+                'category', 'state', 'revision', 'prior_id', 'actor_ref',
+                'action', 'recorded_at', 'fingerprint',
             );
+            $query->from('condor_governance_entry')
+                ->where('tenant_ref = :tenant')
+                ->andWhere('company_ref = :company')
+                ->setParameter('tenant', $tenant)
+                ->setParameter('company', $company)
+                ->orderBy('governance_ref', 'ASC')
+                ->addOrderBy('revision', 'ASC');
+            $records = $query->executeQuery()->fetchAllAssociative();
             foreach ($records as $row) {
                 $this->assertReadableRow($row, $tenant, $company);
             }
@@ -118,14 +125,11 @@ final readonly class GovernanceRecordRepository
     private function recordAccess(
         string $tenant, string $company, string $document, string $actor, string $event,
     ): void {
-        $this->connection->insert('condor_governance_journal', [
-            'journal_id' => bin2hex(random_bytes(16)),
-            'tenant_ref' => $tenant,
-            'company_ref' => $company,
-            'governance_ref' => $document,
-            'actor_ref' => $actor,
-            'event_kind' => $event,
-            'written_at' => gmdate('Y-m-d H:i:s'),
-        ]);
+        $this->connection->executeStatement(
+            'INSERT INTO condor_governance_journal '
+            .'(journal_id, tenant_ref, company_ref, governance_ref, actor_ref, event_kind, written_at) '
+            .'VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [bin2hex(random_bytes(16)), $tenant, $company, $document, $actor, $event, gmdate('Y-m-d H:i:s')],
+        );
     }
 }
