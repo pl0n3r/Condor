@@ -70,6 +70,10 @@ const DevGovernanceManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./GovernanceManagement')).GovernanceManagement }))
   : null;
 
+const DevHumanResourcesManagement = import.meta.env.DEV
+  ? lazy(async () => ({ default: (await import('./HumanResourcesManagement')).HumanResourcesManagement }))
+  : null;
+
 const DevComplianceEvidenceManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./ComplianceManagement')).ComplianceEvidenceManagement }))
   : null;
@@ -173,6 +177,7 @@ export function AdminApp({
         ...(import.meta.env.DEV ? [{ href: '/admin#compliance-management', label: 'SG-SST (pruebas)' }] : []),
         ...(import.meta.env.DEV ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal (pruebas)' }] : []),
         ...(import.meta.env.DEV ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo (pruebas)' }] : []),
+        ...(import.meta.env.DEV ? [{ href: '/admin#human-resources-management', label: 'Talento Humano (pruebas)' }] : []),
         { href: '/admin#commerce', label: 'Comercial' },
         { href: '/admin#orders', label: 'Pedidos' },
         { href: '/admin#sales-reports', label: 'Reportes de ventas' },
@@ -403,6 +408,17 @@ export function AdminApp({
 
           {import.meta.env.DEV && DevGovernanceManagement && DevComplianceEvidenceManagement && (
             <>
+              {import.meta.env.DEV && DevHumanResourcesManagement && (
+                <Suspense fallback={<p role="status">Cargando talento humano ficticio…</p>}>
+                <DevHumanResourcesManagement
+                  key={'human-resources-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                  tenantId={context.data.tenant.id}
+                  companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
+                  branchId={context.data.active_branch.id}
+                  permissions={context.data.permissions}
+                />
+              </Suspense>
+              )}
               <Suspense fallback={<p role="status">Cargando gobierno ficticio…</p>}>
                             <DevGovernanceManagement
                               key={'governance-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
