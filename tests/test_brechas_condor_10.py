@@ -166,6 +166,9 @@ class BrechasCondor10Tests(unittest.TestCase):
         altered["css"] = altered["css"].replace("--space-1: 4px;", "--space-1: 5px;")
         self.assertEqual(local_evidence(altered)["D-041-S02"], UNKNOWN)
         altered = dict(self.sources)
+        altered["css"] = altered["css"].replace("--surface:", "")
+        self.assertEqual(local_evidence(altered)["D-041"], UNKNOWN)
+        altered = dict(self.sources)
         altered["shell"] = altered["shell"].replace("navItems.map((item)", "")
         self.assertEqual(local_evidence(altered)["D-041-S03"], UNKNOWN)
 
