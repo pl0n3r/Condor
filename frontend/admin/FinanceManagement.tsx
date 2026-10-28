@@ -15,7 +15,7 @@ type FinanceRecord = Readonly<{
   amountFixture: '0.00' | '100.00' | '250.00';
   state: FinanceState;
 }>;
-type AuditEvent = Readonly<{ scope: string; reference: string; action: 'created' | 'viewed' | 'review_requested' | 'review_started' }>;
+type AuditEvent = Readonly<{ sequence: number; scope: string; reference: string; action: 'created' | 'viewed' | 'review_requested' | 'review_started' }>;
 type Props = Readonly<{ tenantId: string; companyId: string; branchId: string; permissions: string[] }>;
 
 const financeRefPattern = /^fixture:finance\/[a-z][a-z0-9_-]{0,47}$/;
@@ -24,6 +24,11 @@ const conceptRefPattern = /^fixture:concept\/[a-z][a-z0-9_-]{0,47}$/;
 const states: FinanceState[] = ['BORRADOR', 'REQUIERE_REVISION', 'EN_REVISION'];
 const kinds: FinanceKind[] = ['INGRESO', 'EGRESO', 'CUENTA_POR_COBRAR', 'CUENTA_POR_PAGAR', 'BANCO', 'PRESUPUESTO'];
 const fictionalAmounts: FinanceRecord['amountFixture'][] = ['0.00', '100.00', '250.00'];
+
+/** Nunca inferir datos reales de un identificador aparentemente ficticio. */
+function isDemoReference(value: string, format: RegExp): boolean {
+  return format.test(value) && !/[0-9]{7,}/.test(value);
+}
 
 function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const scope = tenantId + '|' + companyId + '|' + branchId;
@@ -44,13 +49,15 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [notice, setNotice] = useState('');
 
   function audit(item: string, action: AuditEvent['action']) {
-    setEvents(previous => [...previous, { scope, reference: item, action }].slice(-100));
+    setEvents(previous => [...previous, {
+      sequence: (previous.at(-1)?.sequence ?? 0) + 1, scope, reference: item, action,
+    }].slice(-100));
   }
 
   function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canCreate || !financeRefPattern.test(reference)
-      || !periodRefPattern.test(periodRef) || !conceptRefPattern.test(conceptRef)
+    if (!canCreate || !isDemoReference(reference, financeRefPattern)
+      || !isDemoReference(periodRef, periodRefPattern) || !isDemoReference(conceptRef, conceptRefPattern)
       || !kinds.includes(kind) || !fictionalAmounts.includes(amountFixture)
       || records.length >= 100
       || records.some(row => row.reference === reference && row.tenantId === tenantId
@@ -71,7 +78,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   }
 
   function view(ref: string) {
-    if (!canView || !financeRefPattern.test(ref) || !records.some(row =>
+    if (!canView || !isDemoReference(ref, financeRefPattern) || !records.some(row =>
       row.reference === ref && row.tenantId === tenantId
       && row.companyId === companyId && row.branchId === branchId)) return;
     setSelected(ref);
@@ -82,7 +89,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     event.preventDefault();
     const current = records.find(row => row.reference === selected
       && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId);
-    if (!canReview || !current || !financeRefPattern.test(selected) || current.state === 'EN_REVISION') {
+    if (!canReview || !current || !isDemoReference(selected, financeRefPattern) || current.state === 'EN_REVISION') {
       setNotice('No se cambió el estado: permiso insuficiente o transición inválida.');
       return;
     }
@@ -111,105 +118,113 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   return (
     <section id="finance-management" className="catalog-panel" aria-labelledby="finance-title">
       <header>
-        <h2 id="finance-title">Finanzas y contabilidad · simulador</h2>
+        <h2 id="finance-title">Finanzas y contabilidad · laboratorio M07</h2>
         <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal, contable, bancario ni tributario.</p>
-        <p className="muted">Demostración en memoria, sin conexión a bancos, pagos o clientes reales.</p>
+        <p className="muted">Registros locales descartables. Sin transferencias, facturas ni operaciones bancarias.</p>
       </header>
       {notice && <output role="status" aria-live="polite">{notice}</output>}
+
       <div className="catalog-grid">
-        <section className="catalog-card" aria-labelledby="finance-list-title">
-          <h3 id="finance-list-title">Registros ficticios</h3>
-          <label>Buscar referencia
-            <input aria-label="Buscar registro ficticio" value={search} maxLength={80}
-              onChange={event => setSearch(event.target.value)} />
-          </label>
-          <label>Tipo de registro
-            <select aria-label="Filtrar por tipo" value={kindFilter}
-              onChange={event => setKindFilter(event.target.value as typeof kindFilter)}>
-              <option value="TODOS">Todos</option>
-              {kinds.map(item => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
-          <label>Estado
-            <select aria-label="Filtrar por estado" value={stateFilter}
-              onChange={event => setStateFilter(event.target.value as typeof stateFilter)}>
-              <option value="TODOS">Todos</option>
-              {states.map(item => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
-          {visible.length === 0 ? <p role="status">Sin registros ficticios para este filtro.</p> : (
-            <ul>{visible.map(row => (
-              <li key={row.reference}>
-                <button type="button" onClick={() => view(row.reference)}>
-                  {row.reference} · {row.kind} · {row.state}
-                </button>
-              </li>
-            ))}</ul>
-          )}
-        </section>
-        {canCreate && (
-          <section className="catalog-card" aria-labelledby="finance-create-title">
-            <h3 id="finance-create-title">Crear demostración</h3>
-            <form className="catalog-editor" onSubmit={create}>
-              <label>Referencia ficticia
-                <input required maxLength={64} pattern="fixture:finance/[a-z][a-z0-9_-]{0,47}"
-                  placeholder="fixture:finance/demo" value={reference}
-                  onChange={event => setReference(event.target.value)} />
-              </label>
-              <label>Periodo ficticio
-                <input required maxLength={64} pattern="fixture:period/[a-z][a-z0-9_-]{0,47}"
-                  placeholder="fixture:period/demo" value={periodRef}
-                  onChange={event => setPeriodRef(event.target.value)} />
-              </label>
-              <label>Concepto ficticio
-                <input required maxLength={64} pattern="fixture:concept/[a-z][a-z0-9_-]{0,47}"
-                  placeholder="fixture:concept/demo" value={conceptRef}
-                  onChange={event => setConceptRef(event.target.value)} />
-              </label>
-              <label>Tipo
-                <select value={kind} onChange={event => setKind(event.target.value as FinanceKind)}>
-                  {kinds.map(item => <option key={item} value={item}>{item}</option>)}
-                </select>
-              </label>
-              <label>Importe ilustrativo (COP ficticios)
-                <select value={amountFixture}
-                  onChange={event => setAmountFixture(event.target.value as FinanceRecord['amountFixture'])}>
-                  {fictionalAmounts.map(item => <option key={item} value={item}>{item}</option>)}
-                </select>
-              </label>
+        <section className="catalog-card" aria-labelledby="finance-create-title">
+          <h3 id="finance-create-title">Nuevo asiento ilustrativo</h3>
+          <form className="catalog-editor" onSubmit={create}>
+            <fieldset disabled={!canCreate} aria-label="Datos sintéticos del asiento">
+              <label htmlFor="finance-demo-ref">Identificador de laboratorio</label>
+              <input id="finance-demo-ref" required maxLength={64}
+                pattern="fixture:finance/[a-z][a-z0-9_-]{0,47}"
+                placeholder="fixture:finance/demo" value={reference}
+                onChange={event => setReference(event.target.value)} />
+              <label htmlFor="finance-demo-period">Período simulado</label>
+              <input id="finance-demo-period" required maxLength={64}
+                pattern="fixture:period/[a-z][a-z0-9_-]{0,47}"
+                placeholder="fixture:period/demo" value={periodRef}
+                onChange={event => setPeriodRef(event.target.value)} />
+              <label htmlFor="finance-demo-concept">Concepto simulado</label>
+              <input id="finance-demo-concept" required maxLength={64}
+                pattern="fixture:concept/[a-z][a-z0-9_-]{0,47}"
+                placeholder="fixture:concept/demo" value={conceptRef}
+                onChange={event => setConceptRef(event.target.value)} />
+              <label htmlFor="finance-demo-kind">Clasificación ilustrativa</label>
+              <select id="finance-demo-kind" value={kind}
+                onChange={event => setKind(event.target.value as FinanceKind)}>
+                {kinds.map(value => <option value={value} key={value}>{value}</option>)}
+              </select>
+              <label htmlFor="finance-demo-amount">Cantidad ficticia en COP (sin valor monetario)</label>
+              <select id="finance-demo-amount" value={amountFixture}
+                onChange={event => setAmountFixture(event.target.value as FinanceRecord['amountFixture'])}>
+                {fictionalAmounts.map(value => <option value={value} key={value}>{value}</option>)}
+              </select>
               <button type="submit">Crear borrador ficticio</button>
-            </form>
-          </section>
-        )}
-        <section className="catalog-card" aria-labelledby="finance-detail-title">
-          <h3 id="finance-detail-title">Detalle y revisión manual</h3>
-          {current ? <>
-            <dl>
-              <dt>Referencia</dt><dd>{current.reference}</dd>
-              <dt>Tipo</dt><dd>{current.kind}</dd>
-              <dt>Periodo</dt><dd>{current.periodRef}</dd>
-              <dt>Concepto</dt><dd>{current.conceptRef}</dd>
-              <dt>Importe de prueba</dt><dd>{current.amountFixture} COP ficticios</dd>
-              <dt>Estado</dt><dd>{current.state}</dd>
-            </dl>
-            {canReview && current.state !== 'EN_REVISION' && (
-              <form className="catalog-editor" onSubmit={changeState}>
-                <button type="submit">{current.state === 'BORRADOR'
-                  ? 'Solicitar revisión ficticia' : 'Iniciar revisión ficticia'}</button>
-              </form>
-            )}
-            <p className="muted">Ningún registro se aprueba, contabiliza, paga ni cierra automáticamente.</p>
-          </> : <p role="status">Selecciona un registro ficticio para consultar el detalle.</p>}
+            </fieldset>
+          </form>
+          {!canCreate && <p role="status">Solo lectura: falta permiso para crear.</p>}
         </section>
-        <section className="catalog-card" aria-labelledby="finance-audit-title">
-          <h3 id="finance-audit-title">Bitácora de demostración (no oficial)</h3>
-          <p className="muted">Una operación real exige permisos y auditoría de servidor.</p>
-          {events.filter(row => row.scope === scope).length === 0
-            ? <p role="status">Sin operaciones de prueba.</p>
-            : <ul>{events.filter(row => row.scope === scope).map((row, index) => (
-              <li key={index}>{row.action} · {row.reference}</li>
-            ))}</ul>}
+
+        <section className="catalog-card" aria-labelledby="finance-register-title">
+          <h3 id="finance-register-title">Libro de muestra, aislado por empresa</h3>
+          <fieldset aria-label="Filtros de registros ficticios">
+            <label htmlFor="finance-find">Buscar identificador</label>
+            <input id="finance-find" maxLength={80} value={search}
+              onChange={event => setSearch(event.target.value)} />
+            <label htmlFor="finance-kind-filter">Clasificación</label>
+            <select id="finance-kind-filter" value={kindFilter}
+              onChange={event => setKindFilter(event.target.value as typeof kindFilter)}>
+              <option value="TODOS">Todas</option>
+              {kinds.map(value => <option value={value} key={value}>{value}</option>)}
+            </select>
+            <label htmlFor="finance-state-filter">Fase de revisión</label>
+            <select id="finance-state-filter" value={stateFilter}
+              onChange={event => setStateFilter(event.target.value as typeof stateFilter)}>
+              <option value="TODOS">Todas</option>
+              {states.map(value => <option value={value} key={value}>{value}</option>)}
+            </select>
+          </fieldset>
+          <p role="status">{visible.length} registro(s) ficticio(s) en el ámbito actual.</p>
+          <ul aria-label="Asientos simulados">
+            {visible.map(row => <li key={row.reference}>
+              <button type="button" onClick={() => view(row.reference)}>
+                {row.reference} / {row.kind} / {row.state}
+              </button>
+            </li>)}
+          </ul>
         </section>
+
+        <section className="catalog-card" aria-labelledby="finance-preview-title">
+          <h3 id="finance-preview-title">Inspección y control manual</h3>
+          {current ? (
+            <>
+              <dl>
+                <dt>Identificador</dt><dd>{current.reference}</dd>
+                <dt>Período</dt><dd>{current.periodRef}</dd>
+                <dt>Concepto</dt><dd>{current.conceptRef}</dd>
+                <dt>Clase</dt><dd>{current.kind}</dd>
+                <dt>COP de demostración</dt><dd>{current.amountFixture}</dd>
+                <dt>Fase</dt><dd>{current.state}</dd>
+              </dl>
+              {canReview && current.state !== 'EN_REVISION' && (
+                <form onSubmit={changeState}>
+                  <button type="submit">
+                    {current.state === 'BORRADOR' ? 'Solicitar revisión simulada' : 'Iniciar revisión simulada'}
+                  </button>
+                </form>
+              )}
+              <p>Ningún registro se aprueba, contabiliza, paga ni cierra automáticamente.</p>
+            </>
+          ) : <p role="status">Todavía no se ha seleccionado un asiento de prueba.</p>}
+        </section>
+
+        <aside className="catalog-card" aria-labelledby="finance-trace-title">
+          <h3 id="finance-trace-title">Bitácora de demostración (no oficial)</h3>
+          <p className="muted">La auditoría de servidor es obligatoria para operaciones reales.</p>
+          <ol>
+            {events.filter(row => row.scope === scope).map(row => (
+              <li key={row.sequence}>
+                {row.reference} / evento {row.action}
+              </li>
+            ))}
+          </ol>
+          {events.length === 0 && <p role="status">No hay movimientos de laboratorio.</p>}
+        </aside>
       </div>
     </section>
   );
