@@ -8,6 +8,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = ROOT / "frontend/admin/FinanceManagement.tsx"
+PERMISSION_CATALOG = ROOT / "src/Domain/Identity/PermissionCatalog.php"
 
 
 class ModuloTests(unittest.TestCase):
@@ -29,7 +30,7 @@ class ModuloTests(unittest.TestCase):
 
     def test_permisos_y_auditoria(self) -> None:
         code = self.code
-        for permission in ("finance.view", "finance.create", "finance.review"):
+        for permission in ("settings.view", "settings.create", "settings.update"):
             self.assertIn(permission, code)
         for guard in ("if (!canView)", "if (!canCreate", "if (!canReview"):
             self.assertIn(guard, code)
@@ -39,6 +40,18 @@ class ModuloTests(unittest.TestCase):
         self.assertIn("Bitácora de demostración (no oficial)", code)
         self.assertIn("auditoría de servidor", code)
         self.assertIn("if (!import.meta.env.DEV) return null;", code)
+
+    def test_permisos_reales_del_catalogo(self) -> None:
+        """La demo no puede quedar denegada por nombres de permiso inexistentes."""
+        code = self.code
+        php = PERMISSION_CATALOG.read_text(encoding="utf-8")
+        for permission in ("settings.view", "settings.create", "settings.update"):
+            self.assertIn(f"permissions.includes('{permission}')", code)
+        self.assertIn("'settings' => 'Configuración'", php)
+        for action in ("view", "create", "update"):
+            self.assertIn(f"'{action}' =>", php)
+        for old in ("finance.view", "finance.create", "finance.review"):
+            self.assertNotIn(old, code)
 
     def test_sin_datos_reales(self) -> None:
         code = self.code

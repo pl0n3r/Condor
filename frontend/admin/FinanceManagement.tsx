@@ -27,9 +27,9 @@ const fictionalAmounts: FinanceRecord['amountFixture'][] = ['0.00', '100.00', '2
 
 function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const scope = tenantId + '|' + companyId + '|' + branchId;
-  const canView = companyId !== '__unassigned__' && permissions.includes('finance.view');
-  const canCreate = canView && permissions.includes('finance.create');
-  const canReview = canView && permissions.includes('finance.review');
+  const canView = companyId !== '__unassigned__' && permissions.includes('settings.view');
+  const canCreate = canView && permissions.includes('settings.create');
+  const canReview = canView && permissions.includes('settings.update');
   const [records, setRecords] = useState<FinanceRecord[]>([]);
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [reference, setReference] = useState('');
