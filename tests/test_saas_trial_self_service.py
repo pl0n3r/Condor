@@ -100,6 +100,16 @@ class SaasTests(unittest.TestCase):
             data = fixture()
             data[slot]["email"] = "real@example.com"
             self.assertFalse(evaluate(data)["valid"])
+        for field, value in (
+            ("tenant_ref", "fixture:tenant/t3001234567"),
+            ("company_ref", "fixture:company/c900123456"),
+            ("actor_ref", "fixture:actor/a3001234567"),
+        ):
+            data = fixture()
+            data[field] = value
+            with self.subTest(disguised=field):
+                self.assertFalse(evaluate(data)["valid"])
+                self.assertNotIn(value, json.dumps(evaluate(data)))
 
     def test_fail_closed(self):
         data = fixture()
