@@ -74,6 +74,10 @@ const DevHumanResourcesManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./HumanResourcesManagement')).HumanResourcesManagement }))
   : null;
 
+const DevContractsManagement = import.meta.env.DEV
+  ? lazy(async () => ({ default: (await import('./ContractsManagement')).ContractsManagement }))
+  : null;
+
 const DevComplianceEvidenceManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./ComplianceManagement')).ComplianceEvidenceManagement }))
   : null;
@@ -178,6 +182,7 @@ export function AdminApp({
         ...(import.meta.env.DEV ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal (pruebas)' }] : []),
         ...(import.meta.env.DEV ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo (pruebas)' }] : []),
         ...(import.meta.env.DEV ? [{ href: '/admin#human-resources-management', label: 'Talento Humano (pruebas)' }] : []),
+        ...(import.meta.env.DEV ? [{ href: '/admin#contracts-management', label: 'Contratación (pruebas)' }] : []),
         { href: '/admin#commerce', label: 'Comercial' },
         { href: '/admin#orders', label: 'Pedidos' },
         { href: '/admin#sales-reports', label: 'Reportes de ventas' },
@@ -408,6 +413,17 @@ export function AdminApp({
 
           {import.meta.env.DEV && DevGovernanceManagement && DevComplianceEvidenceManagement && (
             <>
+              {import.meta.env.DEV && DevContractsManagement && (
+                <Suspense fallback={<p role="status">Cargando contratación ficticia…</p>}>
+                  <DevContractsManagement
+                    key={'contracts-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                    tenantId={context.data.tenant.id}
+                    companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
+                    branchId={context.data.active_branch.id}
+                    permissions={context.data.permissions}
+                  />
+                </Suspense>
+              )}
               {import.meta.env.DEV && DevHumanResourcesManagement && (
                 <Suspense fallback={<p role="status">Cargando talento humano ficticio…</p>}>
                 <DevHumanResourcesManagement
