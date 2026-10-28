@@ -159,6 +159,32 @@ class BrechasCondor17Tests(unittest.TestCase):
         self.assertIn("$share->isUsable($now)", share)
         self.assertIn("self::MAX_FRAMES", sanitizer)
         self.assertIn("Bearer [REDACTED]", sanitizer)
+        # Prueba real del sanitizador contra un secreto y correo sintéticos:
+        # sin framework, DB, servicios externos ni persistencia.
+        php_fixture = r"""
+require $argv[1];
+$safe = new \App\Infrastructure\Observability\ErrorSanitizer($argv[2]);
+$err = new \RuntimeException(
+    'Authorization: Bearer SYNTHETIC_SECRET usuario@example.test'
+);
+$text = $safe->message($err);
+if (str_contains($text, 'SYNTHETIC_SECRET')
+    || str_contains($text, 'usuario@example.test')
+    || !str_contains($text, 'Bearer [REDACTED]')
+    || !str_contains($text, '[EMAIL]')) {
+    throw new \RuntimeException('Sanitizer did not redact fixture');
+}
+echo 'SANITIZED';
+"""
+        sanitized = subprocess.run(
+            ["php", "-r", php_fixture,
+             str(ROOT / "src/Infrastructure/Observability/ErrorSanitizer.php"),
+             str(ROOT)],
+            cwd=ROOT, capture_output=True, text=True, check=False, timeout=30,
+        )
+        self.assertEqual(0, sanitized.returncode,
+                         sanitized.stdout + sanitized.stderr)
+        self.assertEqual("SANITIZED", sanitized.stdout.strip())
         self.assertIn("testBearerLinksAreScopedAndFailClosed",
                       source("tests/test_shared_diagnostic_http.py"))
 
