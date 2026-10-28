@@ -18,7 +18,10 @@ final readonly class AssetRecordRepository
     {
     }
 
-    /** Create only a fixture record under the caller's explicit permission. */
+    /**
+     * Create only a fixture record under the caller's explicit permission.
+     * @return array<string, string|null>
+     */
     public function create(AssetRecord $record, string $tenantRef, string $actorRef, bool $authorized): array
     {
         $this->assertRecordAuthority($record, $tenantRef, $actorRef, $authorized);
