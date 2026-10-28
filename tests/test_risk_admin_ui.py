@@ -55,6 +55,9 @@ class ModuloTests(unittest.TestCase):
                              f"fixture:{kind}/user@example.com", f"fixture:{kind}/"):
                 self.assertIsNone(pattern.fullmatch(rejected), rejected)
         self.assertIn("digitSequencePattern = /[0-9]{7,}/", code)
+        self.assertIn("const searchPattern = /^[a-z0-9:_/-]{0,70}$/;", code)
+        self.assertIn("searchPattern.test(value) && !digitSequencePattern.test(value)", code)
+        self.assertIn("if (validSearch(value)) setSearch(value)", code)
         self.assertIn("!digitSequencePattern.test(reference)", code)
         self.assertIn("SOLO DATOS FICTICIOS", code)
         self.assertIn("sin API", code)

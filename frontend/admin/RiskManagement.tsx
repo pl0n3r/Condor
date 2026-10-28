@@ -38,6 +38,9 @@ const categories: RiskCategory[] = ['operativo', 'financiero', 'legal', 'tecnolo
 const states: RiskState[] = ['PENDIENTE', 'REQUIERE_REVISION'];
 const validFixture = (reference: string, pattern: RegExp): boolean =>
   pattern.test(reference) && !digitSequencePattern.test(reference);
+const searchPattern = /^[a-z0-9:_/-]{0,70}$/;
+const validSearch = (value: string): boolean =>
+  searchPattern.test(value) && !digitSequencePattern.test(value);
 
 function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   // Company comes exclusively from the authenticated admin context; never from form input.
@@ -143,7 +146,11 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
         <section className="catalog-card" aria-labelledby="risk-list-title">
           <h3 id="risk-list-title">Riesgos de demostración</h3>
           <label>Buscar referencia ficticia
-            <input type="search" value={search} onChange={event => setSearch(event.target.value)}
+            <input type="search" value={search} onChange={event => {
+              const value = event.target.value.toLowerCase();
+              if (validSearch(value)) setSearch(value);
+              else setNotice("Busca solo referencias ficticias: no ingreses datos personales.");
+            }}
               placeholder="fixture:risk/demo" />
           </label>
           <label>Filtrar estado
