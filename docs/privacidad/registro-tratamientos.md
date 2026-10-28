@@ -54,21 +54,21 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `password_reset_lifecycle`
 
-## controlbot_staff_operations
-
-- Categoría: `usage`
-- Campos de software: `action`, `actor_key_id`, `target_staff_user_id`, `result`, `request_id`, `request_nonce_hash`, `request_ip`, `created_at`, `context`
-- Finalidad: `staff_administration_audit`
-- Base documentada: `review_required` (revisión jurídica requerida)
-- Consentimiento: `review_required`
-- Proveedores: ninguno_declarado
-- Retención: `review_required`
-
 ## contract_synthetic_records
 
 - Categoría: `usage`
 - Campos de software: `tenant_ref`, `company_ref`, `contract_ref`, `worker_ref`, `template_ref`, `actor_ref`, `state`, `version`, `audit_action`, `fingerprint`, `created_at`
 - Finalidad: `review_required`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
+## controlbot_staff_operations
+
+- Categoría: `usage`
+- Campos de software: `action`, `actor_key_id`, `target_staff_user_id`, `result`, `request_id`, `request_nonce_hash`, `request_ip`, `created_at`, `context`
+- Finalidad: `staff_administration_audit`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
 - Proveedores: ninguno_declarado
