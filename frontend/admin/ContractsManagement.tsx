@@ -39,7 +39,7 @@ function ContractPreview({ tenantId, companyId, branchId, permissions }: Props) 
   const [notice, setNotice] = useState('');
 
   const scopedDrafts = drafts.filter(entry => entry.scope === scope);
-  const listing = scopedDrafts.filter(entry => entry.ref.includes(filter.trim().toLowerCase()));
+  const listing = scopedDrafts.filter(entry => filter === '' || entry.ref === filter);
   const selected = scopedDrafts.find(entry => entry.ref === picked);
 
   function record(refToRecord: string, operation: string) {
@@ -100,8 +100,11 @@ function ContractPreview({ tenantId, companyId, branchId, permissions }: Props) 
       {notice && <output role="status" aria-live="polite">{notice}</output>}
       <div className="catalog-grid">
         <section className="catalog-card" aria-label="Borradores de prueba">
-          <label>Buscar referencia inventada
-            <input value={filter} maxLength={80} onChange={event => setFilter(event.target.value)} />
+          <label>Filtrar por referencia ficticia
+            <select value={filter} onChange={event => setFilter(event.target.value)}>
+              <option value="">Todas las referencias</option>
+              {scopedDrafts.map(item => <option key={item.ref} value={item.ref}>{item.ref}</option>)}
+            </select>
           </label>
           {listing.length === 0 ? <p role="status">Sin registros en esta empresa y sede.</p> : (
             <table aria-label="Contratos sintéticos"><thead><tr>
