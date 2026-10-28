@@ -6,6 +6,7 @@ import collections
 from pathlib import Path
 import re
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT / "docs/contraste-cd_d3.md"
@@ -43,6 +44,19 @@ def parse_report(text: str) -> dict[str, tuple[str, str, str, str, str]]:
     return found
 
 
+
+def php_class_declares_method(source: str, class_name: str, method_name: str) -> bool:
+    """Asocia el método declarado a su clase, no a una segunda clase del mismo archivo."""
+    declarations = list(re.finditer(r"\bclass\s+([A-Za-z_][A-Za-z0-9_]*)\b", source))
+    for index, match in enumerate(declarations):
+        if match.group(1) != class_name:
+            continue
+        end = declarations[index + 1].start() if index + 1 < len(declarations) else len(source)
+        class_body = source[match.end():end]
+        return re.search(r"\bfunction\s+" + re.escape(method_name) + r"\s*\(", class_body) is not None
+    return False
+
+
 def verify(ident: str, row: tuple[str, str, str, str, str]) -> None:
     state, code, test, pr, reason = row
     if state not in STATES or len(reason) < 100 or not reason.startswith(ident + ":"):
@@ -58,10 +72,8 @@ def verify(ident: str, row: tuple[str, str, str, str, str]) -> None:
             if not (ROOT / path).is_file():
                 raise ValueError("Archivo inexistente: " + path)
         test_content = (ROOT / test_path).read_text(encoding="utf-8")
-        if not re.search(r"\bclass\s+" + re.escape(class_name) + r"\b", test_content):
-            raise ValueError("Clase inexistente: " + ident)
-        if not re.search(r"\bfunction\s+" + re.escape(method_name) + r"\s*\(", test_content):
-            raise ValueError("Método inexistente: " + ident)
+        if not php_class_declares_method(test_content, class_name, method_name):
+            raise ValueError("Método inexistente en clase: " + ident)
         m = re.fullmatch(
             r"PR #(\d+) MERGED: https://github\.com/pl0n3r/Condor/pull/\1", pr
         )
@@ -105,6 +117,8 @@ def verify_matrix(doc_rows, text: str) -> None:
             raise ValueError("Matriz sin justificación: " + ident)
         if state == "NO_VERIFICABLE" and "Falta" not in evidence:
             raise ValueError("Matriz sin brecha: " + ident)
+        if state != "CUBIERTO" and reason not in evidence:
+            raise ValueError("Razón de matriz distinta: " + ident)
     summary = collections.Counter(m[3] for m in matches)
     for state in ("CUBIERTO", "EN_CURSO", "SIN_COBERTURA", "DESCARTADO", "NO_VERIFICABLE"):
         if f"| {state} | {summary[state]} |" not in text:
@@ -148,6 +162,12 @@ class ContrasteTests(unittest.TestCase):
         broken[3] = "—"
         with self.assertRaisesRegex(ValueError, "MERGED"):
             verify(ident, tuple(broken))
+        fake_php = ("class PlatformOwnerNavigationTest { } "
+                    "class OtraClase { public function "
+                    "testNewSectionsDenyNonPlatformOwnersAndRenderForOwner() {} }")
+        with patch.object(Path, "read_text", return_value=fake_php):
+            with self.assertRaisesRegex(ValueError, "Método inexistente en clase"):
+                verify(ident, row)
 
     def test_faltante_tiene_issue(self) -> None:
         self.assertFalse(any(row[0] == "SIN_COBERTURA" for row in self.rows.values()))
@@ -166,6 +186,11 @@ class ContrasteTests(unittest.TestCase):
         invalid = self.matrix.replace("[contraste](contraste-cd_d3.md)", "sin enlace", 1)
         with self.assertRaisesRegex(ValueError, "Enlace"):
             verify_matrix(self.rows, invalid)
+        reason = self.rows["D-054"][4]
+        drift = self.matrix.replace(reason, "D-054: Falta evidencia genérica obsoleta")
+        self.assertNotEqual(self.matrix, drift)
+        with self.assertRaisesRegex(ValueError, "Razón de matriz distinta"):
+            verify_matrix(self.rows, drift)
 
 
 if __name__ == "__main__":
