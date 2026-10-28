@@ -66,7 +66,7 @@ final class QualityRecord
         $this->category = $kind;
         $this->state = $status;
         $this->actorKey = $actor;
-        $this->version = ($predecessor?->version ?? 0) + 1;
+        $this->version = ($predecessor->version ?? 0) + 1;
         $this->priorId = $predecessor?->id;
         $this->priorState = $predecessor?->state;
         $this->action = $predecessor === null ? 'CREADA' : 'CAMBIO_EXPLICITO';
