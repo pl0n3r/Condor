@@ -66,6 +66,10 @@ type ContextState =
     }
   | { status: 'error' };
 
+const DevGovernanceManagement = import.meta.env.DEV
+  ? lazy(async () => ({ default: (await import('./GovernanceManagement')).GovernanceManagement }))
+  : null;
+
 const DevComplianceEvidenceManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./ComplianceManagement')).ComplianceEvidenceManagement }))
   : null;
@@ -168,6 +172,7 @@ export function AdminApp({
         ...(import.meta.env.DEV ? [{ href: '/admin#payroll-management', label: 'Nómina (pruebas)' }] : []),
         ...(import.meta.env.DEV ? [{ href: '/admin#compliance-management', label: 'SG-SST (pruebas)' }] : []),
         ...(import.meta.env.DEV ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal (pruebas)' }] : []),
+        ...(import.meta.env.DEV ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo (pruebas)' }] : []),
         { href: '/admin#commerce', label: 'Comercial' },
         { href: '/admin#orders', label: 'Pedidos' },
         { href: '/admin#sales-reports', label: 'Reportes de ventas' },
@@ -396,15 +401,26 @@ export function AdminApp({
             />
           )}
 
-          {import.meta.env.DEV && DevComplianceEvidenceManagement && (
-            <Suspense fallback={<p role="status">Cargando cumplimiento ficticio…</p>}>
-              <DevComplianceEvidenceManagement
-                key={'compliance-evidence-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
-                branchId={context.data.active_branch.id}
-                permissions={context.data.permissions}
-                csrfToken={accessToken}
-              />
-            </Suspense>
+          {import.meta.env.DEV && DevGovernanceManagement && DevComplianceEvidenceManagement && (
+            <>
+              <Suspense fallback={<p role="status">Cargando gobierno ficticio…</p>}>
+                            <DevGovernanceManagement
+                              key={'governance-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                              tenantId={context.data.tenant.id}
+                              companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
+                              branchId={context.data.active_branch.id}
+                              permissions={context.data.permissions}
+                            />
+                          </Suspense>
+              <Suspense fallback={<p role="status">Cargando cumplimiento ficticio…</p>}>
+                            <DevComplianceEvidenceManagement
+                              key={'compliance-evidence-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                              branchId={context.data.active_branch.id}
+                              permissions={context.data.permissions}
+                              csrfToken={accessToken}
+                            />
+                          </Suspense>
+            </>
           )}
 
           <CommerceManagement
