@@ -17,9 +17,9 @@ const actorRefPattern = /^fixture:actor\/[a-z][a-z0-9_-]{0,47}$/;
 const estados: Estado[] = ['PENDIENTE', 'EN_REVISION', 'CIERRE_REQUIERE_REVISION'];
 
 function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
-  const canView = companyId !== '__unassigned__' && permissions.includes('compliance.view');
-  const canCreate = canView && permissions.includes('compliance.create');
-  const canUpdate = canView && permissions.includes('compliance.update');
+  const canView = companyId !== '__unassigned__' && permissions.includes('inventory.view');
+  const canCreate = canView && permissions.includes('inventory.create');
+  const canUpdate = canView && permissions.includes('inventory.update');
   const scope = tenantId + '|' + companyId + '|' + branchId;
   const [records, setRecords] = useState<Registro[]>([]);
   const [history, setHistory] = useState<Audit[]>([]);
