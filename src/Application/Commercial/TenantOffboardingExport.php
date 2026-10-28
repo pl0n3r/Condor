@@ -73,6 +73,7 @@ final class TenantOffboardingExport
         }
 
         $manifest = [];
+        $export = [];
         $seen = [];
         foreach ($datasets as $dataset) {
             if (!is_array($dataset)
@@ -107,6 +108,13 @@ final class TenantOffboardingExport
             }
             $recordRefs = array_keys($refs);
             sort($recordRefs, SORT_STRING);
+            // A complete synthetic envelope, not only a checksum: callers can
+            // inspect all supplied fixture references without retrieving PII.
+            $export[$dataset['key']] = [
+                'tenant_ref' => $tenant,
+                'company_ref' => $company,
+                'records' => $recordRefs,
+            ];
             $manifest[$dataset['key']] = [
                 'count' => count($recordRefs),
                 'sha256' => hash('sha256', json_encode(
@@ -117,13 +125,14 @@ final class TenantOffboardingExport
             $seen[$dataset['key']] = true;
         }
         ksort($manifest, SORT_STRING);
+        ksort($export, SORT_STRING);
         if (array_keys($manifest) !== self::DATASETS) {
             return $rejected;
         }
 
         // Read-only evidence of what was *supplied*, not a database backup.
         $digest = hash('sha256', json_encode(
-            [$tenant, $company, $request, $manifest],
+            [$tenant, $company, $request, $manifest, $export],
             JSON_THROW_ON_ERROR,
         ));
         $isOffboarding = $action === 'offboarding_review';
@@ -134,6 +143,7 @@ final class TenantOffboardingExport
             'company_ref' => $company,
             'state' => $isOffboarding ? 'BAJA_PENDIENTE_REVISION' : 'EXPORTACION_PENDIENTE_REVISION',
             'manifest' => $manifest,
+            'export' => $export,
             'digest' => $digest,
             'retention_until' => $input['retention_until'],
             'audit' => [[
@@ -174,6 +184,7 @@ final class TenantOffboardingExport
             'company_ref' => null,
             'state' => 'REQUIERE_REVISION',
             'manifest' => [],
+            'export' => [],
             'digest' => null,
             'retention_until' => null,
             'audit' => [],

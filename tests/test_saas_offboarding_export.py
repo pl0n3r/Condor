@@ -71,6 +71,10 @@ class SaasTests(unittest.TestCase):
         self.assertTrue(right["valid"])
         self.assertNotEqual(left["digest"], right["digest"])
         self.assertEqual(set(left["manifest"]), set(DATASETS))
+        self.assertEqual(set(left["export"]), set(DATASETS))
+        self.assertEqual(left["export"]["inventory"]["records"], ["fixture:record/inventory"])
+        self.assertEqual(left["export"]["inventory"]["tenant_ref"], a["tenant_ref"])
+        self.assertEqual(left["export"]["inventory"]["company_ref"], a["company_ref"])
         for path in ("commercial", "datasets"):
             mixed = copy.deepcopy(a)
             mixed[path] = copy.deepcopy(b[path])
@@ -140,6 +144,8 @@ class SaasTests(unittest.TestCase):
         self.assertTrue(out["valid"])
         self.assertEqual(out, evaluate(copy.deepcopy(data)))
         self.assertTrue(out["manual_review_required"])
+        for key in DATASETS:
+            self.assertEqual(out["manifest"][key]["count"], len(out["export"][key]["records"]))
         self.assertFalse(out["deletion_scheduled"])
         self.assertFalse(out["can_delete"])
         self.assertFalse(out["can_charge"])
