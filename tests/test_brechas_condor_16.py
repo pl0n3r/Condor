@@ -20,6 +20,13 @@ OBSERVER = "scripts/observar_release.py"
 POST = "scripts/post-deploy.sh"
 INDEXNOW = "src/Application/Seo/IndexNowNotifier.php"
 SOURCES = (MATRIX, CONTRAST, SPEC, OBSERVER, POST, INDEXNOW)
+TEST_CANDIDATES = {
+    "D-044-S08": "tests/test_observar_release.py",
+    "D-044-S09": "tests/test_post_deploy.py",
+    "D-044-S10": "tests/test_observar_release.py",
+    "D-044-S11": "tests/test_observar_release.py",
+    "D-045": "tests/test_indexnow_notifier.py",
+}
 GAPS = {
     "D-044-S08": (
         "Automatización operativa", "#### Automatización operativa",
@@ -81,7 +88,8 @@ def rows(raw: str, kind: str) -> dict[str, tuple[str, ...]]:
                     or cells[4] != "#1"):
                 raise ValueError("UNKNOWN: invalid matrix " + key)
         elif (len(cells) != 6 or cells[0] != key
-              or cells[1] != "NO_VERIFICABLE" or cells[4] != "—"
+              or cells[1] != "NO_VERIFICABLE" or cells[2] != GAPS[key][3]
+              or cells[3] != TEST_CANDIDATES[key] or cells[4] != "—"
               or key not in cells[5]
               or "Falta acreditar integralmente" not in cells[5]
               or "tríada código/test/PR MERGED" not in cells[5]):
