@@ -28,7 +28,7 @@ class ModuloTests(unittest.TestCase):
 
     def test_permisos_y_auditoria(self) -> None:
         code = COMPONENT.read_text()
-        for permission in ("compliance.view", "compliance.create", "compliance.update"):
+        for permission in ("inventory.view", "inventory.create", "inventory.update"):
             self.assertIn("permissions.includes('" + permission + "')", code)
         for guard in ("if (!canView)", "if (!canCreate", "if (!canUpdate"):
             self.assertIn(guard, code)
