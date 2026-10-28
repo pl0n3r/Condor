@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Compliance\ComplianceApiService;
+use App\Application\Compliance\OccupationalApiService;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\User;
@@ -123,4 +124,100 @@ final class ComplianceController extends AbstractController
         ]);
         $this->entityManager->flush();
     }
+
+    // SG-SST intentionally uses a distinct synthetic session store and strict environment gate.
+    #[Route('/api/v1/branches/{branchId}/sgsst/records', name: 'api_sgsst_record_list', methods: ['GET'])]
+    public function listOccupational(string $branchId, Request $request): JsonResponse
+    {
+        [$actor, $tenant, $branch] = $this->occupationalAccess($request, $branchId, 'settings.view');
+        $rows = $this->domain(fn (): array => OccupationalApiService::listRecords(
+            $this->occupationalStore($request), $this->occupationalScope($tenant, $branch),
+        ));
+        $this->occupationalAudit($tenant, $actor, 'listed', 'fixture:sgsst-record/list');
+        return $this->json(['records' => $rows, 'synthetic_only' => true]);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/sgsst/records/{slug}', name: 'api_sgsst_record_view', methods: ['GET'])]
+    public function viewOccupational(string $branchId, string $slug, Request $request): JsonResponse
+    {
+        [$actor, $tenant, $branch] = $this->occupationalAccess($request, $branchId, 'settings.view');
+        $ref = 'fixture:sgsst-record/'.$slug;
+        $row = $this->domain(fn (): ?array => OccupationalApiService::viewRecord(
+            $this->occupationalStore($request), $this->occupationalScope($tenant, $branch), $ref,
+        ));
+        if ($row === null) {
+            throw new NotFoundHttpException('Registro SG-SST ficticio no encontrado.');
+        }
+        $this->occupationalAudit($tenant, $actor, 'viewed', $ref);
+        return $this->json(['record' => $row, 'synthetic_only' => true]);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/sgsst/records', name: 'api_sgsst_record_create', methods: ['POST'])]
+    public function createOccupational(string $branchId, Request $request): JsonResponse
+    {
+        [$actor, $tenant, $branch] = $this->occupationalAccess($request, $branchId, 'settings.create', true);
+        $payload = $this->payload($request, ['record_ref', 'source_ref', 'kind']);
+        $outcome = $this->domain(fn (): array => OccupationalApiService::createRecord(
+            $this->occupationalStore($request), $this->occupationalScope($tenant, $branch), $payload,
+        ));
+        $this->occupationalAudit($tenant, $actor, 'created', $outcome['record']['record_ref']);
+        $request->getSession()->set('condor_sgsst_synthetic', $outcome['store']);
+        return $this->json(['record' => $outcome['record']], Response::HTTP_CREATED);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/sgsst/records/{slug}/state', name: 'api_sgsst_record_state', methods: ['PATCH'])]
+    public function changeOccupationalState(string $branchId, string $slug, Request $request): JsonResponse
+    {
+        [$actor, $tenant, $branch] = $this->occupationalAccess($request, $branchId, 'settings.update', true);
+        $payload = $this->payload($request, ['state']);
+        $state = is_string($payload['state'] ?? null) ? $payload['state'] : '';
+        $ref = 'fixture:sgsst-record/'.$slug;
+        $outcome = $this->domain(fn (): array => OccupationalApiService::changeState(
+            $this->occupationalStore($request), $this->occupationalScope($tenant, $branch), $ref, $state,
+        ));
+        $this->occupationalAudit($tenant, $actor, 'state_changed', $ref);
+        $request->getSession()->set('condor_sgsst_synthetic', $outcome['store']);
+        return $this->json(['record' => $outcome['record']]);
+    }
+
+    /** @return array{User,Tenant,Branch} */
+    private function occupationalAccess(Request $request, string $branchId, string $permission, bool $write = false): array
+    {
+        $environment = $this->getParameter('kernel.environment');
+        if ($environment !== 'test' && ($environment !== 'dev'
+            || getenv('CONDOR_OCCUPATIONAL_SYNTHETIC_API') !== '1'
+            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion'
+        )) {
+            throw new NotFoundHttpException('SG-SST sintético no disponible.');
+        }
+        if ($write) {
+            $this->requireCsrf($request);
+        }
+        [$actor, $tenant, $branch] = $this->authorizedBranchScope($branchId, $permission);
+        return [$actor, $tenant, $branch];
+    }
+
+    /** @return array<string,mixed> */
+    private function occupationalStore(Request $request): array
+    {
+        $store = $request->getSession()->get('condor_sgsst_synthetic', []);
+        if (!is_array($store)) {
+            throw new NotFoundHttpException('Archivo SG-SST ficticio no disponible.');
+        }
+        return $store;
+    }
+
+    private function occupationalScope(Tenant $tenant, Branch $branch): string
+    {
+        return hash('sha256', $tenant->id().'|'.$branch->id());
+    }
+
+    private function occupationalAudit(Tenant $tenant, User $actor, string $event, string $ref): void
+    {
+        $this->audit($tenant, $actor, 'sgsst.synthetic.'.$event, OccupationalApiService::class, $ref, [
+            'synthetic_only' => true,
+        ]);
+        $this->entityManager->flush();
+    }
+
 }
