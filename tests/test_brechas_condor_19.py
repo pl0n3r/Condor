@@ -169,19 +169,22 @@ class BrechasCondor19Tests(unittest.TestCase):
         identifier = "D-050-S02"
         line = next(x for x in matrix.splitlines()
                     if x.startswith(f"| {BT}{identifier}{BT} · {BT}ESPECIFICACIONES.md{BT} |"))
-        with self.assertRaisesRegex(ValueError, "UNKNOWN"):
-            matrix_rows(matrix.replace(line, ""))
-        with self.assertRaisesRegex(ValueError, "UNKNOWN"):
-            matrix_rows(matrix + "\n" + line)
-        with self.assertRaisesRegex(ValueError, "UNKNOWN"):
-            matrix_rows(matrix.replace(line, line.replace(
-                f"{BT}NO_VERIFICABLE{BT}", f"{BT}CUBIERTO{BT}")))
+        missing = matrix.replace(line, "")
+        duplicated = matrix + "\n" + line
+        promoted = matrix.replace(line, line.replace(
+            f"{BT}NO_VERIFICABLE{BT}", f"{BT}CUBIERTO{BT}"))
         contrast_line = next(x for x in contrast.splitlines()
                              if x.startswith(f"| {identifier} |"))
-        with self.assertRaisesRegex(ValueError, "UNKNOWN"):
-            contrast_rows(contrast.replace(contrast_line, ""))
-        with self.assertRaisesRegex(ValueError, "UNKNOWN"):
-            contrast_rows(contrast + "\n" + contrast_line)
+        contrast_missing = contrast.replace(contrast_line, "")
+        contrast_duplicated = contrast + "\n" + contrast_line
+
+        for sample in (missing, duplicated, promoted):
+            with self.subTest(sample=sample == promoted):
+                with self.assertRaisesRegex(ValueError, "UNKNOWN"):
+                    matrix_rows(sample)
+        for sample in (contrast_missing, contrast_duplicated):
+            with self.assertRaisesRegex(ValueError, "UNKNOWN"):
+                contrast_rows(sample)
         with self.assertRaisesRegex(ValueError, "UNKNOWN"):
             source("../.env")
 
