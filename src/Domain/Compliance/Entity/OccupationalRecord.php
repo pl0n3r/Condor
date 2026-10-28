@@ -9,7 +9,10 @@ use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
 use DomainException;
 
-/** Synthetic-only M03 occupational state, segregated by tenant and occupational reference. */
+/**
+ * M03 construction-only occupational safety record.
+ * These IDs are fixtures, never real employees, accidents or legal findings.
+ */
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_occupational_record')]
 final class OccupationalRecord
@@ -36,7 +39,7 @@ final class OccupationalRecord
     private ?string $evidenceRef = null;
 
     #[ORM\Column(name: 'review_due', type: 'string', length: 10, nullable: true)]
-    private ?string $reviewDue = null;
+    private ?string $reviewDue;
 
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
     private DateTimeImmutable $createdAt;
@@ -51,11 +54,12 @@ final class OccupationalRecord
         bool $authorized,
         ?string $reviewDue = null,
     ) {
-        self::assertAuthority($tenantRef, $actorRef, $authorized);
-        self::assertOccupationalRef($recordRef);
-        if ($reviewDue !== null && !self::date($reviewDue)) {
-            throw new DomainException('Fecha de revisión sintética inválida.');
+        self::assertScope($tenantRef, $actorRef, $authorized);
+        self::assertReference($recordRef);
+        if ($reviewDue !== null && !self::validDate($reviewDue)) {
+            throw new DomainException('Fecha sintética de revisión inválida.');
         }
+
         $this->tenantRef = $tenantRef;
         $this->recordRef = $recordRef;
         $this->actorRef = $actorRef;
@@ -64,45 +68,67 @@ final class OccupationalRecord
         $this->updatedAt = $this->createdAt;
     }
 
-    public static function assertAuthority(string $tenantRef, string $actorRef, bool $authorized): void
+    public static function assertScope(string $tenantRef, string $actorRef, bool $authorized): void
     {
-        if (!$authorized
-            || preg_match('/^tenant-(?:test-)?[a-z][a-z0-9-]{0,31}$/D', $tenantRef) !== 1
-            || preg_match('~^fixture:actor/[a-z][a-z0-9_-]{0,47}$~D', $actorRef) !== 1) {
-            throw new DomainException('Acceso no autorizado o referencias no sintéticas.');
+        $validTenant = preg_match('/^tenant-(?:test-)?[a-z][a-z0-9-]{0,31}$/D', $tenantRef) === 1;
+        $validActor = preg_match('~^fixture:actor/[a-z][a-z0-9_-]{0,47}$~D', $actorRef) === 1;
+        if (!$authorized || !$validTenant || !$validActor) {
+            throw new DomainException('Operador o empresa no autorizados.');
         }
     }
 
-    public static function assertOccupationalRef(string $recordRef): void
+    public static function assertReference(string $recordRef): void
     {
         if (preg_match('~^fixture:occupational/[a-z][a-z0-9_-]{0,47}$~D', $recordRef) !== 1) {
-            throw new DomainException('Referencia de activo no sintética.');
+            throw new DomainException('Solo se aceptan registros ficticios SG-SST.');
         }
     }
 
-    public function transition(string $state, string $actorRef, bool $authorized, ?string $evidenceRef = null): void
-    {
-        self::assertAuthority($this->tenantRef, $actorRef, $authorized);
-        if (!in_array($state, [self::REVIEW, self::CLOSURE_REVIEW], true)
-            || ($state === self::CLOSURE_REVIEW
-                && ($evidenceRef === null
-                    || preg_match('~^fixture:evidence/[a-z][a-z0-9_-]{0,47}$~D', $evidenceRef) !== 1))
-            || ($evidenceRef !== null
-                && preg_match('~^fixture:evidence/[a-z][a-z0-9_-]{0,47}$~D', $evidenceRef) !== 1)) {
-            throw new DomainException('El cierre automático está prohibido; transición o evidencia inválida.');
+    public function transition(
+        string $nextState,
+        string $actorRef,
+        bool $authorized,
+        ?string $evidenceRef = null,
+    ): void {
+        self::assertScope($this->tenantRef, $actorRef, $authorized);
+
+        if (!in_array($nextState, [self::REVIEW, self::CLOSURE_REVIEW], true)) {
+            throw new DomainException('No existen aprobaciones ni cierres automáticos.');
         }
-        $this->state = $state;
-        $this->actorRef = $actorRef;
+        $evidenceValid = $evidenceRef !== null
+            && preg_match('~^fixture:evidence/[a-z][a-z0-9_-]{0,47}$~D', $evidenceRef) === 1;
+        if (($evidenceRef !== null && !$evidenceValid)
+            || ($nextState === self::CLOSURE_REVIEW && !$evidenceValid)) {
+            throw new DomainException('La solicitud de cierre requiere evidencia ficticia.');
+        }
+
+        $this->state = $nextState;
         $this->evidenceRef = $evidenceRef;
+        $this->actorRef = $actorRef;
         $this->updatedAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
-    public function tenantRef(): string { return $this->tenantRef; }
-    public function recordRef(): string { return $this->recordRef; }
-    public function state(): string { return $this->state; }
-    public function actorRef(): string { return $this->actorRef; }
+    public function tenantRef(): string
+    {
+        return $this->tenantRef;
+    }
 
-    /** @return array<string, string|null> */
+    public function recordRef(): string
+    {
+        return $this->recordRef;
+    }
+
+    public function actorRef(): string
+    {
+        return $this->actorRef;
+    }
+
+    public function state(): string
+    {
+        return $this->state;
+    }
+
+    /** @return array<string,string|null> */
     public function snapshot(): array
     {
         return [
@@ -117,12 +143,12 @@ final class OccupationalRecord
         ];
     }
 
-    private static function date(string $value): bool
+    private static function validDate(string $date): bool
     {
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) !== 1) {
+        if (preg_match('/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $date, $part) !== 1) {
             return false;
         }
-        [$year, $month, $day] = array_map('intval', explode('-', $value));
-        return checkdate($month, $day, $year);
+
+        return checkdate((int) $part[2], (int) $part[3], (int) $part[1]);
     }
 }
