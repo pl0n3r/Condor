@@ -78,6 +78,10 @@ const DevContractsManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./ContractsManagement')).ContractsManagement }))
   : null;
 
+const DevSocialSecurityManagement = import.meta.env.DEV
+  ? lazy(async () => ({ default: (await import('./SocialSecurityManagement')).SocialSecurityManagement }))
+  : null;
+
 const DevFinanceManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./FinanceManagement')).FinanceManagement }))
   : null;
@@ -188,6 +192,7 @@ export function AdminApp({
         ...(import.meta.env.DEV ? [{ href: '/admin#human-resources-management', label: 'Talento Humano (pruebas)' }] : []),
         ...(import.meta.env.DEV ? [{ href: '/admin#contracts-management', label: 'Contratación (pruebas)' }] : []),
         ...(import.meta.env.DEV ? [{ href: '/admin#finance-management', label: 'Finanzas (pruebas)' }] : []),
+        ...(import.meta.env.DEV ? [{ href: '/admin#social-security-management', label: 'Seguridad social (pruebas)' }] : []),
         { href: '/admin#commerce', label: 'Comercial' },
         { href: '/admin#orders', label: 'Pedidos' },
         { href: '/admin#sales-reports', label: 'Reportes de ventas' },
@@ -439,6 +444,17 @@ export function AdminApp({
                   permissions={context.data.permissions}
                 />
               </Suspense>
+              )}
+              {import.meta.env.DEV && DevSocialSecurityManagement && (
+                <Suspense fallback={<p role="status">Cargando seguridad social ficticia…</p>}>
+                  <DevSocialSecurityManagement
+                    key={'social-security-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                    tenantId={context.data.tenant.id}
+                    companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
+                    branchId={context.data.active_branch.id}
+                    permissions={context.data.permissions}
+                  />
+                </Suspense>
               )}
               <Suspense fallback={<p role="status">Cargando gobierno ficticio…</p>}>
                             <DevGovernanceManagement
