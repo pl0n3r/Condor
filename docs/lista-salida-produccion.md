@@ -1,6 +1,6 @@
 # Lista de salida a producción de Condor
 
-**Corte:** 27-oct-2026 · fuente: este repositorio, sus workflows y los issues citados. Esta lista **no autoriza el go-live**; la decisión de salir en vivo, el gasto y los datos reales son solo del dueño.
+**Corte:** 28-oct-2026 · fuente: este repositorio, sus workflows y los issues citados. Esta lista **no autoriza el go-live**; la decisión de salir en vivo, el gasto y los datos reales son solo del dueño.
 
 ## Reglas
 
