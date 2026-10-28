@@ -268,7 +268,7 @@ class BrechasCondor04Tests(unittest.TestCase):
         own = Path(__file__).read_text(encoding="utf-8")
         self.assertNotIn("-----BEGIN " + "PRIVATE KEY-----", own)
         self.assertNotRegex(own, r"(?m)^(?:import|from)\s+(?:requests|urllib|httpx|socket)\b")
-        self.assertNotIn("DATABASE_URL=", own)
+        self.assertNotIn("DATABASE_" + "URL=", own)
         self.assertNotIn("curl_" + "exec(", own)
         self.assertNotIn("https://" + "api.", own)
         self.assertEqual(policy_probe(schema_fixture())["authority"], "owner_gate_required")
