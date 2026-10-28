@@ -232,6 +232,10 @@ class BrechasCondor20Tests(unittest.TestCase):
         self.assertTrue(evidence["sensitive_request"])
         self.assertTrue(evidence["provider_request"])
         self.assertTrue(evidence["invalid_result"])
+        # An unconfigured or synthetically prepared provider is never delivery proof.
+        self.assertEqual(UNKNOWN, operational("D-050-S03", {
+            "provider_result": evidence["billing_result"], "mail": "sent",
+        }))
 
     def test_falla_cerrado(self) -> None:
         """AC-02: missing, duplicate, falsely promoted or mutated evidence."""
