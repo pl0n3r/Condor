@@ -110,7 +110,8 @@ def scoped_authorization(actor: object, tenant: object, branch: object,
         return UNKNOWN
     branches = permissions["branches"]
     if (permissions["tenant"] != tenant or not isinstance(branches, list)
-            or not branches or any(not isinstance(x, str) for x in branches)
+            or not branches or any(not isinstance(x, str) or not x.startswith("synthetic:") for x in branches)
+            or len(set(branches)) != len(branches)
             or branch not in branches or permissions["active"] is not True):
         return UNKNOWN
     return LOCAL_PARTIAL
@@ -220,6 +221,14 @@ class BrechasCondor01Tests(unittest.TestCase):
             "synthetic:actor", "synthetic:tenant-a", "synthetic:branch-b",
             {"tenant": "synthetic:tenant-b", "branches": ["synthetic:branch-b"],
              "active": True}), UNKNOWN)
+        self.assertEqual(scoped_authorization(
+            "synthetic:actor", "synthetic:tenant-a", "synthetic:branch-a",
+            {"tenant": "synthetic:tenant-a", "branches": [
+                "synthetic:branch-a", "synthetic:branch-a"], "active": True}), UNKNOWN)
+        self.assertEqual(scoped_authorization(
+            "synthetic:actor", "synthetic:tenant-a", "synthetic:branch-a",
+            {"tenant": "synthetic:tenant-a", "branches": [
+                "synthetic:branch-a", "foreign"], "active": True}), UNKNOWN)
 
     def test_sin_datos_reales(self) -> None:
         """AC-03: solo contratos locales, sin llamadas de red ni datos sensibles."""
