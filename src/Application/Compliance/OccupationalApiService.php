@@ -16,7 +16,10 @@ final class OccupationalApiService
     private const KINDS = ['PELIGRO', 'INSPECCION', 'INCIDENTE', 'EPP', 'CAPACITACION', 'EMERGENCIA'];
     private const STATES = ['PENDIENTE', 'EN_REVISION', 'REQUIERE_REVISION'];
 
-    /** @param array<string,mixed> $store @return list<array<string,mixed>> */
+    /**
+     * @param array<string,mixed> $store
+     * @return list<array<string,mixed>>
+     */
     public static function listRecords(array $store, string $scope): array
     {
         $items = self::bucket($store, $scope);
@@ -24,7 +27,10 @@ final class OccupationalApiService
         return array_values($items);
     }
 
-    /** @param array<string,mixed> $store @return array<string,mixed>|null */
+    /**
+     * @param array<string,mixed> $store
+     * @return array<string,mixed>|null
+     */
     public static function viewRecord(array $store, string $scope, string $ref): ?array
     {
         $recordRef = self::reference($ref, 'sgsst-record');
@@ -129,7 +135,10 @@ final class OccupationalApiService
         return $items;
     }
 
-    /** @param array<string,mixed> $data @param list<string> $keys */
+    /**
+     * @param array<string,mixed> $data
+     * @param list<string> $keys
+     */
     private static function exactKeys(array $data, array $keys): void
     {
         $actual = array_keys($data);
