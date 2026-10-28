@@ -201,16 +201,24 @@ final class PrivacyAsCodeTest extends TestCase
     /** Runs all four M05 synthetic DBAL acceptance cases in Composer-enabled PHP CI. */
     public function testSocialSecurityPersistenceRealPhp(): void
     {
-        $process = new \Symfony\Component\Process\Process(
-            ['python3', '-m', 'unittest', 'discover', '-s', 'tests',
-                '-p', 'test_social_security_persistence.py', '-v'],
-            $this->root(),
-        );
-        $process->setTimeout(90);
-        $process->run();
-        self::assertTrue(
-            $process->isSuccessful(),
-            'M05 synthetic acceptance failed: '.$process->getOutput().$process->getErrorOutput(),
+        $descriptors = [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']];
+        $pipes = [];
+        $command = [
+            'python3', '-m', 'unittest', 'discover', '-s', 'tests',
+            '-p', 'test_social_security_persistence.py', '-v',
+        ];
+        $handle = proc_open($command, $descriptors, $pipes, $this->root());
+        self::assertIsResource($handle, 'No pudo iniciar las pruebas M05 de PHP/SQLite.');
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($handle);
+        self::assertSame(
+            0,
+            $exitCode,
+            'M05 synthetic acceptance failed: '.(string) $stdout.(string) $stderr,
         );
     }
 
