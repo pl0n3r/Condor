@@ -16,13 +16,19 @@ final class ContractApiService
     private const REVIEW_STATES = ['REQUIERE_REVISION', 'EN_REVISION'];
     private const KINDS = ['template', 'contract', 'addendum'];
 
-    /** @param array<string, mixed> $session @return list<array<string, mixed>> */
+    /**
+     * @param array<string, mixed> $session
+     * @return list<array<string, mixed>>
+     */
     public static function listRecords(array $session, string $scope): array
     {
         return array_values(self::records($session, $scope));
     }
 
-    /** @param array<string, mixed> $session @return array<string, mixed>|null */
+    /**
+     * @param array<string, mixed> $session
+     * @return array<string, mixed>|null
+     */
     public static function viewRecord(array $session, string $scope, string $ref): ?array
     {
         self::reference($ref);
@@ -76,7 +82,10 @@ final class ContractApiService
         return ['store' => $session, 'record' => $items[$ref]];
     }
 
-    /** @param array<string, mixed> $session @return array<string, array<string,mixed>> */
+    /**
+     * @param array<string, mixed> $session
+     * @return array<string, array<string, mixed>>
+     */
     private static function records(array $session, string $scope): array
     {
         if (preg_match('/\A[a-f0-9]{64}\z/D', $scope) !== 1) {
@@ -124,7 +133,10 @@ final class ContractApiService
         return str_starts_with($ref, 'fixture:'.$kind.'/');
     }
 
-    /** @param array<array-key,mixed> $value @param list<string> $expected */
+    /**
+     * @param array<array-key, mixed> $value
+     * @param list<string> $expected
+     */
     private static function keys(array $value, array $expected): bool
     {
         return count($value) === count($expected)

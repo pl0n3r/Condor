@@ -66,6 +66,7 @@ final class ContractsController extends AbstractController
             'list', 'view' => 'inventory.view',
             'create' => 'inventory.create',
             'state' => 'inventory.update',
+            default => throw new \LogicException('Operación sintética no admitida.'),
         };
         [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, $permission);
         $scope = $this->companyScope($tenant, $branch);
