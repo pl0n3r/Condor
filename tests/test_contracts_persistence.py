@@ -169,6 +169,13 @@ class ModuloTests(unittest.TestCase):
             self.assertTrue(row["actor_ref"].startswith("fixture:actor/"))
             self.assertEqual(64, len(row["fingerprint"]))
 
+        # Un rol habilitado no puede guardar en un scope de empresa diferente.
+        foreign_scope = run([append(
+            a, role="owner", tenant="tenant-b",
+            company="fixture:company/foreign",
+        )])
+        self.assertFalse(foreign_scope[0]["ok"])
+
     def test_sin_datos_reales(self):
         a = fixture()
         variants = []
