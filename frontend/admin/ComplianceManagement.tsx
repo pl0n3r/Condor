@@ -7,7 +7,7 @@ type Registro = Readonly<{
   tenantId: string; companyId: string; branchId: string;
   ref: string; evidenceRef: string; actorRef: string; state: Estado;
 }>;
-type Audit = Readonly<{ scope: string; ref: string; action: 'created' | 'viewed' | 'state_changed' }>;
+type Audit = Readonly<{ scope: string; ref: string; action: 'created' | 'viewed' | 'state_changed'; actorRef?: string }>;
 type Props = Readonly<{
   tenantId: string; companyId: string; branchId: string; permissions: string[];
 }>;
@@ -26,14 +26,14 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [ref, setRef] = useState('');
   const [evidenceRef, setEvidenceRef] = useState('');
   const [actorRef, setActorRef] = useState('');
+  const [reviewActorRef, setReviewActorRef] = useState('');
   const [selected, setSelected] = useState('');
   const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState<'TODOS' | Estado>('TODOS');
-  const [nextState, setNextState] = useState<Estado>('EN_REVISION');
   const [notice, setNotice] = useState('');
 
-  function audit(item: string, action: Audit['action']) {
-    setHistory(previous => [...previous, { scope, ref: item, action }].slice(-100));
+  function audit(item: string, action: Audit['action'], actor: string | null = null) {
+    setHistory(previous => [...previous, { scope, ref: item, action, actorRef: actor ?? undefined }].slice(-100));
   }
   function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,7 +47,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     setRecords(previous => [...previous, {
       tenantId, companyId, branchId, ref, evidenceRef, actorRef, state: 'PENDIENTE',
     }]);
-    audit(ref, 'created');
+    audit(ref, 'created', actorRef);
     setSelected(ref);
     setRef(''); setEvidenceRef(''); setActorRef('');
     setNotice('Registro ficticio creado en memoria. No tiene valor legal.');
@@ -67,14 +67,14 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       (selectedRow.state === 'PENDIENTE' && nextState === 'EN_REVISION')
       || (selectedRow.state === 'EN_REVISION' && nextState === 'CIERRE_REQUIERE_REVISION')
     );
-    if (!canUpdate || !actorRefPattern.test(actorRef) || !valid) {
+    if (!canUpdate || !actorRefPattern.test(reviewActorRef) || !valid || nextState === null) {
       setNotice('Transición rechazada: permiso, actor ficticio o estado inválido.');
       return;
     }
     setRecords(previous => previous.map(row => row.ref === selected
       && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId
-      ? { ...row, state: nextState, actorRef } : row));
-    audit(selected, 'state_changed');
+      ? { ...row, state: nextState } : row));
+    audit(selected, 'state_changed', reviewActorRef);
     setNotice('Transición ficticia registrada. No existe cierre automático.');
   }
 
@@ -88,6 +88,8 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const filtered = scoped.filter(row => (stateFilter === 'TODOS' || row.state === stateFilter)
     && row.ref.includes(search.trim().toLowerCase()));
   const detail = scoped.find(row => row.ref === selected);
+  const nextState: Estado | null = detail?.state === 'PENDIENTE' ? 'EN_REVISION'
+    : detail?.state === 'EN_REVISION' ? 'CIERRE_REQUIERE_REVISION' : null;
 
   return (
     <section id="compliance-management" className="catalog-panel" aria-labelledby="compliance-title">
@@ -101,11 +103,11 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
         <section className="catalog-card" aria-labelledby="compliance-list-title">
           <h3 id="compliance-list-title">Registros de demostración</h3>
           <label>Buscar referencia ficticia
-            <input aria-label="Buscar registros SG-SST" value={search}
+            <input value={search}
               onChange={event => setSearch(event.target.value)} />
           </label>
           <label>Filtrar estado
-            <select aria-label="Estado SG-SST" value={stateFilter}
+            <select value={stateFilter}
               onChange={event => setStateFilter(event.target.value as typeof stateFilter)}>
               <option value="TODOS">Todos</option>
               {estados.map(item => <option key={item} value={item}>{item}</option>)}
@@ -122,17 +124,17 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             <h3 id="compliance-create-title">Nuevo registro ficticio</h3>
             <form className="catalog-editor" onSubmit={create}>
               <label>Referencia ficticia
-                <input required maxLength={70} pattern="fixture:occupational/[a-z][a-z0-9_-]{0,47}"
+                <input required maxLength={70} pattern="fixture:occupational/[a-z][a-z0-9_\-]{0,47}"
                   value={ref} placeholder="fixture:occupational/demo"
                   onChange={event => setRef(event.target.value)} />
               </label>
               <label>Evidencia ficticia
-                <input required maxLength={70} pattern="fixture:evidence/[a-z][a-z0-9_-]{0,47}"
+                <input required maxLength={70} pattern="fixture:evidence/[a-z][a-z0-9_\-]{0,47}"
                   value={evidenceRef} placeholder="fixture:evidence/demo"
                   onChange={event => setEvidenceRef(event.target.value)} />
               </label>
               <label>Actor ficticio, sin identificación
-                <input required maxLength={70} pattern="fixture:actor/[a-z][a-z0-9_-]{0,47}"
+                <input required maxLength={70} pattern="fixture:actor/[a-z][a-z0-9_\-]{0,47}"
                   value={actorRef} placeholder="fixture:actor/demo"
                   onChange={event => setActorRef(event.target.value)} />
               </label>
@@ -152,15 +154,13 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             {canUpdate && detail.state !== 'CIERRE_REQUIERE_REVISION' && (
               <form className="catalog-editor" onSubmit={changeState}>
                 <label>Actor de revisión ficticio
-                  <input required maxLength={70} pattern="fixture:actor/[a-z][a-z0-9_-]{0,47}"
-                    value={actorRef} placeholder="fixture:actor/revisor"
-                    onChange={event => setActorRef(event.target.value)} />
+                  <input required maxLength={70} pattern="fixture:actor/[a-z][a-z0-9_\-]{0,47}"
+                    value={reviewActorRef} placeholder="fixture:actor/revisor"
+                    onChange={event => setReviewActorRef(event.target.value)} />
                 </label>
                 <label>Acción explícita de prueba
-                  <select aria-label="Transición de SG-SST" value={nextState}
-                    onChange={event => setNextState(event.target.value as Estado)}>
-                    <option value="EN_REVISION">Iniciar revisión</option>
-                    <option value="CIERRE_REQUIERE_REVISION">Solicitar revisión de cierre</option>
+                  <select key={detail.state} defaultValue={nextState ?? ''}>
+                    <option value={nextState ?? ''}>{nextState === 'EN_REVISION' ? 'Iniciar revisión' : 'Solicitar revisión de cierre'}</option>
                   </select>
                 </label>
                 <button type="submit">Registrar transición ficticia explícita</button>
@@ -173,7 +173,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
           <h3 id="compliance-audit-title">Bitácora de demostración (no oficial)</h3>
           <p className="muted">La bitácora local no sustituye la auditoría de servidor.</p>
           {history.length === 0 ? <p role="status">Sin operaciones de prueba.</p> : (
-            <ol>{history.map((item, index) => <li key={index}>{item.ref} · {item.action}</li>)}</ol>
+            <ol>{history.map((item, index) => <li key={index}>{item.ref} · {item.action}{item.actorRef ? ' · ' + item.actorRef : ''}</li>)}</ol>
           )}
         </section>
       </div>
