@@ -9,108 +9,161 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use DomainException;
 
-/** DBAL boundary for M05 synthetic social-security records, not wired to customer traffic. */
+/**
+ * Offline M05 ledger. The caller must explicitly authorize the synthetic scope
+ * for every read or append; the service exposes no public HTTP entry point.
+ */
 final readonly class SocialSecurityRecordRepository
 {
-    public function __construct(private Connection $db)
+    private const RECORDS = 'condor_social_security_record';
+    private const EVENTS = 'condor_social_security_audit';
+
+    public function __construct(private Connection $connection)
     {
     }
 
     public function append(
-        SocialSecurityRecord $record, string $tenantRef, string $companyRef,
-        string $actorRef, bool $authorized,
+        SocialSecurityRecord $record,
+        string $tenantRef,
+        string $companyRef,
+        string $actorRef,
+        bool $authorized,
     ): void {
-        self::checkAccess($tenantRef, $companyRef, $actorRef, $authorized);
-        if ([$record->tenantRef(), $record->companyRef(), $record->actorRef()]
-            !== [$tenantRef, $companyRef, $actorRef]
-        ) {
-            throw new DomainException('No se admite una escritura fuera de la empresa o el actor.');
+        self::requireAuthorization($tenantRef, $companyRef, $actorRef, $authorized);
+        $sameOwner = $record->tenantRef() === $tenantRef
+            && $record->companyRef() === $companyRef
+            && $record->actorRef() === $actorRef;
+        if (!$sameOwner) {
+            throw new DomainException('Seguridad social: el registro pertenece a otro ámbito o autor.');
         }
 
-        $this->db->transactional(function () use ($record, $tenantRef, $companyRef, $actorRef): void {
-            $history = $this->db->fetchAssociative(
-                'SELECT id, state, version FROM condor_social_security_record '
-                .'WHERE tenant_ref = ? AND company_ref = ? AND social_security_ref = ? '
-                .'ORDER BY version DESC LIMIT 1'.$this->lockClause(),
-                [$tenantRef, $companyRef, $record->social_securityRef()],
+        $this->connection->transactional(function () use (
+            $record, $tenantRef, $companyRef, $actorRef
+        ): void {
+            $previous = $this->latestVersion($tenantRef, $companyRef, $record->social_securityRef());
+            self::requireNextVersion($previous, $record);
+            $this->connection->insert(self::RECORDS, $record->snapshot());
+            $this->appendAudit(
+                $tenantRef, $companyRef, $record->social_securityRef(),
+                $actorRef, 'synthetic.saved',
             );
-            $newCase = $history === false;
-            if ($newCase && ($record->version() !== 1 || $record->previousId() !== null)) {
-                throw new DomainException('Debe existir la apertura inicial de Seguridad social.');
-            }
-            if (!$newCase && (
-                $record->version() !== (int) $history['version'] + 1
-                || $record->previousId() !== $history['id']
-                || $record->previousState() !== $history['state']
-            )) {
-                throw new DomainException('Historial obsoleto o inconsistente.');
-            }
-
-            $this->db->insert('condor_social_security_record', $record->snapshot());
-            $this->journal($tenantRef, $companyRef, $record->social_securityRef(), $actorRef, 'synthetic.saved');
         });
     }
 
     /** @return list<array<string, mixed>> */
     public function forCompany(
-        string $tenantRef, string $companyRef, string $actorRef, bool $authorized,
+        string $tenantRef,
+        string $companyRef,
+        string $actorRef,
+        bool $authorized,
     ): array {
-        self::checkAccess($tenantRef, $companyRef, $actorRef, $authorized);
+        self::requireAuthorization($tenantRef, $companyRef, $actorRef, $authorized);
 
-        return $this->db->transactional(function () use ($tenantRef, $companyRef, $actorRef): array {
-            $entries = $this->db->fetchAllAssociative(
-                'SELECT id, tenant_ref, company_ref, social_security_ref, category, state, version, '
-                .'previous_id, previous_state, audit_action, actor_ref, occurred_at, fingerprint '
-                .'FROM condor_social_security_record WHERE tenant_ref = ? AND company_ref = ? '
-                .'ORDER BY social_security_ref, version',
-                [$tenantRef, $companyRef],
-            );
+        return $this->connection->transactional(function () use (
+            $tenantRef, $companyRef, $actorRef
+        ): array {
+            $sql = 'SELECT id, tenant_ref, company_ref, social_security_ref, '
+                .'category, state, version, previous_id, previous_state, '
+                .'audit_action, actor_ref, occurred_at, fingerprint '
+                .'FROM '.self::RECORDS.' WHERE tenant_ref = ? AND company_ref = ? '
+                .'ORDER BY social_security_ref ASC, version ASC';
+            $entries = $this->connection->fetchAllAssociative($sql, [$tenantRef, $companyRef]);
+
             foreach ($entries as $entry) {
-                if ($entry['tenant_ref'] !== $tenantRef || $entry['company_ref'] !== $companyRef
-                    || !is_string($entry['fingerprint'])
-                    || !in_array($entry['state'], [SocialSecurityRecord::PENDING, SocialSecurityRecord::REVIEW], true)
-                    || !in_array($entry['audit_action'], ['CREADA', 'CAMBIO_EXPLICITO'], true)
-                ) {
-                    throw new DomainException('Lectura de Seguridad social no íntegra o ajena al tenant.');
-                }
-                SocialSecurityRecord::assertScope($entry['tenant_ref'], $entry['company_ref'], $entry['actor_ref']);
-                SocialSecurityRecord::assertFixture($entry['social_security_ref'], 'social_security');
-                $payload = $entry;
-                unset($payload['fingerprint']);
-                $payload['version'] = (int) $payload['version'];
-                $digest = hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR));
-                if (!hash_equals($entry['fingerprint'], $digest)) {
-                    throw new DomainException('El histórico de Seguridad social fue alterado.');
-                }
+                self::verifyStoredEntry($entry, $tenantRef, $companyRef);
             }
-            $this->journal($tenantRef, $companyRef, 'fixture:social_security/list', $actorRef, 'synthetic.listed');
+            $this->appendAudit(
+                $tenantRef, $companyRef, 'fixture:social_security/list',
+                $actorRef, 'synthetic.listed',
+            );
+
             return $entries;
         });
     }
 
-    private function lockClause(): string
+    /** @return array<string, mixed>|false */
+    private function latestVersion(string $tenant, string $company, string $case): array|false
     {
-        return $this->db->getDatabasePlatform() instanceof SQLitePlatform ? '' : ' FOR UPDATE';
+        $suffix = $this->connection->getDatabasePlatform() instanceof SQLitePlatform
+            ? ''
+            : ' FOR UPDATE';
+        $sql = 'SELECT id, version, state FROM '.self::RECORDS
+            .' WHERE tenant_ref = ? AND company_ref = ? AND social_security_ref = ?'
+            .' ORDER BY version DESC LIMIT 1'.$suffix;
+
+        return $this->connection->fetchAssociative($sql, [$tenant, $company, $case]);
     }
 
-    private static function checkAccess(
-        string $tenantRef, string $companyRef, string $actorRef, bool $authorized,
-    ): void {
-        SocialSecurityRecord::assertScope($tenantRef, $companyRef, $actorRef);
-        if ($authorized !== true) {
-            throw new DomainException('Acceso al módulo Seguridad social denegado.');
+    /** @param array<string, mixed>|false $latest */
+    private static function requireNextVersion(array|false $latest, SocialSecurityRecord $incoming): void
+    {
+        if ($latest === false) {
+            if ($incoming->version() === 1 && $incoming->previousId() === null) {
+                return;
+            }
+            throw new DomainException('Un historial sintético debe comenzar en versión 1.');
+        }
+
+        $expected = (int) $latest['version'] + 1;
+        $linked = $incoming->previousId() === $latest['id']
+            && $incoming->previousState() === $latest['state'];
+
+        if (!$linked || $incoming->version() !== $expected) {
+            throw new DomainException('Edición concurrente o evento de seguridad social obsoleto.');
         }
     }
 
-    private function journal(
-        string $tenantRef, string $companyRef, string $caseRef, string $actorRef, string $event,
+    private static function requireAuthorization(
+        string $tenant,
+        string $company,
+        string $actor,
+        bool $allowed,
     ): void {
-        $this->db->insert('condor_social_security_audit', [
+        SocialSecurityRecord::assertScope($tenant, $company, $actor);
+        if (!$allowed) {
+            throw new DomainException('Permiso de seguridad social no concedido.');
+        }
+    }
+
+    /** @param array<string, mixed> $entry */
+    private static function verifyStoredEntry(array $entry, string $tenant, string $company): void
+    {
+        if ($entry['tenant_ref'] !== $tenant || $entry['company_ref'] !== $company) {
+            throw new DomainException('Se recibió un registro de otra entidad legal.');
+        }
+        SocialSecurityRecord::assertScope(
+            $entry['tenant_ref'], $entry['company_ref'], $entry['actor_ref'],
+        );
+        SocialSecurityRecord::assertFixture($entry['social_security_ref'], 'social_security');
+        if (!in_array($entry['state'], [SocialSecurityRecord::PENDING, SocialSecurityRecord::REVIEW], true)
+            || !in_array($entry['audit_action'], ['CREADA', 'CAMBIO_EXPLICITO'], true)
+            || !in_array($entry['category'], ['afiliacion', 'aporte', 'novedad', 'soporte'], true)
+            || !is_string($entry['fingerprint'])
+        ) {
+            throw new DomainException('Evento de seguridad social con estructura inválida.');
+        }
+        $check = $entry;
+        unset($check['fingerprint']);
+        $check['version'] = (int) $check['version'];
+        $digest = hash('sha256', json_encode($check, JSON_THROW_ON_ERROR));
+        if (!hash_equals($entry['fingerprint'], $digest)) {
+            throw new DomainException('La huella del evento de seguridad social no coincide.');
+        }
+    }
+
+    private function appendAudit(
+        string $tenant,
+        string $company,
+        string $case,
+        string $actor,
+        string $event,
+    ): void {
+        $this->connection->insert(self::EVENTS, [
             'event_id' => bin2hex(random_bytes(16)),
-            'tenant_ref' => $tenantRef,
-            'company_ref' => $companyRef,
-            'social_security_ref' => $caseRef,
-            'actor_ref' => $actorRef,
+            'tenant_ref' => $tenant,
+            'company_ref' => $company,
+            'social_security_ref' => $case,
+            'actor_ref' => $actor,
             'event' => $event,
             'created_at' => gmdate('Y-m-d H:i:s'),
         ]);

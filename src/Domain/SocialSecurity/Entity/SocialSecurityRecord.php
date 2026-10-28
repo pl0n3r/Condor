@@ -93,7 +93,7 @@ final class SocialSecurityRecord
         $this->state = $status;
         $this->priorId = $previous?->id;
         $this->priorState = $previous?->state;
-        $this->version = 1 + ($previous?->version ?? 0);
+        $this->version = 1 + ($previous === null ? 0 : $previous->version);
         $this->action = $previous === null ? 'CREADA' : 'CAMBIO_EXPLICITO';
         $this->occurredAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $this->fingerprint = hash('sha256', json_encode($this->attributes(), JSON_THROW_ON_ERROR));
