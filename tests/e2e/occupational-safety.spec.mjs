@@ -58,7 +58,7 @@ test.describe('SG-SST sintético: pruebas de navegador', () => {
     await expect(page.getByRole('heading', { name: 'Seguridad y salud en el trabajo · pruebas' })).toBeVisible();
   }
   async function create(page) {
-    await page.getByLabel('Referencia ficticia').fill('fixture:occupational/demo');
+    await page.getByLabel('Referencia ficticia', { exact: true }).fill('fixture:occupational/demo');
     await page.getByLabel('Evidencia ficticia').fill('fixture:evidence/demo');
     await page.getByLabel('Actor ficticio, sin identificación').fill('fixture:actor/creador');
     await page.getByRole('button', { name: 'Crear registro de prueba' }).click();
@@ -96,7 +96,7 @@ test.describe('SG-SST sintético: pruebas de navegador', () => {
 
   test('AC-03: entradas no ficticias se rechazan por validación nativa', async ({ page }) => {
     await open(page);
-    const ref = page.getByLabel('Referencia ficticia');
+    const ref = page.getByLabel('Referencia ficticia', { exact: true });
     await ref.fill('alguien@example.com');
     expect(await ref.evaluate(el => el.validity.patternMismatch)).toBe(true);
     await page.getByLabel('Evidencia ficticia').fill('fixture:evidence/demo');
