@@ -78,6 +78,10 @@ const DevContractsManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./ContractsManagement')).ContractsManagement }))
   : null;
 
+const DevFinanceManagement = import.meta.env.DEV
+  ? lazy(async () => ({ default: (await import('./FinanceManagement')).FinanceManagement }))
+  : null;
+
 const DevComplianceEvidenceManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./ComplianceManagement')).ComplianceEvidenceManagement }))
   : null;
@@ -183,6 +187,7 @@ export function AdminApp({
         ...(import.meta.env.DEV ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo (pruebas)' }] : []),
         ...(import.meta.env.DEV ? [{ href: '/admin#human-resources-management', label: 'Talento Humano (pruebas)' }] : []),
         ...(import.meta.env.DEV ? [{ href: '/admin#contracts-management', label: 'Contratación (pruebas)' }] : []),
+        ...(import.meta.env.DEV ? [{ href: '/admin#finance-management', label: 'Finanzas (pruebas)' }] : []),
         { href: '/admin#commerce', label: 'Comercial' },
         { href: '/admin#orders', label: 'Pedidos' },
         { href: '/admin#sales-reports', label: 'Reportes de ventas' },
@@ -453,6 +458,18 @@ export function AdminApp({
                             />
                           </Suspense>
             </>
+          )}
+
+          {import.meta.env.DEV && DevFinanceManagement && (
+            <Suspense fallback={<p role="status">Cargando finanzas ficticias…</p>}>
+              <DevFinanceManagement
+                key={'finance-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                tenantId={context.data.tenant.id}
+                companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
+                branchId={context.data.active_branch.id}
+                permissions={context.data.permissions}
+              />
+            </Suspense>
           )}
 
           <CommerceManagement
