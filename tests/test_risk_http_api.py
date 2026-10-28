@@ -101,7 +101,7 @@ class ModuloTests(unittest.TestCase):
         ):
             self.assertIn(value, text)
         self.assertEqual(4, text.count("$this->access($request, $branchId,"))
-        self.assertEqual(4, text.count("$this->auditPreview(") - 1)
+        self.assertEqual(4, text.count("$this->auditPreview("))
         self.assertEqual(2, text.count(", true);"))
         self.assertIn("risk.synthetic.", text)
         self.assertIn("'synthetic_only' => true", text)
