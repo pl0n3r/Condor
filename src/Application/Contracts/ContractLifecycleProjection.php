@@ -169,7 +169,10 @@ final class ContractLifecycleProjection
         ];
     }
 
-    /** @param array<string,mixed> $row @param array{tenant_ref:string,company_ref:string} $scope */
+    /**
+     * @param array<string,mixed> $row
+     * @param array{tenant_ref:string,company_ref:string} $scope
+     */
     private static function scope(array $row, array $scope): bool
     {
         foreach ($scope as $key => $expected) {
@@ -209,7 +212,10 @@ final class ContractLifecycleProjection
         return is_array($rows) && array_is_list($rows) && count($rows) <= self::LIMIT;
     }
 
-    /** @param array<array-key,mixed> $row @param list<string> $expected */
+    /**
+     * @param array<array-key,mixed> $row
+     * @param list<string> $expected
+     */
     private static function keys(array $row, array $expected): bool
     {
         if (count($row) !== count($expected)) {
