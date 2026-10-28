@@ -108,9 +108,16 @@ foreach ($bad as $parts) {
     $outcomes[] = false;
   } catch (\DomainException $e) { $outcomes[] = true; }
 }
-echo json_encode([$outcomes, (int) $conn->fetchOne('SELECT COUNT(*) FROM condor_governance_entry')]);
+$actorRejected = false;
+try {
+    G::register('fixture:tenant/uno', 'fixture:company/uno',
+        'fixture:governance/acta', 'acta', 'fixture:actor/operador3001234567');
+} catch (\DomainException $e) {
+    $actorRejected = true;
+}
+echo json_encode([$outcomes, (int) $conn->fetchOne('SELECT COUNT(*) FROM condor_governance_entry'), $actorRejected]);
 """)
-        self.assertEqual([[True] * 5, 0], results)
+        self.assertEqual([[True] * 5, 0, True], results)
         self.assertNotRegex(REPOSITORY.read_text(), r"(?i)(curl_|httpclient|file_get_contents\()")
         up = MIGRATION.read_text().split("public function up", 1)[1].split("public function down", 1)[0]
         self.assertEqual(2, len(re.findall(r"\bCREATE TABLE\b", up)))
