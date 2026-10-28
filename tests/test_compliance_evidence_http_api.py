@@ -68,7 +68,7 @@ class ModuloTests(unittest.TestCase):
         self.assertEqual([], got[2])
         self.assertIsNone(got[3])
         self.assertEqual([got[0]], got[4])
-        self.assertIn("hash('sha256', $tenantId.'|'.$branchId)", CONTROLLER.read_text())
+        self.assertIn("hash('sha256', $company->id().'|'.$office->id())", CONTROLLER.read_text())
 
     def test_permisos_y_auditoria(self) -> None:
         src = CONTROLLER.read_text(encoding='utf-8')
@@ -76,17 +76,19 @@ class ModuloTests(unittest.TestCase):
             self.assertIn(permission, src)
         for http in ("methods: ['GET']", "methods: ['POST']", "methods: ['PATCH']"):
             self.assertIn(http, src)
-        self.assertEqual(4, src.count('$this->authorizedBranchScope('))
-        self.assertEqual(2, src.count('$this->requireCsrf($request);'))
-        self.assertEqual(4, src.count('$this->recordAudit('))
-        self.assertIn('$this->audit($tenant, $user, $action', src)
+        self.assertEqual(1, src.count('$this->authorizedBranchScope('))
+        self.assertEqual(4, src.count('$this->access($request, $branchId,'))
+        self.assertEqual(1, src.count('$this->requireCsrf($request);'))
+        self.assertEqual(2, src.count(", true);"))
+        self.assertEqual(4, src.count('$this->auditPreview('))
+        self.assertIn('$this->audit($company, $actor', src)
         self.assertIn('$this->entityManager->flush()', src)
         self.assertIn('kernel.environment', src)
         self.assertIn("getenv('CONDOR_COMPLIANCE_SYNTHETIC_API')", src)
         self.assertIn("getenv('CONDOR_PRODUCTION_STAGE')", src)
         writes = "$request->getSession()->set('condor_compliance_synthetic'"
-        self.assertLess(src.index("'compliance.synthetic.created'"), src.index(writes))
-        self.assertLess(src.index("'compliance.synthetic.state_changed'"), src.rindex(writes))
+        self.assertLess(src.index("'created'"), src.index(writes))
+        self.assertLess(src.index("'state_changed'"), src.rindex(writes))
 
     def test_sin_datos_reales(self) -> None:
         for bad in (
@@ -101,7 +103,7 @@ class ModuloTests(unittest.TestCase):
                 self.assertEqual([{'error': 'denied'}], execute([op('POST', payload=bad)]))
         for forbidden in ('curl_', 'file_get_contents(', 'httpclient', 'document_number', 'pdo('):
             self.assertNotIn(forbidden, SERVICE.read_text(encoding='utf-8').lower())
-        self.assertIn("$env !== 'dev'", CONTROLLER.read_text(encoding='utf-8'))
+        self.assertIn("$environment !== 'dev'", CONTROLLER.read_text(encoding='utf-8'))
 
     def test_estados_explicitos(self) -> None:
         ref = 'fixture:evidence/demo'

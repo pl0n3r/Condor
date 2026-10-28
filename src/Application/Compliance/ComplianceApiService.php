@@ -6,154 +6,132 @@ namespace App\Application\Compliance;
 
 use DomainException;
 
-/** Synthetic-only compliance evidence queue: no legal decision, DB or external I/O. */
+/** Review queue for synthetic compliance evidence. Nothing here decides legal compliance. */
 final class ComplianceApiService
 {
-    private const MAX_RECORDS = 100;
-    private const TYPES = ['EVIDENCIA', 'EVALUACION'];
-    private const STATES = ['PENDIENTE', 'EN_REVISION', 'REQUIERE_REVISION'];
+    private const LIMIT = 100;
+    private const CATEGORIES = ['EVIDENCIA', 'EVALUACION'];
+    private const REVIEW_STATES = ['PENDIENTE', 'EN_REVISION', 'REQUIERE_REVISION'];
 
     /**
      * @param array<string, mixed> $store
-     * @return list<array{evidence_ref:string, obligation_ref:string, type:string, state:string}>
+     * @return list<array{evidence_ref:string,obligation_ref:string,type:string,state:string}>
      */
     public static function listRecords(array $store, string $scope): array
     {
-        self::assertScope($scope);
-        $records = $store[$scope] ?? [];
-        if (!is_array($records) || !array_is_list($records) || count($records) > self::MAX_RECORDS) {
-            throw new DomainException('Evidencias sintéticas inválidas.');
-        }
-        $indexed = [];
-        foreach ($records as $item) {
-            if (!self::validRecord($item)) {
-                throw new DomainException('Evidencia sintética inválida.');
-            }
-            $key = (string) $item['evidence_ref'];
-            if (isset($indexed[$key])) {
-                throw new DomainException('Referencia sintética duplicada.');
-            }
-            $indexed[$key] = [
-                'evidence_ref' => $key,
-                'obligation_ref' => (string) $item['obligation_ref'],
-                'type' => (string) $item['type'],
-                'state' => (string) $item['state'],
-            ];
-        }
-        ksort($indexed, SORT_STRING);
-        return array_values($indexed);
+        $items = self::bucket($store, $scope);
+        ksort($items, SORT_STRING);
+        return array_values($items);
     }
 
     /**
      * @param array<string, mixed> $store
-     * @return array{evidence_ref:string, obligation_ref:string, type:string, state:string}|null
+     * @return array{evidence_ref:string,obligation_ref:string,type:string,state:string}|null
      */
     public static function viewRecord(array $store, string $scope, string $ref): ?array
     {
-        self::assertRef($ref, 'evidence');
-        foreach (self::listRecords($store, $scope) as $record) {
-            if ($record['evidence_ref'] === $ref) {
-                return $record;
-            }
-        }
-        return null;
+        $reference = self::reference($ref, 'evidence');
+        return self::bucket($store, $scope)[$reference] ?? null;
     }
 
     /**
      * @param array<string, mixed> $store
      * @param array<string, mixed> $payload
-     * @return array{store:array<string,mixed>, record:array{evidence_ref:string, obligation_ref:string, type:string, state:string}}
+     * @return array{store:array<string,mixed>,record:array{evidence_ref:string,obligation_ref:string,type:string,state:string}}
      */
     public static function createRecord(array $store, string $scope, array $payload): array
     {
-        self::assertScope($scope);
-        if (!self::exactKeys($payload, ['evidence_ref', 'obligation_ref', 'type'])
-            || !self::isRef($payload['evidence_ref'], 'evidence')
-            || !self::isRef($payload['obligation_ref'], 'obligation')
-            || !is_string($payload['type'])
-            || !in_array($payload['type'], self::TYPES, true)
-        ) {
-            throw new DomainException('Solo se admiten referencias ficticias de cumplimiento.');
+        $fields = array_keys($payload);
+        sort($fields, SORT_STRING);
+        if ($fields !== ['evidence_ref', 'obligation_ref', 'type']) {
+            throw new DomainException('Campos de demostración inesperados.');
         }
-        $records = self::listRecords($store, $scope);
-        if (count($records) >= self::MAX_RECORDS) {
-            throw new DomainException('Límite de evidencias ficticias alcanzado.');
+        $evidence = self::reference($payload['evidence_ref'], 'evidence');
+        $obligation = self::reference($payload['obligation_ref'], 'obligation');
+        $category = $payload['type'];
+        if (!is_string($category) || !in_array($category, self::CATEGORIES, true)) {
+            throw new DomainException('Tipo de evidencia sintética inválido.');
         }
-        foreach ($records as $record) {
-            if ($record['evidence_ref'] === $payload['evidence_ref']) {
-                throw new DomainException('Referencia sintética duplicada.');
-            }
+        $items = self::bucket($store, $scope);
+        if (isset($items[$evidence]) || count($items) >= self::LIMIT) {
+            throw new DomainException('Referencia duplicada o límite sintético alcanzado.');
         }
-        $created = [
-            'evidence_ref' => $payload['evidence_ref'],
-            'obligation_ref' => $payload['obligation_ref'],
-            'type' => $payload['type'],
+        $record = [
+            'evidence_ref' => $evidence,
+            'obligation_ref' => $obligation,
+            'type' => $category,
             'state' => 'PENDIENTE',
         ];
-        $records[] = $created;
-        $store[$scope] = $records;
-        return ['store' => $store, 'record' => $created];
+        $items[$evidence] = $record;
+        $store[$scope] = $items;
+        return ['store' => $store, 'record' => $record];
     }
 
     /**
      * @param array<string, mixed> $store
-     * @return array{store:array<string,mixed>, record:array{evidence_ref:string, obligation_ref:string, type:string, state:string}}
+     * @return array{store:array<string,mixed>,record:array{evidence_ref:string,obligation_ref:string,type:string,state:string}}
      */
     public static function changeState(array $store, string $scope, string $ref, string $next): array
     {
-        self::assertScope($scope);
-        self::assertRef($ref, 'evidence');
-        // Explicit review transitions only. No approval, rejection or legal closure.
+        $evidence = self::reference($ref, 'evidence');
+        // Never approve, certify, finalize or close compliance automatically.
         if (!in_array($next, ['EN_REVISION', 'REQUIERE_REVISION'], true)) {
-            throw new DomainException('No se permiten aprobación ni cierre automáticos.');
+            throw new DomainException('La aprobación o cierre no están habilitados.');
         }
-        $records = self::listRecords($store, $scope);
-        foreach ($records as $index => $record) {
-            if ($record['evidence_ref'] !== $ref) {
-                continue;
+        $items = self::bucket($store, $scope);
+        if (!isset($items[$evidence])) {
+            throw new DomainException('Evidencia ficticia no encontrada.');
+        }
+        $items[$evidence]['state'] = $next;
+        $store[$scope] = $items;
+        return ['store' => $store, 'record' => $items[$evidence]];
+    }
+
+    /**
+     * @param array<string,mixed> $store
+     * @return array<string,array{evidence_ref:string,obligation_ref:string,type:string,state:string}>
+     */
+    private static function bucket(array $store, string $scope): array
+    {
+        if (preg_match('/\A[a-f0-9]{64}\z/', $scope) !== 1) {
+            throw new DomainException('Contexto empresarial inválido.');
+        }
+        $raw = $store[$scope] ?? [];
+        if (!is_array($raw) || (array_is_list($raw) && $raw !== []) || count($raw) > self::LIMIT) {
+            throw new DomainException('Almacén sintético inválido.');
+        }
+        $result = [];
+        foreach ($raw as $key => $value) {
+            if (!is_array($value) || count($value) !== 4) {
+                throw new DomainException('Registro de prueba inválido.');
             }
-            $record['state'] = $next;
-            $records[$index] = $record;
-            $store[$scope] = $records;
-            return ['store' => $store, 'record' => $record];
+            $ref = self::reference($value['evidence_ref'] ?? null, 'evidence');
+            if ($ref !== $key) {
+                throw new DomainException('Índice de evidencia inconsistente.');
+            }
+            $obligation = self::reference($value['obligation_ref'] ?? null, 'obligation');
+            $type = $value['type'] ?? null;
+            $state = $value['state'] ?? null;
+            if (!is_string($type) || !in_array($type, self::CATEGORIES, true)
+                || !is_string($state) || !in_array($state, self::REVIEW_STATES, true)
+            ) {
+                throw new DomainException('Estado o tipo de prueba inválido.');
+            }
+            $result[$ref] = [
+                'evidence_ref' => $ref, 'obligation_ref' => $obligation,
+                'type' => $type, 'state' => $state,
+            ];
         }
-        throw new DomainException('Evidencia sintética no encontrada.');
+        return $result;
     }
 
-    private static function assertScope(string $scope): void
+    private static function reference(mixed $candidate, string $kind): string
     {
-        if (preg_match('/\A[a-f0-9]{64}\z/D', $scope) !== 1) {
-            throw new DomainException('Ámbito ficticio inválido.');
+        if (!is_string($candidate)
+            || preg_match('~\Afixture:'.preg_quote($kind, '~').'/[a-z][a-z0-9_-]{0,47}\z~', $candidate) !== 1
+        ) {
+            throw new DomainException('Solo se admiten identificadores de pruebas ficticias.');
         }
-    }
-
-    private static function isRef(mixed $ref, string $type): bool
-    {
-        return is_string($ref)
-            && preg_match('~\Afixture:'.preg_quote($type, '~').'/[a-z][a-z0-9_-]{0,47}\z~D', $ref) === 1;
-    }
-
-    private static function assertRef(string $ref, string $type): void
-    {
-        if (!self::isRef($ref, $type)) {
-            throw new DomainException('Referencia ficticia inválida.');
-        }
-    }
-
-    /** @param array<string,mixed> $data @param list<string> $keys */
-    private static function exactKeys(array $data, array $keys): bool
-    {
-        return count($data) === count($keys)
-            && array_diff_key(array_flip($keys), $data) === [];
-    }
-
-    private static function validRecord(mixed $item): bool
-    {
-        return is_array($item)
-            && self::exactKeys($item, ['evidence_ref', 'obligation_ref', 'type', 'state'])
-            && self::isRef($item['evidence_ref'], 'evidence')
-            && self::isRef($item['obligation_ref'], 'obligation')
-            && is_string($item['type']) && in_array($item['type'], self::TYPES, true)
-            && is_string($item['state']) && in_array($item['state'], self::STATES, true);
+        return $candidate;
     }
 }

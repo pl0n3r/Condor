@@ -8,6 +8,7 @@ use App\Application\Compliance\ComplianceApiService;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\User;
+use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -17,7 +18,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
-/** HTTP preview for synthetic compliance evidence; no real records or legal effects. */
+/** Construction-only API for a session-backed synthetic compliance review queue. */
 final class ComplianceController extends AbstractController
 {
     use BranchApiSupport;
@@ -32,92 +33,92 @@ final class ComplianceController extends AbstractController
     #[Route('/api/v1/branches/{branchId}/compliance/evidence', name: 'api_compliance_evidence_list', methods: ['GET'])]
     public function list(string $branchId, Request $request): JsonResponse
     {
-        $this->syntheticOnly();
-        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
-        $records = $this->domain(fn (): array => ComplianceApiService::listRecords(
-            $this->store($request), $this->scope($tenant->id(), $branch->id()),
+        [$actor, $company, $office] = $this->access($request, $branchId, 'settings.view');
+        $rows = $this->domain(fn (): array => ComplianceApiService::listRecords(
+            $this->getQueue($request), $this->scope($company, $office),
         ));
-        $this->recordAudit($tenant, $user, 'compliance.synthetic.listed', 'fixture:evidence/list');
-        return $this->json(['evidence' => $records]);
+        $this->auditPreview($company, $actor, 'listed', 'fixture:evidence/list');
+        return $this->json(['evidence' => $rows]);
     }
 
     #[Route('/api/v1/branches/{branchId}/compliance/evidence/{slug}', name: 'api_compliance_evidence_view', methods: ['GET'])]
     public function view(string $branchId, string $slug, Request $request): JsonResponse
     {
-        $this->syntheticOnly();
-        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
-        $ref = 'fixture:evidence/'.$slug;
-        $record = $this->domain(fn (): ?array => ComplianceApiService::viewRecord(
-            $this->store($request), $this->scope($tenant->id(), $branch->id()), $ref,
+        [$actor, $company, $office] = $this->access($request, $branchId, 'settings.view');
+        $fixture = 'fixture:evidence/'.$slug;
+        $row = $this->domain(fn (): ?array => ComplianceApiService::viewRecord(
+            $this->getQueue($request), $this->scope($company, $office), $fixture,
         ));
-        if ($record === null) {
-            throw new NotFoundHttpException('Evidencia sintética no encontrada.');
+        if ($row === null) {
+            throw new NotFoundHttpException('Evidencia ficticia no encontrada.');
         }
-        $this->recordAudit($tenant, $user, 'compliance.synthetic.viewed', $ref);
-        return $this->json(['evidence' => $record]);
+        $this->auditPreview($company, $actor, 'viewed', $fixture);
+        return $this->json(['evidence' => $row]);
     }
 
     #[Route('/api/v1/branches/{branchId}/compliance/evidence', name: 'api_compliance_evidence_create', methods: ['POST'])]
     public function create(string $branchId, Request $request): JsonResponse
     {
-        $this->syntheticOnly();
-        $this->requireCsrf($request);
-        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.create');
-        $payload = $this->payload($request, ['evidence_ref', 'obligation_ref', 'type']);
-        $result = $this->domain(fn (): array => ComplianceApiService::createRecord(
-            $this->store($request), $this->scope($tenant->id(), $branch->id()), $payload,
+        [$actor, $company, $office] = $this->access($request, $branchId, 'settings.create', true);
+        $data = $this->payload($request, ['evidence_ref', 'obligation_ref', 'type']);
+        $outcome = $this->domain(fn (): array => ComplianceApiService::createRecord(
+            $this->getQueue($request), $this->scope($company, $office), $data,
         ));
-        $this->recordAudit($tenant, $user, 'compliance.synthetic.created', $result['record']['evidence_ref']);
-        $request->getSession()->set('condor_compliance_synthetic', $result['store']);
-        return $this->json(['evidence' => $result['record']], Response::HTTP_CREATED);
+        $this->auditPreview($company, $actor, 'created', $outcome['record']['evidence_ref']);
+        $request->getSession()->set('condor_compliance_synthetic', $outcome['store']);
+        return $this->json(['evidence' => $outcome['record']], Response::HTTP_CREATED);
     }
 
     #[Route('/api/v1/branches/{branchId}/compliance/evidence/{slug}/state', name: 'api_compliance_evidence_state', methods: ['PATCH'])]
     public function state(string $branchId, string $slug, Request $request): JsonResponse
     {
-        $this->syntheticOnly();
-        $this->requireCsrf($request);
-        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.update');
-        $payload = $this->payload($request, ['state']);
-        $ref = 'fixture:evidence/'.$slug;
-        $result = $this->domain(fn (): array => ComplianceApiService::changeState(
-            $this->store($request), $this->scope($tenant->id(), $branch->id()), $ref,
-            is_string($payload['state'] ?? null) ? $payload['state'] : '',
+        [$actor, $company, $office] = $this->access($request, $branchId, 'settings.update', true);
+        $data = $this->payload($request, ['state']);
+        $fixture = 'fixture:evidence/'.$slug;
+        $newState = is_string($data['state'] ?? null) ? $data['state'] : '';
+        $outcome = $this->domain(fn (): array => ComplianceApiService::changeState(
+            $this->getQueue($request), $this->scope($company, $office), $fixture, $newState,
         ));
-        $this->recordAudit($tenant, $user, 'compliance.synthetic.state_changed', $ref);
-        $request->getSession()->set('condor_compliance_synthetic', $result['store']);
-        return $this->json(['evidence' => $result['record']]);
+        $this->auditPreview($company, $actor, 'state_changed', $fixture);
+        $request->getSession()->set('condor_compliance_synthetic', $outcome['store']);
+        return $this->json(['evidence' => $outcome['record']]);
     }
 
-    /** @return array<string, mixed> */
-    private function store(Request $request): array
+    /** @return array{User,Tenant,Branch} */
+    private function access(Request $request, string $branchId, string $permission, bool $write = false): array
     {
-        $store = $request->getSession()->get('condor_compliance_synthetic', []);
-        if (!is_array($store)) {
-            throw new NotFoundHttpException('Evidencias ficticias no disponibles.');
-        }
-        return $store;
-    }
-
-    private function scope(string $tenantId, string $branchId): string
-    {
-        return hash('sha256', $tenantId.'|'.$branchId);
-    }
-
-    private function syntheticOnly(): void
-    {
-        $raw = $this->getParameter('kernel.environment');
-        $env = is_string($raw) ? $raw : '';
-        if ($env !== 'test' && ($env !== 'dev'
+        $environment = $this->getParameter('kernel.environment');
+        if ($environment !== 'test' && ($environment !== 'dev'
             || getenv('CONDOR_COMPLIANCE_SYNTHETIC_API') !== '1'
-            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion')) {
-            throw new NotFoundHttpException('API sintética de cumplimiento no disponible.');
+            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion'
+        )) {
+            throw new NotFoundHttpException('Cumplimiento sintético no disponible.');
         }
+        if ($write) {
+            $this->requireCsrf($request);
+        }
+        [$actor, $company, $office] = $this->authorizedBranchScope($branchId, $permission);
+        return [$actor, $company, $office];
     }
 
-    private function recordAudit(Tenant $tenant, User $user, string $action, string $ref): void
+    /** @return array<string,mixed> */
+    private function getQueue(Request $request): array
     {
-        $this->audit($tenant, $user, $action, ComplianceApiService::class, $ref, [
+        $value = $request->getSession()->get('condor_compliance_synthetic', []);
+        if (!is_array($value)) {
+            throw new NotFoundHttpException('Archivo de prueba no disponible.');
+        }
+        return $value;
+    }
+
+    private function scope(Tenant $company, Branch $office): string
+    {
+        return hash('sha256', $company->id().'|'.$office->id());
+    }
+
+    private function auditPreview(Tenant $company, User $actor, string $event, string $fixture): void
+    {
+        $this->audit($company, $actor, 'compliance.synthetic.'.$event, ComplianceApiService::class, $fixture, [
             'synthetic_only' => true,
         ]);
         $this->entityManager->flush();
