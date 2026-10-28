@@ -15,7 +15,7 @@ CONTROLLER = ROOT / 'src/Http/Controller/ComplianceController.php'
 class ModuloTests(unittest.TestCase):
     def test_aislamiento_por_empresa(self) -> None:
         code, app = PANEL.read_text(), APP.read_text()
-        self.assertIn("key={'compliance-' + context.data.tenant.id + '-'", app)
+        self.assertIn("key={'compliance-evidence-' + context.data.tenant.id + '-'", app)
         self.assertIn("tenantId", app)
         self.assertIn("branchId={context.data.active_branch.id}", app)
         self.assertIn("pathFor(branchId)", code)
@@ -77,7 +77,7 @@ class ModuloTests(unittest.TestCase):
         self.assertIn("role=\"alert\"", code)
         self.assertIn("role=\"status\"", code)
         self.assertIn("aria-live=\"polite\"", code)
-        self.assertIn("<DevComplianceManagement", app)
+        self.assertIn("<DevComplianceEvidenceManagement", app)
 
 
 if __name__ == '__main__':
