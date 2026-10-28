@@ -172,8 +172,12 @@ final class ContractLifecycleProjection
     /** @param array<string,mixed> $row @param array{tenant_ref:string,company_ref:string} $scope */
     private static function scope(array $row, array $scope): bool
     {
-        return $row['tenant_ref'] === $scope['tenant_ref']
-            && $row['company_ref'] === $scope['company_ref'];
+        foreach ($scope as $key => $expected) {
+            if ($row[$key] !== $expected) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static function tenant(mixed $value): bool
@@ -184,8 +188,12 @@ final class ContractLifecycleProjection
 
     private static function fixture(mixed $value, string $kind): bool
     {
-        return is_string($value)
-            && preg_match('~^fixture:' . preg_quote($kind, '~') . '/[a-z][a-z0-9_-]{0,47}$~D', $value) === 1;
+        if (!is_string($value)) {
+            return false;
+        }
+        $prefix = 'fixture:' . $kind . '/';
+        return str_starts_with($value, $prefix)
+            && preg_match('/^[a-z][a-z0-9_-]{0,47}$/D', substr($value, strlen($prefix))) === 1;
     }
 
     private static function date(mixed $value): bool
@@ -207,8 +215,8 @@ final class ContractLifecycleProjection
         if (count($row) !== count($expected)) {
             return false;
         }
-        foreach ($expected as $key) {
-            if (!array_key_exists($key, $row)) {
+        foreach ($row as $key => $_) {
+            if (!in_array($key, $expected, true)) {
                 return false;
             }
         }
