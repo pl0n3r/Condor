@@ -104,10 +104,12 @@ $with = UnitEconomicsProjection::project(true, [$row], $now);
 $invalid = $audit;
 $invalid[0]['actor'] = 'person@example.com';
 $invalidRow = syntheticRecord('tenant:synthetic-alpha', 200000, 40000, $invalid);
+$duplicateAudits = syntheticRecord('tenant:synthetic-alpha', 200000, 40000, [$audit[0], $audit[0]]);
 print json_encode([
     'without' => $without,
     'with' => $with,
     'invalid' => UnitEconomicsProjection::project(true, [$invalidRow], $now),
+    'duplicate' => UnitEconomicsProjection::project(true, [$duplicateAudits], $now),
 ], JSON_THROW_ON_ERROR);
 """)
         self.assertEqual("UNKNOWN", actual["without"]["status"])
@@ -117,6 +119,7 @@ print json_encode([
         self.assertEqual(1, actual["with"]["rows"][0]["audit_count"])
         self.assertEqual("UNKNOWN", actual["invalid"]["status"])
         self.assertEqual("invalid_audit", actual["invalid"]["reason"])
+        self.assertEqual("duplicate_audit", actual["duplicate"]["reason"])
 
     def test_sin_datos_reales(self) -> None:
         actual = run_php(r"""
