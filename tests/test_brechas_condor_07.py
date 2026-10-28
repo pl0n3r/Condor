@@ -230,6 +230,10 @@ class BrechasCondor07Tests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 spec_section(invalid, 2)
         self.assertEqual(local_evidence("D-040-S99", {}), UNKNOWN)
+        self.assertEqual(local_evidence("D-040-S02", None), UNKNOWN)
+        self.assertEqual(local_evidence("D-040-S02", {"unexpected": "success"}), UNKNOWN)
+        with self.assertRaises(ValueError):
+            spec_section(self.spec, 99)
 
     def test_sin_datos_reales(self) -> None:
         """AC-03: only repository text and fake fixtures; no network or secrets."""
