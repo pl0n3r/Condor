@@ -315,6 +315,15 @@ jobs:
             echo 'NO_VERIFICABLE: aún no existen hojas D-L en este SHA; no se atribuye cobertura.'
           fi
 
+      - name: Probar brechas Condor 05 si están presentes
+        run: |
+          set -euo pipefail
+          if [[ -f tests/test_brechas_condor_05.py ]]; then
+            python3 tests/test_brechas_condor_05.py -v
+          else
+            echo 'NO_VERIFICABLE: test_brechas_condor_05.py no existe en este SHA; #1200 se valida en su propio PR.'
+          fi
+
       - name: Probar guard de identidad de release
         run: python3 tests/test_release_identity_guard.py
 
