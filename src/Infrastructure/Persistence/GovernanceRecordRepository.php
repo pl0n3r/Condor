@@ -31,22 +31,7 @@ final readonly class GovernanceRecordRepository
         }
 
         $this->connection->transactional(function () use ($instrument, $tenant, $company, $actor): void {
-            $last = $this->connection->fetchAssociative(
-                'SELECT entry_id, revision FROM condor_governance_entry '
-                .'WHERE tenant_ref = ? AND company_ref = ? AND governance_ref = ? '
-                .'ORDER BY revision DESC LIMIT 1'.$this->lockForWrite(),
-                [$tenant, $company, $instrument->instrument()],
-            );
-            if ($last === false) {
-                if ($instrument->revision() !== 1 || $instrument->prior() !== null) {
-                    throw new DomainException('Una revisión no puede preceder al instrumento original.');
-                }
-            } elseif (
-                $instrument->revision() !== (int) $last['revision'] + 1
-                || $instrument->prior() !== $last['entry_id']
-            ) {
-                throw new DomainException('La revisión usa una base inexistente o desactualizada.');
-            }
+            $this->assertNextRevision($instrument, $tenant, $company);
 
             $this->connection->insert('condor_governance_entry', $instrument->toRow());
             $this->recordAccess($tenant, $company, $instrument->instrument(), $actor, 'fixture.saved');
@@ -67,26 +52,54 @@ final readonly class GovernanceRecordRepository
                 [$tenant, $company],
             );
             foreach ($records as $row) {
-                if ($row['tenant_ref'] !== $tenant || $row['company_ref'] !== $company
-                    || !is_string($row['fingerprint'])
-                    || !in_array($row['state'], [GovernanceRecord::PENDING, GovernanceRecord::REVIEW], true)
-                    || !in_array($row['action'], ['CREADA', 'CAMBIO_EXPLICITO'], true)
-                ) {
-                    throw new DomainException('El historial corporativo no es íntegro o no pertenece al contexto.');
-                }
-                GovernanceRecord::verifyScope($row['tenant_ref'], $row['company_ref'], $row['actor_ref']);
-                GovernanceRecord::checkFixture($row['governance_ref'], 'governance');
-                $payload = $row;
-                unset($payload['fingerprint']);
-                $payload['revision'] = (int) $payload['revision'];
-                $expected = hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR));
-                if (!hash_equals($expected, $row['fingerprint'])) {
-                    throw new DomainException('La integridad del instrumento de gobierno fue alterada.');
-                }
+                $this->assertReadableRow($row, $tenant, $company);
             }
             $this->recordAccess($tenant, $company, 'fixture:governance/list', $actor, 'fixture.listed');
             return $records;
         });
+    }
+
+    /**
+     * Validate within the same transaction as the insert; a unique index also
+     * serializes competing revisions when no preceding row can be locked.
+     */
+    private function assertNextRevision(GovernanceRecord $record, string $tenant, string $company): void
+    {
+        $previous = $this->connection->fetchAssociative(
+            'SELECT entry_id, revision FROM condor_governance_entry '
+            .'WHERE tenant_ref = ? AND company_ref = ? AND governance_ref = ? '
+            .'ORDER BY revision DESC LIMIT 1'.$this->lockForWrite(),
+            [$tenant, $company, $record->instrument()],
+        );
+        $requiredRevision = $previous === false ? 1 : (int) $previous['revision'] + 1;
+        $requiredPriorId = $previous === false ? null : $previous['entry_id'];
+        if ($record->revision() !== $requiredRevision || $record->prior() !== $requiredPriorId) {
+            throw new DomainException('Revisión de instrumento inexistente, duplicada o desactualizada.');
+        }
+    }
+
+    /** @param array<string,mixed> $row */
+    private function assertReadableRow(array $row, string $tenant, string $company): void
+    {
+        if ($row['tenant_ref'] !== $tenant || $row['company_ref'] !== $company) {
+            throw new DomainException('El registro de gobierno pertenece a otro contexto.');
+        }
+        GovernanceRecord::verifyScope($tenant, $company, $row['actor_ref']);
+        GovernanceRecord::checkFixture($row['governance_ref'], 'governance');
+        if (!in_array($row['state'], [GovernanceRecord::PENDING, GovernanceRecord::REVIEW], true)
+            || !in_array($row['action'], ['CREADA', 'CAMBIO_EXPLICITO'], true)
+            || !in_array($row['category'], ['acta', 'organo', 'representante', 'facultad', 'decision'], true)
+            || !is_string($row['fingerprint'])
+        ) {
+            throw new DomainException('El historial de gobierno contiene un valor inválido.');
+        }
+        $document = $row;
+        unset($document['fingerprint']);
+        $document['revision'] = (int) $document['revision'];
+        $calculated = hash('sha256', json_encode($document, JSON_THROW_ON_ERROR));
+        if (!hash_equals($calculated, $row['fingerprint'])) {
+            throw new DomainException('El historial corporativo fue modificado fuera del registro auditado.');
+        }
     }
 
     private function authorize(string $tenant, string $company, string $actor, bool $authorized): void
