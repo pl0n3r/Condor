@@ -9,7 +9,10 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use DomainException;
 
-/** M15 fixture-only repository. Never wired into a live customer endpoint. */
+/**
+ * Append-only history of fictional corporate instruments. No public route or
+ * ORM lifecycle hook invokes this repository.
+ */
 final readonly class GovernanceRecordRepository
 {
     public function __construct(private Connection $connection)
@@ -17,100 +20,99 @@ final readonly class GovernanceRecordRepository
     }
 
     public function append(
-        GovernanceRecord $record, string $tenantRef, string $companyRef, string $actorRef, bool $authorized,
+        GovernanceRecord $instrument, string $tenant, string $company,
+        string $actor, bool $authorized,
     ): void {
-        self::permit($tenantRef, $companyRef, $actorRef, $authorized);
-        if ($record->tenantRef() !== $tenantRef || $record->companyRef() !== $companyRef
-            || $record->actorRef() !== $actorRef
+        $this->authorize($tenant, $company, $actor, $authorized);
+        if ($instrument->tenant() !== $tenant || $instrument->company() !== $company
+            || $instrument->author() !== $actor
         ) {
-            throw new DomainException('Gobierno externo a la empresa autorizada.');
+            throw new DomainException('El instrumento pertenece a otro contexto empresarial.');
         }
 
-        $this->connection->transactional(function () use ($record, $tenantRef, $companyRef, $actorRef): void {
-            $previous = $this->connection->fetchAssociative(
-                'SELECT id, state, version FROM condor_governance_record '
+        $this->connection->transactional(function () use ($instrument, $tenant, $company, $actor): void {
+            $last = $this->connection->fetchAssociative(
+                'SELECT entry_id, revision FROM condor_governance_entry '
                 .'WHERE tenant_ref = ? AND company_ref = ? AND governance_ref = ? '
-                .'ORDER BY version DESC LIMIT 1'.$this->lockClause(),
-                [$tenantRef, $companyRef, $record->governanceRef()],
+                .'ORDER BY revision DESC LIMIT 1'.$this->lockForWrite(),
+                [$tenant, $company, $instrument->instrument()],
             );
-            if ($previous === false) {
-                if ($record->version() !== 1 || $record->previousId() !== null) {
-                    throw new DomainException('Falta registro inicial del gobierno.');
+            if ($last === false) {
+                if ($instrument->revision() !== 1 || $instrument->prior() !== null) {
+                    throw new DomainException('Una revisión no puede preceder al instrumento original.');
                 }
-            } elseif ($record->version() !== (int) $previous['version'] + 1
-                || $record->previousId() !== $previous['id']
-                || $record->previousState() !== $previous['state']
+            } elseif (
+                $instrument->revision() !== (int) $last['revision'] + 1
+                || $instrument->prior() !== $last['entry_id']
             ) {
-                throw new DomainException('Versión obsoleta o auditoría de gobierno inválida.');
+                throw new DomainException('La revisión usa una base inexistente o desactualizada.');
             }
-            $this->connection->insert('condor_governance_record', $record->snapshot());
-            $this->audit($tenantRef, $companyRef, $record->governanceRef(), $actorRef, 'synthetic.saved');
+
+            $this->connection->insert('condor_governance_entry', $instrument->toRow());
+            $this->recordAccess($tenant, $company, $instrument->instrument(), $actor, 'fixture.saved');
         });
     }
 
-    /** @return list<array<string, mixed>> */
-    public function forCompany(
-        string $tenantRef, string $companyRef, string $actorRef, bool $authorized,
+    /** @return list<array<string,mixed>> */
+    public function history(
+        string $tenant, string $company, string $actor, bool $authorized,
     ): array {
-        self::permit($tenantRef, $companyRef, $actorRef, $authorized);
-
-        return $this->connection->transactional(function () use ($tenantRef, $companyRef, $actorRef): array {
-            $rows = $this->connection->fetchAllAssociative(
-                'SELECT id, tenant_ref, company_ref, governance_ref, category, state, version, '
-                .'previous_id, previous_state, audit_action, actor_ref, occurred_at, fingerprint '
-                .'FROM condor_governance_record WHERE tenant_ref = ? AND company_ref = ? '
-                .'ORDER BY governance_ref, version',
-                [$tenantRef, $companyRef],
+        $this->authorize($tenant, $company, $actor, $authorized);
+        return $this->connection->transactional(function () use ($tenant, $company, $actor): array {
+            $records = $this->connection->fetchAllAssociative(
+                'SELECT entry_id, tenant_ref, company_ref, governance_ref, category, state, '
+                .'revision, prior_id, actor_ref, action, recorded_at, fingerprint '
+                .'FROM condor_governance_entry WHERE tenant_ref = ? AND company_ref = ? '
+                .'ORDER BY governance_ref, revision',
+                [$tenant, $company],
             );
-            foreach ($rows as $row) {
-                if ($row['tenant_ref'] !== $tenantRef || $row['company_ref'] !== $companyRef
+            foreach ($records as $row) {
+                if ($row['tenant_ref'] !== $tenant || $row['company_ref'] !== $company
                     || !is_string($row['fingerprint'])
-                    || preg_match('/\A[a-f0-9]{64}\z/D', $row['fingerprint']) !== 1
                     || !in_array($row['state'], [GovernanceRecord::PENDING, GovernanceRecord::REVIEW], true)
-                    || !in_array($row['audit_action'], ['CREADA', 'CAMBIO_EXPLICITO'], true)
+                    || !in_array($row['action'], ['CREADA', 'CAMBIO_EXPLICITO'], true)
                 ) {
-                    throw new DomainException('Historial de gobierno externo o corrupto.');
+                    throw new DomainException('El historial corporativo no es íntegro o no pertenece al contexto.');
                 }
-                GovernanceRecord::assertScope($row['tenant_ref'], $row['company_ref'], $row['actor_ref']);
-                GovernanceRecord::assertFixture($row['governance_ref'], 'governance');
-                $values = $row;
-                unset($values['fingerprint']);
-                $values['version'] = (int) $values['version'];
-                if (!hash_equals(
-                    $row['fingerprint'], hash('sha256', json_encode($values, JSON_THROW_ON_ERROR))
-                )) {
-                    throw new DomainException('La auditoría de gobierno fue alterada.');
+                GovernanceRecord::verifyScope($row['tenant_ref'], $row['company_ref'], $row['actor_ref']);
+                GovernanceRecord::checkFixture($row['governance_ref'], 'governance');
+                $payload = $row;
+                unset($payload['fingerprint']);
+                $payload['revision'] = (int) $payload['revision'];
+                $expected = hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR));
+                if (!hash_equals($expected, $row['fingerprint'])) {
+                    throw new DomainException('La integridad del instrumento de gobierno fue alterada.');
                 }
             }
-            $this->audit($tenantRef, $companyRef, 'fixture:governance/list', $actorRef, 'synthetic.listed');
-            return $rows;
+            $this->recordAccess($tenant, $company, 'fixture:governance/list', $actor, 'fixture.listed');
+            return $records;
         });
     }
 
-    private function lockClause(): string
+    private function authorize(string $tenant, string $company, string $actor, bool $authorized): void
+    {
+        GovernanceRecord::verifyScope($tenant, $company, $actor);
+        if (!$authorized) {
+            throw new DomainException('El actor no puede consultar o modificar gobierno corporativo.');
+        }
+    }
+
+    private function lockForWrite(): string
     {
         return $this->connection->getDatabasePlatform() instanceof SQLitePlatform ? '' : ' FOR UPDATE';
     }
 
-    private static function permit(string $tenant, string $company, string $actor, bool $authorized): void
-    {
-        GovernanceRecord::assertScope($tenant, $company, $actor);
-        if (!$authorized) {
-            throw new DomainException('Acceso a gobierno corporativo denegado.');
-        }
-    }
-
-    private function audit(
-        string $tenant, string $company, string $governance, string $actor, string $event,
+    private function recordAccess(
+        string $tenant, string $company, string $document, string $actor, string $event,
     ): void {
-        $this->connection->insert('condor_governance_audit', [
-            'event_id' => bin2hex(random_bytes(16)),
+        $this->connection->insert('condor_governance_journal', [
+            'journal_id' => bin2hex(random_bytes(16)),
             'tenant_ref' => $tenant,
             'company_ref' => $company,
-            'governance_ref' => $governance,
+            'governance_ref' => $document,
             'actor_ref' => $actor,
-            'event' => $event,
-            'created_at' => gmdate('Y-m-d H:i:s'),
+            'event_kind' => $event,
+            'written_at' => gmdate('Y-m-d H:i:s'),
         ]);
     }
 }

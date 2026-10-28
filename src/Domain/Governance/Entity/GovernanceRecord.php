@@ -7,157 +7,113 @@ namespace App\Domain\Governance\Entity;
 use App\Shared\Id\UlidFactory;
 use DateTimeImmutable;
 use DateTimeZone;
-use Doctrine\ORM\Mapping as ORM;
 use DomainException;
 
-/** Append-only M15 record. Synthetic fixtures only; never a representante governance decision. */
-#[ORM\Entity]
-#[ORM\Table(name: 'condor_governance_record')]
-#[ORM\UniqueConstraint(name: 'uniq_governance_scope_version', columns: ['tenant_ref', 'company_ref', 'governance_ref', 'version'])]
-#[ORM\Index(name: 'idx_governance_company_state', columns: ['tenant_ref', 'company_ref', 'state'])]
+/**
+ * M15 corporate-governance instrument. A synthetic, immutable revision, not a
+ * juridical instrument or a completed authorization.
+ */
 final class GovernanceRecord
 {
     public const PENDING = 'PENDIENTE';
     public const REVIEW = 'REQUIERE_REVISION';
 
-    #[ORM\Id]
-    #[ORM\Column(type: 'string', length: 26)]
-    private string $id;
-
-    #[ORM\Column(name: 'tenant_ref', type: 'string', length: 80)]
-    private string $tenantRef;
-
-    #[ORM\Column(name: 'company_ref', type: 'string', length: 80)]
-    private string $companyRef;
-
-    #[ORM\Column(name: 'governance_ref', type: 'string', length: 80)]
-    private string $governanceRef;
-
-    #[ORM\Column(type: 'string', length: 20)]
-    private string $category;
-
-    #[ORM\Column(type: 'string', length: 20)]
-    private string $state;
-
-    #[ORM\Column(type: 'integer', options: ['unsigned' => true])]
-    private int $version;
-
-    #[ORM\Column(name: 'previous_id', type: 'string', length: 26, nullable: true)]
-    private ?string $previousId;
-
-    #[ORM\Column(name: 'previous_state', type: 'string', length: 20, nullable: true)]
-    private ?string $previousState;
-
-    #[ORM\Column(name: 'audit_action', type: 'string', length: 20)]
-    private string $auditAction;
-
-    #[ORM\Column(name: 'actor_ref', type: 'string', length: 80)]
-    private string $actorRef;
-
-    #[ORM\Column(name: 'occurred_at', type: 'datetime_immutable')]
-    private DateTimeImmutable $occurredAt;
-
-    #[ORM\Column(type: 'string', length: 64)]
-    private string $fingerprint;
-
     private function __construct(
-        string $tenantRef, string $companyRef, string $governanceRef, string $category,
-        string $actorRef, string $state, int $version, ?self $previous,
+        private string $entryId,
+        private string $tenantRef,
+        private string $companyRef,
+        private string $governanceRef,
+        private string $category,
+        private string $state,
+        private int $revision,
+        private ?string $priorId,
+        private string $actorRef,
+        private string $action,
+        private DateTimeImmutable $recordedAt,
     ) {
-        self::assertScope($tenantRef, $companyRef, $actorRef);
-        self::assertFixture($governanceRef, 'governance');
-        if (!in_array($category, ['acta', 'organo', 'representante', 'decision', 'facultad'], true)
-            || !in_array($state, [self::PENDING, self::REVIEW], true)
-            || $version < 1 || $version > 2147483647
-            || ($previous === null) !== ($version === 1)
-        ) {
-            throw new DomainException('Categoría, estado o versión de gobierno inválidos.');
-        }
-        $this->id = UlidFactory::new();
-        $this->tenantRef = $tenantRef;
-        $this->companyRef = $companyRef;
-        $this->governanceRef = $governanceRef;
-        $this->category = $category;
-        $this->actorRef = $actorRef;
-        $this->state = $state;
-        $this->version = $version;
-        $this->previousId = $previous?->id();
-        $this->previousState = $previous?->state();
-        $this->auditAction = $previous === null ? 'CREADA' : 'CAMBIO_EXPLICITO';
-        $this->occurredAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
-        $this->fingerprint = hash('sha256', json_encode($this->values(), JSON_THROW_ON_ERROR));
     }
 
-    public static function open(
-        string $tenantRef, string $companyRef, string $governanceRef, string $category, string $actorRef,
+    /** Only typed fixture references can enter the persistence boundary. */
+    public static function register(
+        string $tenant, string $company, string $document,
+        string $instrument, string $actor,
     ): self {
-        return new self($tenantRef, $companyRef, $governanceRef, $category, $actorRef, self::PENDING, 1, null);
-    }
-
-    /** Only an explicitly authorized human may change the review state. No closed state exists. */
-    public function transition(string $nextState, string $actorRef, bool $humanApproved): self
-    {
-        if (!$humanApproved
-            || !in_array($nextState, [self::PENDING, self::REVIEW], true)
-            || $nextState === $this->state
-        ) {
-            throw new DomainException('La transición requiere revisión humana explícita.');
+        self::verifyScope($tenant, $company, $actor);
+        self::checkFixture($document, 'governance');
+        if (!in_array($instrument, ['acta', 'organo', 'representante', 'facultad', 'decision'], true)) {
+            throw new DomainException('Tipo de instrumento sintético inválido.');
         }
+
         return new self(
-            $this->tenantRef, $this->companyRef, $this->governanceRef, $this->category,
-            $actorRef, $nextState, $this->version + 1, $this,
+            UlidFactory::new(), $tenant, $company, $document, $instrument,
+            self::PENDING, 1, null, $actor, 'CREADA',
+            new DateTimeImmutable('now', new DateTimeZone('UTC')),
         );
     }
 
-    public static function assertScope(string $tenant, string $company, string $actor): void
+    /** Never closes or approves an instrument. A human must authorize every revision. */
+    public function requestState(string $next, string $actor, bool $humanApproved): self
     {
-        self::assertFixture($tenant, 'tenant');
-        self::assertFixture($company, 'company');
-        self::assertFixture($actor, 'actor');
+        self::checkFixture($actor, 'actor');
+        if (!$humanApproved || $next === $this->state
+            || !in_array($next, [self::PENDING, self::REVIEW], true)
+            || $this->revision >= 2147483647
+        ) {
+            throw new DomainException('La revisión de gobierno requiere una decisión humana explícita.');
+        }
+
+        return new self(
+            UlidFactory::new(), $this->tenantRef, $this->companyRef,
+            $this->governanceRef, $this->category, $next,
+            $this->revision + 1, $this->entryId, $actor, 'CAMBIO_EXPLICITO',
+            new DateTimeImmutable('now', new DateTimeZone('UTC')),
+        );
     }
 
-    public static function assertFixture(string $reference, string $kind): void
+    public static function verifyScope(string $tenant, string $company, string $actor): void
+    {
+        self::checkFixture($tenant, 'tenant');
+        self::checkFixture($company, 'company');
+        self::checkFixture($actor, 'actor');
+    }
+
+    public static function checkFixture(string $candidate, string $kind): void
     {
         if (!in_array($kind, ['tenant', 'company', 'actor', 'governance'], true)
-            || preg_match('~\Afixture:'.preg_quote($kind, '~').'/[a-z][a-z0-9_-]{0,47}\z~D', $reference) !== 1
-            || preg_match('/[0-9]{7,}/', $reference) === 1
+            || preg_match('~\Afixture:'.preg_quote($kind, '~').'/[a-z][a-z0-9_-]{0,47}\z~D', $candidate) !== 1
+            || preg_match('/[0-9]{7,}/', $candidate) === 1
         ) {
-            throw new DomainException('Solo referencias tipadas y ficticias, sin datos reales.');
+            throw new DomainException('Solo se admiten referencias ficticias tipadas.');
         }
     }
 
-    public function id(): string { return $this->id; }
-    public function tenantRef(): string { return $this->tenantRef; }
-    public function companyRef(): string { return $this->companyRef; }
-    public function governanceRef(): string { return $this->governanceRef; }
-    public function actorRef(): string { return $this->actorRef; }
+    public function id(): string { return $this->entryId; }
+    public function tenant(): string { return $this->tenantRef; }
+    public function company(): string { return $this->companyRef; }
+    public function instrument(): string { return $this->governanceRef; }
+    public function author(): string { return $this->actorRef; }
     public function state(): string { return $this->state; }
-    public function version(): int { return $this->version; }
-    public function previousId(): ?string { return $this->previousId; }
-    public function previousState(): ?string { return $this->previousState; }
+    public function revision(): int { return $this->revision; }
+    public function prior(): ?string { return $this->priorId; }
 
-    /** @return array<string, string|int|null> */
-    public function snapshot(): array
+    /** @return array<string,string|int|null> */
+    public function toRow(): array
     {
-        return [...$this->values(), 'fingerprint' => $this->fingerprint];
-    }
-
-    /** @return array<string, string|int|null> */
-    private function values(): array
-    {
-        return [
-            'id' => $this->id,
+        $attributes = [
+            'entry_id' => $this->entryId,
             'tenant_ref' => $this->tenantRef,
             'company_ref' => $this->companyRef,
             'governance_ref' => $this->governanceRef,
             'category' => $this->category,
             'state' => $this->state,
-            'version' => $this->version,
-            'previous_id' => $this->previousId,
-            'previous_state' => $this->previousState,
-            'audit_action' => $this->auditAction,
+            'revision' => $this->revision,
+            'prior_id' => $this->priorId,
             'actor_ref' => $this->actorRef,
-            'occurred_at' => $this->occurredAt->format('Y-m-d H:i:s'),
+            'action' => $this->action,
+            'recorded_at' => $this->recordedAt->format('Y-m-d H:i:s'),
+        ];
+        return $attributes + [
+            'fingerprint' => hash('sha256', json_encode($attributes, JSON_THROW_ON_ERROR)),
         ];
     }
 }
