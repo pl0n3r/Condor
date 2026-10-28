@@ -59,6 +59,9 @@ class ModuloTests(unittest.TestCase):
         for forbidden in ("fetch(", "axios", "localStorage", "indexedDB", "setInterval(",
                           "sessionStorage", "new WebSocket", "status: 'CERRADO'"):
             self.assertNotIn(forbidden, src)
+        self.assertIn("filter === '' || entry.ref === filter", src)
+        self.assertIn("scopedDrafts.map(item => <option", src)
+        self.assertNotIn("<input value={filter}", src)
         self.assertIn("SOLO DATOS FICTICIOS", src)
         self.assertIn("if (!import.meta.env.DEV) return null;", src)
 
