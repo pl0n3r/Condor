@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""M13 #1050: real PHP/DBAL synthetic isolation, access, audit and state acceptance."""
+"""M13 #1053: real PHP/DBAL synthetic isolation, access, audit and state acceptance."""
 from __future__ import annotations
 
 import json
