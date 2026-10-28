@@ -16,7 +16,10 @@ final class QualityApiService
     private const KINDS = ['NO_CONFORMIDAD', 'ACCION_CORRECTIVA', 'AUDITORIA_INTERNA'];
     private const STATES = ['PENDIENTE', 'EN_REVISION', 'REQUIERE_REVISION'];
 
-    /** @param array<string,mixed> $store @return list<array<string,string>> */
+    /**
+     * @param array<string,mixed> $store
+     * @return list<array<string,string>>
+     */
     public static function listRecords(array $store, string $scope): array
     {
         $items = self::bucket($store, $scope);
@@ -24,7 +27,10 @@ final class QualityApiService
         return array_values($items);
     }
 
-    /** @param array<string,mixed> $store @return array<string,string>|null */
+    /**
+     * @param array<string,mixed> $store
+     * @return array<string,string>|null
+     */
     public static function viewRecord(array $store, string $scope, string $ref): ?array
     {
         return self::bucket($store, $scope)[self::reference($ref, 'quality-record')] ?? null;
@@ -85,7 +91,10 @@ final class QualityApiService
         return ['store' => $store, 'record' => $bucket[$recordRef]];
     }
 
-    /** @param array<string,mixed> $store @return array<string,array<string,string>> */
+    /**
+     * @param array<string,mixed> $store
+     * @return array<string,array<string,string>>
+     */
     private static function bucket(array $store, string $scope): array
     {
         if (preg_match('/\A[a-f0-9]{64}\z/D', $scope) !== 1) {
