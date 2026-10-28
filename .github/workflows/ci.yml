@@ -306,6 +306,15 @@ jobs:
       - name: Probar herramientas internas del CI
         run: python3 -m unittest discover -s tests -p 'test_ci_*.py'
 
+      - name: Probar contratos de contraste D
+        run: |
+          set -euo pipefail
+          if compgen -G 'tests/test_contraste_d_l*.py' > /dev/null; then
+            python3 -m unittest discover -s tests -p 'test_contraste_d_l*.py'
+          else
+            echo 'NO_VERIFICABLE: aún no existen hojas D-L en este SHA; no se atribuye cobertura.'
+          fi
+
       - name: Probar guard de identidad de release
         run: python3 tests/test_release_identity_guard.py
 
