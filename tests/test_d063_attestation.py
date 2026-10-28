@@ -28,6 +28,7 @@ TREATMENTS = frozenset({
     "diagnostic_shares", "error_incidents", "notification_delivery",
     "notification_preferences", "self_service_trial_application",
     "workflow_definitions", "workflow_executions",
+    "payroll_synthetic_records",
 })
 
 
@@ -63,6 +64,12 @@ class D063AttestationTests(unittest.TestCase):
         for treatment in data["treatments"]:
             self.assertEqual("review_required", treatment["basis"])
             self.assertEqual("review_required", treatment["consent"])
+
+        payroll = next(t for t in data["treatments"] if t["id"] == "payroll_synthetic_records")
+        self.assertEqual("usage", payroll["category"])
+        self.assertEqual("review_required", payroll["purpose"])
+        self.assertEqual("review_required", payroll["retention"])
+        self.assertEqual([], payroll["providers"])
 
         # No hay fallback a phase=construccion ni inferencia de autorización.
         cases = {
