@@ -37,6 +37,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'error_incidents',
                 'notification_delivery',
                 'notification_preferences',
+                'payroll_synthetic_records',
                 'self_service_trial_application',
                 'workflow_definitions',
                 'workflow_executions',
@@ -54,6 +55,12 @@ final class PrivacyAsCodeTest extends TestCase
             'review_required',
             $this->treatment($data, 'self_service_trial_application')['basis'],
         );
+        $payroll = $this->treatment($data, 'payroll_synthetic_records');
+        self::assertSame('usage', $payroll['category']);
+        self::assertSame('review_required', $payroll['purpose']);
+        self::assertSame('review_required', $payroll['basis']);
+        self::assertSame('review_required', $payroll['retention']);
+        self::assertSame([], $payroll['providers']);
     }
 
     /** Verifica derivación byte-a-byte desde datos.yml según el contrato Factory fijado. */
