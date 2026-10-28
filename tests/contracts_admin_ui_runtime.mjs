@@ -31,7 +31,10 @@ handlers += '  return { scope, canRead, canAdd, canAdvance, drafts, scopedDrafts
   '    createDemo, inspect, advance };\n}\n';
 // Compile only the actual, TS-type-stripped behavior before JSX rendering. State setter
 // semantics match functional React hooks. No untrusted payloads or external calls.
-const Component = new Function('useState', constants + handlers + '\nreturn ContractPreview;');
+const moduleSource = 'export default function componentFactory(useState) {\n' +
+  constants + handlers + '\nreturn ContractPreview;\n}\n';
+const moduleUrl = 'data:text/javascript;base64,' + Buffer.from(moduleSource).toString('base64');
+const Component = (await import(moduleUrl)).default;
 function mount() {
   const state = [];
   let cursor = 0;
