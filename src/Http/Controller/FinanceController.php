@@ -89,28 +89,35 @@ final class FinanceController extends AbstractController
     /** @return array{User,Tenant,Branch} */
     private function access(Request $request, string $branchId, string $permission, bool $write = false): array
     {
-        $environment = $this->getParameter('kernel.environment');
-        if ($environment !== 'test' && ($environment !== 'dev'
-            || getenv('CONDOR_FINANCE_SYNTHETIC_API') !== '1'
-            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion'
-        )) {
+        if (!$this->financePreviewEnabled()) {
             throw new NotFoundHttpException('Finanzas sintéticas no disponibles.');
         }
         if ($write) {
             $this->requireCsrf($request);
         }
-        [$actor, $tenant, $branch] = $this->authorizedBranchScope($branchId, $permission);
-        return [$actor, $tenant, $branch];
+        return $this->authorizedBranchScope($branchId, $permission);
+    }
+
+    private function financePreviewEnabled(): bool
+    {
+        $runtime = $this->getParameter('kernel.environment');
+        if ($runtime === 'test') {
+            return true;
+        }
+        if ($runtime !== 'dev') {
+            return false;
+        }
+        return getenv('CONDOR_FINANCE_SYNTHETIC_API') === '1'
+            && getenv('CONDOR_PRODUCTION_STAGE') === 'construccion';
     }
 
     /** @return array<string,mixed> */
     private function store(Request $request): array
     {
-        $store = $request->getSession()->get('condor_finance_synthetic', []);
-        if (!is_array($store)) {
-            throw new NotFoundHttpException('Archivo financiero ficticio no disponible.');
-        }
-        return $store;
+        $snapshot = $request->getSession()->get('condor_finance_synthetic', []);
+        return is_array($snapshot)
+            ? $snapshot
+            : throw new NotFoundHttpException('Archivo financiero ficticio no disponible.');
     }
 
     private function scope(Tenant $tenant, Branch $branch): string
