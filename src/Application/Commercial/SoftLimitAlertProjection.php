@@ -57,7 +57,7 @@ final class SoftLimitAlertProjection
             $measurements = [];
             $alerts = [];
             foreach ($limits as $key => $value) {
-                if (!is_string($key) || !is_int($value) || $value < 1) {
+                if (!is_int($value) || $value < 1) {
                     throw new DomainException('invalid_entitlement_limit');
                 }
                 // Los controles de seguridad y privacidad nunca son medidores comerciales.
