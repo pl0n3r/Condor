@@ -32,6 +32,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'audit_events',
                 'condor_password_reset',
                 'controlbot_staff_operations',
+                'contract_synthetic_records',
                 'customer_contact',
                 'diagnostic_shares',
                 'error_incidents',
