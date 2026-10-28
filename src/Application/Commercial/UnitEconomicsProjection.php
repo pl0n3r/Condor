@@ -63,6 +63,7 @@ final class UnitEconomicsProjection
                 if (!is_array($audits) || !array_is_list($audits)) {
                     throw new DomainException('invalid_audit');
                 }
+                $seenAudits = [];
                 foreach ($audits as $audit) {
                     if (!is_array($audit)) {
                         throw new DomainException('invalid_audit');
@@ -79,6 +80,11 @@ final class UnitEconomicsProjection
                         || preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{6})?Z$/D', $audit['created_at']) !== 1) {
                         throw new DomainException('invalid_audit');
                     }
+                    $auditIdentity = $audit['namespace'].':'.$audit['key'].':'.$audit['created_at'];
+                    if (isset($seenAudits[$auditIdentity])) {
+                        throw new DomainException('duplicate_audit');
+                    }
+                    $seenAudits[$auditIdentity] = true;
                 }
 
                 if (!self::synthetic($costEvidence['tenant_ref'] ?? null, 'tenant')
