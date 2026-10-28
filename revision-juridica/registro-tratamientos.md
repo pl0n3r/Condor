@@ -114,6 +114,16 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `account_lifecycle`
 
+## payroll_synthetic_records
+
+- Categoría: `usage`
+- Campos de software: `tenant_ref`, `legal_entity_ref`, `record_ref`, `employee_ref`, `period_ref`, `actor_ref`, `amount_hundredths`, `state`, `created_at`, `fingerprint`
+- Finalidad: `review_required`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## self_service_trial_application
 
 - Categoría: `contact`
