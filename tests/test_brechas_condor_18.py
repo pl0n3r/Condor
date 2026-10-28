@@ -186,6 +186,10 @@ class BrechasCondor18Tests(unittest.TestCase):
                 corrupted[path] = data[path].replace(marker, "", 1)
                 self.assertNotEqual(data[path], corrupted[path])
                 self.assertEqual(UNKNOWN, classify(key, corrupted))
+                # Una prueba candidata ausente nunca acredita la fila.
+                missing_test = dict(data)
+                missing_test[GAPS[key][4]] = ""
+                self.assertEqual(UNKNOWN, classify(key, missing_test))
         self.assertEqual(UNKNOWN, classify("D-049-S99", data))
 
     def test_sin_datos_reales(self) -> None:
