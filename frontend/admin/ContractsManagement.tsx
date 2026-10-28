@@ -12,7 +12,7 @@ type Draft = Readonly<{
   phase: Phase;
   scope: string;
 }>;
-type Note = Readonly<{ scope: string; ref: string; operation: string }>;
+type Note = Readonly<{ id: number; scope: string; ref: string; operation: string }>;
 type Props = Readonly<{ tenantId: string; companyId: string; branchId: string; permissions: string[] }>;
 
 // Fijar referencias sintéticas predecibles; una cadena "fixture:" no basta.
@@ -43,7 +43,8 @@ function ContractPreview({ tenantId, companyId, branchId, permissions }: Props) 
   const selected = scopedDrafts.find(entry => entry.ref === picked);
 
   function record(refToRecord: string, operation: string) {
-    setTrail(items => items.concat({ scope, ref: refToRecord, operation }).slice(-80));
+    setTrail(items => items.concat({ id: (items[items.length - 1]?.id ?? 0) + 1,
+      scope, ref: refToRecord, operation }).slice(-80));
   }
 
   function createDemo(event: FormEvent<HTMLFormElement>) {
@@ -97,16 +98,16 @@ function ContractPreview({ tenantId, companyId, branchId, permissions }: Props) 
         <h2 id="m02-title">Contratación laboral · prueba local M02</h2>
         <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal, sin trámites, sin datos de trabajadores.</p>
       </header>
-      {notice && <output role="status" aria-live="polite">{notice}</output>}
+      {notice && <output aria-live="polite">{notice}</output>}
       <div className="catalog-grid">
         <section className="catalog-card" aria-label="Borradores de prueba">
-          <label>Filtrar por referencia ficticia
+          <label><span>Filtrar por referencia ficticia</span>
             <select value={filter} onChange={event => setFilter(event.target.value)}>
               <option value="">Todas las referencias</option>
               {scopedDrafts.map(item => <option key={item.ref} value={item.ref}>{item.ref}</option>)}
             </select>
           </label>
-          {listing.length === 0 ? <p role="status">Sin registros en esta empresa y sede.</p> : (
+          {listing.length === 0 ? <output>Sin registros en esta empresa y sede.</output> : (
             <table aria-label="Contratos sintéticos"><thead><tr>
               <th>Referencia</th><th>Clase</th><th>Estado</th><th>Acción</th>
             </tr></thead><tbody>
@@ -119,25 +120,25 @@ function ContractPreview({ tenantId, companyId, branchId, permissions }: Props) 
         </section>
         {canAdd && <section className="catalog-card" aria-label="Nuevo borrador de prueba">
           <form className="catalog-editor" onSubmit={createDemo}>
-            <label>Contrato sintético
+            <label><span>Contrato sintético</span>
               <input value={ref} required maxLength={64}
                 placeholder="fixture:contracts/demo-01"
                 pattern="fixture:contracts/(demo|test|sample)-[0-9]{2,3}"
                 onChange={event => setRef(event.target.value)} />
             </label>
-            <label>Persona sintética
+            <label><span>Persona sintética</span>
               <input value={fictionalPerson} required maxLength={64}
                 placeholder="fixture:person/demo-01"
                 pattern="fixture:person/(demo|test|sample)-[0-9]{2,3}"
                 onChange={event => setFictionalPerson(event.target.value)} />
             </label>
-            <label>Plantilla sintética
+            <label><span>Plantilla sintética</span>
               <input value={sourceTemplate} required maxLength={64}
                 placeholder="fixture:template/demo-01"
                 pattern="fixture:template/(demo|test|sample)-[0-9]{2,3}"
                 onChange={event => setSourceTemplate(event.target.value)} />
             </label>
-            <label>Tipo de borrador
+            <label><span>Tipo de borrador</span>
               <select value={category} onChange={event => setCategory(event.target.value as ContractType)}>
                 {allowedType.map(item => <option key={item} value={item}>{item}</option>)}
               </select>
@@ -147,7 +148,7 @@ function ContractPreview({ tenantId, companyId, branchId, permissions }: Props) 
         </section>}
         <section className="catalog-card" aria-label="Ficha del borrador">
           <h3>Revisión manual de prueba</h3>
-          {!selected ? <p role="status">Selecciona una referencia sintética.</p> : <>
+          {!selected ? <output>Selecciona una referencia sintética.</output> : <>
             <dl><dt>Referencia</dt><dd>{selected.ref}</dd>
               <dt>Persona ficticia</dt><dd>{selected.fictionalPerson}</dd>
               <dt>Plantilla ficticia</dt><dd>{selected.sourceTemplate}</dd>
@@ -163,8 +164,8 @@ function ContractPreview({ tenantId, companyId, branchId, permissions }: Props) 
         <aside className="catalog-card" aria-label="Operaciones del simulador">
           <h3>Bitácora local de demostración</h3>
           <p className="muted">No es evidencia ni auditoría de servidor.</p>
-          <ol>{trail.filter(note => note.scope === scope).map((note, index) =>
-            <li key={index}>{note.ref}: {note.operation}</li>)}</ol>
+          <ol>{trail.filter(note => note.scope === scope).map(note =>
+            <li key={note.id}>{note.ref}: {note.operation}</li>)}</ol>
         </aside>
       </div>
     </section>
