@@ -51,6 +51,19 @@ def access_contract(source: str) -> bool:
     )
     if any(item not in source for item in needed):
         return False
+    # CSRF debe estar habilitado tanto en form_login como en logout de
+    # la misma firewall principal, no solo en cualquier parte del archivo.
+    main = re.search(
+        r"(?ms)^    main:\n(.*?)(?=^  access_control:|\Z)", source,
+    )
+    if main is None:
+        return False
+    for section in ("form_login", "logout"):
+        if re.search(
+            rf"(?m)^      {section}:\n(?:^        [^\n]*\n)*^        enable_csrf: true$",
+            main.group(1),
+        ) is None:
+            return False
     # Verificar la regla asociada a su ruta, no encontrar un rol en otro bloque.
     return all(re.search(
         rf"- path: [^\n]*{re.escape(path)}[^\n]*\n\s+roles: {role}\b",
@@ -175,6 +188,10 @@ class ContrasteDL4Tests(unittest.TestCase):
                        "roles: ROLE_USER", "user_checker:"):
             with self.subTest(change=change):
                 self.assertFalse(access_contract(security.replace(change, "", 1)))
+        # Un logout sin CSRF sigue siendo inseguro aunque login lo tenga.
+        before_logout, sep, after_logout = security.rpartition("enable_csrf: true")
+        self.assertEqual(sep, "enable_csrf: true")
+        self.assertFalse(access_contract(before_logout + after_logout))
         # D-026: un add-on reservado a cantidades no se puede comprar a mano.
         response = php_evaluate(
             r'echo json_encode(['
