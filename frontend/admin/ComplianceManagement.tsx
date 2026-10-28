@@ -188,7 +188,7 @@ export function ComplianceManagement(props: Props) {
 
 /** M06: independent synthetic compliance-evidence facade, distinct from SG-SST. */
 export function ComplianceEvidenceManagement({ branchId, permissions, csrfToken }: Readonly<{
-  branchId: string; permissions: string[]; csrfToken: string;
+  branchId: string; permissions: string[]; csrfToken : string;
 }>) {
 type EvidenceState = 'PENDIENTE' | 'EN_REVISION' | 'REQUIERE_REVISION';
 type EvidenceType = 'EVIDENCIA' | 'EVALUACION';
@@ -241,7 +241,7 @@ async function requestJson(url: string, method = 'GET',
     headers['Content-Type'] = 'application/json';
     headers['X-CSRF-Token'] = csrfToken ?? '';
   }
-  const response = await fetch(url, {
+  const response = await fetch (url, {
     method,
     credentials: 'same-origin',
     headers,
