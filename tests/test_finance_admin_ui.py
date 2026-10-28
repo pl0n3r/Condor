@@ -17,29 +17,42 @@ class ModuloTests(unittest.TestCase):
         cls.code = COMPONENT.read_text(encoding="utf-8")
 
     def test_aislamiento_por_empresa(self) -> None:
-        code = self.code
-        self.assertIn("const scope = tenantId + '|' + companyId + '|' + branchId", code)
-        self.assertIn("key={props.tenantId + '|' + props.companyId + '|' + props.branchId}", code)
-        self.assertIn("const scoped = records.filter", code)
-        for guard in ("row.tenantId === tenantId", "row.companyId === companyId",
-                      "row.branchId === branchId"):
-            self.assertIn(guard, code)
-        self.assertIn("companyId !== '__unassigned__'", code)
-        for io in ("fetch(", "axios", "localStorage", "sessionStorage", "indexedDB"):
-            self.assertNotIn(io, code)
+        required_scopes = {
+            "composite_key": "const scope = tenantId + '|' + companyId + '|' + branchId",
+            "react_remount": "key={props.tenantId + '|' + props.companyId + '|' + props.branchId}",
+            "filtered_view": "const scoped = records.filter",
+            "tenant": "row.tenantId === tenantId",
+            "company": "row.companyId === companyId",
+            "branch": "row.branchId === branchId",
+            "no_company": "companyId !== '__unassigned__'",
+        }
+        for boundary, signature in required_scopes.items():
+            with self.subTest(boundary=boundary):
+                self.assertIn(signature, self.code)
+        for network_or_disk in ("fetch(", "axios", "localStorage", "sessionStorage", "indexedDB"):
+            with self.subTest(forbidden=network_or_disk):
+                self.assertNotIn(network_or_disk, self.code)
 
     def test_permisos_y_auditoria(self) -> None:
-        code = self.code
-        for permission in ("settings.view", "settings.create", "settings.update"):
-            self.assertIn(permission, code)
-        for guard in ("if (!canView)", "if (!canCreate", "if (!canReview"):
-            self.assertIn(guard, code)
-        for action in ("audit(reference, 'created')", "audit(ref, 'viewed')",
-                       "audit(selected, current.state"):
-            self.assertIn(action, code)
-        self.assertIn("Bitácora de demostración (no oficial)", code)
-        self.assertIn("auditoría de servidor", code)
-        self.assertIn("if (!import.meta.env.DEV) return null;", code)
+        policies = {
+            "ver": "settings.view", "crear": "settings.create",
+            "revisar": "settings.update", "lectura": "if (!canView)",
+            "escritura": "if (!canCreate", "revision": "if (!canReview",
+        }
+        ledger = (
+            "audit(reference, 'created')",
+            "audit(ref, 'viewed')",
+            "audit(selected, current.state",
+        )
+        for label, needle in policies.items():
+            with self.subTest(policy=label):
+                self.assertIn(needle, self.code)
+        for statement in ledger:
+            with self.subTest(audit=statement):
+                self.assertIn(statement, self.code)
+        self.assertIn("Bitácora de demostración (no oficial)", self.code)
+        self.assertIn("auditoría de servidor", self.code)
+        self.assertIn("if (!import.meta.env.DEV) return null;", self.code)
 
     def test_permisos_reales_del_catalogo(self) -> None:
         """La demo no puede quedar denegada por nombres de permiso inexistentes."""
@@ -85,22 +98,25 @@ class ModuloTests(unittest.TestCase):
             self.assertNotIn(forbidden, code)
 
     def test_estados_explicitos(self) -> None:
-        code = self.code
-        for state in ("BORRADOR", "REQUIERE_REVISION", "EN_REVISION"):
-            self.assertIn(state, code)
-        self.assertIn("state: 'BORRADOR'", code)
-        self.assertIn("current.state === 'BORRADOR' ? 'REQUIERE_REVISION' : 'EN_REVISION'", code)
-        for forbidden in ("state: 'APROBADO'", "state: 'CERRADO'", "state: 'PAGADO'",
-                          "setTimeout(", "setInterval("):
-            self.assertNotIn(forbidden, code)
-        self.assertIn("onSubmit={changeState}", code)
-        self.assertIn("onSubmit={create}", code)
-        self.assertIn('type="button"', code)
-        self.assertIn('role="alert"', code)
-        self.assertIn('role="status"', code)
-        self.assertIn('aria-live="polite"', code)
-        self.assertIn("Ningún registro se aprueba, contabiliza, paga ni cierra automáticamente.", code)
-
+        expected_lifecycle = (
+            "BORRADOR", "REQUIERE_REVISION", "EN_REVISION",
+            "state: 'BORRADOR'",
+            "current.state === 'BORRADOR' ? 'REQUIERE_REVISION' : 'EN_REVISION'",
+            "onSubmit={changeState}", "onSubmit={create}",
+            'type="button"', 'role="alert"', 'role="status"',
+            'aria-live="polite"',
+            "Ningún registro se aprueba, contabiliza, paga ni cierra automáticamente.",
+        )
+        illegal_shortcuts = (
+            "state: 'APROBADO'", "state: 'CERRADO'",
+            "state: 'PAGADO'", "setTimeout(", "setInterval(",
+        )
+        for marker in expected_lifecycle:
+            with self.subTest(lifecycle=marker):
+                self.assertIn(marker, self.code)
+        for shortcut in illegal_shortcuts:
+            with self.subTest(forbidden=shortcut):
+                self.assertNotIn(shortcut, self.code)
 
     def test_montaje_dev_en_administracion(self) -> None:
         """Solo existe en DEV, mantiene el ámbito tenant/empresa/sede y permisos."""
@@ -114,6 +130,7 @@ class ModuloTests(unittest.TestCase):
         self.assertIn("branchId={context.data.active_branch.id}", shell)
         self.assertIn("permissions={context.data.permissions}", shell)
         self.assertIn("Cargando finanzas ficticias", shell)
+        self.assertIn("href: '/admin#finance-management'", shell)
 
 
 if __name__ == "__main__":
