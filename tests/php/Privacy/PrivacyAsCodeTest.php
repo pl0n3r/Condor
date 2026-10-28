@@ -31,14 +31,17 @@ final class PrivacyAsCodeTest extends TestCase
                 'account_password',
                 'audit_events',
                 'condor_password_reset',
+                'contract_synthetic_records',
                 'controlbot_staff_operations',
                 'customer_contact',
                 'diagnostic_shares',
                 'error_incidents',
+                'human_resources_synthetic_records',
                 'notification_delivery',
                 'notification_preferences',
                 'payroll_synthetic_records',
                 'self_service_trial_application',
+                'social_security_synthetic_records',
                 'workflow_definitions',
                 'workflow_executions',
             ],
@@ -55,6 +58,12 @@ final class PrivacyAsCodeTest extends TestCase
             'review_required',
             $this->treatment($data, 'self_service_trial_application')['basis'],
         );
+        $hr = $this->treatment($data, 'human_resources_synthetic_records');
+        self::assertSame('usage', $hr['category']);
+        foreach (['purpose', 'basis', 'retention', 'consent'] as $key) {
+            self::assertSame('review_required', $hr[$key]);
+        }
+        self::assertSame([], $hr['providers']);
         $payroll = $this->treatment($data, 'payroll_synthetic_records');
         self::assertSame('usage', $payroll['category']);
         self::assertSame('review_required', $payroll['purpose']);
@@ -195,6 +204,53 @@ final class PrivacyAsCodeTest extends TestCase
     private function root(): string
     {
         return dirname(__DIR__, 3);
+    }
+
+    /** Runs all four M05 synthetic DBAL acceptance cases in Composer-enabled PHP CI. */
+    public function testSocialSecurityPersistenceRealPhp(): void
+    {
+        $descriptors = [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']];
+        $pipes = [];
+        $command = [
+            'python3', '-m', 'unittest', 'discover', '-s', 'tests',
+            '-p', 'test_social_security_persistence.py', '-v',
+        ];
+        $handle = proc_open($command, $descriptors, $pipes, $this->root());
+        self::assertIsResource($handle, 'No pudo iniciar las pruebas M05 de PHP/SQLite.');
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($handle);
+        self::assertSame(
+            0,
+            $exitCode,
+            'M05 synthetic acceptance failed: '.(string) $stdout.(string) $stderr,
+        );
+    }
+
+    /** Run M01 acceptance through PHP/SQLite with a real Doctrine DBAL connection. */
+    public function testHumanResourcesPersistenceRealPhp(): void
+    {
+        $descriptors = [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']];
+        $pipes = [];
+        $command = [
+            'python3', '-m', 'unittest', 'discover', '-s', 'tests',
+            '-p', 'test_human_resources_ext_persistence.py', '-v',
+        ];
+        $handle = proc_open($command, $descriptors, $pipes, $this->root());
+        self::assertIsResource($handle, 'No pudo iniciar las pruebas M01 de PHP/SQLite.');
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        self::assertSame(
+            0,
+            proc_close($handle),
+            'M01 synthetic acceptance failed: '.(string) $stdout.(string) $stderr,
+        );
     }
 
     /** @param array<string, mixed> $data

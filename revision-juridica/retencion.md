@@ -11,12 +11,16 @@ Producto: `pl0n3r/Condor`
 | account_password | authentication | credential_lifecycle | review_required |
 | audit_events | usage | review_required | review_required |
 | condor_password_reset | authentication | password_reset_lifecycle | review_required |
+| contract_synthetic_records | usage | review_required | review_required |
 | controlbot_staff_operations | usage | review_required | review_required |
 | customer_contact | contact | review_required | review_required |
 | diagnostic_shares | authentication | diagnostic_share_lifecycle | review_required |
 | error_incidents | usage | review_required | review_required |
+| human_resources_synthetic_records | usage | review_required | review_required |
 | notification_delivery | usage | review_required | review_required |
 | notification_preferences | usage | account_lifecycle | review_required |
+| payroll_synthetic_records | usage | review_required | review_required |
 | self_service_trial_application | contact | review_required | review_required |
+| social_security_synthetic_records | usage | review_required | review_required |
 | workflow_definitions | usage | review_required | review_required |
 | workflow_executions | usage | review_required | review_required |

@@ -275,6 +275,73 @@
       "retention": "review_required",
       "consent": "review_required",
       "providers": []
+    },
+    {
+      "id": "social_security_synthetic_records",
+      "category": "usage",
+      "fields": [
+        "tenant_ref",
+        "company_ref",
+        "social_security_ref",
+        "category",
+        "state",
+        "version",
+        "previous_id",
+        "previous_state",
+        "audit_action",
+        "actor_ref",
+        "occurred_at"
+      ],
+      "purpose": "review_required",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
+      "id": "human_resources_synthetic_records",
+      "category": "usage",
+      "fields": [
+        "tenant_ref",
+        "company_ref",
+        "employee_ref",
+        "category",
+        "state",
+        "version",
+        "previous_id",
+        "previous_state",
+        "audit_action",
+        "actor_ref",
+        "occurred_at",
+        "fingerprint"
+      ],
+      "purpose": "review_required",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
+    },
+    {
+      "id": "contract_synthetic_records",
+      "category": "usage",
+      "fields": [
+        "tenant_ref",
+        "company_ref",
+        "contract_ref",
+        "worker_ref",
+        "template_ref",
+        "actor_ref",
+        "state",
+        "version",
+        "audit_action",
+        "fingerprint",
+        "created_at"
+      ],
+      "purpose": "review_required",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
     }
   ]
 }

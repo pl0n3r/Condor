@@ -54,6 +54,16 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `password_reset_lifecycle`
 
+## contract_synthetic_records
+
+- Categoría: `usage`
+- Campos de software: `tenant_ref`, `company_ref`, `contract_ref`, `worker_ref`, `template_ref`, `actor_ref`, `state`, `version`, `audit_action`, `fingerprint`, `created_at`
+- Finalidad: `review_required`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## controlbot_staff_operations
 
 - Categoría: `usage`
@@ -94,6 +104,16 @@ Producto: `pl0n3r/Condor`
 - Proveedores: `sentry`
 - Retención: `review_required`
 
+## human_resources_synthetic_records
+
+- Categoría: `usage`
+- Campos de software: `tenant_ref`, `company_ref`, `employee_ref`, `category`, `state`, `version`, `previous_id`, `previous_state`, `audit_action`, `actor_ref`, `occurred_at`, `fingerprint`
+- Finalidad: `review_required`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## notification_delivery
 
 - Categoría: `usage`
@@ -114,11 +134,31 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `account_lifecycle`
 
+## payroll_synthetic_records
+
+- Categoría: `usage`
+- Campos de software: `tenant_ref`, `legal_entity_ref`, `record_ref`, `employee_ref`, `period_ref`, `actor_ref`, `amount_hundredths`, `state`, `created_at`, `fingerprint`
+- Finalidad: `review_required`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## self_service_trial_application
 
 - Categoría: `contact`
 - Campos de software: `email`, `trial_quote_id`, `trial_consent_recorded_at`
 - Finalidad: `self_service_trial_application`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
+## social_security_synthetic_records
+
+- Categoría: `usage`
+- Campos de software: `tenant_ref`, `company_ref`, `social_security_ref`, `category`, `state`, `version`, `previous_id`, `previous_state`, `audit_action`, `actor_ref`, `occurred_at`
+- Finalidad: `review_required`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
 - Proveedores: ninguno_declarado

@@ -90,5 +90,19 @@ class ModuloTests(unittest.TestCase):
         self.assertIn("Ningún registro se aprueba, contabiliza, paga ni cierra automáticamente.", code)
 
 
+    def test_montaje_dev_en_administracion(self) -> None:
+        """Solo existe en DEV, mantiene el ámbito tenant/empresa/sede y permisos."""
+        shell = (ROOT / "frontend/admin/AdminApp.tsx").read_text(encoding="utf-8")
+        self.assertIn("const DevFinanceManagement = import.meta.env.DEV", shell)
+        self.assertIn("import('./FinanceManagement')", shell)
+        self.assertIn("import.meta.env.DEV && DevFinanceManagement", shell)
+        self.assertIn("<DevFinanceManagement", shell)
+        self.assertIn("tenantId={context.data.tenant.id}", shell)
+        self.assertIn("companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}", shell)
+        self.assertIn("branchId={context.data.active_branch.id}", shell)
+        self.assertIn("permissions={context.data.permissions}", shell)
+        self.assertIn("Cargando finanzas ficticias", shell)
+
+
 if __name__ == "__main__":
     unittest.main()

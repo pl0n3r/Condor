@@ -30,13 +30,17 @@ Estado: documented_not_legally_approved. Documentos fuente íntegros a continuac
 | account_password | authentication | password_hash | account_security | review_required | review_required | ninguno_declarado | credential_lifecycle |
 | audit_events | usage | actor_user_id, action, entity_type, entity_id, context, created_at | security_audit | review_required | review_required | ninguno_declarado | review_required |
 | condor_password_reset | authentication | user_id, token_hash, expires_at, consumed_at, revoked_at | account_recovery | review_required | review_required | ninguno_declarado | password_reset_lifecycle |
+| contract_synthetic_records | usage | tenant_ref, company_ref, contract_ref, worker_ref, template_ref, actor_ref, state, version, audit_action, fingerprint, created_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | controlbot_staff_operations | usage | action, actor_key_id, target_staff_user_id, result, request_id, request_nonce_hash, request_ip, created_at, context | staff_administration_audit | review_required | review_required | ninguno_declarado | review_required |
 | customer_contact | contact | name, email, phone, document_number, notes, commercial_category_id | customer_management | review_required | review_required | ninguno_declarado | review_required |
 | diagnostic_shares | authentication | token_hash, expires_at, revoked_at, created_at | support_diagnostics | review_required | review_required | ninguno_declarado | diagnostic_share_lifecycle |
 | error_incidents | usage | request_id, status, method, route_name, exception_class, message, fingerprint, version, release_sha, trace, occurred_at | error_diagnostics | review_required | review_required | sentry | review_required |
+| human_resources_synthetic_records | usage | tenant_ref, company_ref, employee_ref, category, state, version, previous_id, previous_state, audit_action, actor_ref, occurred_at, fingerprint | review_required | review_required | review_required | ninguno_declarado | review_required |
 | notification_delivery | usage | user_id, event_key, channel_key, payload, status, attempt_count, last_error, available_at, delivered_at | notification_delivery | review_required | review_required | ninguno_declarado | review_required |
 | notification_preferences | usage | user_id, event_key, channel_key, enabled | notification_preferences | review_required | review_required | ninguno_declarado | account_lifecycle |
+| payroll_synthetic_records | usage | tenant_ref, legal_entity_ref, record_ref, employee_ref, period_ref, actor_ref, amount_hundredths, state, created_at, fingerprint | review_required | review_required | review_required | ninguno_declarado | review_required |
 | self_service_trial_application | contact | email, trial_quote_id, trial_consent_recorded_at | self_service_trial_application | review_required | review_required | ninguno_declarado | review_required |
+| social_security_synthetic_records | usage | tenant_ref, company_ref, social_security_ref, category, state, version, previous_id, previous_state, audit_action, actor_ref, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | workflow_definitions | usage | tenant_id, workflow_id, trigger_name, conditions_json, actions_json, created_by_user_id, updated_by_user_id, created_at, updated_at | workflow_definition_management | review_required | review_required | ninguno_declarado | review_required |
 | workflow_executions | usage | tenant_id, workflow_id, definition_version, actor_user_id, result, created_at | workflow_execution_audit | review_required | review_required | ninguno_declarado | review_required |
 
@@ -99,13 +103,17 @@ El canal debe contemplar solicitudes de acceso, rectificación/corrección, actu
 | account_password | authentication | password_hash | account_security | review_required | review_required | ninguno_declarado | credential_lifecycle |
 | audit_events | usage | actor_user_id, action, entity_type, entity_id, context, created_at | security_audit | review_required | review_required | ninguno_declarado | review_required |
 | condor_password_reset | authentication | user_id, token_hash, expires_at, consumed_at, revoked_at | account_recovery | review_required | review_required | ninguno_declarado | password_reset_lifecycle |
+| contract_synthetic_records | usage | tenant_ref, company_ref, contract_ref, worker_ref, template_ref, actor_ref, state, version, audit_action, fingerprint, created_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | controlbot_staff_operations | usage | action, actor_key_id, target_staff_user_id, result, request_id, request_nonce_hash, request_ip, created_at, context | staff_administration_audit | review_required | review_required | ninguno_declarado | review_required |
 | customer_contact | contact | name, email, phone, document_number, notes, commercial_category_id | customer_management | review_required | review_required | ninguno_declarado | review_required |
 | diagnostic_shares | authentication | token_hash, expires_at, revoked_at, created_at | support_diagnostics | review_required | review_required | ninguno_declarado | diagnostic_share_lifecycle |
 | error_incidents | usage | request_id, status, method, route_name, exception_class, message, fingerprint, version, release_sha, trace, occurred_at | error_diagnostics | review_required | review_required | sentry | review_required |
+| human_resources_synthetic_records | usage | tenant_ref, company_ref, employee_ref, category, state, version, previous_id, previous_state, audit_action, actor_ref, occurred_at, fingerprint | review_required | review_required | review_required | ninguno_declarado | review_required |
 | notification_delivery | usage | user_id, event_key, channel_key, payload, status, attempt_count, last_error, available_at, delivered_at | notification_delivery | review_required | review_required | ninguno_declarado | review_required |
 | notification_preferences | usage | user_id, event_key, channel_key, enabled | notification_preferences | review_required | review_required | ninguno_declarado | account_lifecycle |
+| payroll_synthetic_records | usage | tenant_ref, legal_entity_ref, record_ref, employee_ref, period_ref, actor_ref, amount_hundredths, state, created_at, fingerprint | review_required | review_required | review_required | ninguno_declarado | review_required |
 | self_service_trial_application | contact | email, trial_quote_id, trial_consent_recorded_at | self_service_trial_application | review_required | review_required | ninguno_declarado | review_required |
+| social_security_synthetic_records | usage | tenant_ref, company_ref, social_security_ref, category, state, version, previous_id, previous_state, audit_action, actor_ref, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | workflow_definitions | usage | tenant_id, workflow_id, trigger_name, conditions_json, actions_json, created_by_user_id, updated_by_user_id, created_at, updated_at | workflow_definition_management | review_required | review_required | ninguno_declarado | review_required |
 | workflow_executions | usage | tenant_id, workflow_id, definition_version, actor_user_id, result, created_at | workflow_execution_audit | review_required | review_required | ninguno_declarado | review_required |
 
@@ -173,6 +181,16 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `password_reset_lifecycle`
 
+## contract_synthetic_records
+
+- Categoría: `usage`
+- Campos de software: `tenant_ref`, `company_ref`, `contract_ref`, `worker_ref`, `template_ref`, `actor_ref`, `state`, `version`, `audit_action`, `fingerprint`, `created_at`
+- Finalidad: `review_required`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## controlbot_staff_operations
 
 - Categoría: `usage`
@@ -213,6 +231,16 @@ Producto: `pl0n3r/Condor`
 - Proveedores: `sentry`
 - Retención: `review_required`
 
+## human_resources_synthetic_records
+
+- Categoría: `usage`
+- Campos de software: `tenant_ref`, `company_ref`, `employee_ref`, `category`, `state`, `version`, `previous_id`, `previous_state`, `audit_action`, `actor_ref`, `occurred_at`, `fingerprint`
+- Finalidad: `review_required`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## notification_delivery
 
 - Categoría: `usage`
@@ -233,11 +261,31 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `account_lifecycle`
 
+## payroll_synthetic_records
+
+- Categoría: `usage`
+- Campos de software: `tenant_ref`, `legal_entity_ref`, `record_ref`, `employee_ref`, `period_ref`, `actor_ref`, `amount_hundredths`, `state`, `created_at`, `fingerprint`
+- Finalidad: `review_required`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## self_service_trial_application
 
 - Categoría: `contact`
 - Campos de software: `email`, `trial_quote_id`, `trial_consent_recorded_at`
 - Finalidad: `self_service_trial_application`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
+## social_security_synthetic_records
+
+- Categoría: `usage`
+- Campos de software: `tenant_ref`, `company_ref`, `social_security_ref`, `category`, `state`, `version`, `previous_id`, `previous_state`, `audit_action`, `actor_ref`, `occurred_at`
+- Finalidad: `review_required`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
 - Proveedores: ninguno_declarado
@@ -280,13 +328,17 @@ Producto: `pl0n3r/Condor`
 | account_password | authentication | credential_lifecycle | review_required |
 | audit_events | usage | review_required | review_required |
 | condor_password_reset | authentication | password_reset_lifecycle | review_required |
+| contract_synthetic_records | usage | review_required | review_required |
 | controlbot_staff_operations | usage | review_required | review_required |
 | customer_contact | contact | review_required | review_required |
 | diagnostic_shares | authentication | diagnostic_share_lifecycle | review_required |
 | error_incidents | usage | review_required | review_required |
+| human_resources_synthetic_records | usage | review_required | review_required |
 | notification_delivery | usage | review_required | review_required |
 | notification_preferences | usage | account_lifecycle | review_required |
+| payroll_synthetic_records | usage | review_required | review_required |
 | self_service_trial_application | contact | review_required | review_required |
+| social_security_synthetic_records | usage | review_required | review_required |
 | workflow_definitions | usage | review_required | review_required |
 | workflow_executions | usage | review_required | review_required |
 
