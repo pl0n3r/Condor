@@ -100,12 +100,44 @@ def source(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
 
+def candidate_rows(raw: str, identifier: str, kind: str) -> list[str]:
+    """Identifica filas por ID normalizado, sin perder duplicados espaciados."""
+    if kind not in {"matrix", "contrast"}:
+        raise ValueError("UNKNOWN: tipo de inventario inválido")
+    matches = []
+    for line in raw.splitlines():
+        row = line.strip()
+        if not row.startswith("|"):
+            continue
+        first_cell = row[1:].split("|", 1)[0].strip()
+        key = (first_cell.split("·", 1)[0] if kind == "matrix"
+               else first_cell).strip(" `")
+        if key == identifier:
+            matches.append(row)
+    return matches
+
+
+def spec_section(raw: str, heading: str) -> str:
+    """Aísla un apartado, incluyendo sus subapartados pero no sus vecinos."""
+    lines = raw.splitlines()
+    matches = [i for i, line in enumerate(lines) if line.strip() == heading]
+    if len(matches) != 1:
+        raise ValueError("UNKNOWN: apartado normativo ausente o duplicado")
+    start = matches[0]
+    level = len(heading) - len(heading.lstrip("#"))
+    for end in range(start + 1, len(lines)):
+        next_heading = lines[end].lstrip()
+        next_level = len(next_heading) - len(next_heading.lstrip("#"))
+        if 1 <= next_level <= level and next_heading[next_level:].startswith(" "):
+            return "\n".join(lines[start:end])
+    return "\n".join(lines[start:])
+
+
 def matrix_rows(raw: str) -> dict[str, tuple[str, ...]]:
     """Exige cinco IDs únicos, íntegros y explícitamente no verificables."""
     rows = {}
     for identifier, (title, *_rest) in GAPS.items():
-        prefix = f"| {BT}{identifier}{BT} · {BT}ESPECIFICACIONES.md{BT} |"
-        matches = [line for line in raw.splitlines() if line.startswith(prefix)]
+        matches = candidate_rows(raw, identifier, "matrix")
         if len(matches) != 1:
             raise ValueError(f"UNKNOWN: fila ausente/duplicada {identifier}")
         cells = tuple(x.strip() for x in matches[0].strip("|").split("|"))
@@ -123,8 +155,7 @@ def contrast_rows(raw: str) -> dict[str, tuple[str, ...]]:
     """Contrasta las rutas candidatas sin convertirlas en acreditación."""
     rows = {}
     for identifier, (code_path, test_path) in CONTRAST_SOURCE.items():
-        matches = [line for line in raw.splitlines()
-                   if line.startswith(f"| {identifier} |")]
+        matches = candidate_rows(raw, identifier, "contrast")
         if len(matches) != 1:
             raise ValueError(f"UNKNOWN: contraste ausente/duplicado {identifier}")
         cells = tuple(x.strip() for x in matches[0].strip("|").split("|"))
@@ -153,9 +184,9 @@ class BrechasCondor19Tests(unittest.TestCase):
         self.assertEqual(set(GAPS), set(contrasts))
         for identifier, (_title, heading, clauses) in GAPS.items():
             with self.subTest(identifier=identifier):
-                self.assertIn(heading, specification)
+                section = spec_section(specification, heading)
                 for clause in clauses:
-                    self.assertIn(clause, specification)
+                    self.assertIn(clause, section)
                 self.assertEqual(operational_verdict(identifier, rows[identifier]), UNKNOWN)
                 for path, fragments in ANCHORS[identifier].items():
                     content = source(path)
@@ -177,12 +208,17 @@ class BrechasCondor19Tests(unittest.TestCase):
                              if x.startswith(f"| {identifier} |"))
         contrast_missing = contrast.replace(contrast_line, "")
         contrast_duplicated = contrast + "\n" + contrast_line
+        spacing_duplicate = matrix + "\n" + line.replace(" · ", "    · ", 1)
+        contrast_spacing_duplicate = (
+            contrast + "\n" + contrast_line.replace(
+                f"| {identifier} |", f"| {identifier}    |", 1)
+        )
 
-        for sample in (missing, duplicated, promoted):
+        for sample in (missing, duplicated, promoted, spacing_duplicate):
             with self.subTest(sample=sample == promoted):
                 with self.assertRaisesRegex(ValueError, "UNKNOWN"):
                     matrix_rows(sample)
-        for sample in (contrast_missing, contrast_duplicated):
+        for sample in (contrast_missing, contrast_duplicated, contrast_spacing_duplicate):
             with self.assertRaisesRegex(ValueError, "UNKNOWN"):
                 contrast_rows(sample)
         with self.assertRaisesRegex(ValueError, "UNKNOWN"):
