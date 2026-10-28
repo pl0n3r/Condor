@@ -30,6 +30,14 @@ if (!class_exists('Symfony\\Component\\Uid\\Ulid')) {
         }
     }');
 }
+if (!interface_exists('Doctrine\\Common\\Collections\\Collection')) {
+    eval('namespace Doctrine\\Common\\Collections; interface Collection {}');
+}
+if (!class_exists('Doctrine\\Common\\Collections\\ArrayCollection')) {
+    eval('namespace Doctrine\\Common\\Collections; final class ArrayCollection implements Collection {
+        public function __construct(array $items = []) {}
+    }');
+}
 spl_autoload_register(static function (string $name): void {
     if (!str_starts_with($name, 'App\\')) {
         return;
