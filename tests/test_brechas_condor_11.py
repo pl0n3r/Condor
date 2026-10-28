@@ -107,7 +107,7 @@ def local_evidence(source: dict[str, str]) -> dict[str, str]:
             and "self::assertResponseStatusCodeSame(403)" in backend
         ),
         "D-041-S06": (
-            ".admin-shell { grid-template-columns: 240px 1fr; }" in css
+            ".admin-shell {" in css and "grid-template-columns: 240px 1fr;" in css
             and ".admin-shell { grid-template-columns: 1fr; }" in
                 css_body(css, "@media (max-width: 860px)")
             and ".home-actions .button { width: 100%; }" in
@@ -146,7 +146,7 @@ def local_evidence(source: dict[str, str]) -> dict[str, str]:
             and all(needle in shell for needle in (
                 "status === 'loading'", "status === 'empty'",
                 "status === 'error'", "role="))
-            and "Recarga la" in app and "Reintentar" in platform
+            and "Recarga la" in app and "Abrir diagnósticos" in platform
         ),
     }
     return {key: LOCAL_PARTIAL if passed else UNKNOWN
@@ -185,14 +185,11 @@ class BrechasCondor11Tests(unittest.TestCase):
                 self.assertEqual(self.rows[key][2], "NO_VERIFICABLE")
                 self.assertIn("Falta evidencia integral", self.rows[key][3])
                 self.assertIn("#### " + title, self.spec)
-                self.assertIn(self.evidence[key], {LOCAL_PARTIAL, UNKNOWN})
-                if self.evidence[key] == UNKNOWN:
-                    # An unverified local clause is retained explicitly, not
-                    # declared as satisfied or silently dropped.
-                    self.assertEqual(full_coverage(local=UNKNOWN), UNKNOWN)
-                else:
-                    self.assertEqual(self.evidence[key], LOCAL_PARTIAL)
-                    self.assertEqual(full_coverage(local=LOCAL_PARTIAL), UNKNOWN)
+                self.assertEqual(
+                    self.evidence[key], LOCAL_PARTIAL,
+                    f"{key}: missing local evidence; integral coverage remains UNKNOWN",
+                )
+                self.assertEqual(full_coverage(local=LOCAL_PARTIAL), UNKNOWN)
 
     def test_falla_cerrado(self) -> None:
         """AC-02: loss/duplication/malformed data or source is not success."""
