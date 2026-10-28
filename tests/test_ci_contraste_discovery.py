@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/ci.yml"
 STEP = "Probar contratos de contraste D"
-COMMAND = "python3 -m unittest discover -s tests -p 'test_*contraste*.py'"
+COMMAND = "python3 -m unittest discover -s tests -p 'test_contraste_d_l*.py'"
 
 
 def extract_job(content: str) -> str:
@@ -40,8 +40,10 @@ class ContrastDiscoveryTests(unittest.TestCase):
     def test_workflow_executes_contrast_d(self) -> None:
         job = extract_job(WORKFLOW.read_text(encoding="utf-8"))
         self.assertIn(COMMAND, required_step(job))
-        self.assertTrue(fnmatch.fnmatch("test_contraste_d_l3.py", "test_*contraste*.py"))
-        self.assertTrue(fnmatch.fnmatch("test_ci_contraste_discovery.py", "test_*contraste*.py"))
+        self.assertTrue(fnmatch.fnmatch("test_contraste_d_l3.py", "test_contraste_d_l*.py"))
+        self.assertTrue(fnmatch.fnmatch("test_contraste_d_l5.py", "test_contraste_d_l*.py"))
+        self.assertFalse(fnmatch.fnmatch("test_ci_contraste_discovery.py", "test_contraste_d_l*.py"))
+        self.assertFalse(fnmatch.fnmatch("test_contraste_cd_d1.py", "test_contraste_d_l*.py"))
 
     def test_rejects_bypass(self) -> None:
         job = extract_job(WORKFLOW.read_text(encoding="utf-8"))
