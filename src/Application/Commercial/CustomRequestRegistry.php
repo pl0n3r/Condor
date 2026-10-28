@@ -93,38 +93,11 @@ final class CustomRequestRegistry
                     if (!isset($requests[$requestRef])) {
                         throw new DomainException('unknown_request');
                     }
-                    $current = &$requests[$requestRef];
+                    $current = $requests[$requestRef];
                     if ($current['request_type'] !== $type || $current['source'] !== $source) {
                         throw new DomainException('request_mismatch');
                     }
-                    if ($action !== 'PRIORITIZE' && $current['priority'] !== $priority) {
-                        throw new DomainException('priority_mismatch');
-                    }
-                    if ($action === 'TRIAGE') {
-                        if ($current['status'] !== 'NEW' || $issue !== null) {
-                            throw new DomainException('invalid_transition');
-                        }
-                        $current['status'] = 'TRIAGED';
-                    } elseif ($action === 'PRIORITIZE') {
-                        if ($role !== 'platform_admin' || $current['status'] !== 'TRIAGED' || $issue !== null) {
-                            throw new DomainException('invalid_transition');
-                        }
-                        $current['priority'] = $priority;
-                    } elseif ($action === 'LINK') {
-                        if ($role !== 'platform_admin' || $current['status'] !== 'TRIAGED' || $issue === null) {
-                            throw new DomainException('invalid_transition');
-                        }
-                        $current['issue_ref'] = $issue;
-                        $current['status'] = 'LINKED';
-                    } elseif ($action === 'REJECT') {
-                        if ($role !== 'platform_admin' || $current['status'] !== 'TRIAGED' || $issue !== null) {
-                            throw new DomainException('invalid_transition');
-                        }
-                        $current['status'] = 'REJECTED';
-                    } else {
-                        throw new DomainException('invalid_transition');
-                    }
-                    unset($current);
+                    $requests[$requestRef] = self::applyTransition($current, $action, $role, $priority, $issue);
                 }
                 $audit[] = [
                     'event_ref' => $eventRef, 'request_ref' => $requestRef,
@@ -152,7 +125,51 @@ final class CustomRequestRegistry
         }
     }
 
-    /** @param array<array-key, mixed> $value @param list<string> $fields */
+    /**
+     * @param array<string, mixed> $current
+     * @return array<string, mixed>
+     */
+    private static function applyTransition(
+        array $current,
+        string $action,
+        string $role,
+        string $priority,
+        ?string $issue,
+    ): array {
+        if ($action !== 'PRIORITIZE' && $current['priority'] !== $priority) {
+            throw new DomainException('priority_mismatch');
+        }
+        if ($action === 'TRIAGE') {
+            if ($current['status'] !== 'NEW' || $issue !== null) {
+                throw new DomainException('invalid_transition');
+            }
+            $current['status'] = 'TRIAGED';
+        } elseif ($action === 'PRIORITIZE') {
+            if ($role !== 'platform_admin' || $current['status'] !== 'TRIAGED' || $issue !== null) {
+                throw new DomainException('invalid_transition');
+            }
+            $current['priority'] = $priority;
+        } elseif ($action === 'LINK') {
+            if ($role !== 'platform_admin' || $current['status'] !== 'TRIAGED' || $issue === null) {
+                throw new DomainException('invalid_transition');
+            }
+            $current['issue_ref'] = $issue;
+            $current['status'] = 'LINKED';
+        } elseif ($action === 'REJECT') {
+            if ($role !== 'platform_admin' || $current['status'] !== 'TRIAGED' || $issue !== null) {
+                throw new DomainException('invalid_transition');
+            }
+            $current['status'] = 'REJECTED';
+        } else {
+            throw new DomainException('invalid_transition');
+        }
+        return $current;
+    }
+
+    /**
+     * @param array<array-key, mixed> $value
+     * @param list<string> $fields
+     */
     private static function assertFields(array $value, array $fields): void
     {
         if (count($value) !== count($fields) || array_diff($fields, array_keys($value)) !== []) {
