@@ -160,6 +160,8 @@ class BrechasCondor08Tests(unittest.TestCase):
             {"audit": True, "retention_days": 30},
             {"db_backup": True, "media_backup": True,
              "encrypted": True, "isolated": True, "restore": True},
+            {"status": "VALIDATED_IN_PRODUCTION",
+             "sha": "a" * 40, "signed": True},
         )
         for gap_id in GAPS:
             with self.subTest(gap=gap_id):
