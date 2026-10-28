@@ -15,6 +15,7 @@ Producto: `pl0n3r/Condor`
 | customer_contact | contact | review_required | review_required |
 | diagnostic_shares | authentication | diagnostic_share_lifecycle | review_required |
 | error_incidents | usage | review_required | review_required |
+| human_resources_synthetic_records | usage | review_required | review_required |
 | notification_delivery | usage | review_required | review_required |
 | notification_preferences | usage | account_lifecycle | review_required |
 | payroll_synthetic_records | usage | review_required | review_required |
