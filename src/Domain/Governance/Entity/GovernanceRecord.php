@@ -79,9 +79,15 @@ final class GovernanceRecord
 
     public static function checkFixture(string $candidate, string $kind): void
     {
-        if (!in_array($kind, ['tenant', 'company', 'actor', 'governance'], true)
-            || preg_match('~\Afixture:'.preg_quote($kind, '~').'/[a-z][a-z0-9_-]{0,47}\z~D', $candidate) !== 1
-            || preg_match('/[0-9]{7,}/', $candidate) === 1
+        // Only an explicitly typed synthetic prefix can cross this boundary.
+        $types = ['tenant' => true, 'company' => true, 'actor' => true, 'governance' => true];
+        $prefix = 'fixture:'.$kind.'/';
+        if (!isset($types[$kind]) || !str_starts_with($candidate, $prefix)) {
+            throw new DomainException('Solo se admiten referencias ficticias tipadas.');
+        }
+        $identifier = substr($candidate, strlen($prefix));
+        if (preg_match('~\A[a-z][a-z0-9_-]{0,47}\z~D', $identifier) !== 1
+            || preg_match('/[0-9]{7,}/', $identifier) === 1
         ) {
             throw new DomainException('Solo se admiten referencias ficticias tipadas.');
         }

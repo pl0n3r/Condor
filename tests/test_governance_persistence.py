@@ -32,15 +32,18 @@ NEW = r"G::register('fixture:tenant/uno', 'fixture:company/uno', 'fixture:govern
 
 class ModuloTests(unittest.TestCase):
     def execute(self, code: str) -> object:
-        self.assertTrue((ROOT / "vendor/autoload.php").exists(), "Composer autoload requerido")
-        self.assertIsNotNone(shutil.which("php"), "PHP CLI requerido")
+        autoload = ROOT / "vendor/autoload.php"
+        if not autoload.is_file() or shutil.which("php") is None:
+            self.fail("La prueba de persistencia requiere PHP y Composer instalados.")
         script = "require $argv[1]; " + SETUP + NAMESPACE + code
-        result = subprocess.run(
-            ["php", "-r", script, str(ROOT / "vendor/autoload.php")],
-            cwd=ROOT, capture_output=True, text=True, timeout=35, check=False,
-        )
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        return json.loads(result.stdout)
+        try:
+            output = subprocess.check_output(
+                ["php", "-r", script, str(autoload)],
+                cwd=ROOT, stderr=subprocess.STDOUT, text=True, timeout=35,
+            )
+        except subprocess.CalledProcessError as failure:
+            self.fail("Fallo en prueba PHP/DBAL:\n" + failure.output)
+        return json.loads(output)
 
     def test_aislamiento_por_empresa(self) -> None:
         values = self.execute(r"""
