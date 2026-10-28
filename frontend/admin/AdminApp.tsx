@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { AccessManagement } from './AccessManagement';
 import { CatalogManagement } from './CatalogManagement';
 import { InventoryManagement } from './InventoryManagement';
@@ -14,7 +14,6 @@ import { ReportsDownloads } from './ReportsDownloads';
 import { EmployeesManagement } from './EmployeesManagement';
 import { ProductionManagement } from './ProductionManagement';
 import { PurchasingManagement } from './PurchasingManagement';
-import { ComplianceManagement } from './ComplianceManagement';
 import { CustomerServiceManagement } from './CustomerServiceManagement';
 import { AssetsManagement } from './AssetsManagement';
 import { PayrollManagement } from './PayrollManagement';
@@ -65,6 +64,10 @@ type ContextState =
       message: string;
     }
   | { status: 'error' };
+
+const DevComplianceManagement = import.meta.env.DEV
+  ? lazy(async () => ({ default: (await import('./ComplianceManagement')).ComplianceManagement }))
+  : null;
 
 export function AdminApp({
   version,
@@ -371,13 +374,15 @@ export function AdminApp({
             />
           )}
 
-          {import.meta.env.DEV && (
-            <ComplianceManagement
-              key={'compliance-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
-              branchId={context.data.active_branch.id}
-              permissions={context.data.permissions}
-              csrfToken={accessToken}
-            />
+          {import.meta.env.DEV && DevComplianceManagement && (
+            <Suspense fallback={<p role="status">Cargando cumplimiento ficticio…</p>}>
+              <DevComplianceManagement
+                key={'compliance-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                branchId={context.data.active_branch.id}
+                permissions={context.data.permissions}
+                csrfToken={accessToken}
+              />
+            </Suspense>
           )}
 
           {import.meta.env.DEV && (

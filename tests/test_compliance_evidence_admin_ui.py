@@ -77,7 +77,7 @@ class ModuloTests(unittest.TestCase):
         self.assertIn("role=\"alert\"", code)
         self.assertIn("role=\"status\"", code)
         self.assertIn("aria-live=\"polite\"", code)
-        self.assertIn("<ComplianceManagement", app)
+        self.assertIn("<DevComplianceManagement", app)
 
 
 if __name__ == '__main__':
