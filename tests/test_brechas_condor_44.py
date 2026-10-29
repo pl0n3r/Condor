@@ -43,7 +43,7 @@ CLAUSES = {
     ),
     "SPEC-BASE-1": (
         SPEC, "Regla de idioma", "## 2. Regla de idioma",
-        ("Siempre que sea técnicamente viable", "Español", "es-CO",
+        ("Siempre que sea técnicamente viable", "español", "es-CO",
          "Se conservarán en inglés los elementos"),
     ),
     "SPEC-BASE-3": (
