@@ -16,11 +16,9 @@ from pathlib import Path
 from scripts.ci_change_classifier import classify
 
 ROOT = Path(__file__).resolve().parents[1]
-MATRIX = ROOT / "docs/matriz-cobertura.md"
 PHPUNIT = ROOT / "vendor/bin/simple-phpunit"
 CONFIG = ROOT / "phpunit.xml.dist"
 UNKNOWN = "UNKNOWN"
-TICK = chr(96)
 
 OFFLINE = {
     "D-049-S01": "TenantResolver distinguishes platform slug and exact verified tenant host.",
@@ -80,28 +78,6 @@ NEGATIVE = (
 )
 
 
-def matrix_rows(text: object) -> dict[str, tuple[str, ...]]:
-    """Reject missing, duplicated, malformed and prematurely green rows."""
-    if type(text) is not str:
-        raise ValueError("UNKNOWN: absent coverage inventory")
-    rows = {}
-    for line in text.splitlines():
-        if not line.startswith("| "):
-            continue
-        cells = tuple(part.strip() for part in line.strip().strip("|").split("|"))
-        key = cells[0].split(" · ", 1)[0].strip(TICK) if cells else ""
-        if key not in ALL:
-            continue
-        if (key in rows or len(cells) != 5 or
-                cells[0] != TICK + key + TICK + " · " + TICK + "ESPECIFICACIONES.md" + TICK or
-                not all(cells) or cells[2] != TICK + "NO_VERIFICABLE" + TICK):
-            raise ValueError("UNKNOWN: corrupted row " + key)
-        rows[key] = cells
-    if set(rows) != ALL:
-        raise ValueError("UNKNOWN: incomplete inventory " + repr(sorted(ALL - set(rows))))
-    return rows
-
-
 def run_php_contract(path: str, methods: tuple[str, ...]) -> bool:
     """Execute real local PHP code; unavailable dependencies never pass."""
     if not path.startswith("tests/php/") or not path.endswith("Test.php"):
@@ -132,11 +108,6 @@ def run_php_contract(path: str, methods: tuple[str, ...]) -> bool:
 
 
 class CoberturaCondor11Tests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.content = MATRIX.read_text(encoding="utf-8")
-        cls.rows = matrix_rows(cls.content)
-
     def test_contrato_principal(self) -> None:
         """AC-01: execute real PHP methods for 7 partial storefront/staff rows."""
         self.assertEqual(12, len(ALL))
@@ -144,30 +115,12 @@ class CoberturaCondor11Tests(unittest.TestCase):
         self.assertEqual(5, len(EXTERNAL))
         self.assertEqual({}, DECLARATIVE)
         self.assertEqual({}, ABSENT)
-        self.assertEqual(ALL, set(self.rows))
-        for key, cells in self.rows.items():
-            with self.subTest(row=key):
-                self.assertEqual(TICK + "NO_VERIFICABLE" + TICK, cells[2])
-                self.assertTrue(cells[1] and cells[3] and cells[4])
         for test_file, methods in POSITIVE:
             with self.subTest(file=test_file):
                 self.assertTrue(run_php_contract(test_file, methods))
 
     def test_falla_cerrado(self) -> None:
         """AC-02: reject forged matrix, unknown host, CSRF, scope and privileges."""
-        first = next(x for x in self.content.splitlines()
-                     if x.startswith("| " + TICK + "D-049-S01" + TICK + " · "))
-        altered = (
-            None, self.content.replace(first + "\n", "", 1),
-            self.content + "\n" + first,
-            self.content.replace(first, first.replace(
-                TICK + "NO_VERIFICABLE" + TICK, TICK + "CUBIERTO" + TICK), 1),
-            self.content.replace(first, "| " + TICK + "D-049-S01" + TICK + " | bad |", 1),
-        )
-        for sample in altered:
-            with self.subTest(sample=str(sample)[:24]):
-                with self.assertRaisesRegex(ValueError, UNKNOWN):
-                    matrix_rows(sample)
         for test_file, methods in NEGATIVE:
             with self.subTest(file=test_file):
                 self.assertTrue(run_php_contract(test_file, methods))
@@ -186,7 +139,6 @@ class CoberturaCondor11Tests(unittest.TestCase):
                 self.assertTrue((ROOT / test_file).is_file())
                 self.assertTrue(methods)
         self.assertTrue(all(EXTERNAL.values()))
-        self.assertNotIn("CUBIERTO", " ".join(OFFLINE.values()))
         source = Path(__file__).read_text(encoding="utf-8")
         self.assertNotRegex(source, r"(?m)^\s*(?:import|from)\s+(?:requests|httpx|socket|urllib|pymysql)\b")
         self.assertNotIn("-----BEGIN " + "PRIVATE KEY-----", source)

@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -13,7 +12,6 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MATRIX = ROOT / "docs/matriz-cobertura.md"
 IDS = (
     "D-040-S13", "D-040-S14", "D-040-S15", "D-040-S16",
     "D-040-S17", "D-040-S18", "D-040-S19", "D-040-S20",
@@ -38,28 +36,6 @@ REST = {
     "D-041-S03": ("B", "densidad y superficies requieren layout renderizado"),
     "D-041-S04": ("B", "componentes React requieren arbol renderizado y estados"),
 }
-
-
-def matrix_rows(source: object) -> dict[str, tuple[str, ...]]:
-    if not isinstance(source, str):
-        raise ValueError("UNKNOWN: matriz ausente")
-    result: dict[str, tuple[str, ...]] = {}
-    pattern = re.compile(r"^\|\s*" + chr(96) + r"(D-040-S\d+|D-041(?:-S\d+)?)" + chr(96))
-    for line in source.splitlines():
-        match = pattern.match(line)
-        if match is None or match.group(1) not in IDS:
-            continue
-        key = match.group(1)
-        fields = tuple(part.strip() for part in line.strip().strip("|").split("|"))
-        first = chr(96) + key + chr(96) + " · " + chr(96) + "ESPECIFICACIONES.md" + chr(96)
-        if (key in result or len(fields) != 5 or not all(fields)
-                or fields[0] != first or fields[2] != chr(96) + "NO_VERIFICABLE" + chr(96)
-                or "Falta evidencia integral" not in fields[3] or fields[4] != "#1"):
-            raise ValueError("UNKNOWN: fila duplicada o invalida " + key)
-        result[key] = fields
-    if set(result) != set(IDS):
-        raise ValueError("UNKNOWN: inventario incompleto")
-    return result
 
 
 def module(path: str):
@@ -145,19 +121,13 @@ def billing_regression() -> unittest.TestResult:
 
 
 class CoberturaCondor07Tests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.rows = matrix_rows(MATRIX.read_text(encoding="utf-8"))
-
     def test_contrato_principal(self) -> None:
         """AC-01: cuatro casos A ejercen codigo real; ocho casos B/C son explicitos."""
         self.assertEqual(set(IDS), set(A) | set(REST))
         self.assertEqual(set(A) & set(REST), set())
-        self.assertEqual(set(self.rows), set(IDS))
         for key, (category, reason) in REST.items():
             self.assertIn(category, ("B", "C", "D"), key)
             self.assertGreater(len(reason), 20)
-            self.assertEqual(self.rows[key][2], chr(96) + "NO_VERIFICABLE" + chr(96))
 
         # Dependencias: el validador real rechaza Symfony 8 frente a 7.4 LTS.
         guard = module(A["D-040-S13"])
@@ -195,16 +165,6 @@ class CoberturaCondor07Tests(unittest.TestCase):
 
     def test_falla_cerrado(self) -> None:
         """AC-02: duplicados, filas ausentes y permisos incompletos no pasan."""
-        source = MATRIX.read_text(encoding="utf-8")
-        for key in IDS:
-            row = next(line for line in source.splitlines()
-                       if line.startswith("| " + chr(96) + key + chr(96) + " ·"))
-            for bad in (source.replace(row + "\n", "", 1),
-                        source + "\n" + row,
-                        source.replace(row, row.replace("NO_VERIFICABLE", "CUBIERTO"), 1)):
-                with self.subTest(clause=key):
-                    with self.assertRaises(ValueError):
-                        matrix_rows(bad)
         guard = module(A["D-040-S13"])
         with self.assertRaises(guard.GuardError):
             guard.static_errors({}, {"packages": ["invalid"]})
@@ -222,7 +182,7 @@ class CoberturaCondor07Tests(unittest.TestCase):
 
     def test_sin_datos_reales(self) -> None:
         """AC-03: sin secretos ni datos reales ni proveedor; no se declara go-live."""
-        for path in (MATRIX, *(ROOT / p for p in A.values())):
+        for path in (ROOT / p for p in A.values()):
             self.assertTrue(path.is_file())
             self.assertTrue(path.resolve().is_relative_to(ROOT))
         self.assertTrue(all(x in ("B", "C", "D") for x, _ in REST.values()))

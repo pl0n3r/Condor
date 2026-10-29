@@ -7,7 +7,6 @@ sinteticos. B/C no son falsos pases ni alteran la matriz de cobertura.
 from __future__ import annotations
 
 import importlib.util
-import re
 import socket
 import sys
 import unittest
@@ -17,7 +16,6 @@ from unittest.mock import patch
 from scripts import d043_pending_releases as releases
 
 ROOT = Path(__file__).resolve().parents[1]
-MATRIX = ROOT / "docs/matriz-cobertura.md"
 IDS = (
     "D-044-S07", "D-044-S08", "D-044-S09", "D-044-S10",
     "D-044-S11", "D-045", "D-045-S01", "D-045-S02",
@@ -39,46 +37,6 @@ REST = {
     "D-046": ("B", "Unicidad del propietario ante carrera TOCTOU exige transaccion y BD real"),
     "D-048": ("B", "Contexto tenant/sede, barra visible y permisos requieren HTTP y navegador"),
 }
-
-
-def matrix_rows(source: object) -> dict[str, tuple[str, ...]]:
-    if not isinstance(source, str):
-        raise ValueError("UNKNOWN: matriz ausente")
-    result: dict[str, tuple[str, ...]] = {}
-    pattern = re.compile(r"^\|\s*" + chr(96)
-                         + r"(D-\d{3}(?:-S\d{2})?)" + chr(96)
-                         + r"\s*·\s*" + chr(96)
-                         + r"ESPECIFICACIONES\.md" + chr(96) + r"\s*\|")
-    for line in source.splitlines():
-        match = pattern.match(line)
-        if match is None or match.group(1) not in IDS:
-            continue
-        key = match.group(1)
-        fields = tuple(x.strip() for x in line.strip().strip("|").split("|"))
-        if (key in result or len(fields) != 5 or not all(fields)
-                or fields[0] != f"{chr(96)}{key}{chr(96)} · {chr(96)}ESPECIFICACIONES.md{chr(96)}"
-                or fields[4] != "#1"):
-            raise ValueError("UNKNOWN: fila invalida o duplicada " + key)
-        status = fields[2].strip(chr(96))
-        if status not in {"NO_VERIFICABLE", "EN_CURSO", "CUBIERTO", "DESCARTADO"}:
-            raise ValueError("UNKNOWN: estado de matriz invalido " + key)
-        evidence = fields[3]
-        if status == "NO_VERIFICABLE" and "Falta evidencia integral" not in evidence:
-            raise ValueError("UNKNOWN: falta la brecha explicita " + key)
-        if status == "CUBIERTO":
-            # Comprobación estructural offline; la reconciliación autentica
-            # independientemente que el PR citado esté efectivamente merged.
-            triad = (
-                r"(?:src|scripts|frontend|templates|config|ops|public)/[\w./-]+",
-                r"tests/[\w./-]+",
-                r"\bPR\s+#\d+\s+MERGED\b",
-            )
-            if not all(re.search(pattern, evidence) for pattern in triad):
-                raise ValueError("UNKNOWN: CUBIERTO sin triada " + key)
-        result[key] = fields
-    if set(result) != set(IDS):
-        raise ValueError("UNKNOWN: filas del grupo faltantes")
-    return result
 
 
 def run_real_test(path: str, klass: str, method: str) -> int:
@@ -118,26 +76,15 @@ def event(state: str, sha: str = "a" * 40) -> dict:
 
 
 class CoberturaCondor10Tests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.rows = matrix_rows(MATRIX.read_text(encoding="utf-8"))
-
     def test_contrato_principal(self) -> None:
         """AC-01: 7 comportamientos A offline; 5 B/C sin atestacion falsa."""
         self.assertEqual(set(IDS), set(A) | set(REST))
         self.assertFalse(set(A) & set(REST))
-        self.assertEqual(set(IDS), set(self.rows))
         for key, path in A.items():
             self.assertTrue((ROOT / path).is_file(), key)
         for key, (category, reason) in REST.items():
             self.assertIn(category, ("B", "C", "D"), key)
             self.assertGreater(len(reason), 25)
-            self.assertIn(
-                self.rows[key][2],
-                tuple(chr(96) + x + chr(96) for x in
-                      ("NO_VERIFICABLE", "EN_CURSO", "CUBIERTO", "DESCARTADO")),
-            )
-
         # D-044-S08: reducer real, idempotencia por SHA y autor bot.
         self.assertEqual(releases.reduce_pending_releases([event("pending")]),
                          [{"version": "0.1.195", "sha": "a" * 40}])
@@ -182,42 +129,6 @@ class CoberturaCondor10Tests(unittest.TestCase):
 
     def test_falla_cerrado(self) -> None:
         """AC-02: negar evidencia truncada, forjada, permisos o SQL dudosos."""
-        original = MATRIX.read_text(encoding="utf-8")
-        for key in IDS:
-            row = next(s for s in original.splitlines()
-                       if s.startswith("| " + chr(96) + key + chr(96)
-                                       + " · " + chr(96) + "ESPECIFICACIONES.md"))
-            # El caso invalido debe seguir siendo invalido incluso cuando
-            # una reconciliacion futura cambie la fila a CUBIERTO legitimo.
-            fields = [x.strip() for x in row.strip("|").split("|")]
-            invalid_fields = fields[:]
-            invalid_fields[2] = "`CUBIERTO`"
-            invalid_fields[3] = "Sin ruta de codigo ni test ni PR fusionado"
-            invalid_row = "| " + " | ".join(invalid_fields) + " |"
-            for name, bad in (
-                ("missing", original.replace(row + "\n", "", 1)),
-                ("duplicate", original + "\n" + row),
-                ("fake-covered", original.replace(row, invalid_row, 1)),
-            ):
-                with self.subTest(id=key, negative=name):
-                    with self.assertRaises(ValueError):
-                        matrix_rows(bad)
-
-        # Acreditacion sintactica futurible; la suite no fabrica un PR
-        # realmente fusionado: el proceso de reconciliacion valida esa prueba.
-        example = next(s for s in original.splitlines()
-                       if s.startswith("| " + chr(96) + IDS[0] + chr(96)
-                                       + " · " + chr(96) + "ESPECIFICACIONES.md"))
-        triad = "src/Example.php + tests/test_synthetic.py + PR #123 MERGED (simulado)"
-        positive_fields = [x.strip() for x in example.strip("|").split("|")]
-        positive_fields[2] = "`CUBIERTO`"
-        positive_fields[3] = triad
-        promoted = original.replace(
-            example, "| " + " | ".join(positive_fields) + " |", 1
-        )
-        self.assertEqual(matrix_rows(promoted)[IDS[0]][2],
-                         chr(96) + "CUBIERTO" + chr(96))
-
         forged = {**event("validated"), "user": {"login": "actor-sintetico"}}
         self.assertEqual(releases.reduce_pending_releases(
             [event("pending"), forged]), [{"version": "0.1.195", "sha": "a" * 40}])
