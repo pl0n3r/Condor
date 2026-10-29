@@ -781,3 +781,15 @@ html.mk-motion.mk-motion-calm .mk-rail { transform: none; }
   .mk-btn:hover { transform: translateY(-2px); }
   .mk-btn:active { transform: scale(.97); }
 }
+
+/* Impacto en las páginas interiores: el encabezado pasa a bloque navy a sangre, como el hero del home. */
+.mk-top {
+  --mk-bg: #0d1830; --mk-surface: #132042; --mk-ink: #eef1f8; --mk-ink-2: #a3adc6;
+  --mk-line: #26335a; --mk-soft: #182650; --mk-mark: #8fa6ff; --mk-mark-ink: #0d1830; --mk-link: #8fa6ff;
+  position: relative; isolation: isolate; color: var(--mk-ink);
+  padding-block: clamp(44px, 7vw, 96px); margin-bottom: clamp(28px, 4vw, 56px);
+}
+.mk-top::before { content: ""; position: absolute; inset: 0 calc(50% - 50vw); z-index: -1; background: var(--mk-bg); }
+.mk-top h1 { font-size: clamp(42px, 6.6vw, 104px); line-height: .96; letter-spacing: -.035em; margin: 0; }
+.mk-top > div { display: flex; flex-direction: column-reverse; gap: 18px; }
+.mk-top .mk-eyebrow { color: var(--mk-mark); }
