@@ -177,8 +177,8 @@ class CoberturaCondor12Tests(unittest.TestCase):
             "requests", "httpx", "urllib", "socket",
             "pymysql", "mysql", "selenium", "playwright",
         })
-        self.assertNotIn("-----BEGIN PRIVATE KEY-----", source)
-        self.assertNotIn("DATABASE_URL=", source)
+        self.assertNotIn("-----BEGIN " + "PRIVATE KEY-----", source)
+        self.assertNotIn("DATABASE_" + "URL=", source)
         self.assertTrue(shutil.which("php"), "UNKNOWN: requiere PHP CLI")
         self.assertFalse(set(UNVERIFIABLE) & set(OFFLINE))
 
