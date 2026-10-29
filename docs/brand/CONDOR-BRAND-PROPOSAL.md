@@ -124,3 +124,10 @@ El owner debe decidir si Flightline se adopta, se itera o se descarta. Hasta ent
 - final_identity = false.
 
 La propuesta puede quedar validada en código sin convertirse en marca final. La validación técnica de esta propuesta y la aprobación visual son gates distintos.
+
+## Registro de adopción
+
+- 2026-10-28: el owner aprobó en conversación aplicar la paleta (tokens) a las superficies públicas y, después, al backoffice. Esta aprobación **no** cubre la creación ni instalación de assets de logo y símbolo, que siguen pendientes (etapa 3 de `adoption`).
+- Etapa 4 (superficies públicas): `public/marketing.css` usa los tokens de esta paleta. En modo oscuro, `--mk-mark` es el tinte claro `#8fa6ff` (el mismo que ya usaba el enlace), porque el cobalto de marca no alcanza contraste sobre `condor_night`.
+- Etapa 5 (backoffice): pendiente, en un leaf posterior.
+- El estado del JSON (`proposal_only`, `owner_approval_required`, `runtime_applied`) no cambia todavía: la paleta ya está aplicada en las superficies públicas, pero falta el backoffice y los assets, así que `runtime_applied` sigue en `false` hasta que la adopción sea completa y el owner cierre la identidad final.
