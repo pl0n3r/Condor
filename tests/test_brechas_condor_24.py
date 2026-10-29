@@ -115,7 +115,7 @@ class BrechasCondor24Tests(unittest.TestCase):
     def test_contrato_principal(self):
         data = sources()
         self.assertEqual(set(TITLES), set(rows(data[MATRIX])))
-        self.assertEqual(len(TITLES), 5)
+        self.assertEqual(5, len(TITLES))
         for key in TITLES:
             with self.subTest(key=key):
                 self.assertEqual(GAP, assess(key, data))
