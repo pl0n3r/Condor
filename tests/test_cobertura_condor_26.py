@@ -170,6 +170,10 @@ class CoberturaCondor26Tests(unittest.TestCase):
             {"lines": [{**operational.quotation()["lines"][0], "quantity": "0"}]},
             {"lines": [{**operational.quotation()["lines"][0],
                         "tenant_ref": "fixture:tenant/beta"}]},
+            {"lines": [{**operational.quotation()["lines"][0],
+                        "legal_entity_ref": "fixture:company/foreign"}]},
+            {"lines": [{**operational.quotation()["lines"][0],
+                        "site_ref": "fixture:site/other"}]},
         ):
             with self.subTest(quote=malformed):
                 payload = operational.quotation()
