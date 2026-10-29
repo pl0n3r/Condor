@@ -77,7 +77,7 @@ class MarketingMotionTests(unittest.TestCase):
         print_block = css[css.index("@media print"):]
         for selector in hidden:
             with self.subTest(selector=selector):
-                self.assertIn(f"html.mk-motion {selector}", print_block)
+                self.assertIn(f"html.mk-motion.mk-motion {selector}", print_block)
         self.assertEqual(len(re.findall(r"html\.mk-motion[^{]*\{[^}]*opacity: 0;", css)), 1)
 
     def test_motion_has_a_failsafe_and_a_calm_path(self) -> None:
@@ -89,7 +89,8 @@ class MarketingMotionTests(unittest.TestCase):
         self.assertIn("'(prefers-reduced-motion: reduce)'", motion)
         self.assertIn("'(prefers-reduced-motion: no-preference)'", motion)
         self.assertIn("giveUp()", motion)
-        self.assertGreaterEqual(motion.count("catch (error)"), 2)
+        catches = re.findall(r"catch \{\n\s*//[^\n]+\n\s*giveUp\(\);", motion)
+        self.assertGreaterEqual(len(catches), 2, "Cada catch explica por qué se ignora la excepción y apaga el movimiento")
         self.assertIn("mk-motion-ready", motion)
         self.assertIn("IntersectionObserver", motion)
 

@@ -12,7 +12,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
- * Páginas públicas del sitio de la plataforma (producto, módulos, soluciones, seguridad y la página de destino para campañas).
+ * Páginas públicas del sitio de la plataforma: producto, módulos, soluciones, seguridad y la página de destino
+ * para campañas.
  *
  * Son contenido estático renderizado en el servidor; la interactividad es CSS y el movimiento (GSAP, mismo
  * dominio, ver public/lib/gsap/README.md) es una mejora opcional: sin él, o con «reducir movimiento», todo se lee

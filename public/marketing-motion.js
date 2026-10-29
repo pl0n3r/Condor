@@ -20,7 +20,7 @@
     const HEADS = '.mk-section .mk-head';
     const ITEMS = '.mk-need, .mk-cat-row, .mk-col, .mk-pillars > div, .mk-steps li, .mk-win';
     const STOPS = '.mk-stop';
-    const LINES = '.mk-line';
+    const LINES = '.mk-route';
     const RAIL = '.mk-rail';
     const NARROW = '(max-width: 860px)';
 
@@ -94,8 +94,11 @@
         const rail = line.querySelector(RAIL);
         const stops = gsap.utils.toArray(line.querySelectorAll(STOPS));
         const vertical = window.matchMedia(NARROW).matches;
-        const isNow = line.classList.contains('mk-line-vender');
-        const duration = calm ? 0 : (isNow ? 1.1 : 0.8);
+        const isNow = line.classList.contains('mk-route-vender');
+        let duration = 0;
+        if (!calm) {
+            duration = isNow ? 1.1 : 0.8;
+        }
         const timeline = gsap.timeline({ delay, defaults: { ease: EASE } });
         if (rail && !calm) {
             timeline.fromTo(rail, vertical ? { scaleY: 0 } : { scaleX: 0 }, { scaleX: 1, scaleY: 1, duration }, 0);
@@ -138,7 +141,7 @@
             { full: '(prefers-reduced-motion: no-preference)', calm: '(prefers-reduced-motion: reduce)' },
             (context) => {
                 try {
-                    const calm = Boolean(context.conditions && context.conditions.calm);
+                    const calm = Boolean(context.conditions?.calm);
                     const timeline = gsap.timeline({ defaults: { ease: EASE } });
                     revealTitle(calm, timeline);
                     revealHeroFollow(calm, timeline);
@@ -148,13 +151,15 @@
                         stopScroll();
                         stopNet();
                     };
-                } catch (error) {
+                } catch {
+                    // Si algo falla, el sitio se lee igual sin movimiento.
                     giveUp();
                 }
             },
         );
         root.classList.add('mk-motion-ready');
-    } catch (error) {
+    } catch {
+        // Si GSAP no arranca, el sitio se lee igual sin movimiento.
         giveUp();
     }
 })();

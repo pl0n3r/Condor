@@ -63,8 +63,8 @@ class LandingEmpezarTests(unittest.TestCase):
 
     def test_network_map_encodes_each_stop_state_in_its_shape_and_text(self) -> None:
         net = red()
-        lines = re.findall(r'<li class="mk-line (mk-line-[a-z]+)">(.*?)</ol></div></li>', net, flags=re.DOTALL)
-        self.assertEqual([name for name, _ in lines], ["mk-line-vender", "mk-line-gente", "mk-line-cumplir", "mk-line-dinero", "mk-line-orden", "mk-line-crecer"])
+        lines = re.findall(r'<li class="mk-route (mk-route-[a-z]+)">(.*?)</ol></div></li>', net, flags=re.DOTALL)
+        self.assertEqual([name for name, _ in lines], ["mk-route-vender", "mk-route-gente", "mk-route-cumplir", "mk-route-dinero", "mk-route-orden", "mk-route-crecer"])
         total = 0
         for name, body in lines:
             for state, hidden_prefix in re.findall(r'<li class="mk-stop is-([a-z]+)"><span class="mk-vh">([^<]*)</span>', body):
@@ -72,7 +72,7 @@ class LandingEmpezarTests(unittest.TestCase):
                 expected = {"now": "Disponible: ", "building": "En construcción: ", "soon": "Próximamente: "}[state]
                 self.assertEqual(hidden_prefix, expected)
                 if state == "now":
-                    self.assertEqual(name, "mk-line-vender", "Solo la línea Vender está disponible hoy")
+                    self.assertEqual(name, "mk-route-vender", "Solo la línea Vender está disponible hoy")
         self.assertEqual(total, 27)
         self.assertEqual(net.count("is-now"), 6)
         self.assertEqual(net.count("is-soon"), 2)
