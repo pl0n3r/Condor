@@ -123,7 +123,7 @@ def guide_is_consistent(raw: object) -> bool:
         "### 4. Inventario y sedes",
         "### 5. Clientes y categorías",
         "### 6. Compras y proveedores",
-        "no significa que la pantalla esté terminada",
+        "significa que la pantalla esté terminada",
         "alertas automáticas de stock bajo",
         "CRM avanzado, automatizaciones multicanal",
         "costo histórico ponderado dependen de PRs todavía abiertos",
