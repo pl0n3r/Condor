@@ -201,6 +201,18 @@ class BrechasCondor42Tests(unittest.TestCase):
             altered = dict(data)
             altered[README] += f"\n## {CLAUSES[key][0]}\n"
             self.assertEqual(local_contract(key, altered), UNKNOWN)
+            if key.startswith("README-08-"):
+                bullet = CLAUSES[key][1]
+                item = next(x for x in data[README].splitlines()
+                            if x.startswith(f"- **{bullet}:**"))
+                without_bullet = dict(data)
+                without_bullet[README] = data[README].replace(item, "", 1)
+                self.assertEqual(local_contract(key, without_bullet), UNKNOWN)
+            else:
+                without_command = dict(data)
+                without_command[README] = data[README].replace(
+                    "python3 tests/test_release_identity_guard.py", "", 1)
+                self.assertEqual(local_contract(key, without_command), UNKNOWN)
         self.assertEqual(local_contract("README-00-00", data), UNKNOWN)
         self.assertEqual(local_contract("README-08-01", None), UNKNOWN)
         self.assertEqual(local_contract("README-08-01", {}), UNKNOWN)
