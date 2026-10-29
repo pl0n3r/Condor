@@ -7,7 +7,6 @@ deployment, or authority to process labor or medical personal data.
 from __future__ import annotations
 
 import ast
-import copy
 import json
 from pathlib import Path
 import sys

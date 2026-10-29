@@ -5,7 +5,6 @@ No prueba producción ni convierte filas a CUBIERTO. Contrato: una sola ruta.
 """
 from __future__ import annotations
 
-import re
 import tempfile
 import unittest
 from pathlib import Path

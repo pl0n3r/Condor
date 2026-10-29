@@ -9,7 +9,6 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
-import re
 import socket
 import unittest
 from functools import lru_cache

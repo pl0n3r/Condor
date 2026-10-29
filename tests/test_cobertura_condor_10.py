@@ -7,7 +7,6 @@ sinteticos. B/C no son falsos pases ni alteran la matriz de cobertura.
 from __future__ import annotations
 
 import importlib.util
-import re
 import socket
 import sys
 import unittest

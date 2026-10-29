@@ -2,7 +2,6 @@
 """Condor #1321: ejecuta contratos locales reales sin atribuirles estado live."""
 from __future__ import annotations
 
-import re
 import runpy
 import tempfile
 import unittest
