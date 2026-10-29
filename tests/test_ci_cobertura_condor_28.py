@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
-import os
 import shutil
 import tempfile
 import unittest
@@ -131,13 +130,7 @@ class CoberturaCondor28BridgeTests(unittest.TestCase):
         self.assertIn("php-version: '8.5'", source)
         self.assertIn(discovery, source)
         self.assertIn(install, source)
-        dedicated = (
-            "CONDOR28_REQUIRE_REAL=1 python3 -m unittest discover -s tests "
-            "-p 'test_ci_cobertura_condor_28.py' -v"
-        )
-        self.assertIn(dedicated, source)
-        self.assertLess(source.index(discovery), source.index(install))
-        self.assertLess(source.index(install), source.index(dedicated))
+        self.assertLess(source.index(install), source.index(discovery))
         self.assertEqual(Path(__file__).name, "test_ci_cobertura_condor_28.py")
         self.assertTrue(callable(load_tests))
 
@@ -150,8 +143,7 @@ class Condor28RuntimeProof(unittest.TestCase):
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite,
                pattern: str | None) -> unittest.TestSuite:
     # The target is already merged. Absence must *fail*, never silently skip.
-    if os.environ.get("CONDOR28_REQUIRE_REAL") == "1":
-        tests.addTest(Condor28RuntimeProof("run_real_coverage_contracts"))
+    tests.addTest(Condor28RuntimeProof("run_real_coverage_contracts"))
     return tests
 
 
