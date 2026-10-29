@@ -14,7 +14,7 @@ final class MarketingControllerTest extends WebTestCase
             '/' => 'Digitaliza tu negocio',
             '/producto' => 'Ocho módulos',
             '/modulos' => 'Más allá de vender',
-            '/empezar' => 'Vende, controla',
+            '/empezar' => 'Empieza vendiendo',
             '/soluciones' => 'Hay un Condor para cada negocio',
             '/seguridad' => 'Tu información, aparte',
         ];

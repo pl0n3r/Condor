@@ -111,6 +111,21 @@ class LandingEmpezarTests(unittest.TestCase):
         self.assertIn("path('app_marketing_modulos')", text(PARTIALS["red"]))
         self.assertNotIn("Con registro", modules)
 
+    def test_php_page_tests_expect_the_real_h1_of_every_public_template(self) -> None:
+        # PHPUnit no corre en todos los equipos y el CI es el único que lo ejecuta: este cruce evita descubrirlo tarde.
+        pages = {"/": HOME}
+        for slug in ("producto", "modulos", "empezar", "soluciones", "seguridad"):
+            pages[f"/{slug}"] = ROOT / "templates" / "marketing" / f"{slug}.html.twig"
+        for php_test in ("MarketingControllerTest.php", "PublicSiteNoTrackingTest.php"):
+            source = text(ROOT / "tests" / "php" / "Http" / php_test)
+            expected = dict(re.findall(r"'(/[a-z]*)' => '([^']+)',", source))
+            self.assertEqual(set(expected), set(pages), php_test)
+            for path, heading in expected.items():
+                h1 = re.search(r"<h1[^>]*>(.*?)</h1>", text(pages[path]), flags=re.DOTALL).group(1)
+                plain = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", h1)).strip()
+                with self.subTest(test=php_test, path=path):
+                    self.assertIn(heading, plain)
+
     def test_landing_has_one_h1_no_eyebrow_and_the_motion_partials(self) -> None:
         html = text(PAGE)
         self.assertEqual(html.count("<h1"), 1)
