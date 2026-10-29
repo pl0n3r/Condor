@@ -141,8 +141,16 @@ class CoberturaCondor13Tests(unittest.TestCase):
         self.assertEqual([], forbidden_risk["risks"])
         self.assertEqual("REQUIERE_REVISION",
                          RISK["project"](RISK["payload"](approved=True))["state"])
+        # GEST-FLUJO-1: dos revisiones del mismo registro no dan permiso.
+        duplicates = REVIEW["project"](reviews=[REVIEW["review"](), REVIEW["review"]()])
+        self.assertEqual("REQUIERE_REVISION", duplicates["rows"][0]["state"])
 
         # F3: entidad legal y tenant son guardas independientes; sin PII.
+        cross_entity = SST["project"](
+            SST["profile"](), entity="fixture:legal-entity/entity-b"
+        )
+        self.assertEqual("REQUIERE_REVISION", cross_entity["state"])
+        self.assertFalse(cross_entity["structurally_reviewable"])
         for item in (
             SST["profile"](tenant_ref="fixture:tenant/tenant-b"),
             SST["profile"](legal_entity_ref="fixture:legal-entity/entity-b"),
