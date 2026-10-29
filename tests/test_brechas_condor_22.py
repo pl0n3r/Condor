@@ -172,6 +172,18 @@ def local_contracts(files: object, observation: object) -> dict[str, bool]:
             or any(type(s) is not str or not s.strip() for s in files.values())
             or type(observation) is not dict):
         return dict.fromkeys(IDS, False)
+    required = {
+        "own", "other_entity", "other_tenant", "other_list",
+        "foreign_edit_denied", "auto_approve_denied", "norm_valid",
+        "norm_missing", "norm_expired", "norm_unreviewed", "norm_foreign",
+        "csv", "csv_empty", "csv_invalid_denied",
+    }
+    if (set(observation) != required
+            or type(observation["own"]) is not dict
+            or type(observation["norm_valid"]) is not dict
+            or type(observation["norm_valid"].get("source")) is not dict
+            or any(type(observation[key]) is not str for key in ("csv", "csv_empty"))):
+        return dict.fromkeys(IDS, False)
     o = observation
     doc, hr, normative = files["gestion"], files["hr"], files["normative"]
     review = lambda x: type(x) is dict and x.get("kind") == "REQUIERE_REVISION" and x.get("source") is None
@@ -268,6 +280,16 @@ class BrechasCondor22Tests(unittest.TestCase):
                 )
         self.assertEqual(local_contracts({}, self.obs), dict.fromkeys(IDS, False))
         self.assertEqual(verdict(IDS[0], self.matrix, {}, self.obs), UNKNOWN)
+        for malformed in (
+            {}, {"own": None}, {**self.obs, "own": None},
+            {**self.obs, "norm_valid": None},
+            {**self.obs, "csv": None},
+            {**self.obs, "unexpected": True},
+        ):
+            with self.subTest(malformed=list(malformed)[:3]):
+                self.assertEqual(
+                    set(local_contracts(self.files, malformed).values()), {False},
+                )
         for key, field, corrupt in (
             ("GEST-AC-03", "other_tenant", {"evidence_ref": "fixture:evidence/local"}),
             ("GEST-AC-04", "norm_missing", {"kind": "OBLIGATORIO", "source": None}),
