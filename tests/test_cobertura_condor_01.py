@@ -45,7 +45,7 @@ class CoberturaCondor01Tests(unittest.TestCase):
         cases = (
             ("README.md", "rapido", "categoria_documentacion", False),
             (".github/labels.json", "rapido", "categoria_gobierno", False),
-            ("tests/test_ci_change_classifier.py", "selectivo", "categoria_gobierno", False),
+            ("tests/test_ci_change_classifier.py", "completo", "categoria_gobierno", True),
             ("tests/php/Http/AdminControllerTest.php", "selectivo", "categoria_backend", False),
             ("tests/e2e/admin.spec.mjs", "selectivo", "categoria_frontend", False),
             ("frontend/admin/AdminApp.tsx", "completo", "categoria_frontend", True),
