@@ -14,7 +14,10 @@ final class QuotationPreview
     private const MAX_UNIT_PRICE_CENTS = 100_000_000;
     private const MAX_TOTAL_COP = 100_000_000;
 
-    /** @param array<string,mixed> $request @return array<string,mixed> */
+    /**
+     * @param array<string,mixed> $request
+     * @return array<string,mixed>
+     */
     public static function preview(array $request): array
     {
         self::exactKeys($request, ['tenant_ref', 'legal_entity_ref', 'site_ref', 'currency', 'lines', 'mode']);
@@ -67,7 +70,10 @@ final class QuotationPreview
         ];
     }
 
-    /** @param array<string,mixed> $data @param list<string> $keys */
+    /**
+     * @param array<string,mixed> $data
+     * @param list<string> $keys
+     */
     private static function exactKeys(array $data, array $keys): void
     {
         $actual = array_keys($data);
