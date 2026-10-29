@@ -249,6 +249,11 @@ class BrechasCondor40Tests(unittest.TestCase):
         self.assertEqual(UNKNOWN, source_contract("README-05-01", {}))
         self.assertEqual(UNKNOWN, source_contract(None, data))
         self.assertIsNone(parsed_json("not valid json"))
+        for missing in FILES:
+            with self.subTest(missing_file=missing):
+                incomplete = dict(data)
+                del incomplete[missing]
+                self.assertEqual(UNKNOWN, source_contract("README-05-05", incomplete))
 
     def test_sin_datos_reales(self) -> None:
         """Only local tracked files and synthetic input; no remote effects."""
