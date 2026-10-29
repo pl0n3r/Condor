@@ -68,6 +68,31 @@ class HomeCommercialNarrativeTests(unittest.TestCase):
         self.assertNotIn("http://", home.lower())
         self.assertIn("-apple-system", css)
 
+    def test_platform_capabilities_are_listed_with_their_real_state(self) -> None:
+        home = self.source(HOME)
+        block = home.split('id="plataforma"', 1)[1].split('id="estado"', 1)[0]
+        for capability in (
+            "Tus propios flujos", "El sitio de tu empresa, por bloques",
+            "Que te encuentren en internet", "Lista para una app móvil",
+        ):
+            with self.subTest(capability=capability):
+                self.assertIn(capability, block)
+        # Nada de esta sección está terminado: ninguna capacidad puede llevar la marca de «Disponible».
+        self.assertNotIn("mk-chip-ok", block)
+        self.assertEqual(block.count("En construcción"), 3)
+        self.assertEqual(block.count("Próximamente"), 1)
+        self.assertGreaterEqual(block.count("aria-labelledby="), 1)
+
+    def test_polish_respects_reduced_motion_and_progressive_enhancement(self) -> None:
+        css = self.source(CSS)
+        self.assertRegex(
+            css,
+            r"@supports \(animation-timeline: view\(\)\)\s*\{\s*@media \(prefers-reduced-motion: no-preference\)",
+        )
+        self.assertIn("scroll-margin-top", css)
+        self.assertIn("font-variant-numeric: tabular-nums", css)
+        self.assertNotIn("transition: all", css)
+
     def test_claims_are_bounded(self) -> None:
         home = self.source(HOME)
         for forbidden in (

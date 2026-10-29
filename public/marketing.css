@@ -115,6 +115,7 @@ body:has(.mk-site) { background: #f5f6f8; }
 .mk-need h3 { font-size: 24px; }
 .mk-need p { color: var(--mk-ink-2); font-size: 16px; }
 .mk-need .mk-chip { align-self: flex-start; margin-top: auto; }
+.mk-needs-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 /* simple por defecto */
 .mk-simple { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; counter-reset: on; position: relative; }
@@ -399,6 +400,23 @@ body:has(.mk-site) { background: #f5f6f8; }
   .mk-demo .mk-cta-row .mk-btn { width: 100%; }
 }
 @media (max-width: 480px) { .mk-actions .mk-btn { display: none; } }
+/* Pulido: detalles que se sienten sin pedir atención. Todo es CSS, sin JavaScript. */
+.mk-site p { text-wrap: pretty; }
+.mk-section, .mk-demo { scroll-margin-top: 84px; }
+.mk-prod span, .mk-cnt, .mk-need .mk-say { font-variant-numeric: tabular-nums; }
+.mk-btn { transition-property: transform, background-color, color; }
+.mk-btn:active { transform: scale(.97); }
+.mk-need, .mk-col, .mk-co { transition: background-color .2s ease; }
+@media (hover: hover) {
+  .mk-need:hover, .mk-co:hover { background: color-mix(in srgb, var(--mk-soft) 55%, transparent); }
+}
+/* Entrada suave al hacer scroll: solo donde el navegador la soporta y la persona no pidió menos movimiento. */
+@keyframes mk-rise { from { opacity: 0; transform: translateY(14px); } }
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .mk-need, .mk-col, .mk-co { animation: mk-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 40%; }
+  }
+}
 @media (prefers-reduced-motion: reduce) { .mk-site, .mk-site * { transition: none !important; scroll-behavior: auto !important; } }
 @media print { .mk-bar { position: static; } .mk-tp { display: block !important; } }
 
