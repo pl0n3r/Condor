@@ -217,6 +217,8 @@ class CoberturaCondor16Tests(unittest.TestCase):
         choice = classify(["tests/test_cobertura_condor_16.py"], "pull_request")
         self.assertTrue(choice.pruebas_base)
         self.assertIn(choice.modo, {"selectivo", "completo"})
+        unknown = classify(["ruta-no-prevista.xyz"], "pull_request")
+        self.assertTrue(unknown.validacion_completa)
 
 
 if __name__ == "__main__":
