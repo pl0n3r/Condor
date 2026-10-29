@@ -254,6 +254,19 @@ class CoberturaCondor10Tests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("name: Validar", workflow)
         self.assertIn("pull_request", workflow)
+        self.assertIn(
+            "python3 -m unittest discover -s tests -p 'test_ci_*.py'",
+            workflow,
+        )
+        # #1374 is a separately reserved prerequisite: without its bridge,
+        # CI may pass while never running the four acceptance methods.
+        bridge = ROOT / "tests/test_ci_cobertura_condor_10.py"
+        self.assertTrue(bridge.is_file() and not bridge.is_symlink(),
+                        "UNKNOWN: CI bridge #1374 not merged")
+        bridge_source = bridge.read_text(encoding="utf-8")
+        self.assertIn("def load_tests(", bridge_source)
+        self.assertIn("CoberturaCondor10RuntimeTests", bridge_source)
+        self.assertIn("_execute_target(TARGET)", bridge_source)
 
 
 if __name__ == "__main__":
