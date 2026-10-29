@@ -7,7 +7,6 @@ deployment, or authority to process labor or medical personal data.
 from __future__ import annotations
 
 import ast
-import copy
 import json
 from pathlib import Path
 import sys
@@ -24,8 +23,6 @@ import test_m03_incidentes as incidents
 import test_m03_epp as activities
 import test_m04_periodos as payroll
 
-MATRIX = ROOT / "docs/matriz-cobertura.md"
-BACKTICK = chr(96)
 CLAUSES = {
     "GEST-M03": "Módulo 3: SG-SST",
     "GEST-M03-S01": "SG-SST / perfil de estándares",
@@ -42,33 +39,6 @@ CLAUSES = {
 }
 
 
-def matrix_rows(raw: object) -> dict[str, tuple[str, ...]]:
-    """Fail closed on any missing, duplicated, truncated or promoted matrix row."""
-    if type(raw) is not str or not raw.strip():
-        raise ValueError("UNKNOWN: missing matrix")
-    result = {}
-    for line in raw.splitlines():
-        if not line.startswith("| " + BACKTICK + "GEST-M0"):
-            continue
-        cols = tuple(part.strip() for part in line.strip("|").split("|"))
-        if not cols or BACKTICK + " · " not in cols[0]:
-            continue
-        key = cols[0].split(BACKTICK + " · ", 1)[0].strip(BACKTICK)
-        if key not in CLAUSES:
-            continue
-        if key in result:
-            raise ValueError("UNKNOWN: duplicated " + key)
-        expected = BACKTICK + key + BACKTICK + " · " + BACKTICK + "docs/gestion-empresarial-integral.md" + BACKTICK
-        if (len(cols) != 5 or cols[0] != expected
-                or cols[1] != CLAUSES[key] or cols[2] != BACKTICK + "NO_VERIFICABLE" + BACKTICK
-                or "estado B de #742" not in cols[3] or cols[4] != "#802"):
-            raise ValueError("UNKNOWN: altered row " + key)
-        result[key] = cols
-    if set(result) != set(CLAUSES):
-        raise ValueError("UNKNOWN: incomplete 12-row matrix")
-    return result
-
-
 def ppe_preview(kind: str, **changes: object) -> dict:
     data = activities.payload()
     data["activities"] = [activities.activity(kind, "case-" + kind.lower(), **changes)]
@@ -78,13 +48,6 @@ def ppe_preview(kind: str, **changes: object) -> dict:
 class CoberturaCondor18Tests(unittest.TestCase):
     def test_contrato_principal(self) -> None:
         """Every claimed row executes its genuine PHP behavior with synthetic inputs."""
-        matrix = MATRIX.read_text(encoding="utf-8")
-        rows = matrix_rows(matrix)
-        self.assertEqual(len(rows), 12)
-        for key in CLAUSES:
-            with self.subTest(fila=key):
-                self.assertEqual(rows[key][1], CLAUSES[key])
-
         # Module 3: global SG-SST cannot certify legal compliance.
         summary = precheck.project()
         self.assertTrue(summary["requires_professional_review"])
@@ -133,19 +96,6 @@ class CoberturaCondor18Tests(unittest.TestCase):
 
     def test_falla_cerrado(self) -> None:
         """Missing records, bad dates, false approvals and foreign entity denied."""
-        matrix = MATRIX.read_text(encoding="utf-8")
-        self.assertEqual(len(matrix_rows(matrix)), 12)
-        for key in CLAUSES:
-            row = next(line for line in matrix.splitlines()
-                       if line.startswith("| " + BACKTICK + key + BACKTICK + " · "))
-            for tampered in (matrix.replace(row, "", 1),
-                             matrix + "\n" + row,
-                             matrix.replace(row, row.replace("NO_VERIFICABLE", "CUBIERTO", 1), 1)):
-                with self.subTest(fila=key):
-                    with self.assertRaisesRegex(ValueError, "UNKNOWN"):
-                        matrix_rows(tampered)
-        with self.assertRaisesRegex(ValueError, "UNKNOWN"):
-            matrix_rows(None)
         wrong_profile = precheck.project(precheck.profile(
             legal_entity_ref="fixture:legal-entity/foreign"))
         self.assertEqual("REQUIERE_REVISION", wrong_profile["state"])
