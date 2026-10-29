@@ -156,6 +156,18 @@ class BrechasCondor33Tests(unittest.TestCase):
         case = BRECHAS[0]
         missing = {k: v for k, v in self.rows.items() if k != case.identifier}
         self.assertEqual(UNKNOWN, local_evidence(case, missing, self.spec, self.sources))
+        for item in BRECHAS:
+            with self.subTest(missing_row=item.identifier):
+                without_row = {key: row for key, row in self.rows.items()
+                               if key != item.identifier}
+                self.assertEqual(UNKNOWN, local_evidence(
+                    item, without_row, self.spec, self.sources))
+            for required_path, _tokens in item.sources:
+                with self.subTest(missing_source=item.identifier, path=required_path):
+                    without_source = {key: value for key, value in self.sources.items()
+                                      if key != required_path}
+                    self.assertEqual(UNKNOWN, local_evidence(
+                        item, self.rows, self.spec, without_source))
         self.assertEqual(UNKNOWN, local_evidence(case, self.rows, "", self.sources))
         self.assertEqual(UNKNOWN, local_evidence(case, self.rows, self.spec, {}))
         path, tokens = case.sources[0]
