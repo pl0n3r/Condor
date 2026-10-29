@@ -18,7 +18,7 @@ from scripts.ci_self_audit import audit_workflow
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# IDs de la matriz auditada en main@27f47e2985ecfb9cabdda15c613ca4da3ba0ce7b.
+# IDs de la matriz auditada en main@66bc88d29c71738b97c11f0f8d5caed50c383f60.
 # A = contrato reproducible offline; B = requiere mundo real o integración
 # integral; C = política de gobierno, sin función productiva autónoma.
 PROBABLE_OFFLINE = frozenset({"AGENTES-05-02", "AGENTES-05-03"})
