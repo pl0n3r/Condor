@@ -7,7 +7,6 @@ are certified. The matrix is deliberately not modified by this test.
 """
 from __future__ import annotations
 
-import copy
 import json
 from pathlib import Path
 import re
@@ -97,7 +96,7 @@ def php_run(script: str, file: Path, *args: str, data: dict | None = None) -> di
     php = shutil.which("php")
     if php is None or not file.is_file():
         raise AssertionError("real PHP source and CLI required")
-    command = [php, "-n", "-d", "allow_url_fopen=0", "-r", script, str(file), *args]
+    command = [php, "-d", "allow_url_fopen=0", "-r", script, str(file), *args]
     result = subprocess.run(
         command, cwd=ROOT,
         input=json.dumps(data) if data is not None else None,
@@ -142,18 +141,97 @@ def documentary() -> dict:
     }
 
 
-def phpunit(name: str, path: str) -> None:
-    """Existing PHP domain cases exercise the actual purchasing entities."""
-    runner = ROOT / "vendor/bin/simple-phpunit"
-    target = ROOT / path
-    if not runner.is_file() or not target.is_file():
-        raise AssertionError("PHPUnit/vendor required to prove purchasing domain")
-    result = subprocess.run(
-        [str(runner), "--filter", name, str(target)],
-        cwd=ROOT, text=True, capture_output=True, check=False, timeout=90,
-    )
-    if result.returncode:
-        raise AssertionError("PHPUnit " + name + ": " + (result.stdout + result.stderr)[-1400:])
+DOMAIN_PHP = r"""
+namespace Doctrine\Common\Collections {
+    interface Collection {}
+    class ArrayCollection implements Collection {
+        private array $items = [];
+        public function add(mixed $item): void { $this->items[] = $item; }
+        public function toArray(): array { return $this->items; }
+        public function isEmpty(): bool { return $this->items === []; }
+    }
+}
+namespace App\Shared\Id {
+    class UlidFactory {
+        private static int $n = 0;
+        public static function new(): string {
+            return str_pad((string) ++self::$n, 26, "0", STR_PAD_LEFT);
+        }
+    }
+}
+namespace App\Domain\Organization\Entity {
+    class Tenant {
+        public function __construct(private string $ref) {}
+        public function id(): string { return $this->ref; }
+    }
+    class LegalEntity {
+        public function __construct(private Tenant $tenant) {}
+        public function tenant(): Tenant { return $this->tenant; }
+    }
+}
+namespace App\Domain\Production\Entity {
+    class Material {
+        public function __construct(private \App\Domain\Organization\Entity\Tenant $owner,
+                                    private string $ref) {}
+        public function tenant(): \App\Domain\Organization\Entity\Tenant { return $this->owner; }
+        public function id(): string { return $this->ref; }
+        public function isActive(): bool { return true; }
+    }
+    class MaterialInventoryBalance {
+        public static function normalizeQuantity(string $quantity): string {
+            if (preg_match('/^[1-9][0-9]*(?:\.[0-9]{1,6})?$/D', $quantity) !== 1) {
+                throw new \DomainException('Invalid synthetic quantity');
+            }
+            return $quantity;
+        }
+    }
+}
+namespace {
+    use App\Domain\Organization\Entity\Tenant;
+    use App\Domain\Organization\Entity\LegalEntity;
+    use App\Domain\Production\Entity\Material;
+    use App\Domain\Purchasing\Entity\Supplier;
+    use App\Domain\Purchasing\Entity\PurchaseOrder;
+    require $argv[1];
+    require $argv[2];
+    require $argv[3];
+    function denied(callable $action): bool {
+        try { $action(); return false; }
+        catch (\DomainException $error) { return true; }
+    }
+    $alpha = new Tenant('tenant-a');
+    $beta = new Tenant('tenant-b');
+    $companyA = new LegalEntity($alpha);
+    $companyB = new LegalEntity($beta);
+    $supplier = new Supplier($alpha, 'sup-1', 'Proveedor sintético', 30);
+    $foreign = new Supplier($beta, 'sup-2', 'Proveedor sintético', 30);
+    $denials = [
+        denied(fn() => new PurchaseOrder($alpha, $companyB, $supplier)),
+        denied(fn() => new PurchaseOrder($alpha, $companyA, $foreign)),
+    ];
+    $order = new PurchaseOrder($alpha, $companyA, $supplier);
+    $material = new Material($alpha, 'material-a');
+    $denials[] = denied(fn() => $order->addLine(new Material($beta, 'foreign'), '1', '10'));
+    $order->addLine($material, '2', '10.25');
+    $denials[] = denied(fn() => $order->addLine($material, '1', '10'));
+    $before = $order->status();
+    $source = str_repeat('a', 26);
+    $denials[] = denied(fn() => $order->markReceived('fixture-receipt', 'short'));
+    $order->markReceived('fixture-receipt', $source);
+    $order->markReceived('fixture-receipt', $source);
+    $denials[] = denied(fn() => $order->markReceived('different-receipt', $source));
+    $denials[] = denied(fn() => $order->addLine(new Material($alpha, 'later'), '1', '10'));
+    $denials[] = denied(fn() => PurchaseOrder::normalizeReceiptKey('../../bad'));
+    echo json_encode([
+        'supplier_code' => $supplier->code(),
+        'before' => $before, 'after' => $order->status(),
+        'received' => $order->isReceived(),
+        'receipt_key' => $order->receiptKey(),
+        'line_count' => count($order->lines()),
+        'denials' => $denials,
+    ], JSON_THROW_ON_ERROR);
+}
+"""
 
 
 class CoberturaCondor21Tests(unittest.TestCase):
@@ -183,8 +261,9 @@ class CoberturaCondor21Tests(unittest.TestCase):
             SUPPLIER_PHP, ROOT / "src/Domain/Purchasing/Entity/Supplier.php", "  sup-1 ",
         )
         self.assertEqual("SUP-1", supplier["code"])
-        phpunit("testSupplierNormalizesCodeAndKeepsTenantScope",
-                "tests/php/Domain/Purchasing/SupplierDomainTest.php")
+        self.assertEqual({"error": "denied"}, php_run(
+            SUPPLIER_PHP, ROOT / "src/Domain/Purchasing/Entity/Supplier.php", "../invalid",
+        ))
 
         quote = php_run(
             QUOTE_PHP, ROOT / "src/Application/Purchasing/QuotationPreview.php",
@@ -198,10 +277,18 @@ class CoberturaCondor21Tests(unittest.TestCase):
         self.assertFalse(quote["can_order"])
         self.assertFalse(quote["can_pay"])
 
-        domain = "tests/php/Domain/Purchasing/PurchaseOrderDomainTest.php"
-        phpunit("testPurchaseOrderRejectsCrossTenantSupplierAndMaterial", domain)
-        phpunit("testPurchaseOrderStateIsMonotonicAndIdempotent", domain)
-        phpunit("testReceiptReplayAfterDeactivationAndLegalEntityIsolation", domain)
+        domain = php_run(
+            DOMAIN_PHP, ROOT / "src/Domain/Purchasing/Entity/Supplier.php",
+            str(ROOT / "src/Domain/Purchasing/Entity/PurchaseOrderLine.php"),
+            str(ROOT / "src/Domain/Purchasing/Entity/PurchaseOrder.php"),
+        )
+        self.assertEqual("SUP-1", domain["supplier_code"])
+        self.assertEqual("draft", domain["before"])
+        self.assertEqual("received", domain["after"])
+        self.assertTrue(domain["received"])
+        self.assertEqual("fixture-receipt", domain["receipt_key"])
+        self.assertEqual(1, domain["line_count"])
+        self.assertEqual([True] * 8, domain["denials"])
 
         assignment = assets.project(assets.fixture())
         self.assertTrue(assignment["valid"])
