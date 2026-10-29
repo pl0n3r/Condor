@@ -159,9 +159,9 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         result = self.pr_guard(root, "feat: parallel (V 0.1.77)", head, later_main)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertEqual(before_tags, git(root, "show-ref", "--tags"))
-        # Same PR with an incorrect fetched main identity is still denied.
-        wrong = self.pr_guard(root, "feat: parallel (V 0.1.77)", head, tagged_base)
-        self.assertNotEqual(0, wrong.returncode)
+        # Event BASE may be a genuine ancestor when authenticated main advanced.
+        old_event = self.pr_guard(root, "feat: parallel (V 0.1.77)", head, tagged_base)
+        self.assertEqual(0, old_event.returncode, old_event.stdout + old_event.stderr)
         # Version-bump PRs must not reuse stale main without reconciliation.
         git(root, "checkout", "--detach", head)
         self.write(root, "0.1.78")
@@ -170,6 +170,47 @@ class ReleaseIdentityGuardTests(unittest.TestCase):
         bumped = git(root, "rev-parse", "HEAD")
         rejected = self.pr_guard(root, "feat: bump (V 0.1.78)", bumped, later_main)
         self.assertNotEqual(0, rejected.returncode)
+
+    def test_pr_context_accepts_event_base_after_main_advances(self):
+        """An authenticated old event base remains safe after a code-only merge."""
+        root, head = self.repo("0.1.77", "0.1.77")
+        base = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "checkout", "-B", "main", base)
+        (root / "unrelated-main-change").write_text("independent", encoding="utf-8")
+        git(root, "add", ".")
+        git(root, "commit", "-m", "independent code-only main merge")
+        advanced = git(root, "rev-parse", "HEAD")
+        git(root, "update-ref", "refs/remotes/origin/main", advanced)
+        tag_before = git(root, "show-ref", "--tags")
+        result = self.pr_guard(root, "test: authentic old event (V 0.1.77)", head, base)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(tag_before, git(root, "show-ref", "--tags"))
+
+    def test_pr_context_rejects_advanced_main_version_drift(self):
+        """Do not reinterpret an outdated event base when main changed version."""
+        root, head = self.repo("0.1.77", "0.1.77")
+        base = git(root, "rev-parse", "v0.1.77^{commit}")
+        git(root, "checkout", "-B", "main", base)
+        self.write(root, "0.1.78")
+        git(root, "add", "config/version.php")
+        git(root, "commit", "-m", "independent main release")
+        later = git(root, "rev-parse", "HEAD")
+        git(root, "update-ref", "refs/remotes/origin/main", later)
+        rejected = self.pr_guard(root, "test: stale event (V 0.1.77)", head, base)
+        self.assertNotEqual(0, rejected.returncode)
+        self.assertIn("PR base is not fetched origin/main", rejected.stdout)
+
+        bump_root, bump_head = self.repo("0.1.77", "0.1.78")
+        original = git(bump_root, "rev-parse", "v0.1.77^{commit}")
+        git(bump_root, "checkout", "-B", "main", original)
+        (bump_root / "independent").write_text("safe code", encoding="utf-8")
+        git(bump_root, "add", ".")
+        git(bump_root, "commit", "-m", "main without version bump")
+        advanced = git(bump_root, "rev-parse", "HEAD")
+        git(bump_root, "update-ref", "refs/remotes/origin/main", advanced)
+        rejected_bump = self.pr_guard(bump_root, "feat: bump (V 0.1.78)", bump_head, original)
+        self.assertNotEqual(0, rejected_bump.returncode)
+        self.assertIn("PR base is not fetched origin/main", rejected_bump.stdout)
 
     def test_pr_context_same_version_source_edit_cannot_trigger_release(self):
         root, code_only = self.repo("0.1.77", "0.1.77")
