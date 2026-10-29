@@ -96,6 +96,8 @@ def fixture_review(data):
         "PENDIENTE", "EN_REVISION", "CUMPLE", "INCUMPLE", "NO_APLICA"
     ):
         return UNKNOWN
+    if any(not isinstance(data.get(p), str) or not data[p] for p in ("actor", "reviewer")):
+        return UNKNOWN
     if (data.get("actor") == data.get("reviewer")
             or data.get("reviewer_permitted") is not True
             or data.get("same_tenant") is not True
@@ -147,6 +149,7 @@ class BrechasCondor24Tests(unittest.TestCase):
         self.assertEqual(UNKNOWN, fixture_authority({}))
         self.assertEqual("DENY", fixture_review({"status": "CUMPLE",
                         "actor": "same", "reviewer": "same"}))
+        self.assertEqual(UNKNOWN, fixture_review({"status": "CUMPLE", "reviewer": "synthetic-only"}))
         self.assertEqual(UNKNOWN, fixture_review({"status": "GO"}))
 
     def test_sin_datos_reales(self):
