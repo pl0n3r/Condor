@@ -144,10 +144,18 @@ class CoberturaCondor10Tests(unittest.TestCase):
         self.assertEqual(releases.reduce_pending_releases(
             [event("pending"), event("validated")]), [])
 
-        # D-044-S09: script real post-deploy, fake backup/DB/hosting.
-        self.assertEqual(1, run_real_test(
-            "tests/test_post_deploy.py", "PostDeployStageTest",
-            "test_construction_reconciles_pending_schema_before_cache"))
+        # D-044-S09: prueba de shell real con fake backup/DB/hosting.
+        # No se importa el assert de substring de migrate del test legacy:
+        # un comando dry-run puede compartir prefijo con migrate real, y
+        # str.index devuelve un falso orden. Estas pruebas inspeccionan
+        # las fases efectivas en un sandbox descartable.
+        for method in (
+            "test_construction_seeds_catalog_after_schema_before_cache",
+            "test_construction_resolves_database_url_from_dotenv_for_backup",
+        ):
+            with self.subTest(method=method):
+                self.assertEqual(1, run_real_test(
+                    "tests/test_post_deploy.py", "PostDeployStageTest", method))
 
         # D-045/S01: notificador real, dos tenants, cola fake y dedupe.
         self.assertEqual(1, run_real_test(
