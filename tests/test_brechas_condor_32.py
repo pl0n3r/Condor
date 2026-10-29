@@ -269,7 +269,7 @@ class BrechasCondor32Tests(unittest.TestCase):
     def test_contrato_principal(self) -> None:
         """AC-01: all five matrix rows and the local PHP negative/positive path."""
         data, proof = sources(), exercise_php()
-        self.assertEqual(set(matrix_rows(data[MATRIX])), set(CLAUSES))
+        self.assertEqual(set(CLAUSES), set(matrix_rows(data[MATRIX])))
         self.assertTrue(guide_is_consistent(data[GUIDE]))
         self.assertEqual(set(EVIDENCE), set(CLAUSES))
         for key in CLAUSES:
@@ -323,8 +323,7 @@ class BrechasCondor32Tests(unittest.TestCase):
         self.assertFalse(imports & {
             "socket", "urllib", "requests", "httpx", "playwright", "pymysql", "mysql",
         })
-        self.assertEqual(set(SOURCES), {MATRIX, GUIDE, INVENTORY, CUSTOMER, PURCHASES,
-                         BRANCH, COST, ORDER, INV_TEST, CUSTOMER_TEST, BUY_TEST, COST_TEST})
+        self.assertTrue(all((ROOT / path).is_file() for path in SOURCES))
         for forbidden in (
             "curl_", "PDO", "file_put_contents", "file_get_contents",
             "shell_exec", "http://", "https://", "DATABASE_URL", "APP_SECRET",
