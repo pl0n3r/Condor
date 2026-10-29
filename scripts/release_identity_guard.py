@@ -78,8 +78,7 @@ def _verified_pr_version(root, sha, base_sha, candidate, version, tags, names):
         raise GuardError("release_identity_guard: untrusted base commit.")
     if git(root, "cat-file", "-t", f"{sha}^{{commit}}") != "commit":
         raise GuardError("release_identity_guard: untrusted PR head commit.")
-    if git(root, "rev-parse", "refs/remotes/origin/main") != base_sha:
-        raise GuardError("release_identity_guard: PR base is not fetched origin/main.")
+    authenticated_main = git(root, "rev-parse", "refs/remotes/origin/main")
     # An unchanged-version PR may be older than main but still merge cleanly.
     # A new release identity, by contrast, must start from current main.
     main_is_parent = git(root, "merge-base", base_sha, sha) == base_sha
@@ -87,6 +86,14 @@ def _verified_pr_version(root, sha, base_sha, candidate, version, tags, names):
     if len(original) != 1:
         raise GuardError("release_identity_guard: invalid trusted base version.")
     base_version = original[0]
+    # GitHub may advance main while a queued PR workflow keeps its authentic event BASE.
+    # Only a code-only (unchanged-version) PR can tolerate that monotonic advance.
+    if authenticated_main != base_sha:
+        if (version != base_version
+                or git(root, "merge-base", base_sha, authenticated_main) != base_sha
+                or git(root, "diff", "--name-only", base_sha, authenticated_main,
+                       "--", "config/version.php")):
+            raise GuardError("release_identity_guard: PR base is not fetched origin/main.")
     if sv(version) < sv(base_version):
         raise GuardError("release_identity_guard: PR version regresses main.")
     if version != base_version:
