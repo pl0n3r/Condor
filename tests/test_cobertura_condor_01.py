@@ -18,7 +18,7 @@ from scripts.ci_self_audit import audit_workflow
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# IDs de la matriz auditada en main@db876b6241adbc39103606e137f4ecc2eb4d38c3.
+# IDs de la matriz auditada en main@27f47e2985ecfb9cabdda15c613ca4da3ba0ce7b.
 # A = contrato reproducible offline; B = requiere mundo real o integración
 # integral; C = política de gobierno, sin función productiva autónoma.
 PROBABLE_OFFLINE = frozenset({"AGENTES-05-02", "AGENTES-05-03"})
@@ -37,7 +37,7 @@ FUERA_DE_ALCANCE_OFFLINE = {
 
 
 class CoberturaCondor01Tests(unittest.TestCase):
-    """AC-01..03: comportamientos de código real con entradas sintéticas."""
+    """AC-01..04: comportamientos de código real con entradas sintéticas."""
 
     def test_contrato_principal(self) -> None:
         """AGENTES-05-02: matriz de categorías reales; 05-03: validador real."""
