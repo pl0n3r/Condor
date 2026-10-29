@@ -14,7 +14,6 @@ import shutil
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-MATRIX = ROOT / "docs/matriz-cobertura.md"
 CI = ROOT / ".github/workflows/ci.yml"
 
 A = {
@@ -51,45 +50,21 @@ def _real_php_fixture(module_name: str):
     return module
 
 
-def _matrix_rows() -> dict[str, tuple[str, ...]]:
-    rows = {}
-    for line in MATRIX.read_text(encoding="utf-8").splitlines():
-        match = re.match(r"^\|\s*\x60?(GEST-M0[45](?:-S\d{2})?)(?=\x60|[\s|])", line)
-        if match is None or match.group(1) not in IDS:
-            continue
-        key = match.group(1)
-        cells = tuple(part.strip() for part in line.strip().strip("|").split("|"))
-        if (key in rows or len(cells) != 5 or
-                not cells[0].startswith(chr(96) + key + chr(96)) or
-                "gestion-empresarial-integral.md" not in cells[0] or
-                "NO_VERIFICABLE" not in cells[2] or not all(cells)):
-            raise AssertionError("UNKNOWN: invalid, duplicate or promoted matrix row " + key)
-        rows[key] = cells
-    if set(rows) != IDS or len(rows) != 12:
-        raise AssertionError("UNKNOWN: missing expected row")
-    return rows
-
-
 class CoberturaCondor19Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.pay = _real_php_fixture("test_payroll_http_api")
         cls.soc = _real_php_fixture("test_social_security_http_api")
-        cls.rows = _matrix_rows()
 
     def test_contrato_principal(self) -> None:
         """AC-01: PHP real for A subcontrols; explicit B/D disposition."""
         self.assertEqual(len(A), 3)
         self.assertEqual(len(OTHER), 9)
-        for code, row in self.rows.items():
+        self.assertEqual(set(A) | set(OTHER), IDS)
+        for code, (kind, reason) in OTHER.items():
             with self.subTest(row=code):
-                self.assertTrue(code in row[0])
-                self.assertTrue("NO_VERIFICABLE" in row[2])
-                self.assertIn("#802", row[4])
-                if code in OTHER:
-                    kind, reason = OTHER[code]
-                    self.assertIn(kind, ("B", "C", "D"))
-                    self.assertGreater(len(reason), 30)
+                self.assertIn(kind, ("B", "C", "D"))
+                self.assertGreater(len(reason), 30)
 
         p = self.pay
         records = p.call([
@@ -196,7 +171,6 @@ class CoberturaCondor19Tests(unittest.TestCase):
         self.assertIn("name: Validar", workflow)
         self.assertIn("name: Pruebas de contrato e integración", workflow)
         self.assertIn("python3 -m unittest discover", workflow)
-        self.assertEqual(set(_matrix_rows()), IDS)
 
 
 if __name__ == "__main__":

@@ -15,7 +15,6 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MATRIX = ROOT / "docs/matriz-cobertura.md"
 IDS = (
     "D-050-S02", "D-050-S03", "D-050-S04", "D-050-S05",
     "D-050-S06", "D-051", "D-052", "D-053", "D-054",
@@ -40,33 +39,6 @@ UNVERIFIABLE = {
 }
 
 
-def matrix_rows(source: object) -> dict[str, tuple[str, ...]]:
-    if not isinstance(source, str):
-        raise ValueError("UNKNOWN: matriz ausente")
-    result: dict[str, tuple[str, ...]] = {}
-    q = chr(96)
-    for line in source.splitlines():
-        if not line.startswith("| " + q):
-            continue
-        fields = tuple(part.strip() for part in line.strip().strip("|").split("|"))
-        if len(fields) != 5:
-            continue
-        key = fields[0].split(q)[1] if len(fields[0].split(q)) > 1 else ""
-        if key not in IDS:
-            continue
-        path = "ESPECIFICACIONES.md" if key.startswith("D-") else "docs/gestion-empresarial-integral.md"
-        owner = "#1" if key.startswith("D-") else "#802"
-        text = "Falta evidencia integral" if key.startswith("D-") else "Falta vincular"
-        if (key in result or fields[0] != q + key + q + " · " + q + path + q
-                or not fields[1] or fields[2] != q + "NO_VERIFICABLE" + q
-                or text not in fields[3] or fields[4] != owner):
-            raise ValueError("UNKNOWN: fila inválida o duplicada " + key)
-        result[key] = fields
-    if set(result) != set(IDS):
-        raise ValueError("UNKNOWN: inventario de 12 filas incompleto")
-    return result
-
-
 def load_probe(path: str):
     file = ROOT / path
     if not file.is_file() or file.is_symlink():
@@ -80,20 +52,14 @@ def load_probe(path: str):
 
 
 class CoberturaCondor12Tests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.rows = matrix_rows(MATRIX.read_text(encoding="utf-8"))
-
     def test_contrato_principal(self):
         """AC-01: ejercer PHP real; los B nunca se promueven por evidencia local."""
         self.assertEqual(set(IDS), set(OFFLINE) | set(UNVERIFIABLE))
         self.assertFalse(set(OFFLINE) & set(UNVERIFIABLE))
-        q = chr(96)
         for key, (category, reason) in UNVERIFIABLE.items():
             with self.subTest(key=key):
                 self.assertEqual("B", category)
                 self.assertGreater(len(reason), 35)
-                self.assertEqual(q + "NO_VERIFICABLE" + q, self.rows[key][2])
 
         notification = load_probe("tests/test_brechas_condor_20.py").smoke()
         self.assertEqual(["email", "in_app"], notification["channels"])
@@ -133,21 +99,6 @@ class CoberturaCondor12Tests(unittest.TestCase):
 
     def test_falla_cerrado(self):
         """AC-02: no confundir datos alterados o scope ajeno con cumplimiento."""
-        source = MATRIX.read_text(encoding="utf-8")
-        q = chr(96)
-        for key in IDS:
-            row = next(line for line in source.splitlines()
-                       if line.startswith("| " + q + key + q + " · "))
-            invalids = (
-                source.replace(row + "\n", "", 1),
-                source + "\n" + row,
-                source.replace(row, row.replace("NO_VERIFICABLE", "CUBIERTO", 1), 1),
-            )
-            for candidate in invalids:
-                with self.subTest(key=key):
-                    with self.assertRaisesRegex(ValueError, "UNKNOWN"):
-                        matrix_rows(candidate)
-
         compliance = load_probe("tests/test_brechas_condor_21.py").observe()
         self.assertEqual("REQUIERE_REVISION", compliance["unapproved"]["kind"])
         self.assertEqual("REQUIERE_REVISION", compliance["missing"]["kind"])

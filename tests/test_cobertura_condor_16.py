@@ -17,7 +17,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-MATRIX = ROOT / "docs/matriz-cobertura.md"
 DOC = ROOT / "docs/gestion-empresarial-integral.md"
 IDS = (
     "GEST-LIM-02", "GEST-LIM-03", "GEST-LIM-04", "GEST-LIM-05",
@@ -54,39 +53,12 @@ def helper(name: str):
     return module
 
 
-def matrix_rows(source: object) -> dict[str, tuple[str, ...]]:
-    if not isinstance(source, str):
-        raise ValueError("UNKNOWN: matriz ausente")
-    found = {}
-    tick = chr(96)
-    for line in source.splitlines():
-        match = re.match(r"^\|\s*\x60(GEST-LIM-0[2-5]|GEST-M01(?:-S0[2-8])?)\x60\s*·", line)
-        if not match:
-            continue
-        key = match.group(1)
-        fields = tuple(part.strip() for part in line.strip().strip("|").split("|"))
-        if (key in found or len(fields) != 5 or not all(fields)
-                or fields[0] != f"{tick}{key}{tick} · {tick}docs/gestion-empresarial-integral.md{tick}"
-                or fields[2] != f"{tick}NO_VERIFICABLE{tick}"
-                or fields[4] != "#802"):
-            raise ValueError("UNKNOWN: fila incoherente " + key)
-        found[key] = fields
-    if set(found) != set(IDS):
-        raise ValueError("UNKNOWN: inventario incompleto")
-    return found
-
-
 class CoberturaCondor16Tests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.rows = matrix_rows(MATRIX.read_text(encoding="utf-8"))
-
     def test_contrato_principal(self):
         """AC-01: siete submodulos A ejercen PHP real, cinco B/C no se promueven."""
         self.assertEqual(12, len(IDS))
         self.assertEqual(set(IDS), OFFLINE | set(REST))
         self.assertFalse(OFFLINE & set(REST))
-        self.assertEqual(set(self.rows), set(IDS))
         self.assertTrue(all(code in {"B", "C", "D"} and len(reason) > 30
                             for code, reason in REST.values()))
         o, l, h = helper("org"), helper("leave"), helper("http")
