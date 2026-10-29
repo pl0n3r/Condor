@@ -1,0 +1,71 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Condor — Empieza vendiendo, crece hasta administrar tu empresa{% endblock %}
+
+{% block head %}
+    <meta name="description" content="Empieza vendiendo con catálogo, inventario, pedidos y tienda online, y suma línea a línea tu gente, tu cumplimiento y tu dinero sobre los mismos datos. Configura tu plan y mira el precio.">
+    <link rel="canonical" href="https://www.condorapp.com.co/empezar">
+    <link rel="stylesheet" href="/marketing.css">
+    {% include 'marketing/_motion_head.html.twig' %}
+{% endblock %}
+
+{% block body %}
+<div class="mk-site">
+{% include 'marketing/_nav.html.twig' with {'current': 'empezar', 'minimal': true} %}
+<div class="mk-wrap">
+
+<section class="mk-hero mk-landing" aria-labelledby="empezar-title">
+    <div>
+        <h1 id="empezar-title">Empieza vendiendo. Crece hasta administrar <span class="mk-mark">toda</span> tu empresa.</h1>
+        <div class="mk-land-sub">
+            <p class="mk-lead">Condor parte de tu mostrador, con catálogo, inventario, pedidos y tienda, y suma línea a línea tu gente, tu cumplimiento y tu dinero, sobre los mismos datos.</p>
+            <div class="mk-cta-row">
+                <a class="mk-btn mk-btn-mark" href="{{ path('app_plan_configurator') }}">Configura tu plan <span class="mk-arrow" aria-hidden="true">→</span></a>
+                <a class="mk-btn mk-btn-ghost" href="{{ path('app_commercial_pricing') }}">Ver precios</a>
+            </div>
+        </div>
+        
+    </div>
+</section>
+
+{% include 'marketing/_red.html.twig' %}
+
+{% include 'marketing/_panel.html.twig' %}
+
+{% include 'marketing/_servidor.html.twig' %}
+
+<section class="mk-section" id="como" aria-labelledby="como-title">
+    <div class="mk-head"><h2 id="como-title">Armas tu plan en tres pasos.</h2><p>Sin esperar una llamada: el precio se recalcula siempre con el catálogo vigente.</p></div>
+    <ol class="mk-steps">
+        <li><h3>Cuéntanos cómo opera tu negocio</h3><p>Una tienda, un taller, varias sedes o un grupo de empresas: cada uno parte de una base distinta.</p></li>
+        <li><h3>Elige plan y escala</h3><p>Escoges el plan y el tamaño de tu operación. Lo que no usas queda apagado.</p></li>
+        <li><h3>Ve el precio al instante</h3><p>El configurador te muestra el valor de lo que armaste, en pesos colombianos.</p></li>
+    </ol>
+</section>
+
+<section class="mk-section mk-close" id="empezar" aria-labelledby="cierre-title">
+    <div class="mk-head"><h2 id="cierre-title">Empieza por tu empresa.</h2><p>Hoy configuras y ves el precio; el pago en línea se habilitará más adelante.</p></div>
+    <div class="mk-cta-row">
+        <a class="mk-btn mk-btn-mark" href="{{ path('app_plan_configurator') }}">Configura tu plan <span class="mk-arrow" aria-hidden="true">→</span></a>
+        <a class="mk-btn mk-btn-ghost" href="{{ path('app_commercial_pricing') }}">Ver precios</a>
+    </div>
+</section>
+
+</div>
+<footer class="mk-footer mk-wrap" aria-label="Pie del sitio">
+    <div>
+        <a class="mk-logo" href="{{ path('app_home') }}"><i aria-hidden="true"></i>Condor</a>
+        <p class="mk-foot-note">Digitaliza tu negocio, sea del tamaño que sea. Hecho en Colombia.</p>
+    </div>
+    <div class="mk-cols">
+        <div>
+            <a href="{{ path('app_marketing_producto') }}">Producto</a>
+            <a href="{{ path('app_marketing_modulos') }}">Módulos</a>
+            <a href="{{ path('app_marketing_seguridad') }}">Seguridad</a>
+        </div>
+        <div><a href="{{ path('app_login') }}">Ingresar</a></div>
+    </div>
+</footer>
+</div>
+{% include 'marketing/_motion_scripts.html.twig' %}
+{% endblock %}

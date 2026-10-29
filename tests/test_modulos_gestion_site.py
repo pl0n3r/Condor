@@ -23,10 +23,10 @@ def text(path: Path) -> str:
 def cards() -> dict[str, str]:
     html = text(PAGE)
     found = {}
-    for card in re.findall(r'<article class="mk-need">.*?</article>', html, flags=re.DOTALL):
-        name = re.search(r"<h3>(.*?)</h3>", card).group(1)
-        assert name not in found, f"Tarjeta duplicada: {name}"
-        found[name] = card
+    for row in re.findall(r'<li class="mk-cat-row">.*?</li>', html, flags=re.DOTALL):
+        name = re.search(r"<h3>(.*?)</h3>", row).group(1)
+        assert name not in found, f"Fila duplicada: {name}"
+        found[name] = row
     return found
 
 
@@ -35,6 +35,7 @@ class ModulosGestionSiteTests(unittest.TestCase):
         found = cards()
         self.assertEqual(set(found), set(MODULES))
         self.assertEqual(len(found), 16)
+        self.assertNotIn("mk-eyebrow", text(PAGE))
 
     def test_no_module_is_presented_as_available(self) -> None:
         html = text(PAGE)
@@ -57,9 +58,10 @@ class ModulosGestionSiteTests(unittest.TestCase):
         controller = text(ROOT / "src" / "Http" / "Controller" / "MarketingController.php")
         self.assertIn("Route('/modulos', name: 'app_marketing_modulos', methods: ['GET'])", controller)
         link = "path('app_marketing_modulos')"
-        for relative in ("marketing/_nav.html.twig", "marketing/_cta.html.twig", "home/index.html.twig"):
+        for relative in ("marketing/_nav.html.twig", "marketing/_cta.html.twig", "marketing/_red.html.twig"):
             with self.subTest(template=relative):
                 self.assertIn(link, text(TEMPLATES / relative))
+        self.assertIn("{% include 'marketing/_red.html.twig' %}", text(TEMPLATES / "home" / "index.html.twig"))
         self.assertIn("== 'modulos'", text(TEMPLATES / "marketing" / "_nav.html.twig"))
 
 

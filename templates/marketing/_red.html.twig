@@ -1,0 +1,56 @@
+{# Plano de red: cada módulo es una estación y su estado va en la forma. Variable: more = false oculta el enlace al detalle. #}
+<section class="mk-section mk-net-section" id="red" aria-labelledby="red-title">
+    <div class="mk-head"><h2 id="red-title">Un solo plano, todas tus líneas.</h2><p>Cada línea sale de tu empresa y de sus sedes. La que se ve llena ya funciona; las demás muestran su estado real, sin adelantarse.</p></div>
+    <ul class="mk-legend" aria-label="Cómo leer el plano">
+        <li class="mk-lg mk-lg-now">Disponible hoy</li>
+        <li class="mk-lg mk-lg-building">En construcción</li>
+        <li class="mk-lg mk-lg-soon">Próximamente</li>
+    </ul>
+    <div class="mk-net">
+        <p class="mk-base"><strong>Tu empresa</strong><span>con sus sedes y sus accesos</span></p>
+        <ul class="mk-lines">
+            <li class="mk-route mk-route-vender"><div class="mk-route-head"><h3>Vender</h3><span class="mk-route-state">Disponible hoy</span></div><div class="mk-track"><span class="mk-rail" aria-hidden="true"></span><ol class="mk-stops">
+                <li class="mk-stop is-now"><span class="mk-vh">Disponible: </span>Catálogo y precios</li>
+                <li class="mk-stop is-now"><span class="mk-vh">Disponible: </span>Inventario por sede</li>
+                <li class="mk-stop is-now"><span class="mk-vh">Disponible: </span>Pedidos y ventas</li>
+                <li class="mk-stop is-now"><span class="mk-vh">Disponible: </span>Clientes</li>
+                <li class="mk-stop is-now"><span class="mk-vh">Disponible: </span>Tienda online</li>
+                <li class="mk-stop is-now"><span class="mk-vh">Disponible: </span>Producción</li>
+            </ol></div></li>
+            <li class="mk-route mk-route-gente"><div class="mk-route-head"><h3>Gente</h3><span class="mk-route-state">En construcción</span></div><div class="mk-track"><span class="mk-rail" aria-hidden="true"></span><ol class="mk-stops">
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Talento humano</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Contratación laboral</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Nómina</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Seguridad social</li>
+            </ol></div></li>
+            <li class="mk-route mk-route-cumplir"><div class="mk-route-head"><h3>Cumplir</h3><span class="mk-route-state">En construcción</span></div><div class="mk-track"><span class="mk-rail" aria-hidden="true"></span><ol class="mk-stops">
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Seguridad y salud en el trabajo</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Cumplimiento legal</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Riesgos</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Calidad</li>
+            </ol></div></li>
+            <li class="mk-route mk-route-dinero"><div class="mk-route-head"><h3>Dinero</h3><span class="mk-route-state">En construcción</span></div><div class="mk-track"><span class="mk-rail" aria-hidden="true"></span><ol class="mk-stops">
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Compras y proveedores</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Finanzas</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Activos</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Documentos</li>
+            </ol></div></li>
+            <li class="mk-route mk-route-orden"><div class="mk-route-head"><h3>Orden</h3><span class="mk-route-state">En construcción</span></div><div class="mk-track"><span class="mk-rail" aria-hidden="true"></span><ol class="mk-stops">
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Operaciones</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Seguridad de la información</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Gobierno corporativo</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Servicio al cliente</li>
+            </ol></div></li>
+            <li class="mk-route mk-route-crecer"><div class="mk-route-head"><h3>Crecer</h3><span class="mk-route-state">En construcción y próximamente</span></div><div class="mk-track"><span class="mk-rail" aria-hidden="true"></span><ol class="mk-stops">
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Tus propios flujos</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Sitio por bloques</li>
+                <li class="mk-stop is-building"><span class="mk-vh">En construcción: </span>Que te encuentren</li>
+                <li class="mk-stop is-soon"><span class="mk-vh">Próximamente: </span>Panel con tus cifras</li>
+                <li class="mk-stop is-soon"><span class="mk-vh">Próximamente: </span>App para el celular</li>
+            </ol></div></li>
+        </ul>
+    </div>
+    {% if more|default(true) %}
+    <p class="mk-more"><a class="mk-btn mk-btn-ghost" href="{{ path('app_marketing_modulos') }}">Ver el detalle de cada módulo</a></p>
+    {% endif %}
+</section>

@@ -14,6 +14,7 @@ final class MarketingControllerTest extends WebTestCase
             '/' => 'Digitaliza tu negocio',
             '/producto' => 'Ocho módulos',
             '/modulos' => 'Más allá de vender',
+            '/empezar' => 'Empieza vendiendo',
             '/soluciones' => 'Hay un Condor para cada negocio',
             '/seguridad' => 'Tu información, aparte',
         ];
@@ -27,7 +28,8 @@ final class MarketingControllerTest extends WebTestCase
             self::assertSelectorExists('link[rel="canonical"]');
             self::assertSelectorExists('meta[name="description"]');
             self::assertSelectorExists('link[href="/marketing.css"]');
-            self::assertSelectorNotExists('script');
+            // Solo los scripts propios del movimiento (mismo dominio); ninguno en línea ni de terceros.
+            self::assertSelectorNotExists('script:not([src^="/"])');
             self::ensureKernelShutdown();
         }
     }
