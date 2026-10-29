@@ -252,6 +252,15 @@ class BrechasCondor45Tests(unittest.TestCase):
                                 {**base, "action": "delete"}):
             self.assertEqual(UNKNOWN, synthetic_request(invalid_request, records))
             self.assertEqual([], records)
+        # Malformed persisted rows cannot establish tenant isolation.
+        for invalid_records in (None, [{}],
+                                [{"tenant": "fixture-a", "slug": None}],
+                                [{"tenant": "fixture-a", "slug": "fixture-new",
+                                  "permission": "catalog.create"}]):
+            self.assertEqual(UNKNOWN, synthetic_request(base, invalid_records))
+        self.assertEqual("DENY_SYNTHETIC", synthetic_request(
+            {**base, "action": "read"}, records))
+        self.assertEqual([], records)
 
     def test_sin_datos_reales(self) -> None:
         self.assertEqual(set(FILES), set(read_sources()))
