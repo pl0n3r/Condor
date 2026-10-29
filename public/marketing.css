@@ -744,3 +744,13 @@ html.mk-motion.mk-motion-calm .mk-rail { transform: none; }
   html.mk-motion.mk-motion .mk-stop { opacity: 1; }
   html.mk-motion.mk-motion .mk-rail { transform: none; }
 }
+
+/* Espacios para imagen: marco de proporción fija y rótulo visible hasta que haya material real. */
+.mk-img { margin: 0; }
+.mk-img-frame { display: grid; place-items: center; aspect-ratio: 4 / 3; border: 1.5px solid var(--mk-line); border-radius: 14px; background: repeating-linear-gradient(135deg, var(--mk-surface) 0 14px, var(--mk-soft) 14px 28px); color: var(--mk-ink-2); font: 500 12px/1 var(--mk-mono); letter-spacing: .14em; text-transform: uppercase; }
+.mk-img figcaption { margin-top: 8px; color: var(--mk-ink-2); font-size: 13px; line-height: 1.4; }
+.mk-landing .mk-img { max-width: 520px; margin-top: 32px; }
+@media (min-width: 960px) {
+  .mk-landing { grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 56px; align-items: center; }
+  .mk-landing .mk-img { margin-top: 0; max-width: none; }
+}
