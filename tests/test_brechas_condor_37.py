@@ -157,7 +157,7 @@ def cockpit_safe(raw: object) -> bool:
         and area.splitlines().count(release) == 1
         and "sin commits de refresco" in area
         and "esta portada no declara producción validada" in area
-        and "https://control.condorapp.com.co/" in area
+        and area.splitlines().count("[GitHub Actions](https://github.com/pl0n3r/Condor/actions) · [GitHub Releases](https://github.com/pl0n3r/Condor/releases) · [Orquestador ControlBot](https://control.condorapp.com.co/)") == 1
         and not any(x in area for x in (
             "<!-- factory:status:start -->", "badge.svg?branch=dev",
             "VALIDATED_IN_PRODUCTION", "estado productivo: GREEN",
@@ -284,6 +284,9 @@ class BrechasCondor37Tests(unittest.TestCase):
         self.assertTrue(cockpit_safe(data[README]))
         self.assertFalse(cockpit_safe(data[README].replace(
             "badge.svg?branch=main", "badge.svg?branch=dev", 1)))
+        self.assertFalse(cockpit_safe(data[README].replace(
+            "https://control.condorapp.com.co/",
+            "https://invalid.example.test/https://control.condorapp.com.co/", 1)))
         self.assertTrue("**en construcción**" in STEPS[3])
 
 
