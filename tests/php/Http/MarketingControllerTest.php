@@ -13,6 +13,7 @@ final class MarketingControllerTest extends WebTestCase
         $pages = [
             '/' => 'Digitaliza tu negocio',
             '/producto' => 'Ocho módulos',
+            '/modulos' => 'Más allá de vender',
             '/soluciones' => 'Hay un Condor para cada negocio',
             '/seguridad' => 'Tu información, aparte',
         ];
@@ -38,6 +39,7 @@ final class MarketingControllerTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         self::assertCount(1, $crawler->filter('nav.mk-nav a[href="/producto"][aria-current="page"]'));
+        self::assertCount(1, $crawler->filter('nav.mk-nav a[href="/modulos"]'));
         self::assertCount(1, $crawler->filter('nav.mk-nav a[href="/soluciones"]'));
         self::assertCount(1, $crawler->filter('nav.mk-nav a[href="/seguridad"]'));
     }

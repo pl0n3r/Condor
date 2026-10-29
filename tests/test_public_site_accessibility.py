@@ -18,6 +18,7 @@ CSS = ROOT / "public/marketing.css"
 PAGES = {
     "home": ROOT / "templates/home/index.html.twig",
     "producto": ROOT / "templates/marketing/producto.html.twig",
+    "modulos": ROOT / "templates/marketing/modulos.html.twig",
     "soluciones": ROOT / "templates/marketing/soluciones.html.twig",
     "seguridad": ROOT / "templates/marketing/seguridad.html.twig",
 }
@@ -29,8 +30,6 @@ KNOWN_DEBT = {
     "heading:home:h1-to-h3",
     "contrast:light:chip-ok:mk-bg",
     "contrast:light:chip-ok:mk-surface",
-    "contrast:light:chip-warn:mk-bg",
-    "contrast:light:chip-warn:mk-surface",
     "contrast:light:tag:mk-bg",
     "contrast:light:tag-low:mk-bg",
 }

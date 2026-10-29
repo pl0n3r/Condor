@@ -1,0 +1,73 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Condor — Módulos: toda la gestión de tu empresa{% endblock %}
+
+{% block head %}
+    <meta name="description" content="Además de vender, Condor reúne módulos de gestión empresarial: talento humano, contratación, nómina, seguridad social, seguridad en el trabajo, cumplimiento, finanzas, compras, activos, documentos y más, cada uno con su estado real.">
+    <link rel="canonical" href="https://www.condorapp.com.co/modulos">
+    <link rel="stylesheet" href="/marketing.css">
+{% endblock %}
+
+{% block body %}
+<div class="mk-site">
+{% include 'marketing/_nav.html.twig' with {'current': 'modulos'} %}
+<div class="mk-wrap">
+
+<div class="mk-top">
+    <div><span class="mk-eyebrow">Módulos</span><h1>Más allá de vender: <span class="mk-mark">toda</span> la gestión de tu empresa.</h1></div>
+    <p class="mk-lead">A la operación comercial, Condor le suma dieciséis módulos para tu gente, el cumplimiento, el dinero y el servicio. Aquí están todos con su estado real, sin prometer lo que todavía no está.</p>
+</div>
+<div class="mk-pillars">
+    <div><b>Por empresa y sede</b><span>Cada empresa ve solo lo suyo, y cada sede lo que le toca.</span></div>
+    <div><b>Con permisos</b><span>Cada persona accede a lo que su rol permite, validado en el servidor.</span></div>
+    <div><b>Con registro</b><span>Los cambios importantes quedan anotados, con quién y cuándo.</span></div>
+    <div><b>Con estado real</b><span>Ningún módulo se presenta como listo antes de estarlo.</span></div>
+</div>
+
+
+<section class="mk-section" id="personas" aria-labelledby="personas-title">
+    <div class="mk-head"><h2 id="personas-title">Tu gente, sus contratos y su nómina.</h2><p>Estos módulos tocan datos de personas. Hoy se prueban con datos de ejemplo; usarlos con datos reales espera una decisión y una revisión jurídica.</p></div>
+    <div class="mk-needs mk-needs-2">
+<article class="mk-need"><span class="mk-say">«Quiero a mi gente en orden»</span><h3>Talento humano</h3><p>Personas, cargos, áreas y sedes, con novedades, permisos, vacaciones, incapacidades y evaluaciones. Una sola ficha por persona, ligada a su empresa y a su sede.</p><p class="mk-note">Datos reales de personas: pendientes de una decisión y de revisión jurídica.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+<article class="mk-need"><span class="mk-say">«Se me vencen contratos sin darme cuenta»</span><h3>Contratación laboral</h3><p>Plantillas que una persona revisa, contratos y otrosíes, renovaciones con alertas de vencimiento y terminación. Condor ayuda a organizar; no reemplaza la revisión de un abogado.</p><p class="mk-note">Datos reales de personas: pendientes de una decisión y de revisión jurídica.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+<article class="mk-need"><span class="mk-say">«Liquidar me toma días»</span><h3>Nómina</h3><p>Periodos, novedades, horas extra y recargos, deducciones y prestaciones, con el desprendible de cada persona. Va separada de Talento humano para revisar cada parte por aparte.</p><p class="mk-note">Datos reales de personas: pendientes de una decisión y de revisión jurídica.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+<article class="mk-need"><span class="mk-say">«No quiero olvidar un aporte»</span><h3>Seguridad social</h3><p>Afiliaciones, novedades, aportes y soportes con alertas, y la información preparada para la planilla PILA. Todavía no se conecta con operadores externos.</p><p class="mk-note">Datos reales de personas: pendientes de una decisión y de revisión jurídica.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+    </div>
+</section>
+
+<section class="mk-section" id="cumplir" aria-labelledby="cumplir-title">
+    <div class="mk-head"><h2 id="cumplir-title">Lo que la ley y el cuidado de la gente te piden.</h2><p>Cada obligación tiene su fuente, su responsable y su evidencia. Condor muestra qué falta; no afirma por sí solo que cumples.</p></div>
+    <div class="mk-needs mk-needs-2">
+<article class="mk-need"><span class="mk-say">«¿Qué me exige la seguridad en el trabajo?»</span><h3>Seguridad y salud en el trabajo</h3><p>Matriz de peligros, controles, inspecciones, incidentes e investigación, entrega de elementos de protección, capacitaciones y emergencias. Los datos médicos van en un compartimento aparte.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+<article class="mk-need"><span class="mk-say">«¿Qué normas me aplican?»</span><h3>Cumplimiento legal</h3><p>Un perfil de tu empresa y una matriz de obligaciones con fuente y vigencia, calendario, evidencias y auditorías. Cada regla indica si es obligatoria, condicional o si requiere revisión.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+<article class="mk-need"><span class="mk-say">«Quiero ver los riesgos antes de que ocurran»</span><h3>Riesgos empresariales</h3><p>Riesgos operativos, financieros, legales y tecnológicos, con sus controles, incidentes y planes de acción.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+<article class="mk-need"><span class="mk-say">«Quiero corregir de raíz»</span><h3>Calidad</h3><p>Indicadores, no conformidades, quejas internas y auditorías, con acciones correctivas y la verificación de que funcionaron. Una acción no se cierra sin evidencia ni aprobación.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+    </div>
+</section>
+
+<section class="mk-section" id="dinero" aria-labelledby="dinero-title">
+    <div class="mk-head"><h2 id="dinero-title">Lo que entra, lo que sale y con qué trabajas.</h2><p>Se apoyan en lo que ya manejas: las ventas, las compras y el inventario no se vuelven a capturar.</p></div>
+    <div class="mk-needs mk-needs-2">
+<article class="mk-need"><span class="mk-say">«¿Cuánto tengo por cobrar y por pagar?»</span><h3>Finanzas y contabilidad</h3><p>Ingresos y egresos, cuentas por cobrar y por pagar, bancos y conciliación, presupuestos y cierres.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+<article class="mk-need"><span class="mk-say">«Quiero comprar con orden»</span><h3>Compras y proveedores</h3><p>Proveedores, cotización, solicitud, orden y recepción, con evaluación de proveedores y cuentas por pagar. La lógica base ya existe; falta la pantalla completa.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+<article class="mk-need"><span class="mk-say">«¿Dónde está ese equipo y quién lo tiene?»</span><h3>Activos empresariales</h3><p>Inventario de activos con responsable y asignación, garantías, mantenimientos y bajas con evidencia. Un activo no es mercancía para vender.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+<article class="mk-need"><span class="mk-say">«Los papeles se me pierden»</span><h3>Gestión documental</h3><p>Expedientes con versiones y aprobación, retención, exportación y trazabilidad. El acceso depende del documento, no de una carpeta compartida.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+    </div>
+</section>
+
+<section class="mk-section" id="orden" aria-labelledby="orden-title">
+    <div class="mk-head"><h2 id="orden-title">Que la empresa funcione igual aunque cambie la gente.</h2><p>Procesos, accesos, decisiones y atención al cliente, en el mismo lugar que todo lo demás.</p></div>
+    <div class="mk-needs mk-needs-2">
+<article class="mk-need"><span class="mk-say">«Cada quien lo hace a su manera»</span><h3>Operaciones</h3><p>Procesos y procedimientos, tareas y órdenes de trabajo con responsables y tiempos. Los flujos se configuran, no se programan.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+<article class="mk-need"><span class="mk-say">«¿Quién entró a qué?»</span><h3>Seguridad de la información</h3><p>Roles y accesos con revisiones periódicas, registro de auditoría, copias de respaldo, incidentes y continuidad.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+<article class="mk-need"><span class="mk-say">«Quiero las decisiones documentadas»</span><h3>Gobierno corporativo</h3><p>Socios, órganos y representantes, facultades y poderes, actas y autorizaciones, cada una con su vigencia. No reemplaza la asesoría societaria.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+<article class="mk-need"><span class="mk-say">«El cliente reclama y no sé a quién le toca»</span><h3>Servicio al cliente</h3><p>Peticiones, quejas, reclamos y garantías como casos con responsable y plazos configurables, con comunicaciones y satisfacción.</p><span class="mk-chip mk-chip-warn">En construcción</span></article>
+    </div>
+</section>
+
+</div>
+<div class="mk-wrap">
+{% include 'marketing/_cta.html.twig' %}
+</div>
+</div>
+{% endblock %}

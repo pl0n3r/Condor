@@ -7,6 +7,7 @@ TEMPLATES = ROOT / "templates"
 PAGES = {
     "home": TEMPLATES / "home" / "index.html.twig",
     "producto": TEMPLATES / "marketing" / "producto.html.twig",
+    "modulos": TEMPLATES / "marketing" / "modulos.html.twig",
     "soluciones": TEMPLATES / "marketing" / "soluciones.html.twig",
     "seguridad": TEMPLATES / "marketing" / "seguridad.html.twig",
 }
@@ -18,6 +19,7 @@ CONTROLLER = ROOT / "src" / "Http" / "Controller" / "MarketingController.php"
 CANONICAL = {
     "home": "https://www.condorapp.com.co/",
     "producto": "https://www.condorapp.com.co/producto",
+    "modulos": "https://www.condorapp.com.co/modulos",
     "soluciones": "https://www.condorapp.com.co/soluciones",
     "seguridad": "https://www.condorapp.com.co/seguridad",
 }
@@ -30,7 +32,7 @@ def text(path: Path) -> str:
 class MarketingSiteTests(unittest.TestCase):
     def test_routes_exist_only_for_the_three_new_pages(self) -> None:
         controller = text(CONTROLLER)
-        for path, name in (("/producto", "app_marketing_producto"), ("/soluciones", "app_marketing_soluciones"), ("/seguridad", "app_marketing_seguridad")):
+        for path, name in (("/producto", "app_marketing_producto"), ("/modulos", "app_marketing_modulos"), ("/soluciones", "app_marketing_soluciones"), ("/seguridad", "app_marketing_seguridad")):
             with self.subTest(path=path):
                 self.assertIn(f"Route('{path}', name: '{name}', methods: ['GET'])", controller)
         self.assertIn("NotFoundHttpException", controller)
@@ -123,7 +125,7 @@ class MarketingSiteTests(unittest.TestCase):
         for partial in PARTIALS:
             self.assertTrue(partial.is_file())
         nav = text(PARTIALS[0])
-        for route in ("app_marketing_producto", "app_marketing_soluciones", "app_marketing_seguridad", "app_login"):
+        for route in ("app_marketing_producto", "app_marketing_modulos", "app_marketing_soluciones", "app_marketing_seguridad", "app_login"):
             self.assertIn(route, nav)
 
 

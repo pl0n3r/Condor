@@ -18,6 +18,7 @@ final class PublicSiteNoTrackingTest extends WebTestCase
         $pages = [
             '/' => 'Digitaliza tu negocio',
             '/producto' => 'Ocho módulos',
+            '/modulos' => 'Más allá de vender',
             '/soluciones' => 'Hay un Condor para cada negocio',
             '/seguridad' => 'Tu información, aparte',
         ];
