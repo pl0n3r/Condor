@@ -320,6 +320,11 @@ jobs:
           php-version: '8.5'
           coverage: none
 
+      # La integración de documentación valida solo fuentes del repositorio;
+      # ejecutarla antes de instalar vendor evita enlaces rotos de terceros.
+      - name: Ejecutar integraciones
+        run: python3 -m unittest discover -s tests/integration -p 'test_*.py'
+
       - name: Preparar autoload Composer para cobertura Condor 28
         run: |
           python3 scripts/ci_retry.py \
@@ -371,8 +376,6 @@ jobs:
       - name: Ejecutar contratos
         run: python3 -m unittest discover -s tests/contract -p 'test_*.py'
 
-      - name: Ejecutar integraciones
-        run: python3 -m unittest discover -s tests/integration -p 'test_*.py'
 
   static-analysis:
     name: Análisis estático PHP
