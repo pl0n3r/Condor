@@ -1,5 +1,6 @@
 /* Sitio público de Condor (home, producto, soluciones y seguridad).
-   SSR sin JavaScript: la interactividad se resuelve con radios y casillas (:checked) y contadores CSS.
+   SSR: la interactividad se resuelve con radios y casillas (:checked) y contadores CSS. El movimiento (GSAP)
+   es una mejora opcional que no oculta nada si falla; ver public/marketing-motion.js.
    Concepto: «el hilo crece contigo». Sin recursos de terceros: la fuente de títulos es local. */
 @font-face {
   font-family: "Bricolage Grotesque";
@@ -583,3 +584,164 @@ body:has(.mk-site) { background: #f5f6f2; }
 
 /* Enlace al catálogo completo de módulos, bajo la cuadrícula de la home. */
 .mk-more { margin-top: 28px; }
+
+/* Catálogo de módulos: filas, no tarjetas. Nombre y frase a la izquierda, qué hace en el centro, estado a la derecha. */
+.mk-cat { list-style: none; margin: 0; padding: 0; border-top: 1.5px solid var(--mk-ink); }
+.mk-cat-row { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.6fr) 9.5rem; gap: 8px 32px; align-items: start; padding: 24px 0; border-bottom: 1px solid var(--mk-line); }
+.mk-cat-name { display: flex; flex-direction: column; gap: 6px; }
+.mk-cat-name h3 { font-size: 24px; }
+.mk-cat-name .mk-say { font: 500 14px/1.4 var(--mk-mono); color: var(--mk-ink-2); }
+.mk-cat-body { display: flex; flex-direction: column; gap: 10px; }
+.mk-cat-body p { color: var(--mk-ink-2); font-size: 16px; }
+.mk-cat-row .mk-chip { justify-self: end; }
+@media (max-width: 860px) {
+  .mk-cat-row { grid-template-columns: minmax(0, 1fr); }
+  .mk-cat-row .mk-chip { justify-self: start; }
+}
+
+/* Página de destino para campañas: titular a todo el ancho, plano de red, panel por dentro, pasos y cierre. */
+.mk-landing { grid-template-columns: minmax(0, 1fr); padding-block: 44px 0; }
+.mk-landing h1 { font-size: clamp(42px, 6.2vw, 80px); max-width: 19ch; margin: 0 0 28px; }
+.mk-land-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 20px 40px; }
+.mk-land-sub .mk-cta-row { margin-top: 0; }
+.mk-arrow { display: inline-block; }
+
+/* Plano de red: cada línea sale de «Tu empresa»; el estado va en la forma de la estación, no solo en el color. */
+.mk-net-section { padding-block-start: 36px; }
+.mk-net-section .mk-head { margin-bottom: 20px; }
+.mk-net-section .mk-head h2 { font-size: clamp(28px, 3.2vw, 40px); }
+.mk-legend { list-style: none; margin: 0 0 20px; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 28px; font: 500 14px/1 var(--mk-body); color: var(--mk-ink-2); }
+.mk-lg { display: flex; align-items: center; gap: 10px; }
+.mk-lg::before, .mk-stop::before { content: ""; box-sizing: border-box; flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--line, var(--mk-ink)); border: 4px solid var(--mk-bg); box-shadow: 0 0 0 2px var(--line, var(--mk-ink)); }
+.mk-lg-building::before, .mk-stop.is-building::before { background: var(--mk-bg); border: 4px solid var(--line, var(--mk-ink)); box-shadow: none; }
+.mk-lg-soon::before, .mk-stop.is-soon::before { background: var(--mk-bg); border: 3px dotted var(--line, var(--mk-ink)); box-shadow: none; }
+.mk-net { position: relative; padding-left: 32px; }
+.mk-net::before { content: ""; position: absolute; left: 8px; top: 20px; bottom: 36px; width: 6px; border-radius: 3px; background: var(--mk-ink); }
+.mk-base { margin: 0 0 4px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.mk-base::before { content: ""; position: absolute; left: 0; top: 2px; width: 22px; height: 22px; border-radius: 50%; background: var(--mk-ink); }
+.mk-base strong { font: 800 24px/1.1 var(--mk-display); letter-spacing: -.02em; }
+.mk-base span { color: var(--mk-ink-2); font-size: 15px; }
+.mk-lines { list-style: none; margin: 0; padding: 0; }
+.mk-line { position: relative; display: grid; grid-template-columns: 11.5rem minmax(0, 1fr); gap: 20px; align-items: start; padding: 16px 0 14px; }
+.mk-line::before { content: ""; position: absolute; left: -28px; top: 29px; width: 14px; height: 14px; border-radius: 50%; background: var(--line); border: 3px solid var(--mk-bg); box-shadow: 0 0 0 2px var(--line); }
+.mk-line-vender { --line: var(--mk-link); }
+.mk-line-gente { --line: var(--mk-ok); }
+.mk-line-cumplir { --line: var(--mk-warn); }
+.mk-line-dinero { --line: var(--mk-ink); }
+.mk-line-orden { --line: var(--mk-ink-2); }
+.mk-line-crecer { --line: var(--mk-mark); }
+.mk-line-head { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; }
+.mk-line-head h3 { align-self: flex-start; display: inline-flex; align-items: center; height: 22px; padding: 0 12px; border-radius: 999px; background: var(--line); color: var(--mk-bg); font: 800 13px/1 var(--mk-display); letter-spacing: .06em; text-transform: uppercase; }
+.mk-line-state { color: var(--mk-ink-2); font: 500 13px/1.3 var(--mk-body); }
+.mk-track { display: block; }
+.mk-rail { position: absolute; left: -21px; right: 0; top: 23px; height: 6px; border-radius: 3px; background: var(--line); transform-origin: left center; }
+.mk-line:not(.mk-line-vender) .mk-rail { background: repeating-linear-gradient(90deg, var(--line) 0 14px, transparent 14px 22px); }
+.mk-stops { position: relative; z-index: 1; list-style: none; margin: 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; }
+.mk-stop { display: flex; flex-direction: column; gap: 12px; padding-right: 8px; font: 600 15px/1.25 var(--mk-body); }
+.mk-more { margin-top: 28px; }
+
+/* Ventanas de producto: sombra suave en capas y radios concéntricos (22 = 8 + 14 de relleno). */
+.mk-win { min-width: 0; border: 1.5px solid var(--mk-ink); border-radius: 22px; background: var(--mk-surface); overflow: hidden; box-shadow: 0 1px 2px rgba(13, 24, 48, .08), 0 14px 36px -14px rgba(13, 24, 48, .3); }
+.mk-win-bar { display: flex; align-items: center; gap: 6px; padding: 12px 18px; border-bottom: 1px solid var(--mk-line); background: var(--mk-soft); }
+.mk-win-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--mk-line); }
+.mk-win-bar b { margin-left: 8px; font: 600 14px/1.2 var(--mk-body); }
+.mk-win-bar .mk-chip { margin-left: auto; }
+.mk-win-body { padding: 14px; display: grid; gap: 8px; }
+.mk-win-row { display: flex; justify-content: space-between; gap: 16px; padding: 7px 4px; border-bottom: 1px solid var(--mk-line); font-size: 15px; }
+.mk-win-row span { color: var(--mk-ink-2); font-variant-numeric: tabular-nums; }
+.mk-win-total { border-bottom: 0; }
+.mk-win-total span { color: var(--mk-ink); font-weight: 700; }
+.mk-win-states { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
+.mk-win-states div { border: 1.5px solid var(--mk-line); border-radius: 8px; padding: 10px; }
+.mk-win-states .k { display: block; margin-bottom: 8px; color: var(--mk-ink-2); font: 500 12px/1 var(--mk-body); }
+.mk-win-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.mk-win-table th { padding: 0 8px 10px 4px; text-align: left; color: var(--mk-ink-2); font: 600 12px/1 var(--mk-body); }
+.mk-win-table td { padding: 10px 8px 10px 4px; border-top: 1px solid var(--mk-line); }
+.mk-win-table .n { text-align: right; font-variant-numeric: tabular-nums; }
+.mk-win-cap { margin: 0; padding: 14px 18px 18px; border-top: 1px solid var(--mk-line); color: var(--mk-ink-2); font-size: 15px; }
+.mk-shell { margin-bottom: 20px; }
+.mk-shell-body { display: grid; grid-template-columns: 13rem minmax(0, 1fr); }
+.mk-shell-nav { display: grid; gap: 2px; align-content: start; padding: 16px 12px; border-right: 1px solid var(--mk-line); background: var(--mk-soft); }
+.mk-shell-nav p { margin: 12px 0 4px; padding-left: 10px; color: var(--mk-ink-2); font: 600 12px/1 var(--mk-body); letter-spacing: .06em; text-transform: uppercase; }
+.mk-shell-nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.mk-shell-nav li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font: 500 14px/1.2 var(--mk-body); }
+.mk-shell-nav li::before { content: ""; box-sizing: border-box; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--mk-ink); }
+.mk-shell-nav li.is-building { color: var(--mk-ink-2); }
+.mk-shell-nav li.is-building::before { background: transparent; border: 2px solid var(--mk-ink-2); }
+.mk-shell-nav li.is-current { background: var(--mk-surface); box-shadow: 0 0 0 1px var(--mk-line), 0 1px 2px rgba(13, 24, 48, .08); font-weight: 600; }
+.mk-shell-main { display: grid; gap: 6px; align-content: start; padding: 18px 22px; }
+.mk-desk { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.mk-cat-body code { padding: 2px 6px; border-radius: 6px; background: var(--mk-soft); font: 500 .9em var(--mk-mono); }
+
+/* Tres pasos y cierre. */
+.mk-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 32px; border-top: 1.5px solid var(--mk-ink); counter-reset: paso; }
+.mk-steps li { counter-increment: paso; padding: 24px 0 28px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--mk-line); }
+.mk-steps li::before { content: counter(paso); font: 500 14px/1 var(--mk-mono); color: var(--mk-ink-2); }
+.mk-steps h3 { font-size: 24px; }
+.mk-steps p { color: var(--mk-ink-2); font-size: 16px; }
+.mk-close { padding-bottom: 24px; }
+@media (max-width: 860px) {
+  .mk-landing { padding-block: 36px 8px; }
+  .mk-land-sub { grid-template-columns: minmax(0, 1fr); }
+  .mk-land-sub .mk-cta-row { justify-content: flex-start; }
+  .mk-line { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .mk-track { position: relative; }
+  .mk-rail { left: 7px; right: auto; top: 0; bottom: 0; width: 6px; height: auto; transform-origin: center top; }
+  .mk-line:not(.mk-line-vender) .mk-rail { background: repeating-linear-gradient(180deg, var(--line) 0 14px, transparent 14px 22px); }
+  .mk-stops { grid-auto-flow: row; gap: 14px; }
+  .mk-stop { flex-direction: row; align-items: center; padding-right: 0; }
+  .mk-shell-body { grid-template-columns: minmax(0, 1fr); }
+  .mk-shell-nav { display: none; }
+  .mk-desk { grid-template-columns: minmax(0, 1fr); }
+  .mk-win-states { grid-template-columns: minmax(0, 1fr); }
+  .mk-steps { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* La flecha del botón avanza al pasar el cursor (transitions.dev, «learn more hover»). */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .mk-arrow { transition: transform .25s cubic-bezier(.22, 1, .36, 1); }
+  .mk-btn:hover .mk-arrow { transform: translateX(4px); }
+}
+
+/* Movimiento (GSAP). El contenido es visible por defecto: solo parte oculto si marketing-motion-gate.js marcó el
+   documento (html.mk-motion) y marketing-motion.js lo revela. Los selectores deben coincidir con los de ese script.
+   Si el script no llega a marcar «listo», la puerta quita la clase y todo vuelve a verse. */
+html.mk-motion .mk-site h1,
+html.mk-motion .mk-hero .mk-lead,
+html.mk-motion .mk-hero .mk-cta-row,
+html.mk-motion .mk-hero .mk-micro,
+html.mk-motion .mk-hero .mk-pick,
+html.mk-motion .mk-top .mk-lead,
+html.mk-motion .mk-section .mk-head,
+html.mk-motion .mk-need,
+html.mk-motion .mk-cat-row,
+html.mk-motion .mk-col,
+html.mk-motion .mk-pillars > div,
+html.mk-motion .mk-steps li,
+html.mk-motion .mk-win,
+html.mk-motion .mk-stop { opacity: 0; }
+
+html.mk-motion .mk-rail { transform: scaleX(0); }
+html.mk-motion.mk-motion-calm .mk-rail { transform: none; }
+@media (max-width: 860px) {
+  html.mk-motion .mk-rail { transform: scaleY(0); }
+  html.mk-motion.mk-motion-calm .mk-rail { transform: none; }
+}
+
+@media print {
+  html.mk-motion .mk-site h1,
+  html.mk-motion .mk-hero .mk-lead,
+  html.mk-motion .mk-hero .mk-cta-row,
+  html.mk-motion .mk-hero .mk-micro,
+  html.mk-motion .mk-hero .mk-pick,
+  html.mk-motion .mk-top .mk-lead,
+  html.mk-motion .mk-section .mk-head,
+  html.mk-motion .mk-need,
+  html.mk-motion .mk-cat-row,
+  html.mk-motion .mk-col,
+  html.mk-motion .mk-pillars > div,
+  html.mk-motion .mk-steps li,
+  html.mk-motion .mk-win,
+  html.mk-motion .mk-stop { opacity: 1 !important; }
+  html.mk-motion .mk-rail { transform: none !important; }
+}

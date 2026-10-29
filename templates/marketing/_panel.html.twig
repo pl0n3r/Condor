@@ -1,0 +1,57 @@
+{# Panel de administración por dentro, con pantallas de ejemplo y datos ficticios. #}
+<section class="mk-section" id="vista" aria-labelledby="vista-title">
+    <div class="mk-head"><h2 id="vista-title">El panel de administración, por dentro.</h2><p>Un solo panel para toda la empresa, con una entrada por cada estación del plano. Pantallas de ejemplo con datos ficticios: lo que ya funciona y una simulación de lo que viene.</p></div>
+    <article class="mk-win mk-shell" aria-label="Panel de administración, pantalla de ejemplo">
+        <div class="mk-win-bar"><i></i><i></i><i></i><b>Condor · Panel de administración · Sede principal</b><span class="mk-chip">Ejemplo</span></div>
+        <div class="mk-shell-body">
+            <div class="mk-shell-nav" aria-hidden="true">
+                <p>Vender</p>
+                <ul><li class="is-now is-current">Pedidos y ventas</li><li class="is-now">Inventario</li><li class="is-now">Clientes</li><li class="is-now">Tienda online</li><li class="is-now">Producción</li></ul>
+                <p>Gente</p>
+                <ul><li class="is-building">Talento humano</li><li class="is-building">Nómina</li></ul>
+                <p>Cumplir</p>
+                <ul><li class="is-building">Cumplimiento legal</li></ul>
+                <p>Dinero</p>
+                <ul><li class="is-building">Finanzas</li></ul>
+            </div>
+            <div class="mk-shell-main">
+                <div class="mk-win-row"><b>Pedido #1048 · Almacenes La 70</b><span class="mk-chip mk-chip-ok">Confirmado</span></div>
+                <div class="mk-win-row">Camisa oxford M azul × 14<span>$ 41.900 c/u</span></div>
+                <div class="mk-win-row">Camisa oxford M blanco × 6<span>$ 40.500 c/u</span></div>
+                <div class="mk-win-row mk-win-total"><b>Total</b><span>$ 829.600</span></div>
+                <div class="mk-win-states">
+                    <div><span class="k">Pedido</span><span class="mk-pill mk-pill-g">Confirmado</span></div>
+                    <div><span class="k">Pago</span><span class="mk-pill mk-pill-a">Pendiente</span></div>
+                    <div><span class="k">Entrega</span><span class="mk-pill mk-pill-s">En preparación</span></div>
+                </div>
+            </div>
+        </div>
+        <p class="mk-win-cap">Pedidos manuales, de mayoristas y de la tienda, con el estado de pedido, de pago y de entrega por separado. Las estaciones que aún se construyen aparecen apagadas en el menú.</p>
+    </article>
+    <div class="mk-desk">
+        <article class="mk-win mk-win-stock" aria-label="Inventario por sede, pantalla de ejemplo">
+            <div class="mk-win-bar"><i></i><i></i><i></i><b>Inventario · Camisa oxford M azul</b><span class="mk-chip">Ejemplo</span></div>
+            <div class="mk-win-body">
+                <table class="mk-win-table"><thead><tr><th>Sede</th><th class="n">Stock</th><th class="n">Mínimo</th><th>Estado</th></tr></thead><tbody>
+                    <tr><td>Bodega Medellín</td><td class="n">96</td><td class="n">40</td><td><span class="mk-pill mk-pill-g">OK</span></td></tr>
+                    <tr><td>Local Cali</td><td class="n">14</td><td class="n">20</td><td><span class="mk-pill mk-pill-r">Bajo mínimo</span></td></tr>
+                    <tr><td>Local Bogotá</td><td class="n">31</td><td class="n">20</td><td><span class="mk-pill mk-pill-g">OK</span></td></tr>
+                </tbody></table>
+                <div class="mk-win-row"><b>Traslado</b><span>Medellín → Cali · 12 und</span></div>
+            </div>
+            <p class="mk-win-cap">Cuánto tienes, dónde está y por qué cambió. Las alertas automáticas de stock bajo están en construcción.</p>
+        </article>
+        <article class="mk-win mk-win-cumple" aria-label="Cumplimiento legal, simulación con datos de ejemplo">
+            <div class="mk-win-bar"><i></i><i></i><i></i><b>Cumplimiento · Sede principal</b><span class="mk-chip mk-chip-warn">Simulación</span></div>
+            <div class="mk-win-body">
+                <table class="mk-win-table"><thead><tr><th>Obligación de ejemplo</th><th>Estado</th><th>Evidencia</th></tr></thead><tbody>
+                    <tr><td>Afiliación del personal</td><td><span class="mk-pill mk-pill-a">En revisión</span></td><td>2 archivos</td></tr>
+                    <tr><td>Reglamento interno</td><td><span class="mk-pill mk-pill-g">Cumple</span></td><td>1 archivo</td></tr>
+                    <tr><td>Plan de emergencias</td><td><span class="mk-pill mk-pill-r">Falta evidencia</span></td><td>Sin archivos</td></tr>
+                </tbody></table>
+                <div class="mk-win-row"><b>Revisor</b><span>distinto de quien carga la evidencia</span></div>
+            </div>
+            <p class="mk-win-cap">Cada obligación con su responsable y su evidencia. Condor muestra qué falta; no afirma por sí solo que cumples.</p>
+        </article>
+    </div>
+</section>

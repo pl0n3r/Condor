@@ -19,6 +19,7 @@ final class PublicSiteNoTrackingTest extends WebTestCase
             '/' => 'Digitaliza tu negocio',
             '/producto' => 'Ocho módulos',
             '/modulos' => 'Más allá de vender',
+            '/empezar' => 'Vende, controla',
             '/soluciones' => 'Hay un Condor para cada negocio',
             '/seguridad' => 'Tu información, aparte',
         ];
@@ -46,10 +47,25 @@ final class PublicSiteNoTrackingTest extends WebTestCase
                 'La ruta '.$path.' no debe emitir cookies HTTP.',
             );
 
-            // No scripts, iframes, embeds, actualizaciones automáticas ni
+            // Solo los scripts propios del movimiento: del mismo dominio, ninguno en línea ni de terceros.
+            $approvedScripts = [
+                '/marketing-motion-gate.js',
+                '/lib/gsap/gsap.min.js',
+                '/lib/gsap/SplitText.min.js',
+                '/marketing-motion.js',
+            ];
+            foreach ($crawler->filter('script') as $script) {
+                self::assertContains(
+                    $script->getAttribute('src'),
+                    $approvedScripts,
+                    $path.': script no aprobado o en línea',
+                );
+            }
+
+            // No iframes, embeds, actualizaciones automáticas ni
             // elementos que puedan descargar un recurso sin clic explícito.
             foreach ([
-                'script', 'iframe', 'object', 'embed',
+                'iframe', 'object', 'embed',
                 'meta[http-equiv="refresh"]', 'form[action^="http"]',
             ] as $selector) {
                 self::assertCount(

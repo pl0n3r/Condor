@@ -1,0 +1,13 @@
+{# Lo que corre por debajo del panel, con el estado real de cada regla. #}
+<section class="mk-section" id="servidor" aria-labelledby="servidor-title">
+    <div class="mk-head"><h2 id="servidor-title">Y por debajo, un servidor con reglas.</h2><p>El panel no decide nada solo: habla con una API versionada que valida permisos, separa a cada empresa y rastrea cada solicitud.</p></div>
+    <ul class="mk-cat">
+        <li class="mk-cat-row"><div class="mk-cat-name"><h3>Una API versionada</h3><span class="mk-say">«El panel no hace nada a escondidas»</span></div><div class="mk-cat-body"><p>Todo lo que hace el panel pasa por una API bajo <code>/api/v1</code>, con errores de formato único y un identificador por solicitud para rastrear cualquier fallo.</p></div><span class="mk-chip mk-chip-ok">Disponible</span></li>
+        <li class="mk-cat-row"><div class="mk-cat-name"><h3>Cada empresa, aparte</h3><span class="mk-say">«Mi información es mía»</span></div><div class="mk-cat-body"><p>Cada empresa y cada sede ven solo lo suyo.</p></div><span class="mk-chip mk-chip-ok">Disponible</span></li>
+        <li class="mk-cat-row"><div class="mk-cat-name"><h3>Permisos por rol</h3><span class="mk-say">«Cada quien, lo suyo»</span></div><div class="mk-cat-body"><p>Qué puede ver y hacer cada persona se decide en el servidor, por módulo y por sede, y no en la pantalla.</p></div><span class="mk-chip mk-chip-ok">Disponible</span></li>
+        <li class="mk-cat-row"><div class="mk-cat-name"><h3>Sin duplicados</h3><span class="mk-say">«Repetir no cuesta»</span></div><div class="mk-cat-body"><p>Si una operación se repite por error, sus efectos no se repiten.</p></div><span class="mk-chip mk-chip-ok">Disponible</span></li>
+        <li class="mk-cat-row"><div class="mk-cat-name"><h3>Historial de cambios</h3><span class="mk-say">«Quién cambió qué»</span></div><div class="mk-cat-body"><p>Un registro de los cambios importantes que podrás consultar tú.</p></div><span class="mk-chip mk-chip-warn">En construcción</span></li>
+        <li class="mk-cat-row"><div class="mk-cat-name"><h3>Respaldos</h3><span class="mk-say">«Si algo falla, vuelvo»</span></div><div class="mk-cat-body"><p>Respaldos programados en producción, con una copia fuera del servidor.</p></div><span class="mk-chip mk-chip-warn">En construcción</span></li>
+    </ul>
+    <p class="mk-more"><a class="mk-btn mk-btn-ghost" href="{{ path('app_marketing_seguridad') }}">Cómo cuidamos tu información</a></p>
+</section>
