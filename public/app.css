@@ -468,3 +468,34 @@ input {
 .pricing-card dt { color: var(--muted); }
 .pricing-card dd { margin: 0; font-weight: 750; }
 .pricing-card .button { margin-top: auto; align-self: start; }
+
+/* Backoffice con la identidad de impacto (etapa 5b): menú navy, titulares a escala, tarjetas con filete y contraste AA. */
+.eyebrow { color: var(--muted); }
+.admin-shell .sidebar {
+  background: var(--accent);
+  color: #eef1f8;
+  border-right: 0;
+}
+.admin-shell .sidebar a { color: #c3cbe0; font-weight: 600; transition: background-color .15s ease, color .15s ease; }
+.admin-shell .sidebar a:hover { background: rgba(255, 255, 255, .08); color: #ffffff; }
+.admin-shell .sidebar a[aria-current="page"] { background: var(--brand); color: #ffffff; font-weight: 700; }
+.admin-shell .sidebar a:focus-visible { outline: 3px solid #ffffff; outline-offset: 2px; }
+.admin-shell .workspace h1 { font-size: clamp(2.4rem, 5vw, 4rem); line-height: .98; letter-spacing: -.035em; }
+.admin-shell .catalog-panel, .admin-shell .catalog-card { border-radius: 10px; border-top: 3px solid var(--brand); }
+.admin-shell .button { transition: transform .15s ease, background-color .15s ease; }
+.admin-shell .button:active { transform: scale(.97); }
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell .sidebar a, .admin-shell .button { transition: none; }
+}
+.admin-shell .sidebar .button { color: #eef1f8; background: transparent; border-color: rgba(238, 241, 248, .55); }
+.admin-shell .sidebar .button:hover { background: rgba(255, 255, 255, .12); }
+.admin-shell .brand-block strong { color: #ffffff; font-size: 1.05rem; letter-spacing: .02em; }
+.admin-shell .brand-block span { color: #a3adc6; }
+.admin-shell .foundation-grid article { border-top: 3px solid var(--brand); border-radius: 10px; }
+.admin-shell .overview-value { display: block; font-size: clamp(1.6rem, 3vw, 2.4rem); font-weight: 800; line-height: 1.05; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.admin-shell .overview-detail { color: var(--muted); }
+@media (max-width: 860px) {
+  .admin-shell .sidebar { padding: var(--space-4); gap: var(--space-3); }
+  .admin-shell .sidebar nav { display: flex; gap: var(--space-2); overflow-x: auto; padding-bottom: var(--space-2); scrollbar-width: thin; }
+  .admin-shell .sidebar a { flex: 0 0 auto; white-space: nowrap; }
+}
