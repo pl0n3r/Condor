@@ -30,8 +30,6 @@ KNOWN_DEBT = {
     "heading:home:h1-to-h3",
     "contrast:light:chip-ok:mk-bg",
     "contrast:light:chip-ok:mk-surface",
-    "contrast:light:chip-warn:mk-bg",
-    "contrast:light:chip-warn:mk-surface",
     "contrast:light:tag:mk-bg",
     "contrast:light:tag-low:mk-bg",
 }

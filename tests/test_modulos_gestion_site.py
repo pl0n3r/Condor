@@ -25,6 +25,7 @@ def cards() -> dict[str, str]:
     found = {}
     for card in re.findall(r'<article class="mk-need">.*?</article>', html, flags=re.DOTALL):
         name = re.search(r"<h3>(.*?)</h3>", card).group(1)
+        assert name not in found, f"Tarjeta duplicada: {name}"
         found[name] = card
     return found
 
