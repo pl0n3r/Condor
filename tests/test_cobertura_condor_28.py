@@ -118,6 +118,9 @@ echo json_encode([
         'bad_amount' => $deny(static fn() => $orders->recordPayment(
             $order, -1, true, $tenantId, $tenantId, 'actor-fixture', $at
         )),
+        'missing_actor' => $deny(static fn() => $orders->recordPayment(
+            $order, 100, true, $tenantId, $tenantId, '', $at
+        )),
     ],
     'customers' => [
         'normalized_name' => $customer->name(),
@@ -133,11 +136,13 @@ echo json_encode([
         'key_deterministic' => $key === StockCsvAdjuster::rowKey($tenantId, $parsed['sha256'], 2),
         'foreign_key_denial' => $deny(static fn() => StockCsvAdjuster::rowKey('', $parsed['sha256'], 2)),
         'bad_header' => $deny(static fn() => StockCsvAdjuster::parseCsv('invalid,header')),
+        'empty_payload' => $deny(static fn() => StockCsvAdjuster::parseCsv('')),
     ],
     'purchasing' => [
         'preview' => $preview,
         'foreign_denial' => $deny(static fn() => QuotationPreview::preview($foreignQuote)),
         'bad_quantity' => $deny(static fn() => QuotationPreview::preview($badQuote)),
+        'bad_currency' => $deny(static fn() => QuotationPreview::preview(array_replace($quote, ['currency' => 'USD']))),
     ],
     'architecture' => [
         'cross_tenant_branch_denial' => $deny(static fn() => $authorization->permissions($user, $tenant, $branch)),
@@ -206,12 +211,15 @@ class CoberturaCondor28Tests(unittest.TestCase):
         p = php_case()
         self.assertEqual(p["orders"]["foreign_denial"], "DomainException")
         self.assertEqual(p["orders"]["bad_amount"], "DomainException")
+        self.assertEqual(p["orders"]["missing_actor"], "DomainException")
         self.assertEqual(p["customers"]["foreign_denial"], "DomainException")
         self.assertEqual(p["customers"]["invalid_email"], "DomainException")
         self.assertEqual(p["inventory"]["foreign_key_denial"], "DomainException")
         self.assertEqual(p["inventory"]["bad_header"], "DomainException")
+        self.assertEqual(p["inventory"]["empty_payload"], "DomainException")
         self.assertEqual(p["purchasing"]["foreign_denial"], "InvalidArgumentException")
         self.assertEqual(p["purchasing"]["bad_quantity"], "InvalidArgumentException")
+        self.assertEqual(p["purchasing"]["bad_currency"], "InvalidArgumentException")
         self.assertEqual(
             p["architecture"]["cross_tenant_branch_denial"],
             "Symfony\\Component\\Security\\Core\\Exception\\AccessDeniedException",
