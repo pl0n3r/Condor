@@ -169,7 +169,7 @@ $publicOK = $catalog->filters() === ['q'=>'Camisa','categoria'=>'ropa']
     && $draft['payment'] === 'pending' && $draft['fulfillment'] === 'reserved';
 $publicDenied = denied(fn() => Catalog::fromQuery(['pagina'=>'0']))
     && denied(fn() => Catalog::fromQuery(['categoria'=>'../../../']))
-    && denied(fn() => Catalog::fromQuery(['q'=>"Camisa\n"]));
+    && denied(fn() => Catalog::fromQuery(['q'=>"Camisa\nRoja"]));
 $payment = $changes->recordPayment($draft, 250000, false,
     'tenant-fixture-a', 'tenant-fixture-a', 'actor-fixture-a', $when);
 $fulfilled = $changes->change($payment, 'fulfillment', 'consumed',
