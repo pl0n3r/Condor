@@ -57,10 +57,24 @@ def matrix_rows(source: object) -> dict[str, tuple[str, ...]]:
         fields = tuple(x.strip() for x in line.strip().strip("|").split("|"))
         if (key in result or len(fields) != 5 or not all(fields)
                 or fields[0] != f"{chr(96)}{key}{chr(96)} · {chr(96)}ESPECIFICACIONES.md{chr(96)}"
-                or fields[2] != chr(96) + "NO_VERIFICABLE" + chr(96)
-                or "Falta evidencia integral" not in fields[3]
                 or fields[4] != "#1"):
             raise ValueError("UNKNOWN: fila invalida o duplicada " + key)
+        status = fields[2].strip(chr(96))
+        if status not in {"NO_VERIFICABLE", "EN_CURSO", "CUBIERTO", "DESCARTADO"}:
+            raise ValueError("UNKNOWN: estado de matriz invalido " + key)
+        evidence = fields[3]
+        if status == "NO_VERIFICABLE" and "Falta evidencia integral" not in evidence:
+            raise ValueError("UNKNOWN: falta la brecha explicita " + key)
+        if status == "CUBIERTO":
+            # Comprobación estructural offline; la reconciliación autentica
+            # independientemente que el PR citado esté efectivamente merged.
+            triad = (
+                r"(?:src|scripts|frontend|templates|config|ops|public)/[\w./-]+",
+                r"tests/[\w./-]+",
+                r"\bPR\s+#\d+\s+MERGED\b",
+            )
+            if not all(re.search(pattern, evidence) for pattern in triad):
+                raise ValueError("UNKNOWN: CUBIERTO sin triada " + key)
         result[key] = fields
     if set(result) != set(IDS):
         raise ValueError("UNKNOWN: filas del grupo faltantes")
@@ -118,7 +132,11 @@ class CoberturaCondor10Tests(unittest.TestCase):
         for key, (category, reason) in REST.items():
             self.assertIn(category, ("B", "C", "D"), key)
             self.assertGreater(len(reason), 25)
-            self.assertEqual(self.rows[key][2], chr(96) + "NO_VERIFICABLE" + chr(96))
+            self.assertIn(
+                self.rows[key][2],
+                tuple(chr(96) + x + chr(96) for x in
+                      ("NO_VERIFICABLE", "EN_CURSO", "CUBIERTO", "DESCARTADO")),
+            )
 
         # D-044-S08: reducer real, idempotencia por SHA y autor bot.
         self.assertEqual(releases.reduce_pending_releases([event("pending")]),
@@ -167,6 +185,21 @@ class CoberturaCondor10Tests(unittest.TestCase):
                 with self.subTest(id=key):
                     with self.assertRaises(ValueError):
                         matrix_rows(bad)
+
+        # Acreditacion sintactica futurible; la suite no fabrica un PR
+        # realmente fusionado: el proceso de reconciliacion valida esa prueba.
+        example = next(s for s in original.splitlines()
+                       if s.startswith("| " + chr(96) + IDS[0] + chr(96)
+                                       + " · " + chr(96) + "ESPECIFICACIONES.md"))
+        triad = "src/Example.php + tests/test_synthetic.py + PR #123 MERGED (simulado)"
+        promoted = original.replace(
+            example, example.replace(chr(96) + "NO_VERIFICABLE" + chr(96),
+                                     chr(96) + "CUBIERTO" + chr(96), 1).replace(
+                                         example.split("|")[4].strip(), triad, 1),
+            1,
+        )
+        self.assertEqual(matrix_rows(promoted)[IDS[0]][2],
+                         chr(96) + "CUBIERTO" + chr(96))
 
         forged = {**event("validated"), "user": {"login": "actor-sintetico"}}
         self.assertEqual(releases.reduce_pending_releases(
