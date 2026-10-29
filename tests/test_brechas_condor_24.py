@@ -114,7 +114,7 @@ def production_state(_key, _allegation=None):
 class BrechasCondor24Tests(unittest.TestCase):
     def test_contrato_principal(self):
         data = sources()
-        self.assertEqual(set(rows(data[MATRIX])), set(TITLES))
+        self.assertEqual(set(TITLES), set(rows(data[MATRIX])))
         self.assertEqual(len(TITLES), 5)
         for key in TITLES:
             with self.subTest(key=key):
