@@ -570,3 +570,16 @@ body:has(.mk-site) { background: #f5f6f2; }
 .mk-map-c:has(.n-clientes:hover) .e-clientes, .mk-map-c:has(.n-clientes:focus-visible) .e-clientes { stroke: var(--mk-ink); }
 .mk-map-c:has(.n-produccion:hover) .e-produccion, .mk-map-c:has(.n-produccion:focus-visible) .e-produccion { stroke: var(--mk-ink); }
 .mk-map-c:has(.n-compras:hover) .e-compras, .mk-map-c:has(.n-compras:focus-visible) .e-compras { stroke: var(--mk-ink); }
+
+/* El subtítulo de la opción marcada hereda el color de su etiqueta: sobre el fondo de marca el gris secundario no se lee. */
+#pk1:checked ~ .mk-pick-q label[for="pk1"] small,
+#pk2:checked ~ .mk-pick-q label[for="pk2"] small,
+#pk3:checked ~ .mk-pick-q label[for="pk3"] small,
+#pk4:checked ~ .mk-pick-q label[for="pk4"] small,
+#sl1:checked ~ .mk-seg label[for="sl1"] small,
+#sl2:checked ~ .mk-seg label[for="sl2"] small,
+#sl3:checked ~ .mk-seg label[for="sl3"] small,
+#sl4:checked ~ .mk-seg label[for="sl4"] small { color: inherit; }
+
+/* Enlace al catálogo completo de módulos, bajo la cuadrícula de la home. */
+.mk-more { margin-top: 28px; }

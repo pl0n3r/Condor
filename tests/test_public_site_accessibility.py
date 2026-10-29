@@ -18,6 +18,7 @@ CSS = ROOT / "public/marketing.css"
 PAGES = {
     "home": ROOT / "templates/home/index.html.twig",
     "producto": ROOT / "templates/marketing/producto.html.twig",
+    "modulos": ROOT / "templates/marketing/modulos.html.twig",
     "soluciones": ROOT / "templates/marketing/soluciones.html.twig",
     "seguridad": ROOT / "templates/marketing/seguridad.html.twig",
 }

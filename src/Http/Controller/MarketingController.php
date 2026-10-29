@@ -12,7 +12,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
- * Páginas públicas del sitio de la plataforma (producto, soluciones y seguridad).
+ * Páginas públicas del sitio de la plataforma (producto, módulos, soluciones y seguridad).
  *
  * Son contenido estático renderizado en el servidor, sin JavaScript. Solo existen en el dominio de la
  * plataforma: en el dominio de un tenant la raíz muestra su tienda y estas rutas no existen.
@@ -23,6 +23,12 @@ final class MarketingController extends AbstractController
     public function producto(TenantContext $tenantContext, AppVersion $version): Response
     {
         return $this->page('marketing/producto.html.twig', $tenantContext, $version);
+    }
+
+    #[Route('/modulos', name: 'app_marketing_modulos', methods: ['GET'])]
+    public function modulos(TenantContext $tenantContext, AppVersion $version): Response
+    {
+        return $this->page('marketing/modulos.html.twig', $tenantContext, $version);
     }
 
     #[Route('/soluciones', name: 'app_marketing_soluciones', methods: ['GET'])]
