@@ -35,7 +35,7 @@ body:has(.mk-site) { background: #f5f6f8; }
 .mk-site { scroll-behavior: smooth; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
 .mk-wrap { max-width: 1160px; margin: 0 auto; }
 .mk-site h1, .mk-site h2, .mk-site h3 { font-family: var(--mk-display); font-weight: 800; letter-spacing: -.025em; line-height: 1.03; margin: 0; text-wrap: balance; }
-.mk-site p { margin: 0; }
+.mk-site p { margin: 0; text-wrap: pretty; }
 .mk-site a { color: inherit; }
 .mk-site :focus-visible { outline: 3px solid var(--mk-link); outline-offset: 3px; }
 .mk-eyebrow { font: 500 12px/1 var(--mk-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mk-ink-2); }
@@ -401,10 +401,8 @@ body:has(.mk-site) { background: #f5f6f8; }
 }
 @media (max-width: 480px) { .mk-actions .mk-btn { display: none; } }
 /* Pulido: detalles que se sienten sin pedir atención. Todo es CSS, sin JavaScript. */
-.mk-site p { text-wrap: pretty; }
 .mk-section, .mk-demo { scroll-margin-top: 84px; }
 .mk-prod span, .mk-cnt, .mk-need .mk-say { font-variant-numeric: tabular-nums; }
-.mk-btn { transition-property: transform, background-color, color; }
 .mk-btn:active { transform: scale(.97); }
 .mk-need, .mk-col, .mk-co { transition: background-color .2s ease; }
 @media (hover: hover) {
