@@ -754,3 +754,30 @@ html.mk-motion.mk-motion-calm .mk-rail { transform: none; }
   .mk-landing { grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 56px; align-items: center; }
   .mk-landing .mk-img { margin-top: 0; max-width: none; }
 }
+
+/* Impacto: hero navy a sangre, titular a gran escala y cinta de módulos. Los tokens se remapean dentro del hero. */
+.mk-hero.mk-landing {
+  --mk-bg: #0d1830; --mk-surface: #132042; --mk-ink: #eef1f8; --mk-ink-2: #a3adc6;
+  --mk-line: #26335a; --mk-soft: #182650; --mk-mark: #8fa6ff; --mk-mark-ink: #0d1830; --mk-link: #8fa6ff;
+  position: relative; isolation: isolate; color: var(--mk-ink);
+  padding-block: clamp(48px, 8vw, 104px); margin-top: 0; gap: clamp(32px, 5vw, 72px);
+}
+.mk-hero.mk-landing::before { content: ""; position: absolute; inset: 0 calc(50% - 50vw); z-index: -1; background: var(--mk-bg); }
+.mk-hero.mk-landing h1 { font-size: clamp(46px, 7.2vw, 112px); line-height: .96; letter-spacing: -.035em; max-width: 16ch; }
+.mk-hero.mk-landing .mk-mark { background: none; color: var(--mk-mark); }
+.mk-hero.mk-landing .mk-btn-ghost { color: var(--mk-ink); border-color: var(--mk-ink); }
+.mk-hero.mk-landing .mk-btn-ghost:hover { background: var(--mk-ink); color: var(--mk-bg); }
+.mk-hero.mk-landing .mk-img-frame { border-color: var(--mk-line); background: repeating-linear-gradient(135deg, var(--mk-surface) 0 14px, var(--mk-soft) 14px 28px); }
+.mk-ticker { margin-inline: calc(50% - 50vw); overflow: hidden; background: var(--mk-mark); color: var(--mk-mark-ink); border-block: 1.5px solid var(--mk-ink); }
+.mk-ticker-track { display: inline-flex; width: max-content; padding-block: 14px; font: 700 clamp(14px, 1.5vw, 19px)/1 var(--mk-mono); letter-spacing: .14em; text-transform: uppercase; }
+.mk-ticker-track span { padding-inline: 1.6em; }
+.mk-ticker-track span::after { content: "/"; margin-left: 3.2em; opacity: .55; }
+@media (prefers-reduced-motion: no-preference) {
+  .mk-ticker-track { animation: mk-ticker 40s linear infinite; }
+  @keyframes mk-ticker { to { transform: translateX(-50%); } }
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .mk-btn { transition: transform .15s ease, background-color .2s ease, color .2s ease; }
+  .mk-btn:hover { transform: translateY(-2px); }
+  .mk-btn:active { transform: scale(.97); }
+}
