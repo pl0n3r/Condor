@@ -179,10 +179,19 @@ class CoberturaCondor10Tests(unittest.TestCase):
             row = next(s for s in original.splitlines()
                        if s.startswith("| " + chr(96) + key + chr(96)
                                        + " · " + chr(96) + "ESPECIFICACIONES.md"))
-            for bad in (original.replace(row + "\n", "", 1),
-                        original + "\n" + row,
-                        original.replace(row, row.replace("NO_VERIFICABLE", "CUBIERTO"), 1)):
-                with self.subTest(id=key):
+            # El caso invalido debe seguir siendo invalido incluso cuando
+            # una reconciliacion futura cambie la fila a CUBIERTO legitimo.
+            fields = [x.strip() for x in row.strip("|").split("|")]
+            invalid_fields = fields[:]
+            invalid_fields[2] = "`CUBIERTO`"
+            invalid_fields[3] = "Sin ruta de codigo ni test ni PR fusionado"
+            invalid_row = "| " + " | ".join(invalid_fields) + " |"
+            for name, bad in (
+                ("missing", original.replace(row + "\n", "", 1)),
+                ("duplicate", original + "\n" + row),
+                ("fake-covered", original.replace(row, invalid_row, 1)),
+            ):
+                with self.subTest(id=key, negative=name):
                     with self.assertRaises(ValueError):
                         matrix_rows(bad)
 
@@ -192,11 +201,11 @@ class CoberturaCondor10Tests(unittest.TestCase):
                        if s.startswith("| " + chr(96) + IDS[0] + chr(96)
                                        + " · " + chr(96) + "ESPECIFICACIONES.md"))
         triad = "src/Example.php + tests/test_synthetic.py + PR #123 MERGED (simulado)"
+        positive_fields = [x.strip() for x in example.strip("|").split("|")]
+        positive_fields[2] = "`CUBIERTO`"
+        positive_fields[3] = triad
         promoted = original.replace(
-            example, example.replace(chr(96) + "NO_VERIFICABLE" + chr(96),
-                                     chr(96) + "CUBIERTO" + chr(96), 1).replace(
-                                         example.split("|")[4].strip(), triad, 1),
-            1,
+            example, "| " + " | ".join(positive_fields) + " |", 1
         )
         self.assertEqual(matrix_rows(promoted)[IDS[0]][2],
                          chr(96) + "CUBIERTO" + chr(96))
