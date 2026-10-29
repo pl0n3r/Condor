@@ -129,6 +129,7 @@ def synthetic_notice(template: object, metadata: object) -> dict | str:
         return "DENY"
     if (type(metadata["event_ref"]) is not str
             or re.fullmatch(r"fixture:event/[a-z0-9_-]+", metadata["event_ref"]) is None
+            or type(metadata["kind"]) is not str
             or metadata["kind"] not in {"pending_review", "approved_for_review"}):
         return "DENY"
     return {"subject": "Notificación de gestión",
@@ -199,6 +200,16 @@ def local_check(key: object, data: object, proof: object) -> str:
     try:
         matrix_rows(data[MATRIX])
     except ValueError:
+        return UNKNOWN
+    # Un caso negativo sintético nunca cubre por sí solo prueba ejecutable;
+    # la evidencia parcial de PHP es condición para toda fila.
+    required = {"csv", "invalid_export_denied", "document_status",
+                "foreign_denied", "entity_denied", "site_denied"}
+    if (not required.issubset(proof) or type(proof["csv"]) is not str
+            or type(proof["invalid_export_denied"]) is not bool
+            or type(proof["document_status"]) is not str
+            or any(type(proof[k]) is not bool for k in
+                   ("foreign_denied", "entity_denied", "site_denied"))):
         return UNKNOWN
     if not all(anchor in data[SPEC] for _, _, anchor in CLAUSES.values()):
         return UNKNOWN
