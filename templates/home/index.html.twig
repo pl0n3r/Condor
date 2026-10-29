@@ -14,17 +14,24 @@
 {% include 'marketing/_nav.html.twig' with {'current': 'home'} %}
 <div class="mk-wrap">
 
-<section class="mk-hero" aria-labelledby="home-title">
+<section class="mk-hero mk-landing" aria-labelledby="home-title">
     <div>
-        <span class="mk-eyebrow">Para cualquier negocio, de cualquier tamaño</span>
         <h1 id="home-title">Digitaliza tu negocio, sea del tamaño que <span class="mk-mark">sea</span>.</h1>
-        <p class="mk-lead">Productos, inventario, pedidos y tienda online en un solo lugar. Empiezas con lo básico y Condor crece contigo, de una tienda a un grupo de empresas.</p>
-        <div class="mk-cta-row">
-            <a class="mk-btn mk-btn-mark" href="#solicitar-demo">Solicitar una demo →</a>
-            <a class="mk-btn mk-btn-ghost" href="#resuelve">Qué resuelve</a>
+        <div class="mk-land-sub">
+            <p class="mk-lead">Para cualquier negocio, de cualquier tamaño: productos, inventario, pedidos y tienda online en un solo lugar. Empiezas con lo básico y Condor crece contigo, de una tienda a un grupo de empresas.</p>
+            <div class="mk-cta-row">
+                <a class="mk-btn mk-btn-mark" href="#solicitar-demo">Solicitar una demo <span class="mk-arrow" aria-hidden="true">→</span></a>
+                <a class="mk-btn mk-btn-ghost" href="#resuelve">Qué resuelve</a>
+            </div>
         </div>
         <ul class="mk-micro"><li>Funciona en el celular</li><li>Pesos colombianos</li><li>Activas solo lo que usas</li></ul>
     </div>
+</section>
+
+{% include 'marketing/_red.html.twig' %}
+
+<section class="mk-section" id="negocio" aria-labelledby="negocio-title">
+    <div class="mk-head"><h2 id="negocio-title">Cuéntanos cómo es tu negocio.</h2><p>Elige una opción y mira cómo se ordena con Condor: de una tienda a un grupo de empresas.</p></div>
     <div class="mk-pick mk-tabs">
 <input class="mk-vh" type="radio" name="pick" id="pk1" checked>
 <input class="mk-vh" type="radio" name="pick" id="pk2">
@@ -124,8 +131,6 @@
         <article class="mk-co mk-co-hl"><span class="mk-eyebrow">Te consolidas</span><h3>Varias empresas</h3><ul><li>Cada razón social, aparte</li><li>Permisos por empresa</li><li>Todo desde una cuenta</li></ul></article>
     </div>
 </section>
-
-{% include 'marketing/_red.html.twig' %}
 
 {% include 'marketing/_panel.html.twig' %}
 

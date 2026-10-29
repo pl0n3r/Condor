@@ -92,7 +92,7 @@ body:has(.mk-site) { background: #f5f6f2; }
 .mk-seg label:hover { background: var(--mk-soft); }
 
 /* selector del héroe */
-.mk-pick { background: var(--mk-surface); border: 1.5px solid var(--mk-ink); border-radius: 22px; box-shadow: 8px 8px 0 var(--mk-ink); overflow: hidden; min-width: 0; }
+.mk-pick { background: var(--mk-surface); border: 1.5px solid var(--mk-ink); border-radius: 22px; box-shadow: 0 1px 2px rgba(13, 24, 48, .08), 0 14px 36px -14px rgba(13, 24, 48, .3); overflow: hidden; min-width: 0; }
 .mk-pick-q { padding: 18px 18px 10px; }
 .mk-pick-q .mk-eyebrow { display: block; margin-bottom: 12px; }
 .mk-seg-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -709,7 +709,7 @@ html.mk-motion .mk-site h1,
 html.mk-motion .mk-hero .mk-lead,
 html.mk-motion .mk-hero .mk-cta-row,
 html.mk-motion .mk-hero .mk-micro,
-html.mk-motion .mk-hero .mk-pick,
+html.mk-motion .mk-pick,
 html.mk-motion .mk-top .mk-lead,
 html.mk-motion .mk-section .mk-head,
 html.mk-motion .mk-need,
@@ -732,7 +732,7 @@ html.mk-motion.mk-motion-calm .mk-rail { transform: none; }
   html.mk-motion.mk-motion .mk-hero .mk-lead,
   html.mk-motion.mk-motion .mk-hero .mk-cta-row,
   html.mk-motion.mk-motion .mk-hero .mk-micro,
-  html.mk-motion.mk-motion .mk-hero .mk-pick,
+  html.mk-motion.mk-motion .mk-pick,
   html.mk-motion.mk-motion .mk-top .mk-lead,
   html.mk-motion.mk-motion .mk-section .mk-head,
   html.mk-motion.mk-motion .mk-need,

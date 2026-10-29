@@ -16,7 +16,7 @@
 
     const EASE = 'expo.out';
     const TITLE = '.mk-site h1';
-    const HERO_FOLLOW = '.mk-hero .mk-lead, .mk-hero .mk-cta-row, .mk-hero .mk-micro, .mk-hero .mk-pick, .mk-top .mk-lead';
+    const HERO_FOLLOW = '.mk-hero .mk-lead, .mk-hero .mk-cta-row, .mk-hero .mk-micro, .mk-pick, .mk-top .mk-lead';
     const HEADS = '.mk-section .mk-head';
     const ITEMS = '.mk-need, .mk-cat-row, .mk-col, .mk-pillars > div, .mk-steps li, .mk-win';
     const STOPS = '.mk-stop';
