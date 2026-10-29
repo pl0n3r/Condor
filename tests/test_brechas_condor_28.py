@@ -113,10 +113,11 @@ def synthetic_scope(request: object, grant: object, permission: object) -> str:
 def synthetic_adapter(contract: object, gate: object, authorized: object) -> str:
     """#742: estado B deniega operación, A tampoco acredita transmisión real."""
     if (type(contract) is not dict or set(contract) != {"adapter", "version"}
-            or contract.get("adapter") not in {"nomina", "pila", "dian", "facturacion"}
+            or type(contract.get("adapter")) is not str
+            or contract["adapter"] not in {"nomina", "pila", "dian", "facturacion"}
             or type(contract.get("version")) is not int
             or contract["version"] != 1 or type(authorized) is not bool
-            or gate not in {"A", "B"}):
+            or type(gate) is not str or gate not in {"A", "B"}):
         return UNKNOWN
     return "DENY" if gate == "B" or not authorized else UNKNOWN
 
@@ -295,6 +296,10 @@ class BrechasCondor28Tests(unittest.TestCase):
         self.assertEqual(UNKNOWN, synthetic_scope(scope, {}, True))
         self.assertEqual(UNKNOWN, synthetic_scope(scope, scope, None))
         self.assertEqual(UNKNOWN, synthetic_adapter({}, "B", True))
+        self.assertEqual(UNKNOWN, synthetic_adapter(
+            {"adapter": [], "version": 1}, "B", True))
+        self.assertEqual(UNKNOWN, synthetic_adapter(
+            {"adapter": "pila", "version": 1}, [], True))
         self.assertEqual(UNKNOWN, synthetic_adapter(
             {"adapter": "pila", "version": 1}, None, True))
         self.assertEqual("DENY", synthetic_notice("case_update", {
