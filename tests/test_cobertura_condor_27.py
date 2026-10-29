@@ -225,7 +225,7 @@ class CoberturaCondor27Tests(unittest.TestCase):
     def test_ci_gate_contract(self) -> None:
         """AC-04: local tests must execute; remote Validar exact-SHA remains separate."""
         self.assertEqual(len(HTTP_ACCEPTANCE), 5)
-        self.assertEqual(len({x[0] for x in HTTP_ACCEPTANCE}), 4)
+        self.assertEqual(len({x[0] for x in HTTP_ACCEPTANCE}), 5)
         self.assertTrue(REPORTS.is_file())
         self.assertTrue(OWNER.is_file())
         for _, module, classname in HTTP_ACCEPTANCE:
