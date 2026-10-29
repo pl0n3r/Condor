@@ -95,7 +95,7 @@ def source_contract(data: object) -> str:
     controller_guards = (
         "use BranchApiSupport;",
         "$this->authorizedScope($branchId, 'catalog.view')",
-        "$this->authorizedScope($branchId, 'catalog.create')",
+        "$this->authorizedScope(\n            $branchId,\n            'catalog.create',",
         "'tenant' => $tenant",
         "$this->entityManager->persist($product)",
         "$this->entityManager->getRepository(Product::class)",
@@ -217,7 +217,7 @@ class BrechasCondor45Tests(unittest.TestCase):
                     matrix_row(broken)
                 self.assertEqual(UNKNOWN, source_contract({**data, MATRIX: broken}))
         mutations = (
-            (CONTROLLER, "$this->authorizedScope($branchId, 'catalog.create')"),
+            (CONTROLLER, "$this->authorizedScope(\n            $branchId,\n            'catalog.create',"),
             (CONTROLLER, "$this->entityManager->persist($product)"),
             (SCOPE, "$this->authorization->require("),
             (SCOPE, "'tenant' => $tenant"),
@@ -271,7 +271,7 @@ class BrechasCondor45Tests(unittest.TestCase):
                 item == forbidden or item.startswith(forbidden + ".")
                 for item in imports))
         self.assertNotIn("BEGIN " + "PRIVATE KEY", local_file)
-        self.assertNotIn("DATABASE_URL=", local_file)
+        self.assertNotIn("DATABASE" + "_URL=", local_file)
 
     def test_estados_unknown_explicitos(self) -> None:
         files = read_sources()
