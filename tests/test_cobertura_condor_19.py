@@ -54,7 +54,7 @@ def _real_php_fixture(module_name: str):
 def _matrix_rows() -> dict[str, tuple[str, ...]]:
     rows = {}
     for line in MATRIX.read_text(encoding="utf-8").splitlines():
-        match = re.match(r"^\|\s*\x60?(GEST-M0[45](?:-S\d{2})?)", line)
+        match = re.match(r"^\|\s*\x60?(GEST-M0[45](?:-S\d{2})?)(?=\x60|[\s|])", line)
         if match is None or match.group(1) not in IDS:
             continue
         key = match.group(1)
