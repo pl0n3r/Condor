@@ -139,8 +139,15 @@ class CoberturaCondor10Tests(unittest.TestCase):
         self.assertEqual(1, run_real_test(
             "tests/test_tag_manager_settings.py", "GtmConfigTenantTests",
             "test_acceptance"))
-        # D-045-S03: ambas suites incluyen negativos de seguridad offline.
-        self.assertTrue((ROOT / "src/Application/Seo/IndexNowOperationKey.php").is_file())
+        # D-045-S03: ejecutar de forma explicita ambas rutas negativas
+        # sobre codigo PHP REAL: tenants cruzados, URLs privadas y falta de
+        # consentimiento nunca producen una operacion valida.
+        self.assertEqual(1, run_real_test(
+            "tests/test_indexnow_notifier.py", "IndexNowAdaptadorTests",
+            "test_acceptance"))
+        self.assertEqual(1, run_real_test(
+            "tests/test_tag_manager_settings.py", "GtmConfigTenantTests",
+            "test_acceptance"))
 
         # D-047: controlador, share service y sanitizer reales, ORM fake.
         self.assertEqual(1, run_real_test(
