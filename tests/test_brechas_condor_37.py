@@ -1,20 +1,14 @@
 #!/usr/bin/env python3
 """Condor #1232: five offline coverage gaps for company groups and README.
 
-The only executable business probe is the repository's pure tenant-scoped PHP
-CSV renderer with invented records. It does NOT attest cross-company access,
-owner/plan segregation, joint billing, a live badge or production readiness.
+Existing synthetic PHP/HTTP tests are inspected as partial evidence, never
+re-executed with credentials or a live application by this suite. No fixture,
+document or passing CI attests cross-company readiness or production.
 """
 from __future__ import annotations
 
 import ast
-import csv
-from functools import lru_cache
-import io
-import json
 from pathlib import Path
-import shutil
-import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -171,85 +165,8 @@ def cockpit_safe(raw: object) -> bool:
     )
 
 
-# No application boot, database, network, real tenants, or credentials.
-PHP_PROBE = r'''
-require 'src/Application/Reporting/TenantCsvReportService.php';
-$service = new \App\Application\Reporting\TenantCsvReportService();
-function syntheticRow(string $kind, string $tenant, string $id): array {
-    $columns = \App\Application\Reporting\TenantCsvReportService::COLUMNS[$kind];
-    $row = array_fill_keys($columns, 'synthetic-fixture');
-    $row[$columns[0]] = $id;
-    $row['tenant_id'] = $tenant;
-    $row['occurred_at'] = '2026-10-02';
-    if ($kind === 'sales') {
-        $row['currency'] = 'COP';
-        $row['total_amount_minor'] = '12500';
-    }
-    return $row;
-}
-$out = [];
-foreach (['inventory', 'sales', 'purchases'] as $kind) {
-    $data = $service->build($kind, 'tenant-synthetic-a', '2026-10-01',
-        '2026-10-03', [syntheticRow($kind, 'tenant-synthetic-a', 'own-a'),
-                       syntheticRow($kind, 'tenant-synthetic-b', 'foreign-b')]);
-    $out[$kind] = $data['body'];
-}
-function rejected(callable $action): string {
-    try { $action(); return 'UNEXPECTED_ALLOW'; }
-    catch (\DomainException $ex) { return $ex->getMessage(); }
-}
-$out['joint_billing_denied'] = rejected(
-    fn() => $service->build('consolidated', 'tenant-synthetic-a',
-                            '2026-10-01', '2026-10-03', []));
-$out['missing_tenant'] = rejected(
-    fn() => $service->build('sales', '', '2026-10-01', '2026-10-03', []));
-$out['invalid_range'] = rejected(
-    fn() => $service->build('sales', 'tenant-synthetic-a',
-                            '2026-10-03', '2026-10-01', []));
-echo json_encode($out, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-'''
-
-
-@lru_cache(maxsize=1)
-def exercise_php() -> dict[str, str]:
-    php = shutil.which("php")
-    if php is None:
-        raise AssertionError("UNKNOWN: PHP CLI ausente")
-    run = subprocess.run(
-        [php, "-n", "-d", "allow_url_fopen=0", "-r", PHP_PROBE],
-        cwd=ROOT, text=True, capture_output=True, check=False, timeout=25,
-    )
-    if run.returncode or run.stderr.strip():
-        raise AssertionError("UNKNOWN: PHP sintético falló")
-    try:
-        parsed = json.loads(run.stdout)
-    except ValueError as exc:
-        raise AssertionError("UNKNOWN: salida no es JSON") from exc
-    if type(parsed) is not dict:
-        raise AssertionError("UNKNOWN: salida PHP inválida")
-    return parsed
-
-
-def csv_safe(proof: object) -> bool:
-    if type(proof) is not dict:
-        return False
-    for kind in ("inventory", "sales", "purchases"):
-        body = proof.get(kind)
-        if type(body) is not str:
-            return False
-        lines = list(csv.reader(io.StringIO(body)))
-        if len(lines) != 2 or lines[1][0] != "own-a" or "foreign-b" in body:
-            return False
-    return (
-        proof.get("joint_billing_denied") == "REPORT_KIND_UNSUPPORTED"
-        and proof.get("missing_tenant") == "TENANT_REQUIRED"
-        and proof.get("invalid_range") == "INVALID_REPORT_RANGE"
-        and "COP" in proof["sales"] and "12500" in proof["sales"]
-    )
-
-
-def local_evidence(key: object, data: object, proof: object) -> str:
-    """At most an explicit gap with partial reproducible local evidence."""
+def local_evidence(key: object, data: object) -> str:
+    """Only a documented gap; existing tests do not prove the full journey."""
     if type(key) is not str or key not in CLAUSES or type(data) is not dict:
         return UNKNOWN
     if set(data) != set(SOURCES) or any(
@@ -262,10 +179,10 @@ def local_evidence(key: object, data: object, proof: object) -> str:
         return UNKNOWN
     if not guide_safe(data[GUIDE]) or not cockpit_safe(data[README]):
         return UNKNOWN
-    for path, snippets in EVIDENCE[key].items():
-        if any(needle not in data[path] for needle in snippets):
+    for source, snippets in EVIDENCE[key].items():
+        if any(snippet not in data[source] for snippet in snippets):
             return UNKNOWN
-    return GAP if csv_safe(proof) else UNKNOWN
+    return GAP
 
 
 def operational_state(_key: object, _proof: object = None) -> str:
@@ -275,26 +192,29 @@ def operational_state(_key: object, _proof: object = None) -> str:
 
 class BrechasCondor37Tests(unittest.TestCase):
     def test_contrato_principal(self) -> None:
-        """AC-01: all five IDs, local CSV tenant denial, no silent row."""
-        data, proof = sources(), exercise_php()
+        """AC-01: five unique clauses and partial local evidence or explicit gap."""
+        data = sources()
         self.assertEqual(len(CLAUSES), 5)
         self.assertEqual(set(CLAUSES), set(EVIDENCE))
         self.assertEqual(set(CLAUSES), set(matrix_rows(data[MATRIX])))
-        self.assertTrue(csv_safe(proof))
+        self.assertTrue(guide_safe(data[GUIDE]))
+        self.assertTrue(cockpit_safe(data[README]))
         for key in CLAUSES:
             with self.subTest(clause=key):
-                self.assertEqual(local_evidence(key, data, proof), GAP)
-                self.assertEqual(operational_state(key, proof), UNKNOWN)
+                self.assertEqual(local_evidence(key, data), GAP)
+                self.assertEqual(operational_state(key, data), UNKNOWN)
                 self.assertEqual(matrix_rows(data[MATRIX])[key][2],
                                  f"{TICK}NO_VERIFICABLE{TICK}")
+                for source, needles in EVIDENCE[key].items():
+                    self.assertTrue(all(marker in data[source] for marker in needles))
 
     def test_falla_cerrado(self) -> None:
-        """AC-02: reject absent, ambiguous, promoted and forged evidence."""
-        data, proof = sources(), exercise_php()
+        """AC-02: missing, duplicate, promoted or stale evidence -> UNKNOWN."""
+        data = sources()
         for key in CLAUSES:
             original = next(line for line in data[MATRIX].splitlines()
                             if line.startswith(f"| {TICK}{key}{TICK} ·"))
-            mutations = (
+            variants = (
                 data[MATRIX].replace(original, "", 1),
                 data[MATRIX] + "\n" + original,
                 data[MATRIX].replace(
@@ -302,59 +222,56 @@ class BrechasCondor37Tests(unittest.TestCase):
                 data[MATRIX].replace(
                     original, original.replace("| #1 |", "| #999 |"), 1),
             )
-            for bad in mutations:
+            for mutated in variants:
                 with self.subTest(clause=key):
                     with self.assertRaisesRegex(ValueError, UNKNOWN):
-                        matrix_rows(bad)
+                        matrix_rows(mutated)
                     self.assertEqual(
-                        local_evidence(key, {**data, MATRIX: bad}, proof),
-                        UNKNOWN,
-                    )
-            path = GUIDE if key.startswith("OPS-") else README
-            marker = (STEPS[int(key[-1]) - 1] if key.startswith("OPS-")
-                      else "sin commits de refresco")
+                        local_evidence(key, {**data, MATRIX: mutated}), UNKNOWN)
+            document = GUIDE if key.startswith("OPS-") else README
+            sentence = (STEPS[int(key[-1]) - 1] if key.startswith("OPS-")
+                        else "sin commits de refresco")
+            modified = data[document].replace(sentence, "", 1)
+            self.assertNotEqual(modified, data[document])
             self.assertEqual(
-                local_evidence(key, {**data, path: data[path].replace(marker, "", 1)}, proof),
-                UNKNOWN,
-            )
-            for dependency in EVIDENCE[key]:
+                local_evidence(key, {**data, document: modified}), UNKNOWN)
+            for source, needles in EVIDENCE[key].items():
+                missing = data[source].replace(needles[0], "", 1)
+                self.assertNotEqual(missing, data[source])
                 self.assertEqual(
-                    local_evidence(key, {**data, dependency: ""}, proof), UNKNOWN)
-        self.assertEqual(local_evidence("OPS-REC-Z", data, proof), UNKNOWN)
-        self.assertEqual(local_evidence("OPS-REC-D-P1", {}, proof), UNKNOWN)
-        self.assertEqual(local_evidence("OPS-REC-D-P2", data,
-                                        {**proof, "sales": "foreign-b"}), UNKNOWN)
-        self.assertEqual(local_evidence("OPS-REC-D-P4", data,
-                                        {**proof, "invalid_range": "UNEXPECTED_ALLOW"}),
+                    local_evidence(key, {**data, source: missing}), UNKNOWN)
+        for invalid in (None, {}, False, {"made": "up"}):
+            self.assertEqual(local_evidence("OPS-REC-D-P1", invalid), UNKNOWN)
+        self.assertEqual(local_evidence("OPS-REC-D-UNKNOWN", data), UNKNOWN)
+        self.assertEqual(local_evidence("README-01-01",
+                         {**data, README: data[README].replace(
+                             "badge.svg?branch=main", "badge.svg?branch=dev", 1)}),
                          UNKNOWN)
 
     def test_sin_datos_reales(self) -> None:
-        """AC-03: in-memory-only PHP and fictitious tenants; no external I/O."""
-        path = ROOT / "tests/test_brechas_condor_37.py"
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        """AC-03: no subprocess or network; only checked-in synthetic evidence."""
+        own = (ROOT / "tests/test_brechas_condor_37.py").read_text(encoding="utf-8")
+        tree = ast.parse(own)
         imported = {alias.name.split(".")[0] for node in ast.walk(tree)
                     if isinstance(node, ast.Import) for alias in node.names}
         imported |= {node.module.split(".")[0] for node in ast.walk(tree)
                      if isinstance(node, ast.ImportFrom) and node.module}
-        self.assertFalse(imported & {
-            "socket", "urllib", "requests", "httpx", "playwright",
-            "pymysql", "sqlalchemy", "mysql",
-        })
+        self.assertLessEqual(imported, {"__future__", "ast", "pathlib", "unittest"})
         self.assertTrue(all((ROOT / p).is_file() for p in SOURCES))
-        for forbidden in (
-            "curl_", "file_get_contents", "file_put_contents", "mysqli",
-            "PDO(", "getenv(", "shell_exec", "https://", "http://",
-            "DATABASE_URL", "APP_SECRET", "access_token",
-        ):
-            self.assertNotIn(forbidden, PHP_PROBE)
-        self.assertTrue(csv_safe(exercise_php()))
-        self.assertNotIn("foreign-b", json.dumps(exercise_php()))
+        evidence = sources()
+        self.assertIn("other-tenant", evidence[CSV_TEST])
+        self.assertIn("tenant-b", evidence[CSV_TEST])
+        self.assertIn("testCustomerListsAndMutationsAreTenantScoped",
+                      evidence[CUSTOMERS])
+        self.assertIn("assertResponseStatusCodeSame(404)", evidence[INVENTORY])
+        self.assertEqual(operational_state("OPS-REC-D-P2",
+                                          {"tenant": "synthetic-a"}), UNKNOWN)
 
     def test_estados_unknown_explicitos(self) -> None:
-        """AC-04: badges, offline results and imaginary approvals are not live."""
-        data, proof = sources(), exercise_php()
+        """AC-04: badges, owner plans and combined billing are NOT attested."""
+        data = sources()
         for key in CLAUSES:
-            self.assertEqual(local_evidence(key, data, proof), GAP)
+            self.assertEqual(local_evidence(key, data), GAP)
             for invented in (
                 None, {}, True, {"permission": "allow", "tenant": "fixture"},
                 {"currency": "COP", "amount_minor": 12500},
@@ -364,10 +281,10 @@ class BrechasCondor37Tests(unittest.TestCase):
             ):
                 with self.subTest(clause=key):
                     self.assertEqual(operational_state(key, invented), UNKNOWN)
-        self.assertEqual(proof["joint_billing_denied"], "REPORT_KIND_UNSUPPORTED")
         self.assertTrue(cockpit_safe(data[README]))
-        self.assertFalse(cockpit_safe(
-            data[README].replace("badge.svg?branch=main", "badge.svg?branch=dev", 1)))
+        self.assertFalse(cockpit_safe(data[README].replace(
+            "badge.svg?branch=main", "badge.svg?branch=dev", 1)))
+        self.assertTrue("**en construcción**" in STEPS[3])
 
 
 if __name__ == "__main__":
