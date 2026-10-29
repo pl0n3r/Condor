@@ -88,16 +88,16 @@ def matrix_rows(raw: object) -> dict[str, tuple[str, ...]]:
         raise ValueError("UNKNOWN: matriz ilegible")
     found: dict[str, tuple[str, ...]] = {}
     for line in raw.splitlines():
-        if not line.startswith("| \`GEST-FLUJO-"):
+        if not line.startswith("| `GEST-FLUJO-"):
             continue
         cells = tuple(v.strip() for v in line.strip("|").split("|"))
         key = cells[0].split(" · ", 1)[0].strip(chr(96))
         if key not in CLAUSES:
             continue
-        expected = f"\`{key}\` · \`{SPEC}\`"
+        expected = f"`{key}` · `{SPEC}`"
         if (key in found or len(cells) != 5 or cells[0] != expected
                 or cells[1] != CLAUSES[key][0]
-                or cells[2] != "\`NO_VERIFICABLE\`"
+                or cells[2] != "`NO_VERIFICABLE`"
                 or f"Falta vincular para {key} " not in cells[3]
                 or "no se identificó tríada código+prueba+PR fusionado" not in cells[3]
                 or cells[4] != "#802"):
@@ -212,7 +212,7 @@ class BrechasCondor25Tests(unittest.TestCase):
         original = data[MATRIX]
         for key in CLAUSES:
             line = next(s for s in original.splitlines()
-                        if s.startswith(f"| \`{key}\` ·"))
+                        if s.startswith(f"| `{key}` ·"))
             for mutant in (
                 original.replace(line, "", 1),
                 original + "\n" + line,
