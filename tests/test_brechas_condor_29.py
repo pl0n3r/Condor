@@ -99,6 +99,7 @@ echo json_encode([
  'review'=>R::evaluate($rules,$ctx,'2026-10-27',[$goodReview]),
  'unreviewed'=>R::evaluate($rules,$ctx,'2026-10-27',[]),
  'invalid_review'=>R::evaluate($rules,$ctx,'2026-10-27',[$badReview]),
+ 'duplicate_review'=>R::evaluate($rules,$ctx,'2026-10-27',[$goodReview,$goodReview]),
  'foreign_matrix'=>M::evaluate([$foreign],$ctx,'2026-10-27'),
  'unknown_context'=>M::evaluate([$rule],['tenant_ref'=>'tenant-a'],'2026-10-27'),
  'bad_source'=>A::evaluate($badSource,$ctx,'2026-10-27'),
@@ -218,6 +219,7 @@ def verdict(key: object, data: object, probe: object) -> dict[str, str]:
             and probe["review"]["rows"][0]["state"] == "EN_REVISION"
             and probe["unreviewed"]["rows"][0]["state"] == "PENDIENTE"
             and probe["invalid_review"]["rows"][0]["state"] == "REQUIERE_REVISION"
+            and probe["duplicate_review"]["rows"][0]["state"] == "REQUIERE_REVISION"
             and probe["foreign_matrix"]["rows"] == []
             and probe["unknown_context"]["rows"][0]["kind"] == "REQUIERE_REVISION"
             and all(probe[field]["kind"] == "REQUIERE_REVISION" for field in (
@@ -306,6 +308,8 @@ class BrechasCondor29Tests(unittest.TestCase):
         self.assertIsNone(probe["bad_amount"]["source"])
         self.assertEqual("REQUIERE_REVISION",
                          probe["invalid_review"]["rows"][0]["state"])
+        self.assertEqual("REQUIERE_REVISION",
+                         probe["duplicate_review"]["rows"][0]["state"])
         for key in CLAUSES:
             result = verdict(key, data, probe)
             self.assertEqual(UNKNOWN, result["ci"])
