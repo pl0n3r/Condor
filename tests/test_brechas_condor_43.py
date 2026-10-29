@@ -57,6 +57,12 @@ ACTIONS = {
 }
 
 
+def readme_phrase(key: str) -> str:
+    """The matrix stores plaintext obligations; README roles use bold Markdown."""
+    phrase = CLAUSES[key][1]
+    return phrase if key == "README-09-02" else "**" + phrase.replace(": ", ":** ", 1)
+
+
 def sources() -> dict[str, str]:
     """Read only committed text, without network, credentials or subprocesses."""
     return {file: (ROOT / file).read_text(encoding="utf-8") for file in FILES}
@@ -149,7 +155,7 @@ def source_contract(key: object, data: object) -> str:
         return UNKNOWN
     heading, phrase = CLAUSES[key]
     block = section(data[README], heading)
-    if block is None or phrase not in block:
+    if block is None or readme_phrase(key) not in block:
         return UNKNOWN
 
     if key == "README-09-02":
@@ -210,7 +216,7 @@ class BrechasCondor43Tests(unittest.TestCase):
         for key in CLAUSES:
             with self.subTest(clause=key):
                 heading, phrase = CLAUSES[key]
-                self.assertIn(phrase, section(data[README], heading))
+                self.assertIn(readme_phrase(key), section(data[README], heading))
                 self.assertEqual(DOCUMENTED, source_contract(key, data))
                 self.assertEqual(UNKNOWN, operational_state(key, data))
         for action, owner in ACTIONS.items():
@@ -235,7 +241,7 @@ class BrechasCondor43Tests(unittest.TestCase):
                         matrix_rows(damaged)
                     self.assertEqual(UNKNOWN, source_contract(
                         key, {**data, MATRIX: damaged}))
-            phrase = CLAUSES[key][1]
+            phrase = readme_phrase(key)
             self.assertEqual(UNKNOWN, source_contract(
                 key, {**data, README: data[README].replace(phrase, "AMBIGUOUS", 1)}))
         mutations = {
