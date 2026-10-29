@@ -35,14 +35,14 @@ body:has(.mk-site) { background: #f5f6f8; }
 .mk-site { scroll-behavior: smooth; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
 .mk-wrap { max-width: 1160px; margin: 0 auto; }
 .mk-site h1, .mk-site h2, .mk-site h3 { font-family: var(--mk-display); font-weight: 800; letter-spacing: -.025em; line-height: 1.03; margin: 0; text-wrap: balance; }
-.mk-site p { margin: 0; }
+.mk-site p { margin: 0; text-wrap: pretty; }
 .mk-site a { color: inherit; }
 .mk-site :focus-visible { outline: 3px solid var(--mk-link); outline-offset: 3px; }
 .mk-eyebrow { font: 500 12px/1 var(--mk-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mk-ink-2); }
 .mk-mark { background: linear-gradient(transparent 58%, var(--mk-mark) 58% 92%, transparent 92%); padding: 0 .08em; color: var(--mk-ink); }
 .mk-vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 
-.mk-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; gap: .6em; font: 600 16px/1 var(--mk-body); padding: 14px 22px; border-radius: 999px; text-decoration: none; border: 1.5px solid var(--mk-ink); transition: transform .15s, background .15s, color .15s; cursor: pointer; }
+.mk-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; gap: .6em; font: 600 16px/1 var(--mk-body); padding: 14px 22px; border-radius: 999px; text-decoration: none; border: 1.5px solid var(--mk-ink); cursor: pointer; }
 .mk-btn-primary { background: var(--mk-ink); color: var(--mk-bg) !important; }
 .mk-btn-mark { background: var(--mk-mark); color: var(--mk-mark-ink) !important; border-color: var(--mk-mark); }
 .mk-btn-ghost:hover { background: var(--mk-ink); color: var(--mk-bg); }
@@ -115,6 +115,7 @@ body:has(.mk-site) { background: #f5f6f8; }
 .mk-need h3 { font-size: 24px; }
 .mk-need p { color: var(--mk-ink-2); font-size: 16px; }
 .mk-need .mk-chip { align-self: flex-start; margin-top: auto; }
+.mk-needs-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 /* simple por defecto */
 .mk-simple { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; counter-reset: on; position: relative; }
@@ -399,6 +400,24 @@ body:has(.mk-site) { background: #f5f6f8; }
   .mk-demo .mk-cta-row .mk-btn { width: 100%; }
 }
 @media (max-width: 480px) { .mk-actions .mk-btn { display: none; } }
+/* Pulido: detalles que se sienten sin pedir atención. Todo es CSS, sin JavaScript. */
+.mk-section, .mk-demo { scroll-margin-top: 84px; }
+.mk-prod span, .mk-cnt, .mk-need .mk-say { font-variant-numeric: tabular-nums; }
+.mk-btn:active { transform: scale(.97); }
+@media (prefers-reduced-motion: no-preference) {
+  .mk-btn { transition: transform .15s, background-color .15s, color .15s; }
+  .mk-need, .mk-col, .mk-co { transition: background-color .2s ease; }
+}
+@media (hover: hover) {
+  .mk-need:hover, .mk-co:hover { background: color-mix(in srgb, var(--mk-soft) 55%, transparent); }
+}
+/* Entrada suave al hacer scroll: solo donde el navegador la soporta y la persona no pidió menos movimiento. */
+@keyframes mk-rise { from { opacity: 0; transform: translateY(14px); } }
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .mk-need, .mk-col, .mk-co { animation: mk-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 40%; }
+  }
+}
 @media (prefers-reduced-motion: reduce) { .mk-site, .mk-site * { transition: none !important; scroll-behavior: auto !important; } }
 @media print { .mk-bar { position: static; } .mk-tp { display: block !important; } }
 
