@@ -60,9 +60,11 @@ PHP_TOKEN = r"""
 require 'src/Application/Identity/PasswordResetSecurity.php';
 $s = new App\Application\Identity\PasswordResetSecurity();
 [$raw, $hash, $expiry] = $s->issue();
+[$nextRaw, $nextHash] = $s->issue();
 $delta = $expiry->getTimestamp() - $s->now()->getTimestamp();
 echo json_encode([
     'random_hex_64' => strlen($raw) === 64 && ctype_xdigit($raw),
+    'independent_random_tokens' => $raw !== $nextRaw && $hash !== $nextHash,
     'sha256_digest' => strlen($hash) === 64 && hash_equals($hash, hash('sha256', $raw)),
     'round_trip' => hash_equals($hash, $s->hashRawToken($raw) ?? ''),
     'case_normalization' => hash_equals($hash, $s->hashRawToken(strtoupper($raw)) ?? ''),
