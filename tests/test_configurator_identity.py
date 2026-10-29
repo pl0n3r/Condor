@@ -40,6 +40,12 @@ class ConfiguratorIdentityTests(unittest.TestCase):
         hover = BLOCK[BLOCK.index("@media (hover: hover)"):]
         self.assertIn("prefers-reduced-motion: no-preference", hover.split("{", 1)[0])
 
+    def test_the_lead_under_the_title_overrides_the_muted_class_so_it_keeps_aa_on_navy(self) -> None:
+        self.assertIn(".mk-site .configurator-top .muted, .mk-site .configurator-top .mk-lead { color: var(--mk-ink-2); }", CSS)
+
+    def test_choice_cards_and_hints_use_the_themed_secondary_color_so_dark_mode_keeps_aa(self) -> None:
+        self.assertIn(".mk-site .choice span, .mk-site .choice small, .mk-site .choice .muted, .mk-site .choice .hint, .mk-site .configurator-flow .hint, .mk-site .configurator-flow .muted { color: var(--mk-ink-2); }", CSS)
+
 
 if __name__ == "__main__":
     unittest.main()
