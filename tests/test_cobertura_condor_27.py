@@ -194,6 +194,8 @@ class CoberturaCondor27Tests(unittest.TestCase):
             ({"tenant": ""}, "TENANT_REQUIRED"),
             ({"kind": "consolidated_billing"}, "REPORT_KIND_UNSUPPORTED"),
             ({"start": "invalid"}, "INVALID_REPORT_DATE"),
+            ({"records": [record("fixture-tenant-b", "foreign", "2026-99-99")]},
+             "INVALID_REPORT_DATE"),
             ({"start": "2026-10-22", "end": "2026-10-20"}, "INVALID_REPORT_RANGE"),
             ({"records": [{"record_id": "without-tenant"}]}, "INVALID_REPORT_RECORD"),
             ({"records": [{**record("fixture-tenant-a", "x"),
@@ -203,6 +205,12 @@ class CoberturaCondor27Tests(unittest.TestCase):
                 result = report(**payload)
                 self.assertEqual(result, {"ok": False, "reason": reason})
         self.assertIs(php_probe(OWNER_PHP, OWNER)["denied"], True)
+        # Defense in depth: an attacker-controlled CSV cell must not become a formula.
+        sanitized = report(records=[{**record("fixture-tenant-a", "formula"),
+                                     "source_id": "=1+2"}])
+        self.assertTrue(sanitized["ok"])
+        values = list(csv.DictReader(io.StringIO(sanitized["data"]["body"])))
+        self.assertEqual(values[0]["source_id"], "'=1+2")
 
     def test_sin_datos_reales(self) -> None:
         """AC-03: all fixtures are fictional; no remote client or secrets."""
