@@ -100,8 +100,12 @@ jobs:
               result = read_json(query)
               findings = result.get("issues")
               total = result.get("total")
+              # GitHub check output publishes up to 50 annotations; Sonar's
+              # complete issue page is still required for severe triage.
               if (not isinstance(findings, list) or type(total) is not int
-                      or total != len(findings) or total != expected or total > 100):
+                      or total != len(findings)
+                      or (total <= 50 and total != expected)
+                      or expected != min(total, 50) or total > 100):
                   raise Unverified()
               known_types = {"BUG", "VULNERABILITY", "CODE_SMELL"}
               known_severities = {"INFO", "LOW", "MINOR", "MEDIUM", "MAJOR",
