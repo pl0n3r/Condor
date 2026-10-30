@@ -67,21 +67,21 @@ final class PayUPaymentGateway implements PaymentGateway
     public function charge(array $request): array
     {
         self::shape($request, ['tenant_id', 'company_id', 'order_ref', 'amount_minor', 'currency', 'idempotency_key']);
-        $tenant = self::identifier($request['tenant_id']);
-        $company = self::identifier($request['company_id']);
-        $order = self::identifier($request['order_ref']);
-        $key = self::identifier($request['idempotency_key']);
+        [$tenant, $company, $order, $key] = array_map(
+            static fn (mixed $part): string => self::identifier($part),
+            [$request['tenant_id'], $request['company_id'], $request['order_ref'], $request['idempotency_key']],
+        );
         $amount = self::amount($request['amount_minor']);
         $currency = self::currency($request['currency']);
         $scope = $tenant.'/'.$company;
         $idempotencyScope = $scope.'/'.$key;
         $fingerprint = hash('sha256', json_encode([$tenant, $company, $order, $amount, $currency], JSON_THROW_ON_ERROR));
-        if (isset($this->requests[$idempotencyScope])) {
-            $previous = $this->requests[$idempotencyScope];
-            if (!hash_equals($previous['fingerprint'], $fingerprint)) {
+        $previousCharge = $this->requests[$idempotencyScope] ?? null;
+        if ($previousCharge !== null) {
+            if (!hash_equals($previousCharge['fingerprint'], $fingerprint)) {
                 throw new DomainException('PAYU_IDEMPOTENCY_CONFLICT');
             }
-            return $this->charges[$previous['ref']];
+            return $this->charges[$previousCharge['ref']];
         }
         $saleScope = $scope.'/'.$order;
         if (isset($this->saleRefs[$saleScope])) {
@@ -135,12 +135,17 @@ final class PayUPaymentGateway implements PaymentGateway
 
     public function query(string $tenantId, string $companyId, string $chargeRef): array
     {
-        $tenantId = self::identifier($tenantId);
-        $companyId = self::identifier($companyId);
-        $charge = $this->charges[$chargeRef] ?? null;
-        if ($charge === null || !hash_equals($charge['tenant_id'], $tenantId)
-            || !hash_equals($charge['company_id'], $companyId)) {
+        if (!self::validIdentifier($tenantId) || !self::validIdentifier($companyId)) {
             throw new DomainException('PAYU_CHARGE_NOT_FOUND');
+        }
+        $charge = $this->charges[$chargeRef] ?? null;
+        if ($charge === null) {
+            throw new DomainException('PAYU_CHARGE_NOT_FOUND');
+        }
+        foreach (['tenant_id' => $tenantId, 'company_id' => $companyId] as $field => $expected) {
+            if (!hash_equals($charge[$field], $expected)) {
+                throw new DomainException('PAYU_CHARGE_NOT_FOUND');
+            }
         }
         return $charge;
     }
@@ -148,9 +153,10 @@ final class PayUPaymentGateway implements PaymentGateway
     public function refund(array $request): array
     {
         self::shape($request, ['tenant_id', 'company_id', 'charge_ref', 'amount_minor', 'idempotency_key']);
-        $tenant = self::identifier($request['tenant_id']);
-        $company = self::identifier($request['company_id']);
-        $key = self::identifier($request['idempotency_key']);
+        [$tenant, $company, $key] = array_map(
+            static fn (mixed $part): string => self::identifier($part),
+            [$request['tenant_id'], $request['company_id'], $request['idempotency_key']],
+        );
         $amount = self::amount($request['amount_minor']);
         $ref = $request['charge_ref'];
         if (preg_match('/^payu_[a-f0-9]{64}$/D', $ref) !== 1) {
@@ -159,11 +165,12 @@ final class PayUPaymentGateway implements PaymentGateway
         $charge = $this->query($tenant, $company, $ref);
         $scope = $tenant.'/'.$company.'/'.$key;
         $fingerprint = hash('sha256', $ref.'/'.$amount);
-        if (isset($this->refunds[$scope])) {
-            if (!hash_equals($this->refunds[$scope]['fingerprint'], $fingerprint)) {
+        $previousRefund = $this->refunds[$scope] ?? null;
+        if ($previousRefund !== null) {
+            if (!hash_equals($previousRefund['fingerprint'], $fingerprint)) {
                 throw new DomainException('PAYU_IDEMPOTENCY_CONFLICT');
             }
-            return $this->refunds[$scope]['result'];
+            return $previousRefund['result'];
         }
         if ($charge['status'] !== 'approved' || $charge['amount_minor'] !== $amount) {
             throw new DomainException('PAYU_REFUND_NOT_ALLOWED');
