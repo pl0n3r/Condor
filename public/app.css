@@ -499,3 +499,27 @@ input {
   .admin-shell .sidebar nav { display: flex; gap: var(--space-2); overflow-x: auto; padding-bottom: var(--space-2); scrollbar-width: thin; }
   .admin-shell .sidebar a { flex: 0 0 auto; white-space: nowrap; }
 }
+
+/* Pulido de interfaz (auditoría de diseño, #1428) */
+html { -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
+td, th { font-variant-numeric: tabular-nums; }
+
+.button,
+input {
+  transition-property: background-color, border-color, box-shadow, color, scale;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.button:active { scale: 0.96; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
