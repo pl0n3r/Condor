@@ -158,6 +158,13 @@ final class PayUPaymentGatewayTest extends TestCase
         };
         self::withGateway($transport, static function (PayUPaymentGateway $gateway) use (&$times): void {
             $charge = $gateway->charge(self::charge());
+            // PHP associative payloads are unordered by contract: replay must be stable.
+            $reordered = [
+                'currency' => 'COP', 'idempotency_key' => 'idem-payu-001',
+                'tenant_id' => 'tenant-a', 'amount_minor' => 155025,
+                'company_id' => 'company-a', 'order_ref' => 'sale-payu-001',
+            ];
+            self::assertSame($charge, $gateway->charge($reordered));
             foreach ([
                 [...self::charge(), 'amount_minor' => 155026],
                 self::charge('other-key', 'sale-payu-001'),

@@ -293,7 +293,7 @@ final class PayUPaymentGateway implements PaymentGateway
      */
     private static function shape(array $value, array $keys): void
     {
-        if (array_keys($value) !== $keys) {
+        if (count($value) !== count($keys) || array_diff($keys, array_keys($value)) !== []) {
             throw new DomainException('PAYU_INVALID_PAYLOAD');
         }
     }
