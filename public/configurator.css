@@ -38,3 +38,43 @@
 .quote-cta{display:block;text-align:center;margin-top:16px}
 .choice-grid.compact{grid-template-columns:repeat(2,minmax(0,200px))}
 @media(max-width:760px){.quote-summary{padding:12px 16px}.quote-summary h2,.quote-summary .muted,.quote-summary .eyebrow,.quote-summary>p:not(.muted){display:none}.quote-summary .total{font-size:1.6rem;margin-top:0}.quote-cta{margin-top:8px;padding-block:10px}}
+
+/* Configurador claro: pasos con ayuda, cantidades con botones, resumen con desglose, movimiento con propósito. */
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.cfg-loading{display:block;padding:48px 0;color:var(--mk-ink-2)}
+.mk-site .step-help{margin:0 0 16px;color:var(--mk-ink-2);font-size:.98rem;line-height:1.45;max-width:52ch}
+.choice-grid.plans{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.mk-site .choice{padding:18px 16px 16px;gap:4px;min-height:132px}
+.mk-site .choice strong{font-size:1.1rem}
+.mk-site .choice .price{color:var(--mk-ink);font-size:1.25rem;font-weight:700;font-variant-numeric:tabular-nums;margin-top:6px}
+.mk-site .choice small{color:var(--mk-ink-2);font-size:.82rem}
+.mk-site .choice:has(input:checked) .price{color:var(--mk-link)}
+.field-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
+.qty{display:grid;gap:6px;align-content:start;border:1.5px solid var(--mk-line);border-radius:14px;padding:16px;background:var(--mk-bg)}
+.qty-name{font-weight:700;font-size:1.05rem;color:var(--mk-ink)}
+.stepper{display:grid;grid-template-columns:44px 1fr 44px;gap:8px;margin-block:6px}
+.stepper button{min-height:44px;border:1.5px solid var(--mk-line);border-radius:10px;background:var(--mk-surface);color:var(--mk-ink);font-size:1.3rem;cursor:pointer;transition:border-color .15s ease,transform .1s ease}
+.stepper button:hover:not(:disabled){border-color:var(--mk-link)}
+.stepper button:active:not(:disabled){transform:scale(.94)}
+.stepper button:disabled{opacity:.4;cursor:not-allowed}
+.stepper input{text-align:center;font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.stepper button:focus-visible{outline:3px solid var(--mk-link);outline-offset:2px}
+.mk-site .capability-list{grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:20px}
+.mk-site .capability-list details{border:1.5px solid var(--mk-line);border-radius:12px;padding:12px 14px;background:var(--mk-bg)}
+.mk-site .capability-list summary{display:flex;align-items:center;gap:10px;font-weight:600;list-style:none}
+.mk-site .capability-list summary::-webkit-details-marker{display:none}
+.mk-site .capability-list .tick{display:grid;place-items:center;flex:none;width:22px;height:22px;border-radius:50%;background:color-mix(in srgb,var(--mk-ok) 22%,transparent);color:var(--mk-ok);font-size:.8rem}
+.mk-site .capability-list p{margin:10px 0 0;color:var(--mk-ink-2);font-size:.92rem}
+.segmented{display:inline-grid;grid-template-columns:1fr 1fr;border:1.5px solid var(--mk-line);border-radius:999px;padding:4px;background:var(--mk-bg)}
+.seg{position:relative;cursor:pointer}
+.seg input{position:absolute;opacity:0;inset:0;width:100%;height:100%;margin:0;cursor:pointer}
+.seg span{display:block;padding:10px 26px;border-radius:999px;font-weight:600;color:var(--mk-ink-2);text-align:center;transition:background-color .2s ease,color .2s ease}
+.seg:has(input:checked) span{background:var(--mk-link);color:var(--mk-mark-ink)}
+.seg:has(input:focus-visible){outline:3px solid var(--mk-link);outline-offset:2px;border-radius:999px}
+.mk-site .quote-summary .vert{margin:0 0 14px;color:var(--mk-ink-2)}
+.sum-list{list-style:none;margin:0 0 16px;padding:0;border-top:1px solid var(--mk-line)}
+.sum-list li{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--mk-line);color:var(--mk-ink-2)}
+.sum-list b{color:var(--mk-ink);font-variant-numeric:tabular-nums}
+.quote-summary .total-label{display:block;color:var(--mk-ink-2);font-size:.9rem}
+@media(max-width:760px){.mk-site .sum-list{display:none}.mk-site .quote-summary .vert{display:none}}
