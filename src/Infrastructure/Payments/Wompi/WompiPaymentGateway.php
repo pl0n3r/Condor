@@ -142,8 +142,9 @@ final class WompiPaymentGateway implements PaymentGateway
         ];
         $this->refunds[$scope] = ['fingerprint' => $fingerprint, 'result' => $result];
         $this->refundStatuses[$chargeRef] = 'refunded';
-        $this->charges[$chargeRef]['status'] = 'refunded';
-        $this->charges[$chargeRef]['ledger_context'] = null;
+        $charge['status'] = 'refunded';
+        $charge['ledger_context'] = null;
+        $this->charges[$chargeRef] = $charge;
         return $result;
     }
 
