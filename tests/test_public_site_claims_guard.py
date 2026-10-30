@@ -336,6 +336,8 @@ class AfirmacionesSitioPublicoTests(unittest.TestCase):
             ("url externa", valid.replace('<svg ', '<svg href="https://example.org/logo.svg" '), "home/index.html.twig"),
             ("imagen en svg", valid.replace('</svg>', '<image href="/client.png"/></svg>'), "home/index.html.twig"),
             ("use en svg", valid.replace('</svg>', '<use href="#logo"/></svg>'), "home/index.html.twig"),
+            ("etiqueta de logo", valid.replace('<svg ', '<svg aria-label="Logo de cliente" '), "home/index.html.twig"),
+            ("foreignobject", valid.replace('</svg>', '<foreignObject></foreignObject></svg>'), "home/index.html.twig"),
             ("path externo", valid.replace('<path ', '<path href="https://example.org/asset.svg" '), "home/index.html.twig"),
         )
         for reason, html, page in forbidden:
