@@ -117,8 +117,10 @@ final class FakePaymentGateway implements PaymentGateway
         if ($charge['status'] !== 'approved' || $charge['amount_minor'] !== $amount) {
             throw new DomainException('GATEWAY_REFUND_NOT_ALLOWED');
         }
-        $this->charges[$chargeRef]['status'] = 'refunded';
-        $this->charges[$chargeRef]['ledger_context'] = null;
+        $updated = $charge;
+        $updated['status'] = 'refunded';
+        $updated['ledger_context'] = null;
+        $this->charges[$chargeRef] = $updated;
         /** @var RefundResult $result */
         $result = [
             'charge_ref' => $chargeRef,
