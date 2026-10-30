@@ -108,6 +108,7 @@ class _VisibleText(HTMLParser):
         self.has_client_logo = False
         self._decorative_frames: list[bool] = []
         self._in_hero_lanes = False
+        self._hero_svg_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
@@ -145,29 +146,40 @@ class _VisibleText(HTMLParser):
             # nueva imagen para aprobación explícita, sin heurísticas de filename.
             self.has_client_logo = True
         elif tag == "svg":
-            identity = (attributes.get("viewbox") or "", attributes.get("aria-label") or "")
-            has_url = any(a in attributes for a in ("src", "href", "xlink:href", "style"))
-            approved_hero = (
-                self.page == "home/index.html.twig"
-                and attributes.get("class") == "mk-lanes"
-                and attributes.get("viewbox") == "0 0 520 380"
-                and attributes.get("focusable") == "false"
-                and not attributes.get("aria-label")
-                and bool(self._decorative_frames)
-                and self._decorative_frames[-1]
-                and not has_url
-            )
-            if approved_hero:
-                self._in_hero_lanes = True
-            elif identity not in APPROVED_INLINE_SVGS.get(self.page, set()) or has_url:
+            if self._hero_svg_depth:
+                # Los SVG anidados no forman parte del esquema aprobado.
+                # Conservar el estado exterior para vigilar los nodos siguientes.
                 self.has_client_logo = True
+                self._hero_svg_depth += 1
+            else:
+                identity = (attributes.get("viewbox") or "", attributes.get("aria-label") or "")
+                has_url = any(a in attributes for a in ("src", "href", "xlink:href", "style"))
+                approved_hero = (
+                    self.page == "home/index.html.twig"
+                    and attributes.get("class") == "mk-lanes"
+                    and attributes.get("viewbox") == "0 0 520 380"
+                    and attributes.get("focusable") == "false"
+                    and not attributes.get("aria-label")
+                    and bool(self._decorative_frames)
+                    and self._decorative_frames[-1]
+                    and not has_url
+                )
+                if approved_hero:
+                    self._hero_svg_depth = 1
+                elif identity not in APPROVED_INLINE_SVGS.get(self.page, set()) or has_url:
+                    self.has_client_logo = True
+            self._in_hero_lanes = self._hero_svg_depth > 0
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
+        if tag in {"svg", "div"}:
+            # HTMLParser no invoca handle_endtag para etiquetas autocontenidas.
+            self.handle_endtag(tag)
 
     def handle_endtag(self, tag: str) -> None:
-        if tag == "svg":
-            self._in_hero_lanes = False
+        if tag == "svg" and self._hero_svg_depth:
+            self._hero_svg_depth -= 1
+            self._in_hero_lanes = self._hero_svg_depth > 0
         if tag == "div" and self._decorative_frames:
             self._decorative_frames.pop()
         if tag in {"li", "p", "tr", "td", "th", "h1", "h2", "h3", "h4", "article", "section"}:
@@ -325,6 +337,16 @@ class AfirmacionesSitioPublicoTests(unittest.TestCase):
         findings, _ = scan_claims("home/index.html.twig", valid)
         self.assertEqual([], findings)
 
+        # Una etiqueta SVG autocontenida termina su contexto: el enlace
+        # ordinario que sigue al SVG no es un logotipo de cliente.
+        self_closing = (
+            '<div class="mk-img-frame" aria-hidden="true">'
+            '<svg class="mk-lanes" viewBox="0 0 520 380" focusable="false"/>'
+            '<a href="/contacto">Contacto</a></div>'
+        )
+        findings, _ = scan_claims("home/index.html.twig", self_closing)
+        self.assertEqual([], findings)
+
         forbidden = (
             ("fuera de marco", svg, "home/index.html.twig"),
             ("marco visible", valid.replace('aria-hidden="true"', 'aria-hidden="false"'), "home/index.html.twig"),
@@ -338,6 +360,15 @@ class AfirmacionesSitioPublicoTests(unittest.TestCase):
             ("use en svg", valid.replace('</svg>', '<use href="#logo"/></svg>'), "home/index.html.twig"),
             ("etiqueta de logo", valid.replace('<svg ', '<svg aria-label="Logo de cliente" '), "home/index.html.twig"),
             ("foreignobject", valid.replace('</svg>', '<foreignObject></foreignObject></svg>'), "home/index.html.twig"),
+            (
+                "svg anidado con use externo posterior",
+                valid.replace(
+                    '</svg>',
+                    '<svg viewBox="0 0 12 12"></svg>'
+                    '<use href="/assets/logo.svg#marca"/></svg>',
+                ),
+                "home/index.html.twig",
+            ),
             ("path externo", valid.replace('<path ', '<path href="https://example.org/asset.svg" '), "home/index.html.twig"),
         )
         for reason, html, page in forbidden:
