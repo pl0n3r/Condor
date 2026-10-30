@@ -58,6 +58,7 @@ final class MercadoPagoPaymentGateway implements PaymentGateway
 
     public function mode(): string { return 'sandbox'; }
 
+    /** @return ChargeResult */
     public function charge(array $request): array
     {
         self::shape($request, ['tenant_id','company_id','order_ref','amount_minor','currency','idempotency_key']);
@@ -100,6 +101,7 @@ final class MercadoPagoPaymentGateway implements PaymentGateway
         return $result;
     }
 
+    /** @return ChargeResult */
     public function query(string $tenantId, string $companyId, string $chargeRef): array
     {
         $tenant = self::identifier($tenantId);
@@ -147,7 +149,7 @@ final class MercadoPagoPaymentGateway implements PaymentGateway
             'amount' => self::decimal($amount),
             'sandbox' => true,
         ], 'refund-'.$scope);
-        if (!is_array($response) || array_keys($response) !== ['id','payment_id','amount','status','sandbox']
+        if (array_keys($response) !== ['id','payment_id','amount','status','sandbox']
             || !is_string($response['id']) || preg_match('/^[0-9]{6,40}$/D', $response['id']) !== 1
             || $response['payment_id'] !== $ref || $response['amount'] !== self::decimal($amount)
             || $response['sandbox'] !== true
@@ -212,7 +214,10 @@ final class MercadoPagoPaymentGateway implements PaymentGateway
         }
     }
 
-    /** @param array<string,mixed> $response @return ChargeResult */
+    /**
+     * @param array<string,mixed> $response
+     * @return ChargeResult
+     */
     private function asCharge(array $response, string $tenant, string $company, string $idem): array
     {
         $status = match ($response['status']) {
@@ -244,17 +249,23 @@ final class MercadoPagoPaymentGateway implements PaymentGateway
         return $this->idempotencyByRef[$ref] ?? throw new DomainException('MP_CHARGE_NOT_FOUND');
     }
 
-    /** @param array<string,mixed> $payload @return array<string,mixed> */
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
     private function send(string $method, string $path, array $payload, string $idempotencyKey): array
     {
         $result = ($this->transport)($method, $path, $payload, $this->testToken, $idempotencyKey);
-        if (!is_array($result) || array_is_list($result)) {
+        if ($result === []) {
             throw new DomainException('MP_UNVERIFIABLE_RESPONSE');
         }
         return $result;
     }
 
-    /** @param array<string,mixed> $request @param list<string> $required */
+    /**
+     * @param array<string,mixed> $request
+     * @param list<string> $required
+     */
     private static function shape(array $request, array $required): void
     {
         $keys = array_keys($request);
