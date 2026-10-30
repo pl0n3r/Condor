@@ -802,7 +802,7 @@ html.mk-motion.mk-motion-calm .mk-rail { transform: none; }
 .mk-lanes-trunk { fill: none; stroke: var(--mk-ink-2); stroke-width: 4; stroke-linecap: round; }
 .mk-lanes-rail { fill: none; stroke: var(--line); stroke-width: 4; stroke-linecap: round; }
 .mk-lanes-line circle { fill: var(--mk-bg); stroke: var(--line); stroke-width: 3; }
-.mk-lanes-line .mk-lanes-train { fill: var(--line); stroke: none; }
+.mk-lanes-line .mk-lanes-train { fill: var(--line); stroke: none; opacity: 0; }
 .mk-lanes-vender { --line: var(--l-vender); }
 .mk-lanes-gente { --line: var(--l-gente); }
 .mk-lanes-cumplir { --line: var(--l-cumplir); }
