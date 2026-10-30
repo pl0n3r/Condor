@@ -15,6 +15,9 @@ use DomainException;
  *
  * Transport receives (method, path, form parameters, test key, idempotency key)
  * and returns decoded Stripe JSON. Tests inject an offline transport.
+ *
+ * @phpstan-type ChargeResult array{charge_ref:string,status:string,tenant_id:string,company_id:string,amount_minor:int,currency:string,ledger_context:array<string,int|string>|null}
+ * @phpstan-type RefundResult array{charge_ref:string,status:string,refunded_minor:int,refund_ref:string}
  */
 final class StripePaymentGateway implements PaymentGateway
 {
@@ -23,9 +26,9 @@ final class StripePaymentGateway implements PaymentGateway
     private readonly Closure $transport;
     private readonly Closure $clock;
 
-    /** @var array<string,array{fingerprint:string,result:array<string,mixed>}> */
+    /** @var array<string,array{fingerprint:string,result:ChargeResult}> */
     private array $charges = [];
-    /** @var array<string,array{fingerprint:string,result:array<string,mixed>}> */
+    /** @var array<string,array{fingerprint:string,result:RefundResult}> */
     private array $refunds = [];
     /** @var array<string,string> */
     private array $refundStatus = [];
@@ -105,7 +108,7 @@ final class StripePaymentGateway implements PaymentGateway
         $key = self::identifier($request['idempotency_key']);
         $amount = self::amount($request['amount_minor']);
         $ref = $request['charge_ref'];
-        if (!is_string($ref) || !preg_match('/^pi_[A-Za-z0-9]{8,120}$/D', $ref)) {
+        if (!preg_match('/^pi_[A-Za-z0-9]{8,120}$/D', $ref)) {
             throw new DomainException('GATEWAY_INVALID_REF');
         }
         $scope = hash('sha256', $tenant.'/'.$company.'/'.$key);
@@ -135,6 +138,7 @@ final class StripePaymentGateway implements PaymentGateway
         $status = match ($response['status']) {
             'succeeded' => 'refunded', 'pending' => 'refund_pending', default => 'refund_failed',
         };
+        /** @var RefundResult $result */
         $result = [
             'charge_ref' => $ref, 'status' => $status,
             'refunded_minor' => $status === 'refunded' ? $amount : 0,
@@ -196,14 +200,17 @@ final class StripePaymentGateway implements PaymentGateway
             || ($amount !== null && ($intent['amount'] ?? null) !== $amount)
             || ($currency !== null && ($intent['currency'] ?? null) !== strtolower($currency))
             || ($order !== null && ($intent['metadata']['order_ref'] ?? null) !== $order)
-            || !is_int($intent['amount'] ?? null) || ($intent['amount'] ?? 0) <= 0
+            || !array_key_exists('amount', $intent) || !is_int($intent['amount']) || $intent['amount'] <= 0
             || !is_string($intent['currency'] ?? null) || preg_match('/^[a-z]{3}$/D', $intent['currency']) !== 1
             || !in_array($intent['status'] ?? null, ['succeeded','requires_payment_method','canceled','processing','requires_action'], true)) {
             throw new DomainException('STRIPE_UNVERIFIABLE_RESPONSE');
         }
     }
 
-    /** @param array<string,mixed> $intent @return array<string,mixed> */
+    /**
+     * @param array<string,mixed> $intent
+     * @return ChargeResult
+     */
     private function result(array $intent, string $tenant, string $company): array
     {
         $status = match ($intent['status']) {
@@ -221,7 +228,10 @@ final class StripePaymentGateway implements PaymentGateway
         ];
     }
 
-    /** @param array<string,mixed> $params @return array<string,mixed> */
+    /**
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
     private function send(string $method, string $path, array $params, string $idempotencyKey = ''): array
     {
         $response = ($this->transport)($method, $path, $params, $this->apiKey, $idempotencyKey);
@@ -229,7 +239,10 @@ final class StripePaymentGateway implements PaymentGateway
         return $response;
     }
 
-    /** @param array<string,mixed> $data @return array<string,mixed> */
+    /**
+     * @param array<string,mixed> $data
+     * @return array<string,mixed>
+     */
     private static function sandboxTransport(string $method, string $path, array $data, string $apiKey, string $idempotencyKey): array
     {
         if (!function_exists('curl_init') || !preg_match('~^/v1/(payment_intents(?:/pi_[A-Za-z0-9]{8,120})?|refunds)$~D', $path)) {
@@ -286,11 +299,16 @@ final class StripePaymentGateway implements PaymentGateway
         return rtrim($secret, "\r\n");
     }
 
-    /** @param array<string,mixed> $request @param list<string> $required @param list<string> $optional */
+    /**
+     * @param array<string,mixed> $request
+     * @param list<string> $required
+     * @param list<string> $optional
+     */
     private static function shape(array $request, array $required, array $optional = []): void
     {
-        if (array_diff($required, array_keys($request)) !== []
-            || array_diff(array_keys($request), [...$required, ...$optional]) !== []) {
+        $keys = array_keys($request);
+        if (count(array_diff($required, $keys)) > 0
+            || count(array_diff($keys, array_merge($required, $optional))) > 0) {
             throw new DomainException('GATEWAY_REQUEST_SHAPE_INVALID');
         }
     }
