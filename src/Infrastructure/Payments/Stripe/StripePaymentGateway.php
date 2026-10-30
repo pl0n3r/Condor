@@ -43,18 +43,16 @@ final class StripePaymentGateway implements PaymentGateway
 
     public function id(): string { return 'stripe'; }
 
-    public function mode(): string { return 'sandbox'; }
-
     public function charge(array $request): array
     {
         self::shape($request, ['tenant_id','company_id','order_ref','amount_minor','currency','idempotency_key'], ['scenario']);
+        $scenario = $request['scenario'] ?? 'approve';
+        $currency = self::currency($request['currency']);
+        $amount = self::amount($request['amount_minor']);
+        $key = self::identifier($request['idempotency_key']);
+        $order = self::identifier($request['order_ref']);
         $tenant = self::identifier($request['tenant_id']);
         $company = self::identifier($request['company_id']);
-        $order = self::identifier($request['order_ref']);
-        $key = self::identifier($request['idempotency_key']);
-        $amount = self::amount($request['amount_minor']);
-        $currency = self::currency($request['currency']);
-        $scenario = $request['scenario'] ?? 'approve';
         if (!in_array($scenario, ['approve', 'reject'], true)) {
             throw new DomainException('GATEWAY_INVALID_SCENARIO');
         }
@@ -189,6 +187,8 @@ final class StripePaymentGateway implements PaymentGateway
             && is_string($obj['id'] ?? null)
             && preg_match('/^(pi_|ch_)[A-Za-z0-9]{8,120}$/D', $obj['id']) === 1;
     }
+
+    public function mode(): string { return 'sandbox'; }
 
     /** @param array<string,mixed> $intent */
     private static function assertIntent(array $intent, string $tenant, string $company, ?int $amount = null, ?string $currency = null, ?string $order = null): void
