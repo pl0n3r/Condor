@@ -7,16 +7,20 @@ namespace App\Application\Payments\Fake;
 use App\Application\Payments\PaymentGateway;
 use DomainException;
 
-/** In-memory simulation, never an issuer, ledger writer, or real provider. */
+/**
+ * In-memory simulation, never an issuer, ledger writer, or real provider.
+ * @phpstan-type ChargeResult array{charge_ref:string,status:string,tenant_id:string,company_id:string,amount_minor:int,currency:string,ledger_context:array<string,int|string>|null}
+ * @phpstan-type RefundResult array{charge_ref:string,status:string,refunded_minor:int,refund_ref:string}
+ */
 final class FakePaymentGateway implements PaymentGateway
 {
-    /** @var array<string,array{fingerprint:string,result:array<string,mixed>}> */
+    /** @var array<string,array{fingerprint:string,result:ChargeResult}> */
     private array $requests = [];
 
-    /** @var array<string,array<string,mixed>> */
+    /** @var array<string,ChargeResult> */
     private array $charges = [];
 
-    /** @var array<string,array{fingerprint:string,result:array<string,mixed>}> */
+    /** @var array<string,array{fingerprint:string,result:RefundResult}> */
     private array $refunds = [];
 
     public function __construct(private readonly string $testWebhookKey)
@@ -54,6 +58,7 @@ final class FakePaymentGateway implements PaymentGateway
         }
         $ref = 'fake_'.substr(hash('sha256', $scope), 0, 32);
         $status = $scenario === 'approve' ? 'approved' : 'rejected';
+        /** @var ChargeResult $result */
         $result = [
             'charge_ref' => $ref,
             'status' => $status,
@@ -96,7 +101,7 @@ final class FakePaymentGateway implements PaymentGateway
         $key = self::identifier($request['idempotency_key']);
         $amount = self::amount($request['amount_minor']);
         $chargeRef = $request['charge_ref'];
-        if (!is_string($chargeRef) || !preg_match('/^fake_[a-f0-9]{32}$/D', $chargeRef)) {
+        if (!preg_match('/^fake_[a-f0-9]{32}$/D', $chargeRef)) {
             throw new DomainException('GATEWAY_INVALID_REF');
         }
         $charge = $this->query($tenant, $company, $chargeRef);
@@ -114,6 +119,7 @@ final class FakePaymentGateway implements PaymentGateway
         }
         $this->charges[$chargeRef]['status'] = 'refunded';
         $this->charges[$chargeRef]['ledger_context'] = null;
+        /** @var RefundResult $result */
         $result = [
             'charge_ref' => $chargeRef,
             'status' => 'refunded',
@@ -149,7 +155,11 @@ final class FakePaymentGateway implements PaymentGateway
             && hash_equals($this->charges[$decoded['charge_ref']]['company_id'], $companyId);
     }
 
-    /** @param array<string,mixed> $request @param list<string> $required @param list<string> $optional */
+    /**
+     * @param array<string,mixed> $request
+     * @param list<string> $required
+     * @param list<string> $optional
+     */
     private static function shape(array $request, array $required, array $optional = []): void
     {
         if (array_diff($required, array_keys($request)) !== []

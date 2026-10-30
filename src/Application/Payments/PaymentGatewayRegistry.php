@@ -19,8 +19,8 @@ final readonly class PaymentGatewayRegistry
     private array $companies;
 
     /**
-     * @param list<PaymentGateway> $providers
-     * @param array<string,array{providers:list<string>,currencies:list<string>}> $companies
+     * @param list<mixed> $providers
+     * @param array<string,mixed> $companies
      *        Keys are `tenant_id/company_id`, values are the enabled providers
      *        and currencies for that company (server-side only).
      */
@@ -44,24 +44,28 @@ final readonly class PaymentGatewayRegistry
                 || !is_array($config) || array_keys($config) !== ['providers', 'currencies']
                 || !is_array($config['providers']) || !is_array($config['currencies'])
                 || !array_is_list($config['providers']) || !array_is_list($config['currencies'])
-                || $config['providers'] === [] || $config['currencies'] === []
-                || count(array_filter($config['providers'], 'is_string')) !== count($config['providers'])
-                || count(array_filter($config['currencies'], 'is_string')) !== count($config['currencies'])
-                || count(array_unique($config['providers'])) !== count($config['providers'])
-                || count(array_unique($config['currencies'])) !== count($config['currencies'])) {
+                || $config['providers'] === [] || $config['currencies'] === []) {
                 throw new DomainException('GATEWAY_INVALID_CONFIG');
             }
+            $enabledProviders = [];
             foreach ($config['providers'] as $id) {
-                if (!is_string($id) || !isset($available[$id])) {
+                if (!is_string($id) || !isset($available[$id]) || in_array($id, $enabledProviders, true)) {
                     throw new DomainException('GATEWAY_UNAVAILABLE');
                 }
+                $enabledProviders[] = $id;
             }
+            $enabledCurrencies = [];
             foreach ($config['currencies'] as $currency) {
-                if (!is_string($currency) || preg_match('/^[A-Z]{3}$/D', $currency) !== 1) {
+                if (!is_string($currency) || preg_match('/^[A-Z]{3}$/D', $currency) !== 1
+                    || in_array($currency, $enabledCurrencies, true)) {
                     throw new DomainException('GATEWAY_INVALID_CURRENCY');
                 }
+                $enabledCurrencies[] = $currency;
             }
-            $normalized[$scope] = $config;
+            $normalized[$scope] = [
+                'providers' => $enabledProviders,
+                'currencies' => $enabledCurrencies,
+            ];
         }
         $this->providers = $available;
         $this->companies = $normalized;
