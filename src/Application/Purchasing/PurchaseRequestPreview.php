@@ -87,7 +87,10 @@ final class PurchaseRequestPreview
         ];
     }
 
-    /** @param array<string,mixed> $data @param array<string,mixed> $scope */
+    /**
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $scope
+     */
     private static function sameScope(array $data, array $scope): void
     {
         foreach (['tenant_ref', 'legal_entity_ref', 'site_ref'] as $key) {
@@ -98,7 +101,11 @@ final class PurchaseRequestPreview
         }
     }
 
-    /** @param array<string,mixed> $data @param list<string> $required @param list<string> $optional */
+    /**
+     * @param array<string, mixed> $data
+     * @param list<string> $required
+     * @param list<string> $optional
+     */
     private static function keys(array $data, array $required, array $optional = []): void
     {
         $actual = array_keys($data);
