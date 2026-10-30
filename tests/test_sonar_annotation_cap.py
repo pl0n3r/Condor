@@ -25,11 +25,12 @@ def is_incomplete(findings, total, expected):
 class SonarAnnotationCapTests(unittest.TestCase):
     def test_annotations_cap_does_not_hide_severe_findings(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        required = (
-            "or total != len(findings) or expected != min(total, 50) or total > 100"
-        )
-        self.assertIn(required, workflow)
-        self.assertNotIn("or total != len(findings) or total != expected", workflow)
+        for required in (
+            "or total != len(findings)",
+            "or (total <= 50 and total != expected)",
+            "or expected != min(total, 50) or total > 100",
+        ):
+            self.assertIn(required, workflow)
         self.assertIn("matching[0].get(\"output\", {}).get(\"annotations_count\")", workflow)
         self.assertIn("and item.get(\"head_sha\") == sha", workflow)
         self.assertIn("and item.get(\"conclusion\") == \"success\"", workflow)
