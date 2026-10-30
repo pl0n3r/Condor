@@ -759,6 +759,7 @@ html.mk-motion.mk-motion-calm .mk-rail { transform: none; }
 .mk-hero.mk-landing {
   --mk-bg: #0d1830; --mk-surface: #132042; --mk-ink: #eef1f8; --mk-ink-2: #a3adc6;
   --mk-line: #26335a; --mk-soft: #182650; --mk-mark: #8fa6ff; --mk-mark-ink: #0d1830; --mk-link: #8fa6ff;
+  --l-vender: #8fa6ff; --l-gente: #5fd08a; --l-cumplir: #f2a65a; --l-crecer: #eef1f8;
   position: relative; isolation: isolate; color: var(--mk-ink);
   padding-block: clamp(48px, 8vw, 104px); margin-top: 0; gap: clamp(32px, 5vw, 72px);
 }
@@ -793,3 +794,33 @@ html.mk-motion.mk-motion-calm .mk-rail { transform: none; }
 .mk-top h1 { font-size: clamp(42px, 6.6vw, 104px); line-height: .96; letter-spacing: -.035em; margin: 0; }
 .mk-top > div { display: flex; flex-direction: column-reverse; gap: 18px; }
 .mk-top .mk-eyebrow { color: var(--mk-mark); }
+
+/* Hero del home: mientras no hay foto, el marco muestra los carriles del plano dibujándose en bucle. */
+.mk-hero.mk-landing .mk-img-frame:has(.mk-lanes) { background: var(--mk-surface); padding: 3%; }
+.mk-lanes { width: 100%; height: auto; overflow: visible; }
+.mk-lanes text { font: 600 12px/1 var(--mk-mono); letter-spacing: .12em; text-transform: uppercase; fill: var(--mk-ink-2); }
+.mk-lanes-trunk { fill: none; stroke: var(--mk-ink-2); stroke-width: 4; stroke-linecap: round; }
+.mk-lanes-rail { fill: none; stroke: var(--line); stroke-width: 4; stroke-linecap: round; }
+.mk-lanes-line circle { fill: var(--mk-bg); stroke: var(--line); stroke-width: 3; }
+.mk-lanes-line .mk-lanes-train { fill: var(--line); stroke: none; opacity: 0; }
+.mk-lanes-vender { --line: var(--l-vender); }
+.mk-lanes-gente { --line: var(--l-gente); }
+.mk-lanes-cumplir { --line: var(--l-cumplir); }
+.mk-lanes-crecer { --line: var(--l-crecer); }
+.mk-lanes-line:not(.mk-lanes-vender) .mk-lanes-rail { stroke-dasharray: 10 9; }
+@media (prefers-reduced-motion: no-preference) {
+  .mk-lanes-rail { stroke-dashoffset: 0; animation: mk-lane-draw 7s cubic-bezier(.22, 1, .36, 1) infinite; }
+  .mk-lanes-line:not(.mk-lanes-vender) .mk-lanes-rail { animation-name: mk-lane-flow; animation-duration: 1.4s; animation-timing-function: linear; }
+  .mk-lanes-line circle:not(.mk-lanes-train) { animation: mk-lane-stop 7s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+  .mk-lanes-line .mk-lanes-train { offset-rotate: 0deg; animation: mk-lane-run 7s cubic-bezier(.45, 0, .2, 1) infinite; }
+  .mk-lanes-vender .mk-lanes-train { offset-path: path("M44 70H490"); }
+  .mk-lanes-gente .mk-lanes-train { offset-path: path("M44 150H490"); animation-delay: .5s; }
+  .mk-lanes-cumplir .mk-lanes-train { offset-path: path("M44 230H490"); animation-delay: 1s; }
+  .mk-lanes-crecer .mk-lanes-train { offset-path: path("M44 310H490"); animation-delay: 1.5s; }
+  .mk-lanes-line circle:nth-of-type(2) { animation-delay: .35s; }
+  .mk-lanes-line circle:nth-of-type(3) { animation-delay: .7s; }
+  @keyframes mk-lane-draw { 0% { stroke-dasharray: 0 460; } 35%, 100% { stroke-dasharray: 460 0; } }
+  @keyframes mk-lane-flow { to { stroke-dashoffset: -19; } }
+  @keyframes mk-lane-stop { 0%, 8% { transform: scale(.4); opacity: 0; } 22%, 100% { transform: scale(1); opacity: 1; } }
+  @keyframes mk-lane-run { 0% { offset-distance: 0%; opacity: 0; } 8% { opacity: 1; } 55% { offset-distance: 100%; opacity: 1; } 62%, 100% { offset-distance: 100%; opacity: 0; } }
+}
