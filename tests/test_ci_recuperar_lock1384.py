@@ -141,6 +141,19 @@ class RecuperarLock1384Tests(unittest.TestCase):
         self.assertFalse(denied.deleted)
         self.assertEqual(len([x for x in denied.calls if x[0] == "POST"]), 1)
 
+        # Un CAS con respuesta positiva NO acredita borrado si GET aún ve la ref.
+        still_present = Fake()
+        original_get = still_present.get
+        def sticky_ref(url):
+            if still_present.deleted and url == recovery.LOCK_API:
+                return {"object": {"sha": recovery.NONCE}}
+            return original_get(url)
+        still_present.get = sticky_ref
+        with self.assertRaises(recovery.Denied):
+            recovery.recover(still_present, NOW, "123")
+        posts = [x[1] for x in still_present.calls if x[0] == "POST"]
+        self.assertEqual(posts, ["/graphql"])
+
         # La segunda lectura impide borrar si apareció una rama entretanto.
         raced = Fake()
         original = recovery.prepare
