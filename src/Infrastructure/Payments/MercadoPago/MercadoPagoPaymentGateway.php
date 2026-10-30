@@ -125,7 +125,8 @@ final class MercadoPagoPaymentGateway implements PaymentGateway
 
     public function refund(array $request): array
     {
-        self::shape($request, ['tenant_id','company_id','charge_ref','amount_minor','idempotency_key']);
+        $fields = ['tenant_id','company_id','charge_ref','amount_minor','idempotency_key'];
+        self::shape($request, $fields);
         $tenant = self::identifier($request['tenant_id']);
         $company = self::identifier($request['company_id']);
         $key = self::identifier($request['idempotency_key']);
