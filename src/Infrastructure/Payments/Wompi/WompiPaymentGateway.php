@@ -97,7 +97,9 @@ final class WompiPaymentGateway implements PaymentGateway
         if ($record['id'] !== $chargeRef) throw new DomainException('WOMPI_TRANSACTION_SCOPE_MISMATCH');
         $original = $this->charges[$chargeRef];
         // Scope cannot be inferred from provider IDs; keep the original local tenant.
-        $key = is_array($original['ledger_context']) ? $original['ledger_context']['idempotency_key'] : '';
+        $context = $original['ledger_context'];
+        $key = is_array($context) && is_string($context['idempotency_key'] ?? null)
+            ? $context['idempotency_key'] : '';
         $current = $this->asResult($record, $tenant, $company, $key);
         if (isset($this->refundStatuses[$chargeRef])) {
             $current['status'] = $this->refundStatuses[$chargeRef];
@@ -194,7 +196,10 @@ final class WompiPaymentGateway implements PaymentGateway
         }
     }
 
-    /** @param array<string,mixed> $payload @return array<string,mixed> */
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
     private function send(string $method, string $path, array $payload): array
     {
         try {
@@ -219,7 +224,10 @@ final class WompiPaymentGateway implements PaymentGateway
         }
     }
 
-    /** @param array<string,mixed> $tx @return ChargeResult */
+    /**
+     * @param array<string, mixed> $tx
+     * @return ChargeResult
+     */
     private function asResult(array $tx, string $tenant, string $company, string $key): array
     {
         $status = match ($tx['status']) {
@@ -236,7 +244,11 @@ final class WompiPaymentGateway implements PaymentGateway
         ];
     }
 
-    /** @param array<string,mixed> $source @param list<string> $required @param list<string> $optional */
+    /**
+     * @param array<string, mixed> $source
+     * @param list<string> $required
+     * @param list<string> $optional
+     */
     private static function shape(array $source, array $required, array $optional = []): void
     {
         if (array_diff($required, array_keys($source)) !== []
