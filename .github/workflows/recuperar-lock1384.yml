@@ -1,0 +1,43 @@
+name: Recuperar lock #1384 CAS
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lock1384-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    if: >-
+      github.repository == 'pl0n3r/Condor' &&
+      github.event.issue.number == 1384 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.body == '/limpiar-lock-1384' &&
+      github.event.comment.user.login == 'pl0n3r' &&
+      github.actor == 'pl0n3r' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: write
+      issues: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Retirar solo nonce huérfano mediante updateRefs CAS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: python3 scripts/recuperar_lock1384.py
