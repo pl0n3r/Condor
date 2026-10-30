@@ -90,8 +90,9 @@ final class MercadoPagoPaymentGatewayTest extends TestCase
     public function testApprovedRejectedRefundAndInvalidWebhookSignature(): void
     {
         $gateway = $this->gateway();
-        self::assertSame('mercadopago', $gateway->id());
+        // Mode is asserted first: registry must never accept a live provider.
         self::assertSame('sandbox', $gateway->mode());
+        self::assertSame('mercadopago', $gateway->id());
         $registry = new PaymentGatewayRegistry([$gateway], [
             'tenant-alpha/company-alpha' => ['providers' => ['mercadopago'], 'currencies' => ['COP']],
         ]);
