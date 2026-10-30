@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useMemo, useRef, useState } from 'react';
+import { StrictMode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { createRoot } from 'react-dom/client';
 
@@ -11,6 +11,24 @@ type Options = {plan:Plan & {currency:string};vertical:Vertical;limits:Record<st
 type Quote = {cycle:string;quantities:Record<string,number>;addons:string[];base_amount:number|null;addon_amount:number|null;total_amount:number|null;proposal_required:boolean;valid_until:string};
 
 const money=(value:number|null)=>value===null?'—':new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(value);
+
+const motionOk=()=>typeof window!=='undefined'&&window.matchMedia('(prefers-reduced-motion: no-preference)').matches;
+
+// El total es el único momento animado: solo los dígitos que cambian entran desde abajo con un leve desenfoque.
+function Price({text}:{text:string}){
+  const box=useRef<HTMLSpanElement>(null);
+  const previous=useRef<string|null>(null);
+  useLayoutEffect(()=>{
+    const before=previous.current;
+    previous.current=text;
+    if(before===null||before===text||!box.current||!motionOk())return;
+    const changed=Array.from(box.current.children).filter((el,i)=>before[i]!==text[i]);
+    if(changed.length===0)return;
+    const tween=gsap.fromTo(changed,{y:8,opacity:0,filter:'blur(2px)'},{y:0,opacity:1,filter:'blur(0px)',duration:.5,stagger:.07,ease:'back.out(1.45)',overwrite:true,clearProps:'transform,opacity,filter'});
+    return()=>{tween.kill();};
+  },[text]);
+  return <span className="total" ref={box} aria-label={text}>{Array.from(text).map((ch,i)=><span aria-hidden="true" key={i}>{ch}</span>)}</span>;
+}
 
 function Configurator(){
   const [catalog,setCatalog]=useState<Catalog|null>(null);
@@ -83,39 +101,9 @@ function Configurator(){
   },[payload]);
 
   const LIMIT_LABELS:Record<string,string>={companies:'Empresas',locations:'Sedes',users:'Usuarios'};
-  const LIMIT_HELP:Record<string,string>={companies:'razones sociales que vas a administrar',locations:'sucursales, bodegas o puntos de venta',users:'personas de tu equipo que van a entrar'};
+  const LIMIT_HELP:Record<string,string>={companies:'Razones sociales que vas a administrar',locations:'Sucursales, bodegas o puntos de venta',users:'Personas de tu equipo que van a entrar'};
   const activePlan=catalog?.plans.find(item=>item.key===plan);
   const verticals=catalog?.verticals.filter(item=>activePlan?.verticals.includes(item.key))??[];
-  const root=useRef<HTMLDivElement>(null);
-  const totalRef=useRef<HTMLElement>(null);
-  const shown=useRef({value:0});
-  const motionOk=()=>typeof window!=='undefined'&&window.matchMedia('(prefers-reduced-motion: no-preference)').matches;
-
-  // Entrada escalonada de los pasos: el contenido parte visible (opacidad .35) y solo sube un poco.
-  useEffect(()=>{
-    if(loading||!catalog||!root.current||!motionOk())return;
-    const ctx=gsap.context(()=>{
-      gsap.from('.configurator-flow fieldset',{opacity:.35,y:14,duration:.5,stagger:.08,ease:'power2.out',clearProps:'opacity,transform'});
-    },root);
-    return()=>ctx.revert();
-  },[loading,catalog]);
-
-  // El total cuenta hasta su nuevo valor en vez de saltar: se nota que el precio respondió al cambio.
-  const target=quote&&!quote.proposal_required?quote.total_amount:null;
-  useEffect(()=>{
-    const el=totalRef.current;
-    if(!el||target===null||target===undefined)return;
-    if(!motionOk()){shown.current.value=target;el.textContent=money(target);return;}
-    const tween=gsap.to(shown.current,{value:target,duration:.6,ease:'power2.out',onUpdate:()=>{el.textContent=money(Math.round(shown.current.value));},onComplete:()=>{el.textContent=money(target);}});
-    return()=>{tween.kill();};
-  },[target]);
-
-  // Al elegir un plan, su tarjeta responde con un pequeño rebote.
-  const pulse=(event:React.ChangeEvent<HTMLInputElement>)=>{
-    if(!motionOk())return;
-    const card=event.currentTarget.closest('.choice');
-    if(card)gsap.fromTo(card,{scale:.96},{scale:1,duration:.35,ease:'back.out(2.2)',clearProps:'transform'});
-  };
   const setQty=(key:string,next:number)=>setQuantities(current=>({...current,[key]:Math.max(1,next)}));
 
   if(loading)return <output className="cfg-loading">Cargando configurador…</output>;
@@ -126,14 +114,14 @@ function Configurator(){
   const yearlySaving=activePlan&&activePlan.monthly_amount!==null&&activePlan.annual_amount!==null&&activePlan.annual_amount<activePlan.monthly_amount*12
     ?activePlan.monthly_amount*12-activePlan.annual_amount:null;
 
-  return <div className="configurator-layout" ref={root}>
+  return <div className="configurator-layout">
     <form className="configurator-flow" onSubmit={e=>e.preventDefault()}>
       <fieldset>
         <legend>1. Elige tu plan</legend>
         <p className="step-help">Empieza por el plan. Puedes cambiarlo después y el precio se actualiza solo.</p>
         <div className="choice-grid plans">
           {catalog.plans.map(item=><label className="choice" key={item.key}>
-            <input type="radio" name="plan" value={item.key} checked={plan===item.key} onChange={e=>{setPlan(item.key);setVertical(item.verticals[0]??'');pulse(e);}}/>
+            <input type="radio" name="plan" value={item.key} checked={plan===item.key} onChange={()=>{setPlan(item.key);setVertical(item.verticals[0]??'');}}/>
             <strong>{item.name}</strong>
             <span className="price">{item.quote_required?'Cotización personalizada':money(item.monthly_amount)}</span>
             {!item.quote_required&&<small>por mes</small>}
@@ -156,19 +144,21 @@ function Configurator(){
 
       {options&&<fieldset>
         <legend>3. Escala</legend>
-        <p className="step-help">¿Qué tan grande es tu operación? Tu plan ya incluye una cantidad; sube el número solo si necesitas más.</p>
-        <div className="field-grid">
+        <p className="step-help">Tu plan ya incluye una cantidad. Sube el número solo si necesitas más.</p>
+        <div className="rows">
           {Object.entries(options.limits).map(([key,included])=>{
             const value=quantities[key]??included;
-            return <div className="qty" key={key}>
-              <span className="qty-name">{LIMIT_LABELS[key]??key}</span>
-              <span className="hint">{LIMIT_HELP[key]??''}</span>
-              <div className="stepper">
-                <button type="button" aria-label={`Menos ${LIMIT_LABELS[key]??key}`} disabled={value<=1} onClick={()=>setQty(key,value-1)}>−</button>
-                <input aria-label={LIMIT_LABELS[key]??key} type="number" min={1} value={value} onChange={e=>setQty(key,Number(e.target.value)||1)}/>
-                <button type="button" aria-label={`Más ${LIMIT_LABELS[key]??key}`} onClick={()=>setQty(key,value+1)}>+</button>
+            const name=LIMIT_LABELS[key]??key;
+            return <div className="row qty" key={key}>
+              <div className="row-text">
+                <span className="row-title">{name}</span>
+                <span className="hint">{LIMIT_HELP[key]??''} · incluye {included}</span>
               </div>
-              <span className="hint">Tu plan incluye {included}</span>
+              <div className="stepper">
+                <button type="button" aria-label={`Menos ${name}`} disabled={value<=1} onClick={()=>setQty(key,value-1)}>−</button>
+                <input aria-label={name} type="number" min={1} value={value} onChange={e=>setQty(key,Number(e.target.value)||1)}/>
+                <button type="button" aria-label={`Más ${name}`} onClick={()=>setQty(key,value+1)}>+</button>
+              </div>
             </div>;
           })}
         </div>
@@ -178,9 +168,9 @@ function Configurator(){
         <legend>4. Qué incluye y qué puedes sumar</legend>
         <p className="step-help">Estas capacidades ya vienen con tu plan. Abre una para ver si la necesitas.</p>
         <div className="capability-list">
-          {options.capabilities.map(item=><details key={item.key}><summary><span className="tick" aria-hidden="true">✓</span>{item.name}<small> · ¿Necesito esto?</small></summary><p>Esta capacidad está incluida por el catálogo para tu plan y vertical.</p></details>)}
+          {options.capabilities.map(item=><details key={item.key}><summary><svg className="tick" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>{item.name}<small> · ¿Necesito esto?</small></summary><p>Esta capacidad está incluida por el catálogo para tu plan y vertical.</p></details>)}
         </div>
-        {options.addons.some(item=>item.selectable)&&<p className="step-help">Complementos opcionales:</p>}
+        {options.addons.some(item=>item.selectable)&&<p className="step-help addon-intro">Complementos opcionales</p>}
         <div className="choice-grid">
           {options.addons.filter(item=>item.selectable).map(item=><label className="choice" key={item.key}>
             <input type="checkbox" checked={addons.includes(item.key)} onChange={e=>setAddons(current=>e.target.checked?[...current,item.key]:current.filter(key=>key!==item.key))}/>
@@ -193,7 +183,7 @@ function Configurator(){
 
       <fieldset>
         <legend>5. Cómo quieres pagar</legend>
-        <div className="segmented" role="radiogroup" aria-label="Ciclo de pago">
+        <div className="segmented" data-cycle={cycle} role="radiogroup" aria-label="Ciclo de pago">
           {(['monthly','annual'] as const).map(item=><label className="seg" key={item}>
             <input type="radio" name="cycle" value={item} checked={cycle===item} onChange={()=>setCycle(item)}/>
             <span>{item==='monthly'?'Mensual':'Anual'}</span>
@@ -214,7 +204,7 @@ function Configurator(){
       </ul>}
       {quote?.proposal_required
         ? <><strong>Propuesta personalizada</strong><p>Esta combinación requiere validación comercial. No mostramos un precio inventado.</p></>
-        : <><span className="total-label">Total estimado</span><strong className="total" ref={totalRef}>{money(quote?.total_amount??null)}</strong><span>{cycle==='monthly'?'por mes':'por año'}</span></>}
+        : <><span className="total-label">Total estimado</span><Price text={money(quote?.total_amount??null)}/><span className="per">{cycle==='monthly'?'por mes':'por año'}</span></>}
       <p className="muted">El total se calcula en el servidor con el catálogo vigente.</p>
       <a className="mk-btn mk-btn-primary quote-cta" href="/#solicitar-demo">Solicitar esta configuración</a>
     </section>
