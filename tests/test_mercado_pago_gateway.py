@@ -10,20 +10,16 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 PHP = r'''
 namespace PHPUnit\Framework {
     class TestCase {
-        public static function assertSame(mixed $a, mixed $b): void {
-            if ($a !== $b) throw new \RuntimeException('assertSame failed');
-        }
-        public static function assertTrue(mixed $v): void {
-            if ($v !== true) throw new \RuntimeException('assertTrue failed');
-        }
-        public static function assertFalse(mixed $v): void {
-            if ($v !== false) throw new \RuntimeException('assertFalse failed');
-        }
-        public static function assertNull(mixed $v): void {
-            if ($v !== null) throw new \RuntimeException('assertNull failed');
-        }
-        public static function fail(string $message): never {
-            throw new \RuntimeException($message);
+        public static function __callStatic(string $method, array $args): void {
+            $pass = match ($method) {
+                'assertSame' => $args[0] === $args[1],
+                'assertTrue' => $args[0] === true,
+                'assertFalse' => $args[0] === false,
+                'assertNull' => $args[0] === null,
+                'fail' => false,
+                default => throw new \LogicException('Unexpected assertion'),
+            };
+            if (!$pass) throw new \RuntimeException('PHP assertion failed: ' . $method);
         }
     }
 }
