@@ -135,12 +135,12 @@ final class MercadoPagoPaymentGateway implements PaymentGateway
         self::paymentRef($ref);
         $scope = hash('sha256', $tenant.'/'.$company.'/'.$key);
         $fingerprint = hash('sha256', $ref.'/'.$amount);
-        $previous = $this->refunds[$scope] ?? null;
-        if ($previous !== null) {
-            if (!hash_equals($previous['fingerprint'], $fingerprint)) {
+        if (isset($this->refunds[$scope])) {
+            $stored = $this->refunds[$scope];
+            if (!hash_equals($stored['fingerprint'], $fingerprint)) {
                 throw new DomainException('MP_IDEMPOTENCY_CONFLICT');
             }
-            return $previous['result'];
+            return $stored['result'];
         }
         $charge = $this->query($tenant, $company, $ref);
         if ($charge['status'] !== 'approved' || $amount !== $charge['amount_minor']) {
@@ -218,6 +218,7 @@ final class MercadoPagoPaymentGateway implements PaymentGateway
     /**
      * @param array<string,mixed> $response
      * @return ChargeResult
+     * @throws DomainException
      */
     private function asCharge(array $response, string $tenant, string $company, string $idem): array
     {
@@ -266,6 +267,7 @@ final class MercadoPagoPaymentGateway implements PaymentGateway
     /**
      * @param array<string,mixed> $request
      * @param list<string> $required
+     * @throws DomainException
      */
     private static function shape(array $request, array $required): void
     {
@@ -300,12 +302,14 @@ final class MercadoPagoPaymentGateway implements PaymentGateway
         return $value;
     }
 
-    private static function currency(mixed $value): string
+    private static function currency(mixed $code): string
     {
-        if (!is_string($value) || preg_match('/^[A-Z]{3}$/D', $value) !== 1) {
+        // ISO-like three upper-case letters; reject lowercase and extra bytes.
+        if (!is_string($code) || strlen($code) !== 3
+            || strspn($code, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') !== 3) {
             throw new DomainException('MP_INVALID_CURRENCY');
         }
-        return $value;
+        return $code;
     }
 
     private static function decimal(int $minor): string
