@@ -81,6 +81,7 @@ function Configurator(){
     return()=>{window.clearTimeout(timer);controller.abort();};
   },[payload]);
 
+  const LIMIT_LABELS:Record<string,string>={companies:'Empresas',locations:'Sedes',users:'Usuarios'};
   const activePlan=catalog?.plans.find(item=>item.key===plan);
   const verticals=catalog?.verticals.filter(item=>activePlan?.verticals.includes(item.key))??[];
 
@@ -116,7 +117,7 @@ function Configurator(){
       {options&&<fieldset>
         <legend>3. Escala</legend>
         <div className="field-grid">
-          {Object.entries(options.limits).map(([key,included])=><label key={key}>{key}
+          {Object.entries(options.limits).map(([key,included])=><label key={key}>{LIMIT_LABELS[key]??key}
             <span className="hint">Incluye {included}</span>
             <input type="number" min={1} value={quantities[key]??included} onChange={e=>setQuantities(current=>({...current,[key]:Math.max(1,Number(e.target.value)||1)}))}/>
           </label>)}
@@ -124,7 +125,7 @@ function Configurator(){
       </fieldset>}
 
       {options&&<fieldset>
-        <legend>4. Capacidades y add-ons</legend>
+        <legend>4. Capacidades y complementos</legend>
         <div className="capability-list">
           {options.capabilities.map(item=><details key={item.key}><summary>{item.name} · ¿Necesito esto?</summary><p>Esta capacidad está incluida por el catálogo para tu plan y vertical.</p></details>)}
         </div>

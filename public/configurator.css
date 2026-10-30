@@ -27,3 +27,4 @@
 .mk-site .choice input { width: 18px; height: 18px; min-height: 0; accent-color: var(--mk-link); }
 .mk-site .configurator-top .muted, .mk-site .configurator-top .mk-lead { color: var(--mk-ink-2); }
 .mk-site .choice span, .mk-site .choice small, .mk-site .choice .muted, .mk-site .choice .hint, .mk-site .configurator-flow .hint, .mk-site .configurator-flow .muted { color: var(--mk-ink-2); }
+.choice-grid{align-items:stretch}.choice{align-content:start;min-height:112px}
