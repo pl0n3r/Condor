@@ -71,7 +71,7 @@
 .branch-picker select,
 .field input,
 .field select {
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -960,3 +960,12 @@
   }
 }
 
+
+/* Pulido del panel (auditoría de diseño, #1430) */
+select:focus-visible,
+button:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--focus, var(--brand));
+  outline-offset: 2px;
+}
