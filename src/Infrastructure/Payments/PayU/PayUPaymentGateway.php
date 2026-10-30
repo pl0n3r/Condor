@@ -90,24 +90,18 @@ final class PayUPaymentGateway implements PaymentGateway
         // The neutral PaymentGateway contract contains no payer/payment method.
         // This is intentionally NOT a live, funded transaction. A registered
         // sandbox double interprets this protocol-only request in CI.
-        $response = ($this->transport)(self::SANDBOX_URL, [
-            'language' => 'es',
-            'command' => 'SUBMIT_TRANSACTION',
-            'test' => true,
-            'merchant' => ['apiLogin' => $this->apiLogin, 'apiKey' => $this->apiKey],
-            'transaction' => [
-                'type' => 'AUTHORIZATION_AND_CAPTURE',
-                'order' => [
-                    'accountId' => $this->accountId,
-                    'referenceCode' => $order,
-                    'description' => 'SANDBOX_ONLY',
-                    'language' => 'es',
-                    'additionalValues' => ['TX_VALUE' => [
-                        'value' => self::decimalValue($amount), 'currency' => $currency,
-                    ]],
-                ],
-                'test' => true,
+        $response = $this->runSandbox([
+            'type' => 'AUTHORIZATION_AND_CAPTURE',
+            'order' => [
+                'accountId' => $this->accountId,
+                'referenceCode' => $order,
+                'description' => 'SANDBOX_ONLY',
+                'language' => 'es',
+                'additionalValues' => ['TX_VALUE' => [
+                    'value' => self::decimalValue($amount), 'currency' => $currency,
+                ]],
             ],
+            'test' => true,
         ]);
         $data = $response['transactionResponse'] ?? null;
         if (!is_array($data) || !isset($data['state'], $data['transactionId'])
@@ -159,7 +153,7 @@ final class PayUPaymentGateway implements PaymentGateway
         $key = self::identifier($request['idempotency_key']);
         $amount = self::amount($request['amount_minor']);
         $ref = $request['charge_ref'];
-        if (!is_string($ref) || preg_match('/^payu_[a-f0-9]{64}$/D', $ref) !== 1) {
+        if (preg_match('/^payu_[a-f0-9]{64}$/D', $ref) !== 1) {
             throw new DomainException('PAYU_INVALID_REFERENCE');
         }
         $charge = $this->query($tenant, $company, $ref);
@@ -176,11 +170,10 @@ final class PayUPaymentGateway implements PaymentGateway
         }
         // An actual PayU transaction ID was returned by the test transport.
         // The sandbox-only request still lacks a funded payment method.
-        $response = ($this->transport)(self::SANDBOX_URL, [
-            'language' => 'es', 'command' => 'SUBMIT_TRANSACTION', 'test' => true,
-            'merchant' => ['apiLogin' => $this->apiLogin, 'apiKey' => $this->apiKey],
-            'transaction' => ['type' => 'REFUND', 'order' => ['accountId' => $this->accountId],
-                'parentTransactionId' => $this->transactionRefs[$ref], 'reason' => 'SANDBOX_ONLY', 'test' => true],
+        $response = $this->runSandbox([
+            'type' => 'REFUND', 'order' => ['accountId' => $this->accountId],
+            'parentTransactionId' => $this->transactionRefs[$ref],
+            'reason' => 'SANDBOX_ONLY', 'test' => true,
         ]);
         if (($response['transactionResponse']['state'] ?? null) !== 'APPROVED') {
             throw new DomainException('PAYU_REFUND_NOT_CONFIRMED');
@@ -254,6 +247,21 @@ final class PayUPaymentGateway implements PaymentGateway
             && hash_equals($charge['status'], $state);
     }
 
+    /**
+     * @param array<string,mixed> $transaction
+     * @return array<string,mixed>
+     */
+    private function runSandbox(array $transaction): array
+    {
+        return ($this->transport)(self::SANDBOX_URL, [
+            'language' => 'es',
+            'command' => 'SUBMIT_TRANSACTION',
+            'test' => true,
+            'merchant' => ['apiLogin' => $this->apiLogin, 'apiKey' => $this->apiKey],
+            'transaction' => $transaction,
+        ]);
+    }
+
     private static function readPrivateFile(?string $path, string $env): string
     {
         $path ??= getenv($env) ?: '';
@@ -272,7 +280,10 @@ final class PayUPaymentGateway implements PaymentGateway
         return $value;
     }
 
-    /** @param array<string,mixed> $value @param list<string> $keys */
+    /**
+     * @param array<string,mixed> $value
+     * @param list<string> $keys
+     */
     private static function shape(array $value, array $keys): void
     {
         if (array_keys($value) !== $keys) {
