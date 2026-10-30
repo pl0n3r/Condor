@@ -127,7 +127,7 @@ function Configurator(){
       {options&&<fieldset>
         <legend>4. Capacidades y complementos</legend>
         <div className="capability-list">
-          {options.capabilities.map(item=><details key={item.key}><summary>{item.name} · ¿Necesito esto?</summary><p>Esta capacidad está incluida por el catálogo para tu plan y vertical.</p></details>)}
+          {options.capabilities.map(item=><details key={item.key}><summary>{item.name}<small> · ¿Necesito esto?</small></summary><p>Esta capacidad está incluida por el catálogo para tu plan y vertical.</p></details>)}
         </div>
         <div className="choice-grid">
           {options.addons.filter(item=>item.selectable).map(item=><label className="choice" key={item.key}>
@@ -158,6 +158,7 @@ function Configurator(){
         ? <><strong>Propuesta personalizada</strong><p>Esta combinación requiere validación comercial. No mostramos un precio inventado.</p></>
         : <><span>Total estimado</span><strong className="total">{money(quote?.total_amount??null)}</strong><span>{cycle==='monthly'?'por mes':'por año'}</span></>}
       <p className="muted">El total se calcula en el servidor con el catálogo vigente.</p>
+      <a className="mk-btn mk-btn-primary quote-cta" href="/#solicitar-demo">Solicitar esta configuración</a>
     </section>
   </div>;
 }
