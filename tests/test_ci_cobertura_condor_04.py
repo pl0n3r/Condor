@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import importlib.util
 import io
-import re
 import subprocess
 import sys
 import tempfile
