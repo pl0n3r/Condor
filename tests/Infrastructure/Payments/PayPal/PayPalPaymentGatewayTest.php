@@ -191,6 +191,20 @@ final class Paypalpaymentgatewaytest extends TestCase
                 self::assertSame('PAYPAL_SANDBOX_CREDENTIAL_UNAVAILABLE', $e->getMessage());
             }
         }
+        $worldReadable = tempnam(sys_get_temp_dir(), 'paypal-open-');
+        self::assertNotFalse($worldReadable);
+        try {
+            self::assertNotFalse(file_put_contents($worldReadable, self::SECRET));
+            self::assertTrue(chmod($worldReadable, 0644));
+            try {
+                new PayPalPaymentGateway(self::CLIENT, $transport, $worldReadable, $worldReadable);
+                self::fail('World-readable PayPal secrets accepted');
+            } catch (DomainException $e) {
+                self::assertSame('PAYPAL_SANDBOX_CREDENTIAL_UNAVAILABLE', $e->getMessage());
+            }
+        } finally {
+            @unlink($worldReadable);
+        }
         $this->expectException(DomainException::class);
         new PayPalPaymentGateway('live_paypal_client', $transport);
     }
