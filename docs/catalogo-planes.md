@@ -13,7 +13,7 @@ La pantalla `GET /adminpl0n3r/planes` muestra los planes vigentes con nombre, l�
 - La edición es una transacción: actualizar nombre, cerrar versión vigente, crear `PlanVersion` sucesora con importes **nulos** y `quote_required=true`, conservar verticales y add-ons existentes, asociar capacidades seleccionadas y registrar un `PlatformAuditEvent`.
 - La auditoría incluye identidad del actor, fecha UTC, plan, estado anterior y posterior (nombre, versión, límites y capacidades), sin datos personales ni tokens en el contexto.
 - `CommercialCatalogReader` sigue siendo la entrada de la vista técnica existente (#639); la versión vigente alimenta límites y entitlements sin modificar suscripciones previas.
-- El catálogo inicial no crea tarifas de planes. El catálogo comercial histórico ya contiene valores sembrados; su migración/normalización no se deduce de este contrato y no debe fingirse un precio aprobado.
+- **Historia comercial preservada:** la semilla de `2026-09-27` permanece consultable con sus valores históricos (los contratos existentes dependen de esa fecha); desde `2026-10-30` se materializa una **versión 2 sin tarifas** (`monthly_amount=null`, `annual_amount=null`, `quote_required=true`). La ejecución idempotente conserva capacidades, límites, verticales, add-ons e historial; no aprueba ni inventa tarifas actuales.
 - Pruebas únicamente con planes/empresas sintéticos. Cualquier despliegue o pago real requiere las puertas independientes.
 
 ## Estados y reversión
