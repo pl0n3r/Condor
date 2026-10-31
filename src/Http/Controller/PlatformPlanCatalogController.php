@@ -126,7 +126,10 @@ final class PlatformPlanCatalogController extends PlatformOwnerApiController
         }
     }
 
-    /** @param array<string, mixed> $payload @return array<string, mixed> */
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
     private function apply(string $key, array $payload, string $actor): array
     {
         $fields = array_keys($payload);
