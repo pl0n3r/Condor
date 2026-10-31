@@ -25,9 +25,10 @@
             <button type="button" id="cookie-consent-close" class="cookie-consent__close" aria-label="Cerrar y rechazar cookies opcionales">Cerrar</button>
         </div>
     </aside>
-    <footer class="site-footer" aria-label="Información de versión">
+    <footer class="site-footer" aria-label="Información de versión y privacidad">
         <span>Condor App</span>
         {% if app_version is defined %}<span>V {{ app_version }}</span>{% endif %}
+        <a href="{{ path('app_privacy_rights') }}">Privacidad y mis derechos</a>
         <button type="button" id="cookie-consent-settings" class="cookie-consent__settings">Cambiar preferencias de cookies</button>
     </footer>
     {# Única superficie para futuros scripts opcionales: etiquetas inertes

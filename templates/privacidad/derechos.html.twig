@@ -1,0 +1,34 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Privacidad y mis derechos | Condor App{% endblock %}
+
+{% block body %}
+<section class="privacy-rights" aria-labelledby="privacy-rights-title">
+    <h1 id="privacy-rights-title">Privacidad y mis derechos</h1>
+    <p>Información provisional para conocer el canal de derechos sobre datos personales. El contenido jurídico definitivo está pendiente de revisión y aprobación del abogado (Condor #974).</p>
+
+    <h2>Responsable del tratamiento</h2>
+    <dl>
+        <dt>Nombre o razón social</dt>
+        <dd>{{ responsable.name }}</dd>
+        <dt>Identificación</dt>
+        <dd>{{ responsable.identifier }}</dd>
+        <dt>Dirección</dt>
+        <dd>{{ responsable.address }}</dd>
+    </dl>
+
+    <h2>Cómo solicitar acceso, corrección o borrado</h2>
+    <p>Para solicitar información sobre tus datos, su corrección o su eliminación, utiliza el canal de derechos indicado por el responsable. La recepción, la verificación de identidad y la atención de solicitudes reales quedan pendientes de aprobación jurídica y habilitación operativa.</p>
+    <p>Correo de contacto para derechos:
+        {% if responsable.rights_email != pendiente %}
+            <a href="mailto:{{ responsable.rights_email }}">{{ responsable.rights_email }}</a>
+        {% else %}
+            <strong>{{ pendiente }}</strong>
+        {% endif %}
+    </p>
+
+    <h2>Plazo de respuesta</h2>
+    <p>Plazo aplicable para responder: <strong>{{ pendiente }}</strong>. Se completará después de la revisión jurídica (Condor #974); no se comunica un plazo legal sin verificar.</p>
+    <p>Este contenido es un borrador informativo, no un formulario ni un canal habilitado para tramitar solicitudes.</p>
+</section>
+{% endblock %}
