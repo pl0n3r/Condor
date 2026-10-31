@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Condor App{% endblock %}</title>
     <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="/cookie-consent.css">
+    <script src="/cookie-consent.js" defer></script>
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -14,6 +16,23 @@
     <footer class="site-footer" aria-label="Información de versión">
         <span>Condor App</span>
         {% if app_version is defined %}<span>V {{ app_version }}</span>{% endif %}
+        <button type="button" id="cookie-consent-settings" class="cookie-consent__settings">Cambiar preferencias de cookies</button>
     </footer>
+    <aside id="cookie-consent-banner" class="cookie-consent" role="region" aria-labelledby="cookie-consent-title" hidden>
+        <div class="cookie-consent__copy">
+            <strong id="cookie-consent-title">Preferencias de cookies</strong>
+            <p>Las cookies esenciales de sesión y seguridad funcionan sin consentimiento. Las opcionales permanecen desactivadas hasta que elijas aceptarlas.</p>
+            <p class="cookie-consent__legal">Información jurídica detallada: [PENDIENTE DE APROBACIÓN DEL ABOGADO — Condor #974].</p>
+        </div>
+        <div class="cookie-consent__actions">
+            <button type="button" id="cookie-consent-reject" class="cookie-consent__action">Rechazar</button>
+            <button type="button" id="cookie-consent-accept" class="cookie-consent__action">Aceptar</button>
+            <button type="button" id="cookie-consent-close" class="cookie-consent__close" aria-label="Cerrar y rechazar cookies opcionales">Cerrar</button>
+        </div>
+    </aside>
+    {# Única superficie para futuros scripts opcionales: etiquetas inertes
+       <script type="text/plain" data-cookie-src="https://proveedor.example/script.js"></script>.
+       Nunca insertar analytics ejecutables en head/body ni activar proveedores reales en #1439. #}
+    {% block cookie_optional_scripts %}{% endblock %}
 </body>
 </html>
