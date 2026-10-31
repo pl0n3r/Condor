@@ -49,6 +49,7 @@ final class PublicSiteNoTrackingTest extends WebTestCase
 
             // Solo los scripts propios del movimiento: del mismo dominio, ninguno en línea ni de terceros.
             $approvedScripts = [
+                '/cookie-consent.js',
                 '/marketing-motion-gate.js',
                 '/lib/gsap/gsap.min.js',
                 '/lib/gsap/SplitText.min.js',
