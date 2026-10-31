@@ -18,6 +18,8 @@ class AdminCssPolishTests(unittest.TestCase):
                 self.assertIn(f"{tag}:focus-visible", built)
         self.assertRegex(source, r"outline:\s*3px\s+solid\s+var\(")
         self.assertRegex(source, r"outline-offset:\s*2px")
+        self.assertRegex(built, r"outline:3px solid var\(")
+        self.assertIn("outline-offset:2px", built)
         self.assertIn("min-height: 44px", source)
         self.assertIn("min-height:44px", built)
         self.assertNotRegex(source, r"min-height:\s*42px")
