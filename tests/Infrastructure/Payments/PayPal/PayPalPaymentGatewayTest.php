@@ -130,8 +130,11 @@ final class Paypalpaymentgatewaytest extends TestCase
             self::assertFalse($gateway->verifyWebhook('tenant-a', 'company-a',
                 json_encode([...self::event(), 'resource' => [...self::event()['resource'], 'invoice_id' => 'wrong']], JSON_THROW_ON_ERROR),
                 self::headers()));
-            self::assertTrue($gateway->verifyWebhook('tenant-a', 'company-a', $event, self::headers()));
+            $headers = json_decode(self::headers(), true, 8, JSON_THROW_ON_ERROR);
+            self::assertTrue($gateway->verifyWebhook('tenant-a', 'company-a', $event,
+                json_encode(array_reverse($headers, true), JSON_THROW_ON_ERROR)));
             self::assertFalse($gateway->verifyWebhook('tenant-a', 'company-a', $event, self::headers()));
+            self::assertFalse($gateway->verifyWebhook('tenant-a', 'company-a', $event, self::headers('TESTTX-003')));
 
             $refund = [
                 'tenant_id' => 'tenant-a', 'company_id' => 'company-a',
