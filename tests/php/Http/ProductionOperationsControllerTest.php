@@ -443,7 +443,8 @@ final class ProductionOperationsControllerTest extends WebTestCase
         ]);
         self::assertInstanceOf(PlanVersion::class, $version);
 
-        $at = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        // Suscripción real de prueba anterior a la retirada de tarifas v1.
+        $at = new DateTimeImmutable('2026-09-30T10:00:00Z', new DateTimeZone('UTC'));
         $subscription = Subscription::fromLifecycle(
             new SubscriptionLifecycle(
                 $tenant->id(),
