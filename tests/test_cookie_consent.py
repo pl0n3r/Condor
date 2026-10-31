@@ -88,6 +88,10 @@ class CookieConsentTests(unittest.TestCase):
                 self.assertIn(marker, html)
         self.assertIn('src="/cookie-consent.js" defer', html)
         self.assertIn('href="/cookie-consent.css"', html)
+        # El smoke HTTP usa curl|grep -q para la versión: dejar el footer
+        # después del banner evita el cierre anticipado del pipe.
+        self.assertLess(html.index('id="cookie-consent-banner"'),
+                        html.index('class="site-footer"'))
         self.assertIn('type="text/plain"', html)
         self.assertNotIn('checked', html)
         self.assertIn('min-height: 44px', css)
