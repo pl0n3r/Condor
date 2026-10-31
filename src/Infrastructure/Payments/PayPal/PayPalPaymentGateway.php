@@ -299,11 +299,17 @@ final class PayPalPaymentGateway implements PaymentGateway
     private static function secret(?string $path, string $name): string
     {
         $path ??= getenv($name) ?: '';
-        if ($path === '' || is_link($path) || !is_file($path) || !is_readable($path)
+        if ($path === '' || !str_starts_with($path, DIRECTORY_SEPARATOR)
+            || is_link($path) || !is_file($path) || !is_readable($path)
             || (fileperms($path) & 0077) !== 0 || filesize($path) === false || filesize($path) > 512) {
             throw new DomainException('PAYPAL_SANDBOX_CREDENTIAL_UNAVAILABLE');
         }
-        $value = file_get_contents($path);
+        $real = realpath($path);
+        $root = realpath(dirname(__DIR__, 4));
+        if ($real === false || ($root !== false && str_starts_with($real, $root.DIRECTORY_SEPARATOR))) {
+            throw new DomainException('PAYPAL_SANDBOX_CREDENTIAL_UNAVAILABLE');
+        }
+        $value = file_get_contents($real);
         if (!is_string($value) || preg_match('/^test_[A-Za-z0-9_-]{12,240}$/D', trim($value)) !== 1) {
             throw new DomainException('PAYPAL_SANDBOX_CREDENTIAL_UNAVAILABLE');
         }
