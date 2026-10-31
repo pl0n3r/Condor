@@ -82,7 +82,7 @@ class PlantillaEmpresaClienteTests(unittest.TestCase):
         raw = DOC.read_text(encoding="utf-8")
         for bad in (None, "", raw.replace(SECTIONS[1], "", 1),
                     raw + "\n" + SECTIONS[2],
-                    raw.replace("empresa cliente como responsable", "", 1),
+                    raw.replace("empresa cliente como responsable", ""),
                     raw.replace("NO APROBADO JURÍDICAMENTE", "", 1)):
             with self.subTest(case=str(bad)[:35]):
                 with self.assertRaisesRegex(ValueError, "UNKNOWN"):
