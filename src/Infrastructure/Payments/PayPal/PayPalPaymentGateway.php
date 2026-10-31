@@ -30,6 +30,8 @@ final class PayPalPaymentGateway implements PaymentGateway
     private array $refunds = [];
     /** @var array<string,bool> */
     private array $transmissions = [];
+    /** @var array<string,bool> */
+    private array $events = [];
     private readonly string $clientSecret;
     private readonly string $webhookId;
     private readonly Closure $clock;
@@ -200,7 +202,8 @@ final class PayPalPaymentGateway implements PaymentGateway
             $headers = json_decode($signature, true, 8, JSON_THROW_ON_ERROR);
             $event = json_decode($payload, true, 12, JSON_THROW_ON_ERROR);
             if (!is_array($headers) || !is_array($event)
-                || array_keys($headers) !== ['transmission_id','transmission_time','cert_url','auth_algo','transmission_sig']
+                || count($headers) !== 5
+                || array_diff(['transmission_id','transmission_time','cert_url','auth_algo','transmission_sig'], array_keys($headers)) !== []
                 || !self::providerId($headers['transmission_id'])
                 || !is_string($headers['transmission_sig'])
                 || preg_match('~^[A-Za-z0-9+/]{32,1024}={0,2}$~D', $headers['transmission_sig']) !== 1
@@ -231,7 +234,8 @@ final class PayPalPaymentGateway implements PaymentGateway
                 || ($event['resource']['custom_id'] ?? null) !== $scope
                 || ($event['resource']['invoice_id'] ?? null) !== $entry['invoice']
                 || $entry['result']['status'] !== ($event['event_type'] === 'PAYMENT.CAPTURE.COMPLETED' ? 'approved' : 'rejected')
-                || isset($this->transmissions[$headers['transmission_id']])) return false;
+                || isset($this->transmissions[$headers['transmission_id']])
+                || isset($this->events[$event['id']])) return false;
             // PayPal's official postback protocol verifies the raw event and
             // five headers. Never trust the event or a syntactically valid sig.
             $verification = ($this->transport)('verify_webhook', [
@@ -248,6 +252,7 @@ final class PayPalPaymentGateway implements PaymentGateway
             ]);
             if (($verification['verification_status'] ?? null) !== 'SUCCESS') return false;
             $this->transmissions[$headers['transmission_id']] = true;
+            $this->events[$event['id']] = true;
             return true;
         } catch (DomainException|JsonException) {
             return false;
