@@ -364,7 +364,9 @@ final class ProductionMaterialsControllerTest extends WebTestCase
             ->findOneBy(['key' => 'production-lite']);
         self::assertInstanceOf(AddOn::class, $production);
 
-        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        // Simula una suscripción creada mientras v1 estaba vigente.
+        // La edición del catálogo no debe revocar sus entitlements.
+        $now = new DateTimeImmutable('2026-09-30T10:00:00Z', new DateTimeZone('UTC'));
         $subscription = Subscription::fromLifecycle(
             new SubscriptionLifecycle(
                 $tenant->id(),
