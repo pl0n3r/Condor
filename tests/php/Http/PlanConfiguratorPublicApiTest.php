@@ -69,7 +69,9 @@ final class PlanConfiguratorPublicApiTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         $payload = self::payload($client);
-        self::assertSame(229700, $payload['quote']['total_amount']);
+        self::assertSame(2, $payload['quote']['plan']['version']);
+        self::assertNull($payload['quote']['total_amount']);
+        self::assertTrue($payload['quote']['proposal_required']);
         self::assertSame($before, $this->manager->getRepository(Quote::class)->count([]));
     }
 
