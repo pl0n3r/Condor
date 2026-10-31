@@ -45,7 +45,7 @@ final class CommercialPricingConsumersTest extends WebTestCase
             $crawler->filter('[data-plan-key]')->count(),
         );
         self::assertSame(
-            '1',
+            '2',
             $crawler
                 ->filter('[data-plan-key="business"]')
                 ->attr('data-plan-version'),
