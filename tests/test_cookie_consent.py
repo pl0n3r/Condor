@@ -16,7 +16,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const code = fs.readFileSync(process.argv[1], 'utf8');
-function session(initial = '') {
+function session(initial = '', pathname = '/') {
   let cookie = initial;
   const loaded = [];
   const elements = {};
@@ -37,7 +37,7 @@ function session(initial = '') {
     head:{appendChild(script){loaded.push(script.src);}},
   };
   const window = {location:{href:'https://condor.test/',origin:'https://condor.test',
-    protocol:'https:',reload(){window.reloadCount++;}},reloadCount:0};
+    protocol:'https:',pathname,reload(){window.reloadCount++;}},reloadCount:0};
   vm.runInNewContext(code,{document,window,URL}, {timeout:1000});
   return {elements,loaded,optional,window,get cookie(){return cookie;}};
 }
@@ -66,6 +66,12 @@ assert.match(accepted.cookie,/rejected$/);
 const unknown=session('condor_cookie_choice=unexpected');
 assert.equal(unknown.loaded.length,0);
 assert.equal(unknown.elements['cookie-consent-banner'].hidden,false);
+// El flujo de backoffice no puede bloquear controles ni cargar scripts opcionales.
+for (const path of ['/admin/login', '/adminpl0n3r/empresas']) {
+  const admin = session('condor_cookie_choice=accepted', path);
+  assert.equal(admin.elements['cookie-consent-banner'].hidden,true);
+  assert.equal(admin.loaded.length,0);
+}
 console.log('cookie consent browser simulation: OK');
 '''
 

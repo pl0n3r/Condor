@@ -7,6 +7,9 @@
   const close = document.getElementById('cookie-consent-close');
   const settings = document.getElementById('cookie-consent-settings');
   if (!banner || !accept || !reject || !close || !settings) return;
+  // El backoffice no presenta un panel flotante sobre acciones administrativas;
+  // jamás carga proveedores opcionales, incluso con una elección pública anterior.
+  if (/^\/(?:admin|adminpl0n3r)(?:\/|$)/.test(window.location.pathname)) return;
 
   const name = 'condor_cookie_choice';
   const maxAge = 60 * 60 * 24 * 180;
