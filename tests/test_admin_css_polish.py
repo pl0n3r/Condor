@@ -28,6 +28,7 @@ class AdminCssPolishTests(unittest.TestCase):
         self.assertRegex(built, r":where\(input,select,button,textarea,summary\)")
         self.assertIn("font-variant-numeric: tabular-nums", source)
         self.assertIn("font-variant-numeric:tabular-nums", built)
+        self.assertIn(":where(table,[role=grid]){font-variant-numeric:tabular-nums}", built)
 
     def test_contract_is_not_vacuous(self):
         source = SOURCE.read_text(encoding="utf-8")
