@@ -14,7 +14,7 @@ class RevisionJuridicaTests(unittest.TestCase):
         dest = ROOT / "revision-juridica"
         self.assertTrue(dest.is_dir())
         expected_names = {name for _, name, _ in SOURCES}
-        expected_names |= {"00-LEEME.md", "paquete-completo.md"}
+        expected_names |= {"00-LEEME.md", "paquete-completo.md", "PAQUETE-ABOGADO.md"}
         self.assertEqual({p.name for p in dest.iterdir() if p.is_file()},
                          expected_names)
         sources = {}
