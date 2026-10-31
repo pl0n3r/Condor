@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Contratos de regresión del catálogo administrativo de planes (#1448).
 
-Estas pruebas no crean tarifas, cuentas ni pagos y no suplantan el CI de PHP.
+Solo utiliza fixtures conceptuales y fuentes locales. No inicia pagos ni
+requiere credenciales de producción.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ IDENTITY = ROOT / "src/Domain/Commercial/Entity/CommercialIdentity.php"
 VERSION = ROOT / "src/Domain/Commercial/Entity/PlanVersion.php"
 SEEDER = ROOT / "src/Application/Commercial/CommercialCatalogSeeder.php"
 READER = ROOT / "src/Application/Commercial/CommercialCatalogReader.php"
+AUDIT = ROOT / "src/Domain/Audit/Entity/PlatformAuditEvent.php"
 DOCUMENT = ROOT / "docs/catalogo-planes.md"
 
 
@@ -24,7 +26,7 @@ class CatalogoPlanesAdminTests(unittest.TestCase):
         return path.read_text(encoding="utf-8")
 
     def test_criterio_principal(self) -> None:
-        """El admin conserva un catálogo versionado, auditable y sin tarifas."""
+        """Editor propietario: versiones, límites, funciones, historial, tarifa vacía."""
         controller = self.source(CONTROLLER)
         self.assertIn("/adminpl0n3r/planes", controller)
         self.assertIn("/adminpl0n3r/api/plans/{key}", controller)
@@ -32,46 +34,76 @@ class CatalogoPlanesAdminTests(unittest.TestCase):
         self.assertIn("requireManagementCsrf(", controller)
         self.assertIn("expected_version", controller)
         self.assertIn("wrapInTransaction(", controller)
+        self.assertIn("PESSIMISTIC_WRITE", controller)
         self.assertIn("PlatformAuditEvent", controller)
-        self.assertIn("old", controller)
-        self.assertIn("new", controller)
+        self.assertIn("['old' => $before, 'new' => $after]", controller)
         self.assertIn("new PlanVersion(", controller)
-        self.assertIn("null, null, true", controller.replace("\n", " "))
+        self.assertRegex(controller, r"null,\s*null,\s*true,\s*\$payload\['limits'\]")
         self.assertIn("CommercialCatalogReader", controller)
         self.assertIn("rename(", self.source(IDENTITY))
         self.assertIn("closeAt(", self.source(VERSION))
         self.assertIn("'limits' => $version->limits()", self.source(READER))
 
-    def test_plan_defaults_have_no_unapproved_rates(self) -> None:
+    def test_seed_preserves_history_but_current_rates_are_empty(self) -> None:
         seeder = self.source(SEEDER)
-        definitions = seeder.split("$definitions = [", 1)[1].split("];", 1)[0]
-        # La semilla de planes no presupone cifras comerciales.
-        for key in ("basic", "business", "pro", "enterprise"):
-            self.assertRegex(
-                definitions,
-                rf"'{key}'\s*=>\s*\[null,\s*null,\s*true",
-            )
-        self.assertNotRegex(
-            definitions, r"'(?:basic|business|pro|enterprise)'\s*=>\s*\[\d",
+        # Los contratos que consultan la fecha histórica conservan sus cifras
+        # anteriores: una nueva decisión no puede falsificar el pasado.
+        self.assertIn("'basic' => [79900, 799000, false", seeder)
+        self.assertIn("2026-09-27T00:00:00Z", seeder)
+        self.assertIn("2026-10-30T00:00:00Z", seeder)
+        self.assertIn("$historical->closeAt($withoutPricesFrom)", seeder)
+        self.assertRegex(
+            seeder,
+            r"\$plans\[\$key\],\s*2,\s*null,\s*null,\s*true,\s*\$limits",
         )
+        self.assertIn("'version' => $number", seeder)
+        self.assertIn("$historical->capabilities()", seeder)
 
-    def test_no_billing_or_untrusted_write_surface(self) -> None:
+    def test_owner_csrf_conflict_and_invalid_input_fail_closed(self) -> None:
         controller = self.source(CONTROLLER)
-        self.assertIn("JsonResponse::HTTP_UNPROCESSABLE_ENTITY", controller)
-        self.assertIn("capabilities", controller)
-        self.assertIn("limits", controller)
-        self.assertNotIn("BillingAdapter", controller)
-        self.assertNotIn("PaymentGateway", controller)
-        self.assertNotIn("monthly_amount',", controller)  # no edición de tarifas
-        self.assertIn("CSRF", controller)
+        for required in (
+            "platformOwner()", "requireManagementCsrf(", "isCsrfTokenValid(",
+            "expected_version", "Configuración de plan inválida",
+            "Funcionalidad duplicada", "Funcionalidad del catálogo desconocida",
+            "UnprocessableEntityHttpException",
+            "JsonResponse::HTTP_UNPROCESSABLE_ENTITY",
+            "'capabilities', 'expected_version', 'limits', 'name'",
+            "PESSIMISTIC_WRITE",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, controller)
+        for forbidden in ("BillingAdapter", "PaymentGateway", "charge(", "invoice("):
+            self.assertNotIn(forbidden, controller)
 
-    def test_contract_explicitly_preserves_canonical_reader(self) -> None:
-        doc = self.source(DOCUMENT)
-        self.assertIn("CommercialCatalogReader", doc)
-        self.assertIn("PlatformAuditEvent", doc)
-        self.assertIn("sin tarifa definida", doc)
-        self.assertIn("datos", doc.lower())
-        self.assertIn("Fuera de alcance", doc)
+    def test_audit_is_structured_and_reader_remains_canonical(self) -> None:
+        controller = self.source(CONTROLLER)
+        audit = self.source(AUDIT)
+        reader = self.source(READER)
+        for field in ("'name'", "'limits'", "'capabilities'", "'version'"):
+            self.assertIn(field, controller)
+        self.assertIn("'commercial.plan.updated'", controller)
+        self.assertIn("'old' => $before", controller)
+        self.assertIn("'new' => $after", controller)
+        self.assertIn("actorUserId", audit)
+        self.assertIn("createdAt", audit)
+        self.assertIn("DateTimeZone('UTC')", audit)
+        self.assertIn("PlanVersionTimeline", reader)
+        self.assertIn("monthlyAmount()", reader)
+        self.assertIn("quoteRequired()", reader)
+
+    def test_contract_documents_synthetic_scope_and_reversal(self) -> None:
+        document = self.source(DOCUMENT)
+        for value in (
+            "CommercialCatalogReader",
+            "PlatformAuditEvent",
+            "sin tarifa definida",
+            "datos",
+            "Fuera de alcance",
+            "Revertir",
+            "2026-09-27",
+            "2026-10-30",
+        ):
+            self.assertIn(value, document)
 
 
 if __name__ == "__main__":
