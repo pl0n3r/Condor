@@ -34,7 +34,7 @@ class AdminCssPolishTests(unittest.TestCase):
         self.assertIn(".field select", source)
         self.assertRegex(source, r"min-height:\s*44px")
         # Reversion of keyboard focus rules must fail the main test.
-        self.assertEqual(len(re.findall(r"\\b(?:select|button|textarea|summary|input):focus-visible", source)), 5)
+        self.assertEqual(len(re.findall(r"\b(?:select|button|textarea|summary|input):focus-visible", source)), 5)
 
 
 if __name__ == "__main__":
