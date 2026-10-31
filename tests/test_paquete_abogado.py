@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PATH = ROOT / "revision-juridica" / "PAQUETE-ABOGADO.md"
 PROJECTS = ("Factory", "Condor", "ControlBot", "GrindFlow", "BRVTAL", "FactoryRunner", "AutoFactory")
-COUNTS = {"Condor": 18, "ControlBot": 8, "GrindFlow": 14, "BRVTAL": 16, "FactoryRunner": 1, "AutoFactory": 9}
+COUNTS = {"Condor": 18, "ControlBot": 8, "GrindFlow": 16, "BRVTAL": 19, "FactoryRunner": 1, "AutoFactory": 9}
 PLACEHOLDER = "[COMPLETAR POR EL DUEÑO]"
 
 
@@ -51,7 +51,7 @@ class PaqueteAbogadoTests(unittest.TestCase):
 
     def test_no_inventa_responsables_aprobaciones_o_fuentes(self):
         doc = PATH.read_text(encoding="utf-8")
-        self.assertIn("no asesoría ni aprobación legal", doc)
+        self.assertIn("No constituye asesoría ni aprobación legal", doc)
         self.assertIn("no ejecutar cambios productivos", doc)
         self.assertIn("ninguno declarado — NO VERIFICADO", doc)
         self.assertIn("AutoFactory no dispone de carpeta revision-juridica", doc)
