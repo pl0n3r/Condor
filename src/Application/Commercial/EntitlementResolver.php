@@ -6,6 +6,9 @@ namespace App\Application\Commercial;
 
 use App\Domain\Commercial\Entity\AddOn;
 use App\Domain\Commercial\Entity\Capability;
+use App\Domain\Commercial\Entity\Subscription;
+use App\Domain\Commercial\Entity\SubscriptionConfiguration;
+use App\Domain\Commercial\SubscriptionState;
 use App\Domain\Commercial\Entity\VerticalCapability;
 use App\Domain\Commercial\EntitlementOverride;
 use Doctrine\ORM\EntityManagerInterface;
@@ -32,18 +35,63 @@ final readonly class EntitlementResolver
         $version = $context->planVersion();
         $vertical = $context->vertical();
 
-        if (
-            !$version->plan()->isActive()
-            || !$version->isEffectiveAt($context->evaluatedAt())
-            || !$vertical->isActive()
-        ) {
+        if (!$version->plan()->isActive() || !$vertical->isActive()) {
             throw new DomainException('Contexto comercial inactivo o fuera de vigencia.');
+        }
+
+        $catalogAt = $context->evaluatedAt();
+        if (!$version->isEffectiveAt($catalogAt)) {
+            // Una PlanVersion cerrada sigue siendo el contrato de los tenants
+            // que se suscribieron mientras estaba vigente. No habilitar
+            // versiones obsoletas aportadas por un contexto arbitrario.
+            $subscription = $this->entityManager->getRepository(Subscription::class)
+                ->findOneBy(['tenantId' => $context->tenantId()]);
+            if (
+                !$subscription instanceof Subscription
+                || $subscription->state() !== SubscriptionState::Active
+                || $subscription->planVersion()->id() !== $version->id()
+                || !$version->isEffectiveAt($subscription->createdAt())
+                || $subscription->createdAt() > $catalogAt
+                || $version->effectiveUntil() === null
+                || $catalogAt < $version->effectiveUntil()
+            ) {
+                throw new DomainException('Contexto comercial inactivo o fuera de vigencia.');
+            }
+
+            $configuration = $this->entityManager
+                ->getRepository(SubscriptionConfiguration::class)
+                ->findOneBy(['subscription' => $subscription]);
+            if (
+                !$configuration instanceof SubscriptionConfiguration
+                || $configuration->vertical()->id() !== $vertical->id()
+                || $configuration->subscription()->id() !== $subscription->id()
+            ) {
+                throw new DomainException('Configuración histórica incompatible con el tenant.');
+            }
+
+            $selectedKeys = array_map(
+                static fn (AddOn $addOn): string => $addOn->key(),
+                $context->selectedAddOns(),
+            );
+            $configuredKeys = array_map(
+                static fn (AddOn $addOn): string => $addOn->key(),
+                $configuration->addOns(),
+            );
+            sort($selectedKeys);
+            sort($configuredKeys);
+            if ($selectedKeys !== $configuredKeys) {
+                throw new DomainException('Add-ons históricos distintos del contrato.');
+            }
+
+            // El lector conserva la foto versionada; no se usan tarifas
+            // actuales para verificar capacidades de una suscripción previa.
+            $catalogAt = $subscription->createdAt();
         }
 
         $options = $this->catalog->options(
             $version->plan()->key(),
             $vertical->key(),
-            $context->evaluatedAt(),
+            $catalogAt,
         );
         $resolvedPlan = $options['plan'] ?? null;
         $resolvedVertical = $options['vertical'] ?? null;
