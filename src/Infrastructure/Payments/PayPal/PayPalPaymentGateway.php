@@ -150,10 +150,7 @@ final class PayPalPaymentGateway implements PaymentGateway
         $company = self::identifier($request['company_id']);
         $key = self::identifier($request['idempotency_key']);
         $amount = self::amount($request['amount_minor']);
-        $ref = $request['charge_ref'];
-        if (!is_string($ref) || preg_match('/^paypal_[a-f0-9]{64}$/D', $ref) !== 1) {
-            throw new DomainException('PAYPAL_INVALID_REFERENCE');
-        }
+        $ref = self::chargeRef($request['charge_ref']);
         $scope = $tenant.'/'.$company.'/'.$key;
         $fingerprint = hash('sha256', json_encode([$ref,$amount], JSON_THROW_ON_ERROR));
         if (isset($this->refunds[$scope])) {
@@ -259,7 +256,11 @@ final class PayPalPaymentGateway implements PaymentGateway
         }
     }
 
-    /** @param array<string,mixed> $value @param list<string> $required @param list<string> $optional */
+    /**
+     * @param array<string,mixed> $value
+     * @param list<string> $required
+     * @param list<string> $optional
+     */
     private static function shape(array $value, array $required, array $optional = []): void
     {
         $keys = array_keys($value);
@@ -271,6 +272,13 @@ final class PayPalPaymentGateway implements PaymentGateway
     {
         if (!is_string($value) || preg_match('/^[A-Za-z0-9_-]{2,80}$/D', $value) !== 1) {
             throw new DomainException('PAYPAL_INVALID_IDENTIFIER');
+        }
+        return $value;
+    }
+    private static function chargeRef(mixed $value): string
+    {
+        if (!is_string($value) || preg_match('/^paypal_[a-f0-9]{64}$/D', $value) !== 1) {
+            throw new DomainException('PAYPAL_INVALID_REFERENCE');
         }
         return $value;
     }
