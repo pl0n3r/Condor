@@ -50,10 +50,11 @@ final class CommercialPricingConsumersTest extends WebTestCase
                 ->filter('[data-plan-key="business"]')
                 ->attr('data-plan-version'),
         );
-        self::assertStringContainsString(
-            'COP',
-            $crawler->filter('[data-plan-key="business"]')->text(),
-        );
+        $businessCard = $crawler->filter('[data-plan-key="business"]');
+        self::assertSame(1, $businessCard->count());
+        self::assertStringContainsString('Solicitar propuesta', $businessCard->text());
+        self::assertStringNotContainsString('COP', $businessCard->text());
+        self::assertSame(0, $businessCard->filter('dd')->count());
     }
 
     public function testConsumersShareCatalogIdentity(): void

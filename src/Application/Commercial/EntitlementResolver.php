@@ -82,6 +82,9 @@ final readonly class EntitlementResolver
             if ($selectedKeys !== $configuredKeys) {
                 throw new DomainException('Add-ons históricos distintos del contrato.');
             }
+            if ($context->configuredLimits() !== $configuration->quantities()) {
+                throw new DomainException('Límites históricos distintos del contrato.');
+            }
 
             // El lector conserva la foto versionada; no se usan tarifas
             // actuales para verificar capacidades de una suscripción previa.

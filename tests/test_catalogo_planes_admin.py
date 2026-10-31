@@ -44,6 +44,13 @@ class CatalogoPlanesAdminTests(unittest.TestCase):
         self.assertIn("closeAt(", self.source(VERSION))
         self.assertIn("'limits' => $version->limits()", self.source(READER))
 
+    def test_historical_contract_rejects_forged_configured_limits(self) -> None:
+        resolver = self.source(ROOT / "src/Application/Commercial/EntitlementResolver.php")
+        self.assertIn(
+            "$context->configuredLimits() !== $configuration->quantities()",
+            resolver,
+        )
+
     def test_seed_preserves_history_but_current_rates_are_empty(self) -> None:
         seeder = self.source(SEEDER)
         # Los contratos que consultan la fecha histórica conservan sus cifras
