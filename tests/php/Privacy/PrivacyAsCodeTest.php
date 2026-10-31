@@ -87,7 +87,13 @@ final class PrivacyAsCodeTest extends TestCase
         $directory = $this->root().'/docs/privacidad';
         $actual = array_map('basename', glob($directory.'/*.md') ?: []);
         sort($actual);
-        self::assertSame($expectedNames, $actual);
+        // #1446 añade una plantilla jurídica manual, no derivada de datos.yml.
+        $allowedNames = [...$expectedNames, 'plantilla-empresa-cliente.md'];
+        sort($allowedNames);
+        self::assertSame($allowedNames, $actual);
+        $template = file_get_contents($directory.'/plantilla-empresa-cliente.md');
+        self::assertIsString($template);
+        self::assertStringContainsString('NO APROBADO JURÍDICAMENTE', $template);
 
         foreach ($expectedNames as $name) {
             $actualContent = file_get_contents($directory.'/'.$name);
