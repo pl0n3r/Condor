@@ -76,6 +76,12 @@ final class PlatformPlanCatalogController extends PlatformOwnerApiController
     public function saveForm(string $key, Request $request): Response
     {
         $owner = $this->platformOwner();
+        $allowedFields = ['_csrf_token', 'capabilities', 'expected_version', 'limits', 'name'];
+        foreach (array_keys($request->request->all()) as $field) {
+            if (!in_array($field, $allowedFields, true)) {
+                throw new UnprocessableEntityHttpException('Campo de plan no permitido.');
+            }
+        }
         $token = (string) $request->request->get('_csrf_token', '');
         if (!$this->isCsrfTokenValid(self::CSRF_ID, $token)) {
             throw new AccessDeniedHttpException('CSRF inválido.');
