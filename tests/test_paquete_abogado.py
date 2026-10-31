@@ -56,7 +56,7 @@ class PaqueteAbogadoTests(unittest.TestCase):
         self.assertIn("ninguno declarado — NO VERIFICADO", doc)
         self.assertIn("AutoFactory no dispone de carpeta revision-juridica", doc)
         self.assertIn("No existe inventario datos.yml propio de Factory", doc)
-        self.assertEqual(doc.count("| " + PLACEHOLDER), 7)
+        self.assertEqual(doc.count("| " + PLACEHOLDER), 7 * 4)
 
     def test_documentos_verificables_por_producto(self):
         parts = project_sections(PATH.read_text(encoding="utf-8"))
