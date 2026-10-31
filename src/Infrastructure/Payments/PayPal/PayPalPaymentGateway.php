@@ -58,12 +58,13 @@ final class PayPalPaymentGateway implements PaymentGateway
     public function charge(array $request): array
     {
         self::shape($request, ['tenant_id','company_id','order_ref','amount_minor','currency','idempotency_key'], ['scenario']);
-        $tenant = self::identifier($request['tenant_id']);
-        $company = self::identifier($request['company_id']);
-        $order = self::identifier($request['order_ref']);
-        $key = self::identifier($request['idempotency_key']);
-        $amount = self::amount($request['amount_minor']);
+        // Normalize all four identity boundaries together before provider I/O.
+        [$tenant, $company, $order, $key] = array_map(
+            static fn (mixed $value): string => self::identifier($value),
+            [$request['tenant_id'], $request['company_id'], $request['order_ref'], $request['idempotency_key']],
+        );
         $currency = self::currency($request['currency']);
+        $amount = self::amount($request['amount_minor']);
         $scenario = $request['scenario'] ?? 'approve';
         if (!in_array($scenario, ['approve','reject'], true)) {
             throw new DomainException('PAYPAL_INVALID_SCENARIO');
