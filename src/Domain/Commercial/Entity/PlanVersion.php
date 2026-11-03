@@ -137,6 +137,16 @@ final class PlanVersion
     public function effectiveFrom(): DateTimeImmutable { return $this->effectiveFrom; }
     public function effectiveUntil(): ?DateTimeImmutable { return $this->effectiveUntil; }
 
+    public function closeAt(DateTimeImmutable $at): void
+    {
+        if ($at <= $this->effectiveFrom
+            || ($this->effectiveUntil !== null && $this->effectiveUntil != $at)
+        ) {
+            throw new DomainException('Cierre de vigencia comercial inválido.');
+        }
+        $this->effectiveUntil = $at;
+    }
+
     public function isEffectiveAt(DateTimeImmutable $at): bool
     {
         return $at >= $this->effectiveFrom

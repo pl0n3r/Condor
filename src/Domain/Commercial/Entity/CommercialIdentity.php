@@ -43,6 +43,15 @@ abstract class CommercialIdentity
     final public function id(): string { return $this->id; }
     final public function key(): string { return $this->key; }
     final public function name(): string { return $this->name; }
+
+    final public function rename(string $name): void
+    {
+        $name = trim($name);
+        if ($name === '' || mb_strlen($name, 'UTF-8') > 160) {
+            throw new DomainException('Nombre comercial inválido.');
+        }
+        $this->name = $name;
+    }
     final public function isActive(): bool { return $this->active; }
     final public function deactivate(): void { $this->active = false; }
 }

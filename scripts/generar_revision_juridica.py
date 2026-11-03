@@ -137,7 +137,8 @@ def main() -> int:
         if not (DEST / name).is_file() or (DEST / name).read_bytes() != data
     ]
     unexpected = sorted(
-        p.name for p in DEST.iterdir() if p.is_file() and p.name not in outputs
+        p.name for p in DEST.iterdir()
+        if p.is_file() and p.name not in outputs and p.name != "PAQUETE-ABOGADO.md"
     ) if DEST.is_dir() else []
     if args.check:
         if stale or unexpected:

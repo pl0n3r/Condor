@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace App\Tests\Http;
 
 use App\Application\Commercial\CommercialCatalogSeeder;
+use App\Application\Commercial\PlanQuoteService;
+use DateTimeImmutable;
 use App\Domain\Commercial\Entity\Quote;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
@@ -87,9 +89,24 @@ final class PlanConfiguratorHttpNegativesTest extends WebTestCase
         $result = json_decode($response, true, 512, JSON_THROW_ON_ERROR);
         self::assertIsArray($result);
         self::assertArrayHasKey('quote', $result);
-        self::assertSame(229700, $result['quote']['total_amount']);
-        self::assertNotSame(1, $result['quote']['total_amount']);
-        self::assertFalse($result['quote']['proposal_required']);
+        self::assertNull($result['quote']['total_amount']);
+        self::assertTrue($result['quote']['proposal_required']);
+
+        // El precio conocido se conserva únicamente en el intervalo
+        // histórico; la versión nueva no hereda ni inventa una tarifa.
+        $quotes = static::getContainer()->get(PlanQuoteService::class);
+        self::assertInstanceOf(PlanQuoteService::class, $quotes);
+        $historical = $quotes->preview(
+            'business',
+            'commerce',
+            'monthly',
+            $baseline['quantities'],
+            [],
+            new DateTimeImmutable('2026-09-30T10:00:00Z'),
+            1,
+        );
+        self::assertSame(229700, $historical->totalAmount());
+        self::assertFalse($historical->proposalRequired());
         self::assertSame($before, $em->getRepository(Quote::class)->count([]));
         self::assertStringNotContainsString('Cliente A '.$suffix, $response);
         self::assertStringNotContainsString('Cliente B '.$suffix, $response);

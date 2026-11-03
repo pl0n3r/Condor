@@ -66,6 +66,10 @@ final readonly class CommercialCatalogSeeder
         $this->verticalCapabilities($verticals, $capabilities);
 
         $effectiveFrom = new DateTimeImmutable('2026-09-27T00:00:00Z', new DateTimeZone('UTC'));
+        // La semilla previa incluía cifras históricas utilizadas por los
+        // contratos de 2026-09. Conservar la historia, pero no mantener
+        // tarifas por defecto desde la decisión del dueño del 2026-10-30.
+        $withoutPricesFrom = new DateTimeImmutable('2026-10-30T00:00:00Z', new DateTimeZone('UTC'));
         $definitions = [
             'basic' => [79900, 799000, false, ['companies'=>1,'users'=>3,'locations'=>1]],
             'business' => [199900, 1999000, false, ['companies'=>1,'users'=>10,'locations'=>3]],
@@ -74,15 +78,37 @@ final readonly class CommercialCatalogSeeder
         ];
 
         foreach ($definitions as $key => [$monthly, $annual, $quoteRequired, $limits]) {
-            $version = $this->version($plans[$key], $monthly, $annual, $quoteRequired, $limits, $effectiveFrom);
+            $historical = $this->version(
+                $plans[$key], 1, $monthly, $annual, $quoteRequired, $limits, $effectiveFrom,
+            );
             foreach ($verticals as $vertical) {
-                $version->addVertical($vertical);
+                $historical->addVertical($vertical);
             }
             foreach ($this->capabilitiesFor($key, $capabilities) as $capability) {
-                $version->addCapability($capability);
+                $historical->addCapability($capability);
             }
             foreach ($this->addOnsFor($key, $addOns) as $addOn) {
-                $version->addAddOn($addOn);
+                $historical->addAddOn($addOn);
+            }
+
+            if ($historical->effectiveUntil() === null) {
+                $historical->closeAt($withoutPricesFrom);
+            }
+
+            // La versión actual no inventa tarifas, conserva los límites
+            // históricos y las relaciones de capacidades; un cambio del
+            // propietario crea versiones posteriores de forma auditada.
+            $unpriced = $this->version(
+                $plans[$key], 2, null, null, true, $limits, $withoutPricesFrom,
+            );
+            foreach ($historical->verticals() as $vertical) {
+                $unpriced->addVertical($vertical);
+            }
+            foreach ($historical->capabilities() as $capability) {
+                $unpriced->addCapability($capability);
+            }
+            foreach ($historical->addOns() as $addOn) {
+                $unpriced->addAddOn($addOn);
             }
         }
 
@@ -248,6 +274,7 @@ final readonly class CommercialCatalogSeeder
     /** @param array<string,bool|int|string|null> $limits */
     private function version(
         Plan $plan,
+        int $number,
         ?int $monthly,
         ?int $annual,
         bool $quoteRequired,
@@ -256,14 +283,14 @@ final readonly class CommercialCatalogSeeder
     ): PlanVersion {
         $version = $this->entityManager->getRepository(PlanVersion::class)->findOneBy([
             'plan' => $plan,
-            'version' => 1,
+            'version' => $number,
         ]);
         if ($version instanceof PlanVersion) {
             return $version;
         }
 
         $version = new PlanVersion(
-            $plan, 1, $monthly, $annual, $quoteRequired, $limits, $effectiveFrom,
+            $plan, $number, $monthly, $annual, $quoteRequired, $limits, $effectiveFrom,
         );
         $this->entityManager->persist($version);
         return $version;
