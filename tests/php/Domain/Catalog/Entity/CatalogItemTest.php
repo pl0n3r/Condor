@@ -35,8 +35,8 @@ final class CatalogItemTest extends TestCase
         $first = new CatalogItemProbe($tenant);
         $second = new CatalogItemProbe($tenant);
 
-        self::assertMatchesRegularExpression('/^[0-9A-HJKMNP-TV-Z]{26}$/D', $first->id());
-        self::assertMatchesRegularExpression('/^[0-9A-HJKMNP-TV-Z]{26}$/D', $second->id());
+        self::assertMatchesRegularExpression('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $first->id());
+        self::assertMatchesRegularExpression('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $second->id());
         self::assertNotSame($first->id(), $second->id());
         self::assertSame($tenant, $first->tenant());
         self::assertTrue($first->isActive());
@@ -61,13 +61,15 @@ final class CatalogItemTest extends TestCase
     {
         $item = new CatalogItemProbe(new Tenant('Empresa', 'catalog-deactivate'));
         $createdAt = $item->createdAt();
+        $staleUpdatedAt = new DateTimeImmutable('2000-01-01 00:00:00', new DateTimeZone('UTC'));
+        (new \ReflectionProperty(CatalogItem::class, 'updatedAt'))->setValue($item, $staleUpdatedAt);
 
         $item->deactivate();
 
         self::assertFalse($item->isActive());
         self::assertSame($createdAt, $item->createdAt());
         self::assertSame('UTC', $item->updatedAt()->getTimezone()->getName());
-        self::assertGreaterThanOrEqual($createdAt, $item->updatedAt());
+        self::assertGreaterThan($staleUpdatedAt, $item->updatedAt());
 
         $updatedAt = $item->updatedAt();
         $item->deactivate();
