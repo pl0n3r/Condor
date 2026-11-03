@@ -78,6 +78,25 @@ final class AttendanceEventTest extends TestCase
         self::assertSame($first->occurredAt(), $second->occurredAt());
     }
 
+    public function testEmployeesWithSameCodeRemainDistinctIdentities(): void
+    {
+        $tenant = new Tenant('Tenant A', 'tenant-a');
+        $firstEmployee = new Employee($tenant, 'EMP001');
+        $secondEmployee = new Employee($tenant, 'EMP001');
+        $at = new DateTimeImmutable('2024-02-05T15:30:00Z');
+
+        $first = new AttendanceEvent($tenant, new AttendanceMark(
+            $firstEmployee, 'remote-1', $at, AttendanceMark::CHECK_IN,
+        ), 'clock');
+        $second = new AttendanceEvent($tenant, new AttendanceMark(
+            $secondEmployee, 'remote-1', $at, AttendanceMark::CHECK_IN,
+        ), 'clock');
+
+        self::assertSame($firstEmployee->code(), $secondEmployee->code());
+        self::assertNotSame($firstEmployee->id(), $secondEmployee->id());
+        self::assertFalse($first->hasSamePayload($second));
+    }
+
     /**
      * @return iterable<string, array{string, string, string, string, string, string}>
      */
