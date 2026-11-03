@@ -65,6 +65,7 @@ final class CatalogItemTest extends TestCase
         $item->deactivate();
 
         self::assertFalse($item->isActive());
+        self::assertSame($createdAt, $item->createdAt());
         self::assertSame('UTC', $item->updatedAt()->getTimezone()->getName());
         self::assertGreaterThanOrEqual($createdAt, $item->updatedAt());
 
@@ -72,6 +73,7 @@ final class CatalogItemTest extends TestCase
         $item->deactivate();
 
         self::assertFalse($item->isActive());
+        self::assertSame($createdAt, $item->createdAt());
         self::assertSame($updatedAt, $item->updatedAt());
     }
 
@@ -80,6 +82,7 @@ final class CatalogItemTest extends TestCase
         $item = new CatalogItemProbe(new Tenant('Empresa', 'catalog-name'));
 
         self::assertSame('Café premium', $item->normalizedName("  Café premium \t\n"));
+        self::assertSame('Café  de origen', $item->normalizedName('  Café  de origen  '));
         self::assertSame(str_repeat('á', 160), $item->normalizedName('  '.str_repeat('á', 160).'  '));
     }
 
@@ -89,6 +92,14 @@ final class CatalogItemTest extends TestCase
 
         $this->expectException(DomainException::class);
         $item->normalizedName(" \t\n ");
+    }
+
+    public function testNormalizeNameRejects161AsciiCharactersAfterTrimming(): void
+    {
+        $item = new CatalogItemProbe(new Tenant('Empresa', 'catalog-ascii-too-long'));
+
+        $this->expectException(DomainException::class);
+        $item->normalizedName('  '.str_repeat('a', 161).'  ');
     }
 
     public function testNormalizeNameRejects161UnicodeCharacters(): void
