@@ -49,11 +49,11 @@ test.describe('Plan Configurator público', () => {
     await expect(page.getByRole('heading',{name:'Encuentra una configuración que se adapte a tu operación.'})).toBeVisible();
     await expect(page.getByRole('region',{name:'Resumen de configuración'})).toBeVisible();
 
-    await page.getByLabel('Vertical').selectOption('legal');
+    await page.getByLabel('Tipo de operación').selectOption('legal');
     await expect(page.getByText('Casos / expedientes')).toBeVisible();
     await expect(page.getByText('Inventario')).toHaveCount(0);
 
-    await page.getByLabel('users').fill('12');
+    await page.getByLabel('Usuarios',{exact:true}).fill('12');
     await expect.poll(()=>previews).toBeGreaterThan(0);
 
     await page.getByLabel('Enterprise').check();
