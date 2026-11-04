@@ -192,8 +192,7 @@ final class StockTransferController extends AbstractController
         $donors = [];
         foreach ($sources as $source) {
             if (!$source instanceof InventorySource
-                || !$source->branch() instanceof Branch
-                || !$source->branch()->isActive()) {
+                || !$source->branch() instanceof Branch) {
                 continue;
             }
             if ($source->branch()->id() === $branchId) {
