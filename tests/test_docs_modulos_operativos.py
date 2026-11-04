@@ -167,7 +167,11 @@ class GuiaModulosOperativosTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, site)
                 if phrase != "ajustes csv":
-                    self.assertIn(phrase, guide)
+                    guide_label = (
+                        "descarga de reportes csv"
+                        if phrase == "descargas de reportes csv" else phrase
+                    )
+                    self.assertIn(guide_label, guide)
         for phrase in ("sin afirmar despliegue", "sitio sigue en preparación",
                        "disponibilidad comercial", "transferencias automáticas"):
             with self.subTest(limit=phrase):
