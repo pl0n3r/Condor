@@ -195,7 +195,7 @@ class GuiaModulosOperativosTests(unittest.TestCase):
     def test_rejects_obsolete_status_and_missing_wiring(self):
         good = GUIDE.read_text(encoding="utf-8")
         self.assertIn("obsolete_pending", validate_document(
-            good + "\\nla pantalla integral de compras y el costo histórico ponderado\\n"
+            good + "\nla pantalla integral de compras y el costo histórico ponderado\n"
         ))
         removed = good.replace(
             "src/Http/Controller/StockAlertController.php",
