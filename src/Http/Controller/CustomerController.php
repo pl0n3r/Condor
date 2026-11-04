@@ -217,7 +217,7 @@ final class CustomerController extends AbstractController
             ->setParameter('customer', $customer);
 
         $orders = (clone $base)
-            ->orderBy('o.createdAt', 'DESC')->addOrderBy('o.id', 'DESC')
+            ->orderBy('o.createdAt', \SortDirection::Descending)->addOrderBy('o.id', \SortDirection::Descending)
             ->setFirstResult(($page - 1) * 10)
             ->setMaxResults(11)
             ->getQuery()->getResult();
@@ -240,7 +240,7 @@ final class CustomerController extends AbstractController
         }
         $last = (clone $base)->andWhere('o.orderStatus = :open')
             ->setParameter('open', Order::STATUS_OPEN)
-            ->orderBy('o.createdAt', 'DESC')->addOrderBy('o.id', 'DESC')
+            ->orderBy('o.createdAt', \SortDirection::Descending)->addOrderBy('o.id', \SortDirection::Descending)
             ->setMaxResults(1)->getQuery()->getOneOrNullResult();
 
         return $this->json([
