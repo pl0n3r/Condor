@@ -304,10 +304,14 @@ final class StockTransferController extends AbstractController
                 if ($proposal === null) {
                     continue;
                 }
+                $donorBranch = $donor->branch();
+                if (!$donorBranch instanceof Branch) {
+                    continue;
+                }
                 if ($best === null || $proposal['origin_excess'] > $best['origin_excess']) {
                     $best = [
                         'source_from_id' => $donor->id(),
-                        'source_from_branch_id' => $donor->branch()->id(),
+                        'source_from_branch_id' => $donorBranch->id(),
                         'source_from_name' => $donor->name(),
                         'source_to_id' => $targetId,
                         'source_to_branch_id' => $branchId,
