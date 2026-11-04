@@ -107,8 +107,15 @@ class DoctrineHistoricalDriftTests(unittest.TestCase):
         self.assertIn("no ejecutar", document.lower())
 
     def test_version_is_a_distinct_pre_live_patch(self) -> None:
+        """Release >= 0.1.196: el lote #1490 no congela futuros parches."""
         version = (ROOT / "config/version.php").read_text(encoding="utf-8")
-        self.assertIn("'version' => '0.1.196'", version)
+        match = re.search(
+            r"'version'\s*=>\s*'(\d+)\.(\d+)\.(\d+)'", version
+        )
+        self.assertIsNotNone(match, "Versión semántica ausente en config/version.php")
+        major, minor, patch = (int(part) for part in match.groups())
+        self.assertEqual((0, 1), (major, minor))
+        self.assertGreaterEqual(patch, 196)
 
 
 if __name__ == "__main__":
