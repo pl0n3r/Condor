@@ -291,7 +291,7 @@ export function CommerceManagement({
     void (async () => {
       try {
         const response = await fetch(
-          customersPath(branchId) + '/search',
+          customersPath(branchId) + '/segments',
           {
             method: 'POST',
             credentials: 'same-origin',

@@ -87,8 +87,8 @@ final class CustomerController extends AbstractController
 
 
     #[Route(
-        '/api/v1/branches/{branchId}/customers/search',
-        name: 'api_customers_search',
+        '/api/v1/branches/{branchId}/customers/segments',
+        name: 'api_customer_segments_query',
         methods: ['POST'],
     )]
     public function search(string $branchId, Request $request): JsonResponse

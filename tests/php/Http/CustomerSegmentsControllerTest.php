@@ -50,7 +50,7 @@ final class CustomerSegmentsControllerTest extends WebTestCase
 
         $client->loginUser($owner);
         $csrf = $this->csrf($client);
-        $url = '/api/v1/branches/'.$branchA->id().'/customers/search';
+        $url = '/api/v1/branches/'.$branchA->id().'/customers/segments';
         $client->jsonRequest('POST', $url, [
             'segment' => 'with_recent_purchases_90_days',
         ], ['HTTP_X_CSRF_TOKEN' => $csrf]);
@@ -118,7 +118,7 @@ final class CustomerSegmentsControllerTest extends WebTestCase
         }
         $em->flush();
 
-        $search = '/api/v1/branches/'.$branch->id().'/customers/search';
+        $search = '/api/v1/branches/'.$branch->id().'/customers/segments';
         $history = '/api/v1/branches/'.$branch->id().'/customers/history';
         $client->loginUser($owner);
         $csrf = $this->csrf($client);
@@ -149,7 +149,7 @@ final class CustomerSegmentsControllerTest extends WebTestCase
         ], ['HTTP_X_CSRF_TOKEN' => $csrf]);
         self::assertResponseStatusCodeSame(403);
         $client->jsonRequest('POST',
-            '/api/v1/branches/'.$branchB->id().'/customers/search',
+            '/api/v1/branches/'.$branchB->id().'/customers/segments',
             ['segment' => 'all'],
             ['HTTP_X_CSRF_TOKEN' => $csrf],
         );
