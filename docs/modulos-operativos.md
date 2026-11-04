@@ -1,6 +1,6 @@
 # Guía de módulos operativos por tipo de negocio
 
-> **Corte de código:** `main@b6ee2c18e714872538bfde4c9b97cdb1db760764` (4 de noviembre de 2026). Fuente: controladores, servicios y pruebas versionados; no se infiere despliegue ni disponibilidad comercial. **Estado general: construcción/pre-live.**
+> **Corte de código:** `main@4ff703c2a3e83cc42a68bc85cb4a723e3487f9b5` (4 de noviembre de 2026). Fuente: controladores, servicios y pruebas versionados; no se infiere despliegue ni disponibilidad comercial. **Estado general: construcción/pre-live.**
 
 Esta guía ayuda a escoger por dónde empezar. **«Presente en main»** significa que hay implementación verificable en código; **no** significa que la pantalla esté terminada, que el flujo haya sido validado en producción o que se pueda ofrecer hoy a clientes reales. La columna **«en construcción»** recoge únicamente lo todavía pendiente del alcance descrito; una función presente en el checkout puede seguir sin estar desplegada, habilitada o validada para usuarios reales. Las decisiones de planes, facturación, go-live y tratamiento de datos reales requieren sus propias puertas.
 
