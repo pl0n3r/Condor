@@ -211,7 +211,7 @@ def main():
     args = parser.parse_args()
     try:
         result = backup(args.source, args.backup_dir) if args.mode == "backup" else restore(args.archive, args.destination)
-    except (ValueError, OSError, tarfile.TarError, json.JSONDecodeError) as error:
+    except (ValueError, OSError, EOFError, tarfile.TarError, json.JSONDecodeError) as error:
         parser.exit(1, f"backup-persistent-files.py: operación rechazada: {type(error).__name__}\n")
     print(json.dumps(result, sort_keys=True))
 

@@ -33,6 +33,7 @@ class PersistentFileBackupTest(unittest.TestCase):
             return json.loads(result.stdout)
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertNotIn("sentinel.txt", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
         return result
 
     def archive(self):
