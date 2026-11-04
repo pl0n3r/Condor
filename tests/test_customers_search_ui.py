@@ -65,7 +65,7 @@ class UiClientesBusquedaTests(unittest.TestCase):
         self.assertIn('requireCsrf($request)', CUSTOMERS)
         self.assertIn('setMaxResults(11)', CUSTOMERS)
 
-    def test_personal_data_do_not_travel_in_urls(self) -> None:
+        # Negativa cross-tenant y privacidad: no transportar PII en query strings.
         for stale in (
             "params.set('term', activeSearch.term)",
             "params.set('segment', activeSearch.segment)",
