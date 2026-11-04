@@ -907,6 +907,7 @@ jobs:
       APP_ENV: test
       APP_DEBUG: 0
       DATABASE_URL: mysql://root@127.0.0.1:3306/condor_backup_source?serverVersion=mariadb-11.4.0&charset=utf8mb4
+      CONDOR_DRILL_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -996,7 +997,24 @@ jobs:
             | grep -q 'primary_verified_tenant_id'
 
       - name: Crear backup real de la base migrada
-        run: bash scripts/backup-database.sh
+        run: |
+          set -euo pipefail
+          echo "CONDOR_DB_BACKUP_AT=$(date -u +%s)" >> "$GITHUB_ENV"
+          bash scripts/backup-database.sh
+
+      - name: Respaldar archivos persistentes sintéticos y probar guardas
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p 'test_backup_persistent_files.py' -v
+          source="$RUNNER_TEMP/condor-files-source"
+          store="$RUNNER_TEMP/condor-files-private"
+          mkdir -p "$source/uploads" "$store"
+          printf 'condor-synthetic-restore-001\n' > "$source/uploads/adjunto.txt"
+          printf 'ejercicio sintético\n' > "$source/archivo con espacio.txt"
+          printf 'synthetic-only\n' > "$RUNNER_TEMP/.condor-recovery-synthetic-only"
+          CONDOR_RECOVERY_SANDBOX_ROOT="$RUNNER_TEMP" \
+            python3 scripts/backup-persistent-files.py backup \
+            > "$RUNNER_TEMP/condor-files-backup.json"
 
       - name: Probar ventana mínima de 30 días
         run: |
@@ -1073,6 +1091,7 @@ jobs:
           CONDOR_RESTORE_EXPECT_USER_EMAIL: backup-sentinel@example.test
         run: |
           set -euo pipefail
+          echo "CONDOR_RESTORE_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
           dump="$(ls -1t var/backups/condor-condor_backup_source-*.sql.gz | head -1)"
           bash scripts/verify-backup-restore.sh "$dump"
 
@@ -1102,6 +1121,83 @@ jobs:
                AND primary_verified_tenant_id = tenant_id" \
             | grep -q 'backup.example.test'
 
+
+      - name: Restaurar archivos y acreditar RPO RTO del ensayo aislado
+        run: |
+          set -euo pipefail
+          source="$RUNNER_TEMP/condor-files-source"
+          store="$RUNNER_TEMP/condor-files-private"
+          archive="$(find "$store" -maxdepth 1 -type f -name 'condor-files-*.tar.gz' -print -quit)"
+          [[ -n "$archive" ]] || { echo "::error::No existe backup de archivos."; exit 1; }
+          CONDOR_RECOVERY_SANDBOX_ROOT="$RUNNER_TEMP" \
+            python3 scripts/backup-persistent-files.py restore \
+            > "$RUNNER_TEMP/condor-files-restore.json"
+          cmp "$source/uploads/adjunto.txt" "$RUNNER_TEMP/condor-files-restored/uploads/adjunto.txt"
+          cmp "$source/archivo con espacio.txt" "$RUNNER_TEMP/condor-files-restored/archivo con espacio.txt"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import time
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          source = json.loads((root / "condor-files-backup.json").read_text(encoding="utf-8"))
+          restored = json.loads((root / "condor-files-restore.json").read_text(encoding="utf-8"))
+          if source["sha256"] != restored["sha256"] or source["file_count"] != restored["file_count"]:
+              raise SystemExit("Fallo de integridad entre backup y restore")
+          db_at = int(os.environ["CONDOR_DB_BACKUP_AT"])
+          files_at = int(datetime.fromisoformat(source["created_at"]).timestamp())
+          started_at = int(os.environ["CONDOR_RESTORE_STARTED_AT"])
+          finished_at = int(time.time())
+          rpo = started_at - min(db_at, files_at)
+          rto = finished_at - started_at
+          if not 0 <= rpo <= 900 or not 0 <= rto <= 3600:
+              raise SystemExit("Objetivo de RPO/RTO del ensayo descartable superado")
+          backups = sorted(Path("var/backups").glob("condor-condor_backup_source-*.sql.gz"),
+                           key=lambda p: p.stat().st_mtime)
+          if not backups:
+              raise SystemExit("Backup lógico MariaDB no encontrado")
+          digest = hashlib.sha256()
+          with backups[-1].open("rb") as stream:
+              for chunk in iter(lambda: stream.read(1048576), b""):
+                  digest.update(chunk)
+          receipt = {
+              "scope": "isolated-ci-synthetic-only",
+              "status": "passed",
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "head_sha": os.environ["CONDOR_DRILL_SOURCE_SHA"],
+              "mariadb_restored": True,
+              "files_restored": source["file_count"],
+              "database_backup_sha256": digest.hexdigest(),
+              "files_backup_sha256": source["sha256"],
+              "manifest_verified": True,
+              "rpo_seconds": rpo,
+              "rto_seconds": rto,
+              "rpo_target_seconds": 900,
+              "rto_target_seconds": 3600,
+              "note": "No acredita la recuperación de producción.",
+          }
+          (root / "condor-dr-receipt.json").write_text(
+              json.dumps(receipt, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+          )
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as out:
+              out.write("### Condor: ensayo de recuperación aislado\n")
+              out.write(f"- SHA: {receipt['head_sha']}\n")
+              out.write(f"- RPO medido: {rpo}s / 900s; RTO medido: {rto}s / 3600s\n")
+              out.write(f"- MariaDB restaurada: sí; archivos íntegros: {source['file_count']}\n")
+              out.write("- No constituye evidencia de recuperación productiva.\n")
+          PY
+
+      - name: Conservar recibo sintético no sensible del ensayo
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: condor-dr-synthetic
+          retention-days: 30
+          if-no-files-found: error
+          path: ${{ runner.temp }}/condor-dr-receipt.json
 
   validar:
     name: Validar
