@@ -77,6 +77,12 @@ class PersistentFileBackupTest(unittest.TestCase):
         self.command("restore", ok=False)
         self.assertFalse((self.root / "condor-files-restored").exists())
 
+    def test_ci_receipt_uses_exact_pr_head_instead_of_merge_commit(self):
+        wf = (Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text()
+        expression = chr(36) + "{{ github.event.pull_request.head.sha || github.sha }}"
+        self.assertIn("CONDOR_DRILL_SOURCE_SHA: " + expression, wf)
+        self.assertIn('"head_sha": os.environ["CONDOR_DRILL_SOURCE_SHA"]', wf)
+
     def test_missing_sandbox_marker_fails_closed(self):
         (self.root / ".condor-recovery-synthetic-only").unlink()
         self.command("backup", ok=False)

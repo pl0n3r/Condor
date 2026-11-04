@@ -907,6 +907,7 @@ jobs:
       APP_ENV: test
       APP_DEBUG: 0
       DATABASE_URL: mysql://root@127.0.0.1:3306/condor_backup_source?serverVersion=mariadb-11.4.0&charset=utf8mb4
+      CONDOR_DRILL_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1167,7 +1168,7 @@ jobs:
               "status": "passed",
               "generated_at": datetime.now(timezone.utc).isoformat(),
               "run_id": os.environ["GITHUB_RUN_ID"],
-              "head_sha": os.environ["GITHUB_SHA"],
+              "head_sha": os.environ["CONDOR_DRILL_SOURCE_SHA"],
               "mariadb_restored": True,
               "files_restored": source["file_count"],
               "database_backup_sha256": digest.hexdigest(),
