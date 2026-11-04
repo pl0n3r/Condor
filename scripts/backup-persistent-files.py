@@ -21,6 +21,28 @@ from datetime import datetime, timezone
 
 MAX_FILES = 10000
 MAX_FILE_BYTES = 10 * 1024 ** 3
+ARCHIVE_FILES_PREFIX = "files/"
+SYNTHETIC_MARKER = ".condor-recovery-synthetic-only"
+
+
+def sandbox_root():
+    """Only operate on the caller's explicit, marked disposable test directory."""
+    raw = os.environ.get("CONDOR_RECOVERY_SANDBOX_ROOT", "")
+    if not raw:
+        fail("falta el directorio aislado de simulación")
+    path = Path(raw)
+    if path.is_symlink() or not path.is_dir():
+        fail("sandbox inexistente o simbólico")
+    root = path.resolve(strict=True)
+    if root == Path(root.anchor):
+        fail("la raíz del sistema no es un sandbox")
+    marker = root / SYNTHETIC_MARKER
+    if marker.is_symlink() or not marker.is_file():
+        fail("falta la marca de entorno sintético")
+    if marker.read_text(encoding="utf-8") != "synthetic-only\n":
+        fail("el entorno no es descartable")
+    return root
+
 
 
 def fail(message):
@@ -71,55 +93,70 @@ def collect(source):
     return files
 
 
+def load_manifest(bundle, members):
+    if not members or members[-1].name != "MANIFEST.json":
+        fail("manifiesto ausente o fuera de posición")
+    if len(members) > MAX_FILES + 1 or any(not m.isfile() for m in members):
+        fail("tar contiene objetos no permitidos")
+    last = members[-1]
+    if last.size > 5 * 1024 * 1024:
+        fail("manifiesto excesivo")
+    raw = bundle.extractfile(last)
+    if raw is None:
+        fail("manifiesto inaccesible")
+    manifest = json.loads(raw.read())
+    if (not isinstance(manifest, dict) or manifest.get("version") != 1
+            or not isinstance(manifest.get("created_at"), str)
+            or not isinstance(manifest.get("files"), list)):
+        fail("contrato de manifiesto incorrecto")
+    if not manifest["files"] or len(manifest["files"]) != len(members) - 1:
+        fail("cantidad de archivos no coincide")
+    return manifest
+
+
+def verify_inventory(members, entries):
+    expected = []
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {"path", "size", "sha256"}:
+            fail("entrada de manifiesto inválida")
+        rel = safe_name(entry["path"])
+        if (not isinstance(entry["size"], int) or isinstance(entry["size"], bool)
+                or entry["size"] < 0 or entry["size"] > MAX_FILE_BYTES
+                or not isinstance(entry["sha256"], str)
+                or len(entry["sha256"]) != 64
+                or any(ch not in "0123456789abcdef" for ch in entry["sha256"])):
+            fail("hash o tamaño inválido")
+        expected.append(ARCHIVE_FILES_PREFIX + rel.as_posix())
+    if expected != sorted(set(expected)):
+        fail("archivos repetidos o desordenados")
+    if [member.name for member in members[:-1]] != expected:
+        fail("archivo ausente o extra")
+    for member, entry in zip(members[:-1], entries):
+        if member.size != entry["size"]:
+            fail("tamaño del contenido no coincide")
+
+
 def inspect_archive(archive):
     with tarfile.open(archive, "r:gz") as bundle:
         members = bundle.getmembers()
-        if not members or members[-1].name != "MANIFEST.json":
-            fail("manifiesto ausente o fuera de posición")
-        if len(members) > MAX_FILES + 1 or any(not m.isfile() for m in members):
-            fail("tar contiene objetos no permitidos")
-        manifest_handle = bundle.extractfile(members[-1])
-        if manifest_handle is None or members[-1].size > 5 * 1024 * 1024:
-            fail("manifiesto inválido")
-        manifest = json.loads(manifest_handle.read())
-        if (not isinstance(manifest, dict) or manifest.get("version") != 1
-                or not isinstance(manifest.get("created_at"), str)
-                or not isinstance(manifest.get("files"), list)):
-            fail("contrato de manifiesto incorrecto")
-        listed = manifest["files"]
-        if not listed or len(listed) != len(members) - 1:
-            fail("cantidad de archivos no coincide")
-        expected = []
-        for entry in listed:
-            if not isinstance(entry, dict) or set(entry) != {"path", "size", "sha256"}:
-                fail("entrada de manifiesto inválida")
-            rel = safe_name(entry["path"])
-            if (not isinstance(entry["size"], int) or isinstance(entry["size"], bool)
-                    or entry["size"] < 0 or entry["size"] > MAX_FILE_BYTES
-                    or not isinstance(entry["sha256"], str)
-                    or len(entry["sha256"]) != 64
-                    or any(ch not in "0123456789abcdef" for ch in entry["sha256"])):
-                fail("hash o tamaño inválido")
-            expected.append("files/" + rel.as_posix())
-        if expected != sorted(set(expected)):
-            fail("archivos repetidos o desordenados")
-        if [m.name for m in members[:-1]] != expected:
-            fail("archivo ausente o extra")
-        for member, entry in zip(members[:-1], listed):
-            if member.size != entry["size"]:
-                fail("tamaño del contenido no coincide")
-            source = bundle.extractfile(member)
-            if source is None:
+        manifest = load_manifest(bundle, members)
+        verify_inventory(members, manifest["files"])
+        for member, entry in zip(members[:-1], manifest["files"]):
+            stream = bundle.extractfile(member)
+            if stream is None:
                 fail("contenido inaccesible")
             digest = hashlib.sha256()
-            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                 digest.update(chunk)
             if digest.hexdigest() != entry["sha256"]:
                 fail("integridad SHA-256 incorrecta")
     return manifest
 
 
-def backup(source, backup_dir):
+def backup():
+    root = sandbox_root()
+    source = root / "condor-files-source"
+    backup_dir = root / "condor-files-private"
     if source.is_symlink() or not source.is_dir():
         fail("origen inexistente o simbólico")
     src = source.resolve(strict=True)
@@ -144,7 +181,7 @@ def backup(source, backup_dir):
                 source_path = src / entry["path"]
                 if source_path.is_symlink() or not source_path.is_file():
                     fail("el origen cambió durante el backup")
-                info = tarfile.TarInfo("files/" + entry["path"])
+                info = tarfile.TarInfo(ARCHIVE_FILES_PREFIX + entry["path"])
                 info.size = entry["size"]
                 info.mode = 0o600
                 with source_path.open("rb") as file_handle:
@@ -164,7 +201,16 @@ def backup(source, backup_dir):
             os.unlink(path)
 
 
-def restore(archive, destination):
+def restore():
+    root = sandbox_root()
+    store = root / "condor-files-private"
+    if store.is_symlink() or not store.is_dir():
+        fail("almacén sintético inexistente o simbólico")
+    matches = sorted(store.glob("condor-files-*.tar.gz"))
+    if len(matches) != 1:
+        fail("se requiere exactamente un archivo de backup sintético")
+    archive = matches[0]
+    destination = root / "condor-files-restored"
     if not archive.is_file() or archive.is_symlink():
         fail("backup no disponible o simbólico")
     if destination.exists() or destination.is_symlink():
@@ -181,7 +227,7 @@ def restore(archive, destination):
             for entry in manifest["files"]:
                 target = stage.joinpath(*safe_name(entry["path"]).parts)
                 target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-                stream = bundle.extractfile("files/" + entry["path"])
+                stream = bundle.extractfile(ARCHIVE_FILES_PREFIX + entry["path"])
                 if stream is None:
                     fail("el archivo desapareció del backup")
                 with target.open("xb") as out:
@@ -202,16 +248,12 @@ def restore(archive, destination):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_subparsers(dest="mode", required=True)
-    create = modes.add_parser("backup")
-    create.add_argument("--source", required=True, type=Path)
-    create.add_argument("--backup-dir", required=True, type=Path)
-    recover = modes.add_parser("restore")
-    recover.add_argument("--archive", required=True, type=Path)
-    recover.add_argument("--destination", required=True, type=Path)
+    modes.add_parser("backup")
+    modes.add_parser("restore")
     args = parser.parse_args()
     try:
-        result = backup(args.source, args.backup_dir) if args.mode == "backup" else restore(args.archive, args.destination)
-    except (ValueError, OSError, EOFError, tarfile.TarError, json.JSONDecodeError) as error:
+        result = backup() if args.mode == "backup" else restore()
+    except (ValueError, OSError, EOFError, tarfile.TarError) as error:
         parser.exit(1, f"backup-persistent-files.py: operación rechazada: {type(error).__name__}\n")
     print(json.dumps(result, sort_keys=True))
 

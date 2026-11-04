@@ -1010,8 +1010,9 @@ jobs:
           mkdir -p "$source/uploads" "$store"
           printf 'condor-synthetic-restore-001\n' > "$source/uploads/adjunto.txt"
           printf 'ejercicio sintético\n' > "$source/archivo con espacio.txt"
-          python3 scripts/backup-persistent-files.py backup \
-            --source "$source" --backup-dir "$store" \
+          printf 'synthetic-only\n' > "$RUNNER_TEMP/.condor-recovery-synthetic-only"
+          CONDOR_RECOVERY_SANDBOX_ROOT="$RUNNER_TEMP" \
+            python3 scripts/backup-persistent-files.py backup \
             > "$RUNNER_TEMP/condor-files-backup.json"
 
       - name: Probar ventana mínima de 30 días
@@ -1127,9 +1128,8 @@ jobs:
           store="$RUNNER_TEMP/condor-files-private"
           archive="$(find "$store" -maxdepth 1 -type f -name 'condor-files-*.tar.gz' -print -quit)"
           [[ -n "$archive" ]] || { echo "::error::No existe backup de archivos."; exit 1; }
-          python3 scripts/backup-persistent-files.py restore \
-            --archive "$archive" \
-            --destination "$RUNNER_TEMP/condor-files-restored" \
+          CONDOR_RECOVERY_SANDBOX_ROOT="$RUNNER_TEMP" \
+            python3 scripts/backup-persistent-files.py restore \
             > "$RUNNER_TEMP/condor-files-restore.json"
           cmp "$source/uploads/adjunto.txt" "$RUNNER_TEMP/condor-files-restored/uploads/adjunto.txt"
           cmp "$source/archivo con espacio.txt" "$RUNNER_TEMP/condor-files-restored/archivo con espacio.txt"
