@@ -41,3 +41,7 @@ Se usan `ALTER TABLE … RENAME INDEX` de MariaDB: no se borra ni reconstruye un
 6. **Producción**: D-054 exige allowlist/dry-run, **backup exitoso previo**, opt-out `CONDOR_AUTO_MIGRATE=0`, comprobación posterior del schema y smoke antes de tocar caché; toda operación irreversible requiere aprobación separada del dueño. Este PR no ejecuta ni autoriza el deploy.
 
 **Reversión:** `down` restaura los nombres originales sin `DROP`; para un problema de datos se requiere restore autorizado en una ventana de mantenimiento (no ejecutar automáticamente). Siguiente grupo recomendado: registrar exactamente las FKs compuestas y comparar tipos de columnas con una migración aditiva demostrable, sin debilitar integridad.
+
+## Lección del preflight (identidad de release)
+
+El primer CI de #1490 rechazó el título del PR porque terminaba con `(#1490)` **después** de `(V 0.1.196)`. El contrato exige que el título termine exactamente en `(V 0.1.196)`. Al corregirlo, generar un nuevo evento `synchronize` con HEAD actualizado; reejecutar el workflow anterior conserva su payload de título obsoleto.
