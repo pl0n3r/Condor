@@ -191,7 +191,10 @@ class PostDeployStageTest(unittest.TestCase):
         self.assertIn("backup", calls)
         self.assertTrue((root / "backup-created").exists())
         self.assertLess(calls.index("--dry-run"), calls.index("backup"))
-        self.assertLess(calls.index("backup"), calls.index(actual_migrate))
+        self.assertLess(
+            calls.splitlines().index("backup"),
+            calls.splitlines().index(actual_migrate),
+        )
         self.assertLess(calls.index(actual_migrate), calls.index("cache:clear"))
         self.assertIn("cache:warmup", calls)
 
@@ -373,6 +376,93 @@ class PostDeployStageTest(unittest.TestCase):
         self.assertNotIn("cache:warmup", calls)
         self.assertNotIn("app:commercial:seed", calls)
 
+
+    def test_exact_safe_doctrine_index_renames_preserve_d054_order(self):
+        """Admite solo los cuatro renombres ya probados, sin saltar el backup."""
+        sql = (
+            "ALTER TABLE condor_tenant RENAME INDEX UNIQ_TENANT_SLUG "
+            "TO UNIQ_7B8C3E58989D9B62;\n"
+            "ALTER TABLE condor_tenant_domain RENAME INDEX UNIQ_DOMAIN_HOSTNAME "
+            "TO UNIQ_B8F8428BE551C011;\n"
+            "ALTER TABLE condor_tenant_domain RENAME INDEX "
+            "uniq_domain_primary_verified_tenant TO UNIQ_B8F8428B9676AA7E;\n"
+            "ALTER TABLE condor_storefront_profile RENAME INDEX "
+            "uniq_storefront_profile_tenant TO UNIQ_5DBD65159033212A;"
+        )
+        result, calls, root = self.run_script("construction", migration_sql=sql)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue((root / "backup-created").exists())
+        self.assertTrue((root / "migrated").exists())
+        steps = calls.splitlines()
+        dry = next(i for i, line in enumerate(steps) if "--dry-run" in line)
+        backup = steps.index("backup")
+        migrated = next(
+            i for i, line in enumerate(steps)
+            if "doctrine:migrations:migrate" in line and "--dry-run" not in line
+        )
+        cleared = next(i for i, line in enumerate(steps) if "cache:clear" in line)
+        self.assertLess(dry, backup)
+        self.assertLess(backup, migrated)
+        self.assertLess(migrated, cleared)
+        self.assertTrue(any("cache:warmup" in line for line in steps))
+        import json
+        status = json.loads(
+            (root / "var/runtime/post-deploy-status.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("success", status["result"])
+        self.assertEqual("complete", status["phase"])
+
+        # El permiso SQL no elimina ninguna puerta D-054 ni activa live.
+        for options in (
+            {"backup_failure": True},
+            {"auto_migrate": "0"},
+            {"stage": "live"},
+        ):
+            stage = options.pop("stage", "construction")
+            stopped, history, blocked = self.run_script(
+                stage, migration_sql=sql, **options,
+            )
+            self.assertNotEqual(0, stopped.returncode)
+            self.assertFalse((blocked / "migrated").exists())
+            self.assertNotIn("cache:clear", history)
+
+    def test_index_rename_allowlist_rejects_unapproved_statements(self):
+        """Un renombre distinto o SQL concatenado no pasa al backup/migrate."""
+        cases = {
+            "tabla no listada": (
+                "ALTER TABLE another_table RENAME INDEX old TO new;"
+            ),
+            "indice diferente": (
+                "ALTER TABLE condor_tenant RENAME INDEX UNIQ_TENANT_SLUG TO other;"
+            ),
+            "renombrar tabla": (
+                "RENAME TABLE condor_tenant TO another_tenant;"
+            ),
+            "renombrar columna": (
+                "ALTER TABLE condor_tenant RENAME COLUMN slug TO legacy_slug;"
+            ),
+            "cambio de columna": (
+                "ALTER TABLE condor_tenant CHANGE COLUMN slug legacy_slug VARCHAR(255);"
+            ),
+            "SQL anadido despues de instruccion valida": (
+                "ALTER TABLE condor_tenant RENAME INDEX UNIQ_TENANT_SLUG "
+                "TO UNIQ_7B8C3E58989D9B62; DROP TABLE condor_tenant;"
+            ),
+            "revertir indice no autorizado": (
+                "ALTER TABLE condor_tenant RENAME INDEX UNIQ_7B8C3E58989D9B62 "
+                "TO UNIQ_TENANT_SLUG;"
+            ),
+        }
+        for label, statement in cases.items():
+            with self.subTest(sql_case=label):
+                result, calls, root = self.run_script(
+                    "construction", migration_sql=statement,
+                )
+                self.assertEqual(2, result.returncode, result.stderr)
+                self.assertNotIn("backup", calls.splitlines())
+                self.assertFalse((root / "backup-created").exists())
+                self.assertFalse((root / "migrated").exists())
+                self.assertNotIn("cache:clear", calls)
 
     def test_construction_blocks_sql_outside_allowlist(self):
         """SQL desconocido falla cerrado antes de backup, migrate y caché."""

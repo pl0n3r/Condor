@@ -457,6 +457,17 @@ validate_construction_migrations() {
             if (statement == "") next
             count++
             normalized = toupper(statement)
+            gsub(/[[:space:]]+/, " ", normalized)
+
+            # Unicamente los cuatro renombres de indices UNIQUE validados en
+            # #1490 (MariaDB sintetica) son expand-compatible. No permitir
+            # RENAME arbitrario: el guard destructivo sigue abajo.
+            if (normalized == "ALTER TABLE CONDOR_TENANT RENAME INDEX UNIQ_TENANT_SLUG TO UNIQ_7B8C3E58989D9B62" ||
+                normalized == "ALTER TABLE CONDOR_TENANT_DOMAIN RENAME INDEX UNIQ_DOMAIN_HOSTNAME TO UNIQ_B8F8428BE551C011" ||
+                normalized == "ALTER TABLE CONDOR_TENANT_DOMAIN RENAME INDEX UNIQ_DOMAIN_PRIMARY_VERIFIED_TENANT TO UNIQ_B8F8428B9676AA7E" ||
+                normalized == "ALTER TABLE CONDOR_STOREFRONT_PROFILE RENAME INDEX UNIQ_STOREFRONT_PROFILE_TENANT TO UNIQ_5DBD65159033212A") {
+                next
+            }
 
             if (normalized ~ /(^|[^A-Z0-9_])(DROP|TRUNCATE|RENAME|MODIFY|CHANGE)([^A-Z0-9_]|$)/ ||
                 normalized ~ /^DELETE[[:space:]]+FROM([[:space:]]|$)/ ||
