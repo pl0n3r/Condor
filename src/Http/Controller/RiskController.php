@@ -65,7 +65,7 @@ final class RiskController extends AbstractController
     public function create(string $branchId, Request $request): JsonResponse
     {
         [$actor, $company, $office] = $this->access($request, $branchId, 'settings.create', true);
-        $data = $this->payload($request, ['risk_ref', 'category', 'probability', 'impact']);
+        $data = $this->payload($request, ['risk_ref', 'category', 'probability', 'impact', 'scenario_ref']);
         $result = $this->domain(fn (): array => RiskApiService::createRecord(
             $this->getQueue($request), $this->scope($company, $office), $data,
         ));
