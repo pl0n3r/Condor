@@ -40,13 +40,13 @@ final class OperationsSummaryController extends AbstractController
     #[Route('/api/v1/branches/{branchId}/production/operations-summary', name: 'api_operations_summary', methods: ['GET'])]
     public function summary(string $branchId, Request $request): JsonResponse
     {
-        if ($request->query->count() !== 0) {
-            throw new BadRequestHttpException('El resumen no admite filtros sin verificar.');
-        }
         [, $tenant, $branch] = $this->authorizedBranchScope(
             $branchId,
             'inventory.view',
         );
+        if ($request->query->count() !== 0) {
+            throw new BadRequestHttpException('El resumen no admite filtros sin verificar.');
+        }
         /** @var EntitlementSnapshot $entitlements */
         $entitlements = $this->domain(fn (): EntitlementSnapshot =>
             $this->entitlementResolver->resolve(

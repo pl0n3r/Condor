@@ -96,6 +96,8 @@ final class OperationsSummaryControllerTest extends WebTestCase
         $path = '/api/v1/branches/'.$branch->id().'/production/operations-summary';
         $client->request('GET', $path);
         self::assertResponseStatusCodeSame(403);
+        $client->request('GET', $path.'?responsible=unknown');
+        self::assertResponseStatusCodeSame(403);
         $client->loginUser($owner);
         $client->request('GET', $path);
         self::assertResponseIsSuccessful();

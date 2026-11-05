@@ -16,6 +16,9 @@ function parseSnapshot(raw: unknown): Snapshot {
   if (!data || typeof data !== 'object' || !Array.isArray(data.orders)
     || !Number.isSafeInteger(data.sample_size)
     || !Number.isSafeInteger(data.completed_orders)
+    || (data.completion_percent !== null
+      && (typeof data.completion_percent !== 'number'
+        || !Number.isFinite(data.completion_percent)))
     || typeof data.sample_limited !== 'boolean'
     || !data.orders.every((row) => row && typeof row.id === 'string'
       && (row.status === 'draft' || row.status === 'completed')
@@ -68,7 +71,7 @@ export function OperationsSummaryPanel({
   return <section aria-label="Resumen de producción Lite">
     <h2>Órdenes de producción</h2>
     <p>Terminadas: {data.completed_orders} de {data.sample_size}.
-      Avance de unidades: {data.completion_percent ?? 'Sin datos'}%.</p>
+      Avance de unidades: {data.completion_percent === null ? 'Sin datos' : String(data.completion_percent) + '%'}.</p>
     <p>Responsables, tiempo laboral y productividad: no verificables.</p>
     {data.sample_limited && <p>Solo las 50 órdenes más recientes.</p>}
     {data.orders.length === 0
