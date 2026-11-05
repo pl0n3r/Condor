@@ -31,8 +31,9 @@ No hay peticiones externas ni cambios de producción.
 **Brecha pendiente:** `frontend/admin/GovernanceManagement.tsx` actualmente
 simula órganos solo en memoria; no consume estos endpoints ni prueba
 los estados loading, empty, error y permission-denied con respuestas HTTP
-autenticadas. Se requiere una hoja hija específica y disjunta de esta
-reserva para integración HTTP/UI y pruebas end-to-end. No marcar los
+autenticadas. Hoja hija creada: [#1564](https://github.com/pl0n3r/Condor/issues/1564),
+bloqueada hasta fusionar #1540. Integrará HTTP/UI con pruebas end-to-end,
+sin invadir los claims de esta reserva. No marcar los
 cuatro submódulos `CUBIERTO` integral con la presente entrega.
 
 ## Validación y reversión
