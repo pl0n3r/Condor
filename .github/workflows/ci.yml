@@ -386,7 +386,8 @@ jobs:
           if compgen -G 'tests/test_verificacion_decisiones_*.py' > /dev/null; then
             python3 -m unittest discover -s tests -p 'test_verificacion_decisiones_*.py'
           else
-            echo 'NO_VERIFICABLE: no existen hojas de decisiones en este SHA; no se atribuye cobertura.'
+            echo 'ERROR: no existen hojas test_verificacion_decisiones_*.py en este SHA; no se atribuye cobertura.' >&2
+            exit 1
           fi
 
       - name: Probar brechas Condor 05 si están presentes

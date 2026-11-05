@@ -29,9 +29,14 @@ class VerificacionDecisionesDiscoveryTests(unittest.TestCase):
         )
         self.assertIn("set -euo pipefail", self.block)
 
-    def test_sin_lotes_no_inventa_cobertura(self):
-        self.assertIn("NO_VERIFICABLE:", self.block)
+    def test_sin_lotes_falla_cerrado(self):
+        self.assertIn("ERROR: no existen hojas", self.block)
         self.assertIn("no se atribuye cobertura", self.block)
+        self.assertIn("exit 1", self.block)
+        self.assertNotIn("NO_VERIFICABLE:", self.block)
+
+    def test_lote_03_presente_en_repo(self):
+        self.assertTrue((ROOT / "tests/test_verificacion_decisiones_03.py").is_file())
 
     def test_ejecucion_despues_de_composer_y_contraste(self):
         wf = self.workflow
