@@ -12,28 +12,28 @@ no cambian el estado integral de las filas por el simple hecho de escribir esta 
 no se observa en las pruebas. **Las 20 decisiones conservan NO_VERIFICABLE
 a nivel integral.** Un testigo causal parcial no prueba el programa completo.
 
-| Decisión | Testigo local existente y aserción exacta | Clase | Brecha que no acredita el testigo |
-| --- | --- | --- | --- |
-| `D-044-S05` | `tests/test_seo_settings_http.py` · `test_acceptance` | A parcial | SSR/sitemap/robots por cada dominio requieren E2E con canonical y host reales |
-| `D-044-S06` | `tests/test_cobertura_condor_09.py` · `test_contrato_principal` | A parcial | instrumentación integral de onboarding e inventario requiere eventos reales acotados |
-| `D-044-S07` | `tests/test_security_workflow_contract.py` · `test_owner_exact_decision_commands_use_versioned_factory_security` | C parcial | faltan calendario mensual de dependencias y revisión arquitectónica trimestral acreditados |
-| `D-044-S08` | `tests/test_post_deploy.py` · `test_construction_reconciles_pending_schema_before_cache` | A parcial | smoke/backup/rehearsal y telemetría operativos requieren recibos verificables |
-| `D-044-S09` | `tests/test_post_deploy.py` · `test_live_fails_closed_without_migrating_or_touching_cache` | A parcial | migración y esquema desplegado no se infieren de un sandbox |
-| `D-044-S10` | `tests/test_security_workflow_contract.py` · `test_consumer_code_is_never_checked_out_or_executed` | C parcial | falta revisión trimestral de amenazas autorizada y hallazgos accionables |
-| `D-044-S11` | `tests/test_post_deploy.py` · `test_backup_failure_prevents_migration_and_cache` | C parcial | portabilidad Hostinger a otro proveedor no ensayada ni medida |
-| `D-045` | `tests/test_indexnow_notifier.py` · `test_acceptance` | A parcial | falta integración integral con HTTP de publicación, DNS real y CSP por tenant |
-| `D-045-S01` | `tests/test_indexnow_notifier.py` · `test_acceptance` | A parcial | envío IndexNow a proveedor real no autorizado en este lote |
-| `D-045-S02` | `tests/test_tag_manager_settings.py` · `test_acceptance` | A parcial | snippets GTM en navegadores/hosts reales y consentimiento requieren E2E |
-| `D-045-S03` | `tests/test_tag_manager_settings.py` · `test_php_lint_and_no_external_transport` | A parcial | CSP HTTP multitenant y ausencia de secretos requieren integración completa |
-| `D-046` | `tests/test_provision_platform_owner_command_unit.py` · `test_acceptance` | B parcial | invariante singleton/roles debe acreditarse con carrera y base real de pruebas |
-| `D-047` | `tests/test_shared_diagnostic_http.py` · `test_acceptance` | A parcial | retención, revocación, auditoría y 5xx productivos requieren evidencia real |
-| `D-048` | `tests/test_platform_owner_api_permissions.py` · `test_acceptance` | B parcial | shell compartido y barra de contexto requieren sesión de navegador autenticada |
-| `D-048-S02` | `tests/test_brechas_condor_18.py` · `test_estados_unknown_explicitos` | B parcial | progreso visible en runtime real y navegación read-only no observados |
-| `D-049` | `tests/test_cobertura_condor_11.py` · `test_contrato_principal` | B parcial | servidor de dominio personalizado, propiedad DNS y TLS aún no acreditados |
-| `D-049-S01` | `tests/test_cobertura_condor_11.py` · `test_contrato_principal` | A parcial | navegación real a slug y host personalizado requiere E2E |
-| `D-049-S02` | `tests/test_cobertura_condor_11.py` · `test_falla_cerrado` | A parcial | unicidad real y estado activo requieren persistencia de pruebas y DNS |
-| `D-049-S03` | `tests/test_cobertura_condor_11.py` · `test_sin_datos_reales` | B parcial | DNS/TLS y prueba de propiedad del host exigen recibos externos |
-| `D-049-S04` | `tests/test_cobertura_condor_11.py` · `test_falla_cerrado` | A parcial | Host header HTTP/HTTPS en reverse proxy real requiere prueba externa |
+| Decisión | Código/workflow parcial (ruta real) | Testigo local y aserción exacta | Clase | Brecha no acreditada |
+| --- | --- | --- | --- | --- |
+| `D-044-S05` | `src/Http/Controller/SeoSettingsController.php` | `tests/test_seo_settings_http.py` · `test_acceptance` | A parcial | SSR/sitemap/robots por cada dominio requieren E2E con canonical y host reales |
+| `D-044-S06` | `src/Application/Observability/FunctionalSignalReport.php` | `tests/test_cobertura_condor_09.py` · `test_contrato_principal` | A parcial | instrumentación integral de onboarding e inventario requiere eventos reales acotados |
+| `D-044-S07` | `.github/workflows/seguridad.yml` | `tests/test_security_workflow_contract.py` · `test_owner_exact_decision_commands_use_versioned_factory_security` | C parcial | faltan calendario mensual de dependencias y revisión arquitectónica trimestral acreditados |
+| `D-044-S08` | `scripts/post-deploy.sh` | `tests/test_post_deploy.py` · `test_construction_reconciles_pending_schema_before_cache` | A parcial | smoke/backup/rehearsal y telemetría operativos requieren recibos verificables |
+| `D-044-S09` | `scripts/post-deploy.sh` | `tests/test_post_deploy.py` · `test_live_fails_closed_without_migrating_or_touching_cache` | A parcial | migración y esquema desplegado no se infieren de un sandbox |
+| `D-044-S10` | `.github/workflows/seguridad.yml` | `tests/test_security_workflow_contract.py` · `test_consumer_code_is_never_checked_out_or_executed` | C parcial | falta revisión trimestral de amenazas autorizada y hallazgos accionables |
+| `D-044-S11` | `scripts/backup-persistent-files.py` | `tests/test_post_deploy.py` · `test_backup_failure_prevents_migration_and_cache` | C parcial | portabilidad Hostinger a otro proveedor no ensayada ni medida |
+| `D-045` | `src/Application/Seo/IndexNowNotifier.php` | `tests/test_indexnow_notifier.py` · `test_acceptance` | A parcial | falta integración integral con HTTP de publicación, DNS real y CSP por tenant |
+| `D-045-S01` | `src/Application/Seo/IndexNowNotifier.php` | `tests/test_indexnow_notifier.py` · `test_acceptance` | A parcial | envío IndexNow a proveedor real no autorizado en este lote |
+| `D-045-S02` | `src/Application/Seo/TagManagerSettings.php` | `tests/test_tag_manager_settings.py` · `test_acceptance` | A parcial | snippets GTM en navegadores/hosts reales y consentimiento requieren E2E |
+| `D-045-S03` | `src/Infrastructure/Http/SecurityHeadersSubscriber.php` | `tests/test_tag_manager_settings.py` · `test_php_lint_and_no_external_transport` | A parcial | CSP HTTP multitenant y ausencia de secretos requieren integración completa |
+| `D-046` | `src/Application/Identity/ProvisionPlatformOwner.php` | `tests/test_provision_platform_owner_command_unit.py` · `test_acceptance` | B parcial | invariante singleton/roles debe acreditarse con carrera y base real de pruebas |
+| `D-047` | `src/Http/Controller/SharedDiagnosticController.php` | `tests/test_shared_diagnostic_http.py` · `test_acceptance` | A parcial | retención, revocación, auditoría y 5xx productivos requieren evidencia real |
+| `D-048` | `frontend/admin/PlatformOwnerApp.tsx` | `tests/test_platform_owner_api_permissions.py` · `test_acceptance` | B parcial | shell compartido y barra de contexto requieren sesión de navegador autenticada |
+| `D-048-S02` | `frontend/admin/PlatformOwnerApp.tsx` | `tests/test_brechas_condor_18.py` · `test_estados_unknown_explicitos` | B parcial | progreso visible en runtime real y navegación read-only no observados |
+| `D-049` | `src/Infrastructure/Tenancy/TenantResolver.php` | `tests/test_cobertura_condor_11.py` · `test_contrato_principal` | B parcial | servidor de dominio personalizado, propiedad DNS y TLS aún no acreditados |
+| `D-049-S01` | `src/Infrastructure/Tenancy/TenantResolver.php` | `tests/test_cobertura_condor_11.py` · `test_contrato_principal` | A parcial | navegación real a slug y host personalizado requiere E2E |
+| `D-049-S02` | `src/Domain/Organization/Entity/TenantDomain.php` | `tests/test_cobertura_condor_11.py` · `test_falla_cerrado` | A parcial | unicidad real y estado activo requieren persistencia de pruebas y DNS |
+| `D-049-S03` | `src/Domain/Organization/Entity/TenantDomain.php` | `tests/test_cobertura_condor_11.py` · `test_sin_datos_reales` | B parcial | DNS/TLS y prueba de propiedad del host exigen recibos externos |
+| `D-049-S04` | `src/Infrastructure/Tenancy/TenantResolver.php` | `tests/test_cobertura_condor_11.py` · `test_falla_cerrado` | A parcial | Host header HTTP/HTTPS en reverse proxy real requiere prueba externa |
 
 ## Aserciones ejecutables y negativos
 
