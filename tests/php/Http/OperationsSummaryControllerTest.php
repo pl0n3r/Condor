@@ -103,7 +103,7 @@ final class OperationsSummaryControllerTest extends WebTestCase
         self::assertSame($branch->id(), $data['branch_id']);
         self::assertSame(1, $data['completed_orders']);
         self::assertSame(2, $data['completed_units']);
-        self::assertSame(100.0, $data['completion_percent']);
+        self::assertEquals(100.0, $data['completion_percent']);
         self::assertSame($order->id(), $data['orders'][0]['id']);
         self::assertNull($data['orders'][0]['responsible_alias']);
         self::assertNull($data['orders'][0]['productivity_units_per_hour']);
