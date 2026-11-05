@@ -266,10 +266,12 @@ function isHttpRisk(value: unknown): value is HttpRisk {
     && validFixture(item.risk_ref, riskRefPattern)
     && httpCategories.some(category => category === item.category)
     && httpStates.some(state => state === item.state)
-    && Number.isInteger(item.probability) && (item.probability ?? 0) >= 1
-    && (item.probability ?? 0) <= 5
-    && Number.isInteger(item.impact) && (item.impact ?? 0) >= 1
-    && (item.impact ?? 0) <= 5
+    && typeof item.probability === 'number'
+    && Number.isInteger(item.probability) && item.probability >= 1
+    && item.probability <= 5
+    && typeof item.impact === 'number'
+    && Number.isInteger(item.impact) && item.impact >= 1
+    && item.impact <= 5
     && (item.category !== 'reputacional' || (
       typeof item.scenario_ref === 'string'
       && validFixture(item.scenario_ref, scenarioRefPattern)
