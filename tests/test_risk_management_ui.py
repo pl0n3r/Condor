@@ -89,9 +89,10 @@ final class RiskManagementHttpAcceptanceTest extends WebTestCase
         self::assertResponseStatusCodeSame(200);
         $list = json_decode((string) $client->getResponse()->getContent(), true);
         self::assertCount(2, $list['risks']);
-        self::assertSame('reputacional', $list['risks'][1]['category']);
+        $byRef = array_column($list['risks'], null, 'risk_ref');
+        self::assertSame('reputacional', $byRef['fixture:risk/reputation-a']['category']);
         self::assertSame('fixture:risk-scenario/brand-a',
-            $list['risks'][1]['scenario_ref']);
+            $byRef['fixture:risk/reputation-a']['scenario_ref']);
 
         $stateUrl = $urlA.'/reputation-a/state';
         $client->jsonRequest('PATCH', $stateUrl, ['state' => 'EN_REVISION'], $headers);
