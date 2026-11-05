@@ -12,7 +12,6 @@ use App\Domain\Organization\Entity\Tenant;
 use DateTimeImmutable;
 use DateTimeZone;
 use DomainException;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 
@@ -27,7 +26,7 @@ final class ProductMediaTest extends TestCase
         yield 'underscore and dash in filename' => ['photo_2026-11.jpg', 'image/jpeg', 1000];
     }
 
-    #[DataProvider('acceptedFiles')]
+    /** @dataProvider acceptedFiles */
     public function testValidImagesHaveCorrectRelationsAndMetadata(string $name, string $mime, int $bytes): void
     {
         $tenant = new Tenant('Empresa A', 'media-tenant-a');
@@ -115,7 +114,7 @@ final class ProductMediaTest extends TestCase
         yield 'path exceeds allowed length' => ['{TENANT}/'.str_repeat('x', 470).'.jpg', 'image/jpeg', 1];
     }
 
-    #[DataProvider('rejectedFiles')]
+    /** @dataProvider rejectedFiles */
     public function testRejectsUnsafeOrInvalidImages(string $relativePath, string $mime, int $bytes): void
     {
         $tenant = new Tenant('Empresa A', 'media-file-reject');
