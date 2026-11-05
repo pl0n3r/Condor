@@ -30,6 +30,13 @@ sin segunda página pendiente para estas cuatro consultas:
 
 Cada filtro tiene origen rastreable bajo
 https://api.github.com/search/issues y su enlace equivalente en README.md.
+El verificador ci_check_receipt exige origen REST GitHub
+/repos/pl0n3r/Condor/commits/<SHA>/check-runs, nombre
+CI Factory v1 / Validar, head_sha idéntico, fuente github-actions, estado
+completed/success y URL de job verificable. Su salida CI_SUCCESS_ONLY no
+certifica producción. El test negativo incluye status pending/skipped,
+otro SHA, otro check, fecha caducada o dominio distinto.
+
 La foto puede cambiar **inmediatamente después de obtenida**. Los filtros
 solo clasifican etiquetas; NO demuestran reserva V3, titular, lease válida,
 dependencias completadas ni permisos. Esos hechos exigen leer Issue, comentarios

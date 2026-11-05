@@ -183,6 +183,32 @@ def badge_receipt(receipt: dict, now: dt.datetime) -> str:
     return "BADGE_HTTP_ONLY"
 
 
+
+def ci_check_receipt(receipt: dict, sha: str, now: dt.datetime) -> str:
+    """El badge no sustituye el check oficial terminal del HEAD exacto."""
+    require(re.fullmatch(r"[a-f0-9]{40}", sha) is not None, "SHA invalid")
+    source = urlsplit(receipt.get("source_url", ""))
+    require(source.scheme == "https" and source.netloc == "api.github.com"
+            and source.path == f"/repos/{REPO}/commits/{sha}/check-runs",
+            "check source not exact-SHA GitHub REST")
+    check = receipt.get("check_run")
+    require(isinstance(check, dict), "check-run absent")
+    require(check.get("name") == "CI Factory v1 / Validar"
+            and check.get("head_sha") == sha, "wrong check or commit identity")
+    require(check.get("status") == "completed"
+            and check.get("conclusion") == "success",
+            "required check not terminal green")
+    require(type(check.get("id")) is int and check["id"] > 0
+            and isinstance(check.get("app"), dict)
+            and check["app"].get("slug") == "github-actions",
+            "check origin not identifiable")
+    require(re.fullmatch(
+        r"https://github\.com/pl0n3r/Condor/actions/runs/[0-9]+/job/[0-9]+",
+        str(check.get("details_url", "")),
+    ) is not None, "check-run URL not canonical")
+    fresh(check.get("completed_at"), now, maximum_age=86400)
+    return "CI_SUCCESS_ONLY"
+
 def browser_contract(build: dict, browser: dict, twig: dict,
                      sha: str, now: dt.datetime) -> str:
     require(re.fullmatch(r"[a-f0-9]{40}", sha) is not None, "SHA invalid")
@@ -291,8 +317,31 @@ class ReadmeExternalEvidenceTests(unittest.TestCase):
         badge={"url":"https://github.com/pl0n3r/Condor/actions/workflows/ci.yml/badge.svg?branch=main",
                "fetched_at":self.WHEN,"status":200,"content_type":"image/svg+xml"}
         self.assertEqual(badge_receipt(badge,self.NOW), "BADGE_HTTP_ONLY")
+        bad_url = badge["url"].replace("main", "work-branch")
         with self.assertRaises(EvidenceError):
-            badge_receipt({**badge,"url":badge["url"].replace("main","work-branch")},self.NOW)
+            badge_receipt({**badge, "url":bad_url}, self.NOW)
+
+    def test_ci_check_requires_official_terminal_exact_sha(self):
+        check = {"name": "CI Factory v1 / Validar", "head_sha": SHA,
+                 "status": "completed", "conclusion": "success",
+                 "id": 123, "app": {"slug": "github-actions"},
+                 "completed_at": self.WHEN,
+                 "details_url": "https://github.com/pl0n3r/Condor/actions/runs/12/job/123"}
+        receipt = {"source_url":
+                   f"https://api.github.com/repos/{REPO}/commits/{SHA}/check-runs",
+                   "check_run": check}
+        self.assertEqual(ci_check_receipt(receipt, SHA, self.NOW), "CI_SUCCESS_ONLY")
+        for key, value in (("head_sha", "c"*40), ("conclusion", "skipped"),
+                           ("status", "in_progress"), ("name", "README badge"),
+                           ("completed_at", "2020-01-01T00:00:00Z")):
+            invalid = copy.deepcopy(receipt)
+            invalid["check_run"][key] = value
+            with self.subTest(field=key), self.assertRaises(EvidenceError):
+                ci_check_receipt(invalid, SHA, self.NOW)
+        foreign = copy.deepcopy(receipt)
+        foreign["source_url"] = foreign["source_url"].replace(REPO, "other/repo")
+        with self.assertRaises(EvidenceError):
+            ci_check_receipt(foreign, SHA, self.NOW)
 
     def test_browser_build_twig_need_isolated_receipts_and_negatives(self):
         def document(kind):
