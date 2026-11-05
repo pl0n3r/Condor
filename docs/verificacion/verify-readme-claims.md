@@ -1,6 +1,6 @@
 # Condor #1551 — trazabilidad verificable del README (29 filas)
 
-**Corte:** 5-nov-2026 · issue #1551 · reserva V3 `58bf3431-e00c-4ed4-a763-f6b137bd047a`. **PR:** se asociará antes del merge. La matriz original marca `NO_VERIFICABLE`; este documento identifica evidencias, **no cambia su veredicto global**. Todos los tests son locales/sintéticos: no se usaron tokens, GitHub vivo, Hostinger, datos de clientes ni navegación remota. Entrega **sin tocar `docs/matriz-cobertura.md`**.
+**Corte:** 5-nov-2026 · issue #1551 · reserva V3 `58bf3431-e00c-4ed4-a763-f6b137bd047a`. **PR:** [Condor #1557](https://github.com/pl0n3r/Condor/pull/1557), fusión por squash condicionada a CI exact-HEAD. La matriz original marca `NO_VERIFICABLE`; este documento identifica evidencias, **no cambia su veredicto global**. Todos los tests son locales/sintéticos: no se usaron tokens, GitHub vivo, Hostinger, datos de clientes ni navegación remota. Entrega **sin tocar `docs/matriz-cobertura.md`**.
 
 La columna de límite distingue:
 - `CONTRATO_LOCAL`: rutas, versiones, imports o guards comprobables sobre checkout.
