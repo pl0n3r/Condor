@@ -1,6 +1,6 @@
 # Condor · reversión de despliegue y apagado de emergencia
 
-**Estado:** runbook de preparación en fase `construccion`. Fuente: Condor #982, checklist [#980](lista-salida-produccion.md), `AGENTES.md`, [migraciones](LIVE-MIGRATION-POLICY.md) y [recuperación](recovery-production.md). **No autoriza go-live, despliegue, mantenimiento real, acceso a Hostinger, gastos, datos reales ni cambios de tenant.** No es evidencia de un simulacro ejecutado.
+**Estado:** runbook de preparación en fase `construccion`. Fuente: Condor #982, checklist [#980](lista-salida-produccion.md), `AGENTES.md`, [migraciones](LIVE-MIGRATION-POLICY.md) y [recuperación](recovery-production.md). **No autoriza go-live, despliegue, mantenimiento real, acceso a Hostinger, gastos, datos reales ni cambios de tenant.** No es evidencia de un simulacro productivo ejecutado.
 
 ## Propósito, alcance y límites
 
@@ -70,3 +70,10 @@ El adaptador existente `ops/factory/adapter.py` implementa `deploy` y `rollback`
 | Después | Health/SHA exactos, esquema, smoke autorizado, integridad, límites tenant, alerta y aviso aprobados | Evidencia UNKNOWN/NO_VERIFICADO, fuga inter-tenant o señales inconsistentes |
 
 **AC-04 / gate de entrega de este runbook:** exigir `Validar` terminal `success` sobre el HEAD exacto del PR, reserva V3 y claims vigentes, calidad y seguridad revisadas; luego squash y comprobación de `main`. Ningún documento ni prueba local sustituye ese check. Este issue no ejecuta los pasos productivos.
+
+
+## 5. Simulacro técnico sintético de #1492 (anexo v1)
+
+El [anexo del simulacro](simulacro-reversion-apagado.md) especifica el ejercicio ejecutable de rollback y contención en entorno temporal, con registros UTC, tiempos observados, responsables por rol, no escritura en 503/Retry-After, validación de recuperación y acciones correctivas. El comando `python3 scripts/simular_reversion_apagado.py` emite un recibo sanitizado y `tests/test_ci_salida_reversion_simulacro.py` prueba rollback real del shell del adaptador bajo transporte interceptado, guardas fail-closed y HTTP sintético por tenant.
+
+Este ensayo **no autoriza go-live**: un éxito local (`PASSED_SYNTHETIC_ONLY`) no significa shutdown de Condor real ni rollback productivo; siguen siendo **NO_VERIFICADO** en Hostinger. Control granular backend, compatibilidad real de esquema, personal de guardia y avisos externos siguen **DEL_DUEÑO** y pendientes antes de recomendar live.
