@@ -1,48 +1,28 @@
 import { useEffect, useState } from 'react';
 
 type Order = {
-  id: string;
-  status: 'draft' | 'completed';
-  target_quantity: number;
-  completed_quantity: number | null;
-  elapsed_lifecycle_minutes: number | null;
-  responsible_alias: null;
-  work_minutes: null;
-  productivity_units_per_hour: null;
+  id: string; status: 'draft' | 'completed'; target_quantity: number;
+  completed_quantity: number | null; elapsed_lifecycle_minutes: number | null;
 };
-
 type Snapshot = {
-  orders: Order[];
-  sample_size: number;
-  completed_orders: number;
-  completion_percent: number | null;
-  sample_limited: boolean;
-  responsible_state: 'UNKNOWN';
-  worktime_state: 'UNKNOWN';
-  productivity_state: 'UNKNOWN';
+  orders: Order[]; sample_size: number; completed_orders: number;
+  completion_percent: number | null; sample_limited: boolean;
 };
-
 type Load = { kind: 'loading' } | { kind: 'denied' }
   | { kind: 'error'; message: string } | { kind: 'ready'; data: Snapshot };
 
-function readSnapshot(raw: unknown): Snapshot {
-  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new Error('Respuesta de operaciones inválida.');
-  }
-  const data = raw as Partial<Snapshot>;
-  if (!Array.isArray(data.orders) || !data.orders.every((row: unknown) =>
-    row !== null && typeof row === 'object'
-    && typeof (row as Order).id === 'string'
-    && ['draft', 'completed'].includes((row as Order).status)
-    && Number.isSafeInteger((row as Order).target_quantity))
-    || typeof data.sample_size !== 'number'
+function parseSnapshot(raw: unknown): Snapshot {
+  const data = raw as Snapshot | null;
+  if (!data || typeof data !== 'object' || !Array.isArray(data.orders)
     || !Number.isSafeInteger(data.sample_size)
-    || typeof data.completed_orders !== 'number'
     || !Number.isSafeInteger(data.completed_orders)
-    || typeof data.sample_limited !== 'boolean') {
+    || typeof data.sample_limited !== 'boolean'
+    || !data.orders.every((row) => row && typeof row.id === 'string'
+      && (row.status === 'draft' || row.status === 'completed')
+      && Number.isSafeInteger(row.target_quantity))) {
     throw new Error('Respuesta de operaciones inválida.');
   }
-  return data as Snapshot;
+  return data;
 }
 
 export function OperationsSummaryPanel({
@@ -61,17 +41,12 @@ export function OperationsSummaryPanel({
     setState({ kind: 'loading' });
     void fetch('/api/v1/branches/' + encodeURIComponent(branchId)
       + '/production/operations-summary', {
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json' },
+      credentials: 'same-origin', headers: { Accept: 'application/json' },
       signal: controller.signal,
     }).then(async (response) => {
-      if (response.status === 401 || response.status === 403) {
-        throw new Error('denied');
-      }
-      if (!response.ok) {
-        throw new Error('No fue posible consultar las operaciones de esta sede.');
-      }
-      return readSnapshot(await response.json() as unknown);
+      if (response.status === 401 || response.status === 403) throw new Error('denied');
+      if (!response.ok) throw new Error('No fue posible consultar las operaciones.');
+      return parseSnapshot(await response.json() as unknown);
     }).then((data) => {
       if (!controller.signal.aborted) setState({ kind: 'ready', data });
     }).catch((error: unknown) => {
@@ -92,15 +67,15 @@ export function OperationsSummaryPanel({
   const { data } = state;
   return <section aria-label="Resumen de producción Lite">
     <h2>Órdenes de producción</h2>
-    <p>Órdenes terminadas: {data.completed_orders} de {data.sample_size}.
-      Avance por unidades: {data.completion_percent ?? 'Sin datos'}%.</p>
+    <p>Terminadas: {data.completed_orders} de {data.sample_size}.
+      Avance de unidades: {data.completion_percent ?? 'Sin datos'}%.</p>
     <p>Responsables, tiempo laboral y productividad: no verificables.</p>
-    {data.sample_limited && <p>Se muestran solo las 50 órdenes más recientes.</p>}
+    {data.sample_limited && <p>Solo las 50 órdenes más recientes.</p>}
     {data.orders.length === 0
       ? <p role="status">No hay órdenes de producción para esta sede.</p>
-      : <table><caption>Lectura limitada a Producción Lite</caption>
+      : <table><caption>Lectura de Producción Lite</caption>
         <thead><tr><th>Orden</th><th>Estado</th><th>Unidades</th>
-          <th>Minutos desde creación hasta cierre</th><th>Responsable</th></tr></thead>
+          <th>Minutos de ciclo</th><th>Responsable</th></tr></thead>
         <tbody>{data.orders.map((row) => <tr key={row.id}>
           <th scope="row">{row.id}</th><td>{row.status}</td>
           <td>{row.completed_quantity ?? 0}/{row.target_quantity}</td>
