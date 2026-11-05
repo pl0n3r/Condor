@@ -152,9 +152,22 @@ final class DocumentApiService
     {
         $this->detail($state, $scope, $reference);
         $history = $state['trace:'.$scope] ?? [];
-        $events = is_array($history) ? ($history[$reference] ?? []) : [];
+        if (!is_array($history)) {
+            throw new DomainException('Historial sintético inválido.');
+        }
+        $events = $history[$reference] ?? [];
+        if (!is_array($events) || !array_is_list($events) || count($events) > 100) {
+            throw new DomainException('Eventos sintéticos inválidos.');
+        }
+        foreach ($events as $i => $event) {
+            if (!is_array($event) || array_keys($event) !== ['sequence', 'action']
+                || $event['sequence'] !== $i + 1
+                || !in_array($event['action'], ['CREADO', 'EVIDENCIA_ADJUNTADA', 'REVISION_SOLICITADA'], true)) {
+                throw new DomainException('Secuencia sintética inválida.');
+            }
+        }
         return [
-            'reference' => $reference, 'events' => is_array($events) ? $events : [],
+            'reference' => $reference, 'events' => $events,
             'synthetic' => true, 'can_close' => false,
         ];
     }

@@ -66,6 +66,12 @@ final class GestM08VerificationTest extends TestCase
         self::assertSame('PENDIENTE_REVISION', $api->detail($state, self::A, self::REF)['status']);
         self::assertFalse($trace['can_close']);
         $this->rejects(static fn () => $api->trace($state, self::B, self::REF));
+        $tampered = $state;
+        $tampered['trace:'.self::A][self::REF][0]['sequence'] = 99;
+        $this->rejects(static fn () => $api->trace($tampered, self::A, self::REF));
+        $tampered = $state;
+        $tampered['trace:'.self::A][self::REF][0]['action'] = 'APROBADO';
+        $this->rejects(static fn () => $api->trace($tampered, self::A, self::REF));
         $this->rejects(static fn () => $api->attachEvidence(
             $state, self::A, self::REF, 'fixture:evidence/later',
         ));
