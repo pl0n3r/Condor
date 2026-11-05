@@ -21,186 +21,134 @@ from scripts import release_identity_guard as identity
 
 ROWS = [
     {
-        "id": "AGENTES-02-06", "section": 2,
-        "claim": "si producción deja de estar GREEN, priorizar su recuperación antes de trabajo dependiente.",
-        "source": "AGENTES.md", "token": "confirmar el estado productivo separado del estado de CI",
-        "limit": "EXTERNO_PENDIENTE",
-        "pending": "Se exige HEALTH degradado comprobado y despacho de recuperación real; no se infiere de la norma escrita.",
+        "id": "AGENTES-02-06", "section": 2, "claim": "si producción deja de estar GREEN, priorizar su recuperación antes de trabajo dependiente.",
+        "source": "AGENTES.md", "token": "confirmar el estado productivo separado del estado de CI", "limit": "EXTERNO_PENDIENTE",
+        "pending": "Se exige HEALTH degradado comprobado y despacho de recuperación real; no se infiere de la norma escrita."
     },
     {
-        "id": "AGENTES-03-04", "section": 3,
-        "claim": "Colombia / es-CO",
-        "source": "AGENTES.md", "token": "Mercado / locale",
-        "limit": "NAVEGADOR_PENDIENTE",
-        "pending": "No hay E2E transversal de vistas, formatos y respuestas HTTP con locale es-CO.",
+        "id": "AGENTES-03-04", "section": 3, "claim": "Colombia / es-CO",
+        "source": "AGENTES.md", "token": "Mercado / locale", "limit": "NAVEGADOR_PENDIENTE",
+        "pending": "No hay E2E transversal de vistas, formatos y respuestas HTTP con locale es-CO."
     },
     {
-        "id": "AGENTES-03-05", "section": 3,
-        "claim": "Moneda por defecto | COP",
-        "source": "AGENTES.md", "token": "Moneda por defecto | COP",
-        "limit": "INTEGRACION_PENDIENTE",
-        "pending": "La tabla contractual no verifica COP por defecto en todos los flujos monetarios.",
+        "id": "AGENTES-03-05", "section": 3, "claim": "Moneda por defecto | COP",
+        "source": "AGENTES.md", "token": "Moneda por defecto | COP", "limit": "INTEGRACION_PENDIENTE",
+        "pending": "La tabla contractual no verifica COP por defecto en todos los flujos monetarios."
     },
     {
-        "id": "AGENTES-03-06", "section": 3,
-        "claim": "PHP 8.5 + Symfony 7.4 LTS",
-        "source": "composer.json", "token": "symfony/framework-bundle",
-        "limit": "OPERACION_PENDIENTE",
-        "pending": "composer fija dependencias; falta evidencia del runtime efectivamente desplegado.",
+        "id": "AGENTES-03-06", "section": 3, "claim": "PHP 8.5 + Symfony 7.4 LTS",
+        "source": "composer.json", "token": "symfony/framework-bundle", "limit": "OPERACION_PENDIENTE",
+        "pending": "composer fija dependencias; falta evidencia del runtime efectivamente desplegado."
     },
     {
-        "id": "AGENTES-04-01", "section": 4,
-        "claim": "servidor como autoridad final de validación y autorización",
-        "source": "src/Application/Identity/BranchAuthorization.php", "token": "throw new AccessDeniedException",
-        "limit": "HTTP_INTEGRAL_PENDIENTE",
-        "pending": "El control servidor de sede es un slice, no cubre todos los endpoints y permisos E2E.",
+        "id": "AGENTES-04-01", "section": 4, "claim": "servidor como autoridad final de validación y autorización",
+        "source": "src/Application/Identity/BranchAuthorization.php", "token": "throw new AccessDeniedException", "limit": "HTTP_INTEGRAL_PENDIENTE",
+        "pending": "El control servidor de sede es un slice, no cubre todos los endpoints y permisos E2E."
     },
     {
-        "id": "AGENTES-04-03", "section": 4,
-        "claim": "relaciones de negocio como datos estructurados",
-        "source": "src/Domain/Organization/Entity/Branch.php", "token": "ManyToOne(targetEntity: Tenant::class)",
-        "limit": "INTEGRACION_PENDIENTE",
-        "pending": "Mapeo Doctrine de sede no demuestra todas las relaciones de negocio ni su integración DB.",
+        "id": "AGENTES-04-03", "section": 4, "claim": "relaciones de negocio como datos estructurados",
+        "source": "src/Domain/Organization/Entity/Branch.php", "token": "ManyToOne(targetEntity: Tenant::class)", "limit": "INTEGRACION_PENDIENTE",
+        "pending": "Mapeo Doctrine de sede no demuestra todas las relaciones de negocio ni su integración DB."
     },
     {
-        "id": "AGENTES-04-06", "section": 4,
-        "claim": "migraciones explícitas, expand-compatible y seguras ante despliegues parciales",
-        "source": "scripts/live-schema-policy.php", "token": "'additive'",
-        "limit": "OPERACION_PENDIENTE",
-        "pending": "Contrato aditivo local; sin prueba de despliegue parcial ni migración productiva autorizada.",
+        "id": "AGENTES-04-06", "section": 4, "claim": "migraciones explícitas, expand-compatible y seguras ante despliegues parciales",
+        "source": "scripts/live-schema-policy.php", "token": "'additive'", "limit": "OPERACION_PENDIENTE",
+        "pending": "Contrato aditivo local; sin prueba de despliegue parcial ni migración productiva autorizada."
     },
     {
-        "id": "AGENTES-05-01", "section": 5,
-        "claim": "política de decisiones/revisiones",
-        "source": ".github/workflows/politica.yml", "token": "pl0n3r/factory/.github/workflows/politica.yml@v1",
-        "limit": "EXTERNO_PENDIENTE",
-        "pending": "El reusable remoto requiere su ejecución auténtica y una revisión definitiva.",
+        "id": "AGENTES-05-01", "section": 5, "claim": "política de decisiones/revisiones",
+        "source": ".github/workflows/politica.yml", "token": "pl0n3r/factory/.github/workflows/politica.yml@v1", "limit": "EXTERNO_PENDIENTE",
+        "pending": "El reusable remoto requiere su ejecución auténtica y una revisión definitiva."
     },
     {
-        "id": "AGENTES-05-02", "section": 5,
-        "claim": "clasificador selectivo de cambios",
-        "source": "scripts/ci_change_classifier.py", "token": "def classify",
-        "limit": "CONTRATO_LOCAL",
-        "pending": "Se contrastan cambios sintéticos; no certifica todas las familias de archivos del CI.",
+        "id": "AGENTES-05-02", "section": 5, "claim": "clasificador selectivo de cambios",
+        "source": "scripts/ci_change_classifier.py", "token": "def classify", "limit": "CONTRATO_LOCAL",
+        "pending": "Se contrastan cambios sintéticos; no certifica todas las familias de archivos del CI."
     },
     {
-        "id": "AGENTES-05-03", "section": 5,
-        "claim": "validación documental y gobierno local",
-        "source": ".github/workflows/ci.yml", "token": "name: Validar gobierno del repositorio",
-        "limit": "EXTERNO_PENDIENTE",
-        "pending": "Declaración de job no es recibo de ejecución exact-HEAD.",
+        "id": "AGENTES-05-03", "section": 5, "claim": "validación documental y gobierno local",
+        "source": ".github/workflows/ci.yml", "token": "name: Validar gobierno del repositorio", "limit": "EXTERNO_PENDIENTE",
+        "pending": "Declaración de job no es recibo de ejecución exact-HEAD."
     },
     {
-        "id": "AGENTES-05-04", "section": 5,
-        "claim": "contratos e integración",
-        "source": ".github/workflows/ci.yml", "token": "name: Pruebas de contrato e integración",
-        "limit": "EXTERNO_PENDIENTE",
-        "pending": "La presencia del job no acredita todos los contratos y DB de cada PR.",
+        "id": "AGENTES-05-04", "section": 5, "claim": "contratos e integración",
+        "source": ".github/workflows/ci.yml", "token": "name: Pruebas de contrato e integración", "limit": "EXTERNO_PENDIENTE",
+        "pending": "La presencia del job no acredita todos los contratos y DB de cada PR."
     },
     {
-        "id": "AGENTES-05-05", "section": 5,
-        "claim": "TypeScript/build",
-        "source": ".github/workflows/ci.yml", "token": "name: Frontend TypeScript / build",
-        "limit": "EXTERNO_PENDIENTE",
-        "pending": "La ruta declarada no equivale a un build terminal y navegador probado.",
+        "id": "AGENTES-05-05", "section": 5, "claim": "TypeScript/build",
+        "source": ".github/workflows/ci.yml", "token": "name: Frontend TypeScript / build", "limit": "EXTERNO_PENDIENTE",
+        "pending": "La ruta declarada no equivale a un build terminal y navegador probado."
     },
     {
-        "id": "AGENTES-05-06", "section": 5,
-        "claim": "auditorías npm/Composer",
-        "source": ".github/workflows/ci.yml", "token": "name: Auditoría de dependencias Composer",
-        "limit": "EXTERNO_PENDIENTE",
-        "pending": "Los controles de auditoría requieren resultados terminales auténticos.",
+        "id": "AGENTES-05-06", "section": 5, "claim": "auditorías npm/Composer",
+        "source": ".github/workflows/ci.yml", "token": "name: Auditoría de dependencias Composer", "limit": "EXTERNO_PENDIENTE",
+        "pending": "Los controles de auditoría requieren resultados terminales auténticos."
     },
     {
-        "id": "AGENTES-06-01", "section": 6,
-        "claim": "cada deploy productivo identificable usa versión humana",
-        "source": "scripts/release_identity_guard.py", "token": "TITLE_RE=re.compile",
-        "limit": "OPERACION_PENDIENTE",
-        "pending": "Validación de identidad de candidato no prueba deploy real con versión.",
+        "id": "AGENTES-06-01", "section": 6, "claim": "cada deploy productivo identificable usa versión humana",
+        "source": "scripts/release_identity_guard.py", "token": "TITLE_RE=re.compile", "limit": "OPERACION_PENDIENTE",
+        "pending": "Validación de identidad de candidato no prueba deploy real con versión."
     },
     {
-        "id": "AGENTES-06-02", "section": 6,
-        "claim": "incremento normal pre-1.0: patch",
-        "source": "config/version.php", "token": "'version' =>",
-        "limit": "DOCUMENTAL",
-        "pending": "Patch normal es política; no equivale a autorizar ni ejecutar nuevo release.",
+        "id": "AGENTES-06-02", "section": 6, "claim": "incremento normal pre-1.0: patch",
+        "source": "config/version.php", "token": "'version' =>", "limit": "DOCUMENTAL",
+        "pending": "Patch normal es política; no equivale a autorizar ni ejecutar nuevo release."
     },
     {
-        "id": "AGENTES-06-03", "section": 6,
-        "claim": "no reutilizar una versión para dos deploys distintos",
-        "source": "scripts/release_identity_guard.py", "token": "release identities are single-use",
-        "limit": "OPERACION_PENDIENTE",
-        "pending": "Guard local no observa dos despliegues reales ni historial externo completo.",
+        "id": "AGENTES-06-03", "section": 6, "claim": "no reutilizar una versión para dos deploys distintos",
+        "source": "scripts/release_identity_guard.py", "token": "release identities are single-use", "limit": "OPERACION_PENDIENTE",
+        "pending": "Guard local no observa dos despliegues reales ni historial externo completo."
     },
     {
-        "id": "AGENTES-06-06", "section": 6,
-        "claim": "una PR deploy-bound contiene su versión objetivo antes de gates finales",
-        "source": "scripts/release_identity_guard.py", "token": "PR title must end with exact format",
-        "limit": "OPERACION_PENDIENTE",
-        "pending": "Una PR real exige identidad exacta y gates; regex local no demuestra entrega.",
+        "id": "AGENTES-06-06", "section": 6, "claim": "una PR deploy-bound contiene su versión objetivo antes de gates finales",
+        "source": "scripts/release_identity_guard.py", "token": "PR title must end with exact format", "limit": "OPERACION_PENDIENTE",
+        "pending": "Una PR real exige identidad exacta y gates; regex local no demuestra entrega."
     },
     {
-        "id": "AGENTES-07-01", "section": 7,
-        "claim": "solo migraciones versionadas, aditivas/expand-compatible",
-        "source": "scripts/live-schema-policy.php", "token": "'additive'",
-        "limit": "OPERACION_PENDIENTE",
-        "pending": "Clasificación fail-closed no ejecuta ni certifica migraciones reales.",
+        "id": "AGENTES-07-01", "section": 7, "claim": "solo migraciones versionadas, aditivas/expand-compatible",
+        "source": "scripts/live-schema-policy.php", "token": "'additive'", "limit": "OPERACION_PENDIENTE",
+        "pending": "Clasificación fail-closed no ejecuta ni certifica migraciones reales."
     },
     {
-        "id": "AGENTES-07-02", "section": 7,
-        "claim": "dry-run/allowlist",
-        "source": "scripts/live-schema-policy.php", "token": "'allowlist_complete'",
-        "limit": "OPERACION_PENDIENTE",
-        "pending": "El gate sintético no es un dry-run real en Hostinger.",
+        "id": "AGENTES-07-02", "section": 7, "claim": "dry-run/allowlist",
+        "source": "scripts/live-schema-policy.php", "token": "'allowlist_complete'", "limit": "OPERACION_PENDIENTE",
+        "pending": "El gate sintético no es un dry-run real en Hostinger."
     },
     {
-        "id": "AGENTES-07-03", "section": 7,
-        "claim": "backup exitoso previo",
-        "source": "scripts/live-schema-policy.php", "token": "'backup_receipt_verified'",
-        "limit": "OPERACION_PENDIENTE",
-        "pending": "La bandera de fixture no sustituye un recibo verificado de backup.",
+        "id": "AGENTES-07-03", "section": 7, "claim": "backup exitoso previo",
+        "source": "scripts/live-schema-policy.php", "token": "'backup_receipt_verified'", "limit": "OPERACION_PENDIENTE",
+        "pending": "La bandera de fixture no sustituye un recibo verificado de backup."
     },
     {
-        "id": "AGENTES-07-04", "section": 7,
-        "claim": "CONDOR_AUTO_MIGRATE=0",
-        "source": "scripts/post-deploy.sh", "token": "AUTO_MIGRATE=",
-        "limit": "OPERACION_PENDIENTE",
-        "pending": "La condición de shell existe; falta demostrar el opt-out en host con identidad.",
+        "id": "AGENTES-07-04", "section": 7, "claim": "CONDOR_AUTO_MIGRATE=0",
+        "source": "scripts/post-deploy.sh", "token": "AUTO_MIGRATE=", "limit": "OPERACION_PENDIENTE",
+        "pending": "La condición de shell existe; falta demostrar el opt-out en host con identidad."
     },
     {
-        "id": "AGENTES-07-05", "section": 7,
-        "claim": "migrate + recheck antes de tocar caché",
-        "source": "scripts/post-deploy.sh", "token": "doctrine:migrations:up-to-date",
-        "limit": "OPERACION_PENDIENTE",
-        "pending": "Orden y resultado de convergencia productiva no acreditados por texto.",
+        "id": "AGENTES-07-05", "section": 7, "claim": "migrate + recheck antes de tocar caché",
+        "source": "scripts/post-deploy.sh", "token": "doctrine:migrations:up-to-date", "limit": "OPERACION_PENDIENTE",
+        "pending": "Orden y resultado de convergencia productiva no acreditados por texto."
     },
     {
-        "id": "AGENTES-07-06", "section": 7,
-        "claim": "si backup o validación fallan, se falla cerrado",
-        "source": "scripts/live-schema-policy.php", "token": "'eligible_after_owner_gate'",
-        "limit": "OPERACION_PENDIENTE",
-        "pending": "Negativos locales no acreditan abort de pipeline productivo real.",
+        "id": "AGENTES-07-06", "section": 7, "claim": "si backup o validación fallan, se falla cerrado",
+        "source": "scripts/live-schema-policy.php", "token": "'eligible_after_owner_gate'", "limit": "OPERACION_PENDIENTE",
+        "pending": "Negativos locales no acreditan abort de pipeline productivo real."
     },
     {
-        "id": "AGENTES-08-03", "section": 8,
-        "claim": "La capacidad se decide por",
-        "source": "AGENTES.md", "token": "claims de archivo disjuntos",
-        "limit": "EXTERNO_PENDIENTE",
-        "pending": "Reserva V3 y colisiones reales dependen del coordinador GitHub autenticado.",
+        "id": "AGENTES-08-03", "section": 8, "claim": "La capacidad se decide por",
+        "source": "AGENTES.md", "token": "claims de archivo disjuntos", "limit": "EXTERNO_PENDIENTE",
+        "pending": "Reserva V3 y colisiones reales dependen del coordinador GitHub autenticado."
     },
     {
-        "id": "AGENTES-08-04", "section": 8,
-        "claim": "1200 solicitudes",
-        "source": "AGENTES.md", "token": "límite menor",
-        "limit": "EXTERNO_PENDIENTE",
-        "pending": "El umbral escrito no incluye medición real del cupo de API ni despacho.",
+        "id": "AGENTES-08-04", "section": 8, "claim": "1200 solicitudes",
+        "source": "AGENTES.md", "token": "límite menor", "limit": "EXTERNO_PENDIENTE",
+        "pending": "El umbral escrito no incluye medición real del cupo de API ni despacho."
     },
     {
-        "id": "AGENTES-08-05", "section": 8,
-        "claim": "La telemetría CI se muestrea una vez por hora",
-        "source": ".github/workflows/ci-throughput-telemetry.yml", "token": "cron: '37 * * * *'",
-        "limit": "EXTERNO_PENDIENTE",
-        "pending": "Cron declarado no prueba una sola muestra real, frecuencia ni artifacts.",
+        "id": "AGENTES-08-05", "section": 8, "claim": "La telemetría CI se muestrea una vez por hora",
+        "source": ".github/workflows/ci-throughput-telemetry.yml", "token": "cron: '37 * * * *'", "limit": "EXTERNO_PENDIENTE",
+        "pending": "Cron declarado no prueba una sola muestra real, frecuencia ni artifacts."
     },
 ]
 
