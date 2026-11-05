@@ -93,6 +93,17 @@ final class OperationsSummaryControllerTest extends WebTestCase
         ));
         $em->flush();
 
+        $viewer = new User('viewer-'.$salt.'@example.test', 'Viewer');
+        $membership = new Membership($tenant, $viewer, 'ADMIN');
+        $role = new Role($tenant, 'Sin permiso de lectura', ['inventory.update']);
+        foreach ([
+            $viewer, $membership, $role,
+            new BranchRoleAssignment($membership, $branch, $role),
+        ] as $object) {
+            $em->persist($object);
+        }
+        $em->flush();
+
         $path = '/api/v1/branches/'.$branch->id().'/production/operations-summary';
         $client->request('GET', $path);
         self::assertResponseStatusCodeSame(401);
@@ -131,16 +142,6 @@ final class OperationsSummaryControllerTest extends WebTestCase
         $client->request('POST', $path);
         self::assertResponseStatusCodeSame(405);
 
-        $viewer = new User('viewer-'.$salt.'@example.test', 'Viewer');
-        $membership = new Membership($tenant, $viewer, 'ADMIN');
-        $role = new Role($tenant, 'Sin permiso de lectura', ['inventory.update']);
-        foreach ([
-            $viewer, $membership, $role,
-            new BranchRoleAssignment($membership, $branch, $role),
-        ] as $object) {
-            $em->persist($object);
-        }
-        $em->flush();
         $client->loginUser($viewer);
         $client->request('GET', $path);
         self::assertResponseStatusCodeSame(403);
