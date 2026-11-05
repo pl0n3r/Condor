@@ -13,7 +13,7 @@ use DomainException;
 final class QualityApiService
 {
     private const MAX_ITEMS = 50;
-    private const KINDS = ['NO_CONFORMIDAD', 'ACCION_CORRECTIVA', 'AUDITORIA_INTERNA'];
+    private const KINDS = ['NO_CONFORMIDAD', 'ACCION_CORRECTIVA', 'AUDITORIA_INTERNA', 'QUEJA_INTERNA'];
     private const STATES = ['PENDIENTE', 'EN_REVISION', 'REQUIERE_REVISION'];
 
     /**
