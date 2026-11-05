@@ -2,8 +2,6 @@
 """#1541: 18 flow rows, real PHP subcontracts, explicit non-E2E gaps."""
 from __future__ import annotations
 
-import copy
-import importlib.util
 import re
 import runpy
 import unittest
