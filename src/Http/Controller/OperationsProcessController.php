@@ -33,11 +33,8 @@ final class OperationsProcessController extends AbstractController
     {
         [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'inventory.view');
         $this->requirePreview($tenant->id());
-        return $this->json([
-            'branch_id' => $branch->id(),
-            'processes' => OperationsProcessService::catalog(),
-            'persisted' => false,
-        ]);
+        return $this->json(['branch_id' => $branch->id(),
+            'processes' => OperationsProcessService::catalog(), 'persisted' => false]);
     }
     #[Route('/api/v1/branches/{branchId}/operations/processes/preview', name: 'api_operations_processes_preview', methods: ['POST'])]
     public function preview(string $branchId, Request $request): JsonResponse

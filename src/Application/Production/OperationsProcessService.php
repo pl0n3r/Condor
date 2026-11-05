@@ -18,10 +18,7 @@ final class OperationsProcessService
         ]],
     ]];
     /** @return list<array<string,mixed>> */
-    public static function catalog(): array
-    {
-        return self::PROCESSES;
-    }
+    public static function catalog(): array { return self::PROCESSES; }
     /** @param array<string,mixed> $input
      * @return array<string,mixed> */
     public static function preview(array $input): array

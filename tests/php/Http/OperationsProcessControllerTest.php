@@ -52,6 +52,9 @@ final class OperationsProcessControllerTest extends WebTestCase
             'task_id' => $task['id'],
             'state' => 'done',
         ];
+        $client->jsonRequest('POST', '/api/v1/branches/'.$foreign->id().'/operations/processes/preview',
+            $input, ['HTTP_X_CSRF_TOKEN' => $csrf]);
+        self::assertResponseStatusCodeSame(404);
         $client->jsonRequest('POST', $base.'/preview', $input, ['HTTP_X_CSRF_TOKEN' => $csrf]);
         self::assertResponseIsSuccessful();
         $output = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
