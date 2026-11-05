@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Application\Identity;
 
+use App\Application\Async\OutboxDelivery;
+use App\Application\Async\OutboxEnqueuer;
 use App\Application\Notification\TransactionalEmailGateway;
 use App\Application\Notification\TransactionalEmailMessage;
 use App\Domain\Identity\Entity\AccountInvitation;
@@ -19,6 +21,8 @@ final readonly class ControlBotStaffManager
         private EntityManagerInterface $entityManager,
         private PlatformInvitationSecurity $invitationSecurity,
         private TransactionalEmailGateway $emailGateway,
+        private OutboxEnqueuer $outbox,
+        private OutboxDelivery $outboxDelivery,
     ) {
     }
 
@@ -60,21 +64,41 @@ final readonly class ControlBotStaffManager
         );
         $this->entityManager->persist($staff);
         $this->entityManager->persist($invitation);
+        $this->enqueueInvitation($staff, $invitation, $rawToken);
 
         return new PlatformStaffInvitationResult($staff, $invitation, $rawToken);
     }
 
+    /**
+     * The envelope already exists (invite()/reissueInvitation() wrote it in the
+     * caller's transaction). This attempts it now; on failure it is cancelled
+     * and the exception lets the caller revoke the invitation.
+     */
     public function deliverInvitation(PlatformStaffInvitationResult $result): void
     {
-        $this->emailGateway->deliver(new TransactionalEmailMessage(
-            $result->user->email(),
-            'platform_staff_invitation',
+        $this->outboxDelivery->deliverNow(self::invitationKey($result->invitation, $result->rawToken));
+    }
+
+    private static function invitationKey(AccountInvitation $invitation, string $rawToken): string
+    {
+        return 'platform_staff_invitation:'.$invitation->id().':'.substr(hash('sha256', $rawToken), 0, 16);
+    }
+
+    private function enqueueInvitation(User $staff, AccountInvitation $invitation, string $rawToken): void
+    {
+        $this->outbox->enqueue(
+            self::invitationKey($invitation, $rawToken),
+            'transactional_email',
             [
-                'display_name' => $result->user->displayName(),
-                'activation_token' => $result->rawToken,
-                'expires_at' => $result->invitation->expiresAt()->format(DATE_ATOM),
+                'recipient' => $staff->email(),
+                'template' => 'platform_staff_invitation',
+                'data' => [
+                    'display_name' => $staff->displayName(),
+                    'activation_token' => $rawToken,
+                    'expires_at' => $invitation->expiresAt()->format(DATE_ATOM),
+                ],
             ],
-        ));
+        );
     }
 
     public function revokeInvitation(PlatformStaffInvitationResult $result): void
@@ -95,6 +119,7 @@ final readonly class ControlBotStaffManager
 
         [$rawToken, $tokenHash, $expiresAt] = $this->invitationSecurity->issue();
         $invitation->reissue($tokenHash, $expiresAt);
+        $this->enqueueInvitation($staff, $invitation, $rawToken);
 
         return new PlatformStaffInvitationResult($staff, $invitation, $rawToken);
     }
