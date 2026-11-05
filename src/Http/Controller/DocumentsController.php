@@ -35,6 +35,66 @@ final class DocumentsController extends AbstractController
     ) {
     }
 
+    #[Route('/api/v1/branches/{branchId}/documents/export', name: 'api_documents_export',
+        methods: ['GET'], priority: 10)]
+    public function export(string $branchId, Request $request): JsonResponse
+    {
+        $this->constructionOnly();
+        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
+        $payload = $this->documents->export($this->store($request), $this->scope($branch));
+        $this->audit($tenant, $user, 'documents_synthetic.exported', DocumentApiService::class, $branch->id(), [
+            'branch_id' => $branch->id(), 'synthetic' => true,
+        ]);
+        $this->entityManager->flush();
+        return $this->json($payload);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/documents/{documentKey}/trace',
+        name: 'api_documents_trace', requirements: ['documentKey' => '[a-z][a-z0-9_-]{0,47}'],
+        methods: ['GET'])]
+    public function trace(string $branchId, string $documentKey, Request $request): JsonResponse
+    {
+        $this->constructionOnly();
+        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
+        $reference = $this->domain(fn (): string => DocumentApiService::referenceFromKey($documentKey));
+        $result = $this->domain(fn (): array => $this->documents->trace(
+            $this->store($request), $this->scope($branch), $reference,
+        ));
+        $this->audit($tenant, $user, 'documents_synthetic.trace_read', DocumentApiService::class, $reference, [
+            'branch_id' => $branch->id(), 'synthetic' => true,
+        ]);
+        $this->entityManager->flush();
+        return $this->json($result);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/documents/{documentKey}/evidence',
+        name: 'api_documents_evidence', requirements: ['documentKey' => '[a-z][a-z0-9_-]{0,47}'],
+        methods: ['POST'])]
+    public function attachEvidence(string $branchId, string $documentKey, Request $request): JsonResponse
+    {
+        $this->constructionOnly();
+        $this->requireCsrf($request);
+        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.update');
+        $data = $this->payload($request, ['evidence_ref']);
+        $evidenceRef = $data['evidence_ref'] ?? null;
+        if (!is_string($evidenceRef)) {
+            throw new \Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException('Referencia de evidencia inválida.');
+        }
+        $reference = $this->domain(fn (): string => DocumentApiService::referenceFromKey($documentKey));
+        $result = $this->domain(fn (): array => $this->documents->attachEvidence(
+            $this->store($request), $this->scope($branch), $reference, $evidenceRef,
+        ));
+        if ($result['changed']) {
+            $this->audit($tenant, $user, 'documents_synthetic.evidence_attached', DocumentApiService::class, $reference, [
+                'branch_id' => $branch->id(), 'synthetic' => true,
+            ]);
+            $this->entityManager->flush();
+            $request->getSession()->set(self::SESSION_KEY, $result['state']);
+        }
+        return $this->json(['document' => $result['document'], 'changed' => $result['changed'],
+            'synthetic' => true, 'legal_signature' => false, 'can_close' => false]);
+    }
+
     #[Route('/api/v1/branches/{branchId}/documents', name: 'api_documents_list', methods: ['GET'])]
     public function listing(string $branchId, Request $request): JsonResponse
     {

@@ -74,6 +74,7 @@ final class DocumentApiService
         $doc = ['reference' => $reference, 'classification' => $classification, 'status' => 'BORRADOR'];
         $docs[$reference] = $doc;
         $state[$scope] = $docs;
+        $state = $this->appendEvent($state, $scope, $reference, 'CREADO');
         return ['state' => $state, 'document' => $doc];
     }
 
@@ -97,7 +98,80 @@ final class DocumentApiService
         }
         $docs[$reference] = $doc;
         $state[$scope] = $docs;
+        $state = $this->appendEvent($state, $scope, $reference, 'REVISION_SOLICITADA');
         return ['state' => $state, 'document' => $doc, 'changed' => true];
+    }
+
+    /**
+     * Associate a fixture-only evidence reference. It is NOT a signature, legal
+     * attestation, proof of identity or an approval.
+     * @param array<string, mixed> $state
+     * @return array{state: array<string, mixed>, document: array<string, mixed>, changed: bool}
+     */
+    public function attachEvidence(array $state, string $scope, string $reference, string $evidenceRef): array
+    {
+        $doc = $this->detail($state, $scope, $reference);
+        if (preg_match('~^fixture:evidence/[a-z][a-z0-9_-]{0,47}$~D', $evidenceRef) !== 1) {
+            throw new DomainException('Solo se admite evidencia de prueba.');
+        }
+        if (isset($doc['evidence_ref'])) {
+            if ($doc['evidence_ref'] !== $evidenceRef) {
+                throw new DomainException('La evidencia no se puede sustituir.');
+            }
+            return ['state' => $state, 'document' => $doc, 'changed' => false];
+        }
+        if ($doc['status'] !== 'BORRADOR') {
+            throw new DomainException('No se permite añadir evidencia tras la revisión.');
+        }
+        $doc['evidence_ref'] = $evidenceRef;
+        $state[$scope][$reference] = $doc;
+        $state = $this->appendEvent($state, $scope, $reference, 'EVIDENCIA_ADJUNTADA');
+        return ['state' => $state, 'document' => $doc, 'changed' => true];
+    }
+
+    /** @param array<string, mixed> $state
+     * @return array{documents: list<array<string, mixed>>, synthetic: bool, legal_signature: bool, can_close: bool}
+     */
+    public function export(array $state, string $scope): array
+    {
+        return [
+            'documents' => $this->listing($state, $scope),
+            'synthetic' => true, 'legal_signature' => false, 'can_close' => false,
+        ];
+    }
+
+    /** @param array<string, mixed> $state
+     * @return array{reference: string, events: array<mixed>, synthetic: bool, can_close: bool}
+     */
+    public function trace(array $state, string $scope, string $reference): array
+    {
+        $this->detail($state, $scope, $reference);
+        $history = $state['trace:'.$scope] ?? [];
+        $events = is_array($history) ? ($history[$reference] ?? []) : [];
+        return [
+            'reference' => $reference, 'events' => is_array($events) ? $events : [],
+            'synthetic' => true, 'can_close' => false,
+        ];
+    }
+
+    /** @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function appendEvent(array $state, string $scope, string $reference, string $action): array
+    {
+        $key = 'trace:'.$scope;
+        $history = $state[$key] ?? [];
+        if (!is_array($history)) {
+            throw new DomainException('Historial sintético inválido.');
+        }
+        $events = $history[$reference] ?? [];
+        if (!is_array($events) || count($events) >= 100) {
+            throw new DomainException('Límite de eventos sintéticos alcanzado.');
+        }
+        $events[] = ['sequence' => count($events) + 1, 'action' => $action];
+        $history[$reference] = $events;
+        $state[$key] = $history;
+        return $state;
     }
 
     public static function referenceFromKey(string $key): string
@@ -119,10 +193,16 @@ final class DocumentApiService
     private function validDocument(mixed $value): bool
     {
         return is_array($value)
-            && array_keys($value) === ['reference', 'classification', 'status']
+            && in_array(array_keys($value), [
+                ['reference', 'classification', 'status'],
+                ['reference', 'classification', 'status', 'evidence_ref'],
+            ], true)
             && is_string($value['reference'])
             && preg_match('~^fixture:doc/[a-z][a-z0-9_-]{0,47}$~D', $value['reference']) === 1
             && in_array($value['classification'], self::CLASSIFICATIONS, true)
-            && in_array($value['status'], ['BORRADOR', 'PENDIENTE_REVISION'], true);
+            && in_array($value['status'], ['BORRADOR', 'PENDIENTE_REVISION'], true)
+            && (!array_key_exists('evidence_ref', $value)
+                || (is_string($value['evidence_ref'])
+                    && preg_match('~^fixture:evidence/[a-z][a-z0-9_-]{0,47}$~D', $value['evidence_ref']) === 1));
     }
 }
