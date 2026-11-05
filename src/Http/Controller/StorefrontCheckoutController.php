@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
+use App\Application\Commercial\OrderCreationCoordinator;
 use App\Application\Orders\OrderConflictException;
 use App\Application\Orders\OrderService;
 use App\Domain\Commerce\Entity\SalesChannel;
@@ -31,7 +32,7 @@ final class StorefrontCheckoutController extends AbstractController
     public function __construct(
         private readonly TenantContext $tenantContext,
         private readonly EntityManagerInterface $entityManager,
-        private readonly OrderService $orders,
+        private readonly OrderCreationCoordinator $orderCreation,
         private readonly RateLimiterFactory $storefrontCheckoutLimiter,
     ) {
     }
@@ -95,7 +96,7 @@ final class StorefrontCheckoutController extends AbstractController
         $created = false;
 
         try {
-            $order = $this->orders->create(
+            $order = $this->orderCreation->create(
                 $tenant,
                 $channel->inventorySource(),
                 $channel->priceList(),

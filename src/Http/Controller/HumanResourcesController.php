@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\HumanResources\EmployeeApiService;
+use App\Application\HumanResources\HumanResourcesPreview;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\Membership;
@@ -17,6 +18,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -72,6 +74,42 @@ final class HumanResourcesController extends AbstractController
         $payload = $this->payload($request, ['state', 'expected_version']);
         return $this->privateJson(['employee' => $this->domain(
             fn (): array => $this->employees->changeState($tenant, $branch, $actor, true, $slug, $payload),
+        )]);
+    }
+
+    /**
+     * Proyección efímera y ficticia; ninguna orden laboral, dato personal o
+     * persistencia. La identidad de empresa se obtiene de la sede autorizada.
+     */
+    #[Route(
+        '/api/v1/branches/{branchId}/hr/extension/previews/{kind}',
+        name: 'api_hr_extension_preview',
+        requirements: ['kind' => 'structure|leave|performance'],
+        methods: ['POST'],
+    )]
+    public function preview(string $branchId, string $kind, Request $request): JsonResponse
+    {
+        $this->requireCsrf($request);
+        [, $tenant, $branch] = $this->access($branchId, 'users.view');
+        $company = $branch->legalEntity();
+        if ($company === null) {
+            throw new NotFoundHttpException('Entidad legal no disponible.');
+        }
+        if (strlen((string) $request->getContent()) > 16384) {
+            throw new BadRequestHttpException('Proyección sintética excede tamaño permitido.');
+        }
+        $allowed = match ($kind) {
+            'structure' => ['as_of', 'areas', 'sites', 'positions'],
+            'leave' => ['as_of', 'requests', 'balances'],
+            'performance' => ['as_of', 'viewer_employee_ref', 'evaluations'],
+            default => throw new NotFoundHttpException('Vista sintética no disponible.'),
+        };
+        $payload = $this->payload($request, $allowed);
+
+        return $this->privateJson(['preview' => $this->domain(
+            fn (): array => HumanResourcesPreview::project(
+                $kind, $tenant->id(), $company->id(), $payload,
+            ),
         )]);
     }
 
