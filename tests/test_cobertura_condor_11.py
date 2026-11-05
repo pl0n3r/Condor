@@ -78,6 +78,16 @@ NEGATIVE = (
 )
 
 
+def phpunit_summary_has_real_tests(output: str) -> bool:
+    """Contar pruebas reales en resúmenes PHPUnit con ANSI SGR o sin colores."""
+    clean = re.sub(r"\x1b\[[0-9;]*m", "", output)
+    return re.search(
+        r"(?m)^[ \t]*OK\s*\(\s*[1-9]\d*\s+tests?\b"
+        r"|^[ \t]*Tests:\s*[1-9]\d*\b",
+        clean,
+    ) is not None
+
+
 def run_php_contract(path: str, methods: tuple[str, ...]) -> bool:
     """Execute real local PHP code; unavailable dependencies never pass."""
     if not path.startswith("tests/php/") or not path.endswith("Test.php"):
@@ -102,7 +112,7 @@ def run_php_contract(path: str, methods: tuple[str, ...]) -> bool:
     if result.returncode:
         raise AssertionError("UNKNOWN: real PHP behavior failed in " + path)
     output = result.stdout + result.stderr
-    if not re.search(r"\bOK\s*\(\s*[1-9]\d*\s+tests?\b|\bTests:\s*[1-9]\d*\b", output):
+    if not phpunit_summary_has_real_tests(output):
         raise AssertionError("UNKNOWN: no real PHP tests executed")
     return True
 
