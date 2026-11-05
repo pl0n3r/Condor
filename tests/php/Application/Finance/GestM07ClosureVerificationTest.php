@@ -111,6 +111,7 @@ final class GestM07ClosureVerificationTest extends TestCase
         self::assertStringContainsString('/finance/closures/preview', $source);
         self::assertStringContainsString("'api_finance_closure_preview', methods: ['POST']", $source);
         self::assertStringContainsString("'settings.update', true", $method);
+        self::assertStringContainsString('strlen($request->getContent()) > 65536', $method);
         self::assertStringContainsString('FinanceReconciliationBudget::project(', $method);
         self::assertStringContainsString("'fixture:tenant/current'", $method);
         self::assertStringContainsString("'fixture:legal-entity/current'", $method);

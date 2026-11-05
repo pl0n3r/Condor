@@ -16,6 +16,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -96,6 +97,9 @@ final class FinanceController extends AbstractController
     public function previewClosure(string $branchId, Request $request): JsonResponse
     {
         [$actor, $tenant] = $this->access($request, $branchId, 'settings.update', true);
+        if (strlen($request->getContent()) > 65536) {
+            throw new BadRequestHttpException('Fixture de cierre sintético demasiado grande.');
+        }
         $payload = $this->payload($request, [
             'fixture_ref', 'tenant_ref', 'legal_entity_ref', 'as_of',
             'ledger_entries', 'bank_movements', 'budgets', 'periods',
