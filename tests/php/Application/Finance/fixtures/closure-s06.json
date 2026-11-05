@@ -1,0 +1,52 @@
+{
+  "fixture_ref": "fixture:finance-reconciliation/demo",
+  "tenant_ref": "fixture:tenant/current",
+  "legal_entity_ref": "fixture:legal-entity/current",
+  "as_of": "2026-11-05",
+  "periods": [
+    {
+      "tenant_ref": "fixture:tenant/current",
+      "legal_entity_ref": "fixture:legal-entity/current",
+      "period_ref": "fixture:finance-period/october",
+      "starts_on": "2026-10-01",
+      "ends_on": "2026-10-31",
+      "state": "BORRADOR"
+    }
+  ],
+  "budgets": [
+    {
+      "tenant_ref": "fixture:tenant/current",
+      "legal_entity_ref": "fixture:legal-entity/current",
+      "budget_ref": "fixture:finance-budget/demo",
+      "period_ref": "fixture:finance-period/october",
+      "kind": "INGRESO",
+      "planned_decimal": "20.00",
+      "state": "BORRADOR"
+    }
+  ],
+  "ledger_entries": [
+    {
+      "tenant_ref": "fixture:tenant/current",
+      "legal_entity_ref": "fixture:legal-entity/current",
+      "entry_ref": "fixture:finance-entry/demo",
+      "period_ref": "fixture:finance-period/october",
+      "budget_ref": "fixture:finance-budget/demo",
+      "amount_decimal": "12.30",
+      "kind": "INGRESO",
+      "booked_on": "2026-10-20",
+      "state": "BORRADOR"
+    }
+  ],
+  "bank_movements": [
+    {
+      "tenant_ref": "fixture:tenant/current",
+      "legal_entity_ref": "fixture:legal-entity/current",
+      "movement_ref": "fixture:finance-movement/demo",
+      "entry_ref": "fixture:finance-entry/demo",
+      "amount_decimal": "12.30",
+      "kind": "INGRESO",
+      "booked_on": "2026-10-21",
+      "state": "BORRADOR"
+    }
+  ]
+}
