@@ -292,6 +292,12 @@ function requestRisk(
       xhr.setRequestHeader('X-CSRF-Token', csrfToken ?? '');
     }
     xhr.onload = () => {
+      // Symfony puede devolver HTML en un 401/403/404. La denegación
+      // se clasifica por status HTTP, nunca por la forma del cuerpo.
+      if ([401, 403, 404].includes(xhr.status)) {
+        resolve({ status: xhr.status, body: null });
+        return;
+      }
       try {
         resolve({ status: xhr.status, body: JSON.parse(xhr.responseText) as unknown });
       } catch {
