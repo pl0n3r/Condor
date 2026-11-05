@@ -108,7 +108,9 @@ final class GovernanceController extends AbstractController
         $rawEnvironment = $this->getParameter('kernel.environment');
         $environment = is_string($rawEnvironment) ? $rawEnvironment : '';
         if ($environment !== 'test'
-            && ($environment !== 'dev' || getenv('CONDOR_GOVERNANCE_SYNTHETIC_API') !== '1')
+            && ($environment !== 'dev'
+                || getenv('CONDOR_GOVERNANCE_SYNTHETIC_API') !== '1'
+                || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion')
         ) {
             throw new NotFoundHttpException('Gobierno sintético no disponible.');
         }

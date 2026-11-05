@@ -40,7 +40,7 @@ final class GovernanceRecord
     ): self {
         self::verifyScope($tenant, $company, $actor);
         self::checkFixture($document, 'governance');
-        if (!in_array($instrument, ['acta', 'organo', 'representante', 'facultad', 'decision'], true)) {
+        if (!in_array($instrument, ['acta', 'organo', 'representante', 'socio', 'facultad', 'autorizacion', 'decision'], true)) {
             throw new DomainException('Tipo de instrumento sintético inválido.');
         }
 
