@@ -99,6 +99,28 @@ class MarketingSiteTests(unittest.TestCase):
             if "$ " in html:
                 self.assertIn("Ejemplo", html)
 
+    def test_static_portada_distinguishes_wired_modules_from_live(self) -> None:
+        """La portada estática no puede llamar pendiente a lo integrado (#1510)."""
+        portada = text(ROOT / "index.html").lower()
+        guia = text(ROOT / "docs" / "modulos-operativos.md").lower()
+        for feature in (
+            "alertas de stock bajo", "transferencias manuales",
+            "costo promedio", "costo estimado por orden de producción",
+        ):
+            with self.subTest(feature=feature):
+                self.assertIn(feature, portada)
+        for feature in (
+            "alertas de stock bajo", "transferencias manuales", "costo promedio",
+        ):
+            self.assertIn(feature, guia)
+        for limit in ("sin afirmar despliegue", "sitio sigue en preparación",
+                      "disponibilidad comercial", "facturación y conciliación",
+                      "transferencias automáticas"):
+            with self.subTest(limit=limit):
+                self.assertIn(limit, portada)
+        self.assertIn("en construcción", guia)
+        self.assertNotIn("listas para producción", portada)
+
     def test_claims_are_bounded_and_unpriced(self) -> None:
         for name, path in PAGES.items():
             html = text(path)

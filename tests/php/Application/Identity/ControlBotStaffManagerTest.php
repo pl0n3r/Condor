@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace App\Tests\Application\Identity;
 
+use App\Application\Async\OutboxEnqueuer;
 use App\Application\Identity\ControlBotStaffManager;
 use App\Application\Identity\PlatformInvitationSecurity;
 use App\Application\Notification\TransactionalEmailGateway;
 use App\Application\Notification\TransactionalEmailMessage;
+use App\Domain\Async\Entity\OutboxMessage;
 use App\Domain\Identity\Entity\AccountInvitation;
+use App\Infrastructure\Async\OutboxDispatcher;
+use App\Infrastructure\Notification\TransactionalEmailOutboxHandler;
+use Psr\Log\NullLogger;
 use App\Domain\Identity\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
@@ -32,6 +37,7 @@ final class ControlBotStaffManagerTest extends KernelTestCase
             $entityManager,
             new PlatformInvitationSecurity($entityManager),
             $gateway,
+            ...self::outboxDeps($entityManager, $gateway),
         );
         $suffix = bin2hex(random_bytes(6));
         $result = $manager->invite(
@@ -59,6 +65,13 @@ final class ControlBotStaffManagerTest extends KernelTestCase
             self::assertSame('platform_staff_invitation', $sent[0]->templateKey);
             self::assertSame($result->rawToken, $sent[0]->templateData['activation_token']);
             self::assertSame($staff->displayName(), $sent[0]->templateData['display_name']);
+            $envelope = $entityManager->getConnection()->fetchAssociative(
+                'SELECT status, payload FROM condor_outbox_message WHERE idempotency_key LIKE ?',
+                ['platform_staff_invitation:'.$invitation->id().':%'],
+            );
+            self::assertIsArray($envelope, 'El correo debe pasar por el outbox.');
+            self::assertSame(OutboxMessage::STATUS_SENT, $envelope['status']);
+            self::assertSame('[]', $envelope['payload'], 'El token no debe sobrevivir al envío.');
 
             self::assertRejects(static fn () => $manager->reactivate($staff));
             $oldHash = $invitation->tokenHash();
@@ -80,6 +93,7 @@ final class ControlBotStaffManagerTest extends KernelTestCase
             self::assertRejects(static fn () => $manager->setRole($staff, 'owner'));
         } finally {
             if ($entityManager->isOpen()) {
+                $entityManager->getConnection()->executeStatement('DELETE FROM condor_outbox_message WHERE idempotency_key LIKE ?', ['platform_staff_invitation:'.$invitation->id().':%']);
                 $entityManager->remove($invitation);
                 $entityManager->remove($staff);
                 $entityManager->flush();
@@ -96,6 +110,7 @@ final class ControlBotStaffManagerTest extends KernelTestCase
         $gateway->method('isAvailable')->willReturn(true);
         $manager = new ControlBotStaffManager(
             $entityManager, new PlatformInvitationSecurity($entityManager), $gateway,
+            ...self::outboxDeps($entityManager, $gateway),
         );
         foreach ([
             ['invalid-email', 'Personal', 'staff'],
@@ -111,6 +126,7 @@ final class ControlBotStaffManagerTest extends KernelTestCase
         $unavailable->method('isAvailable')->willReturn(false);
         $disabledManager = new ControlBotStaffManager(
             $entityManager, new PlatformInvitationSecurity($entityManager), $unavailable,
+            ...self::outboxDeps($entityManager, $unavailable),
         );
         self::assertRejects(static fn () => $disabledManager->invite(
             'synthetic@example.test', 'Personal', 'staff',
@@ -123,6 +139,7 @@ final class ControlBotStaffManagerTest extends KernelTestCase
         $gateway = $this->createMock(TransactionalEmailGateway::class);
         $manager = new ControlBotStaffManager(
             $entityManager, new PlatformInvitationSecurity($entityManager), $gateway,
+            ...self::outboxDeps($entityManager, $gateway),
         );
         foreach ([
             new User('owner@example.test', 'Owner', [User::ROLE_PLATFORM_OWNER]),
@@ -135,6 +152,14 @@ final class ControlBotStaffManagerTest extends KernelTestCase
             self::assertRejects(static fn () => $manager->setRole($account, 'staff'));
             self::assertRejects(static fn () => $manager->reissueInvitation($account));
         }
+    }
+
+    private static function outboxDeps(EntityManagerInterface $em, TransactionalEmailGateway $gateway): array
+    {
+        return [
+            new OutboxEnqueuer($em),
+            new OutboxDispatcher($em, new NullLogger(), [new TransactionalEmailOutboxHandler($gateway)]),
+        ];
     }
 
     private static function assertRejects(callable $operation): void

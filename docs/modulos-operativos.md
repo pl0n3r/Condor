@@ -1,8 +1,8 @@
 # Guía de módulos operativos por tipo de negocio
 
-> **Corte de código:** `main@6538d9b31ea6d91d25f62f5b7128bc2efb8f0143` (20 de octubre de 2026). Fuente: controladores, servicios y pruebas versionados; no se infiere despliegue ni disponibilidad comercial. **Estado general: construcción/pre-live.**
+> **Corte de código:** `main@4ff703c2a3e83cc42a68bc85cb4a723e3487f9b5` (4 de noviembre de 2026). Fuente: controladores, servicios y pruebas versionados; no se infiere despliegue ni disponibilidad comercial. **Estado general: construcción/pre-live.**
 
-Esta guía ayuda a escoger por dónde empezar. **«Presente en main»** significa que hay implementación verificable en código; **no** significa que la pantalla esté terminada, que el flujo haya sido validado en producción o que se pueda ofrecer hoy a clientes reales. Cuando el API, la interfaz o la integración final están pendientes, se señala **«en construcción»**. Las decisiones de planes, facturación, go-live y tratamiento de datos reales requieren sus propias puertas.
+Esta guía ayuda a escoger por dónde empezar. **«Presente en main»** significa que hay implementación verificable en código; **no** significa que la pantalla esté terminada, que el flujo haya sido validado en producción o que se pueda ofrecer hoy a clientes reales. La columna **«en construcción»** recoge únicamente lo todavía pendiente del alcance descrito; una función presente en el checkout puede seguir sin estar desplegada, habilitada o validada para usuarios reales. Las decisiones de planes, facturación, go-live y tratamiento de datos reales requieren sus propias puertas.
 
 ## Ocho módulos y estado verificable
 
@@ -22,8 +22,8 @@ Esta guía ayuda a escoger por dónde empezar. **«Presente en main»** signific
 **Empezar por:** definir estados de pedido y probar cambios de stock en entorno de prueba.
 
 ### 4. Inventario y sedes
-**Presente en main:** fuentes de existencias, ajustes y snapshot por sede, con interfaz administrativa de inventario. Referencias: `src/Http/Controller/InventoryController.php`, `frontend/admin/InventoryManagement.tsx`.
-**En construcción:** alertas automáticas de stock bajo y escaneo de códigos en el admin siguen en hojas separadas; no afirmar que están integradas.
+**Presente en main:** inventario por sede, ajustes y consulta de existencias; alertas de stock bajo y mínimos configurables, transferencias manuales entre sedes autorizadas, escaneo de códigos y ajuste CSV (vista previa y aplicación con permisos). Las pantallas están conectadas en `frontend/admin/AdminApp.tsx`. Referencias de API y pantalla: `src/Http/Controller/InventoryController.php` + `frontend/admin/InventoryManagement.tsx`; `src/Http/Controller/StockAlertController.php` + `frontend/admin/StockAlertsPanel.tsx`; `src/Http/Controller/StockTransferController.php` + `frontend/admin/StockTransferPanel.tsx`; `src/Http/Controller/ScanController.php` + `frontend/admin/InventoryManagement.tsx`; `src/Http/Controller/InventoryCsvAdjustController.php` + `frontend/admin/StockCsvAdjust.tsx`.
+**En construcción:** transferencias automáticas intersede y validación de notificaciones y flujos con operación real; los controles visibles en código no prueban funcionamiento o despliegue productivo.
 **Empezar por:** registrar sedes, identificar variantes y hacer un ajuste controlado con datos de prueba.
 
 ### 5. Clientes y categorías
@@ -32,18 +32,18 @@ Esta guía ayuda a escoger por dónde empezar. **«Presente en main»** signific
 **Empezar por:** establecer categorías, campos obligatorios y permisos de acceso por sede.
 
 ### 6. Compras y proveedores
-**Presente en main:** API de proveedores, órdenes de compra y recepción, con permisos de tenant/sede. Referencia: `src/Http/Controller/PurchasingController.php`.
-**En construcción:** la pantalla integral de compras y el costo histórico ponderado dependen de PRs todavía abiertos; no tratarlos como entregados.
+**Presente en main:** API de proveedores, órdenes de compra y recepción por tenant/sede; pantalla de compras y cálculo/consulta de costo promedio histórico de materiales recibidos, con estado `KNOWN` o `UNKNOWN` cuando falta evidencia. Referencias de controlador y pantalla: `src/Http/Controller/PurchasingController.php` + `frontend/admin/PurchasingManagement.tsx`; cableado en `frontend/admin/AdminApp.tsx`.
+**En construcción:** conciliación contable, facturación, conexión comercial con proveedores y comprobación del flujo con datos reales; el costo promedio en código no acredita una valoración contable aprobada.
 **Empezar por:** simular proveedor, orden y recepción; contrastar impacto de inventario antes de operar.
 
 ### 7. Producción y materiales
-**Presente en main:** API de listas de materiales (BOM), órdenes y cierre de producción; existe una pantalla base administrativa. Referencias: `src/Http/Controller/ProductionOperationsController.php`, `frontend/admin/ProductionManagement.tsx`.
-**En construcción:** costo total/unitario por orden y su desglose en la UI dependen de trabajos pendientes. No incluye nómina ni contabilidad.
+**Presente en main:** API de materiales (BOM), órdenes, cierre y consulta del costo por orden; la pantalla administrativa presenta costo total, unitario y consumos cuando hay un comprobante persistido válido. La salida es **costo estimado** (`ESTIMATED_COST`), no costo contable definitivo; si no hay respaldo permanece desconocida. Referencias de controladores y pantalla: `src/Http/Controller/ProductionOperationsController.php` + `frontend/admin/ProductionManagement.tsx`; `src/Http/Controller/ProductionCostController.php` + `frontend/admin/ProductionManagement.tsx`; cableado en `frontend/admin/AdminApp.tsx`.
+**En construcción:** valoración contable definitiva, facturación/conciliación y operación productiva acreditada. No incluye nómina ni contabilidad.
 **Empezar por:** modelar producto, materiales y orden de prueba; revisar consumos y permisos.
 
 ### 8. Reportes CSV
-**Presente en main:** servicio y pruebas de CSV aislados por tenant para inventario, ventas y compras. Referencias: `src/Application/Reporting/TenantCsvReportService.php`, `tests/test_reports_csv.py`.
-**En construcción:** la pantalla de descarga con filtros de fecha dentro del administrador está planificada aparte; un servicio probado no equivale a botón visible.
+**Presente en main:** servicio, controlador y pantalla de descarga de reportes CSV de inventario, ventas y compras, con filtros de fecha, contexto de sede y permisos; botón visible en `frontend/admin/ReportsDownloads.tsx`, conectado desde `frontend/admin/AdminApp.tsx`. Referencias de controlador y pantalla: `src/Http/Controller/ReportsController.php` + `frontend/admin/ReportsDownloads.tsx`; servicio `src/Application/Reporting/TenantCsvReportService.php` y pruebas `tests/test_reports_csv.py`.
+**En construcción:** validación de los datos y descargas reales en el entorno de producción; no hay garantía de acceso comercial ni de reportes contables certificados.
 **Empezar por:** validar columnas, rango y aislamiento entre tenants sobre información ficticia.
 
 ## Recorridos sugeridos (preparación, no producción)
@@ -58,13 +58,13 @@ Esta guía ayuda a escoger por dónde empezar. **«Presente en main»** signific
 1. Configurar **Catálogo y precios** e **Inventario y sedes** para los materiales.
 2. Registrar BOM y órdenes de prueba en **Producción y materiales**.
 3. Evaluar **Compras y proveedores** para la reposición.
-4. El costo por orden integrado en pantalla sigue **en construcción**, y no se debe prometer un ERP contable.
+4. Comprobar el costo **estimado** total/unitario por orden terminada si existe comprobante válido; siguen **en construcción** la valoración contable y la conciliación, sin prometer un ERP contable.
 
 ### Recorrido C — Distribuidora con sedes
 1. Definir sedes y permisos; usar **Inventario y sedes** con fuentes por sede.
 2. Probar **Catálogo y precios**, **Clientes y categorías** y **Pedidos y ventas**.
 3. Añadir pruebas de **Compras y proveedores** y contrastar **Reportes CSV** por tenant.
-4. Transferencias automáticas intersede, alertas y escaneo UI están **en construcción** hasta que sus hojas estén integradas.
+4. Contrastar las alertas de stock, transferencias **manuales**, escaneo y ajustes CSV que ya constan **presentes en main**; las transferencias **automáticas** y la validación productiva siguen **en construcción**.
 
 ### Recorrido D — Grupo de empresas
 1. Modelar cada empresa como tenant separado; no consolidar información saltando permisos.

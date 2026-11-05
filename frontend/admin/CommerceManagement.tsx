@@ -77,9 +77,9 @@ type LoadState =
   | { status: 'error'; message: string };
 
 
-type CustomerSegment = 'all' | 'new_this_month'
-  | 'without_purchases_90_days' | 'top_20_purchases';
-type CustomerSearchFilters = { term: string; segment: CustomerSegment };
+type CustomerSegment = 'all' | 'new_this_month' | 'with_recent_purchases_90_days'
+  | 'without_purchases_90_days' | 'without_purchases' | 'top_20_purchases' | 'by_category';
+type CustomerSearchFilters = { term: string; segment: CustomerSegment; categoryId: string };
 type CustomerSearchState =
   | { status: 'idle' | 'loading' }
   | { status: 'error'; message: string }
@@ -153,6 +153,7 @@ export function CommerceManagement({
 }: Props) {
   const can = (permission: string) => permissions.includes(permission);
   const canViewCustomers = can('customers.view');
+  const canViewOrders = can('orders.view');
   const canCreateCustomers = can('customers.create');
   const canUpdateCustomers = can('customers.update');
   const canDeleteCustomers = can('customers.delete');
@@ -164,8 +165,9 @@ export function CommerceManagement({
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [searchTerm, setSearchTerm] = useState('');
   const [searchSegment, setSearchSegment] = useState<CustomerSegment>('all');
+  const [searchCategoryId, setSearchCategoryId] = useState('');
   const [activeSearch, setActiveSearch] = useState<CustomerSearchFilters>({
-    term: '', segment: 'all',
+    term: '', segment: 'all', categoryId: '',
   });
   const [searchResult, setSearchResult] = useState<CustomerSearchState>({ status: 'idle' });
   const [customerRevision, setCustomerRevision] = useState(0);
@@ -258,7 +260,8 @@ export function CommerceManagement({
     setNotice(null);
     setSearchTerm('');
     setSearchSegment('all');
-    setActiveSearch({ term: '', segment: 'all' });
+    setSearchCategoryId('');
+    setActiveSearch({ term: '', segment: 'all', categoryId: '' });
     setSearchResult({ status: 'idle' });
     setSelectedCustomerId(null);
     setHistoryPage(1);
@@ -279,24 +282,22 @@ export function CommerceManagement({
   // Search and segment results must come from an authenticated backend route.
   // Never infer top purchasers or recent customers from a partial UI snapshot.
   useEffect(() => {
-    if (!canViewCustomers || (activeSearch.term === '' && activeSearch.segment === 'all')) {
+    if (!canViewCustomers || (activeSearch.term === '' && activeSearch.segment === 'all' && !activeSearch.categoryId)) {
       setSearchResult({ status: 'idle' });
       return;
     }
     const controller = new AbortController();
     setSearchResult({ status: 'loading' });
-    const params = new URLSearchParams();
-    if (activeSearch.term) {
-      params.set('term', activeSearch.term);
-    }
-    params.set('segment', activeSearch.segment);
     void (async () => {
       try {
         const response = await fetch(
-          customersPath(branchId) + '/search?' + params.toString(),
+          customersPath(branchId) + '/segments',
           {
+            method: 'POST',
             credentials: 'same-origin',
-            headers: { Accept: 'application/json' },
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ term: activeSearch.term, segment: activeSearch.segment,
+              category_id: activeSearch.categoryId || null }),
             signal: controller.signal,
           },
         );
@@ -322,10 +323,10 @@ export function CommerceManagement({
       }
     })();
     return () => controller.abort();
-  }, [branchId, canViewCustomers, activeSearch, customerRevision]);
+  }, [branchId, canViewCustomers, csrfToken, activeSearch, customerRevision]);
 
   useEffect(() => {
-    if (!canViewCustomers || selectedCustomerId === null) {
+    if (!canViewCustomers || !canViewOrders || selectedCustomerId === null) {
       setHistoryResult({ status: 'idle' });
       return;
     }
@@ -334,11 +335,12 @@ export function CommerceManagement({
     void (async () => {
       try {
         const response = await fetch(
-          '/api/customers/' + encodeURIComponent(selectedCustomerId)
-          + '/history?page=' + historyPage,
+          customersPath(branchId) + '/history',
           {
+            method: 'POST',
             credentials: 'same-origin',
-            headers: { Accept: 'application/json' },
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ customer_id: selectedCustomerId, page: historyPage }),
             signal: controller.signal,
           },
         );
@@ -363,7 +365,7 @@ export function CommerceManagement({
       }
     })();
     return () => controller.abort();
-  }, [branchId, canViewCustomers, selectedCustomerId, historyPage, historyRetry]);
+  }, [branchId, canViewCustomers, canViewOrders, csrfToken, selectedCustomerId, historyPage, historyRetry]);
 
   async function saveCategory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -741,7 +743,7 @@ export function CommerceManagement({
                 event.preventDefault();
                 setSelectedCustomerId(null);
                 setHistoryPage(1);
-                setActiveSearch({ term: searchTerm.trim(), segment: searchSegment });
+                setActiveSearch({ term: searchTerm.trim(), segment: searchSegment, categoryId: searchCategoryId });
               }}
             >
               <div className="catalog-form-grid">
@@ -763,8 +765,21 @@ export function CommerceManagement({
                   >
                     <option value="all">Todos</option>
                     <option value="new_this_month">Nuevos este mes</option>
+                    <option value="with_recent_purchases_90_days">Con compras en 90 días</option>
                     <option value="without_purchases_90_days">Sin compras en 90 días</option>
+                    <option value="without_purchases">Nunca han comprado en esta sede</option>
                     <option value="top_20_purchases">20 con más compras</option>
+                    <option value="by_category">Por categoría comercial</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Categoría comercial</span>
+                  <select value={searchCategoryId} onChange={(event) => setSearchCategoryId(event.target.value)}
+                    required={searchSegment === 'by_category'}>
+                    <option value="">Todas las categorías</option>
+                    {(customers?.categories ?? []).map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
                   </select>
                 </label>
               </div>
@@ -776,7 +791,8 @@ export function CommerceManagement({
                   onClick={() => {
                     setSearchTerm('');
                     setSearchSegment('all');
-                    setActiveSearch({ term: '', segment: 'all' });
+                    setSearchCategoryId('');
+                    setActiveSearch({ term: '', segment: 'all', categoryId: '' });
                     setSelectedCustomerId(null);
                   }}
                 >Limpiar búsqueda</button>
@@ -911,7 +927,7 @@ export function CommerceManagement({
                       </div>
                       <div className="catalog-actions">
 
-                        <button
+                        {canViewOrders && <button
                           type="button"
                           className="button button-secondary"
                           aria-expanded={selectedCustomerId === customer.id}
@@ -924,7 +940,7 @@ export function CommerceManagement({
                           }}
                         >
                           {selectedCustomerId === customer.id ? 'Ocultar historial' : 'Ver historial'}
-                        </button>
+                        </button>}
                         {canUpdateCustomers && (
                           <button
                             type="button"
