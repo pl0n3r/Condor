@@ -90,7 +90,11 @@ final class GestM08VerificationTest extends TestCase
 
     private function rejects(callable $action): void
     {
-        $this->expectException(DomainException::class);
-        $action();
+        try {
+            $action();
+            self::fail('Se aceptó una operación documental inválida.');
+        } catch (DomainException) {
+            self::assertTrue(true);
+        }
     }
 }

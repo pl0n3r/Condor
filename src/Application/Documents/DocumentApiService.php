@@ -18,7 +18,7 @@ final class DocumentApiService
 
     /**
      * @param array<string, mixed> $state
-     * @return list<array{reference: string, classification: string, status: string}>
+     * @return list<array{reference: string, classification: string, status: string, evidence_ref?: string}>
      */
     public function listing(array $state, string $scope): array
     {
@@ -38,7 +38,7 @@ final class DocumentApiService
 
     /**
      * @param array<string, mixed> $state
-     * @return array{reference: string, classification: string, status: string}
+     * @return array{reference: string, classification: string, status: string, evidence_ref?: string}
      */
     public function detail(array $state, string $scope, string $reference): array
     {
@@ -80,7 +80,7 @@ final class DocumentApiService
 
     /**
      * @param array<string, mixed> $state
-     * @return array{state: array<string, mixed>, document: array{reference: string, classification: string, status: string}, changed: bool}
+     * @return array{state: array<string, mixed>, document: array{reference: string, classification: string, status: string, evidence_ref?: string}, changed: bool}
      */
     public function requestReview(array $state, string $scope, string $reference): array
     {
@@ -124,7 +124,12 @@ final class DocumentApiService
             throw new DomainException('No se permite añadir evidencia tras la revisión.');
         }
         $doc['evidence_ref'] = $evidenceRef;
-        $state[$scope][$reference] = $doc;
+        $docs = $state[$scope] ?? [];
+        if (!is_array($docs)) {
+            throw new DomainException('Estado documental inválido.');
+        }
+        $docs[$reference] = $doc;
+        $state[$scope] = $docs;
         $state = $this->appendEvent($state, $scope, $reference, 'EVIDENCIA_ADJUNTADA');
         return ['state' => $state, 'document' => $doc, 'changed' => true];
     }
@@ -189,7 +194,7 @@ final class DocumentApiService
         }
     }
 
-    /** @phpstan-assert-if-true array{reference: string, classification: string, status: string} $value */
+    /** @phpstan-assert-if-true array{reference: string, classification: string, status: string, evidence_ref?: string} $value */
     private function validDocument(mixed $value): bool
     {
         return is_array($value)
