@@ -16,50 +16,17 @@ final class GestM07ClosureVerificationTest extends TestCase
     /** @return array<string,mixed> */
     private static function fixture(): array
     {
-        return [
-            'fixture_ref' => 'fixture:finance-reconciliation/demo',
-            'tenant_ref' => self::TENANT,
-            'legal_entity_ref' => self::ENTITY,
-            'as_of' => '2026-11-05',
-            'periods' => [[
-                'period_ref' => 'fixture:finance-period/october',
-                'tenant_ref' => self::TENANT,
-                'legal_entity_ref' => self::ENTITY,
-                'starts_on' => '2026-10-01',
-                'ends_on' => '2026-10-31',
-                'state' => 'BORRADOR',
-            ]],
-            'budgets' => [[
-                'budget_ref' => 'fixture:finance-budget/demo',
-                'tenant_ref' => self::TENANT,
-                'legal_entity_ref' => self::ENTITY,
-                'period_ref' => 'fixture:finance-period/october',
-                'kind' => 'INGRESO',
-                'planned_decimal' => '20.00',
-                'state' => 'BORRADOR',
-            ]],
-            'ledger_entries' => [[
-                'entry_ref' => 'fixture:finance-entry/demo',
-                'tenant_ref' => self::TENANT,
-                'legal_entity_ref' => self::ENTITY,
-                'period_ref' => 'fixture:finance-period/october',
-                'budget_ref' => 'fixture:finance-budget/demo',
-                'amount_decimal' => '12.30',
-                'kind' => 'INGRESO',
-                'booked_on' => '2026-10-20',
-                'state' => 'BORRADOR',
-            ]],
-            'bank_movements' => [[
-                'movement_ref' => 'fixture:finance-movement/demo',
-                'tenant_ref' => self::TENANT,
-                'legal_entity_ref' => self::ENTITY,
-                'entry_ref' => 'fixture:finance-entry/demo',
-                'amount_decimal' => '12.30',
-                'kind' => 'INGRESO',
-                'booked_on' => '2026-10-21',
-                'state' => 'BORRADOR',
-            ]],
-        ];
+        $raw = file_get_contents(__DIR__.'/fixtures/closure-s06.json');
+        if ($raw === false) {
+            throw new \RuntimeException('Fixture de cierres sintéticos no encontrada.');
+        }
+        $decoded = json_decode($raw, true, 32, JSON_THROW_ON_ERROR);
+        if (!is_array($decoded)) {
+            throw new \RuntimeException('Fixture de cierres sintéticos inválida.');
+        }
+
+        /** @var array<string,mixed> $decoded */
+        return $decoded;
     }
 
     /** @param array<string,mixed> $payload

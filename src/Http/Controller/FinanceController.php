@@ -87,7 +87,6 @@ final class FinanceController extends AbstractController
         return $this->json(['record' => $result['record'], 'synthetic_only' => true]);
     }
 
-
     /**
      * Review-only, never a real financial close. No bank data or persistence.
      * The fixed local fixture identities cannot select another real tenant:
