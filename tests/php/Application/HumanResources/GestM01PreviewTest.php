@@ -94,7 +94,7 @@ final class GestM01PreviewTest extends TestCase
     /** @param array<string,mixed> $input
      *  @return array<string,mixed>
      */
-    private static function run(string $kind, array $input): array
+    private static function project(string $kind, array $input): array
     {
         return Preview::project($kind, 'tenant-a', 'company-a', $input);
     }
@@ -111,7 +111,7 @@ final class GestM01PreviewTest extends TestCase
 
     public function testS02CargosSinResponsableExigenRevision(): void
     {
-        $result = self::run('structure', self::structure());
+        $result = self::project('structure', self::structure());
         self::assertTrue($result['valid']);
         self::assertTrue($result['positions'][0]['without_responsible']);
         self::assertSame('REQUIERE_REVISION', $result['positions'][0]['state']);
@@ -121,7 +121,7 @@ final class GestM01PreviewTest extends TestCase
     {
         $input = self::structure();
         $input['areas'][0]['parent_ref'] = 'fixture:area/child';
-        $result = self::run('structure', $input);
+        $result = self::project('structure', $input);
         self::assertTrue($result['has_cycles']);
         self::assertFalse($result['can_approve']);
     }
@@ -133,7 +133,7 @@ final class GestM01PreviewTest extends TestCase
             'tenant_ref' => 'tenant-b', 'company_ref' => 'fixture:company/foreign',
             'ref' => 'fixture:site/foreign',
         ];
-        $result = self::run('structure', $input);
+        $result = self::project('structure', $input);
         self::assertCount(1, $result['sites']);
         self::assertSame('fixture:site/main', $result['sites'][0]['ref']);
         self::assertStringNotContainsString('foreign', json_encode($result, JSON_THROW_ON_ERROR));
@@ -143,12 +143,12 @@ final class GestM01PreviewTest extends TestCase
     {
         $input = self::structure();
         $input['positions'][0]['parent_ref'] = 'fixture:position/unknown';
-        self::rejects(static fn () => self::run('structure', $input));
+        self::rejects(static fn () => self::project('structure', $input));
     }
 
     public function testS06NovedadesDetectanSolapamiento(): void
     {
-        $result = self::run('leave', self::leaves());
+        $result = self::project('leave', self::leaves());
         self::assertCount(3, $result['requests']);
         self::assertTrue($result['requests'][0]['overlaps']);
         self::assertFalse($result['automatically_closed']);
@@ -156,7 +156,7 @@ final class GestM01PreviewTest extends TestCase
 
     public function testS07PermisosNoAutorizanAprobacionAutomatica(): void
     {
-        $result = self::run('leave', self::leaves());
+        $result = self::project('leave', self::leaves());
         $permission = array_values(array_filter(
             $result['requests'], static fn (array $row): bool => $row['kind'] === 'PERMISO',
         ));
@@ -167,7 +167,7 @@ final class GestM01PreviewTest extends TestCase
 
     public function testS08VacacionesDetectanSaldoInsuficiente(): void
     {
-        $rows = self::run('leave', self::leaves())['requests'];
+        $rows = self::project('leave', self::leaves())['requests'];
         $vacation = array_values(array_filter(
             $rows, static fn (array $row): bool => $row['kind'] === 'VACACIONES',
         ));
@@ -179,27 +179,27 @@ final class GestM01PreviewTest extends TestCase
     public function testS09IncapacidadesNoAdmitenDiagnostico(): void
     {
         $input = self::leaves();
-        $result = self::run('leave', $input);
+        $result = self::project('leave', $input);
         self::assertCount(1, array_filter(
             $result['requests'], static fn (array $r): bool => $r['kind'] === 'INCAPACIDAD',
         ));
         $input['requests'][2]['diagnosis'] = 'dato-sensible';
-        self::rejects(static fn () => self::run('leave', $input));
+        self::rejects(static fn () => self::project('leave', $input));
     }
 
     public function testS10EvaluacionesSinCalificacionInvalida(): void
     {
-        $result = self::run('performance', self::performance());
+        $result = self::project('performance', self::performance());
         self::assertSame(82, $result['evaluations'][0]['score']);
         self::assertTrue($result['evaluations'][0]['needs_human_review']);
         $input = self::performance();
         $input['evaluations'][0]['score'] = 101;
-        self::rejects(static fn () => self::run('performance', $input));
+        self::rejects(static fn () => self::project('performance', $input));
     }
 
     public function testS11PortalRestringeVisorYNoCierra(): void
     {
-        $result = self::run('performance', self::performance());
+        $result = self::project('performance', self::performance());
         self::assertCount(1, $result['evaluations']);
         self::assertSame('fixture:evaluation/own', $result['evaluations'][0]['ref']);
         self::assertFalse($result['can_close']);
@@ -210,11 +210,11 @@ final class GestM01PreviewTest extends TestCase
     {
         $input = self::structure();
         $input['tenant_ref'] = 'tenant-b';
-        self::rejects(static fn () => self::run('structure', $input));
+        self::rejects(static fn () => self::project('structure', $input));
         $input = self::structure();
         $input['positions'][0]['employee_ref'] = 'persona@example.com';
-        self::rejects(static fn () => self::run('structure', $input));
-        self::rejects(static fn () => self::run('unknown', self::structure()));
+        self::rejects(static fn () => self::project('structure', $input));
+        self::rejects(static fn () => self::project('unknown', self::structure()));
     }
 
     public function testControladorExigeCsrfOwnerYBranchScopeEnPreview(): void
