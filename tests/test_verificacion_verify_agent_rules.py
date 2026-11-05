@@ -275,6 +275,11 @@ class AgentRulesVerificationTests(unittest.TestCase):
             {"backup_receipt_verified": False},
             {"post_checks": {"service_readiness": True, "schema": False,
                              "smoke": True}},
+            {"post_checks": {"service_readiness": False, "schema": True,
+                             "smoke": True}},
+            {"post_checks": {"service_readiness": True, "schema": True,
+                             "smoke": False}},
+            {"backup_receipt_verified": "false"},
             {"unrecognized_gate": True},
         ):
             with self.subTest(change=change):
