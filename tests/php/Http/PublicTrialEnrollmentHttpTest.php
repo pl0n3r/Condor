@@ -159,6 +159,8 @@ final class PublicTrialEnrollmentHttpTest extends WebTestCase
         putenv('CONDOR_MAILER_DSN=smtp://example.test:25');
         putenv('CONDOR_MAIL_FROM=notificaciones@example.test');
         $client = self::createClient();
+        // Preserve synthetic CAPTCHA/SMTP overrides across BrowserKit requests.
+        $client->disableReboot();
         $container = self::getContainer();
         $seeder = $container->get(CommercialCatalogSeeder::class);
         self::assertInstanceOf(CommercialCatalogSeeder::class, $seeder);
