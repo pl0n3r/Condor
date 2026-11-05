@@ -223,7 +223,7 @@ final class GestM03VerificationTest extends TestCase
         )[1] ?? '';
         self::assertSame(4, substr_count($occupational, '#[Route('));
         self::assertSame(4, substr_count($occupational, 'occupationalAccess($request, $branchId'));
-        self::assertContains('settings.view', [$this->readPermission($occupational, 'settings.view')]);
+        self::assertStringContainsString("'settings.view'", $occupational);
         self::assertStringContainsString('settings.create', $occupational);
         self::assertStringContainsString('settings.update', $occupational);
         self::assertStringContainsString('authorizedBranchScope($branchId, $permission)', $occupational);
@@ -232,10 +232,5 @@ final class GestM03VerificationTest extends TestCase
         self::assertStringContainsString("getenv('CONDOR_PRODUCTION_STAGE')", $occupational);
         self::assertStringContainsString("'condor_sgsst_synthetic'", $occupational);
         self::assertSame(4, substr_count($occupational, 'occupationalAudit($tenant, $actor'));
-    }
-
-    private function readPermission(string $text, string $permission): string
-    {
-        return str_contains($text, "'".$permission."'") ? $permission : '';
     }
 }
