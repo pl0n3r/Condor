@@ -46,6 +46,12 @@ class SimulacroReversionTests(unittest.TestCase):
                 drill.local_rollback(root)
             self.assertEqual(current.resolve(), root / "releases" / drill.BAD_SHA)
 
+            (root / ".previous").unlink()
+            (root / ".previous").symlink_to("/outside/not-authorized")
+            with self.assertRaises(drill.DrillError):
+                drill.local_rollback(root)
+            self.assertEqual(current.resolve(), root / "releases" / drill.BAD_SHA)
+            (root / ".previous").unlink()
             (root / ".previous").write_text(
                 str(root / "releases" / drill.GOOD_SHA) + "\n", encoding="utf-8"
             )

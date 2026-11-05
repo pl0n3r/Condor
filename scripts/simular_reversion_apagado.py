@@ -53,6 +53,8 @@ def local_rollback(root: Path) -> None:
     if marker.is_symlink() or not marker.is_file() or marker.read_text(encoding="utf-8") != SENTINEL:
         raise DrillError("sandbox_authority_missing")
     expected_releases = root / "releases"
+    if (root / ".previous").is_symlink():
+        raise DrillError("sandbox_previous_symlink_rejected")
     current = root / "current"
     if not current.is_symlink() or current.resolve(strict=True).parent != expected_releases:
         raise DrillError("sandbox_current_invalid")
