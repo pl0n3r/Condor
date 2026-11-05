@@ -169,7 +169,7 @@ final class GestM09VerificationTest extends TestCase
             self::assertNotSame('', $method);
             self::assertStringContainsString('$this->requirePurchasingPreviewEnabled()', $method);
             self::assertStringContainsString('$this->requireCsrf($request)', $method);
-            self::assertStringContainsString("authorizedBranchScope($branchId, 'inventory.create')", $method);
+            self::assertStringContainsString("authorizedBranchScope(\$branchId, 'inventory.create')", $method);
             self::assertStringNotContainsString('->persist(', $method);
         }
         self::assertStringContainsString('/purchasing/quotations/preview', $source);
