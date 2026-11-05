@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace App\Application\Catalog;
 
+use App\Application\Commercial\EntitlementResolver;
+use App\Application\Commercial\ExecutionContext;
+use App\Application\Commercial\SubscriptionEntitlementContextFactory;
 use App\Domain\Audit\Entity\AuditEvent;
+use App\Domain\Commercial\Entity\Subscription;
 use App\Domain\Catalog\Entity\Product;
 use App\Domain\Catalog\Entity\ProductVariant;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\Tenant;
+use DateTimeImmutable;
+use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
 
@@ -24,8 +30,12 @@ final readonly class ProductCsvImporter
     private const REQUIRED = ['sku', 'product_name', 'product_slug', 'variant_name'];
     private const OPTIONAL = ['description', 'allow_backorder'];
 
-    public function __construct(private EntityManagerInterface $entityManager)
-    {
+    public function __construct(
+        private EntityManagerInterface $entityManager,
+        private CatalogCapabilityGuard $capabilityGuard,
+        private SubscriptionEntitlementContextFactory $entitlementContexts,
+        private EntitlementResolver $entitlementResolver,
+    ) {
     }
 
     /**
@@ -186,6 +196,7 @@ final readonly class ProductCsvImporter
     public function commit(Tenant $tenant, Branch $branch, User $actor, string $csv): array
     {
         return $this->entityManager->wrapInTransaction(function () use ($tenant, $branch, $actor, $csv): array {
+            $this->assertCatalogCapability($tenant, $actor);
             $result = $this->preview($tenant, $csv);
             $created = 0;
             $knownProducts = [];
@@ -230,5 +241,28 @@ final readonly class ProductCsvImporter
             $this->entityManager->flush();
             return [...$result, 'created' => $created];
         });
+    }
+
+    /**
+     * Bootstrap heredado sin suscripción sigue siendo GAP explícito. Para
+     * tenants suscritos se evalúa el snapshot comercial desde el servidor,
+     * antes de cualquier persistencia en la transacción de importación.
+     */
+    private function assertCatalogCapability(Tenant $tenant, User $actor): void
+    {
+        $subscription = $this->entityManager->getRepository(Subscription::class)
+            ->findOneBy(['tenantId' => $tenant->id()]);
+        if (!$subscription instanceof Subscription) {
+            return;
+        }
+
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $snapshot = $this->entitlementResolver->resolve(
+            $this->entitlementContexts->forTenant($tenant->id(), $now),
+        );
+        $this->capabilityGuard->assertCanWrite(
+            new ExecutionContext($tenant->id(), $snapshot, $actor->id()),
+            $tenant->id(),
+        );
     }
 }
