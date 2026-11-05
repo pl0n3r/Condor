@@ -24,7 +24,8 @@ certificación fiscal. No se modifica \`docs/matriz-cobertura.md\`.
 - La UI actual \`frontend/admin/FinanceManagement.tsx\` es memoria local;
   no consume el endpoint ni garantiza los cuatro estados frente a errores HTTP.
   Esa integración y negativas HTTP autenticadas requieren una hoja hija de
-  frontend/QA con claims separados, nunca ampliación de esta reserva.
+  frontend/QA en la [hoja hija #1568](https://github.com/pl0n3r/Condor/issues/1568),
+  con claims separados, nunca ampliación de esta reserva.
 
 Comprobación local: \`vendor/bin/simple-phpunit --filter GestM07ClosureVerificationTest\`.
 Puerta de merge: \`CI Factory v1 / Validar\` terminal \`success\` del HEAD
