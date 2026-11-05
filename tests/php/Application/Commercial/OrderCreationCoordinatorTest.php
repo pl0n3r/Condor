@@ -241,4 +241,50 @@ final class OrderCreationCoordinatorTest extends KernelTestCase
             [$tenant->id()],
         );
     }
+
+    /**
+     * @param list<string> $keys
+     * @return list<array{status: string, order: ?string}>
+     */
+    private function race(Tenant $tenant, InventorySource $source, PriceList $list, SalesChannel $channel, ProductVariant $variant, int $limit, array $keys): array
+    {
+        $this->dir = sys_get_temp_dir().'/orders1486-'.bin2hex(random_bytes(6));
+        mkdir($this->dir);
+        $pipes = [];
+        $names = [];
+        foreach ($keys as $i => $key) {
+            $names[] = 'w'.$i;
+            $cfg = [
+                'ready' => $this->dir.'/w'.$i.'.ready', 'go' => $this->dir.'/go', 'limit' => $limit, 'key' => $key,
+                'tenant' => $tenant->id(), 'source' => $source->id(), 'list' => $list->id(),
+                'channel' => $channel->id(), 'variant' => $variant->id(),
+            ];
+            $proc = proc_open(
+                [PHP_BINARY, __DIR__.'/Support/order_worker.php', json_encode($cfg, JSON_THROW_ON_ERROR)],
+                [1 => ['pipe', 'w'], 2 => ['file', $this->dir.'/w'.$i.'.err', 'w']],
+                $p,
+            );
+            self::assertIsResource($proc);
+            $pipes[] = $p[1];
+            $this->procs[] = $proc;
+        }
+        $deadline = microtime(true) + 30;
+        while (count(array_filter($names, fn (string $n): bool => is_file($this->dir.'/'.$n.'.ready'))) < count($names)) {
+            if (microtime(true) > $deadline) {
+                self::fail('Los workers no arrancaron: '.implode(' | ', array_map(static fn (string $f): string => (string) file_get_contents($f), glob($this->dir.'/*.err') ?: [])));
+            }
+            usleep(20000);
+        }
+        touch($this->dir.'/go');
+
+        $out = [];
+        foreach ($pipes as $pipe) {
+            $line = stream_get_contents($pipe);
+            $decoded = json_decode((string) $line, true);
+            self::assertIsArray($decoded, 'Salida del worker: '.$line);
+            $out[] = $decoded;
+        }
+
+        return $out;
+    }
 }
