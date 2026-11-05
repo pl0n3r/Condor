@@ -13,7 +13,7 @@ use DomainException;
 final class RiskApiService
 {
     private const LIMIT = 50;
-    private const CATEGORIES = ['operativo', 'financiero', 'legal', 'tecnologico'];
+    private const CATEGORIES = ['operativo', 'financiero', 'legal', 'tecnologico', 'reputacional'];
     private const STATES = ['PENDIENTE', 'EN_REVISION', 'REQUIERE_REVISION'];
     private const NEXT_STATES = ['EN_REVISION', 'REQUIERE_REVISION'];
 
@@ -47,7 +47,14 @@ final class RiskApiService
     {
         $fields = array_keys($payload);
         sort($fields, SORT_STRING);
-        if ($fields !== ['category', 'impact', 'probability', 'risk_ref']) {
+        // Reputational scenarios require an additional typed, fictitious reference.
+        // The legacy four-field payload must continue rejecting this category.
+        $reputational = ($payload['category'] ?? null) === 'reputacional';
+        $expected = ['category', 'impact', 'probability', 'risk_ref'];
+        if ($reputational) {
+            $expected[] = 'scenario_ref';
+        }
+        if ($fields !== $expected) {
             throw new DomainException('Campos de prueba inesperados.');
         }
 
@@ -67,6 +74,9 @@ final class RiskApiService
             'impact' => $impact,
             'state' => 'PENDIENTE',
         ];
+        if ($reputational) {
+            $record['scenario_ref'] = self::scenario($payload['scenario_ref']);
+        }
         $items[$ref] = $record;
         $store[$scope] = $items;
 
@@ -114,7 +124,18 @@ final class RiskApiService
 
         $result = [];
         foreach ($raw as $key => $value) {
-            if (!is_array($value) || count($value) !== 5) {
+            if (!is_array($value)) {
+                throw new DomainException('Registro de demostración inválido.');
+            }
+            $fields = array_keys($value);
+            sort($fields, SORT_STRING);
+            $reputational = ($value['category'] ?? null) === 'reputacional';
+            $expected = ['category', 'impact', 'probability', 'risk_ref', 'state'];
+            if ($reputational) {
+                $expected[] = 'scenario_ref';
+                sort($expected, SORT_STRING);
+            }
+            if ($fields !== $expected) {
                 throw new DomainException('Registro de demostración inválido.');
             }
             $ref = self::reference($value['risk_ref'] ?? null);
@@ -130,6 +151,9 @@ final class RiskApiService
                 'impact' => self::score($value['impact'] ?? null),
                 'state' => $value['state'],
             ];
+            if ($reputational) {
+                $result[$ref]['scenario_ref'] = self::scenario($value['scenario_ref']);
+            }
         }
 
         return $result;
@@ -144,6 +168,17 @@ final class RiskApiService
             throw new DomainException('Solo se admiten referencias sintéticas de riesgos.');
         }
 
+        return $value;
+    }
+
+    private static function scenario(mixed $value): string
+    {
+        if (!is_string($value)
+            || preg_match('~\Afixture:risk-scenario/[a-z][a-z0-9_-]{0,47}\z~D', $value) !== 1
+            || preg_match('/[0-9]{7,}/', $value) === 1
+        ) {
+            throw new DomainException('Solo se admiten escenarios reputacionales ficticios.');
+        }
         return $value;
     }
 
