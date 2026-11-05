@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import subprocess
 import tempfile
@@ -43,6 +42,7 @@ final class RiskManagementHttpAcceptanceTest extends WebTestCase
         $legalB = new LegalEntity($b, 'SAS B', null, true);
         $branchA = new Branch($a, 'Sede A', 'sede-a-'.$id, $legalA, true);
         $branchB = new Branch($b, 'Sede B', 'sede-b-'.$id, $legalB, true);
+        $branchA2 = new Branch($a, 'Segunda sede A', 'sede-a2-'.$id, $legalA);
         $ownerA = new User('risk-owner-a-'.$id.'@example.test', 'Owner A');
         $ownerB = new User('risk-owner-b-'.$id.'@example.test', 'Owner B');
         $reader = new User('risk-reader-'.$id.'@example.test', 'Reader A');
@@ -50,7 +50,7 @@ final class RiskManagementHttpAcceptanceTest extends WebTestCase
         $role = new Role($a, 'Leer riesgos '.$id, ['settings.view']);
         $assignment = new BranchRoleAssignment($member, $branchA, $role);
         foreach ([$a, $b, $legalA, $legalB, $branchA, $branchB,
-            $ownerA, $ownerB, $reader, $member, $role, $assignment,
+            $branchA2, $ownerA, $ownerB, $reader, $member, $role, $assignment,
             new Membership($a, $ownerA, Membership::ROLE_OWNER),
             new Membership($b, $ownerB, Membership::ROLE_OWNER)] as $entity) {
             $em->persist($entity);
@@ -59,6 +59,7 @@ final class RiskManagementHttpAcceptanceTest extends WebTestCase
 
         $urlA = '/api/v1/branches/'.$branchA->id().'/risks';
         $urlB = '/api/v1/branches/'.$branchB->id().'/risks';
+        $urlA2 = '/api/v1/branches/'.$branchA2->id().'/risks';
         $technical = ['risk_ref' => 'fixture:risk/tech-a',
             'category' => 'tecnologico', 'probability' => 2, 'impact' => 3];
         $reputational = ['risk_ref' => 'fixture:risk/reputation-a',
@@ -100,6 +101,10 @@ final class RiskManagementHttpAcceptanceTest extends WebTestCase
         $client->jsonRequest('PATCH', $stateUrl, ['state' => 'CERRADO'], $headers);
         self::assertResponseStatusCodeSame(422);
 
+        $client->request('GET', $urlA2);
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame([], json_decode(
+            (string) $client->getResponse()->getContent(), true)['risks']);
         $client->request('GET', $urlB);
         self::assertResponseStatusCodeSame(404);
         $client->jsonRequest('POST', $urlB, $technical, $headers);
@@ -114,6 +119,8 @@ final class RiskManagementHttpAcceptanceTest extends WebTestCase
         self::assertResponseStatusCodeSame(404);
 
         $client->loginUser($reader);
+        $client->request('GET', $urlA2);
+        self::assertResponseStatusCodeSame(403);
         $client->request('GET', $urlA);
         self::assertResponseStatusCodeSame(200);
         $client->jsonRequest('POST', $urlA, $technical, $headers);
