@@ -6,6 +6,7 @@ namespace App\Http\Controller;
 
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
+use App\Application\Commercial\OrderCreationCoordinator;
 use App\Application\Orders\OrderConflictException;
 use App\Application\Orders\OrderService;
 use App\Application\Orders\OrderListQuery;
@@ -46,6 +47,7 @@ final class OrderController extends AbstractController
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
         private readonly OrderService $orders,
+        private readonly OrderCreationCoordinator $orderCreation,
     ) {
     }
 
@@ -231,7 +233,7 @@ final class OrderController extends AbstractController
                 $payload,
                 $items,
             ): Order {
-                return $this->orders->create(
+                return $this->orderCreation->create(
                     $tenant,
                     $source,
                     $priceList,
