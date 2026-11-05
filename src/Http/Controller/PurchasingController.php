@@ -8,6 +8,8 @@ use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Application\Purchasing\MaterialCostService;
 use App\Application\Purchasing\PurchaseOrderService;
+use App\Application\Purchasing\PurchaseRequestPreview;
+use App\Application\Purchasing\QuotationPreview;
 use App\Application\Purchasing\SupplierService;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Organization\Entity\Branch;
@@ -22,6 +24,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -178,6 +181,87 @@ final class PurchasingController extends AbstractController
                 );
             },
         );
+    }
+
+
+    /**
+     * Synthetic-only quotation: no supplier contact, orders, persistence or money movement.
+     */
+    #[Route('/api/v1/branches/{branchId}/purchasing/quotations/preview', name: 'api_purchasing_quotation_preview', methods: ['POST'])]
+    public function previewQuotation(string $branchId, Request $request): JsonResponse
+    {
+        $this->requirePurchasingPreviewEnabled();
+        $this->requireCsrf($request);
+        $this->authorizedBranchScope($branchId, 'inventory.create');
+
+        try {
+            $preview = QuotationPreview::preview($this->syntheticPurchasingPayload($request));
+        } catch (\InvalidArgumentException $exception) {
+            throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
+        }
+
+        return $this->json(['quotation_preview' => $preview, 'synthetic_only' => true]);
+    }
+
+    /**
+     * Synthetic-only purchase request: never approves, places or pays for an order.
+     */
+    #[Route('/api/v1/branches/{branchId}/purchasing/requests/preview', name: 'api_purchasing_request_preview', methods: ['POST'])]
+    public function previewRequest(string $branchId, Request $request): JsonResponse
+    {
+        $this->requirePurchasingPreviewEnabled();
+        $this->requireCsrf($request);
+        $this->authorizedBranchScope($branchId, 'inventory.create');
+
+        try {
+            $preview = PurchaseRequestPreview::preview($this->syntheticPurchasingPayload($request));
+        } catch (\InvalidArgumentException $exception) {
+            throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
+        }
+
+        return $this->json(['request_preview' => $preview, 'synthetic_only' => true]);
+    }
+
+    private function requirePurchasingPreviewEnabled(): void
+    {
+        $environment = $this->getParameter('kernel.environment');
+        if ($environment === 'test') {
+            return;
+        }
+        if ($environment !== 'dev'
+            || getenv('CONDOR_PURCHASING_SYNTHETIC_API') !== '1'
+            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion'
+        ) {
+            throw new NotFoundHttpException('Compras sintéticas no disponibles.');
+        }
+    }
+
+    /** @return array<string,mixed> */
+    private function syntheticPurchasingPayload(Request $request): array
+    {
+        if (strlen($request->getContent()) > 65536) {
+            throw new BadRequestHttpException('Fixture sintético demasiado grande.');
+        }
+        try {
+            $payload = json_decode($request->getContent(), true, 32, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw new BadRequestHttpException('JSON inválido.', $exception);
+        }
+        if (!is_array($payload) || array_is_list($payload)) {
+            throw new BadRequestHttpException('Se requiere un objeto JSON.');
+        }
+        // Fixed fixture scope is a sentinel, not a customer-supplied tenant identity.
+        // Real branch membership and RBAC were checked before parsing this payload.
+        foreach ([
+            'tenant_ref' => 'fixture:tenant/current',
+            'legal_entity_ref' => 'fixture:legal-entity/current',
+            'site_ref' => 'fixture:site/current',
+        ] as $field => $expected) {
+            if (($payload[$field] ?? null) !== $expected) {
+                throw new UnprocessableEntityHttpException('Ámbito sintético inválido.');
+            }
+        }
+        return $payload;
     }
 
     private function branchSource(Tenant $tenant, Branch $branch, bool $requireActive = true): InventorySource
