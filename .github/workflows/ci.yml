@@ -358,6 +358,15 @@ jobs:
             echo 'NO_VERIFICABLE: aún no existen hojas D-L en este SHA; no se atribuye cobertura.'
           fi
 
+      # Testigo PHP existente: ejecutarlo de forma transparente antes del
+      # discovery para no perder la causa real de fallos de integración.
+      - name: Acreditar testigo PHP de tenants antes del discovery
+        run: |
+          set -euo pipefail
+          php vendor/bin/simple-phpunit --configuration phpunit.xml.dist \
+            --filter 'testItResolvesVerifiedDomainsWithoutCrossingTenants' \
+            tests/php/Infrastructure/Tenancy/TenantResolverTest.php
+
       - name: Probar hojas de verificación de decisiones
         run: |
           set -euo pipefail
