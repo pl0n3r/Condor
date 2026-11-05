@@ -81,6 +81,7 @@ final class GestM08VerificationTest extends TestCase
             '$this->authorizedBranchScope($branchId,',
             '$this->requireCsrf($request);', '$this->constructionOnly();',
             "hash('sha256',", "private const SESSION_KEY",
+            "'Content-Disposition'", "'private, no-store'",
         ] as $required) {
             self::assertStringContainsString($required, $controller);
         }

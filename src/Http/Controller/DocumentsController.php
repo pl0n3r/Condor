@@ -46,7 +46,10 @@ final class DocumentsController extends AbstractController
             'branch_id' => $branch->id(), 'synthetic' => true,
         ]);
         $this->entityManager->flush();
-        return $this->json($payload);
+        $response = $this->json($payload);
+        $response->headers->set('Content-Disposition', 'attachment; filename="condor-m08-fixtures.json"');
+        $response->headers->set('Cache-Control', 'private, no-store');
+        return $response;
     }
 
     #[Route('/api/v1/branches/{branchId}/documents/{documentKey}/trace',
