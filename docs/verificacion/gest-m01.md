@@ -1,6 +1,6 @@
 # Gestión empresarial M01 · verificación sintética (#1526)
 
-Corte de construcción, no de operación real. Reserva V3 `3ec7ea4b-d9d3-420c-ac35-76d4b2f0e9c0`. Contrato fuente: `docs/gestion-empresarial-integral.md`, matriz `docs/matriz-cobertura.md` (no modificada). Antecedentes: [PR #1173 fusionado](https://github.com/pl0n3r/Condor/pull/1173) y [PR #1373 fusionado](https://github.com/pl0n3r/Condor/pull/1373). Esta hoja solo incorpora pruebas para comportamientos limitados y **no** promueve filas integrales `CUBIERTO`.
+Corte de construcción, no de operación real. Entrega trazable: [PR #1570](https://github.com/pl0n3r/Condor/pull/1570) (la fusión debe verificarse por GitHub; este informe no la presume). Reserva V3 `3ec7ea4b-d9d3-420c-ac35-76d4b2f0e9c0`. Contrato fuente: `docs/gestion-empresarial-integral.md`, matriz `docs/matriz-cobertura.md` (no modificada). Antecedentes: [PR #1173 fusionado](https://github.com/pl0n3r/Condor/pull/1173) y [PR #1373 fusionado](https://github.com/pl0n3r/Condor/pull/1373). Esta hoja solo incorpora pruebas para comportamientos limitados y **no** promueve filas integrales `CUBIERTO`.
 
 | ID | Submódulo | Testigo ejecutable del subcontrato | Estado integral / brecha | Hoja hija |
 | --- | --- | --- | --- | --- |
