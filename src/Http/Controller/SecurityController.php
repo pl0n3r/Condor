@@ -19,11 +19,17 @@ final class SecurityController extends AbstractController
             return $this->redirectToRoute('app_admin');
         }
 
-        return $this->render('security/login.html.twig', [
+        $response = $this->render('security/login.html.twig', [
             'last_username' => $authenticationUtils->getLastUsername(),
             'error' => $authenticationUtils->getLastAuthenticationError(),
             'app_version' => $version->human(),
         ]);
+        // El formulario puede reflejar el último usuario o un error de acceso.
+        // Evitar que navegadores y proxies conserven esos datos sensibles.
+        $response->headers->set('Cache-Control', 'no-store, private');
+        $response->headers->set('Referrer-Policy', 'no-referrer');
+
+        return $response;
     }
 
     #[Route('/admin/logout', name: 'app_logout', methods: ['POST'])]
