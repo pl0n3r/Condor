@@ -66,7 +66,7 @@ final class RiskRecord
     ) {
         self::assertScope($tenantRef, $companyRef, $actorRef);
         self::assertFixture($riskRef, 'risk');
-        if (!in_array($category, ['operativo', 'financiero', 'legal', 'tecnologico'], true)
+        if (!in_array($category, ['operativo', 'financiero', 'legal', 'tecnologico', 'reputacional'], true)
             || !in_array($state, [self::PENDING, self::REVIEW], true)
             || $version < 1 || $version > 2147483647
             || ($previous === null) !== ($version === 1)
