@@ -53,7 +53,7 @@ final class QualityRecord
     ) {
         self::assertScope($tenant, $company, $actor);
         self::assertFixture($case, 'quality');
-        if (!in_array($kind, ['no_conformidad', 'indicador', 'auditoria', 'accion'], true)
+        if (!in_array($kind, ['no_conformidad', 'indicador', 'auditoria', 'accion', 'queja_interna'], true)
             || !in_array($status, [self::PENDING, self::REVIEW], true)
             || ($predecessor !== null && $predecessor->version >= 2147483647)
         ) {

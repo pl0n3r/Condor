@@ -42,3 +42,29 @@ Reglas para quien reserve uso (p. ej. #1486 sobre órdenes):
 Evidencia (GAP-P0-04): `tests/php/Application/Commercial/BillableUsageTest.php`
 (owner/sede inicial excluidos, altas consumen, límites rechazan sin persistir,
 reintentos idempotentes, aislamiento por tenant, `null` sin límite).
+
+## GAP-P0-05 — Primera ola de enforcement comercial (#1488)
+
+**Estado PARCIAL: el GAP global permanece abierto.** El contrato permite
+un write boundary a la vez. No habilita despliegue, usuarios reales ni go-live.
+La capacidad se evalúa del lado servidor; no filtra la UI, GET ni el tenant.
+
+| Superficie | Estado y frontera de escritura | Evidencia o GAP pendiente |
+| --- | --- | --- |
+| catálogo CSV | ENFORCEMENT PARCIAL: ProductCsvImporter::commit invoca CatalogCapabilityGuard::assertCanWrite dentro de su transacción, antes de preview/persist/flush; usa tenant y actor autorizados, SubscriptionEntitlementContextFactory y EntitlementResolver del servidor | tests/test_capability_gap_p0_wave1.py (tenant cruzado, capability denegada/desconocida, posición previa a escrituras); prueba HTTP sintética existente tests/test_catalog_csv_import_api.py cubre CSRF, idempotencia, tenant |
+| catálogo individual | GAP: CatalogController::createProduct es otra frontera sin snapshot | Fuera de estos claims; no invadir la reserva activa #1485 |
+| comercio | GAP para esta ola | OrderCreationCoordinator (#1486) ya maneja orders; otras escrituras requieren frontera y pruebas propias |
+| CMS | GAP: controladores CMS no incorporan snapshot comercial en un write boundary reclamado | Requiere claim específico y suite HTTP |
+| producción | GAP: falta write boundary con contexto comercial comprobado | No usar guard para filtrar UI ni tenant |
+| compras | GAP: no hay write boundary reclamado bajo este contrato | Preservar los claims del frente #1534 |
+| workflows | GAP: el permiso de rama no es capability comercial | Necesita frontera y pruebas de tenant |
+
+**Compatibilidad explícita:** sin suscripción comercial para un tenant heredado,
+ProductCsvImporter::commit preserva su comportamiento anterior: esa vía permanece
+GAP, nunca se declara enforcement total. Con suscripción existente, un snapshot
+incompatible, una capability denegada, ausente o de otro tenant falla antes de
+persistir. Nunca se aceptan capacidades enviadas por cliente ni se inventan
+límites, precios o unidades de uso.
+
+**Reversión:** revertir el squash restaura el importador original. Sin migración,
+contador, datos reales, PII, publicación ni operación destructiva.
