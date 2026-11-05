@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { useState, type FormEvent } from 'react';
+import { useLayoutEffect, useState, type FormEvent } from 'react';
 
 /**
  * M12 · Riesgos empresariales. Simulador local de construcción, no una evaluación
@@ -244,7 +244,221 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   );
 }
 
+
+// M12 S04: vista HTTP de pruebas. El simulador local histórico sigue aislado
+// en un <details> separado y nunca se presenta como recibo del servidor.
+type HttpRisk = Readonly<{
+  risk_ref: string; category: RiskCategory | 'reputacional';
+  probability: number; impact: number;
+  state: RiskState | 'EN_REVISION'; scenario_ref?: string;
+}>;
+type HttpLoad = { kind: 'loading' | 'denied' }
+  | { kind: 'error'; message: string }
+  | { kind: 'ready'; risks: HttpRisk[] };
+const scenarioRefPattern = /^fixture:risk-scenario\/[a-z][a-z0-9_-]{0,47}$/;
+const httpCategories = [...categories, 'reputacional'] as const;
+const httpStates = [...states, 'EN_REVISION'] as const;
+
+function isHttpRisk(value: unknown): value is HttpRisk {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Partial<HttpRisk>;
+  return typeof item.risk_ref === 'string'
+    && validFixture(item.risk_ref, riskRefPattern)
+    && httpCategories.some(category => category === item.category)
+    && httpStates.some(state => state === item.state)
+    && Number.isInteger(item.probability) && (item.probability ?? 0) >= 1
+    && (item.probability ?? 0) <= 5
+    && Number.isInteger(item.impact) && (item.impact ?? 0) >= 1
+    && (item.impact ?? 0) <= 5
+    && (item.category !== 'reputacional' || (
+      typeof item.scenario_ref === 'string'
+      && validFixture(item.scenario_ref, scenarioRefPattern)
+    ));
+}
+
+type HttpReply = Readonly<{ status: number; body: unknown }>;
+function requestRisk(
+  url: string, method: 'GET' | 'POST' | 'PATCH' = 'GET',
+  payload?: object, csrfToken?: string,
+): { promise: Promise<HttpReply>; abort: () => void } {
+  const xhr = new XMLHttpRequest();
+  const promise = new Promise<HttpReply>((resolve, reject) => {
+    xhr.open(method, url, true);
+    xhr.withCredentials = true;
+    xhr.timeout = 15000;
+    xhr.setRequestHeader('Accept', 'application/json');
+    if (payload) {
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.setRequestHeader('X-CSRF-Token', csrfToken ?? '');
+    }
+    xhr.onload = () => {
+      try {
+        resolve({ status: xhr.status, body: JSON.parse(xhr.responseText) as unknown });
+      } catch {
+        reject(new Error('Respuesta JSON inválida'));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Error de red'));
+    xhr.ontimeout = () => reject(new Error('Tiempo de espera agotado'));
+    xhr.onabort = () => reject(new Error('Petición cancelada'));
+    xhr.send(payload ? JSON.stringify(payload) : null);
+  });
+  return { promise, abort: () => xhr.abort() };
+}
+
+function RiskHttpWorkspace({
+  tenantId, companyId, branchId, permissions,
+}: Props) {
+  const canView = permissions.includes('settings.view')
+    && companyId !== '__unassigned__' && branchId !== '__unassigned__';
+  const canCreate = canView && permissions.includes('settings.create');
+  const canUpdate = canView && permissions.includes('settings.update');
+  const endpoint = '/api/v1/branches/' + encodeURIComponent(branchId) + '/risks';
+  const [load, setLoad] = useState<HttpLoad>({ kind: 'loading' });
+  const [revision, setRevision] = useState(0);
+  const [category, setCategory] = useState<'tecnologico' | 'reputacional'>('tecnologico');
+  const [ref, setRef] = useState('fixture:risk/demo');
+  const [scenario, setScenario] = useState('fixture:risk-scenario/demo');
+  const [probability, setProbability] = useState('1');
+  const [impact, setImpact] = useState('1');
+  const [selected, setSelected] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!canView) {
+      setLoad({ kind: 'denied' });
+      return;
+    }
+    let alive = true;
+    const request = requestRisk(endpoint);
+    setLoad({ kind: 'loading' });
+    void request.promise.then(({ status, body }) => {
+      if (!alive) return;
+      if ([401, 403, 404].includes(status)) {
+        setLoad({ kind: 'denied' });
+      } else if (status === 200 && body && typeof body === 'object'
+        && 'risks' in body && Array.isArray(body.risks)
+        && body.risks.length <= 50 && body.risks.every(isHttpRisk)) {
+        setLoad({ kind: 'ready', risks: body.risks });
+      } else {
+        setLoad({ kind: 'error', message: 'Respuesta HTTP inválida o no disponible.' });
+      }
+    }).catch(() => {
+      if (alive) setLoad({ kind: 'error', message: 'No se pudo consultar la API de riesgos.' });
+    });
+    return () => { alive = false; request.abort(); };
+  }, [tenantId, companyId, branchId, endpoint, canView, revision]);
+
+  // La API obtiene tenant y sede de la sesión del servidor: nunca los
+  // recibe del formulario. Todas las escrituras incluyen el CSRF de /admin.
+  async function mutate(method: 'POST' | 'PATCH', url: string, payload: object) {
+    if (busy || !canView || (method === 'POST' ? !canCreate : !canUpdate)) return;
+    const token = document.querySelector('#condor-admin-root')?.getAttribute('data-access-token');
+    if (!token) {
+      setNotice('Sin token CSRF de la sesión: escritura denegada.');
+      return;
+    }
+    setBusy(true);
+    setNotice('');
+    try {
+      const response = await requestRisk(url, method, payload, token).promise;
+      if ([401, 403, 404].includes(response.status)) {
+        setLoad({ kind: 'denied' });
+      } else if ((method === 'POST' ? response.status === 201 : response.status === 200)
+        && response.body && typeof response.body === 'object'
+        && 'risk' in response.body && isHttpRisk(response.body.risk)) {
+        setRevision(value => value + 1);
+        setNotice('Cambio ficticio confirmado por el servidor; no es aprobación.');
+      } else {
+        setNotice('El servidor rechazó la operación o devolvió datos inválidos.');
+      }
+    } catch {
+      setNotice('Error de red al operar sobre el riesgo ficticio.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const risks = load.kind === 'ready' ? load.risks : [];
+  const chosen = risks.find(row => row.risk_ref === selected);
+  return (
+    <section className="catalog-panel" aria-labelledby="risk-http-title">
+      <h2 id="risk-http-title">M12 S04 · riesgos ficticios desde API</h2>
+      <p className="muted">Solo construcción. Los permisos y la sede se validan en el servidor.
+        Sin certificación jurídica, aprobación ni cierre automático.</p>
+      {load.kind === 'loading' && <output role="status" aria-live="polite">Cargando riesgos ficticios…</output>}
+      {load.kind === 'denied' && <p role="alert">Permiso denegado o sede ajena (HTTP 401/403/404).</p>}
+      {load.kind === 'error' && <div role="alert">{load.message}
+        <button type="button" onClick={() => setRevision(value => value + 1)}>Reintentar</button>
+      </div>}
+      {load.kind === 'ready' && risks.length === 0 && <p role="status">No hay riesgos ficticios en esta sede.</p>}
+      {load.kind === 'ready' && risks.length > 0 && <ul>{risks.map(row => <li key={row.risk_ref}>
+        <button type="button" onClick={() => setSelected(row.risk_ref)}>{row.risk_ref}</button>
+        {' · '}{row.category} · {row.state}
+        {row.scenario_ref && <> · escenario: {row.scenario_ref}</>}
+      </li>)}</ul>}
+      {load.kind === 'ready' && chosen && <section aria-label="Estado del riesgo seleccionado">
+        <p>{chosen.risk_ref}: {chosen.state} · probabilidad {chosen.probability}
+          {' · '}impacto {chosen.impact}</p>
+        {canUpdate && <button type="button" disabled={busy}
+          onClick={() => void mutate('PATCH',
+            endpoint + '/' + encodeURIComponent(chosen.risk_ref.slice('fixture:risk/'.length)) + '/state',
+            { state: chosen.state === 'PENDIENTE' ? 'EN_REVISION' : 'REQUIERE_REVISION' })}>
+          Registrar revisión ficticia en servidor
+        </button>}
+      </section>}
+      {load.kind === 'ready' && canCreate && <form className="catalog-editor" onSubmit={event => {
+        event.preventDefault();
+        if (!validFixture(ref, riskRefPattern)
+          || (category === 'reputacional' && !validFixture(scenario, scenarioRefPattern))
+          || !/^[1-5]$/.test(probability) || !/^[1-5]$/.test(impact)) {
+          setNotice('Solo se admiten referencias y puntajes ficticios válidos.');
+          return;
+        }
+        void mutate('POST', endpoint, {
+          risk_ref: ref, category, probability: Number(probability),
+          impact: Number(impact),
+          ...(category === 'reputacional' ? { scenario_ref: scenario } : {}),
+        });
+      }}>
+        <h3>Crear riesgo de prueba en sesión HTTP</h3>
+        <label>Tipo
+          <select value={category} onChange={event =>
+            setCategory(event.target.value === 'reputacional' ? 'reputacional' : 'tecnologico')}>
+            <option value="tecnologico">Tecnológico</option>
+            <option value="reputacional">Reputacional</option>
+          </select>
+        </label>
+        <label>Referencia ficticia
+          <input required value={ref} onChange={event => setRef(event.target.value)}
+            pattern="fixture:risk/[a-z][a-z0-9_\-]{0,47}" />
+        </label>
+        {category === 'reputacional' && <label>Escenario ficticio tipado
+          <input required value={scenario} onChange={event => setScenario(event.target.value)}
+            pattern="fixture:risk-scenario/[a-z][a-z0-9_\-]{0,47}" />
+        </label>}
+        <label>Probabilidad 1 a 5
+          <input type="number" min={1} max={5} value={probability}
+            onChange={event => setProbability(event.target.value)} />
+        </label>
+        <label>Impacto 1 a 5
+          <input type="number" min={1} max={5} value={impact}
+            onChange={event => setImpact(event.target.value)} />
+        </label>
+        <button type="submit" disabled={busy}>Crear escenario ficticio</button>
+      </form>}
+      {notice && <output role="status" aria-live="polite">{notice}</output>}
+    </section>
+  );
+}
+
 export function RiskManagement(props: Props) {
   if (!import.meta.env.DEV) return null;
-  return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId} {...props} />;
+  return <div key={props.tenantId + '|' + props.companyId + '|' + props.branchId}>
+    <RiskHttpWorkspace {...props} />
+    <details><summary>Simulador local histórico (sin API, evidencia separada)</summary>
+      <Workspace {...props} />
+    </details>
+  </div>;
 }
