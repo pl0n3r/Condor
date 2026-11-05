@@ -111,6 +111,15 @@ final class GestM09VerificationTest extends TestCase
         $personal = self::request();
         $personal['customer_email'] = 'invalid@example.test';
         $cases[] = $personal;
+        $foreignSite = self::request();
+        $foreignSite['lines'][0]['site_ref'] = 'fixture:site/foreign';
+        $cases[] = $foreignSite;
+        $missing = self::request();
+        unset($missing['legal_entity_ref']);
+        $cases[] = $missing;
+        $badQuantity = self::request();
+        $badQuantity['lines'][0]['quantity'] = '0';
+        $cases[] = $badQuantity;
         foreach ($cases as $payload) {
             try {
                 PurchaseRequestPreview::preview($payload);
