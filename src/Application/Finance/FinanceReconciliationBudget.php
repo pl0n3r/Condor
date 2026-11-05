@@ -75,6 +75,7 @@ final class FinanceReconciliationBudget
             ];
         }
         $entries = [];
+        $entriesPerPeriod = [];
         foreach ($payload['ledger_entries'] as $record) {
             if (!is_array($record)
                 || !self::row($record, self::ENTRY_KEYS, 'entry_ref', 'finance-entry', $tenantRef, $entityRef)
@@ -96,6 +97,7 @@ final class FinanceReconciliationBudget
             }
             $seen[$record['entry_ref']] = true;
             $entries[$record['entry_ref']] = ['amount_cents' => $amount, 'kind' => $record['kind']];
+            $entriesPerPeriod[$record['period_ref']] = ($entriesPerPeriod[$record['period_ref']] ?? 0) + 1;
             $budgets[$record['budget_ref']]['actual_cents'] += $amount;
         }
         $used = [];
@@ -158,7 +160,8 @@ final class FinanceReconciliationBudget
         $outPeriods = [];
         foreach ($periods as $ref => $period) {
             $outPeriods[] = [
-                'period_ref' => $ref, 'review_candidate' => !$pending,
+                'period_ref' => $ref,
+                'review_candidate' => !$pending && ($entriesPerPeriod[$ref] ?? 0) > 0,
                 'can_close' => false, 'state' => 'REQUIERE_REVISION',
             ];
         }
