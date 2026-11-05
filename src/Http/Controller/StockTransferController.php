@@ -191,8 +191,7 @@ final class StockTransferController extends AbstractController
         $destination = null;
         $donors = [];
         foreach ($sources as $source) {
-            if (!$source instanceof InventorySource
-                || !$source->branch() instanceof Branch) {
+            if (!$source->branch() instanceof Branch) {
                 continue;
             }
             if ($source->branch()->id() === $branchId) {
@@ -229,9 +228,6 @@ final class StockTransferController extends AbstractController
             'legalEntity' => $legalEntity,
             'source' => $visibleSources,
         ]) as $balance) {
-            if (!$balance instanceof InventoryBalance) {
-                continue;
-            }
             $stocks[$balance->source()->id()][$balance->variant()->id()] = $balance;
         }
 
@@ -278,7 +274,7 @@ final class StockTransferController extends AbstractController
             'tenant' => $tenant,
             'active' => true,
         ]) as $variant) {
-            if (!$variant instanceof ProductVariant || !$variant->product()->isActive()) {
+            if (!$variant->product()->isActive()) {
                 continue;
             }
             $variantId = $variant->id();
