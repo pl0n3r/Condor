@@ -303,6 +303,8 @@ class AgentRulesVerificationTests(unittest.TestCase):
                      "name: Auditoría de dependencias Composer",
                      "name: Validar"):
             self.assertIn(task, ci)
+        self.assertEqual(
+            ci.count("run: python3 tests/test_verificacion_verify_agent_rules.py -v"), 1)
         deploy = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
         for token in ("CONDOR_AUTO_MIGRATE", "--dry-run",
                       "doctrine:migrations:up-to-date", "backup"):
@@ -333,7 +335,7 @@ class AgentRulesVerificationTests(unittest.TestCase):
                 ])
         self.assertNotIn("| CUBIERTO |", body)
         self.assertIn("No equivale a producción GREEN", document)
-        self.assertIn("no está integrada por nombre en los pasos", document)
+        self.assertIn("queda integrada explícitamente en el job", document)
 
 
 if __name__ == "__main__":
