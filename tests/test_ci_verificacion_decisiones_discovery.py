@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/ci.yml"
 STEP = "      - name: Probar hojas de verificación de decisiones"
 PATTERN = "tests/test_verificacion_decisiones_*.py"
+UNITTEST_PATTERN = "test_verificacion_decisiones_*.py"
 
 
 class VerificacionDecisionesDiscoveryTests(unittest.TestCase):
@@ -23,7 +24,7 @@ class VerificacionDecisionesDiscoveryTests(unittest.TestCase):
         self.assertEqual(self.workflow.count(STEP), 1)
         self.assertIn("if compgen -G '" + PATTERN + "' > /dev/null", self.block)
         self.assertIn(
-            "python3 -m unittest discover -s tests -p '" + PATTERN + "'",
+            "python3 -m unittest discover -s tests -p '" + UNITTEST_PATTERN + "'",
             self.block,
         )
         self.assertIn("set -euo pipefail", self.block)
