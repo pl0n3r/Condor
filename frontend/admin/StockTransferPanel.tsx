@@ -35,6 +35,22 @@ type TransferReceipt = {
   quantity: number;
   status: 'completed';
 };
+type Proposal = {
+  source_from_id: string;
+  source_from_branch_id: string;
+  source_from_name: string;
+  source_to_id: string;
+  source_to_branch_id: string;
+  variant_id: string;
+  sku: string;
+  quantity: number;
+  destination_available: number;
+  origin_excess: number;
+};
+type ProposalState =
+  | { status: 'loading' }
+  | { status: 'ready'; proposals: Proposal[] }
+  | { status: 'error'; message: string };
 type Result = { receipt: TransferReceipt; movements: Movement[] };
 type PanelState =
   | { status: 'loading' }
@@ -74,6 +90,29 @@ function readSnapshot(value: unknown, branchId: string): Snapshot {
     throw new Error('El inventario recibido no corresponde a esta sede.');
   }
   return value as Snapshot;
+}
+
+function readProposals(value: unknown, branchId: string): Proposal[] {
+  if (!record(value) || value.branch_id !== branchId
+    || !Array.isArray(value.proposals)
+    || !value.proposals.every((candidate: unknown) => record(candidate)
+      && typeof candidate.source_from_id === 'string'
+      && typeof candidate.source_to_id === 'string'
+      && typeof candidate.source_from_branch_id === 'string'
+      && candidate.source_from_branch_id !== branchId
+      && candidate.source_to_branch_id === branchId
+      && typeof candidate.source_from_name === 'string'
+      && typeof candidate.variant_id === 'string'
+      && typeof candidate.sku === 'string'
+      && Number.isSafeInteger(candidate.quantity) && (candidate.quantity as number) > 0
+      && Number.isSafeInteger(candidate.origin_excess)
+      && (candidate.origin_excess as number) >= (candidate.quantity as number)
+      && Number.isSafeInteger(candidate.destination_available)
+      && (candidate.destination_available as number) >= 0
+      && candidate.source_from_id !== candidate.source_to_id)) {
+    throw new Error('Las propuestas recibidas no son válidas para esta sede.');
+  }
+  return value.proposals as Proposal[];
 }
 
 function responseError(status: number): Error {
@@ -132,13 +171,40 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  const [proposalState, setProposalState] = useState<ProposalState>({ status: 'loading' });
+  const [pendingProposal, setPendingProposal] = useState<Proposal | null>(null);
   const latest = useRef(0);
   const idempotency = useRef<Idempotency>({ signature: '', key: '' });
+
+  async function loadProposals(request: number) {
+    if (!canUpdate) {
+      setProposalState({ status: 'ready', proposals: [] });
+      return;
+    }
+    try {
+      const response = await fetch(inventoryPath(branchId) + '/branch-transfers/proposals', {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+      });
+      const proposals = readProposals(await jsonResponse(response), branchId);
+      if (request === latest.current) {
+        setProposalState({ status: 'ready', proposals });
+      }
+    } catch (error) {
+      if (request === latest.current) {
+        setProposalState({
+          status: 'error',
+          message: error instanceof Error ? error.message : 'No fue posible consultar propuestas.',
+        });
+      }
+    }
+  }
 
   async function load() {
     if (!canView) return;
     const request = ++latest.current;
     setState({ status: 'loading' });
+    setProposalState({ status: 'loading' });
     try {
       const response = await fetch(inventoryPath(branchId), {
         credentials: 'same-origin',
@@ -147,6 +213,7 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
       const data = readSnapshot(await jsonResponse(response), branchId);
       if (request !== latest.current) return;
       setState({ status: 'ready', data });
+      await loadProposals(request);
     } catch (error) {
       if (request !== latest.current) return;
       if (error instanceof Error && error.message.startsWith('No tienes permiso')) {
@@ -167,10 +234,12 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
     setVariantId('');
     setResult(null);
     setNotice(null);
+    setPendingProposal(null);
+    setProposalState({ status: 'loading' });
     idempotency.current = { signature: '', key: '' };
     if (canView) void load();
     return () => { latest.current += 1; };
-  }, [branchId, canView]);
+  }, [branchId, canView, canUpdate]);
 
   const ready = state.status === 'ready' ? state.data : null;
   const sources = useMemo(() => (ready?.sources ?? []).filter((source) => (
@@ -201,18 +270,18 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
     && validQuantity && result === null
     && selectedOrigin?.id !== selectedDestination?.id;
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!canTransfer || !selectedOrigin || !selectedDestination || !selectedVariant
-      || parsedQuantity === null) {
-      setNotice('Selecciona sedes distintas, una variante y una cantidad disponible.');
+  async function executeTransfer(
+    routeBranchId: string,
+    from: string,
+    to: string,
+    variant: string,
+    amount: number,
+  ) {
+    if (!canView || !canUpdate || busy || !ready || !Number.isSafeInteger(amount)
+      || amount <= 0 || from === to) {
       return;
     }
-    const from = selectedOrigin.id;
-    const to = selectedDestination.id;
-    const variant = selectedVariant.id;
-    const amount = parsedQuantity;
-    const signature = JSON.stringify([branchId, from, to, variant, amount]);
+    const signature = JSON.stringify([routeBranchId, from, to, variant, amount]);
     if (idempotency.current.signature !== signature) {
       idempotency.current = { signature, key: crypto.randomUUID() };
     }
@@ -221,8 +290,11 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
     setNotice(null);
     setResult(null);
     try {
+      // Only this explicit confirmation triggers a write. The existing
+      // branch-transfer endpoint rechecks both branch permissions and stock
+      // inside its idempotent, pessimistically locked transaction.
       const response = await fetch(
-        inventoryPath(branchId) + '/branch-transfers',
+        inventoryPath(routeBranchId) + '/branch-transfers',
         {
           method: 'POST',
           credentials: 'same-origin',
@@ -244,8 +316,7 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
         await jsonResponse(response), from, to, variant, amount,
       );
       if (request !== latest.current) return;
-      // The POST only returns a transfer receipt. The movement ledger comes
-      // from the existing authenticated snapshot, never from invented deltas.
+      setPendingProposal(null);
       setResult({ receipt, movements: [] });
       idempotency.current = { signature: '', key: '' };
       try {
@@ -277,6 +348,10 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
           setNotice('Transferencia confirmada; no fue posible actualizar los movimientos.');
         }
       }
+      if (request === latest.current) {
+        setProposalState({ status: 'loading' });
+        await loadProposals(request);
+      }
     } catch (error) {
       if (request === latest.current) {
         setNotice(error instanceof Error ? error.message
@@ -285,6 +360,33 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
     } finally {
       if (request === latest.current) setBusy(false);
     }
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canTransfer || !selectedOrigin || !selectedDestination || !selectedVariant
+      || parsedQuantity === null) {
+      setNotice('Selecciona sedes distintas, una variante y una cantidad disponible.');
+      return;
+    }
+    await executeTransfer(
+      branchId,
+      selectedOrigin.id,
+      selectedDestination.id,
+      selectedVariant.id,
+      parsedQuantity,
+    );
+  }
+
+  async function confirmProposal() {
+    if (!pendingProposal || busy || !canUpdate || !canView) return;
+    await executeTransfer(
+      pendingProposal.source_from_branch_id,
+      pendingProposal.source_from_id,
+      pendingProposal.source_to_id,
+      pendingProposal.variant_id,
+      pendingProposal.quantity,
+    );
   }
 
   return (
@@ -332,6 +434,64 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
               No hay sedes de origen y destino distintas o variantes disponibles
               para transferir con tu acceso actual.
             </p>
+          )}
+          {canUpdate && (
+            <section className="catalog-list" aria-labelledby="transfer-proposals-title">
+              <h3 id="transfer-proposals-title">Propuestas de reposición entre sedes</h3>
+              <p className="muted">
+                Basadas en el consumo de 30 días y el excedente disponible de otra sede autorizada.
+                No se mueve inventario hasta que confirmes la transferencia.
+              </p>
+              {proposalState.status === 'loading' && (
+                <output className="muted" aria-live="polite">Calculando propuestas…</output>
+              )}
+              {proposalState.status === 'error' && (
+                <div className="alert alert-error" role="alert">
+                  <p>{proposalState.message}</p>
+                  <button type="button" className="button" onClick={() => {
+                    setProposalState({ status: 'loading' });
+                    void loadProposals(latest.current);
+                  }}>Reintentar propuestas</button>
+                </div>
+              )}
+              {proposalState.status === 'ready' && proposalState.proposals.length === 0 && (
+                <p className="muted">
+                  No hay propuestas con excedente suficiente en sedes autorizadas.
+                </p>
+              )}
+              {proposalState.status === 'ready' && proposalState.proposals.map((proposal) => (
+                <article className="catalog-card" key={proposal.variant_id}>
+                  <div>
+                    <strong>{proposal.sku}</strong>
+                    <p>Desde {proposal.source_from_name} hacia esta sede</p>
+                    <p>{proposal.quantity} unidades sugeridas;
+                      {' '}excedente de origen: {proposal.origin_excess}.
+                    </p>
+                  </div>
+                  <button type="button" className="button"
+                    disabled={busy || result !== null}
+                    onClick={() => { setPendingProposal(proposal); setNotice(null); }}>
+                    Revisar propuesta
+                  </button>
+                </article>
+              ))}
+              {pendingProposal && (
+                <div className="catalog-editor" role="group"
+                  aria-label="Confirmación de transferencia propuesta">
+                  <p>
+                    Confirmar {pendingProposal.quantity} unidades de {pendingProposal.sku}
+                    {' '}desde {pendingProposal.source_from_name}. El servidor volverá a
+                    validar permisos y existencias.
+                  </p>
+                  <button type="button" className="button" disabled={busy || result !== null}
+                    onClick={() => void confirmProposal()}>
+                    {busy ? 'Transfiriendo…' : 'Confirmar transferencia'}
+                  </button>
+                  <button type="button" className="button" disabled={busy}
+                    onClick={() => setPendingProposal(null)}>Cancelar</button>
+                </div>
+              )}
+            </section>
           )}
           {canUpdate && origins.length > 0 && destinations.length > 0
             && variants.length > 0 && (
