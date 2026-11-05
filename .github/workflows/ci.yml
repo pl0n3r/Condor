@@ -218,6 +218,9 @@ jobs:
       - name: Autoauditar CI
         run: python3 scripts/ci_self_audit.py
 
+      - name: Verificar reglas AGENTES.md (26 filas)
+        run: python3 tests/test_verificacion_verify_agent_rules.py -v
+
       - name: Validar títulos predeterminados de Issues
         run: |
           set -euo pipefail
