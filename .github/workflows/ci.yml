@@ -346,6 +346,17 @@ jobs:
       - name: Preparar esquema de MariaDB descartable para tests HTTP existentes
         run: php bin/console doctrine:migrations:migrate --no-interaction
 
+      # #1626: ejecutar la hoja M12 S04 en el mismo kernel/MariaDB real de
+      # integración. Ausencia antes de fusionar #1583 no acredita cobertura.
+      - name: Verificar riesgos M12 HTTP/UI A-B con Symfony
+        run: |
+          set -euo pipefail
+          if [[ -f tests/test_risk_management_ui.py ]]; then
+            python3 tests/test_risk_management_ui.py -v
+          else
+            echo 'NO_VERIFICABLE: hoja #1583 ausente de este HEAD; no se atribuye cobertura M12.'
+          fi
+
       - name: Probar herramientas internas del CI
         run: python3 -m unittest discover -s tests -p 'test_ci_*.py'
 
