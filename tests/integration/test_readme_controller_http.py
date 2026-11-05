@@ -266,6 +266,16 @@ class ReadmeControllerHttpIntegrationTests(unittest.TestCase):
         env = dict(os.environ)
         env["APP_ENV"] = "test"
         env.setdefault("APP_SECRET", secrets.token_hex(32))
+        vendor = ROOT / "vendor"
+        # El CI ejecuta el validador de documentación después de esta
+        # prueba: no dejar README ajenos de un Composer/PHPUnit temporal.
+        # Limpiar únicamente vendor generado por este runner descartable.
+        if os.environ.get("GITHUB_ACTIONS") == "true" and not vendor.exists():
+            def cleanup_generated_vendor() -> None:
+                if vendor.is_dir() and not vendor.is_symlink():
+                    shutil.rmtree(vendor)
+            self.addCleanup(cleanup_generated_vendor)
+
         if not (ROOT / "vendor/autoload.php").is_file():
             composer = shutil.which("composer")
             self.assertIsNotNone(composer, "Composer requerido para kernel HTTP real")
