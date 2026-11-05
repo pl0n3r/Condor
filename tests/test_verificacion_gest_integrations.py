@@ -24,16 +24,16 @@ ROWS = (
         ("src/Application/Inventory/ChannelInventorySource.php",),
         (
             ("tests/test_channel_inventory_source.py", "FuenteInventarioCanalTests", "test_acceptance"),
-            ("tests/test_orders_http_isolation.py", "PedidosAislamientoHttpTests", "test_acceptance"),
+            ("tests/test_order_fulfillment_api.py", "CumplimientoEntregaApiTests", "test_acceptance"),
         ),
     ),
     (
         "GEST-INTEG-02",
         "Entitlements vs permisos",
-        ("src/Application/Commercial/EntitlementResolver.php",),
+        ("src/Application/Catalog/CatalogCapabilityGuard.php", "src/Application/Commercial/SaasControlCenterReader.php"),
         (
-            ("tests/test_entitlements_acceptance.py", "EntitlementsAcceptanceTests", "test_ac02_keeps_rbac_separate"),
-            ("tests/test_entitlements_acceptance.py", "EntitlementsAcceptanceTests", "test_ac03_fails_closed"),
+            ("tests/test_capability_gap_p0_wave1.py", "CapabilityGapP0Wave1Tests", "test_guard_pure_enforces_capability_and_tenant"),
+            ("tests/test_saas_control_center_reader_contract.py", "SaasControlCenterReaderContractTests", "test_unauthorized_or_cross_tenant_calls_fail_closed"),
         ),
     ),
     (
