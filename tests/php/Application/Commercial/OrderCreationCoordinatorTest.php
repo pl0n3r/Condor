@@ -10,16 +10,12 @@ use App\Application\Commercial\OrderCreationCoordinator;
 use App\Application\Commercial\UsageLimitExceeded;
 use App\Application\Inventory\InventoryService;
 use App\Application\Orders\OrderService;
-use App\Domain\Catalog\Entity\Product;
+use App\Tests\Application\Orders\Support\OrderFixtureTrait;
 use App\Domain\Catalog\Entity\ProductVariant;
 use App\Domain\Commerce\Entity\PriceList;
 use App\Domain\Commerce\Entity\SalesChannel;
-use App\Domain\Commerce\Entity\VariantPrice;
-use App\Domain\Inventory\Entity\InventoryBalance;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Orders\Entity\Order;
-use App\Domain\Organization\Entity\Branch;
-use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
@@ -32,6 +28,9 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  */
 final class OrderCreationCoordinatorTest extends KernelTestCase
 {
+    use OrderFixtureTrait;
+
+    private InventoryService $inventory;
     private EntityManagerInterface $entityManager;
     private OrderCreationCoordinator $coordinator;
     /** @var list<resource> */
@@ -46,6 +45,7 @@ final class OrderCreationCoordinatorTest extends KernelTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $em);
         self::assertInstanceOf(OrderCreationCoordinator::class, $coordinator);
         $this->entityManager = $em;
+        $this->inventory = new InventoryService($em);
         $this->coordinator = $coordinator;
     }
 
@@ -240,145 +240,5 @@ final class OrderCreationCoordinatorTest extends KernelTestCase
             'SELECT COUNT(*) FROM condor_order WHERE tenant_id = ?',
             [$tenant->id()],
         );
-    }
-
-    /**
-     * @param list<string> $keys
-     * @return list<array{status: string, order: ?string}>
-     */
-    private function race(Tenant $tenant, InventorySource $source, PriceList $list, SalesChannel $channel, ProductVariant $variant, int $limit, array $keys): array
-    {
-        $this->dir = sys_get_temp_dir().'/orders1486-'.bin2hex(random_bytes(6));
-        mkdir($this->dir);
-        $pipes = [];
-        $names = [];
-        foreach ($keys as $i => $key) {
-            $names[] = 'w'.$i;
-            $cfg = [
-                'ready' => $this->dir.'/w'.$i.'.ready', 'go' => $this->dir.'/go', 'limit' => $limit, 'key' => $key,
-                'tenant' => $tenant->id(), 'source' => $source->id(), 'list' => $list->id(),
-                'channel' => $channel->id(), 'variant' => $variant->id(),
-            ];
-            $proc = proc_open(
-                [PHP_BINARY, __DIR__.'/Support/order_worker.php', json_encode($cfg, JSON_THROW_ON_ERROR)],
-                [1 => ['pipe', 'w'], 2 => ['file', $this->dir.'/w'.$i.'.err', 'w']],
-                $p,
-            );
-            self::assertIsResource($proc);
-            $pipes[] = $p[1];
-            $this->procs[] = $proc;
-        }
-        $deadline = microtime(true) + 30;
-        while (count(array_filter($names, fn (string $n): bool => is_file($this->dir.'/'.$n.'.ready'))) < count($names)) {
-            if (microtime(true) > $deadline) {
-                self::fail('Los workers no arrancaron: '.implode(' | ', array_map(static fn (string $f): string => (string) file_get_contents($f), glob($this->dir.'/*.err') ?: [])));
-            }
-            usleep(20000);
-        }
-        touch($this->dir.'/go');
-
-        $out = [];
-        foreach ($pipes as $pipe) {
-            $line = stream_get_contents($pipe);
-            $decoded = json_decode((string) $line, true);
-            self::assertIsArray($decoded, 'Salida del worker: '.$line);
-            $out[] = $decoded;
-        }
-
-        return $out;
-    }
-
-    private function fixture(int $stock, int $price): array
-    {
-        $suffix = strtolower(bin2hex(random_bytes(5)));
-        $tenant = new Tenant('Empresa '.$suffix, 'empresa-'.$suffix);
-        $legal = new LegalEntity(
-            $tenant,
-            'Empresa '.$suffix.' SAS',
-            null,
-            true,
-        );
-        $branch = new Branch(
-            $tenant,
-            'Principal',
-            'principal-'.$suffix,
-            $legal,
-            true,
-        );
-        $source = new InventorySource(
-            $tenant,
-            $legal,
-            'Principal',
-            'principal-'.$suffix,
-            InventorySource::TYPE_BRANCH,
-            $branch,
-        );
-        $product = new Product(
-            $tenant,
-            'Producto '.$suffix,
-            'producto-'.$suffix,
-        );
-        $variant = new ProductVariant(
-            $tenant,
-            $product,
-            'SKU-'.$suffix,
-            'Variante '.$suffix,
-        );
-        $list = new PriceList(
-            $tenant,
-            'Lista '.$suffix,
-            'lista-'.$suffix,
-        );
-        $variantPrice = new VariantPrice(
-            $tenant,
-            $list,
-            $variant,
-            $price,
-        );
-        $channel = new SalesChannel(
-            $tenant,
-            'Web '.$suffix,
-            'web-'.$suffix,
-            $source,
-            $list,
-        );
-
-        foreach (
-            [
-                $tenant,
-                $legal,
-                $branch,
-                $source,
-                $product,
-                $variant,
-                $list,
-                $variantPrice,
-                $channel,
-            ] as $entity
-        ) {
-            $this->entityManager->persist($entity);
-        }
-        $this->entityManager->flush();
-
-        if ($stock > 0) {
-            (new InventoryService($this->entityManager))->adjust(
-                $tenant,
-                $source,
-                $variant,
-                $stock,
-                null,
-                'seed-'.bin2hex(random_bytes(6)),
-            );
-        }
-
-        return [$tenant, $source, $list, $channel, $variant];
-    }
-
-    private function balance(Tenant $tenant, InventorySource $source, ProductVariant $variant): InventoryBalance
-    {
-        $balance = $this->entityManager->getRepository(InventoryBalance::class)->findOneBy(['tenant' => $tenant, 'source' => $source, 'variant' => $variant]);
-        self::assertInstanceOf(InventoryBalance::class, $balance);
-
-        return $balance;
     }
 }
