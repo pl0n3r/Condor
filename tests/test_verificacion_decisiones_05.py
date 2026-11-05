@@ -201,6 +201,7 @@ def run_case(filename: str, classname: str, method: str) -> unittest.TestResult:
 
 class Decisiones05Verification(unittest.TestCase):
     def test_01_twenty_exact_decisions_and_witnesses(self) -> None:
+        """Valida veinte identidades únicas y testigos reales en archivos autorizados."""
         names = [row[0] for row in ROWS]
         self.assertEqual(20, len(names))
         self.assertEqual(20, len(set(names)))
@@ -217,6 +218,7 @@ class Decisiones05Verification(unittest.TestCase):
                                              method), identifier)
 
     def test_02_mutated_or_forged_witness_fails_closed(self) -> None:
+        """Demuestra que renombrar testigos impide verde nominal."""
         for identifier, filename, method, _, _ in ROWS:
             source = (ROOT / filename).read_text(encoding="utf-8")
             with self.subTest(decision=identifier):
@@ -237,24 +239,31 @@ class Decisiones05Verification(unittest.TestCase):
                 result = run_case(filename, CLASS_FOR_PATH[filename], method)
                 self.assertEqual(1, result.testsRun, "UNKNOWN: sin ejecución")
                 self.assertFalse(result.skipped, "UNKNOWN: testigo omitido")
+                self.assertFalse(result.expectedFailures, "UNKNOWN: testigo expectedFailure")
                 self.assertTrue(result.wasSuccessful(),
                                 "UNKNOWN: prueba real fallida: " + filename +
                                 ":" + method)
 
     def test_04_report_all_rows_as_partial(self) -> None:
+        """Vincula cada fila documental con su testigo y brecha exactos."""
         report = (ROOT / "docs/verificacion/decisiones-05.md").read_text(
             encoding="utf-8")
         ids = re.findall(r"(?m)^\| `(D-\d{3}(?:-S\d{2})?)` \|", report)
         self.assertEqual([row[0] for row in ROWS], ids)
         self.assertNotIn("| CUBIERTO |", report)
+        row_by_id = {
+            match.group(1): match.group(0)
+            for match in re.finditer(r"(?m)^\| `(D-\d{3}(?:-S\d{2})?)` \|.*$", report)
+        }
         for identifier, filename, method, level, pending in ROWS:
             with self.subTest(decision=identifier):
-                self.assertIn("`" + filename + "`", report)
-                self.assertIn("`" + method + "`", report)
-                self.assertIn(level + " parcial", report)
-                self.assertIn(pending, report)
+                row = row_by_id[identifier]
+                self.assertIn("`" + filename + "` · `" + method + "`", row)
+                self.assertIn("| " + level + " parcial |", row)
+                self.assertIn(pending, row)
 
     def test_05_classifier_and_authority(self) -> None:
+        """Comprueba selección de CI y respeto del alcance autorizado."""
         from scripts.ci_change_classifier import classify
         selection = classify(
             ["docs/verificacion/decisiones-05.md",
