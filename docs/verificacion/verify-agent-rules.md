@@ -41,7 +41,7 @@ Las pruebas contrastan exactamente cada texto en su sección original (con recha
 
 Los controles estáticos también exigen dependencia PHP 8.5/Symfony 7.4, denegación por tenant en servidor, relación Doctrine real de sede/tenant, declaración de las puertas CI, opt-out y dry-run de postdeploy y cron horario. No se invoca GitHub vivo, Hostinger, datos reales, shell de deploy ni migraciones. La validación de políticas no equivale a producción GREEN.
 
-Prueba local: `python3 tests/test_verificacion_verify_agent_rules.py -v`. Este test nuevo **no está integrado por nombre en los pasos** del workflow actual, que descubre `test_ci_*.py` y suites designadas; por tanto `CI Factory v1 / Validar` en verde demuestra las puertas canónicas de ese HEAD, **no** que haya ejecutado automáticamente esta suite nueva. Su integración adicional debe conservar su propio claim sobre CI y no se añade a este PR fuera de la reserva. Si PHP CLI no está presente, el subcaso live-schema-policy se marca skip, no éxito falso.
+Prueba local: `python3 tests/test_verificacion_verify_agent_rules.py -v`. Esta suite **queda integrada explícitamente en el job** obligatorio de gobierno de CI, que antes solo descubría `test_ci_*.py` y suites designadas; por tanto `CI Factory v1 / Validar` en verde demuestra las puertas canónicas de ese HEAD, la ejecución de esta suite en el job obligatorio de gobierno, sin modificar permisos ni lógica de la protección. La reserva V3 ampliada reclama de forma explícita la ruta del workflow. Si PHP CLI no está presente, el subcaso live-schema-policy se marca skip, no éxito falso.
 
 ## Aceptación, seguridad y reversión
 
