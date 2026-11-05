@@ -198,6 +198,8 @@ final class AssetVerificationM10Test extends TestCase
                 ['asset_ref' => 'fixture:asset/other', 'responsible_ref' => 'fixture:responsible/demo']),
             static fn () => $service->changeState($a, $officeA, 'demo', ['state' => 'CERRADO']),
             static fn () => $service->changeState($a, $officeA, 'demo',
+                ['state' => 'BAJA_REQUIERE_REVISION']),
+            static fn () => $service->changeState($a, $officeA, 'demo',
                 ['state' => 'BAJA_REQUIERE_REVISION', 'evidence_ref' => 'user@example.test']),
         ] as $denied) {
             try {
