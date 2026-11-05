@@ -358,14 +358,25 @@ jobs:
             echo 'NO_VERIFICABLE: aún no existen hojas D-L en este SHA; no se atribuye cobertura.'
           fi
 
-      # Testigo PHP existente: ejecutarlo de forma transparente antes del
-      # discovery para no perder la causa real de fallos de integración.
-      - name: Acreditar testigo PHP de tenants antes del discovery
+      # Ejecutar exactamente los testigos positivos existentes, mostrando
+      # el primer fallo PHP real antes de que el wrapper lo reduzca a UNKNOWN.
+      - name: Acreditar testigos PHP antes del discovery
         run: |
           set -euo pipefail
-          php vendor/bin/simple-phpunit --configuration phpunit.xml.dist \
-            --filter 'testItResolvesVerifiedDomainsWithoutCrossingTenants' \
-            tests/php/Infrastructure/Tenancy/TenantResolverTest.php
+          python3 - <<'PY'
+          import runpy
+          import subprocess
+
+          for path, methods in runpy.run_path("tests/test_cobertura_condor_11.py")["POSITIVE"]:
+              print("TESTIGO_PHP:", path, flush=True)
+              completed = subprocess.run(
+                  ["php", "vendor/bin/simple-phpunit", "--configuration",
+                   "phpunit.xml.dist", "--filter", "|".join(methods), path],
+                  check=False,
+              )
+              if completed.returncode:
+                  raise SystemExit(completed.returncode)
+          PY
 
       - name: Probar hojas de verificación de decisiones
         run: |
