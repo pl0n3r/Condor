@@ -11,6 +11,7 @@ final class GovernanceApiService
 {
     private const MAX_ROWS = 100;
     private const STATES = ['REQUIERE_REVISION', 'EN_REVISION'];
+    private const KINDS = ['body', 'minute', 'power', 'shareholder', 'faculty', 'authorization', 'decision'];
 
     /**
      * @param array<string,mixed> $store
@@ -124,14 +125,14 @@ final class GovernanceApiService
 
     private static function assertRef(string $ref): void
     {
-        if (preg_match('~^fixture:(body|minute|power)/[a-z][a-z0-9_-]{0,47}$~D', $ref) !== 1) {
+        if (preg_match('~^fixture:(body|minute|power|shareholder|faculty|authorization|decision)/[a-z][a-z0-9_-]{0,47}$~D', $ref) !== 1) {
             throw new DomainException('Referencia sintética inválida.');
         }
     }
 
     private static function validKindRef(string $kind, string $ref): bool
     {
-        return in_array($kind, ['body', 'minute', 'power'], true)
+        return in_array($kind, self::KINDS, true)
             && preg_match('~^fixture:' . preg_quote($kind, '~') . '/[a-z][a-z0-9_-]{0,47}$~D', $ref) === 1;
     }
 
