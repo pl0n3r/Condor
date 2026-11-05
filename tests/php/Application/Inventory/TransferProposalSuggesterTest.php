@@ -29,6 +29,13 @@ final class TransferProposalSuggesterTest extends TestCase
             'origin_excess' => 8,
         ], $service->suggest(10, 2, 0, 4, 18, 6));
         self::assertNull($service->suggest(10, 10, 0, 4, 30, 0));
+        // Reserved stock at the destination increases the deficit; the
+        // candidate must still be covered entirely by donor surplus.
+        self::assertSame([
+            'quantity' => 4,
+            'destination_available' => 6,
+            'origin_excess' => 20,
+        ], $service->suggest(10, 10, 4, 0, 20, 0));
         self::assertNull($service->suggest(0, 0, 0, 0, 30, 0));
         self::assertNull($service->suggest(10, 2, 0, 25, 30, 0));
     }
