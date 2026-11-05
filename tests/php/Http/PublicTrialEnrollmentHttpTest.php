@@ -103,6 +103,11 @@ final class PublicTrialEnrollmentHttpTest extends WebTestCase
         self::assertResponseStatusCodeSame(422);
         self::assertSame(0, $this->em()->getRepository(Subscription::class)->count([]));
 
+        // Whitespace-only passwords must never become an empty hashed password.
+        $client->request('POST', $url, array_replace($fields, ['owner_password' => str_repeat(' ', 12)]));
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame(0, $this->em()->getRepository(User::class)->count(['email' => $email]));
+
         $client->request('POST', $url, $fields);
         self::assertResponseStatusCodeSame(303);
         self::assertSame('/admin/login', $client->getResponse()->headers->get('Location'));

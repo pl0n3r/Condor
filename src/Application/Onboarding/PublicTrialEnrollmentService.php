@@ -160,12 +160,12 @@ final readonly class PublicTrialEnrollmentService
                 throw new DomainException('Formulario de activación inválido.');
             }
         }
-        if (strlen($payload['owner_password']) < 12) {
+        if (strlen($payload['owner_password']) < 12 || trim($payload['owner_password']) === '') {
             throw new DomainException('La contraseña debe tener 12 caracteres o más.');
         }
         $data = [];
         foreach ($payload as $key => $value) {
-            $data[$key] = trim($value);
+            $data[$key] = $key === 'owner_password' ? $value : trim($value);
         }
         $input = new ProvisionTenantInput(
             $data['tenant_name'], $data['tenant_slug'], $data['legal_name'],
