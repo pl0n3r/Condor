@@ -10,7 +10,7 @@ use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\Persistence\ObjectRepository;
+use Doctrine\ORM\EntityRepository;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
@@ -81,7 +81,7 @@ final class GestM14SecurityContractTest extends WebTestCase
         $branch = new Branch($tenant, 'Sede A', 'sede-a');
         $user = new User('m14-staff@example.invalid', 'Staff sintético');
         $membership = new Membership($tenant, $user, 'ADMIN');
-        $repository = $this->createMock(ObjectRepository::class);
+        $repository = $this->createMock(EntityRepository::class);
         $repository->method('findOneBy')->willReturn($membership);
         $repository->method('findBy')->willReturn([]);
         $em = $this->createMock(EntityManagerInterface::class);
@@ -102,7 +102,7 @@ final class GestM14SecurityContractTest extends WebTestCase
         $tenant = new Tenant('M14 sin afiliación', 'm14-no-membership');
         $branch = new Branch($tenant, 'Sede A', 'sede-a');
         $user = new User('m14-visitor@example.invalid', 'Visitante sintético');
-        $repository = $this->createMock(ObjectRepository::class);
+        $repository = $this->createMock(EntityRepository::class);
         $repository->method('findOneBy')->willReturn(null);
         $em = $this->createMock(EntityManagerInterface::class);
         $em->method('getRepository')->willReturn($repository);
