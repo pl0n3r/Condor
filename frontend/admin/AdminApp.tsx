@@ -82,6 +82,10 @@ const DevSocialSecurityManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./SocialSecurityManagement')).SocialSecurityManagement }))
   : null;
 
+const DevOperationsProcessesPanel = import.meta.env.DEV
+  ? lazy(async () => ({ default: (await import('./OperationsProcessesPanel')).OperationsProcessesPanel }))
+  : null;
+
 const DevFinanceManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./FinanceManagement')).FinanceManagement }))
   : null;
@@ -180,6 +184,7 @@ export function AdminApp({
         { href: '/admin#stock-alerts', label: 'Alertas de stock' },
         { href: '/admin#stock-transfers', label: 'Transferencias' },
         { href: '/admin#workflows', label: 'Workflows' },
+        ...(import.meta.env.DEV ? [{ href: '/admin#operations-processes', label: 'Procesos (pruebas)' }] : []),
         { href: '/admin#seo-settings', label: 'SEO' },
         { href: '/admin#production', label: 'Producción' },
         { href: '/admin#purchasing', label: 'Compras' },
@@ -358,6 +363,17 @@ export function AdminApp({
             permissions={context.data.permissions}
             csrfToken={accessToken}
           />
+
+          {DevOperationsProcessesPanel && (
+            <Suspense fallback={<p role="status">Cargando procesos ficticios…</p>}>
+              <DevOperationsProcessesPanel
+                key={'operations-processes-' + context.data.active_branch.id}
+                branchId={context.data.active_branch.id}
+                permissions={context.data.permissions}
+                csrfToken={accessToken}
+              />
+            </Suspense>
+          )}
 
           <SeoSettingsPanel
             key={'seo-settings-' + context.data.active_branch.id}
