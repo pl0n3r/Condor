@@ -35,7 +35,9 @@ function readSnapshot(raw: unknown): Snapshot {
     && typeof (row as Order).id === 'string'
     && ['draft', 'completed'].includes((row as Order).status)
     && Number.isSafeInteger((row as Order).target_quantity))
+    || typeof data.sample_size !== 'number'
     || !Number.isSafeInteger(data.sample_size)
+    || typeof data.completed_orders !== 'number'
     || !Number.isSafeInteger(data.completed_orders)
     || typeof data.sample_limited !== 'boolean') {
     throw new Error('Respuesta de operaciones inválida.');
