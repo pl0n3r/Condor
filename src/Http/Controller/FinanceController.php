@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Finance\FinanceApiService;
+use App\Application\Finance\FinanceReconciliationBudget;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\User;
@@ -84,6 +85,28 @@ final class FinanceController extends AbstractController
         $this->auditPreview($tenant, $actor, 'state_changed', $ref);
         $request->getSession()->set('condor_finance_synthetic', $result['store']);
         return $this->json(['record' => $result['record'], 'synthetic_only' => true]);
+    }
+
+
+    /**
+     * Review-only, never a real financial close. No bank data or persistence.
+     * The fixed local fixture identities cannot select another real tenant:
+     * access() resolves and authorizes the actual tenant/branch first.
+     */
+    #[Route('/api/v1/branches/{branchId}/finance/closures/preview', name: 'api_finance_closure_preview', methods: ['POST'])]
+    public function previewClosure(string $branchId, Request $request): JsonResponse
+    {
+        [$actor, $tenant] = $this->access($request, $branchId, 'settings.update', true);
+        $payload = $this->payload($request, [
+            'fixture_ref', 'tenant_ref', 'legal_entity_ref', 'as_of',
+            'ledger_entries', 'bank_movements', 'budgets', 'periods',
+        ]);
+        $projection = FinanceReconciliationBudget::project(
+            $payload, 'fixture:tenant/current', 'fixture:legal-entity/current',
+        );
+        $this->auditPreview($tenant, $actor, 'closure_preview', 'fixture:finance-reconciliation/preview');
+
+        return $this->json(['closure_preview' => $projection, 'synthetic_only' => true]);
     }
 
     /** @return array{User,Tenant,Branch} */
