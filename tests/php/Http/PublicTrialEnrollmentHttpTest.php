@@ -61,6 +61,8 @@ final class PublicTrialEnrollmentHttpTest extends WebTestCase
     public function testVerifiedEmailProvisionsSingleFourteenDayTrialAtomically(): void
     {
         [$client, $mailer] = $this->readyClient();
+        // Integration DB has subscriptions from other fixtures; assert no new rows.
+        $subscriptionCountBefore = $this->em()->getRepository(Subscription::class)->count([]);
         $email = 'trial-'.bin2hex(random_bytes(5)).'@example.test';
         $request = ['email' => strtoupper($email), 'captcha' => 'test-passed-captcha', 'consent' => true];
         $client->jsonRequest('POST', '/trial/solicitar', $request);
@@ -84,7 +86,7 @@ final class PublicTrialEnrollmentHttpTest extends WebTestCase
 
         $client->request('GET', $url);
         self::assertResponseIsSuccessful();
-        self::assertSame(0, $this->em()->getRepository(Subscription::class)->count([]));
+        self::assertSame($subscriptionCountBefore, $this->em()->getRepository(Subscription::class)->count([]));
         self::assertSame('no-referrer', $client->getResponse()->headers->get('Referrer-Policy'));
         preg_match('/name="_csrf_token" value="([^"]+)"/', (string) $client->getResponse()->getContent(), $csrfMatch);
         self::assertCount(2, $csrfMatch);
@@ -101,7 +103,7 @@ final class PublicTrialEnrollmentHttpTest extends WebTestCase
         ];
         $client->request('POST', $url, $fields + ['plan_version_id' => 'spoofed']);
         self::assertResponseStatusCodeSame(422);
-        self::assertSame(0, $this->em()->getRepository(Subscription::class)->count([]));
+        self::assertSame($subscriptionCountBefore, $this->em()->getRepository(Subscription::class)->count([]));
 
         // Whitespace-only passwords must never become an empty hashed password.
         $client->request('POST', $url, array_replace($fields, ['owner_password' => str_repeat(' ', 12)]));
