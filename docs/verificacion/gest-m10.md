@@ -13,7 +13,7 @@ Alcance exacto: GEST-M10-S03 (responsable) y GEST-M10-S07 (evidencia). Fuente: \
 
 La ruta versionada existente en \`AssetsController\` ya exige \`inventory.view\` para GET, \`inventory.create\` para POST, \`inventory.update\` y CSRF para PATCH, y extrae tenant/empresa del usuario y sede autorizada (\`BranchApiSupport::authorizedBranchScope\`). Fuera de \`test\`, está cerrada salvo \`dev\` con \`CONDOR_ASSETS_SYNTHETIC_API=1\` y \`CONDOR_PRODUCTION_STAGE=construccion\`. Los tests de aplicación adjuntos verifican filtrado multiempresa, payload no permitido y referencias ficticias, **no** son prueba HTTP real contra sesión ni prueba de permisos en navegador.
 
-\`frontend/admin/AssetsManagement.tsx\` presenta \`empty\` y \`permission-denied\` pero es un simulador in-memory solo DEV; **no** implementa loading/error de fetch porque no consulta API, ni persiste responsable. Este archivo **no está reclamado** en #1535. La solución está materializada en una hoja hija independiente con claim de frontend/infraestructura; no editar el componente ni ampliar paths del presente PR.
+\`frontend/admin/AssetsManagement.tsx\` presenta \`empty\` y \`permission-denied\` pero es un simulador in-memory solo DEV; **no** implementa loading/error de fetch porque no consulta API, ni persiste responsable. Este archivo **no está reclamado** en #1535. La solución posterior está registrada como hoja hija [#1558](https://github.com/pl0n3r/Condor/issues/1558), con dependencia de #1535, claims propios de frontend/infraestructura y estado bloqueado hasta cerrar este PR. No editar el componente ni ampliar los paths actuales.
 
 ## Reproducción, seguridad y reversión
 
