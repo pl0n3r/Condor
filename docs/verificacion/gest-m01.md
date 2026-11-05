@@ -1,0 +1,22 @@
+# Gestión empresarial M01 · verificación sintética (#1526)
+
+Corte de construcción, no de operación real. Reserva V3 `3ec7ea4b-d9d3-420c-ac35-76d4b2f0e9c0`. Contrato fuente: `docs/gestion-empresarial-integral.md`, matriz `docs/matriz-cobertura.md` (no modificada). Antecedentes: [PR #1173 fusionado](https://github.com/pl0n3r/Condor/pull/1173) y [PR #1373 fusionado](https://github.com/pl0n3r/Condor/pull/1373). Esta hoja solo incorpora pruebas para comportamientos limitados y **no** promueve filas integrales `CUBIERTO`.
+
+| ID | Submódulo | Testigo ejecutable del subcontrato | Estado integral / brecha | Hoja hija |
+| --- | --- | --- | --- | --- |
+| GEST-M01-S02 | Cargos | `GestM01PreviewTest::testS02CargosSinResponsableExigenRevision` + `OrganizationStructureProjection` | `NO_VERIFICABLE`: faltan catálogo persistente y endpoint/UI conectados por rol | [#1567](https://github.com/pl0n3r/Condor/issues/1567) |
+| GEST-M01-S03 | Áreas | `testS03AreasDetectanCiclos` + `OrganizationStructureProjection` | `NO_VERIFICABLE`: estructura real por entidad/sede, UI y permiso | [#1567](https://github.com/pl0n3r/Condor/issues/1567) |
+| GEST-M01-S04 | Sedes | `testS04SedesAisladasPorEmpresa` + `OrganizationStructureProjection` | `NO_VERIFICABLE`: falta endpoint/rol real y test E2E cross-tenant | [#1567](https://github.com/pl0n3r/Condor/issues/1567) |
+| GEST-M01-S05 | Organigrama | `testS05OrganigramaRechazaPadreInexistente` + `OrganizationStructureProjection` | `NO_VERIFICABLE`: faltan relaciones persistentes y UI | [#1567](https://github.com/pl0n3r/Condor/issues/1567) |
+| GEST-M01-S06 | Novedades | `testS06NovedadesDetectanSolapamiento` + `LeaveAbsenceProjection` | `NO_VERIFICABLE`: falta flujo persistente con autorizaciones laborales | [#1567](https://github.com/pl0n3r/Condor/issues/1567) |
+| GEST-M01-S07 | Permisos | `testS07PermisosNoAutorizanAprobacionAutomatica` + `LeaveAbsenceProjection` | `NO_VERIFICABLE`: falta solicitud/aprobación por rol en HTTP/UI real | [#1567](https://github.com/pl0n3r/Condor/issues/1567) |
+| GEST-M01-S08 | Vacaciones | `testS08VacacionesDetectanSaldoInsuficiente` + `LeaveAbsenceProjection` | `NO_VERIFICABLE`: saldo ficticio no prueba acumulación legal, persistencia o permisos | [#1567](https://github.com/pl0n3r/Condor/issues/1567) |
+| GEST-M01-S09 | Incapacidades | `testS09IncapacidadesNoAdmitenDiagnostico` + `LeaveAbsenceProjection` | `NO_VERIFICABLE`: prohibido capturar salud/diagnósticos sin base y puerta legal | [#1567](https://github.com/pl0n3r/Condor/issues/1567) |
+| GEST-M01-S10 | Evaluaciones | `testS10EvaluacionesSinCalificacionInvalida` + `PerformancePortalProjection` | `NO_VERIFICABLE`: faltan evaluador autorizado, ciclo guardado y UI | [#1567](https://github.com/pl0n3r/Condor/issues/1567) |
+| GEST-M01-S11 | Portal | `testS11PortalRestringeVisorYNoCierra` + `PerformancePortalProjection` | `NO_VERIFICABLE`: vista sintética no acredita permisos ni estados de la UI conectada | [#1567](https://github.com/pl0n3r/Condor/issues/1567) |
+
+**API añadida en esta hoja:** `POST /api/v1/branches/{branchId}/hr/extension/previews/{kind}` para `structure|leave|performance`, solo en `test` o en `dev` con `CONDOR_HR_SYNTHETIC_API=1` y `CONDOR_PRODUCTION_STAGE=construccion`, OWNER autenticado, permiso `users.view`, sede legal del tenant, CSRF y JSON estrictamente ficticio. No guarda datos ni cambia estado de personas. `testControladorExigeCsrfOwnerYBranchScopeEnPreview` verifica el cableado estáticamente; falta ejecución HTTP autenticada E2E y los estados UI loading/empty/error/permission-denied. No se reclama prueba real para esos estados.
+
+**Límite:** #742 registra la puerta jurídica D-063 y su opción segura B. El cierre administrativo de #742 no habilita PII, retención, diagnósticos, permisos legales o producción. #1567 concentra la brecha integral; requiere autoridad del dueño, descomposición en hojas V3 y pruebas cross-tenant/roles/UI antes de promover la matriz.
+
+**Evidencia para CI:** `tests/php/Application/HumanResources/GestM01PreviewTest.php` (12 pruebas, entradas sintéticas y negativas); precedentes `tests/test_m01_estructura.py`, `tests/test_m01_novedades.py`, `tests/test_m01_evaluaciones.py`, `tests/test_human_resources_ext_http_api.py`. Solo el CI sobre SHA exacto y PR fusionado confirman el subcontrato entregado, nunca la funcionalidad laboral integral.
