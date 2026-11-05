@@ -92,6 +92,9 @@ final class GestM08VerificationTest extends TestCase
             self::assertStringContainsString($required, $controller);
         }
         self::assertSame(7, substr_count($controller, '$this->authorizedBranchScope($branchId,'));
+        self::assertSame(2, substr_count($controller, '$this->requireDocumentWriteCsrf($request);'));
+        self::assertSame(2, substr_count($controller, '$this->requireCsrf($request);'));
+        self::assertSame(4, substr_count($controller, '$this->audit('));
         // Source contract only; real HTTP negatives and React UI require a scoped follow-up.
     }
 

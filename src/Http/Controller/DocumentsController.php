@@ -7,7 +7,9 @@ namespace App\Http\Controller;
 use App\Application\Documents\DocumentApiService;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
+use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Branch;
+use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -42,10 +44,7 @@ final class DocumentsController extends AbstractController
         $this->constructionOnly();
         [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
         $payload = $this->documents->export($this->store($request), $this->scope($branch));
-        $this->audit($tenant, $user, 'documents_synthetic.exported', DocumentApiService::class, $branch->id(), [
-            'branch_id' => $branch->id(), 'synthetic' => true,
-        ]);
-        $this->entityManager->flush();
+        $this->recordSyntheticAudit($tenant, $user, $branch, 'documents_synthetic.exported', $branch->id());
         $response = $this->json($payload);
         $response->headers->set('Content-Disposition', 'attachment; filename="condor-m08-fixtures.json"');
         $response->headers->set('Cache-Control', 'private, no-store');
@@ -63,10 +62,7 @@ final class DocumentsController extends AbstractController
         $result = $this->domain(fn (): array => $this->documents->trace(
             $this->store($request), $this->scope($branch), $reference,
         ));
-        $this->audit($tenant, $user, 'documents_synthetic.trace_read', DocumentApiService::class, $reference, [
-            'branch_id' => $branch->id(), 'synthetic' => true,
-        ]);
-        $this->entityManager->flush();
+        $this->recordSyntheticAudit($tenant, $user, $branch, 'documents_synthetic.trace_read', $reference);
         return $this->json($result);
     }
 
@@ -76,7 +72,7 @@ final class DocumentsController extends AbstractController
     public function attachEvidence(string $branchId, string $documentKey, Request $request): JsonResponse
     {
         $this->constructionOnly();
-        $this->requireCsrf($request);
+        $this->requireDocumentWriteCsrf($request);
         [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.update');
         $data = $this->payload($request, ['evidence_ref']);
         $evidenceRef = $data['evidence_ref'] ?? null;
@@ -88,10 +84,7 @@ final class DocumentsController extends AbstractController
             $this->store($request), $this->scope($branch), $reference, $evidenceRef,
         ));
         if ($result['changed']) {
-            $this->audit($tenant, $user, 'documents_synthetic.evidence_attached', DocumentApiService::class, $reference, [
-                'branch_id' => $branch->id(), 'synthetic' => true,
-            ]);
-            $this->entityManager->flush();
+            $this->recordSyntheticAudit($tenant, $user, $branch, 'documents_synthetic.evidence_attached', $reference);
             $request->getSession()->set(self::SESSION_KEY, $result['state']);
         }
         return $this->json(['document' => $result['document'], 'changed' => $result['changed'],
@@ -120,10 +113,7 @@ final class DocumentsController extends AbstractController
         [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
         $reference = $this->domain(fn (): string => DocumentApiService::referenceFromKey($documentKey));
         $document = $this->findDocument($request, $this->scope($branch), $reference);
-        $this->audit($tenant, $user, 'documents_synthetic.read', DocumentApiService::class, $reference, [
-            'branch_id' => $branch->id(), 'synthetic' => true,
-        ]);
-        $this->entityManager->flush();
+        $this->recordSyntheticAudit($tenant, $user, $branch, 'documents_synthetic.read', $reference);
         return $this->json(['document' => $document, 'synthetic' => true, 'can_close' => false]);
     }
 
@@ -157,7 +147,7 @@ final class DocumentsController extends AbstractController
     public function requestReview(string $branchId, string $documentKey, Request $request): JsonResponse
     {
         $this->constructionOnly();
-        $this->requireCsrf($request);
+        $this->requireDocumentWriteCsrf($request);
         [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.update');
         // Request body must contain no unverified document values.
         $this->payload($request, []);
@@ -174,6 +164,28 @@ final class DocumentsController extends AbstractController
         }
         return $this->json(['document' => $result['document'], 'changed' => $result['changed'],
             'synthetic' => true, 'can_close' => false]);
+    }
+
+    /**
+     * Shared fail-closed write guard for document evidence and review.
+     * Keeps the legacy create path unchanged.
+     */
+    private function requireDocumentWriteCsrf(Request $request): void
+    {
+        $this->requireCsrf($request);
+    }
+
+    private function recordSyntheticAudit(
+        Tenant $tenant,
+        User $actor,
+        Branch $branch,
+        string $action,
+        string $entityId,
+    ): void {
+        $this->audit($tenant, $actor, $action, DocumentApiService::class, $entityId, [
+            'branch_id' => $branch->id(), 'synthetic' => true,
+        ]);
+        $this->entityManager->flush();
     }
 
     private function constructionOnly(): void
