@@ -358,6 +358,15 @@ jobs:
             echo 'NO_VERIFICABLE: aún no existen hojas D-L en este SHA; no se atribuye cobertura.'
           fi
 
+      - name: Probar hojas de verificación de decisiones
+        run: |
+          set -euo pipefail
+          if compgen -G 'tests/test_verificacion_decisiones_*.py' > /dev/null; then
+            python3 -m unittest discover -s tests -p 'test_verificacion_decisiones_*.py'
+          else
+            echo 'NO_VERIFICABLE: no existen hojas de decisiones en este SHA; no se atribuye cobertura.'
+          fi
+
       - name: Probar brechas Condor 05 si están presentes
         run: |
           set -euo pipefail
