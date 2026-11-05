@@ -359,6 +359,8 @@ jobs:
           fi
 
       - name: Probar hojas de verificación de decisiones
+        env:
+          NO_COLOR: '1'
         run: |
           set -euo pipefail
           if compgen -G 'tests/test_verificacion_decisiones_*.py' > /dev/null; then

@@ -29,6 +29,11 @@ class VerificacionDecisionesDiscoveryTests(unittest.TestCase):
         )
         self.assertIn("set -euo pipefail", self.block)
 
+    def test_phpunit_no_color_evitar_falso_unknown(self):
+        # PHPUnit colorea "OK" con ANSI; el verificador legado exige un
+        # word-boundary y rechaza el color incluso con todas las PHP PASS.
+        self.assertIn("NO_COLOR: '1'", self.block)
+
     def test_sin_lotes_falla_cerrado(self):
         self.assertIn("ERROR: no existen hojas", self.block)
         self.assertIn("no se atribuye cobertura", self.block)
