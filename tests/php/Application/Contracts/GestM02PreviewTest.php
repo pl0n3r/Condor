@@ -221,4 +221,15 @@ final class GestM02PreviewTest extends TestCase
         self::assertStringContainsString("'inventory.create'", $source);
         self::assertStringContainsString("'inventory.update'", $source);
     }
+
+    public function testApiRechazaDuplicadoEnElMismoAmbito(): void
+    {
+        $scope = hash('sha256', 'tenant:alpha|company:demo|branch:one');
+        $payload = ['kind' => 'contract', 'ref' => 'fixture:contract/unique'];
+        $first = ContractApiService::createRecord([], $scope, $payload);
+        self::assertCount(1, ContractApiService::listRecords($first['store'], $scope));
+
+        $this->expectException(DomainException::class);
+        ContractApiService::createRecord($first['store'], $scope, $payload);
+    }
 }
