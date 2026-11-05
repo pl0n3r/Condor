@@ -14,7 +14,7 @@ final class RiskRegisterControls
     private const ROOT_KEYS = ['tenant_ref', 'risks', 'controls'];
     private const RISK_KEYS = ['tenant_ref', 'risk_ref', 'category', 'probability', 'impact', 'state'];
     private const CONTROL_KEYS = ['tenant_ref', 'control_ref', 'risk_ref', 'effectiveness', 'state'];
-    private const CATEGORIES = ['operativo', 'financiero', 'legal', 'tecnologico'];
+    private const CATEGORIES = ['operativo', 'financiero', 'legal', 'tecnologico', 'reputacional'];
     private const STATES = ['PENDIENTE', 'REQUIERE_REVISION'];
 
     /**
