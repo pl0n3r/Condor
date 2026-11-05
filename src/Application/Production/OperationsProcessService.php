@@ -22,7 +22,8 @@ final class OperationsProcessService
     {
         return self::PROCESSES;
     }
-    /** @param array<string,mixed> $input @return array<string,mixed> */
+    /** @param array<string,mixed> $input
+     * @return array<string,mixed> */
     public static function preview(array $input): array
     {
         $fields = ['process_id', 'procedure_id', 'task_id', 'state'];
