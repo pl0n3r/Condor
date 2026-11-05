@@ -346,8 +346,11 @@ class VerificacionDecisiones06Tests(unittest.TestCase):
             matrix_rows(self.matrix.replace(
                 BT + "D-054" + BT, BT + "D-054-QUITADO" + BT, 1))
         with self.assertRaises(ValueError):
-            matrix_rows(self.matrix.replace(
-                BT + "NO_VERIFICABLE" + BT, BT + "CUBIERTO" + BT, 1))
+            promoted = self.matrix.replace(
+                example,
+                example.replace(BT + "NO_VERIFICABLE" + BT,
+                                BT + "CUBIERTO" + BT, 1), 1)
+            matrix_rows(promoted)
         with self.assertRaises(ValueError):
             section(self.spec.replace("### D-054 —", "### DELETED —"),
                     "### D-054 — Auto-migración aditiva con backup durante pre-lanzamiento")
