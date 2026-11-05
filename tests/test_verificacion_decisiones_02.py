@@ -110,7 +110,10 @@ class VerificacionDecisiones02Tests(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertEqual(inventory[key][1], title)
                 self.assertIn("PR #" + str(prior) + " MERGED", inventory[key][3])
-                self.assertTrue(section(self.spec, heading))
+                exact_section = section(self.spec, heading)
+                self.assertTrue(exact_section)
+                if source == "ESPECIFICACIONES.md":
+                    self.assertTrue(all(marker in exact_section for marker in markers))
                 self.assertTrue(require_source(source, markers))
                 self.assertTrue((ROOT / witness).is_file(), witness)
                 self.assertTrue(grade and gap)
