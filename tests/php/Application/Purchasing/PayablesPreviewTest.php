@@ -30,26 +30,22 @@ final class PayablesPreviewTest extends WebTestCase
             'legal_entity_ref' => 'fixture:legal-entity/current',
             'site_ref' => 'fixture:site/current',
         ];
+        $first = [
+            'obligation_ref' => 'fixture:payable/zeta',
+            'supplier_ref' => 'fixture:supplier/demo',
+            'amount_cop' => '120000',
+            'currency' => 'COP',
+            'reconciliation_status' => 'unreconciled',
+            'payment_status' => 'unpaid',
+        ] + $scope;
+        $second = array_replace($first, [
+            'obligation_ref' => 'fixture:payable/alpha',
+            'supplier_ref' => 'fixture:supplier/other',
+            'amount_cop' => '34500',
+        ]);
         return $scope + [
             'mode' => 'preview_only',
-            'obligations' => [
-                [
-                    'obligation_ref' => 'fixture:payable/zeta',
-                    'supplier_ref' => 'fixture:supplier/demo',
-                    'amount_cop' => '120000',
-                    'currency' => 'COP',
-                    'reconciliation_status' => 'unreconciled',
-                    'payment_status' => 'unpaid',
-                ] + $scope,
-                [
-                    'obligation_ref' => 'fixture:payable/alpha',
-                    'supplier_ref' => 'fixture:supplier/other',
-                    'amount_cop' => '34500',
-                    'currency' => 'COP',
-                    'reconciliation_status' => 'unreconciled',
-                    'payment_status' => 'unpaid',
-                ] + $scope,
-            ],
+            'obligations' => [$first, $second],
         ];
     }
 
