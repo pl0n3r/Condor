@@ -56,7 +56,9 @@
       "basis": "review_required",
       "retention": "password_reset_lifecycle",
       "consent": "review_required",
-      "providers": []
+      "providers": [
+        "resend"
+      ]
     },
     {
       "id": "customer_contact",
@@ -91,7 +93,9 @@
       "basis": "review_required",
       "retention": "invitation_lifecycle",
       "consent": "review_required",
-      "providers": []
+      "providers": [
+        "resend"
+      ]
     },
     {
       "id": "notification_preferences",
@@ -126,7 +130,9 @@
       "basis": "review_required",
       "retention": "review_required",
       "consent": "review_required",
-      "providers": []
+      "providers": [
+        "resend"
+      ]
     },
     {
       "id": "audit_events",

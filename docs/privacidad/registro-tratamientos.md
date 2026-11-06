@@ -21,7 +21,7 @@ Producto: `pl0n3r/Condor`
 - Finalidad: `account_invitation`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
-- Proveedores: ninguno_declarado
+- Proveedores: `resend`
 - Retención: `invitation_lifecycle`
 
 ## account_password
@@ -51,7 +51,7 @@ Producto: `pl0n3r/Condor`
 - Finalidad: `account_recovery`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
-- Proveedores: ninguno_declarado
+- Proveedores: `resend`
 - Retención: `password_reset_lifecycle`
 
 ## contract_synthetic_records
@@ -131,7 +131,7 @@ Producto: `pl0n3r/Condor`
 - Finalidad: `notification_delivery`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
-- Proveedores: ninguno_declarado
+- Proveedores: `resend`
 - Retención: `review_required`
 
 ## notification_preferences

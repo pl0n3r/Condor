@@ -99,6 +99,10 @@ const DevComplianceEvidenceManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./ComplianceManagement')).ComplianceEvidenceManagement }))
   : null;
 
+const DevLegalComplianceManagement = import.meta.env.DEV
+  ? lazy(async () => ({ default: (await import('./ComplianceManagement')).LegalComplianceManagement }))
+  : null;
+
 export function AdminApp({
   version,
   logoutToken,
@@ -558,6 +562,17 @@ export function AdminApp({
                             />
                           </Suspense>
             </>
+          )}
+
+          {import.meta.env.DEV && DevLegalComplianceManagement && (
+            <Suspense fallback={<p role="status">Cargando M06 ficticio…</p>}>
+              <DevLegalComplianceManagement
+                key={'legal-m06-' + context.data.tenant.id + '-' + context.data.active_branch.id}
+                branchId={context.data.active_branch.id}
+                permissions={context.data.permissions}
+                csrfToken={accessToken}
+              />
+            </Suspense>
           )}
 
           {import.meta.env.DEV && DevFinanceManagement && (

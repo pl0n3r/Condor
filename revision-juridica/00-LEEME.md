@@ -1,9 +1,9 @@
-Última actualización automática: 2026-11-06 · SHA de origen: 08427243a262e6e64ea9443607e61da8cb05ca5a
+Última actualización automática: 2026-11-06 · SHA de origen: afac4ff1245d7dc769abd55c94ed65de2244f7ef
 
 # Documentos para revisión jurídica — Condor
 
 Estado literal: documented_not_legally_approved. Sin aprobación jurídica.
-Versión del producto: 0.1.198. Commit del repositorio de origen: 08427243a262e6e64ea9443607e61da8cb05ca5a.
+Versión del producto: 0.1.198. Commit del repositorio de origen: afac4ff1245d7dc769abd55c94ed65de2244f7ef.
 Las copias preservan byte a byte los documentos fuente. Este paquete no autoriza go-live, publicación ni tratamiento adicional de datos.
 
 ## Documentos que debe comprobar o corregir el abogado
@@ -29,6 +29,7 @@ Las copias preservan byte a byte los documentos fuente. Este paquete no autoriza
 
 ## Proveedores declarados e infraestructura por confirmar
 
+- resend: declarado en datos.yml; validar rol jurídico, contrato, subencargo y posibles transferencias.
 - sentry: declarado en datos.yml; validar rol jurídico, contrato, subencargo y posibles transferencias.
 - Hostinger: hosting compartido declarado en AGENTES.md; confirmar contratante, rol y ubicación de datos. No se infiere su calidad de subencargado.
 - GitHub Actions: automatización del repositorio; verificar si accede a datos personales reales antes de considerarlo subprocesador.
