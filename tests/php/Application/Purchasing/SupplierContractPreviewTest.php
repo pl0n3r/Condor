@@ -125,21 +125,25 @@ final class SupplierContractPreviewTest extends WebTestCase
         [$tenant, $branch, $owner, $viewer, $foreign] = $this->contractActors($em);
         $path = '/api/v1/branches/'.$branch->id().'/purchasing/suppliers/contracts/preview';
         $payload = self::fixturePayload();
-        $client->jsonRequest('POST', $path, $payload);
+        // A single transport helper keeps each negative assertion focused on policy.
+        $send = static function (array $value, array $headers = []) use ($client, $path): void {
+            $client->jsonRequest('POST', $path, $value, $headers);
+        };
+        $send($payload);
         self::assertResponseStatusCodeSame(401);
         $client->loginUser($owner);
         $client->request('GET', '/admin');
         self::assertResponseIsSuccessful();
         $csrf = ['HTTP_X_CSRF_TOKEN' => $this->csrfToken($client, 'branch_access')];
-        $client->jsonRequest('POST', $path, $payload);
+        $send($payload);
         self::assertResponseStatusCodeSame(403);
         $client->request('POST', $path, [], [], [
             'CONTENT_TYPE' => 'application/json', 'HTTP_X_CSRF_TOKEN' => $csrf['HTTP_X_CSRF_TOKEN'],
         ], '{"broken"');
         self::assertResponseStatusCodeSame(400);
-        $client->jsonRequest('POST', $path, [...$payload, 'padding' => str_repeat('x', 70000)], $csrf);
+        $send([...$payload, 'padding' => str_repeat('x', 70000)], $csrf);
         self::assertResponseStatusCodeSame(400);
-        $client->jsonRequest('POST', $path, $payload, $csrf);
+        $send($payload, $csrf);
         self::assertResponseStatusCodeSame(200);
         $output = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
         self::assertTrue($output['synthetic_only']);
@@ -159,13 +163,13 @@ final class SupplierContractPreviewTest extends WebTestCase
             [...$payload, 'metadata' => [...$payload['metadata'], 'signature' => true]],
             [...$payload, 'reviews' => [[...$payload['reviews'][0], 'state' => 'approved'], ...array_slice($payload['reviews'], 1)]],
         ] as $invalid) {
-            $client->jsonRequest('POST', $path, $invalid, $csrf);
+            $send($invalid, $csrf);
             self::assertResponseStatusCodeSame(422);
         }
         $client->loginUser($viewer);
         $client->request('GET', '/admin');
         $viewerCsrf = ['HTTP_X_CSRF_TOKEN' => $this->csrfToken($client, 'branch_access')];
-        $client->jsonRequest('POST', $path, $payload, $viewerCsrf);
+        $send($payload, $viewerCsrf);
         self::assertResponseStatusCodeSame(403);
     }
 
