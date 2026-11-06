@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Tests\Infrastructure\Persistence;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Schema\Schema;
+use Doctrine\Migrations\Exception\IrreversibleMigration;
+use DoctrineMigrations\Version20261212120000;
+use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /** Verifies the actual MariaDB schema produced by Doctrine migrations. */
@@ -37,17 +41,60 @@ final class PlatformIntegrationSettingsMigrationTest extends KernelTestCase
         self::assertNotContains('secret', $auditColumns);
     }
 
-    public function testRollbackGuardProhibitsDroppingPopulatedAuditOrSettings(): void
+    public function testUpSkipsAlreadyAppliedCompatibleTables(): void
     {
-        $path = dirname(__DIR__, 4).'/migrations/Version20261212120000.php';
-        $source = file_get_contents($path);
-        self::assertIsString($source);
-        self::assertStringContainsString('IrreversibleMigration', $source);
-        self::assertStringContainsString(
-            'SELECT COUNT(*) FROM condor_platform_integration_setting', $source,
+        self::bootKernel();
+        $db = self::getContainer()->get(Connection::class);
+        self::assertInstanceOf(Connection::class, $db);
+        require_once dirname(__DIR__, 4).'/migrations/Version20261212120000.php';
+        $migration = new Version20261212120000($db, new NullLogger());
+        $migration->up(new Schema());
+        self::assertSame([], $migration->getSql());
+    }
+
+    public function testRollbackRejectsEachPopulatedTableAndSchedulesEmptyRollback(): void
+    {
+        require_once dirname(__DIR__, 4).'/migrations/Version20261212120000.php';
+        foreach ([[1, 0], [0, 1]] as [$settings, $audits]) {
+            $migration = $this->rollbackMigrationForCounts($settings, $audits);
+            $schema = new Schema();
+            $migration->preDown($schema);
+            try {
+                $migration->down($schema);
+                self::fail('La reversión aceptó una tabla poblada.');
+            } catch (IrreversibleMigration) {
+                self::assertSame([], $migration->getSql());
+            }
+        }
+
+        $migration = $this->rollbackMigrationForCounts(0, 0);
+        $schema = new Schema();
+        $migration->preDown($schema);
+        $migration->down($schema);
+        self::assertSame(
+            ['DROP TABLE condor_platform_setting_audit', 'DROP TABLE condor_platform_integration_setting'],
+            array_map(static fn ($sql): string => $sql->getStatement(), $migration->getSql()),
         );
-        self::assertStringContainsString(
-            'SELECT COUNT(*) FROM condor_platform_setting_audit', $source,
+        $migration->postDown($schema);
+    }
+
+    private function rollbackMigrationForCounts(int $settings, int $audits): Version20261212120000
+    {
+        $db = $this->createMock(Connection::class);
+        $db->method('fetchOne')->willReturnCallback(
+            static function (string $sql) use ($settings, $audits): int {
+                if (str_contains($sql, 'GET_LOCK') || str_contains($sql, 'RELEASE_LOCK')) {
+                    return 1;
+                }
+                if (str_contains($sql, 'condor_platform_integration_setting')) {
+                    return $settings;
+                }
+                if (str_contains($sql, 'condor_platform_setting_audit')) {
+                    return $audits;
+                }
+                throw new \LogicException('SQL inesperado en prueba de reversión.');
+            },
         );
+        return new Version20261212120000($db, new NullLogger());
     }
 }

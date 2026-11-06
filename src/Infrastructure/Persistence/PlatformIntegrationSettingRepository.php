@@ -38,16 +38,18 @@ final readonly class PlatformIntegrationSettingRepository
         if (($ciphertext === null) === ($plain === null)
             || ($ciphertext !== null && (
                 $nonce === null || strlen($nonce) !== 32 || $keyVersion !== 1
-                || $suffix === null || strlen($suffix) !== 4
+                || $suffix === null || preg_match('/\A.{4}\z/usD', $suffix) !== 1
             ))
             || ($ciphertext === null && ($nonce !== null || $keyVersion !== null || $suffix !== null))
         ) {
             throw new DomainException('Campos de ajuste cifrado inconsistentes.');
         }
 
-        $this->connection->transactional(function () use (
-            $name, $plain, $ciphertext, $nonce, $keyVersion, $suffix, $actor,
-        ): void {
+        $this->acquireSchemaLock();
+        try {
+            $this->connection->transactional(function () use (
+                $name, $plain, $ciphertext, $nonce, $keyVersion, $suffix, $actor,
+            ): void {
             $this->connection->executeStatement(
                 'INSERT INTO condor_platform_integration_setting '
                 .'(setting_key, plain_value, encrypted_value, nonce, key_version, secret_suffix, updated_at, updated_by) '
@@ -59,13 +61,18 @@ final readonly class PlatformIntegrationSettingRepository
                 [$name, $plain, $ciphertext, $nonce, $keyVersion, $suffix, $actor],
             );
             $this->audit($name, $actor, 'UPSERT');
-        });
+            });
+        } finally {
+            $this->releaseSchemaLock();
+        }
     }
 
     public function delete(string $name, string $actor): void
     {
         PlatformIntegrationSetting::assertKey($name);
-        $this->connection->transactional(function () use ($name, $actor): void {
+        $this->acquireSchemaLock();
+        try {
+            $this->connection->transactional(function () use ($name, $actor): void {
             $deleted = $this->connection->executeStatement(
                 'DELETE FROM condor_platform_integration_setting WHERE setting_key = ?',
                 [$name],
@@ -73,7 +80,10 @@ final readonly class PlatformIntegrationSettingRepository
             if ($deleted > 0) {
                 $this->audit($name, $actor, 'DELETE');
             }
-        });
+            });
+        } finally {
+            $this->releaseSchemaLock();
+        }
     }
 
     /** @return array<string,mixed>|null */
@@ -126,6 +136,18 @@ final readonly class PlatformIntegrationSettingRepository
             $result['value'] = $row['public_value'];
         }
         return $result;
+    }
+
+    private function acquireSchemaLock(): void
+    {
+        if ((int) $this->connection->fetchOne("SELECT GET_LOCK('condor_platform_settings_schema', 10)") !== 1) {
+            throw new DomainException('No se obtuvo exclusión para escribir ajustes de plataforma.');
+        }
+    }
+
+    private function releaseSchemaLock(): void
+    {
+        $this->connection->fetchOne("SELECT RELEASE_LOCK('condor_platform_settings_schema')");
     }
 
     private function audit(string $name, string $actor, string $action): void

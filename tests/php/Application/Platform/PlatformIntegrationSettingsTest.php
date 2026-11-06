@@ -25,7 +25,8 @@ final class PlatformIntegrationSettingsTest extends KernelTestCase
 
     public function testSecretIsCiphertextOnlyAndSafeSnapshotExcludesIt(): void
     {
-        [$settings, $db] = $this->service(bin2hex(random_bytes(32)));
+        $master = bin2hex(random_bytes(32));
+        [$settings, $db] = $this->service($master);
         $name = 'fixture.secret.'.bin2hex(random_bytes(4));
         $synthetic = 'fixture-secret-'.bin2hex(random_bytes(10));
         $settings->saveSecret($name, $synthetic, 'platform_owner_fixture', true);
@@ -38,7 +39,14 @@ final class PlatformIntegrationSettingsTest extends KernelTestCase
         self::assertNotSame($synthetic, $row['encrypted_value']);
         self::assertStringNotContainsString($synthetic, (string) $row['encrypted_value']);
         self::assertSame(1, (int) $row['key_version']);
-        self::assertSame(24, strlen((string) base64_decode($row['nonce'], true)));
+        $nonce = base64_decode((string) $row['nonce'], true);
+        $encrypted = base64_decode((string) $row['encrypted_value'], true);
+        self::assertIsString($nonce);
+        self::assertIsString($encrypted);
+        self::assertSame(24, strlen($nonce));
+        $key = hash_hkdf('sha256', $master, SODIUM_CRYPTO_SECRETBOX_KEYBYTES, 'condor-platform-settings-v1');
+        self::assertSame($synthetic, sodium_crypto_secretbox_open($encrypted, $nonce, $key));
+        sodium_memzero($key);
         self::assertSame(substr($synthetic, -4), $row['secret_suffix']);
 
         $view = $settings->get($name, 'platform_owner_fixture', true);
@@ -62,7 +70,7 @@ final class PlatformIntegrationSettingsTest extends KernelTestCase
     {
         [$settings, $db] = $this->service('');
         $name = 'fixture.denied.'.bin2hex(random_bytes(4));
-        foreach (['', 'change-me-local-only', 'example-app-secret'] as $placeholder) {
+        foreach (['', 'change-me-local-only', 'example-app-secret', 'change-me-'.str_repeat('a', 32)] as $placeholder) {
             $invalid = new PlatformIntegrationSettings(
                 new PlatformIntegrationSettingRepository($db), $placeholder,
             );
@@ -79,6 +87,19 @@ final class PlatformIntegrationSettingsTest extends KernelTestCase
         } catch (DomainException) {
             self::assertNull($settings->get($name, 'platform_owner_fixture', true));
         }
+    }
+
+    public function testUnicodeSecretSuffixKeepsFourCharactersAndRejectsInvalidUtf8(): void
+    {
+        [$settings] = $this->service(bin2hex(random_bytes(32)));
+        $name = 'fixture.unicode.'.bin2hex(random_bytes(4));
+        $settings->saveSecret($name, 'abcdefghéé', 'platform_owner_fixture', true);
+        $safe = $settings->get($name, 'platform_owner_fixture', true);
+        self::assertIsArray($safe);
+        self::assertSame('••••ghéé', $safe['last4']);
+
+        $this->expectException(DomainException::class);
+        $settings->saveSecret($name, "fixture-\xFF-invalid", 'platform_owner_fixture', true);
     }
 
     public function testPlainValueOverwriteDeleteAndAuditHistory(): void

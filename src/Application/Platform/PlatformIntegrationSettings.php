@@ -40,6 +40,12 @@ final readonly class PlatformIntegrationSettings
         if (strlen($secret) < 8 || strlen($secret) > 8192 || str_contains($secret, "\0")) {
             throw new DomainException('Secreto inválido.');
         }
+        // Four UTF-8 code points, not four bytes. Reject malformed UTF-8.
+        $characters = preg_split('//u', $secret, -1, PREG_SPLIT_NO_EMPTY);
+        if ($characters === false || count($characters) < 4) {
+            throw new DomainException('Codificación o longitud de secreto inválida.');
+        }
+        $suffix = implode('', array_slice($characters, -4));
         if (!function_exists('sodium_crypto_secretbox') || !$this->hasSafeMasterKey()) {
             throw new DomainException('No existe una clave maestra válida para cifrar secretos.');
         }
@@ -50,7 +56,7 @@ final readonly class PlatformIntegrationSettings
         sodium_memzero($key);
         $this->repository->put(
             $name, null, base64_encode($ciphertext), base64_encode($nonce),
-            self::KEY_VERSION, substr($secret, -4), $actor,
+            self::KEY_VERSION, $suffix, $actor,
         );
     }
 
