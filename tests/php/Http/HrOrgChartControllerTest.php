@@ -103,26 +103,36 @@ final class HrOrgChartControllerTest extends WebTestCase
     /** @return array{Tenant,LegalEntity,LegalEntity,Branch,Branch,Branch,User,User} */
     private function fixtures(EntityManagerInterface $db): array
     {
-        $id = bin2hex(random_bytes(5));
-        $tenant = new Tenant('Org test', 'org-'.$id);
-        $foreignTenant = new Tenant('Org externa', 'other-'.$id);
-        $company = new LegalEntity($tenant, 'Empresa ficticia', null, true);
-        $other = new LegalEntity($tenant, 'Empresa ficticia B', null);
-        $foreignCompany = new LegalEntity($foreignTenant, 'Empresa externa', null);
-        $branch = new Branch($tenant, 'Sede principal', 'principal', $company, true);
-        $second = new Branch($tenant, 'Sede secundaria', 'secundaria', $other);
-        $foreign = new Branch($foreignTenant, 'Sede externa', 'externa', $foreignCompany);
-        $owner = new User('org-owner-'.$id.'@example.test', 'Owner');
-        $restricted = new User('org-user-'.$id.'@example.test', 'Restricted');
-        $ownMembership = new Membership($tenant, $owner, Membership::ROLE_OWNER);
-        $membership = new Membership($tenant, $restricted, 'ADMIN');
-        $role = new Role($tenant, 'Permiso reducido', ['catalog.view']);
-        foreach ([$tenant, $foreignTenant, $company, $other, $foreignCompany, $branch, $second,
-            $foreign, $owner, $restricted, $ownMembership, $membership, $role] as $row) {
-            $db->persist($row);
+        $suffix = bin2hex(random_bytes(5));
+        $tenants = [
+            new Tenant('Fixture de organigrama', 'chart-main-'.$suffix),
+            new Tenant('Fixture de otra organización', 'chart-foreign-'.$suffix),
+        ];
+        $companies = [
+            new LegalEntity($tenants[0], 'Compañía titular ficticia', null, true),
+            new LegalEntity($tenants[0], 'Otra compañía ficticia', null),
+            new LegalEntity($tenants[1], 'Compañía ajena ficticia', null),
+        ];
+        $branches = [
+            new Branch($tenants[0], 'Oficina primera', 'primera', $companies[0], true),
+            new Branch($tenants[0], 'Oficina segunda', 'segunda', $companies[1]),
+            new Branch($tenants[1], 'Oficina ajena', 'ajena', $companies[2]),
+        ];
+        $users = [
+            new User('chart-owner-'.$suffix.'@example.test', 'Owner ficticio'),
+            new User('chart-limited-'.$suffix.'@example.test', 'Rol limitado ficticio'),
+        ];
+        $memberships = [
+            new Membership($tenants[0], $users[0], Membership::ROLE_OWNER),
+            new Membership($tenants[0], $users[1], 'ADMIN'),
+        ];
+        $noAccess = new Role($tenants[0], 'Sin permiso de personas', ['catalog.view']);
+        foreach ([...$tenants, ...$companies, ...$branches, ...$users, ...$memberships, $noAccess] as $entity) {
+            $db->persist($entity);
         }
-        $db->persist(new BranchRoleAssignment($membership, $branch, $role));
+        $db->persist(new BranchRoleAssignment($memberships[1], $branches[0], $noAccess));
         $db->flush();
-        return [$tenant, $company, $other, $branch, $second, $foreign, $owner, $restricted];
+
+        return [$tenants[0], $companies[0], $companies[1], $branches[0], $branches[1], $branches[2], $users[0], $users[1]];
     }
 }
