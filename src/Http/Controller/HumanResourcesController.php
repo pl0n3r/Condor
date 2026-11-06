@@ -6,6 +6,7 @@ namespace App\Http\Controller;
 
 use App\Application\HumanResources\EmployeeApiService;
 use App\Application\HumanResources\HumanResourcesPreview;
+use App\Application\HumanResources\HumanResourceRecordService;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\Membership;
@@ -32,6 +33,7 @@ final class HumanResourcesController extends AbstractController
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
         private readonly EmployeeApiService $employees,
+        private readonly HumanResourceRecordService $records,
     ) {
     }
 
@@ -111,6 +113,76 @@ final class HumanResourcesController extends AbstractController
                 $kind, $tenant->id(), $company->id(), $payload,
             ),
         )]);
+    }
+
+    /** Server-gated real RRHH endpoints. All tenant/company/actor IDs come from session authorization. */
+    #[Route('/api/v1/branches/{branchId}/hr/records', name: 'api_hr_records_list', methods: ['GET'])]
+    public function recordsList(string $branchId): JsonResponse
+    {
+        if (($off = $this->realDisabled()) !== null) { return $off; }
+        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
+        return $this->privateJson(['records' => $this->domain(
+            fn (): array => $this->records->listRecords($tenant->id(), $this->realCompany($tenant, $branch)),
+        )]);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/hr/records/{ref}', name: 'api_hr_records_detail', methods: ['GET'])]
+    public function recordsDetail(string $branchId, string $ref): JsonResponse
+    {
+        if (($off = $this->realDisabled()) !== null) { return $off; }
+        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
+        $row = $this->domain(fn (): ?array => $this->records->detail(
+            $tenant->id(), $this->realCompany($tenant, $branch), $ref,
+        ));
+        if ($row === null) { throw new NotFoundHttpException('Registro laboral no encontrado.'); }
+        return $this->privateJson(['record' => $row]);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/hr/records', name: 'api_hr_records_create', methods: ['POST'])]
+    public function recordsCreate(string $branchId, Request $request): JsonResponse
+    {
+        if (($off = $this->realDisabled()) !== null) { return $off; }
+        $this->requireCsrf($request);
+        [$actor, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.create');
+        $input = $this->payload($request, ['record_ref', 'kind', 'collaborator_ref', 'position_ref']);
+        return $this->privateJson(['record' => $this->domain(
+            fn (): array => $this->records->create(
+                $tenant->id(), $this->realCompany($tenant, $branch), $actor->id(), $input,
+            ),
+        )], Response::HTTP_CREATED);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/hr/records/{ref}/state', name: 'api_hr_records_state', methods: ['PATCH'])]
+    public function recordsState(string $branchId, string $ref, Request $request): JsonResponse
+    {
+        if (($off = $this->realDisabled()) !== null) { return $off; }
+        $this->requireCsrf($request);
+        [$actor, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.update');
+        $input = $this->payload($request, ['state', 'expected_version']);
+        if (!is_string($input['state'] ?? null) || !is_int($input['expected_version'] ?? null)) {
+            throw new BadRequestHttpException('Estado y versión obligatorios.');
+        }
+        return $this->privateJson(['record' => $this->domain(
+            fn (): array => $this->records->changeState(
+                $tenant->id(), $this->realCompany($tenant, $branch), $actor->id(),
+                $ref, $input['state'], $input['expected_version'],
+            ),
+        )]);
+    }
+
+    private function realDisabled(): ?JsonResponse
+    {
+        if (getenv('HR_REAL_DATA_ENABLED') === 'true') { return null; }
+        return $this->privateJson(['error' => 'feature_unavailable'], Response::HTTP_NOT_FOUND);
+    }
+
+    private function realCompany(Tenant $tenant, Branch $branch): string
+    {
+        $company = $branch->legalEntity();
+        if ($company === null || $company->tenant()->id() !== $tenant->id()) {
+            throw new NotFoundHttpException('Razón social no disponible.');
+        }
+        return $company->id();
     }
 
     /** @return array{User,Tenant,Branch} */
