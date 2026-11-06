@@ -130,9 +130,23 @@ final readonly class PlanQuoteService
             $options['limits'],
             $allowed,
         );
+        $verticalRate = $options['vertical']['price'];
+        if (is_array($verticalRate)) {
+            $verticalAmount = $cycle === 'monthly'
+                ? $verticalRate['monthly_amount'] : $verticalRate['annual_amount'];
+            if ($verticalRate['quote_required'] || !is_int($verticalAmount)) {
+                return $this->finish(
+                    $options, $cycle, $quantities, $selected,
+                    null, null, true, $at, $persist,
+                );
+            }
+            $extraAmount += $verticalAmount;
+        }
         foreach ($selected as $key) {
-            $price = $allowed[$key]['monthly_amount'];
-            if (!is_int($price) || $price < 1) {
+            $price = $cycle === 'annual'
+                ? ($allowed[$key]['annual_amount'] ?? null)
+                : $allowed[$key]['monthly_amount'];
+            if (!is_int($price) || $price < 0) {
                 return $this->finish(
                     $options,
                     $cycle,
@@ -148,7 +162,9 @@ final readonly class PlanQuoteService
             $extraAmount += $price;
         }
 
-        $proposal = $cycle === 'annual' && $extraAmount > 0;
+        // Sin precio anual de extras de escala, el total necesita propuesta.
+        // Add-ons y verticales con importe anual explícito sí se calculan.
+        $proposal = $cycle === 'annual' && $derived !== [];
 
         return $this->finish(
             $options,
@@ -203,7 +219,7 @@ final readonly class PlanQuoteService
                 continue;
             }
             $price = $allowed[$addOnKey]['monthly_amount'] ?? null;
-            if (!is_int($price) || $price < 1) {
+            if (!is_int($price) || $price < 0) {
                 throw new DomainException('La cantidad excede el catálogo permitido.');
             }
             $amount += $units * $price;
