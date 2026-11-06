@@ -8,6 +8,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / 'templates/base.html.twig'
+RIGHTS = ROOT / 'templates/privacidad/derechos.html.twig'
 CSS = ROOT / 'public/cookie-consent.css'
 SCRIPT = ROOT / 'public/cookie-consent.js'
 
@@ -83,9 +84,15 @@ class CookieConsentTests(unittest.TestCase):
         for marker in ('cookie-consent-banner', 'cookie-consent-accept',
                        'cookie-consent-reject', 'cookie-consent-settings',
                        'cookie-consent-close', 'aria-labelledby',
-                       'cookie_optional_scripts', 'PENDIENTE DE APROBACIÓN'):
+                       'cookie_optional_scripts', 'cookie-consent__legal',
+                       'política de cookies', 'canal de privacidad y derechos'):
             with self.subTest(marker=marker):
                 self.assertIn(marker, html)
+        self.assertNotIn('PENDIENTE DE APROBACIÓN', html.upper())
+        self.assertIn('href="{{ path(\'app_privacy_rights\') }}#politica-de-cookies"', html)
+        rights = RIGHTS.read_text(encoding='utf-8')
+        self.assertIn('id="politica-de-cookies"', rights)
+        self.assertNotIn('pendiente de revisión y aprobación del abogado', rights.lower())
         self.assertIn('src="/cookie-consent.js" defer', html)
         self.assertIn('href="/cookie-consent.css"', html)
         # El smoke HTTP usa curl|grep -q para la versión: dejar el footer
