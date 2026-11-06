@@ -18,7 +18,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
-/** M01 S05 preview: only fictional nodes, never personnel or persisted HR records. */
+/** Fixture-only organizational hierarchy. Does not touch employee records. */
 final class HrOrgChartController extends AbstractController
 {
     use BranchApiSupport;
@@ -34,75 +34,62 @@ final class HrOrgChartController extends AbstractController
     #[Route('/api/v1/branches/{branchId}/hr/org-chart', name: 'api_hr_org_chart_index', methods: ['GET'])]
     public function index(string $branchId, Request $request): JsonResponse
     {
-        $this->requireSynthetic();
-        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
+        [$tenant, $company, $branch] = $this->previewContext($branchId, $request);
 
-        return $this->privateJson([
-            'nodes' => $this->catalog->listFor($tenant, $company, $branch),
-            'synthetic' => true,
-            'persisted' => false,
-            'juridically_binding' => false,
-        ]);
+        return $this->safeJson(['nodes' => $this->catalog->listFor($tenant, $company, $branch)]);
     }
 
     #[Route('/api/v1/branches/{branchId}/hr/org-chart/{ref}', name: 'api_hr_org_chart_detail', methods: ['GET'])]
     public function detail(string $branchId, string $ref, Request $request): JsonResponse
     {
-        $this->requireSynthetic();
-        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
+        [$tenant, $company, $branch] = $this->previewContext($branchId, $request);
         $node = $this->catalog->findFor($tenant, $company, $branch, $ref);
+
         if ($node === null) {
             throw new NotFoundHttpException('Nodo ficticio no encontrado.');
         }
 
-        return $this->privateJson([
-            'node' => $node,
-            'synthetic' => true,
-            'persisted' => false,
-            'juridically_binding' => false,
-        ]);
+        return $this->safeJson(['node' => $node]);
     }
 
-    private function requireSynthetic(): void
+    /** @return array{Tenant, LegalEntity, Branch} */
+    private function previewContext(string $branchId, Request $request): array
     {
-        $real = getenv('HR_REAL_DATA_ENABLED');
-        if ($real !== false && !in_array(strtolower(trim($real)), ['', 'false', '0', 'off', 'no'], true)) {
-            throw new NotFoundHttpException('Organigrama sintético no disponible.');
-        }
+        $flag = getenv('HR_REAL_DATA_ENABLED');
+        $realMode = $flag !== false && !in_array(strtolower(trim($flag)), ['', '0', 'false', 'off', 'no'], true);
         $environment = $this->getParameter('kernel.environment');
-        if ($environment !== 'test' && ($environment !== 'dev'
-            || getenv('CONDOR_HR_SYNTHETIC_API') !== '1'
-            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion')) {
+        $devPreview = $environment === 'dev'
+            && getenv('CONDOR_HR_SYNTHETIC_API') === '1'
+            && getenv('CONDOR_PRODUCTION_STAGE') === 'construccion';
+
+        if ($realMode || ($environment !== 'test' && !$devPreview)) {
             throw new NotFoundHttpException('Organigrama sintético no disponible.');
         }
-    }
 
-    private function companyFor(Tenant $tenant, Branch $branch, Request $request): LegalEntity
-    {
-        $query = $request->query->all();
-        if (array_diff(array_keys($query), ['company_id']) !== []) {
+        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
+        $params = $request->query->all();
+        if ($params !== [] && (count($params) !== 1 || !array_key_exists('company_id', $params))) {
             throw new BadRequestHttpException('Parámetros de consulta no permitidos.');
         }
+
         $company = $branch->legalEntity();
         if (!$company instanceof LegalEntity || $company->tenant()->id() !== $tenant->id()) {
             throw new NotFoundHttpException('Empresa no disponible.');
         }
-        $provided = $query['company_id'] ?? null;
-        if ($provided !== null && (!is_string($provided) || $provided !== $company->id())) {
+        if ($params !== [] && (!is_string($params['company_id']) || $params['company_id'] !== $company->id())) {
             throw new NotFoundHttpException('Empresa no disponible.');
         }
 
-        return $company;
+        return [$tenant, $company, $branch];
     }
 
-    /** @param array<string,mixed> $payload */
-    private function privateJson(array $payload): JsonResponse
+    /** @param array<string,mixed> $data */
+    private function safeJson(array $data): JsonResponse
     {
-        $response = $this->json($payload);
-        $response->headers->set('Cache-Control', 'private, no-store');
-        $response->headers->set('X-Content-Type-Options', 'nosniff');
-        return $response;
+        return $this->json(
+            $data + ['synthetic' => true, 'persisted' => false, 'juridically_binding' => false],
+            200,
+            ['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff'],
+        );
     }
 }
