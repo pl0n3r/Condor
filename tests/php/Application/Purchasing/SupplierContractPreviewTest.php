@@ -69,6 +69,20 @@ final class SupplierContractPreviewTest extends WebTestCase
         self::assertFalse($allReviewed['can_sign']);
     }
 
+    public function testChangesRequestedRemainsNonBinding(): void
+    {
+        $fixture = self::fixturePayload();
+        $fixture['reviews'][0]['state'] = 'changes_requested';
+        $fixture['reviews'][1]['state'] = 'reviewed';
+        $preview = SupplierContractPreview::preview($fixture);
+        self::assertSame('changes_requested', $preview['reviews']['purchasing']);
+        self::assertSame('reviewed', $preview['reviews']['legal']);
+        self::assertSame('REQUIRES_HUMAN_REVIEW', $preview['status']);
+        self::assertFalse($preview['can_approve']);
+        self::assertFalse($preview['can_sign']);
+        self::assertFalse($preview['juridically_binding']);
+    }
+
     public function testScopeRealDataAndInvalidReviewInputsFailClosed(): void
     {
         $base = self::fixturePayload();
