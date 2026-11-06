@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Application\Compliance\LegalCompliance;
 
+use App\Application\Compliance\ComplianceApiService;
 use App\Application\Compliance\ComplianceAttentionProjection;
 use App\Application\Compliance\ComplianceAuditCandidateProjection;
 use App\Application\Compliance\ComplianceEvidenceEvaluation;
@@ -220,6 +221,44 @@ final class GestM06VerificationTest extends TestCase
         self::assertSame('REQUIERE_REVISION', $foreign['rows'][0]['state']);
         self::assertFalse($foreign['rows'][0]['corrective_action_candidate']);
         self::assertNull($foreign['rows'][0]['audit_ref']);
+    }
+
+    public function testS06ServicioGenericoRestringeTenantYNoAprueba(): void
+    {
+        $scope = hash('sha256', 'tenant-a|branch-a');
+        $foreign = hash('sha256', 'tenant-b|branch-a');
+        $created = ComplianceApiService::createRecord([], $scope, [
+            'evidence_ref' => 'fixture:evidence/m06-demo',
+            'obligation_ref' => 'fixture:obligation/m06-demo',
+            'type' => 'EVALUACION',
+        ]);
+        $store = $created['store'];
+        self::assertSame('PENDIENTE', $created['record']['state']);
+        self::assertCount(1, ComplianceApiService::listRecords($store, $scope));
+        self::assertSame([], ComplianceApiService::listRecords($store, $foreign));
+        self::assertNull(ComplianceApiService::viewRecord(
+            $store, $foreign, 'fixture:evidence/m06-demo',
+        ));
+
+        try {
+            ComplianceApiService::changeState(
+                $store, $foreign, 'fixture:evidence/m06-demo', 'EN_REVISION',
+            );
+            self::fail('Se permitió modificar registros de otro tenant');
+        } catch (\DomainException) {
+            // Expected cross-tenant rejection from the real service.
+        }
+
+        foreach (['APROBADO', 'CUMPLE', 'CERRADO'] as $forbidden) {
+            try {
+                ComplianceApiService::changeState(
+                    $store, $scope, 'fixture:evidence/m06-demo', $forbidden,
+                );
+                self::fail('Se permitió aprobación/cierre automático');
+            } catch (\DomainException) {
+                // Review-only state machine; no legal completion.
+            }
+        }
     }
 
     public function testApiActualExigeScopePermisosCsrfYBanderaSintetica(): void
