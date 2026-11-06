@@ -25,6 +25,11 @@ por GitHub; un CI verde no acredita el flujo completo.
 La fila S05 no fue pedida por #1531 y no se promueve aquí.
 **0 de 6 filas** se califican como `CUBIERTO` integral por estos testigos.
 
+La prueba adicional `testS06ServicioGenericoRestringeTenantYNoAprueba` ejecuta
+`ComplianceApiService` PHP real: listado y vista cross-tenant vacíos, cambios
+en otro scope rechazados, y estados `APROBADO`/`CUMPLE`/`CERRADO`
+prohibidos. Esto no sustituye autenticación HTTP ni auditoría real.
+
 ## Aislamiento, permisos, UI y fronteras del test
 
 `testApiActualExigeScopePermisosCsrfYBanderaSintetica` inspecciona el
