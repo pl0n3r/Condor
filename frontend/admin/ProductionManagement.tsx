@@ -799,9 +799,8 @@ export function ProductionManagement({
                 </dl>)}
               </SidePanel>
 
-              {canCreate && (
+              {canCreate && <SidePanel open={activePanel === 'material'} title="Nuevo material" onClose={() => setActivePanel(null)}>
                 <form className="catalog-editor" onSubmit={(event) => void createMaterial(event)}>
-                  <h3>Nuevo material</h3>
                   <div className="catalog-form-grid">
                     <label className="field">
                       <span>Código</span>
@@ -837,11 +836,10 @@ export function ProductionManagement({
                     Crear material
                   </button>
                 </form>
-              )}
+              </SidePanel>}
 
-              {(canUpdate || canDelete) && ready.materials.materials.length > 0 && (
+              {(canUpdate || canDelete) && ready.materials.materials.length > 0 && <SidePanel open={activePanel === 'editMaterial'} title="Editar material" onClose={() => setActivePanel(null)}>
                 <form className="catalog-editor" onSubmit={(event) => void updateMaterial(event)}>
-                  <h3>Editar material</h3>
                   <label className="field">
                     <span>Material</span>
                     <select
@@ -908,11 +906,10 @@ export function ProductionManagement({
                     </>
                   )}
                 </form>
-              )}
+              </SidePanel>}
 
-              {canUpdate && activeMaterials.length > 0 && (
+              {canUpdate && activeMaterials.length > 0 && <SidePanel open={activePanel === 'adjustMaterial'} title="Ajustar materia prima" onClose={() => setActivePanel(null)}>
                 <form className="catalog-editor" onSubmit={(event) => void adjustMaterial(event)}>
-                  <h3>Ajustar materia prima</h3>
                   <div className="catalog-form-grid">
                     <label className="field">
                       <span>Material</span>
@@ -950,7 +947,7 @@ export function ProductionManagement({
                     Aplicar ajuste
                   </button>
                 </form>
-              )}
+              </SidePanel>}
             </section>
 
             <section className="catalog-card" aria-labelledby="production-bom-title">
@@ -988,9 +985,8 @@ export function ProductionManagement({
                 </div>
               )}
 
-              {canCreate && ready.variants.length > 0 && activeMaterials.length > 0 && (
+              {canCreate && ready.variants.length > 0 && activeMaterials.length > 0 && <SidePanel open={activePanel === 'bom'} title="Nueva versión de BOM" onClose={() => setActivePanel(null)}>
                 <form className="catalog-editor" onSubmit={(event) => void createBom(event)}>
-                  <h3>Nueva versión de BOM</h3>
                   <label className="field">
                     <span>Variante</span>
                     <select
@@ -1074,7 +1070,7 @@ export function ProductionManagement({
                     </button>
                   </div>
                 </form>
-              )}
+              </SidePanel>}
             </section>
 
             <section className="catalog-card production-orders" aria-labelledby="production-orders-title">
@@ -1145,9 +1141,8 @@ export function ProductionManagement({
                 </div>
               )}
 
-              {canCreate && activeBoms.length > 0 && (
+              {canCreate && activeBoms.length > 0 && <SidePanel open={activePanel === 'order'} title="Nueva orden" onClose={() => setActivePanel(null)}>
                 <form className="catalog-editor" onSubmit={(event) => void createOrder(event)}>
-                  <h3>Nueva orden</h3>
                   <div className="catalog-form-grid">
                     <label className="field">
                       <span>BOM activa</span>
@@ -1176,7 +1171,7 @@ export function ProductionManagement({
                     Crear orden
                   </button>
                 </form>
-              )}
+              </SidePanel>}
             </section>
           </div>
         </>
