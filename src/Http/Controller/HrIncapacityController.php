@@ -18,7 +18,8 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
-/** A read-only synthetic preview. Never touches payroll or real personnel. */
+/** A non-persistent HTTP facade for fictional absences only. */
+#[Route('/api/v1/branches/{branchId}/hr/incapacities')]
 final class HrIncapacityController extends AbstractController
 {
     use BranchApiSupport;
@@ -27,76 +28,86 @@ final class HrIncapacityController extends AbstractController
         private readonly CurrentTenantForUser $currentTenantForUser,
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
-        private readonly HrIncapacityCatalog $catalog,
+        private readonly HrIncapacityCatalog $incapacityCatalog,
     ) {
     }
 
-    #[Route('/api/v1/branches/{branchId}/hr/incapacities', name: 'api_hr_incapacities_index', methods: ['GET'])]
+    #[Route('', name: 'api_hr_incapacities_index', methods: ['GET'])]
     public function index(string $branchId, Request $request): JsonResponse
     {
-        [$tenant, $company, $branch] = $this->readScope($branchId, $request);
-        return $this->result('incapacities', $this->catalog->listFor($tenant, $company, $branch));
+        $scope = $this->visibleScope($request, $branchId);
+
+        return $this->respond('incapacities', $this->incapacityCatalog->listFor(...$scope));
     }
 
-    #[Route('/api/v1/branches/{branchId}/hr/incapacities/{ref}', name: 'api_hr_incapacities_detail', methods: ['GET'])]
+    #[Route('/{ref}', name: 'api_hr_incapacities_detail', methods: ['GET'])]
     public function detail(string $branchId, string $ref, Request $request): JsonResponse
     {
-        [$tenant, $company, $branch] = $this->readScope($branchId, $request);
-        $incapacity = $this->catalog->findFor($tenant, $company, $branch, $ref);
-        if ($incapacity === null) {
-            throw new NotFoundHttpException('Ausencia sintética no encontrada.');
+        [$tenant, $company, $branch] = $this->visibleScope($request, $branchId);
+        $entry = $this->incapacityCatalog->findFor($tenant, $company, $branch, $ref);
+        if ($entry === null) {
+            throw new NotFoundHttpException('No hay ausencia ficticia con esa referencia.');
         }
-        return $this->result('incapacity', $incapacity);
+
+        return $this->respond('incapacity', $entry);
     }
 
-    /** @return array{Tenant,LegalEntity,Branch} */
-    private function readScope(string $branchId, Request $request): array
+    /** @return array{Tenant, LegalEntity, Branch} */
+    private function visibleScope(Request $request, string $branchId): array
     {
-        $this->rejectUnsafeContext();
-        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $branch->legalEntity();
-        if (!$company instanceof LegalEntity || $company->tenant()->id() !== $tenant->id()) {
-            throw new NotFoundHttpException('Empresa ficticia no disponible.');
+        if (!$this->isSyntheticPreviewAllowed()) {
+            throw new NotFoundHttpException('La vista ficticia no está disponible.');
         }
-        $query = $request->query->all();
-        foreach (array_keys($query) as $key) {
-            if ($key !== 'company_id') {
-                throw new BadRequestHttpException('Consulta no admitida.');
+
+        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
+        $entity = $branch->legalEntity();
+        if (!$entity instanceof LegalEntity || $entity->tenant()->id() !== $tenant->id()) {
+            throw new NotFoundHttpException('Ámbito empresarial no disponible.');
+        }
+
+        $filters = $request->query->all();
+        if (array_diff(array_keys($filters), ['company_id']) !== []) {
+            throw new BadRequestHttpException('Filtro no admitido para el ensayo.');
+        }
+        if (array_key_exists('company_id', $filters)) {
+            $requested = $filters['company_id'];
+            if (!is_string($requested) || $requested !== $entity->id()) {
+                throw new NotFoundHttpException('Ámbito empresarial no disponible.');
             }
         }
-        if (array_key_exists('company_id', $query)
-            && (!is_string($query['company_id']) || $query['company_id'] !== $company->id())) {
-            throw new NotFoundHttpException('Empresa ficticia no disponible.');
-        }
-        return [$tenant, $company, $branch];
+
+        return [$tenant, $entity, $branch];
     }
 
-    private function rejectUnsafeContext(): void
+    private function isSyntheticPreviewAllowed(): bool
     {
-        $enabled = getenv('HR_REAL_DATA_ENABLED');
-        $off = $enabled === false || in_array(strtolower(trim($enabled)), ['', 'false', '0', 'off', 'no'], true);
-        $environment = $this->getParameter('kernel.environment');
-        $allowed = $environment === 'test' || (
-            $environment === 'dev'
+        $realData = strtolower(trim((string) (getenv('HR_REAL_DATA_ENABLED') ?: '')));
+        if (!in_array($realData, ['', '0', 'false', 'off', 'no'], true)) {
+            return false;
+        }
+
+        $environment = (string) $this->getParameter('kernel.environment');
+        if ($environment === 'test') {
+            return true;
+        }
+
+        return $environment === 'dev'
             && getenv('CONDOR_HR_SYNTHETIC_API') === '1'
-            && getenv('CONDOR_PRODUCTION_STAGE') === 'construccion'
-        );
-        if (!$off || !$allowed) {
-            throw new NotFoundHttpException('Vista de ausencias ficticias deshabilitada.');
-        }
+            && getenv('CONDOR_PRODUCTION_STAGE') === 'construccion';
     }
 
-    /** @param array<string,mixed>|list<array<string,mixed>> $content */
-    private function result(string $key, array $content): JsonResponse
+    /** @param array<string, mixed>|list<array<string, mixed>> $body */
+    private function respond(string $field, array $body): JsonResponse
     {
-        return new JsonResponse([
-            $key => $content,
+        $response = $this->json([
+            $field => $body,
             'synthetic' => true,
             'persisted' => false,
             'juridically_binding' => false,
-        ], 200, [
-            'Cache-Control' => 'private, no-store',
-            'X-Content-Type-Options' => 'nosniff',
         ]);
+        $response->headers->set('Cache-Control', 'private, no-store');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+
+        return $response;
     }
 }

@@ -9,65 +9,60 @@ use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use DomainException;
 
-/** Immutable fictional incapacities: never reads employees, HR records, or balances. */
+/** Synthetic absence snapshots. No employee entity or medical input is used. */
 final class HrIncapacityCatalog
 {
-    private const EXAMPLES = [
-        'samplea' => ['Ausencia temporal ficticia A', '2030-01-10'],
-        'sampleb' => ['Ausencia temporal ficticia B', '2030-02-12'],
-        'samplec' => ['Ausencia temporal ficticia C', '2030-03-15'],
+    /** @var list<array{code:string,label:string,from:string,to:string}> */
+    private const SCENARIOS = [
+        ['code' => 'a', 'label' => 'Ausencia ficticia A', 'from' => '2030-01-10', 'to' => '2030-01-12'],
+        ['code' => 'b', 'label' => 'Ausencia ficticia B', 'from' => '2030-03-05', 'to' => '2030-03-06'],
+        ['code' => 'c', 'label' => 'Ausencia ficticia C', 'from' => '2030-06-18', 'to' => '2030-06-20'],
     ];
 
     /** @return list<array{ref:string,label:string,starts_on:string,ends_on:string,state:string,synthetic:bool,automatically_approved:bool}> */
     public function listFor(Tenant $tenant, LegalEntity $company, Branch $branch): array
     {
-        $prefix = $this->scopePrefix($tenant, $company, $branch);
-        $examples = [];
-        foreach (self::EXAMPLES as $slug => [$description, $date]) {
-            $examples[] = self::example($prefix, $slug, $description, $date);
-        }
-        return $examples;
+        $scope = $this->scopeFingerprint($tenant, $company, $branch);
+
+        return array_map(
+            static fn (array $item): array => [
+                'ref' => 'fixture-incapacity-'.substr(hash('sha256', $scope.'|'.$item['code']), 0, 24),
+                'label' => $item['label'],
+                'starts_on' => $item['from'],
+                'ends_on' => $item['to'],
+                'state' => 'SIMULADA',
+                'synthetic' => true,
+                'automatically_approved' => false,
+            ],
+            self::SCENARIOS,
+        );
     }
 
     /** @return array{ref:string,label:string,starts_on:string,ends_on:string,state:string,synthetic:bool,automatically_approved:bool}|null */
-    public function findFor(Tenant $tenant, LegalEntity $company, Branch $branch, string $ref): ?array
+    public function findFor(Tenant $tenant, LegalEntity $company, Branch $branch, string $reference): ?array
     {
-        $prefix = $this->scopePrefix($tenant, $company, $branch);
-        if (strlen($ref) > 80 || !preg_match('/\Afixture-incapacity-[0-9a-f]{16}-[a-z]+\z/D', $ref)) {
+        if (preg_match('/\Afixture-incapacity-[a-f0-9]{24}\z/D', $reference) !== 1) {
             return null;
         }
-        foreach (self::EXAMPLES as $slug => [$description, $date]) {
-            $candidate = self::example($prefix, $slug, $description, $date);
-            if (hash_equals($candidate['ref'], $ref)) {
-                return $candidate;
+
+        foreach ($this->listFor($tenant, $company, $branch) as $entry) {
+            if (hash_equals($reference, $entry['ref'])) {
+                return $entry;
             }
         }
+
         return null;
     }
 
-    /** @return array{ref:string,label:string,starts_on:string,ends_on:string,state:string,synthetic:bool,automatically_approved:bool} */
-    private static function example(string $prefix, string $slug, string $description, string $date): array
+    private function scopeFingerprint(Tenant $tenant, LegalEntity $company, Branch $branch): string
     {
-        return [
-            'ref' => 'fixture-incapacity-'.$prefix.'-'.$slug,
-            'label' => $description,
-            'starts_on' => $date,
-            'ends_on' => $date,
-            'state' => 'SIMULADA',
-            'synthetic' => true,
-            'automatically_approved' => false,
-        ];
-    }
+        $tenantId = $tenant->id();
+        if ($tenantId !== $company->tenant()->id()
+            || $tenantId !== $branch->tenant()->id()
+            || $branch->legalEntity()?->id() !== $company->id()) {
+            throw new DomainException('El contexto ficticio de ausencias no pertenece al ámbito solicitado.');
+        }
 
-    private function scopePrefix(Tenant $tenant, LegalEntity $company, Branch $branch): string
-    {
-        $tenantKey = $tenant->id();
-        if ($company->tenant()->id() !== $tenantKey || $branch->tenant()->id() !== $tenantKey) {
-            throw new DomainException('Tenant ficticio inválido para el catálogo de ausencias.');
-        }
-        if ($branch->legalEntity()?->id() !== $company->id()) {
-            throw new DomainException('Sede ficticia fuera de su empresa.');
-        }
-        return substr(hash('sha256', $tenantKey.'|'.$company->id().'|'.$branch->id()), 0, 16);
+        return hash('sha256', implode('|', [$tenantId, $company->id(), $branch->id()]));
     }
 }
