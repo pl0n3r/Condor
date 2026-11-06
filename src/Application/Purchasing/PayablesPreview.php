@@ -9,6 +9,13 @@ use InvalidArgumentException;
 /** M09/S08: deterministic, synthetic-only unpaid obligations; no database or payment side effects. */
 final class PayablesPreview
 {
+    /** Every field is validated before being projected, in a canonical order. */
+    private const OBLIGATION_FIELDS = [
+        'obligation_ref', 'supplier_ref', 'tenant_ref', 'legal_entity_ref',
+        'site_ref', 'amount_cop', 'currency', 'reconciliation_status',
+        'payment_status',
+    ];
+
     /** @param array<string,mixed> $payload
      *  @return array<string,mixed>
      */
@@ -72,13 +79,9 @@ final class PayablesPreview
         if (!is_array($candidate) || array_is_list($candidate)) {
             throw new InvalidArgumentException('INVALID_OBLIGATION');
         }
-        self::requireFields($candidate, [
-            'obligation_ref', 'supplier_ref', 'tenant_ref', 'legal_entity_ref',
-            'site_ref', 'amount_cop', 'currency', 'reconciliation_status',
-            'payment_status',
-        ]);
-        $obligation = self::fixture($candidate['obligation_ref'], 'payable');
-        $supplier = self::fixture($candidate['supplier_ref'], 'supplier');
+        self::requireFields($candidate, self::OBLIGATION_FIELDS);
+        self::fixture($candidate['obligation_ref'], 'payable');
+        self::fixture($candidate['supplier_ref'], 'supplier');
         if ([
             $candidate['tenant_ref'], $candidate['legal_entity_ref'], $candidate['site_ref'],
         ] !== [
@@ -95,14 +98,11 @@ final class PayablesPreview
             || $candidate['payment_status'] !== 'unpaid') {
             throw new InvalidArgumentException('UNPAID_ONLY');
         }
-        return [
-            'obligation_ref' => $obligation,
-            'supplier_ref' => $supplier,
-            'amount_cop' => $amount,
-            'currency' => 'COP',
-            'reconciliation_status' => 'unreconciled',
-            'payment_status' => 'unpaid',
-        ];
+        $canonical = [];
+        foreach (self::OBLIGATION_FIELDS as $field) {
+            $canonical[$field] = $candidate[$field];
+        }
+        return $canonical;
     }
 
     /** @param array<string,mixed> $input
