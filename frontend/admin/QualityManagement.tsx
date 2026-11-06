@@ -121,7 +121,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             </select>
           </label>
           </Toolbar>
-          <DataTable caption="Listado de Calidad de la empresa · pruebas" rows={visible} rowKey={row => row.ref} onOpen={row => view(row.ref)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.ref}</strong></span> }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.status === 'EN_REVISION' ? 'info' : row.status === 'REQUIERE_REVISION' || row.status === 'CIERRE_REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.status}</StatusPill> }]} />
+          <DataTable caption="Listado de Calidad de la empresa · pruebas" rows={visible} rowKey={row => row.ref} onOpen={row => view(row.ref)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.ref}</strong></span> }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.status === 'EN_REVISION' ? 'info' : row.status === 'CIERRE_REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.status}</StatusPill> }]} />
         </section>
         {canCreate && (
           <SidePanel open={creating && canCreate} title="Nuevo registro ficticio" onClose={() => setCreating(false)}>
