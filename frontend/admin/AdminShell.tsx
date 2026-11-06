@@ -1,4 +1,9 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+
+/** El laboratorio solo existe en desarrollo; no activa datos ficticios en producción. */
+const DesignReference = import.meta.env.DEV
+  ? lazy(async () => ({ default: (await import('./ui/ReferencePages')).DesignPreview }))
+  : null;
 
 export type AdminNavItem = Readonly<{
   href: string;
@@ -353,6 +358,7 @@ export function AdminShell({
   children,
 }: AdminShellProps) {
   const hash = useLocationHash();
+  const designPreview = import.meta.env.DEV && variant === 'tenant' && hash === '#design-preview';
   // Si el ancla de la URL apunta a una sección dentro de un grupo, esa sección es la actual y «Inicio» deja de estarlo.
   const sectionInGroup = navItems.some((entry) => isGroup(entry)
     && entry.items.some((item) => !item.current && itemIsCurrent(item, hash)));
@@ -405,7 +411,7 @@ export function AdminShell({
         </form>
       </aside>
 
-      <div className="workspace" data-module={/^[a-z0-9-]+$/.test(activeId) ? activeId : 'inicio'}>
+      <main className="workspace" aria-label="Área de trabajo" data-module={/^[a-z0-9-]+$/.test(activeId) ? activeId : 'inicio'}>
         {/* El CSS estático activa solo el módulo elegido: compatible con CSP sin estilos embebidos. */}
         {variant === 'tenant' && <AdminGlobalSearch />}
         {activeLabel && (
@@ -417,8 +423,12 @@ export function AdminShell({
             <strong aria-current="page">{activeLabel}</strong>
           </nav>
         )}
-        {children}
-      </div>
+        {designPreview && DesignReference ? (
+          <Suspense fallback={<output>Cargando laboratorio de diseño…</output>}>
+            <DesignReference />
+          </Suspense>
+        ) : children}
+      </main>
     </section>
   );
 }

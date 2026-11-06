@@ -70,6 +70,7 @@ final readonly class PlanConfiguratorCatalogReader
             'vertical' => [
                 'key' => $vertical->key(),
                 'name' => $vertical->name(),
+                'price' => $plan['vertical_prices'][$vertical->key()] ?? null,
             ],
             'limits' => $plan['limits'],
             'capabilities' => $capabilities,

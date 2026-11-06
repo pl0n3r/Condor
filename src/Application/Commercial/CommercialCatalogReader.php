@@ -47,6 +47,7 @@ final readonly class CommercialCatalogReader
                 'annual_amount' => $version->annualAmount(),
                 'quote_required' => $version->quoteRequired(),
                 'limits' => $version->limits(),
+                'vertical_prices' => $version->priceOptions()['verticals'] ?? [],
                 'verticals' => array_map(
                     static fn (Vertical $item): string => $item->key(),
                     $version->verticals(),
@@ -59,8 +60,10 @@ final readonly class CommercialCatalogReader
                     static fn (AddOn $item): array => [
                         'key' => $item->key(),
                         'name' => $item->name(),
-                        'monthly_amount' => $item->monthlyAmount(),
-                        'quote_required' => $item->quoteRequired(),
+                        'currency' => $version->currency(),
+                        'monthly_amount' => ($version->priceOptions()['addons'][$item->key()] ?? ['monthly_amount' => $item->monthlyAmount()])['monthly_amount'],
+                        'annual_amount' => ($version->priceOptions()['addons'][$item->key()] ?? ['annual_amount' => null])['annual_amount'],
+                        'quote_required' => ($version->priceOptions()['addons'][$item->key()] ?? ['quote_required' => $item->quoteRequired()])['quote_required'],
                     ],
                     $version->addOns(),
                 ),
