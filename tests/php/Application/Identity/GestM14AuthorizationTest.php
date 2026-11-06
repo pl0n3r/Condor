@@ -15,10 +15,10 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
-/** GEST-M14-S01/S02: require() must never grant a foreign tenant's branch. */
+/** GEST-M14-S01/S02: exercise the real require() with a foreign tenant branch. */
 final class GestM14AuthorizationTest extends KernelTestCase
 {
-    public function testOwnerAndAdminCannotRequirePermissionOnForeignBranch(): void
+    public function testOwnerShortcutCannotBypassTenantBoundary(): void
     {
         self::bootKernel();
         $em = static::getContainer()->get(EntityManagerInterface::class);
@@ -26,60 +26,36 @@ final class GestM14AuthorizationTest extends KernelTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $em);
         self::assertInstanceOf(BranchAuthorization::class, $auth);
 
-        $suffix = bin2hex(random_bytes(5));
-        $tenant = new Tenant('Autorización A', 'auth-a-'.$suffix);
-        $foreignTenant = new Tenant('Autorización B', 'auth-b-'.$suffix);
-        $branch = new Branch($tenant, 'Propia', 'own', null, true);
-        $foreign = new Branch($foreignTenant, 'Ajena', 'foreign', null, true);
-        $owner = new User('auth-owner-'.$suffix.'@example.test', 'Owner');
-        $admin = new User('auth-admin-'.$suffix.'@example.test', 'Admin');
-        $ownerMembership = new Membership($tenant, $owner, Membership::ROLE_OWNER);
-        $adminMembership = new Membership($tenant, $admin, 'ADMIN');
-        $viewRole = new Role($tenant, 'Ver roles', ['roles.view']);
+        $nonce = bin2hex(random_bytes(5));
+        $tenant = new Tenant('Auth principal', 'unit-a-'.$nonce);
+        $other = new Tenant('Auth ajeno', 'unit-b-'.$nonce);
+        $local = new Branch($tenant, 'Propia', 'own', null, true);
+        $foreign = new Branch($other, 'Ajena', 'foreign', null, true);
+        $owner = new User('unit-owner-'.$nonce.'@example.test', 'Propietario');
+        $admin = new User('unit-admin-'.$nonce.'@example.test', 'Delegado');
+        $ownerMember = new Membership($tenant, $owner, Membership::ROLE_OWNER);
+        $adminMember = new Membership($tenant, $admin, 'ADMIN');
+        $viewer = new Role($tenant, 'Consulta', ['roles.view']);
+
+        $entities = [$tenant, $other, $local, $foreign, $owner, $admin, $ownerMember, $adminMember, $viewer];
+        array_walk($entities, static fn (object $entity) => $em->persist($entity));
+        $em->persist(new BranchRoleAssignment($adminMember, $local, $viewer));
+        $em->flush();
+
+        self::assertSame($ownerMember, $auth->require($owner, $tenant, $local, 'roles.create'));
+        self::assertSame($adminMember, $auth->require($admin, $tenant, $local, 'roles.view'));
 
         foreach ([
-            $tenant, $foreignTenant, $branch, $foreign, $owner, $admin,
-            $ownerMembership, $adminMembership, $viewRole,
-        ] as $entity) {
-            $em->persist($entity);
-        }
-        $em->persist(new BranchRoleAssignment($adminMembership, $branch, $viewRole));
-        $em->flush();
-
-        // Positive control: the patch cannot revoke legitimate same-tenant access.
-        self::assertSame($ownerMembership, $auth->require($owner, $tenant, $branch, 'roles.create'));
-        self::assertSame($adminMembership, $auth->require($admin, $tenant, $branch, 'roles.view'));
-
-        // Before the fix OWNER returned its membership despite the foreign branch.
-        foreach ([$owner, $admin] as $actor) {
+            [$owner, $foreign, 'roles.view', 'La sede no pertenece a la empresa activa.'],
+            [$admin, $foreign, 'roles.view', 'La sede no pertenece a la empresa activa.'],
+            [$admin, $local, 'roles.create', 'No tienes permiso para realizar esta acción.'],
+        ] as [$actor, $branch, $permission, $reason]) {
             try {
-                $auth->require($actor, $tenant, $foreign, 'roles.view');
-                self::fail('require() authorized an unrelated tenant branch.');
+                $auth->require($actor, $tenant, $branch, $permission);
+                self::fail('require() granted a forbidden branch or permission.');
             } catch (AccessDeniedException $exception) {
-                self::assertSame('La sede no pertenece a la empresa activa.', $exception->getMessage());
+                self::assertSame($reason, $exception->getMessage());
             }
         }
-    }
-
-    public function testAdminWithoutAssignedPermissionStillFailsClosed(): void
-    {
-        self::bootKernel();
-        $em = static::getContainer()->get(EntityManagerInterface::class);
-        $auth = static::getContainer()->get(BranchAuthorization::class);
-        self::assertInstanceOf(EntityManagerInterface::class, $em);
-        self::assertInstanceOf(BranchAuthorization::class, $auth);
-
-        $suffix = bin2hex(random_bytes(5));
-        $tenant = new Tenant('Tenant C', 'auth-c-'.$suffix);
-        $branch = new Branch($tenant, 'Principal', 'principal', null, true);
-        $user = new User('auth-restricted-'.$suffix.'@example.test', 'Admin limitado');
-        $membership = new Membership($tenant, $user, 'ADMIN');
-        foreach ([$tenant, $branch, $user, $membership] as $entity) {
-            $em->persist($entity);
-        }
-        $em->flush();
-
-        $this->expectException(AccessDeniedException::class);
-        $auth->require($user, $tenant, $branch, 'roles.create');
     }
 }
