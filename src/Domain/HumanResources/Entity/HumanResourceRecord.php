@@ -14,6 +14,7 @@ use DomainException;
 #[ORM\Entity]
 #[ORM\Table(name: 'condor_hr_real_record')]
 #[ORM\UniqueConstraint(name: 'uniq_hr_scope_version', columns: ['tenant_id', 'company_id', 'record_ref', 'version'])]
+#[ORM\Index(name: 'idx_hr_company_state', columns: ['tenant_id', 'company_id', 'state'])]
 final class HumanResourceRecord
 {
     public const DRAFT = 'BORRADOR';

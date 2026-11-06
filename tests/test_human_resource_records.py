@@ -96,7 +96,14 @@ echo json_encode($checks);
         self.assertIn("condor_risk_audit", sql)
         self.assertEqual(2, len(re.findall(r"\bCREATE TABLE\b", sql)))
         self.assertIn("condor_hr_real_record", ENTITY.read_text())
-        # A separate new migration and privacy registry are required for go-live.
+        # The independent migration is already merged through #1673, M12 remains untouched.
+        migration = (ROOT / "migrations/Version20261210120000.php").read_text()
+        self.assertIn("CREATE TABLE condor_hr_real_record", migration)
+        self.assertIn("FOREIGN KEY (tenant_id, company_id)", migration)
+        self.assertIn("UNIQUE INDEX uniq_hr_scope_version", migration)
+        self.assertIn("idx_hr_company_state", ENTITY.read_text())
+        self.assertIn("human_resources_real_records", (ROOT / "datos.yml").read_text())
+        # Publication/real personnel remain gated on owner decision and legal review.
 
 
 if __name__ == "__main__":

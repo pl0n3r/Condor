@@ -31,6 +31,7 @@ TREATMENTS = frozenset({
     "workflow_definitions", "workflow_executions",
     "payroll_synthetic_records", "social_security_synthetic_records",
     "human_resources_synthetic_records",
+    "human_resources_real_records",
 })
 
 
