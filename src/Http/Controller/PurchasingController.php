@@ -11,6 +11,7 @@ use App\Application\Purchasing\PurchaseOrderService;
 use App\Application\Purchasing\PurchaseRequestPreview;
 use App\Application\Purchasing\QuotationPreview;
 use App\Application\Purchasing\SupplierEvaluationPreview;
+use App\Application\Purchasing\SupplierContractPreview;
 use App\Application\Purchasing\SupplierService;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Organization\Entity\Branch;
@@ -240,6 +241,25 @@ final class PurchasingController extends AbstractController
         }
 
         return $this->json(['supplier_evaluation_preview' => $preview, 'synthetic_only' => true]);
+    }
+
+    /**
+     * Synthetic contract metadata only: no signatures, legal validity or persistence.
+     */
+    #[Route('/api/v1/branches/{branchId}/purchasing/suppliers/contracts/preview', name: 'api_purchasing_supplier_contract_preview', methods: ['POST'])]
+    public function previewSupplierContract(string $branchId, Request $request): JsonResponse
+    {
+        $this->requirePurchasingPreviewEnabled();
+        $this->requireCsrf($request);
+        $this->authorizedBranchScope($branchId, 'inventory.create');
+
+        try {
+            $preview = SupplierContractPreview::preview($this->syntheticPurchasingPayload($request));
+        } catch (\InvalidArgumentException $exception) {
+            throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
+        }
+
+        return $this->json(['supplier_contract_preview' => $preview, 'synthetic_only' => true]);
     }
 
     private function requirePurchasingPreviewEnabled(): void
