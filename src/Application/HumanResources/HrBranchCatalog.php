@@ -9,63 +9,62 @@ use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use DomainException;
 
-/** M01 S04: immutable fictional branch previews, scoped to an authorized tenant, company and branch. */
+/** Fictional, immutable branch samples: no staff data and no persistence. */
 final class HrBranchCatalog
 {
-    private const BRANCHES = [
-        ['slug' => 'norte', 'label' => 'Sede ficticia Norte', 'kind' => 'ensayo'],
-        ['slug' => 'centro', 'label' => 'Sede ficticia Centro', 'kind' => 'ensayo'],
-        ['slug' => 'sur', 'label' => 'Sede ficticia Sur', 'kind' => 'ensayo'],
+    private const LABELS = [
+        'norte' => 'Sede de ensayo Norte',
+        'centro' => 'Sede de ensayo Centro',
+        'sur' => 'Sede de ensayo Sur',
     ];
 
-    /** @return list<array{ref: string, label: string, kind: string, synthetic: bool}> */
+    /** @return list<array{ref:string,label:string,kind:string,synthetic:bool}> */
     public function listFor(Tenant $tenant, LegalEntity $company, Branch $branch): array
     {
-        self::assertScope($tenant, $company, $branch);
-        $scope = self::scopeRef($tenant, $company, $branch);
-        $result = [];
-        foreach (self::BRANCHES as $entry) {
-            $result[] = [
-                'ref' => 'fixture-branch-'.$scope.'-'.$entry['slug'],
-                'label' => $entry['label'],
-                'kind' => $entry['kind'],
+        $scope = self::scopeToken($tenant, $company, $branch);
+        $samples = [];
+        foreach (self::LABELS as $suffix => $label) {
+            $samples[] = [
+                'ref' => sprintf('fixture-branch-%s-%s', $scope, $suffix),
+                'label' => $label,
+                'kind' => 'ensayo',
                 'synthetic' => true,
             ];
         }
 
-        return $result;
+        return $samples;
     }
 
-    /** @return array{ref: string, label: string, kind: string, synthetic: bool}|null */
+    /** @return array{ref:string,label:string,kind:string,synthetic:bool}|null */
     public function findFor(Tenant $tenant, LegalEntity $company, Branch $branch, string $ref): ?array
     {
-        // Validate the entire scope before looking up even a synthetic identifier.
-        $entries = $this->listFor($tenant, $company, $branch);
-        if (strlen($ref) > 80 || !preg_match('/\Afixture-branch-[a-f0-9]{16}-[a-z]+\z/D', $ref)) {
+        $samples = $this->listFor($tenant, $company, $branch);
+        if (strlen($ref) > 80 || preg_match('/\Afixture-branch-[a-f0-9]{16}-[a-z]+\z/D', $ref) !== 1) {
             return null;
         }
-        foreach ($entries as $entry) {
-            if ($entry['ref'] === $ref) {
-                return $entry;
+
+        foreach ($samples as $sample) {
+            if (hash_equals($sample['ref'], $ref)) {
+                return $sample;
             }
         }
 
         return null;
     }
 
-    private static function assertScope(Tenant $tenant, LegalEntity $company, Branch $branch): void
+    private static function scopeToken(Tenant $tenant, LegalEntity $company, Branch $branch): string
     {
-        if ($company->tenant()->id() !== $tenant->id()
-            || $branch->tenant()->id() !== $tenant->id()
-            || $branch->legalEntity()?->id() !== $company->id()) {
-            throw new DomainException('Contexto de sedes ficticias no disponible.');
+        $tenantId = $tenant->id();
+        if ($branch->tenant()->id() !== $tenantId) {
+            throw new DomainException('Sede fuera del tenant sintético.');
         }
-    }
+        if ($company->tenant()->id() !== $tenantId) {
+            throw new DomainException('Empresa fuera del tenant sintético.');
+        }
+        if ($branch->legalEntity()?->id() !== $company->id()) {
+            throw new DomainException('Sede fuera de la empresa sintética.');
+        }
 
-    private static function scopeRef(Tenant $tenant, LegalEntity $company, Branch $branch): string
-    {
-        return substr(hash('sha256', implode('|', [
-            $tenant->id(), $company->id(), $branch->id(),
-        ])), 0, 16);
+        return substr(hash('sha256', $tenantId."\0".$company->id()."\0".$branch->id()), 0, 16);
     }
 }
