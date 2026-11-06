@@ -150,7 +150,7 @@ function HttpDocumentsPanel({ branchId, permissions, csrfToken }: Props) {
       };
       if (!Array.isArray(body.documents) || body.synthetic !== true || body.can_close !== false
         || body.signature_gate?.status !== 'NO_VERIFICABLE'
-        || body.signature_gate.legal_signature !== false) {
+        || body.signature_gate?.legal_signature !== false) {
         throw new Error('Respuesta documental sin garantías de simulación.');
       }
       if (!abort.signal.aborted) setState({ kind: 'ready', documents: body.documents });
