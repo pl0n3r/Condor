@@ -376,6 +376,7 @@ export function OrdersManagement({
         text: 'Pedido creado y stock reservado.',
       });
       setLines([draftLine(state.data.variants[0]?.id || '')]);
+      setCreateOpen(false);
       if (page === 1) {
         await loadOrders();
       } else {
