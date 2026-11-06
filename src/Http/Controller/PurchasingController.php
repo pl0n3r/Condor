@@ -187,22 +187,42 @@ final class PurchasingController extends AbstractController
     }
 
 
-    /** Construction-only quotation; no supplier contact or order placement. */
+    /**
+     * Synthetic-only quotation: no supplier contact, orders, persistence or money movement.
+     */
     #[Route('/api/v1/branches/{branchId}/purchasing/quotations/preview', name: 'api_purchasing_quotation_preview', methods: ['POST'])]
     public function previewQuotation(string $branchId, Request $request): JsonResponse
     {
-        return $this->syntheticPurchasingPreview(
-            $branchId, $request, 'quotation_preview', QuotationPreview::preview(...),
-        );
+        $this->requirePurchasingPreviewEnabled();
+        $this->requireCsrf($request);
+        $this->authorizedBranchScope($branchId, 'inventory.create');
+
+        try {
+            $preview = QuotationPreview::preview($this->syntheticPurchasingPayload($request));
+        } catch (\InvalidArgumentException $exception) {
+            throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
+        }
+
+        return $this->json(['quotation_preview' => $preview, 'synthetic_only' => true]);
     }
 
-    /** Construction-only purchase request; never approves or pays an order. */
+    /**
+     * Synthetic-only purchase request: never approves, places or pays for an order.
+     */
     #[Route('/api/v1/branches/{branchId}/purchasing/requests/preview', name: 'api_purchasing_request_preview', methods: ['POST'])]
     public function previewRequest(string $branchId, Request $request): JsonResponse
     {
-        return $this->syntheticPurchasingPreview(
-            $branchId, $request, 'request_preview', PurchaseRequestPreview::preview(...),
-        );
+        $this->requirePurchasingPreviewEnabled();
+        $this->requireCsrf($request);
+        $this->authorizedBranchScope($branchId, 'inventory.create');
+
+        try {
+            $preview = PurchaseRequestPreview::preview($this->syntheticPurchasingPayload($request));
+        } catch (\InvalidArgumentException $exception) {
+            throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
+        }
+
+        return $this->json(['request_preview' => $preview, 'synthetic_only' => true]);
     }
 
     /** Synthetic supplier evaluation; no lookup, award or persistence. */
