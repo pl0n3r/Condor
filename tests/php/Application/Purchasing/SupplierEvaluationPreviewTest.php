@@ -98,7 +98,7 @@ final class SupplierEvaluationPreviewTest extends WebTestCase
         $payload = self::fixturePayload();
 
         $client->jsonRequest('POST', $path, $payload);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(401);
         $client->loginUser($owner);
         $client->request('GET', '/admin');
         self::assertResponseIsSuccessful();
