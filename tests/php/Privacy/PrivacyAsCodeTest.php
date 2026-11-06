@@ -158,13 +158,15 @@ final class PrivacyAsCodeTest extends TestCase
     {
         $data = $this->data();
         foreach ($data['treatments'] as $treatment) {
-            $expectedProviders = $treatment['id'] === 'error_incidents'
-                ? ['sentry']
-                : [];
+            $expectedProviders = match ($treatment['id']) {
+                'error_incidents' => ['sentry'],
+                'condor_password_reset', 'account_invitation', 'notification_delivery' => ['resend'],
+                default => [],
+            };
             self::assertSame(
                 $expectedProviders,
                 $treatment['providers'],
-                'Solo error_incidents puede declarar Sentry como proveedor.',
+                'Solo Resend transaccional y Sentry de errores están autorizados.',
             );
         }
 
@@ -178,6 +180,7 @@ final class PrivacyAsCodeTest extends TestCase
             );
         }
         self::assertStringContainsString('proveedores: `sentry`', $register);
+        self::assertStringContainsString('proveedores: `resend`', $register);
         self::assertStringContainsString('proveedores: ninguno_declarado', $register);
     }
 
