@@ -99,8 +99,8 @@ final class PlanesV3PreciosTest extends WebTestCase
                 static fn ($node) => $node->getAttribute('data-plan-key') === $key,
             )->first();
             self::assertSame('3', $card->attr('data-plan-version'));
-            self::assertStringContainsString(number_format($monthly, 0, ',', '.'), $card->text());
-            self::assertStringContainsString(number_format($annual, 0, ',', '.'), $card->text());
+            self::assertStringContainsString('$ '.number_format($monthly, 0, ',', '.'), $card->text());
+            self::assertStringContainsString('$ '.number_format($annual, 0, ',', '.'), $card->text());
         }
         $enterprise = $cards->reduce(
             static fn ($node) => $node->getAttribute('data-plan-key') === 'enterprise',
