@@ -87,6 +87,10 @@ const DevOperationsProcessesPanel = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./OperationsProcessesPanel')).OperationsProcessesPanel }))
   : null;
 
+const DevDocumentsManagement = import.meta.env.DEV
+  ? lazy(async () => ({ default: (await import('./DocumentsManagement')).DocumentsManagement }))
+  : null;
+
 const DevFinanceManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./FinanceManagement')).FinanceManagement }))
   : null;
@@ -238,7 +242,10 @@ export function AdminApp({
         {
           group: 'Administración',
           icon: 'admin',
-          items: [{ href: '/admin#roles', label: 'Roles y permisos' }],
+          items: [
+            { href: '/admin#roles', label: 'Roles y permisos' },
+            ...(import.meta.env.DEV ? [{ href: '/admin#documents', label: 'Gestión documental (pruebas)' }] : []),
+          ],
         },
   ];
 
@@ -374,6 +381,19 @@ export function AdminApp({
           />
 
           <ModuleDirectory entries={navEntries} />
+
+          {DevDocumentsManagement && (
+            <Suspense fallback={<p role="status">Cargando gestión documental ficticia…</p>}>
+              <DevDocumentsManagement
+                key={'documents-' + context.data.tenant.id + '-' + (context.data.active_branch.legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                tenantId={context.data.tenant.id}
+                legalEntityId={context.data.active_branch.legal_entity?.id ?? '__unassigned__'}
+                branchId={context.data.active_branch.id}
+                permissions={context.data.permissions}
+                csrfToken={accessToken}
+              />
+            </Suspense>
+          )}
 
           <CatalogManagement
             key={'catalog-' + context.data.active_branch.id}
