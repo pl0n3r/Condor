@@ -39,10 +39,11 @@ export function MetricStrip({ items, label }: Readonly<{ items: readonly Metric[
 
 export function Toolbar({ children, trailing }: Readonly<{ children: ReactNode; trailing?: ReactNode }>) {
   return (
-    <div className="ui-toolbar" role="group" aria-label="Filtros">
+    <fieldset className="ui-toolbar">
+      <legend className="ui-sr-only">Filtros</legend>
       <div className="ui-toolbar-filters">{children}</div>
       {trailing && <div className="ui-toolbar-trailing">{trailing}</div>}
-    </div>
+    </fieldset>
   );
 }
 
@@ -118,13 +119,12 @@ export function SidePanel({ open, title, onClose, children, footer }: Readonly<{
       aria-labelledby={titleId}
       aria-modal="true"
       onCancel={(event) => { event.preventDefault(); onClose(); }}
-      onClick={(event) => { if (event.target === ref.current) onClose(); }}
     >
       <div className="ui-sidepanel-card">
         <header>
           <h3 id={titleId}>{title}</h3>
           <button type="button" className="ui-icon-button" aria-label="Cerrar" onClick={onClose}>
-            <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 5l10 10M15 5L5 15" /></svg>
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 5l10 10M15 5L5 15" /></svg>
           </button>
         </header>
         <div className="ui-sidepanel-body">{children}</div>

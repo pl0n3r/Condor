@@ -992,14 +992,14 @@ input:focus-visible {
 .admin-shell .ui-page-header p { color: var(--ui-muted); margin-top: 4px; }
 .admin-shell .ui-page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-.admin-shell .ui-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 0; }
+.admin-shell .ui-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 12px; margin: 0; }
 .admin-shell .ui-metric { background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); padding: 14px 16px; display: grid; gap: 2px; }
 .admin-shell .ui-metric dt { font-size: 0.8125rem; color: var(--ui-muted); font-weight: 600; }
-.admin-shell .ui-metric dd { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.admin-shell .ui-metric dd { line-height: 1.3; margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .admin-shell .ui-metric-hint { font-size: 0.8125rem; color: var(--ui-muted); }
 .admin-shell .ui-tone-ok { color: var(--ui-ok); } .admin-shell .ui-tone-warn { color: var(--ui-warn); } .admin-shell .ui-tone-danger { color: var(--ui-danger); }
 
-.admin-shell .ui-card { background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); padding: 0; overflow: hidden; display: block; }
+.admin-shell .ui-card { min-width: 0; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); padding: 0; overflow: hidden; display: block; }
 .admin-shell .ui-card > header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--ui-border); }
 .admin-shell .ui-card > header h3 { font-size: 0.9375rem; }
 .admin-shell .ui-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; align-items: start; }
@@ -1008,20 +1008,20 @@ input:focus-visible {
 .admin-shell .ui-toolbar-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex: 1 1 auto; }
 .admin-shell .ui-toolbar label { display: block; }
 .admin-shell .ui-search { flex: 1 1 260px; max-width: 360px; }
-.admin-shell .ui-toolbar select { width: auto; min-width: 150px; }
+.admin-shell .ui-toolbar select { width: auto; min-width: 150px; max-width: 100%; }
 .admin-shell .ui-count { font-size: 0.8125rem; color: var(--ui-muted); font-variant-numeric: tabular-nums; }
 
-.admin-shell .ui-table-wrap { overflow-x: auto; }
+.admin-shell .ui-table-wrap { overflow-x: auto; max-width: 100%; }
 .admin-shell .ui-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
 .admin-shell .ui-table th { position: sticky; top: 0; text-align: left; padding: 10px 16px; font-size: 0.75rem; font-weight: 650; color: var(--ui-muted); background: var(--ui-surface-2); border-bottom: 1px solid var(--ui-border); white-space: nowrap; }
 .admin-shell .ui-table td { padding: 12px 16px; border-bottom: 1px solid var(--ui-border); vertical-align: middle; }
 .admin-shell .ui-table tbody tr:last-child td { border-bottom: 0; }
 .admin-shell .ui-table tbody tr:hover td { background: var(--ui-surface-2); }
-.admin-shell .ui-right { text-align: right; font-variant-numeric: tabular-nums; }
+.admin-shell .ui-right { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
 .admin-shell .ui-cell-main { display: grid; gap: 1px; } .admin-shell .ui-cell-main small { color: var(--ui-muted); font-size: 0.75rem; }
 .admin-shell .workspace .ui-link { min-height: 0; padding: 0; border: 0; background: none; color: var(--ui-text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; display: inline; }
 .admin-shell .workspace .ui-link:hover { color: var(--ui-brand); background: none; text-decoration: underline; }
-.admin-shell .ui-empty { display: grid; gap: 4px; justify-items: center; padding: 40px 16px; text-align: center; color: var(--ui-muted); }
+.admin-shell .ui-empty { min-height: 150px; display: grid; gap: 4px; justify-items: center; padding: 40px 16px; text-align: center; color: var(--ui-muted); }
 .admin-shell .ui-empty strong { color: var(--ui-text); }
 
 .admin-shell .ui-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 650; background: #eef0f4; color: #3a4457; }
@@ -1035,12 +1035,12 @@ input:focus-visible {
 .admin-shell .ui-tasks a { display: grid; gap: 2px; padding: 12px; border-radius: 8px; text-decoration: none; color: inherit; transition: background-color .12s ease; }
 .admin-shell .ui-tasks a:hover { background: var(--ui-surface-2); }
 .admin-shell .ui-tasks span { color: var(--ui-muted); font-size: 0.8125rem; }
-.admin-shell .ui-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px; }
+.admin-shell .ui-shortcuts { align-items: start; display: flex; flex-wrap: wrap; gap: 8px; padding: 16px; }
 .admin-shell .ui-shortcuts a.button { text-decoration: none; }
 .admin-shell .ui-note { padding: 0 16px 16px; color: var(--ui-muted); font-size: 0.8125rem; }
 
 /* Panel lateral */
-.admin-shell dialog.ui-sidepanel, dialog.ui-sidepanel { margin: 0 0 0 auto; padding: 0; border: 0; height: 100dvh; max-height: 100dvh; width: min(480px, 100vw); background: var(--ui-surface, #fff); color: #0f1626; box-shadow: -8px 0 32px rgba(15, 22, 38, .18); }
+.admin-shell dialog.ui-sidepanel, dialog.ui-sidepanel { margin: 0 0 0 auto; padding: 0; border: 0; height: 100dvh; max-height: 100dvh; width: min(480px, 100vw); background: var(--ui-surface, #fff); color: var(--ui-text, #0f1626); box-shadow: -8px 0 32px rgba(15, 22, 38, .18); }
 dialog.ui-sidepanel::backdrop { background: rgba(15, 22, 38, .4); }
 dialog.ui-sidepanel[open] { animation: ui-sheet-in .2s cubic-bezier(.22, 1, .36, 1); }
 @keyframes ui-sheet-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -1084,27 +1084,25 @@ dialog.ui-sidepanel[open] { animation: ui-sheet-in .2s cubic-bezier(.22, 1, .36,
 .admin-shell .ui-icon-button:focus-visible,
 .admin-shell .ui-link:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 3px; }
 .admin-shell .ui-preview-tab:disabled, .admin-shell button:disabled { cursor: not-allowed; opacity: .65; }
-.admin-shell .ui-card { min-width: 0; }
-.admin-shell .ui-grid-2 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
-.admin-shell .ui-toolbar select { max-width: 100%; }
-.admin-shell .ui-metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); }
-.admin-shell .ui-table-wrap { max-width: 100%; }
-.admin-shell .ui-empty { min-height: 150px; }
+
+
+
+
+
+
 .admin-shell .ui-row-action:focus-within td { background: var(--ui-surface-2); }
 .admin-shell .ui-table td, .admin-shell .ui-table th { overflow-wrap: anywhere; }
-.admin-shell .ui-metric dd { line-height: 1.3; }
-.admin-shell .ui-right { white-space: nowrap; }
+
+
 .admin-shell .ui-card > :not(header) { min-width: 0; }
 .admin-shell .ui-preview .ui-card > .ui-tasks { padding: 8px 12px; }
 .admin-shell .ui-preview .ui-card > .ui-note { padding: 0 16px 16px; }
 .admin-shell .ui-preview .ui-shortcuts .button { width: auto; }
 .admin-shell .ui-metric dd, .admin-shell .overview-value { font-variant-numeric: tabular-nums; }
 .admin-shell .ui-preview p, .admin-shell .ui-cell-main { overflow-wrap: anywhere; }
-.admin-shell .ui-shortcuts { align-items: start; }
+
 .admin-shell .ui-page-actions .button:disabled { opacity: .55; }
-.admin-shell dialog.ui-sidepanel, dialog.ui-sidepanel {
-  background: var(--ui-surface, #fff); color: var(--ui-text, #0f1626);
-}
+
 .admin-shell .ui-sidepanel-card > header, .admin-shell .ui-sidepanel-card > footer,
 .admin-shell .ui-details > div { border-color: var(--ui-border); }
 .admin-shell .ui-sidepanel-card > footer { background: var(--ui-surface-2); }

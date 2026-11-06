@@ -38,7 +38,11 @@ class CatalogoPlanesAdminTests(unittest.TestCase):
         self.assertIn("PlatformAuditEvent", controller)
         self.assertIn("['old' => $before, 'new' => $after]", controller)
         self.assertIn("new PlanVersion(", controller)
-        self.assertRegex(controller, r"null,\s*null,\s*true,\s*\$payload\['limits'\]")
+        # La edición de nombre/límites ya no puede destruir tarifas vigentes.
+        self.assertIn("$current->monthlyAmount()", controller)
+        self.assertIn("$current->annualAmount()", controller)
+        self.assertIn("$current->quoteRequired()", controller)
+        self.assertIn("$current->priceOptions()", controller)
         self.assertIn("CommercialCatalogReader", controller)
         self.assertIn("rename(", self.source(IDENTITY))
         self.assertIn("closeAt(", self.source(VERSION))

@@ -30,7 +30,7 @@ Condor App es una plataforma SaaS multiempresa para operaciones de empresas colo
 
 Documentación, tokens, shell refinado y un kit de referencia con cabecera, tarjetas de métricas, filtros, tabla de registros, indicadores de estado, panel de detalle y formulario lateral.
 
-La ruta **local** \`/admin#design-preview\` muestra, únicamente durante \`vite dev\`, tres vistas con contenido sintético. No emite peticiones HTTP ni guarda información. En la compilación de producción, \`import.meta.env.DEV\` impide el acceso a esta vista. Es una guía visual para los desarrolladores, **no** un módulo de personal real.
+La ruta **local** `/admin#design-preview` muestra, únicamente durante `vite dev`, tres vistas con contenido sintético. No emite peticiones HTTP ni guarda información. En la compilación de producción, `import.meta.env.DEV` impide el acceso a esta vista. Es una guía visual para los desarrolladores, **no** un módulo de personal real.
 
 ## Límites de entrega
 
@@ -40,6 +40,6 @@ No introduce nuevas API, permisos, datos de clientes, proveedores, contenido pú
 
 - Interfaces con estructura consistente y navegación sin pérdida de contexto.
 - Contraste de texto WCAG 2.2 AA: al menos 4.5:1 para texto normal, 3:1 para texto grande y componentes no textuales pertinentes.
-- Tabulación y activación con Enter/Espacio; \`<dialog>\` nativo devuelve el foco al disparador.
+- Tabulación y activación con Enter/Espacio; `<dialog>` nativo devuelve el foco al disparador.
 - Estado oscuro compatible con el sistema, sin suprimir el foco y sin animación obligatoria.
-- \`CI Factory v1 / Validar\` terminal en verde sobre el commit exacto, además de calidad y revisión final requeridas.
+- `CI Factory v1 / Validar` terminal en verde sobre el commit exacto, además de calidad y revisión final requeridas.

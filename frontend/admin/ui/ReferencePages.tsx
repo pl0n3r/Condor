@@ -52,7 +52,7 @@ export function PeoplePage() {
         { label: 'Novedades abiertas', value: 6, hint: '2 por revisar', tone: 'warn' },
         { label: 'Movimientos del mes', value: 3 },
       ]} />
-      {notice && <p className="alert alert-success" role="status">{notice}</p>}
+      {notice && <output className="alert alert-success">{notice}</output>}
       <Card>
         <Toolbar trailing={<span className="ui-count">{rows.length} de {PEOPLE.length}</span>}>
           <label className="ui-search"><span className="ui-sr-only">Buscar</span>

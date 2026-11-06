@@ -411,7 +411,7 @@ export function AdminShell({
         </form>
       </aside>
 
-      <div className="workspace" role="main" aria-label="Área de trabajo" data-module={/^[a-z0-9-]+$/.test(activeId) ? activeId : 'inicio'}>
+      <main className="workspace" aria-label="Área de trabajo" data-module={/^[a-z0-9-]+$/.test(activeId) ? activeId : 'inicio'}>
         {/* El CSS estático activa solo el módulo elegido: compatible con CSP sin estilos embebidos. */}
         {variant === 'tenant' && <AdminGlobalSearch />}
         {activeLabel && (
@@ -424,11 +424,11 @@ export function AdminShell({
           </nav>
         )}
         {designPreview && DesignReference ? (
-          <Suspense fallback={<p role="status">Cargando laboratorio de diseño…</p>}>
+          <Suspense fallback={<output>Cargando laboratorio de diseño…</output>}>
             <DesignReference />
           </Suspense>
         ) : children}
-      </div>
+      </main>
     </section>
   );
 }
