@@ -1,5 +1,7 @@
 # GEST-M05 · Seguridad social — verificación sintética de seis submódulos (#1530)
 
+**PR de verificación:** [#1708](https://github.com/pl0n3r/Condor/pull/1708), entrega candidata; no se considera fusionado hasta recibir el comprobante de GitHub.
+
 **Corte de código:** Condor `main@0a424dd07b54de9b83b8639892e604cd749d7b61`, 6 de noviembre de 2026. **Alcance:** construcción con identidades exclusivamente `fixture:`; la decisión B de [#742](https://github.com/pl0n3r/Condor/issues/742) continúa prohibiendo activar RR. HH. para datos reales. Ninguna prueba sustituye dictamen jurídico, afiliación real, cotización o presentación ante PILA.
 
 ## Inventario verificable y brecha residual
