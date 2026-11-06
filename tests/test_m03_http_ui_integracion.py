@@ -118,6 +118,9 @@ class M03HttpUiIntegracionTests(unittest.TestCase):
                       "getenv('CONDOR_PRODUCTION_STAGE')", "'construccion'",
                       "'condor_sgsst_synthetic'", "'private, no-store'"):
             self.assertIn(guard, section)
+        self.assertIn("!in_array($environment, ['dev', 'test'], true)", section)
+        self.assertLess(section.index("getenv('CONDOR_OCCUPATIONAL_SYNTHETIC_API')"),
+                        section.index("authorizedBranchScope($branchId, $permission)"))
         self.assertEqual(4, section.count("occupationalAudit($tenant, $actor"))
 
     def test_ac03_dev_ui_http_and_four_states(self) -> None:

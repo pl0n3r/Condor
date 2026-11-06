@@ -184,10 +184,10 @@ final class ComplianceController extends AbstractController
     private function occupationalAccess(Request $request, string $branchId, string $permission, bool $write = false): array
     {
         $environment = $this->getParameter('kernel.environment');
-        if ($environment !== 'test' && ($environment !== 'dev'
+        if (!in_array($environment, ['dev', 'test'], true)
             || getenv('CONDOR_OCCUPATIONAL_SYNTHETIC_API') !== '1'
             || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion'
-        )) {
+        ) {
             throw new NotFoundHttpException('SG-SST sintético no disponible.');
         }
         if ($write) {
