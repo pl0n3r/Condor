@@ -144,6 +144,23 @@ final class DocumentsControllerHttpTest extends WebTestCase
         }
     }
 
+    public function testReactPanelHasServerStatesAndFailClosedLegalStatus(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3).'/frontend/admin/DocumentsManagement.tsx');
+        self::assertIsString($source);
+        foreach ([
+            'HttpDocumentsPanel', 'useEffect(', 'credentials:', 'state.kind === \'loading\'',
+            'state.kind === \'denied\'', 'state.kind === \'error\'',
+            'state.documents.length === 0', "base + '/export'",
+            "base + '/' + encodeURIComponent(key) + '/trace'",
+            "base + '/' + encodeURIComponent(key) + '/evidence'",
+            "body.signature_gate?.status !== 'NO_VERIFICABLE'",
+            'X-CSRF-Token', 'import.meta.env.DEV',
+        ] as $required) {
+            self::assertStringContainsString($required, $source);
+        }
+    }
+
     /** @return array{Tenant,LegalEntity,Branch,User} */
     private function fixture(EntityManagerInterface $em): array
     {
