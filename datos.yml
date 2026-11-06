@@ -345,7 +345,7 @@
     },
     {
       "id": "human_resources_real_records",
-      "category": "employment",
+      "category": "usage",
       "fields": [
         "id",
         "tenant_id",
