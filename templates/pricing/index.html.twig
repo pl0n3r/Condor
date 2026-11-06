@@ -35,11 +35,11 @@
                     <dl>
                         <div>
                             <dt>Mensual</dt>
-                            <dd>{% if plan.currency == 'COP' %}&#36;{% else %}{{ plan.currency }}{% endif %} {{ plan.monthly_amount|number_format(0, ',', '.') }}</dd>
+                            <dd>{% if plan.monthly_amount is null %}Sin tarifa{% else %}{% if plan.currency == 'COP' %}&#36;{% else %}{{ plan.currency }}{% endif %} {{ plan.monthly_amount|number_format(0, ',', '.') }}{% endif %}</dd>
                         </div>
                         <div>
                             <dt>Anual</dt>
-                            <dd>{% if plan.currency == 'COP' %}&#36;{% else %}{{ plan.currency }}{% endif %} {{ plan.annual_amount|number_format(0, ',', '.') }}</dd>
+                            <dd>{% if plan.annual_amount is null %}Sin tarifa{% else %}{% if plan.currency == 'COP' %}&#36;{% else %}{{ plan.currency }}{% endif %} {{ plan.annual_amount|number_format(0, ',', '.') }}{% endif %}</dd>
                         </div>
                     </dl>
                 {% endif %}
