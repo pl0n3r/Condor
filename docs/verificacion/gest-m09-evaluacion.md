@@ -33,7 +33,7 @@ La nota numérica no es una recomendación ni decisión contractual.
 `tests/php/Application/Purchasing/SupplierEvaluationPreviewTest.php` comprueba
 igualdad determinista, extremos 0/5, duplicados, campos/PII extra, números fuera
 de rango, referencia de proveedor real y scope cruzado tenant/entidad/sede.
-El escenario HTTP usa Symfony, usuarios/tenants/sedes de prueba, CSRF, 403
+El escenario HTTP usa Symfony, usuarios/tenants/sedes de prueba, CSRF, JSON malformado (400), tamaño excesivo (400), 403
 sin permiso, 404 por sede ajena y 422 por referencia/ámbito inválido.
 Reversión: revert squash de este PR; no crea tablas, órdenes, pagos, llamadas
 externas ni operaciones de escritura.

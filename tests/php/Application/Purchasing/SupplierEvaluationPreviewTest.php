@@ -105,6 +105,15 @@ final class SupplierEvaluationPreviewTest extends WebTestCase
         $csrf = ['HTTP_X_CSRF_TOKEN' => $this->csrfToken($client, 'branch_access')];
         $client->jsonRequest('POST', $path, $payload);
         self::assertResponseStatusCodeSame(403);
+        $client->request('POST', $path, [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_CSRF_TOKEN' => $csrf['HTTP_X_CSRF_TOKEN'],
+        ], '{"broken"');
+        self::assertResponseStatusCodeSame(400);
+        $client->jsonRequest('POST', $path, [
+            ...$payload, 'padding' => str_repeat('x', 70000),
+        ], $csrf);
+        self::assertResponseStatusCodeSame(400);
         $client->jsonRequest('POST', $path, $payload, $csrf);
         self::assertResponseStatusCodeSame(200);
         $response = json_decode((string)$client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
