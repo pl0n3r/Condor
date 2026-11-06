@@ -94,6 +94,14 @@ final class SupplierEvaluationPreviewTest extends WebTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $em);
         [$tenant, $branch, $owner] = $this->fixtureUser($em);
         [, $foreign] = $this->fixtureUser($em);
+        // KernelBrowser can reset Doctrine between HTTP requests: persist roles first.
+        $viewer = new User('m09-view-'.bin2hex(random_bytes(5)).'@example.test', 'Lector ficticio');
+        $membership = new Membership($tenant, $viewer, 'ADMIN');
+        $role = new Role($tenant, 'Lectura inventario ficticio', ['inventory.view']);
+        foreach ([$viewer, $membership, $role, new BranchRoleAssignment($membership, $branch, $role)] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
         $path = '/api/v1/branches/'.$branch->id().'/purchasing/suppliers/evaluations/preview';
         $payload = self::fixturePayload();
 
@@ -131,13 +139,6 @@ final class SupplierEvaluationPreviewTest extends WebTestCase
             $client->jsonRequest('POST', $path, $invalid, $csrf);
             self::assertResponseStatusCodeSame(422);
         }
-        $viewer = new User('m09-view-'.bin2hex(random_bytes(5)).'@example.test', 'Lector ficticio');
-        $membership = new Membership($tenant, $viewer, 'ADMIN');
-        $role = new Role($tenant, 'Lectura inventario ficticio', ['inventory.view']);
-        foreach ([$viewer, $membership, $role, new BranchRoleAssignment($membership, $branch, $role)] as $entity) {
-            $em->persist($entity);
-        }
-        $em->flush();
         $client->loginUser($viewer);
         $client->request('GET', '/admin');
         $csrfViewer = ['HTTP_X_CSRF_TOKEN' => $this->csrfToken($client, 'branch_access')];
