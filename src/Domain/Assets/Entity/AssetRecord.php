@@ -32,6 +32,9 @@ final class AssetRecord
     #[ORM\Column(name: 'state', type: 'string', length: 32)]
     private string $state = self::PENDING;
 
+    #[ORM\Column(name: 'responsible_ref', type: 'string', length: 80, nullable: true)]
+    private ?string $responsibleRef = null;
+
     #[ORM\Column(name: 'evidence_ref', type: 'string', length: 80, nullable: true)]
     private ?string $evidenceRef = null;
 
@@ -80,6 +83,18 @@ final class AssetRecord
         }
     }
 
+    public function assignResponsible(string $responsibleRef, string $actorRef, bool $authorized): void
+    {
+        self::assertAuthority($this->tenantRef, $actorRef, $authorized);
+        if (preg_match('~^fixture:responsible/[a-z][a-z0-9_-]{0,47}$~D', $responsibleRef) !== 1) {
+            throw new DomainException('Responsable sintético obligatorio.');
+        }
+        $this->responsibleRef = $responsibleRef;
+        $this->state = 'ASIGNADO';
+        $this->actorRef = $actorRef;
+        $this->updatedAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    }
+
     public function transition(string $state, string $actorRef, bool $authorized, ?string $evidenceRef = null): void
     {
         self::assertAuthority($this->tenantRef, $actorRef, $authorized);
@@ -110,6 +125,7 @@ final class AssetRecord
             'asset_ref' => $this->assetRef,
             'actor_ref' => $this->actorRef,
             'state' => $this->state,
+            'responsible_ref' => $this->responsibleRef,
             'evidence_ref' => $this->evidenceRef,
             'warranty_until' => $this->warrantyUntil,
             'created_at' => $this->createdAt->format('Y-m-d H:i:s'),

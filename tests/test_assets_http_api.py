@@ -90,6 +90,7 @@ foreach (json_decode($argv[4], true, 32, JSON_THROW_ON_ERROR) as $op) {
             'VIEW' => $service->viewRecord($tenant, $branch, $op['slug'] ?? 'demo'),
             'POST' => $service->createRecord($tenant, $branch, $op['payload']),
             'PATCH' => $service->changeState($tenant, $branch, $op['slug'] ?? 'demo', $op['payload']),
+            'ASSIGN' => $service->assignResponsible($tenant, $branch, $op['slug'] ?? 'demo', $op['payload']),
         };
     } catch (\DomainException $e) {
         $out[] = ['error' => 'denied'];
@@ -144,9 +145,9 @@ class ModuloTests(unittest.TestCase):
             self.assertIn(permission, source)
         for verb in ("methods: ['GET']", "methods: ['POST']", "methods: ['PATCH']"):
             self.assertIn(verb, source)
-        self.assertEqual(4, source.count('$this->access($branchId,'))
+        self.assertEqual(5, source.count('$this->access($branchId,'))
         self.assertIn('$this->authorizedBranchScope($branchId, $permission)', source)
-        self.assertEqual(2, source.count('$this->requireCsrf($request);'))
+        self.assertEqual(3, source.count('$this->requireCsrf($request);'))
         self.assertIn('$this->authorization->require(', support)
         self.assertIn("'tenant' => $tenant", support)
         self.assertIn('use BranchApiSupport;', source)
@@ -159,6 +160,30 @@ class ModuloTests(unittest.TestCase):
         self.assertEqual('EN_REVISION', rows[3]['state'])
         self.assertIn('transactional(', REPOSITORY.read_text(encoding='utf-8'))
         self.assertIn('FOR UPDATE', REPOSITORY.read_text(encoding='utf-8'))
+
+    def test_asignacion_responsable_sintetico_con_auditoria_y_scope(self) -> None:
+        rows = execute([
+            op('POST', payload=create()),
+            op('ASSIGN', payload={'responsible_ref': 'fixture:responsible/demo'}),
+            op('VIEW'),
+            op('GET'),
+            op('ASSIGN', company='company-b',
+               payload={'responsible_ref': 'fixture:responsible/other'}),
+            op('ASSIGN', tenant='tenant-b',
+               payload={'responsible_ref': 'fixture:responsible/other'}),
+            op('ASSIGN', payload={'responsible_ref': None}),
+            op('ASSIGN', payload={'responsible_ref': 'name@example.com'}),
+            op('ASSIGN', payload={'responsible_ref': 'fixture:responsible/demo', 'tenant': 'tenant-b'}),
+            op('VIEW'),
+        ])
+        self.assertEqual('ASIGNADO', rows[1]['state'])
+        self.assertEqual('fixture:responsible/demo', rows[1]['responsible_ref'])
+        self.assertEqual(rows[1], rows[2])
+        self.assertEqual([rows[1]], rows[3])
+        for i in (4, 5, 6, 7, 8):
+            self.assertEqual({'error': 'denied'}, rows[i])
+        self.assertEqual(rows[1], rows[9])
+        self.assertEqual(1, rows[-1]['audits'].count('synthetic.responsible_assigned'))
 
     def test_sin_datos_reales(self) -> None:
         for bad in (
