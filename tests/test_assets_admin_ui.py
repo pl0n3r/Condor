@@ -22,7 +22,7 @@ class ModuloTests(unittest.TestCase):
         self.assertIn("companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}", app)
         self.assertIn("tenantId={context.data.tenant.id}", app)
         self.assertIn("branchId={context.data.active_branch.id}", app)
-        for forbidden in ("localStorage", "sessionStorage", "indexedDB", "fetch("):
+        for forbidden in ("localStorage", "sessionStorage", "indexedDB"):
             self.assertNotIn(forbidden, code)
 
     def test_permisos_y_auditoria(self) -> None:
@@ -55,12 +55,27 @@ class ModuloTests(unittest.TestCase):
             self.assertNotIn(forbidden, code.lower())
         self.assertIn("if (!import.meta.env.DEV) return null;", code)
 
+    def test_estados_reales_de_api_red_y_autorizacion(self) -> None:
+        code = COMPONENT.read_text()
+        for expected in (
+            "new AbortController()", "credentials: 'same-origin'",
+            "response.status === 401 || response.status === 403",
+            "'permission-denied'", "'loading'", "'error'", "'ready'",
+            "if (!response.ok)", "setLoadState('error')",
+            "data.assets.map(fromApi)", "setRecords([])",
+            "'X-CSRF-Token': csrfToken", "void persist('POST'",
+            "void persist('PATCH'", "setAttempt(value => value + 1)",
+        ):
+            self.assertIn(expected, code)
+        self.assertIn("if (!import.meta.env.DEV) return null;", code)
+        self.assertNotIn("setRecords(previous => [...previous, record]);", code)
+
     def test_estados_explicitos(self) -> None:
         code, app = COMPONENT.read_text(), APP.read_text()
-        for state in ("INVENTARIADO", "ASIGNADO", "MANTENIMIENTO_PENDIENTE",
+        for state in ("PENDIENTE", "ASIGNADO", "EN_REVISION",
                       "BAJA_REQUIERE_REVISION"):
             self.assertIn(state, code)
-        self.assertIn("setRecords(previous => previous.map", code)
+        self.assertIn("setRecords(previous =>", code)
         self.assertIn("onSubmit={changeState}", code)
         self.assertIn("onSubmit={create}", code)
         self.assertIn("Registrar transición ficticia explícita", code)

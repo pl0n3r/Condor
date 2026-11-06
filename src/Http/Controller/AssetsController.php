@@ -16,6 +16,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
 /** Offline/synthetic-only M10 HTTP surface. Never enabled on a live environment. */
 final class AssetsController extends AbstractController
@@ -27,6 +28,7 @@ final class AssetsController extends AbstractController
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
         private readonly AssetApiService $assets,
+        private readonly CsrfTokenManagerInterface $csrfTokens,
     ) {
     }
 
@@ -34,7 +36,10 @@ final class AssetsController extends AbstractController
     public function list(string $branchId): JsonResponse
     {
         [$tenant, $office] = $this->access($branchId, 'inventory.view');
-        return $this->json(['assets' => $this->domain(fn (): array => $this->assets->listRecords($tenant, $office))]);
+        return $this->json([
+            'assets' => $this->domain(fn (): array => $this->assets->listRecords($tenant, $office)),
+            'csrf_token' => $this->csrfTokens->getToken('branch_access')->getValue(),
+        ]);
     }
 
     #[Route('/api/v1/branches/{branchId}/assets/{slug}', name: 'api_assets_view', methods: ['GET'])]
@@ -56,6 +61,16 @@ final class AssetsController extends AbstractController
         $payload = $this->payload($request, ['asset_ref', 'warranty_until']);
         $asset = $this->domain(fn (): array => $this->assets->createRecord($tenant, $office, $payload));
         return $this->json(['asset' => $asset], Response::HTTP_CREATED);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/assets/{slug}/responsible', name: 'api_assets_responsible', methods: ['PATCH'])]
+    public function responsible(string $branchId, string $slug, Request $request): JsonResponse
+    {
+        $this->requireCsrf($request);
+        [$tenant, $office] = $this->access($branchId, 'inventory.update');
+        $payload = $this->payload($request, ['responsible_ref']);
+        $asset = $this->domain(fn (): array => $this->assets->assignResponsible($tenant, $office, $slug, $payload));
+        return $this->json(['asset' => $asset]);
     }
 
     #[Route('/api/v1/branches/{branchId}/assets/{slug}/state', name: 'api_assets_state', methods: ['PATCH'])]
