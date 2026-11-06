@@ -552,12 +552,12 @@ final class PricingController extends AbstractController
                 ['name' => 'ASC'],
             );
 
-        return array_values(array_map(
+        return array_map(
             static fn (PriceList $list): array => self::priceListPayload(
                 $list,
             ),
             $lists,
-        ));
+        );
     }
 
     /** @return list<array<string, mixed>> */
