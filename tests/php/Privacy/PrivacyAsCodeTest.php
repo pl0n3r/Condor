@@ -36,6 +36,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'customer_contact',
                 'diagnostic_shares',
                 'error_incidents',
+                'human_resources_real_records',
                 'human_resources_synthetic_records',
                 'notification_delivery',
                 'notification_preferences',
@@ -64,6 +65,15 @@ final class PrivacyAsCodeTest extends TestCase
             self::assertSame('review_required', $hr[$key]);
         }
         self::assertSame([], $hr['providers']);
+        $hrReal = $this->treatment($data, 'human_resources_real_records');
+        self::assertSame('usage', $hrReal['category']);
+        self::assertSame('workforce_record_management', $hrReal['purpose']);
+        self::assertSame('review_required', $hrReal['basis']);
+        self::assertSame('review_required', $hrReal['retention']);
+        self::assertSame('review_required', $hrReal['consent']);
+        self::assertContains('company_id', $hrReal['fields']);
+        self::assertContains('collaborator_ref', $hrReal['fields']);
+        self::assertSame([], $hrReal['providers']);
         $payroll = $this->treatment($data, 'payroll_synthetic_records');
         self::assertSame('usage', $payroll['category']);
         self::assertSame('review_required', $payroll['purpose']);
