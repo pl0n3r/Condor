@@ -70,3 +70,16 @@ El CSS de referencia usa variables `--ui-*` bajo `.admin-shell`; no introduce un
 ## Límites
 
 Los componentes nuevos son una referencia dev-only, nunca datos de negocio; no se altera la autenticación, roles, tokens CSRF, rutas del backend ni políticas de despliegue. El rediseño de módulos específicos queda fuera de #1644.
+
+## Evidencia visual de #1644 — capturas de navegador
+
+Las cuatro imágenes son capturas reales de Playwright Chromium a 1280 × 940, con React/Vite en checkouts locales aislados. La versión anterior corresponde a main@912f5348 (interfaz de #1643); la nueva corresponde al código fuente de ab47ae52 (el commit 4b274e6b solo reconcilia bundles generados). Las personas y métricas son datos sintéticos, no datos de clientes; no se alteró producción.
+
+| | Claro | Oscuro del sistema |
+| --- | --- | --- |
+| **Antes** | ![Condor antes, claro](docs/screenshots/condor-1644-before-light.png) | ![Condor antes, preferencia oscura sin implementación](docs/screenshots/condor-1644-before-dark.png) |
+| **Después** | ![Condor después, claro](docs/screenshots/condor-1644-after-light.png) | ![Condor después, oscuro](docs/screenshots/condor-1644-after-dark.png) |
+
+**Nota:** el shell original no reaccionaba al tema oscuro del sistema; por eso las dos capturas "antes" tienen el mismo aspecto. Es una diferencia observada, no una captura ficticia.
+
+**Comprobaciones locales:** typecheck y build:admin pasan; Playwright a 360 px verificó tabla filtrable, panel lateral con Escape y retorno del foco, cero errores JS y cero desbordamiento horizontal. Contraste medido de 13 pares texto/fondo de elementos presentes: mínimo 5,47:1 (claro), 6,51:1 (oscuro). La muestra no sustituye auditoría integral de accesibilidad.
