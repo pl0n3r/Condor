@@ -74,25 +74,14 @@ final readonly class ErrorSanitizer
                 break;
             }
 
-            $class = isset($frame['class']) && is_string($frame['class'])
-                ? $frame['class']
-                : '';
-            $type = isset($frame['type']) && is_string($frame['type'])
-                ? $frame['type']
-                : '';
-            $function = isset($frame['function']) && is_string($frame['function'])
-                ? $frame['function']
-                : '(unknown)';
+            // Throwable::getTrace() tipa function como string; el resto de claves es opcional.
+            $class = $frame['class'] ?? '';
+            $type = $frame['type'] ?? '';
+            $function = $frame['function'];
 
             $frames[] = [
-                'file' => $this->safeFile(
-                    isset($frame['file']) && is_string($frame['file'])
-                        ? $frame['file']
-                        : ''
-                ),
-                'line' => isset($frame['line']) && is_int($frame['line'])
-                    ? $frame['line']
-                    : null,
+                'file' => $this->safeFile($frame['file'] ?? ''),
+                'line' => $frame['line'] ?? null,
                 'call' => substr($class.$type.$function, 0, 255),
             ];
         }
@@ -100,6 +89,9 @@ final readonly class ErrorSanitizer
         return $frames;
     }
 
+    /**
+     * @param list<array{file: string, line: int|null, call: string}> $trace
+     */
     public function fingerprint(
         Throwable $error,
         ?string $routeName,
@@ -112,7 +104,7 @@ final readonly class ErrorSanitizer
             implode('|', [
                 $error::class,
                 $routeName ?? '(sin-ruta)',
-                (string) ($origin['file'] ?? ''),
+                (string) $origin['file'],
                 (string) ($origin['line'] ?? ''),
             ]),
         );
