@@ -37,7 +37,7 @@ final class GovernanceController extends AbstractController
         $scope = $this->scope($tenant->id(), $branch->id());
         $records = $this->domain(fn (): array => GovernanceApiService::listRecords($this->store($request), $scope));
         $this->recordAudit($tenant, $user, 'governance.synthetic.listed', 'fixture:governance/list');
-        return $this->json(['records' => $records]);
+        return $this->syntheticJson(['records' => $records]);
     }
 
     #[Route('/api/v1/branches/{branchId}/governance/{kind}/{slug}', name: 'api_governance_view', methods: ['GET'])]
@@ -53,7 +53,7 @@ final class GovernanceController extends AbstractController
             throw new NotFoundHttpException('Referencia sintética no encontrada.');
         }
         $this->recordAudit($tenant, $user, 'governance.synthetic.viewed', $ref);
-        return $this->json(['record' => $record]);
+        return $this->syntheticJson(['record' => $record]);
     }
 
     #[Route('/api/v1/branches/{branchId}/governance', name: 'api_governance_create', methods: ['POST'])]
@@ -68,7 +68,7 @@ final class GovernanceController extends AbstractController
         ));
         $request->getSession()->set('condor_governance_synthetic', $result['store']);
         $this->recordAudit($tenant, $user, 'governance.synthetic.created', $result['record']['ref']);
-        return $this->json(['record' => $result['record']], Response::HTTP_CREATED);
+        return $this->syntheticJson(['record' => $result['record']], Response::HTTP_CREATED);
     }
 
     #[Route('/api/v1/branches/{branchId}/governance/{kind}/{slug}/state', name: 'api_governance_state', methods: ['PATCH'])]
@@ -85,7 +85,7 @@ final class GovernanceController extends AbstractController
         ));
         $request->getSession()->set('condor_governance_synthetic', $result['store']);
         $this->recordAudit($tenant, $user, 'governance.synthetic.state_changed', $ref);
-        return $this->json(['record' => $result['record']]);
+        return $this->syntheticJson(['record' => $result['record']]);
     }
 
     /** @return array<string,mixed> */
@@ -103,14 +103,24 @@ final class GovernanceController extends AbstractController
         return hash('sha256', $tenantId.'|'.$branchId);
     }
 
+    /** @param array<string,mixed> $payload */
+    private function syntheticJson(array $payload, int $status = Response::HTTP_OK): JsonResponse
+    {
+        $response = $this->json($payload, $status);
+        $response->headers->set('Cache-Control', 'private, no-store');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        return $response;
+    }
+
     private function syntheticOnly(): void
     {
         $rawEnvironment = $this->getParameter('kernel.environment');
         $environment = is_string($rawEnvironment) ? $rawEnvironment : '';
-        if ($environment !== 'test'
+        if (($environment === 'test' && getenv('CONDOR_GOVERNANCE_SYNTHETIC_API') === '0')
+            || ($environment !== 'test'
             && ($environment !== 'dev'
                 || getenv('CONDOR_GOVERNANCE_SYNTHETIC_API') !== '1'
-                || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion')
+                || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion'))
         ) {
             throw new NotFoundHttpException('Gobierno sintético no disponible.');
         }
