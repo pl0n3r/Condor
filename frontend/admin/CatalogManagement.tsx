@@ -559,10 +559,8 @@ export function CatalogManagement({
                   {product.allow_backorder ? 'Permitido' : 'Desactivado'}
                 </StatusPill> },
             ]} />
-          <SidePanel open={Boolean(selectedProductId)} title="Detalle de producto"
-            onClose={() => { setSelectedProductId(null); setVariantDraft(null); }}>
-            <div className="catalog-list">
-              {state.products.filter(product => product.id === selectedProductId).map((product) => (
+          <div className="catalog-list" aria-label="Fichas operativas de productos">
+            {state.products.map((product) => (
             <article className="catalog-card" key={product.id}>
               <div className="catalog-card-heading">
                 <div>
@@ -757,7 +755,17 @@ export function CatalogManagement({
               )}
             </article>
           ))}
-            </div>
+          </div>
+          <SidePanel open={selectedProductId !== null} title="Detalle de producto"
+            onClose={() => setSelectedProductId(null)}>
+            {state.products.filter(product => product.id === selectedProductId).map(product => (
+              <dl key={product.id} className="ui-details">
+                <div><dt>Nombre</dt><dd>{product.name}</dd></div>
+                <div><dt>Slug</dt><dd>{product.slug}</dd></div>
+                <div><dt>Variantes</dt><dd>{product.variants.length}</dd></div>
+                <div><dt>Backorder</dt><dd>{product.allow_backorder ? 'Permitido' : 'Desactivado'}</dd></div>
+              </dl>
+            ))}
           </SidePanel>
         </Card>
       )}
