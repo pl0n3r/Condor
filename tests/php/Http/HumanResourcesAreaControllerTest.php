@@ -20,6 +20,23 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 /** Kernel-level M01 S03 contract: synthetic fixtures only, zero real people. */
 final class HumanResourcesAreaControllerTest extends WebTestCase
 {
+    private string|false $originalRealDataFlag;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->originalRealDataFlag = getenv('HR_REAL_DATA_ENABLED');
+        putenv('HR_REAL_DATA_ENABLED=off');
+    }
+
+    protected function tearDown(): void
+    {
+        putenv($this->originalRealDataFlag === false
+            ? 'HR_REAL_DATA_ENABLED'
+            : 'HR_REAL_DATA_ENABLED='.$this->originalRealDataFlag);
+        parent::tearDown();
+    }
+
     public function testHttpListingAndDetailsUseOnlyTheAuthorizedCompanyAndBranch(): void
     {
         $browser = static::createClient();
@@ -109,6 +126,17 @@ final class HumanResourcesAreaControllerTest extends WebTestCase
         self::assertCount(3, $catalog->listFor($tenant, $company, $branch));
         $this->expectException(DomainException::class);
         $catalog->findFor($tenant, $foreignCompany, $branch, 'invalid');
+    }
+
+    public function testDomainRejectsBranchFromAnotherCompanyInTheSameTenant(): void
+    {
+        $tenant = new Tenant('Ficticio A', 'area-a');
+        $company = new LegalEntity($tenant, 'Entidad A', null);
+        $otherCompany = new LegalEntity($tenant, 'Entidad B', null);
+        $branch = new Branch($tenant, 'Sede A', 'a', $company);
+
+        $this->expectException(DomainException::class);
+        (new AreaCatalog())->findFor($tenant, $otherCompany, $branch, 'invalid');
     }
 
     /** @return array<string,mixed> */
