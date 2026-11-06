@@ -220,7 +220,10 @@ final class ComplianceController extends AbstractController
         $this->entityManager->flush();
     }
 
-    /** Synthetic previews must not be stored by intermediaries. */
+    /**
+     * Synthetic previews must not be stored by intermediaries.
+     * @param array<string, mixed> $payload
+     */
     private function occupationalResponse(array $payload, int $status = Response::HTTP_OK): JsonResponse
     {
         $response = $this->json($payload, $status);
