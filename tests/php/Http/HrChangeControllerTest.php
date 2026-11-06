@@ -79,7 +79,7 @@ final class HrChangeControllerTest extends WebTestCase
         $path = '/api/v1/branches/'.$branch->id().'/hr/changes';
 
         $browser->request('GET', $path);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(401);
         $browser->loginUser($delegate);
         $browser->request('GET', $path);
         self::assertResponseStatusCodeSame(403);
