@@ -33,6 +33,7 @@ test.describe('Slice 5 — clientes y precios', () => {
     await page.getByLabel('Contraseña').fill(password);
     await page.getByRole('button', { name: 'Ingresar' }).click();
     await expect(page).toHaveURL(/\/admin$/);
+    await page.goto('/admin#catalog');
 
     const catalog = page.locator('#catalog');
     await catalog.getByRole('button', { name: 'Nuevo producto' }).click();
@@ -50,6 +51,7 @@ test.describe('Slice 5 — clientes y precios', () => {
     await productCard.getByRole('button', { name: 'Crear variante' }).click();
     await expect(catalog.getByText('Variante creada.')).toBeVisible();
 
+    await page.goto('/admin#commerce');
     const commerce = page.locator('#commerce');
     await expect(
       commerce.getByRole('heading', { name: 'Comercial', exact: true })

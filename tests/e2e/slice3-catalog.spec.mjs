@@ -24,6 +24,7 @@ test.describe('Slice 3 — catálogo de productos y variantes', () => {
     await page.getByRole('button', { name: 'Ingresar' }).click();
 
     await expect(page).toHaveURL(/\/admin$/);
+    await page.goto('/admin#catalog');
     const catalog = page.locator('#catalog');
     await expect(
       catalog.getByRole('heading', { name: 'Catálogo' })

@@ -60,7 +60,7 @@ test.describe('Slice 7 — pedidos y reservas', () => {
     );
     expect(balance.quantity).toBe(8);
 
-    await page.goto('/admin');
+    await page.goto('/admin#orders');
     const orders = page.locator('#orders');
     await expect(
       orders.getByRole('heading', { name: 'Pedidos', exact: true })
