@@ -41,7 +41,7 @@ function governanceRequest(method: 'GET' | 'POST' | 'PATCH', url: string,
     request.setRequestHeader('Accept', 'application/json');
     if (body) {
       request.setRequestHeader('Content-Type', 'application/json');
-      const token = document.getElementById('condor-admin-root')?.getAttribute('data-access-token') ?? '';
+      const token = document.getElementById('condor-admin-root')?.dataset.accessToken ?? '';
       request.setRequestHeader('X-CSRF-Token', token);
     }
     request.onerror = () => reject(new GovernanceHttpError(0));
@@ -63,7 +63,7 @@ function serverRecord(value: unknown, tenantId: string, companyId: string,
     throw new GovernanceHttpError(0);
   }
   const item = value as Record<string, unknown>;
-  if (Object.keys(item).sort().join(',') !== 'kind,ref,state'
+  if (Object.keys(item).sort((left, right) => left.localeCompare(right)).join(',') !== 'kind,ref,state'
     || typeof item.ref !== 'string' || !serverRefPattern.test(item.ref)
     || typeof item.kind !== 'string' || !kinds.includes(item.kind as GovernanceKind)
     || !item.ref.startsWith('fixture:' + item.kind + '/')
