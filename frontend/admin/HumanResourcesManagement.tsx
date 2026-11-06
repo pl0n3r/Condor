@@ -236,5 +236,5 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
 /** The production surface stays closed until owner/go-live gates authorize it. */
 export function HumanResourcesManagement(props: Props) {
   if (!import.meta.env.DEV) return null;
-  return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId} {...props} />;
+  return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId + '|' + props.permissions.slice().sort().join(',')} {...props} />;
 }
