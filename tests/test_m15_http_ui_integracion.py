@@ -20,7 +20,7 @@ class GovernanceHttpUiIntegrationTests(unittest.TestCase):
             "request.withCredentials = true",
             "request.setRequestHeader('Accept', 'application/json')",
             "document.getElementById('condor-admin-root')",
-            "getAttribute('data-access-token')",
+            "dataset.accessToken",
             "request.setRequestHeader('X-CSRF-Token', token)",
             "request.send(body ? JSON.stringify(body) : null)",
             "governanceRequest('GET', governancePath(branchId))",
