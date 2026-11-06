@@ -314,3 +314,110 @@ export function cmsBlockPath(
 ): string {
   return cmsBlocksPath(branchId, pageId) + '/' + safeUlid(blockId);
 }
+
+
+/** M07-S06: únicamente fixtures de laboratorio; nunca una operación contable. */
+export type FinanceClosureMode = 'empty' | 'reconciled';
+export type FinanceClosureResult = Readonly<{
+  state: 'REQUIERE_REVISION';
+  synthetic_only: true;
+  can_close: false;
+  can_approve: false;
+  matched_candidate_count: number;
+  unmatched_movement_count: number;
+  periods: readonly Readonly<{
+    period_ref: string;
+    review_candidate: boolean;
+    can_close: false;
+    state: 'REQUIERE_REVISION';
+  }>[];
+}>;
+
+export class FinanceClosureAccessDenied extends Error {}
+
+/** El token branch_access ya está presente en el mount del administrador. */
+export function financeClosurePreviewPath(branchId: string): string {
+  return '/api/v1/branches/' + safeUlid(branchId) + '/finance/closures/preview';
+}
+
+function financeClosureFixture(mode: FinanceClosureMode): Record<string, unknown> {
+  const tenant_ref = 'fixture:tenant/current';
+  const legal_entity_ref = 'fixture:legal-entity/current';
+  const period_ref = 'fixture:finance-period/october';
+  const entry_ref = 'fixture:finance-entry/demo';
+  const common = { tenant_ref, legal_entity_ref };
+  return {
+    ...common,
+    fixture_ref: 'fixture:finance-reconciliation/demo',
+    as_of: '2026-11-05',
+    periods: mode === 'empty' ? [] : [{
+      ...common, period_ref, starts_on: '2026-10-01', ends_on: '2026-10-31',
+      state: 'BORRADOR',
+    }],
+    budgets: mode === 'empty' ? [] : [{
+      ...common, budget_ref: 'fixture:finance-budget/demo', period_ref,
+      kind: 'INGRESO', planned_decimal: '20.00', state: 'BORRADOR',
+    }],
+    ledger_entries: mode === 'empty' ? [] : [{
+      ...common, entry_ref, period_ref, budget_ref: 'fixture:finance-budget/demo',
+      amount_decimal: '12.30', kind: 'INGRESO', booked_on: '2026-10-20',
+      state: 'BORRADOR',
+    }],
+    bank_movements: mode === 'empty' ? [] : [{
+      ...common, movement_ref: 'fixture:finance-movement/demo', entry_ref,
+      amount_decimal: '12.30', kind: 'INGRESO', booked_on: '2026-10-21',
+      state: 'BORRADOR',
+    }],
+  };
+}
+
+function isSafeFinanceClosure(value: unknown): value is FinanceClosureResult {
+  if (typeof value !== 'object' || value === null) return false;
+  const row = value as Record<string, unknown>;
+  return row.synthetic_only === true && row.state === 'REQUIERE_REVISION'
+    && row.can_close === false && row.can_approve === false
+    && typeof row.matched_candidate_count === 'number'
+    && typeof row.unmatched_movement_count === 'number'
+    && Array.isArray(row.periods)
+    && row.periods.every((period: unknown) => {
+      if (typeof period !== 'object' || period === null) return false;
+      const item = period as Record<string, unknown>;
+      return typeof item.period_ref === 'string'
+        && item.period_ref.startsWith('fixture:finance-period/')
+        && item.can_close === false
+        && item.state === 'REQUIERE_REVISION'
+        && typeof item.review_candidate === 'boolean';
+    });
+}
+
+/** HTTP autenticado, sin persistencia cliente, sin permitir mutaciones de cierre. */
+export async function previewSyntheticFinanceClosure(
+  branchId: string,
+  mode: FinanceClosureMode,
+  signal?: AbortSignal,
+): Promise<FinanceClosureResult> {
+  const csrfToken = document.getElementById('condor-admin-root')?.dataset.accessToken ?? '';
+  if (!csrfToken) throw new FinanceClosureAccessDenied('CSRF no disponible');
+  const response = await fetch(financeClosurePreviewPath(branchId), {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify(financeClosureFixture(mode)),
+    signal,
+  });
+  if ([401, 403, 404].includes(response.status)) {
+    throw new FinanceClosureAccessDenied('No hay permiso o acceso a esta sede.');
+  }
+  if (!response.ok) throw new Error('No fue posible consultar el preview de cierre.');
+  const body: unknown = await response.json();
+  if (typeof body !== 'object' || body === null) throw new Error('Respuesta inválida.');
+  const envelope = body as Record<string, unknown>;
+  if (envelope.synthetic_only !== true || !isSafeFinanceClosure(envelope.closure_preview)) {
+    throw new Error('Respuesta no sintética o insegura.');
+  }
+  return envelope.closure_preview;
+}
