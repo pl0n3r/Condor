@@ -1,4 +1,5 @@
 import { OrderLifecyclePanel } from './OrderLifecyclePanel';
+import { MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import {
   orderCancelPath,
@@ -159,6 +160,7 @@ export function OrdersManagement({
   const [notice, setNotice] = useState<Notice | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [exportFrom, setExportFrom] = useState('');
   const [exportTo, setExportTo] = useState('');
   const [exportBusy, setExportBusy] = useState(false);
@@ -436,16 +438,14 @@ export function OrdersManagement({
       className="catalog-panel"
       aria-labelledby="orders-title"
     >
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">Ventas</span>
-          <h2 id="orders-title">Pedidos</h2>
-          <p className="muted">
-            Admin y e-commerce comparten el mismo dominio, reservas y
-            snapshots históricos de precio.
-          </p>
-        </div>
-      </div>
+      <PageHeader title="Pedidos"
+        description="Admin y e-commerce comparten el mismo dominio, reservas y snapshots históricos de precio."
+        actions={ready && canCreate ? <button type="button" className="button"
+          onClick={() => setCreateOpen(true)}>Crear pedido</button> : undefined} />
+      {ready && <MetricStrip label="Resumen de pedidos" items={[
+        { label: 'Pedidos encontrados', value: ready.pagination.total },
+        { label: 'Página', value: ready.pagination.page },
+      ]} />}
 
       {notice && (
         <output
@@ -485,7 +485,8 @@ export function OrdersManagement({
       )}
 
       {ready && canCreate && (
-        <form className="catalog-card" onSubmit={submitOrder}>
+        <SidePanel open={createOpen} title="Crear pedido" onClose={() => setCreateOpen(false)}>
+          <form className="catalog-editor" onSubmit={submitOrder}>
           <div>
             <span className="eyebrow">Pedido manual</span>
             <h3>Crear pedido</h3>
@@ -638,7 +639,8 @@ export function OrdersManagement({
               Crear pedido
             </button>
           </div>
-        </form>
+          </form>
+        </SidePanel>
       )}
 
       {ready && canView && (
@@ -679,12 +681,12 @@ export function OrdersManagement({
       )}
 
       {ready && (
-        <form className="catalog-card" onSubmit={applyFilters} aria-label="Filtros de pedidos">
+        <form className="ui-card" onSubmit={applyFilters} aria-label="Filtros de pedidos">
           <div>
             <h3>Filtrar pedidos</h3>
             <p className="muted">Los resultados pertenecen a la sede seleccionada.</p>
           </div>
-          <div className="catalog-form-grid">
+          <div className="ui-toolbar-filters">
             <label className="field">
               <span>Estado del pedido</span>
               <select value={draftFilters.status}
