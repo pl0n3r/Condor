@@ -57,11 +57,41 @@ test.describe('SG-SST sintético: pruebas de navegador', () => {
     await page.goto(origin + '/__sgsst_fixture__');
     await expect(page.getByRole('heading', { name: 'Seguridad y salud en el trabajo · pruebas' })).toBeVisible();
   }
+  // DataTable moves the state to another cell; the legacy list keeps it in the button.
+  async function expectRecordState(page, expectedState) {
+    const record = page.getByRole('button', { name: /fixture:occupational\/demo/ });
+    await expect(record).toBeVisible();
+    const row = page.getByRole('row').filter({ has: record });
+    if (await row.count()) {
+      await expect(row).toContainText(expectedState);
+    } else {
+      await expect(record).toContainText(expectedState);
+    }
+  }
+
+  // The previous UI had an inline form; the redesigned UI opens a native dialog.
+  async function openCreateForm(page) {
+    const opener = page.getByRole('button', { name: 'Nuevo registro ficticio' });
+    if (!(await opener.count())) return false;
+    await opener.click();
+    const dialog = page.getByRole('dialog', { name: 'Nuevo registro ficticio' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Cerrar' })).toBeFocused();
+    return true;
+  }
+
   async function create(page) {
+    const dialogMode = await openCreateForm(page);
     await page.getByLabel('Referencia ficticia', { exact: true }).fill('fixture:occupational/demo');
     await page.getByLabel('Evidencia ficticia').fill('fixture:evidence/demo');
     await page.getByLabel('Actor ficticio, sin identificación').fill('fixture:actor/creador');
     await page.getByRole('button', { name: 'Crear registro de prueba' }).click();
+    if (dialogMode) {
+      const detail = page.getByRole('dialog', { name: 'Detalle y revisión' });
+      await expect(detail).toBeVisible();
+      await detail.getByRole('button', { name: 'Cerrar' }).click();
+      await expect(detail).toHaveCount(0);
+    }
     await expect(page.getByRole('button', { name: /fixture:occupational\/demo/ })).toBeVisible();
   }
 
@@ -96,6 +126,7 @@ test.describe('SG-SST sintético: pruebas de navegador', () => {
 
   test('AC-03: entradas no ficticias se rechazan por validación nativa', async ({ page }) => {
     await open(page);
+    const dialogMode = await openCreateForm(page);
     const ref = page.getByLabel('Referencia ficticia', { exact: true });
     await ref.fill('alguien@example.com');
     expect(await ref.evaluate(el => el.validity.patternMismatch)).toBe(true);
@@ -106,22 +137,28 @@ test.describe('SG-SST sintético: pruebas de navegador', () => {
     await ref.fill('fixture:occupational/demo');
     await page.getByLabel('Evidencia ficticia').fill('fixture:evidence/../private');
     expect(await page.getByLabel('Evidencia ficticia').evaluate(el => el.validity.patternMismatch)).toBe(true);
-    await expect(page.getByRole('button', { name: /fixture:occupational\/demo · PENDIENTE/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /fixture:occupational\/demo/ })).toHaveCount(0);
+    if (dialogMode) {
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('dialog', { name: 'Nuevo registro ficticio' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Nuevo registro ficticio' })).toBeFocused();
+    }
   });
 
   test('AC-04: transiciones explícitas y actor original intacto', async ({ page }) => {
     await open(page);
     await create(page);
+    await page.getByRole('button', { name: /fixture:occupational\/demo/ }).click();
     const action = page.getByLabel('Acción explícita de prueba');
     await expect(action.locator('option')).toHaveCount(1);
     await expect(action).toHaveValue('EN_REVISION');
     await page.getByLabel('Actor de revisión ficticio').fill('fixture:actor/revisor');
     await page.getByRole('button', { name: 'Registrar transición ficticia explícita' }).click();
-    await expect(page.getByRole('button', { name: /fixture:occupational\/demo · EN_REVISION/ })).toBeVisible();
+    await expectRecordState(page, 'EN_REVISION');
     await expect(action).toHaveValue('CIERRE_REQUIERE_REVISION');
     await expect(page.getByText('fixture:actor/creador', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Registrar transición ficticia explícita' }).click();
-    await expect(page.getByRole('button', { name: /fixture:occupational\/demo · CIERRE_REQUIERE_REVISION/ })).toBeVisible();
+    await expectRecordState(page, 'CIERRE_REQUIERE_REVISION');
     await expect(page.getByRole('button', { name: 'Registrar transición ficticia explícita' })).toHaveCount(0);
   });
 });
