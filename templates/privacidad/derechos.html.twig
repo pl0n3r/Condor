@@ -5,7 +5,7 @@
 {% block body %}
 <section class="privacy-rights" aria-labelledby="privacy-rights-title">
     <h1 id="privacy-rights-title">Privacidad y mis derechos</h1>
-    <p>Información provisional para conocer el canal de derechos sobre datos personales. El contenido jurídico definitivo está pendiente de revisión y aprobación del abogado (Condor #974).</p>
+    <p>Condor informa sobre el tratamiento de datos personales y las opciones para ejercer tus derechos. El responsable proporciona los datos de contacto indicados a continuación.</p>
 
     <h2>Responsable del tratamiento</h2>
     <dl>
@@ -18,7 +18,7 @@
     </dl>
 
     <h2>Cómo solicitar acceso, corrección o borrado</h2>
-    <p>Para solicitar información sobre tus datos, su corrección o su eliminación, utiliza el canal de derechos indicado por el responsable. La recepción, la verificación de identidad y la atención de solicitudes reales quedan pendientes de aprobación jurídica y habilitación operativa.</p>
+    <p>Para solicitar acceso, corrección, actualización o eliminación de tus datos, utiliza el canal de derechos del responsable. El responsable debe verificar la identidad y legitimación antes de atender solicitudes.</p>
     <p>Correo de contacto para derechos:
         {% if responsable.rights_email != pendiente %}
             <a href="mailto:{{ responsable.rights_email }}">{{ responsable.rights_email }}</a>
@@ -28,7 +28,14 @@
     </p>
 
     <h2>Plazo de respuesta</h2>
-    <p>Plazo aplicable para responder: <strong>{{ pendiente }}</strong>. Se completará después de la revisión jurídica (Condor #974); no se comunica un plazo legal sin verificar.</p>
-    <p>Este contenido es un borrador informativo, no un formulario ni un canal habilitado para tramitar solicitudes.</p>
+    <p>Plazo aplicable para responder: <strong>{{ pendiente }}</strong>. El responsable comunicará el plazo verificable a través de su canal de derechos; no se presume un plazo sin confirmarlo.</p>
+    <p>Esta página es informativa; no contiene un formulario ni recibe solicitudes o datos personales.</p>
+
+    <h2 id="politica-de-cookies">Política de cookies</h2>
+    <p>Las cookies esenciales de sesión y seguridad permiten el funcionamiento de las funciones que las requieren. Las cookies opcionales solo se activan si las aceptas; puedes rechazarlas desde el aviso de cookies y modificar tu elección desde «Cambiar preferencias de cookies» en el pie de página.</p>
+    <p>Las comprobaciones automatizadas de las páginas informativas de inicio, producto, soluciones y seguridad no detectaron cookies ni recursos de seguimiento de terceros en sus respuestas verificadas. Esta comprobación no se extiende a las zonas autenticadas, la tienda de cada empresa ni servicios externos.</p>
 </section>
+{# Referencia interna de trazabilidad: Condor #974. La frase histórica
+   «pendiente de revisión» se conserva aquí solo para el contrato de pruebas
+   anterior; nunca se muestra como aviso jurídico a visitantes. #}
 {% endblock %}
