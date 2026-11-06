@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Platform\Entity;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
 use DomainException;
 
@@ -40,6 +41,15 @@ final class PlatformIntegrationSetting
 
     #[ORM\Column(name: 'updated_by', type: 'string', length: 80)]
     private string $updatedBy;
+
+    /** ORM can hydrate the private ciphertext/nonce; this constructor never accepts secrets. */
+    public function __construct(string $key, string $updatedBy)
+    {
+        self::assertKey($key);
+        $this->key = $key;
+        $this->updatedBy = $updatedBy;
+        $this->updatedAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    }
 
     public static function assertKey(string $key): void
     {
