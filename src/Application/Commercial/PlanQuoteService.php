@@ -143,7 +143,9 @@ final readonly class PlanQuoteService
             $extraAmount += $verticalAmount;
         }
         foreach ($selected as $key) {
-            $price = $allowed[$key]['monthly_amount'];
+            $price = $cycle === 'annual'
+                ? ($allowed[$key]['annual_amount'] ?? null)
+                : $allowed[$key]['monthly_amount'];
             if (!is_int($price) || $price < 0) {
                 return $this->finish(
                     $options,
@@ -160,7 +162,9 @@ final readonly class PlanQuoteService
             $extraAmount += $price;
         }
 
-        $proposal = $cycle === 'annual' && $extraAmount > 0;
+        // Sin precio anual de extras de escala, el total necesita propuesta.
+        // Add-ons y verticales con importe anual explícito sí se calculan.
+        $proposal = $cycle === 'annual' && $derived !== [];
 
         return $this->finish(
             $options,

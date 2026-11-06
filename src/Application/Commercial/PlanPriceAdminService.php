@@ -233,8 +233,15 @@ final readonly class PlanPriceAdminService
         if (!$at instanceof DateTimeImmutable
             || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))
             || $at->format($format === '!Y-m-d' ? 'Y-m-d' : 'Y-m-d\TH:i:s\Z') !== $input
-            || $at < $now
         ) {
+            throw new DomainException('La vigencia debe ser actual o futura en UTC.');
+        }
+        // Una fecha de calendario de hoy significa vigencia inmediata,
+        // no medianoche pasada. Instantes explícitos nunca se retrodatan.
+        if ($format === '!Y-m-d' && $at->format('Y-m-d') === $now->format('Y-m-d')) {
+            return $now;
+        }
+        if ($at < $now) {
             throw new DomainException('La vigencia debe ser actual o futura en UTC.');
         }
         return $at;

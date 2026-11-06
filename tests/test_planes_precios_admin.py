@@ -38,6 +38,11 @@ class PlanesPreciosAdminTests(unittest.TestCase):
         self.assertIn("vertical_prices", reader)
         self.assertIn("priceOptions()['addons']", reader)
         self.assertIn("$verticalRate", quote)
+        self.assertIn("['annual_amount']", quote)
+        pricing = source("templates/pricing/index.html.twig")
+        self.assertIn("plan.monthly_amount is null", pricing)
+        self.assertIn("plan.annual_amount is null", pricing)
+        self.assertIn("Sin tarifa", pricing)
         self.assertIn("$price < 0", quote)
         self.assertNotIn("update AddOn", service)
 

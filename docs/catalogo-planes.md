@@ -10,7 +10,7 @@ La pantalla `GET /adminpl0n3r/planes` muestra los planes vigentes con nombre, l�
 - Requiere usuario activo con rol de propietario de plataforma, sesión y CSRF válido; denegar a tenant/anon y entradas extra.
 - Validar nombre no vacío, límites como mapa de claves permitidas y enteros/banderas no negativos, capacidades conocidas y sin duplicados.
 - `expected_version` evita pisar cambios concurrentes; ante conflicto devolver 422 sin escritura.
-- La edición es una transacción: actualizar nombre, cerrar versión vigente, crear `PlanVersion` sucesora con importes **nulos** y `quote_required=true`, conservar verticales y add-ons existentes, asociar capacidades seleccionadas y registrar un `PlatformAuditEvent`.
+- La edición es una transacción: actualizar nombre, cerrar versión vigente y crear `PlanVersion` sucesora **conservando exactamente la tarifa, moneda y precio de complementos/verticales vigentes**, junto con límites, relaciones y auditoría `PlatformAuditEvent`. Los importes solo se modifican en la API específica `/prices`, nunca por editar el nombre.
 - La auditoría incluye identidad del actor, fecha UTC, plan, estado anterior y posterior (nombre, versión, límites y capacidades), sin datos personales ni tokens en el contexto.
 - `CommercialCatalogReader` sigue siendo la entrada de la vista técnica existente (#639); la versión vigente alimenta límites y entitlements sin modificar suscripciones previas.
 - **Historia comercial preservada:** la semilla de `2026-09-27` permanece consultable con sus valores históricos (los contratos existentes dependen de esa fecha); desde `2026-10-30` se materializa una **versión 2 sin tarifas** (`monthly_amount=null`, `annual_amount=null`, `quote_required=true`). La ejecución idempotente conserva capacidades, límites, verticales, add-ons e historial; no aprueba ni inventa tarifas actuales.
@@ -24,7 +24,7 @@ La vista muestra vacío cuando no hay planes, error cuando no se puede guardar, 
 
 1. Un propietario puede leer y editar nombre, límites y capacidades desde el panel; el servidor verifica autorización y CSRF.
 2. La edición conserva entidades relacionadas, registra anterior/nuevo y fecha/actor en auditoría y alimenta el lector existente.
-3. Planes iniciales sin tarifa, sin importes de ejemplo; no se habilita cobro ni contrato.
+3. Historia de v1/v2 preservada, v2 sin tarifa y v3 con importes aprobados en #1684; ninguna edición de límites borra importes ni habilita cobro o contrato.
 4. Las pruebas `tests/test_catalogo_planes_admin.py::CatalogoPlanesAdminTests::test_criterio_principal` y el CI `Validar` pasan sobre el mismo HEAD.
 
 **Fuera de alcance:** go-live, precios y tarifas reales, cobros, facturas, proveedores, datos de clientes reales y decisiones financieras del dueño.
