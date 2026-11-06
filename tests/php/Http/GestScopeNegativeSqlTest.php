@@ -109,9 +109,9 @@ final class GestScopeNegativeSqlTest extends WebTestCase
 
             $client->request('GET', '/api/v1/context?branch='.$branchHidden->id());
             self::assertResponseStatusCodeSame(403);
-            $client->request('GET', '/admin');
+            $delegateCrawler = $client->request('GET', '/admin');
             self::assertResponseIsSuccessful();
-            $delegateToken = $client->getCrawler()->filter('#condor-admin-root')
+            $delegateToken = $delegateCrawler->filter('#condor-admin-root')
                 ->attr('data-access-token');
             self::assertIsString($delegateToken);
             self::assertNotSame('', $delegateToken);
@@ -131,9 +131,9 @@ final class GestScopeNegativeSqlTest extends WebTestCase
                 'name' => 'Sin CSRF '.$suffix, 'permissions' => ['catalog.view'],
             ]);
             self::assertResponseStatusCodeSame(403);
-            $client->request('GET', '/admin');
+            $ownerCrawler = $client->request('GET', '/admin');
             self::assertResponseIsSuccessful();
-            $ownerToken = $client->getCrawler()->filter('#condor-admin-root')
+            $ownerToken = $ownerCrawler->filter('#condor-admin-root')
                 ->attr('data-access-token');
             self::assertIsString($ownerToken);
             self::assertNotSame('', $ownerToken);
