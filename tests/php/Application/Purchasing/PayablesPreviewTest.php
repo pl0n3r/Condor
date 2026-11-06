@@ -168,14 +168,11 @@ final class PayablesPreviewTest extends WebTestCase
     private function fixtureUser(EntityManagerInterface $em): array
     {
         $suffix = bin2hex(random_bytes(5));
-        $tenant = new Tenant('Cuentas sintéticas '.$suffix, 'm09-pay-'.$suffix);
-        $legal = new LegalEntity($tenant, 'SAS ficticia '.$suffix, null, true);
-        $branch = new Branch($tenant, 'Sede ficticia', 'm09-pay-'.$suffix, $legal, true);
-        $owner = new User('m09-pay-'.$suffix.'@example.test', 'Dueño ficticio');
-        foreach ([$tenant, $legal, $branch, $owner,
-            new Membership($tenant, $owner, Membership::ROLE_OWNER)] as $entity) {
-            $em->persist($entity);
-        }
+        $em->persist($tenant = new Tenant('Cuentas sintéticas '.$suffix, 'm09-pay-'.$suffix));
+        $em->persist($legal = new LegalEntity($tenant, 'SAS ficticia '.$suffix, null, true));
+        $em->persist($branch = new Branch($tenant, 'Sede ficticia', 'm09-pay-'.$suffix, $legal, true));
+        $em->persist($owner = new User('m09-pay-'.$suffix.'@example.test', 'Dueño ficticio'));
+        $em->persist(new Membership($tenant, $owner, Membership::ROLE_OWNER));
         $em->flush();
         return [$tenant, $branch, $owner];
     }

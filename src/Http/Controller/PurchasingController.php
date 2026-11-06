@@ -263,24 +263,23 @@ final class PurchasingController extends AbstractController
         return $this->json(['supplier_contract_preview' => $preview, 'synthetic_only' => true]);
     }
 
-    /**
-     * M09/S08: obligations in COP are synthetic, unpaid and unreconciled.
-     * No suppliers, accounting ledger, payments, or persistence are accessed.
-     */
+    /** M09/S08: never reads or pays real obligations. */
     #[Route('/api/v1/branches/{branchId}/purchasing/payables/preview', name: 'api_purchasing_payables_preview', methods: ['POST'])]
     public function previewPayables(string $branchId, Request $request): JsonResponse
     {
         $this->requirePurchasingPreviewEnabled();
         $this->requireCsrf($request);
         $this->authorizedBranchScope($branchId, 'inventory.create');
+        $fixture = $this->syntheticPurchasingPayload($request);
 
         try {
-            $preview = PayablesPreview::preview($this->syntheticPurchasingPayload($request));
+            return $this->json([
+                'payables_preview' => PayablesPreview::preview($fixture),
+                'synthetic_only' => true,
+            ]);
         } catch (\InvalidArgumentException $exception) {
             throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
         }
-
-        return $this->json(['payables_preview' => $preview, 'synthetic_only' => true]);
     }
 
     private function requirePurchasingPreviewEnabled(): void

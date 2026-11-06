@@ -104,17 +104,20 @@ final class PayablesPreview
     private static function exactKeys(array $data, array $keys): void
     {
         $actual = array_keys($data);
-        sort($actual);
-        sort($keys);
-        if ($actual !== $keys) {
+        if (count($actual) !== count($keys) || array_diff($actual, $keys) !== []
+            || array_diff($keys, $actual) !== []) {
             throw new InvalidArgumentException('UNEXPECTED_FIELDS');
         }
     }
 
     private static function fixture(mixed $reference, string $type): string
     {
-        if (!is_string($reference)
-            || preg_match('~\Afixture:'.preg_quote($type, '~').'/[a-z0-9][a-z0-9-]{0,63}\z~D', $reference) !== 1) {
+        $prefix = sprintf('fixture:%s/', $type);
+        if (!is_string($reference) || !str_starts_with($reference, $prefix)) {
+            throw new InvalidArgumentException('INVALID_FIXTURE');
+        }
+        $slug = substr($reference, strlen($prefix));
+        if (preg_match('/\A[a-z0-9][a-z0-9-]{0,63}\z/D', $slug) !== 1) {
             throw new InvalidArgumentException('INVALID_FIXTURE');
         }
         return $reference;
