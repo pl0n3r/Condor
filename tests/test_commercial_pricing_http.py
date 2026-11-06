@@ -89,7 +89,362 @@ final class CommercialPricingHttpSmokeTest extends WebTestCase
                 self::assertStringNotContainsString('0 COP', $card['text']);
             } else {
                 self::assertStringContainsString(
-                    $plan['currency'].' '.number_format($plan['monthly_amount'], 0, ',', '.'),
+                    ($plan['currency'] === 'COP' ? ',
+                    $card['text'],
+                );
+                if ($plan['annual_amount'] !== null) {
+                    self::assertStringContainsString(
+                        ($plan['currency'] === 'COP' ? ',
+                        $card['text'],
+                    );
+                }
+            }
+        }
+        self::assertSame(1, count(array_filter(
+            $catalog, static fn (array $plan): bool => $plan['quote_required'],
+        )));
+
+        // El cliente intenta modificar totales, moneda, plan y tenant. La
+        // ruta GET debe ignorarlo y mostrar las mismas tarjetas del servidor.
+        $client->request(
+            'GET',
+            '/precios?plan=enterprise&monthly_amount=1&annual_amount=1'
+                .'&currency=USD&total=1&tenant='.$tenantB->id(),
+            [], [], ['HTTP_X_TENANT_ID' => $tenantB->id()],
+        );
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame($anonymousCards, self::cards($client));
+        self::assertPrivateNamesAbsent($client, [$privateA, $privateB]);
+
+        // Dos owners de tenants independientes nunca obtienen datos privados
+        // ajenos a través del catálogo público; tampoco pueden personalizar
+        // un precio enviado desde el cliente.
+        foreach ([$userA, $userB] as $user) {
+            $client->loginUser($user);
+            $client->request(
+                'GET',
+                '/precios?total=1&monthly_amount=1&tenant='.$tenantA->id(),
+                [], [], ['HTTP_X_TENANT_ID' => $tenantB->id()],
+            );
+            self::assertResponseStatusCodeSame(200);
+            self::assertSame($anonymousCards, self::cards($client));
+            self::assertPrivateNamesAbsent($client, [$privateA, $privateB]);
+        }
+
+        // La ruta de catálogo solo acepta GET. Ningún verbo mutante puede
+        // convertir precios enviados por el usuario en importes persistidos.
+        foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+            $client->request($method, '/precios', ['monthly_amount' => '1']);
+            self::assertResponseStatusCodeSame(405);
+            self::assertPrivateNamesAbsent($client, [$privateA, $privateB]);
+        }
+        $client->restart();
+        $client->request('GET', '/precios');
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame($anonymousCards, self::cards($client));
+
+        $freshManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $freshManager);
+        self::assertSame($beforePlans, $freshManager->getRepository(Plan::class)->count([]));
+        self::assertSame(
+            $beforeVersions,
+            $freshManager->getRepository(PlanVersion::class)->count([]),
+            'Ninguna petición HTTP debe escribir el catálogo comercial.',
+        );
+    }
+
+    /** @return list<array{key:string,version:string,text:string}> */
+    private static function cards(KernelBrowser $client): array
+    {
+        return $client->getCrawler()->filter('article.pricing-card')->each(
+            static function (Crawler $card): array {
+                return [
+                    'key' => (string) $card->attr('data-plan-key'),
+                    'version' => (string) $card->attr('data-plan-version'),
+                    'text' => trim((string) preg_replace('/\s+/u', ' ', $card->text())),
+                ];
+            },
+        );
+    }
+
+    /** @param list<string> $names */
+    private static function assertPrivateNamesAbsent(KernelBrowser $client, array $names): void
+    {
+        $body = (string) $client->getResponse()->getContent();
+        foreach ($names as $name) {
+            self::assertStringNotContainsString($name, $body);
+        }
+        self::assertStringNotContainsString('@example.test', $body);
+    }
+}
+"""
+
+
+class PreciosComercialesHttpTests(unittest.TestCase):
+    def test_acceptance(self) -> None:
+        for source in (CONTROLLER, READER):
+            self.assertTrue(source.is_file(), str(source))
+        php = shutil.which("php")
+        self.assertIsNotNone(php, "PHP CLI real es obligatorio")
+        self.assertTrue(RUNNER.is_file(), "PHPUnit real es obligatorio")
+
+        with tempfile.TemporaryDirectory(prefix="condor-commercial-http-") as directory:
+            fixture = Path(directory) / "CommercialPricingHttpSmokeTest.php"
+            fixture.write_text(PHP_SCENARIO, encoding="utf-8")
+            commands = (
+                ("lint PHP", [php, "-l", str(fixture)], 25),
+                ("test HTTP", [str(RUNNER), str(fixture)], 180),
+            )
+            results: dict[str, str] = {}
+            for stage, command, timeout in commands:
+                run = subprocess.run(
+                    command, cwd=ROOT, capture_output=True, text=True,
+                    check=False, timeout=timeout,
+                )
+                evidence = run.stdout + run.stderr
+                self.assertEqual(0, run.returncode, f"{stage}: {evidence}")
+                results[stage] = evidence
+            self.assertRegex(results["test HTTP"], r"OK\s*\(\s*1 test,")
+
+
+if __name__ == "__main__":
+    unittest.main()
+ : $plan['currency']).' '.number_format($plan['monthly_amount'], 0, ',', '.'),
+                    $card['text'],
+                );
+                if ($plan['annual_amount'] !== null) {
+                    self::assertStringContainsString(
+                        $plan['currency'].' '.number_format($plan['annual_amount'], 0, ',', '.'),
+                        $card['text'],
+                    );
+                }
+            }
+        }
+        self::assertSame(1, count(array_filter(
+            $catalog, static fn (array $plan): bool => $plan['quote_required'],
+        )));
+
+        // El cliente intenta modificar totales, moneda, plan y tenant. La
+        // ruta GET debe ignorarlo y mostrar las mismas tarjetas del servidor.
+        $client->request(
+            'GET',
+            '/precios?plan=enterprise&monthly_amount=1&annual_amount=1'
+                .'&currency=USD&total=1&tenant='.$tenantB->id(),
+            [], [], ['HTTP_X_TENANT_ID' => $tenantB->id()],
+        );
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame($anonymousCards, self::cards($client));
+        self::assertPrivateNamesAbsent($client, [$privateA, $privateB]);
+
+        // Dos owners de tenants independientes nunca obtienen datos privados
+        // ajenos a través del catálogo público; tampoco pueden personalizar
+        // un precio enviado desde el cliente.
+        foreach ([$userA, $userB] as $user) {
+            $client->loginUser($user);
+            $client->request(
+                'GET',
+                '/precios?total=1&monthly_amount=1&tenant='.$tenantA->id(),
+                [], [], ['HTTP_X_TENANT_ID' => $tenantB->id()],
+            );
+            self::assertResponseStatusCodeSame(200);
+            self::assertSame($anonymousCards, self::cards($client));
+            self::assertPrivateNamesAbsent($client, [$privateA, $privateB]);
+        }
+
+        // La ruta de catálogo solo acepta GET. Ningún verbo mutante puede
+        // convertir precios enviados por el usuario en importes persistidos.
+        foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+            $client->request($method, '/precios', ['monthly_amount' => '1']);
+            self::assertResponseStatusCodeSame(405);
+            self::assertPrivateNamesAbsent($client, [$privateA, $privateB]);
+        }
+        $client->restart();
+        $client->request('GET', '/precios');
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame($anonymousCards, self::cards($client));
+
+        $freshManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $freshManager);
+        self::assertSame($beforePlans, $freshManager->getRepository(Plan::class)->count([]));
+        self::assertSame(
+            $beforeVersions,
+            $freshManager->getRepository(PlanVersion::class)->count([]),
+            'Ninguna petición HTTP debe escribir el catálogo comercial.',
+        );
+    }
+
+    /** @return list<array{key:string,version:string,text:string}> */
+    private static function cards(KernelBrowser $client): array
+    {
+        return $client->getCrawler()->filter('article.pricing-card')->each(
+            static function (Crawler $card): array {
+                return [
+                    'key' => (string) $card->attr('data-plan-key'),
+                    'version' => (string) $card->attr('data-plan-version'),
+                    'text' => trim((string) preg_replace('/\s+/u', ' ', $card->text())),
+                ];
+            },
+        );
+    }
+
+    /** @param list<string> $names */
+    private static function assertPrivateNamesAbsent(KernelBrowser $client, array $names): void
+    {
+        $body = (string) $client->getResponse()->getContent();
+        foreach ($names as $name) {
+            self::assertStringNotContainsString($name, $body);
+        }
+        self::assertStringNotContainsString('@example.test', $body);
+    }
+}
+"""
+
+
+class PreciosComercialesHttpTests(unittest.TestCase):
+    def test_acceptance(self) -> None:
+        for source in (CONTROLLER, READER):
+            self.assertTrue(source.is_file(), str(source))
+        php = shutil.which("php")
+        self.assertIsNotNone(php, "PHP CLI real es obligatorio")
+        self.assertTrue(RUNNER.is_file(), "PHPUnit real es obligatorio")
+
+        with tempfile.TemporaryDirectory(prefix="condor-commercial-http-") as directory:
+            fixture = Path(directory) / "CommercialPricingHttpSmokeTest.php"
+            fixture.write_text(PHP_SCENARIO, encoding="utf-8")
+            commands = (
+                ("lint PHP", [php, "-l", str(fixture)], 25),
+                ("test HTTP", [str(RUNNER), str(fixture)], 180),
+            )
+            results: dict[str, str] = {}
+            for stage, command, timeout in commands:
+                run = subprocess.run(
+                    command, cwd=ROOT, capture_output=True, text=True,
+                    check=False, timeout=timeout,
+                )
+                evidence = run.stdout + run.stderr
+                self.assertEqual(0, run.returncode, f"{stage}: {evidence}")
+                results[stage] = evidence
+            self.assertRegex(results["test HTTP"], r"OK\s*\(\s*1 test,")
+
+
+if __name__ == "__main__":
+    unittest.main()
+ : $plan['currency']).' '.number_format($plan['annual_amount'], 0, ',', '.'),
+                        $card['text'],
+                    );
+                }
+            }
+        }
+        self::assertSame(1, count(array_filter(
+            $catalog, static fn (array $plan): bool => $plan['quote_required'],
+        )));
+
+        // El cliente intenta modificar totales, moneda, plan y tenant. La
+        // ruta GET debe ignorarlo y mostrar las mismas tarjetas del servidor.
+        $client->request(
+            'GET',
+            '/precios?plan=enterprise&monthly_amount=1&annual_amount=1'
+                .'&currency=USD&total=1&tenant='.$tenantB->id(),
+            [], [], ['HTTP_X_TENANT_ID' => $tenantB->id()],
+        );
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame($anonymousCards, self::cards($client));
+        self::assertPrivateNamesAbsent($client, [$privateA, $privateB]);
+
+        // Dos owners de tenants independientes nunca obtienen datos privados
+        // ajenos a través del catálogo público; tampoco pueden personalizar
+        // un precio enviado desde el cliente.
+        foreach ([$userA, $userB] as $user) {
+            $client->loginUser($user);
+            $client->request(
+                'GET',
+                '/precios?total=1&monthly_amount=1&tenant='.$tenantA->id(),
+                [], [], ['HTTP_X_TENANT_ID' => $tenantB->id()],
+            );
+            self::assertResponseStatusCodeSame(200);
+            self::assertSame($anonymousCards, self::cards($client));
+            self::assertPrivateNamesAbsent($client, [$privateA, $privateB]);
+        }
+
+        // La ruta de catálogo solo acepta GET. Ningún verbo mutante puede
+        // convertir precios enviados por el usuario en importes persistidos.
+        foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+            $client->request($method, '/precios', ['monthly_amount' => '1']);
+            self::assertResponseStatusCodeSame(405);
+            self::assertPrivateNamesAbsent($client, [$privateA, $privateB]);
+        }
+        $client->restart();
+        $client->request('GET', '/precios');
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame($anonymousCards, self::cards($client));
+
+        $freshManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $freshManager);
+        self::assertSame($beforePlans, $freshManager->getRepository(Plan::class)->count([]));
+        self::assertSame(
+            $beforeVersions,
+            $freshManager->getRepository(PlanVersion::class)->count([]),
+            'Ninguna petición HTTP debe escribir el catálogo comercial.',
+        );
+    }
+
+    /** @return list<array{key:string,version:string,text:string}> */
+    private static function cards(KernelBrowser $client): array
+    {
+        return $client->getCrawler()->filter('article.pricing-card')->each(
+            static function (Crawler $card): array {
+                return [
+                    'key' => (string) $card->attr('data-plan-key'),
+                    'version' => (string) $card->attr('data-plan-version'),
+                    'text' => trim((string) preg_replace('/\s+/u', ' ', $card->text())),
+                ];
+            },
+        );
+    }
+
+    /** @param list<string> $names */
+    private static function assertPrivateNamesAbsent(KernelBrowser $client, array $names): void
+    {
+        $body = (string) $client->getResponse()->getContent();
+        foreach ($names as $name) {
+            self::assertStringNotContainsString($name, $body);
+        }
+        self::assertStringNotContainsString('@example.test', $body);
+    }
+}
+"""
+
+
+class PreciosComercialesHttpTests(unittest.TestCase):
+    def test_acceptance(self) -> None:
+        for source in (CONTROLLER, READER):
+            self.assertTrue(source.is_file(), str(source))
+        php = shutil.which("php")
+        self.assertIsNotNone(php, "PHP CLI real es obligatorio")
+        self.assertTrue(RUNNER.is_file(), "PHPUnit real es obligatorio")
+
+        with tempfile.TemporaryDirectory(prefix="condor-commercial-http-") as directory:
+            fixture = Path(directory) / "CommercialPricingHttpSmokeTest.php"
+            fixture.write_text(PHP_SCENARIO, encoding="utf-8")
+            commands = (
+                ("lint PHP", [php, "-l", str(fixture)], 25),
+                ("test HTTP", [str(RUNNER), str(fixture)], 180),
+            )
+            results: dict[str, str] = {}
+            for stage, command, timeout in commands:
+                run = subprocess.run(
+                    command, cwd=ROOT, capture_output=True, text=True,
+                    check=False, timeout=timeout,
+                )
+                evidence = run.stdout + run.stderr
+                self.assertEqual(0, run.returncode, f"{stage}: {evidence}")
+                results[stage] = evidence
+            self.assertRegex(results["test HTTP"], r"OK\s*\(\s*1 test,")
+
+
+if __name__ == "__main__":
+    unittest.main()
+ : $plan['currency']).' '.number_format($plan['monthly_amount'], 0, ',', '.'),
                     $card['text'],
                 );
                 if ($plan['annual_amount'] !== null) {
