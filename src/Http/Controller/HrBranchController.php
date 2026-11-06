@@ -7,9 +7,7 @@ namespace App\Http\Controller;
 use App\Application\HumanResources\HrBranchCatalog;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
-use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\LegalEntity;
-use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -18,7 +16,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
-/** Synthetic, branch-scoped M01 S04 previews. Never reads personnel records. */
+/** Authorized, read-only M01 S04 branch previews; never queries HR records. */
 final class HrBranchController extends AbstractController
 {
     use BranchApiSupport;
@@ -32,77 +30,61 @@ final class HrBranchController extends AbstractController
     }
 
     #[Route('/api/v1/branches/{branchId}/hr/branch-preview', name: 'api_hr_branch_preview_index', methods: ['GET'])]
-    public function index(string $branchId, Request $request): JsonResponse
-    {
-        $this->requireSynthetic();
-        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
-
-        return $this->privateJson([
-            'branches' => $this->catalog->listFor($tenant, $company, $branch),
-            'synthetic' => true,
-            'persisted' => false,
-            'juridically_binding' => false,
-        ]);
-    }
-
     #[Route('/api/v1/branches/{branchId}/hr/branch-preview/{ref}', name: 'api_hr_branch_preview_detail', methods: ['GET'])]
-    public function detail(string $branchId, string $ref, Request $request): JsonResponse
+    public function preview(string $branchId, Request $request, ?string $ref = null): JsonResponse
     {
-        $this->requireSynthetic();
+        $this->assertSyntheticMode();
         [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
-        $preview = $this->catalog->findFor($tenant, $company, $branch, $ref);
-        if ($preview === null) {
-            throw new NotFoundHttpException('Sede ficticia no encontrada.');
-        }
 
-        return $this->privateJson([
-            'branch' => $preview,
-            'synthetic' => true,
-            'persisted' => false,
-            'juridically_binding' => false,
-        ]);
-    }
-
-    private function requireSynthetic(): void
-    {
-        $real = getenv('HR_REAL_DATA_ENABLED');
-        if ($real !== false && !in_array(strtolower(trim($real)), ['', 'false', '0', 'off', 'no'], true)) {
-            throw new NotFoundHttpException('Vista sintética de sedes no disponible.');
-        }
-        $environment = $this->getParameter('kernel.environment');
-        if ($environment !== 'test' && ($environment !== 'dev'
-            || getenv('CONDOR_HR_SYNTHETIC_API') !== '1'
-            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion')) {
-            throw new NotFoundHttpException('Vista sintética de sedes no disponible.');
-        }
-    }
-
-    private function companyFor(Tenant $tenant, Branch $branch, Request $request): LegalEntity
-    {
         $query = $request->query->all();
         if (array_diff(array_keys($query), ['company_id']) !== []) {
-            throw new BadRequestHttpException('Parámetros de consulta no permitidos.');
+            throw new BadRequestHttpException('Solo se admite company_id.');
         }
         $company = $branch->legalEntity();
         if (!$company instanceof LegalEntity || $company->tenant()->id() !== $tenant->id()) {
             throw new NotFoundHttpException('Empresa no disponible.');
         }
-        $provided = $query['company_id'] ?? null;
-        if ($provided !== null && (!is_string($provided) || $provided !== $company->id())) {
+        if (array_key_exists('company_id', $query)
+            && (!is_string($query['company_id']) || !hash_equals($company->id(), $query['company_id']))) {
             throw new NotFoundHttpException('Empresa no disponible.');
         }
 
-        return $company;
-    }
+        if ($ref === null) {
+            $result = ['branches' => $this->catalog->listFor($tenant, $company, $branch)];
+        } else {
+            $sample = $this->catalog->findFor($tenant, $company, $branch, $ref);
+            if ($sample === null) {
+                throw new NotFoundHttpException('Sede ficticia no encontrada.');
+            }
+            $result = ['branch' => $sample];
+        }
 
-    /** @param array<string,mixed> $payload */
-    private function privateJson(array $payload): JsonResponse
-    {
-        $response = $this->json($payload);
+        $response = new JsonResponse($result + [
+            'synthetic' => true,
+            'persisted' => false,
+            'juridically_binding' => false,
+        ]);
         $response->headers->set('Cache-Control', 'private, no-store');
         $response->headers->set('X-Content-Type-Options', 'nosniff');
+
         return $response;
+    }
+
+    private function assertSyntheticMode(): void
+    {
+        $flag = getenv('HR_REAL_DATA_ENABLED');
+        if ($flag !== false && !in_array(strtolower(trim($flag)), ['', 'false', '0', 'off', 'no'], true)) {
+            throw new NotFoundHttpException('Sedes ficticias inhabilitadas.');
+        }
+
+        $env = $this->getParameter('kernel.environment');
+        if ($env === 'test') {
+            return;
+        }
+        if ($env === 'dev' && getenv('CONDOR_HR_SYNTHETIC_API') === '1'
+            && getenv('CONDOR_PRODUCTION_STAGE') === 'construccion') {
+            return;
+        }
+        throw new NotFoundHttpException('Vista previa no disponible fuera del entorno sintético.');
     }
 }
