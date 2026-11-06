@@ -40,7 +40,7 @@ final class QualityController extends AbstractController
             $this->store($request), $this->scope($tenant, $branch),
         ));
         $this->auditSynthetic($tenant, $actor, 'listed', 'fixture:quality-record/list');
-        return $this->json(['records' => $records, 'synthetic_only' => true]);
+        return $this->syntheticResponse(['records' => $records, 'synthetic_only' => true]);
     }
 
     #[Route('/api/v1/branches/{branchId}/quality/records/{slug}', name: 'api_quality_record_view', methods: ['GET'])]
@@ -55,7 +55,7 @@ final class QualityController extends AbstractController
             throw new NotFoundHttpException('Registro de calidad ficticio no encontrado.');
         }
         $this->auditSynthetic($tenant, $actor, 'viewed', $ref);
-        return $this->json(['record' => $record, 'synthetic_only' => true]);
+        return $this->syntheticResponse(['record' => $record, 'synthetic_only' => true]);
     }
 
     #[Route('/api/v1/branches/{branchId}/quality/records', name: 'api_quality_record_create', methods: ['POST'])]
@@ -68,7 +68,7 @@ final class QualityController extends AbstractController
         ));
         $this->auditSynthetic($tenant, $actor, 'created', $result['record']['record_ref']);
         $request->getSession()->set(self::SESSION_KEY, $result['store']);
-        return $this->json(['record' => $result['record'], 'synthetic_only' => true], Response::HTTP_CREATED);
+        return $this->syntheticResponse(['record' => $result['record'], 'synthetic_only' => true], Response::HTTP_CREATED);
     }
 
     #[Route('/api/v1/branches/{branchId}/quality/records/{slug}/state', name: 'api_quality_record_state', methods: ['PATCH'])]
@@ -83,7 +83,13 @@ final class QualityController extends AbstractController
         ));
         $this->auditSynthetic($tenant, $actor, 'state_changed', $ref);
         $request->getSession()->set(self::SESSION_KEY, $result['store']);
-        return $this->json(['record' => $result['record'], 'synthetic_only' => true]);
+        return $this->syntheticResponse(['record' => $result['record'], 'synthetic_only' => true]);
+    }
+
+    /** @param array<string,mixed> $body */
+    private function syntheticResponse(array $body, int $status = Response::HTTP_OK): JsonResponse
+    {
+        return $this->json($body, $status, ['Cache-Control' => 'private, no-store']);
     }
 
     /** @return array{User,Tenant,Branch} */
