@@ -99,7 +99,10 @@ final class PayablesPreview
             throw new InvalidArgumentException('UNPAID_ONLY');
         }
         $canonical = [];
-        foreach (self::OBLIGATION_FIELDS as $field) {
+        $publicFields = array_diff(self::OBLIGATION_FIELDS, [
+            'tenant_ref', 'legal_entity_ref', 'site_ref',
+        ]);
+        foreach ($publicFields as $field) {
             $canonical[$field] = $candidate[$field];
         }
         return $canonical;
