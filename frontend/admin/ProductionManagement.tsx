@@ -763,15 +763,8 @@ export function ProductionManagement({
           ]} />
 
           <div className="production-layout">
-            <section className="catalog-card" aria-labelledby="production-materials-title">
-              <div className="catalog-card-heading">
-                <div>
-                  <h3 id="production-materials-title">Materiales</h3>
-                  <span className="muted">
-                    Stock en {ready.materials.source.name}
-                  </span>
-                </div>
-              </div>
+            <Card title="Materiales">
+              <p className="muted">Stock en {ready.materials.source.name}</p>
 
               <Toolbar trailing={<span className="ui-count">{ready.materials.materials.length} materiales</span>}>
                 <label className="ui-search"><span className="ui-sr-only">Buscar material</span>
@@ -948,42 +941,28 @@ export function ProductionManagement({
                   </button>
                 </form>
               </SidePanel>}
-            </section>
+            </Card>
 
-            <section className="catalog-card" aria-labelledby="production-bom-title">
-              <div className="catalog-card-heading">
-                <div>
-                  <h3 id="production-bom-title">BOM / recetas</h3>
-                  <span className="muted">Versiones por variante</span>
-                </div>
-              </div>
+            <Card title="BOM / recetas">
+              <p className="muted">Versiones por variante</p>
 
-              {ready.boms.boms.length === 0 ? (
-                <p className="catalog-variant-empty" role="status">
-                  Aún no hay BOM registradas.
-                </p>
-              ) : (
-                <div className="production-list">
-                  {ready.boms.boms.map((bom) => (
-                    <article className="production-row" key={bom.id}>
-                      <div>
-                        <strong>
-                          {bom.variant_sku} · v{bom.version}
-                          {bom.active ? ' · activa' : ''}
-                        </strong>
-                        <span className="muted">{bom.variant_name}</span>
-                      </div>
-                      <ul>
-                        {bom.lines.map((line) => (
-                          <li key={line.material_id}>
-                            {line.material_code}: {line.quantity} {line.unit}
-                          </li>
-                        ))}
-                      </ul>
-                    </article>
-                  ))}
-                </div>
-              )}
+              <DataTable caption="Versiones BOM por variante" rows={ready.boms.boms}
+                rowKey={bom => bom.id} onOpen={bom => setSelectedBomId(bom.id)}
+                empty={<><strong>Sin BOM</strong><span>Aún no hay BOM registradas.</span></>}
+                columns={[
+                  { key: 'variant', header: 'Variante', render: bom => <span className="ui-cell-main"><strong>{bom.variant_sku}</strong><small>{bom.variant_name}</small></span> },
+                  { key: 'version', header: 'Versión', render: bom => bom.version, align: 'right' },
+                  { key: 'components', header: 'Componentes', render: bom => bom.lines.length, align: 'right' },
+                  { key: 'state', header: 'Estado', render: bom => <StatusPill tone={bom.active ? 'ok' : 'neutral'}>{bom.active ? 'Activa' : 'Anterior'}</StatusPill> },
+                ]} />
+              <SidePanel open={selectedBomId !== null} title="Detalle de BOM" onClose={() => setSelectedBomId(null)}>
+                {ready.boms.boms.filter(bom => bom.id === selectedBomId).map(bom => <div key={bom.id}>
+                  <p>{bom.variant_sku} · versión {bom.version}</p>
+                  <ul>{bom.lines.map(line => <li key={line.material_id}>
+                    {line.material_code}: {line.quantity} {line.unit}
+                  </li>)}</ul>
+                </div>)}
+              </SidePanel>
 
               {canCreate && ready.variants.length > 0 && activeMaterials.length > 0 && <SidePanel open={activePanel === 'bom'} title="Nueva versión de BOM" onClose={() => setActivePanel(null)}>
                 <form className="catalog-editor" onSubmit={(event) => void createBom(event)}>
@@ -1071,75 +1050,45 @@ export function ProductionManagement({
                   </div>
                 </form>
               </SidePanel>}
-            </section>
+            </Card>
 
-            <section className="catalog-card production-orders" aria-labelledby="production-orders-title">
-              <div className="catalog-card-heading">
-                <div>
-                  <h3 id="production-orders-title">Órdenes</h3>
-                  <span className="muted">Crear y completar lotes</span>
-                </div>
-              </div>
+            <Card title="Órdenes">
+              <p className="muted">Crear y completar lotes</p>
 
-              {ready.orders.orders.length === 0 ? (
-                <p className="catalog-variant-empty" role="status">
-                  Aún no hay órdenes de producción.
-                </p>
-              ) : (
-                <div className="production-list">
-                  {ready.orders.orders.map((order) => (
-                    <article className="production-row" key={order.id}>
-                      <div>
-                        <strong>
-                          {order.variant_sku} · {order.status}
-                        </strong>
-                        <span className="muted">
-                          BOM v{order.bom_version} · objetivo {order.target_quantity}
-                          {order.completed_quantity === null
-                            ? ''
-                            : ' · terminado ' + order.completed_quantity}
-                        </span>
-                      </div>
-                      {order.status === 'completed' && (
-                        <div className="production-order-cost" aria-label="Costo de orden terminada">
-                          <OrderCostDetails
-                            cost={orderCosts[order.id] ?? { status: 'loading' }}
-                            materials={materialById}
-                          />
-                        </div>
-                      )}
-                      {canUpdate && order.status === 'draft' && (
-                        <div className="production-complete">
-                          <label className="field">
-                            <span>Cantidad terminada</span>
-                            <input
-                              value={
-                                completionQuantities[order.id]
-                                ?? String(order.target_quantity)
-                              }
-                              onChange={(event) => setCompletionQuantities(
-                                (current) => ({
-                                  ...current,
-                                  [order.id]: event.target.value,
-                                }),
-                              )}
-                              inputMode="numeric"
-                            />
-                          </label>
-                          <button
-                            className="button"
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void completeOrder(order)}
-                          >
-                            Completar
-                          </button>
-                        </div>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              )}
+              <DataTable caption="Órdenes de producción" rows={ready.orders.orders}
+                rowKey={order => order.id} onOpen={order => setSelectedOrderId(order.id)}
+                empty={<><strong>Sin órdenes</strong><span>Aún no hay órdenes de producción.</span></>}
+                columns={[
+                  { key: 'sku', header: 'Variante', render: order => order.variant_sku },
+                  { key: 'bom', header: 'BOM', render: order => 'v' + order.bom_version },
+                  { key: 'target', header: 'Objetivo', render: order => order.target_quantity, align: 'right' },
+                  { key: 'completed', header: 'Terminado', render: order => order.completed_quantity ?? 'Pendiente', align: 'right' },
+                  { key: 'status', header: 'Estado', render: order =>
+                    <StatusPill tone={order.status === 'completed' ? 'ok' : 'warn'}>{order.status}</StatusPill> },
+                ]} />
+              <SidePanel open={selectedOrderId !== null} title="Detalle de orden" onClose={() => setSelectedOrderId(null)}>
+                {ready.orders.orders.filter(order => order.id === selectedOrderId).map(order => <div key={order.id}>
+                  <dl className="ui-details">
+                    <div><dt>Variante</dt><dd>{order.variant_sku}</dd></div>
+                    <div><dt>BOM</dt><dd>v{order.bom_version}</dd></div>
+                    <div><dt>Objetivo</dt><dd>{order.target_quantity}</dd></div>
+                    <div><dt>Terminado</dt><dd>{order.completed_quantity ?? 'Pendiente'}</dd></div>
+                  </dl>
+                  {order.status === 'completed' && <div className="production-order-cost" aria-label="Costo de orden terminada">
+                    <OrderCostDetails cost={orderCosts[order.id] ?? { status: 'loading' }} materials={materialById} />
+                  </div>}
+                  {canUpdate && order.status === 'draft' && <div className="production-complete">
+                    <label className="field"><span>Cantidad terminada</span>
+                      <input value={completionQuantities[order.id] ?? String(order.target_quantity)}
+                        onChange={event => setCompletionQuantities(current => ({
+                          ...current, [order.id]: event.target.value,
+                        }))} inputMode="numeric" />
+                    </label>
+                    <button className="button" type="button" disabled={busy}
+                      onClick={() => void completeOrder(order)}>Completar</button>
+                  </div>}
+                </div>)}
+              </SidePanel>
 
               {canCreate && activeBoms.length > 0 && <SidePanel open={activePanel === 'order'} title="Nueva orden" onClose={() => setActivePanel(null)}>
                 <form className="catalog-editor" onSubmit={(event) => void createOrder(event)}>
@@ -1172,7 +1121,7 @@ export function ProductionManagement({
                   </button>
                 </form>
               </SidePanel>}
-            </section>
+            </Card>
           </div>
         </>
       )}
