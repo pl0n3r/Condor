@@ -574,6 +574,8 @@ Verificación incremental **sin promoción de estado**: [PR backend #1672](https
 
 **Límite de aceptación #1567:** la integración genérica de registros no constituye un endpoint específico con persistencia, validación y denegación cross-tenant/empresa/sede para cada S02–S11, ni acredita sus diez recorridos E2E por rol. Las filas de la tabla permanecen `NO_VERIFICABLE` hasta disponer de código, prueba negativa exacta y PR fusionado por cada alcance, sin heredar los gates de #1713 como evidencia integral.
 
+**Evidencia técnica de alcance limitado:** [`src/Application/HumanResources/HumanResourceRecordService.php`](../src/Application/HumanResources/HumanResourceRecordService.php), [`src/Http/Controller/HumanResourcesController.php`](../src/Http/Controller/HumanResourcesController.php) y [`tests/test_human_resource_records.py`](../tests/test_human_resource_records.py) acreditan controles de registros genéricos (incluida denegación por empresa y CSRF); [`frontend/admin/HumanResourcesManagement.tsx`](../frontend/admin/HumanResourcesManagement.tsx) integra esa API. Estos artefactos no prueban persistencia/HTTP/E2E propios de cargos, áreas, sedes, organigrama, novedades, permisos, vacaciones, incapacidades, evaluaciones ni portal. Se requieren pruebas sintéticas específicas sin habilitar datos reales.
+
 | IDs | Estado conservado | Evidencia parcial | Aceptación pendiente |
 | --- | --- | --- | --- |
 | `GEST-M01-S02`–`GEST-M01-S05` | `NO_VERIFICABLE` | Backend de registros #1672 y UI por empresa #1713; no acreditan cargos, áreas, sedes ni organigrama completos. | Endpoint y prueba HTTP/rol/cross-tenant/empresa/sede por cada submódulo, E2E con cuatro estados, PR fusionado. |
