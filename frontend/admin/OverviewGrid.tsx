@@ -19,6 +19,7 @@ export function OverviewGrid({
     <div
       className={'foundation-grid foundation-grid-' + variant}
       aria-label={ariaLabel}
+      role="group"
     >
       {items.map((item) => (
         <article key={item.label}>
