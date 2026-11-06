@@ -17,14 +17,10 @@ final class PayablesPreview
         self::exactKeys($payload, [
             'tenant_ref', 'legal_entity_ref', 'site_ref', 'mode', 'obligations',
         ]);
-        foreach ([
-            'tenant_ref' => 'fixture:tenant/current',
-            'legal_entity_ref' => 'fixture:legal-entity/current',
-            'site_ref' => 'fixture:site/current',
-        ] as $field => $expected) {
-            if ($payload[$field] !== $expected) {
-                throw new InvalidArgumentException('SCOPE_MISMATCH');
-            }
+        if ($payload['tenant_ref'] !== 'fixture:tenant/current'
+            || $payload['legal_entity_ref'] !== 'fixture:legal-entity/current'
+            || $payload['site_ref'] !== 'fixture:site/current') {
+            throw new InvalidArgumentException('SCOPE_MISMATCH');
         }
         if ($payload['mode'] !== 'preview_only') {
             throw new InvalidArgumentException('PREVIEW_ONLY');
@@ -37,44 +33,14 @@ final class PayablesPreview
 
         $obligations = [];
         $sum = 0;
-        foreach ($submitted as $row) {
-            if (!is_array($row) || array_is_list($row)) {
-                throw new InvalidArgumentException('INVALID_OBLIGATION');
-            }
-            self::exactKeys($row, [
-                'obligation_ref', 'supplier_ref', 'tenant_ref', 'legal_entity_ref',
-                'site_ref', 'amount_cop', 'currency', 'reconciliation_status',
-                'payment_status',
-            ]);
-            $id = self::fixture($row['obligation_ref'], 'payable');
-            self::fixture($row['supplier_ref'], 'supplier');
-            foreach (['tenant_ref', 'legal_entity_ref', 'site_ref'] as $field) {
-                if ($row[$field] !== $payload[$field]) {
-                    throw new InvalidArgumentException('SCOPE_MISMATCH');
-                }
-            }
-            $amount = $row['amount_cop'];
-            if (!is_string($amount)
-                || preg_match('/\A[1-9][0-9]{0,11}\z/D', $amount) !== 1) {
-                throw new InvalidArgumentException('INVALID_COP_AMOUNT');
-            }
-            if ($row['currency'] !== 'COP'
-                || $row['reconciliation_status'] !== 'unreconciled'
-                || $row['payment_status'] !== 'unpaid') {
-                throw new InvalidArgumentException('UNPAID_ONLY');
-            }
-            if (isset($obligations[$id])) {
+        foreach ($submitted as $candidate) {
+            $row = self::normalizeObligation($candidate, $payload);
+            $key = $row['obligation_ref'];
+            if (isset($obligations[$key])) {
                 throw new InvalidArgumentException('DUPLICATE_OBLIGATION');
             }
-            $sum += (int) $amount;
-            $obligations[$id] = [
-                'obligation_ref' => $id,
-                'supplier_ref' => $row['supplier_ref'],
-                'amount_cop' => $amount,
-                'currency' => 'COP',
-                'reconciliation_status' => 'unreconciled',
-                'payment_status' => 'unpaid',
-            ];
+            $obligations[$key] = $row;
+            $sum += (int) $row['amount_cop'];
         }
         ksort($obligations, SORT_STRING);
 
@@ -95,6 +61,47 @@ final class PayablesPreview
             'accounting_posted' => false,
             'persisted' => false,
             'notified' => false,
+        ];
+    }
+
+    /** @param array<string,mixed> $scope
+     *  @return array<string,string>
+     */
+    private static function normalizeObligation(mixed $candidate, array $scope): array
+    {
+        if (!is_array($candidate) || array_is_list($candidate)) {
+            throw new InvalidArgumentException('INVALID_OBLIGATION');
+        }
+        self::exactKeys($candidate, [
+            'obligation_ref', 'supplier_ref', 'tenant_ref', 'legal_entity_ref',
+            'site_ref', 'amount_cop', 'currency', 'reconciliation_status',
+            'payment_status',
+        ]);
+        $obligation = self::fixture($candidate['obligation_ref'], 'payable');
+        $supplier = self::fixture($candidate['supplier_ref'], 'supplier');
+        if ([
+            $candidate['tenant_ref'], $candidate['legal_entity_ref'], $candidate['site_ref'],
+        ] !== [
+            $scope['tenant_ref'], $scope['legal_entity_ref'], $scope['site_ref'],
+        ]) {
+            throw new InvalidArgumentException('SCOPE_MISMATCH');
+        }
+        $amount = $candidate['amount_cop'];
+        if (!is_string($amount) || preg_match('/\A[1-9][0-9]{0,11}\z/D', $amount) !== 1) {
+            throw new InvalidArgumentException('INVALID_COP_AMOUNT');
+        }
+        if ($candidate['currency'] !== 'COP'
+            || $candidate['reconciliation_status'] !== 'unreconciled'
+            || $candidate['payment_status'] !== 'unpaid') {
+            throw new InvalidArgumentException('UNPAID_ONLY');
+        }
+        return [
+            'obligation_ref' => $obligation,
+            'supplier_ref' => $supplier,
+            'amount_cop' => $amount,
+            'currency' => 'COP',
+            'reconciliation_status' => 'unreconciled',
+            'payment_status' => 'unpaid',
         ];
     }
 

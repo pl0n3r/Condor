@@ -70,6 +70,19 @@ final class PayablesPreviewTest extends WebTestCase
         self::assertSame($expected, PayablesPreview::preview($payload));
     }
 
+    public function testCanonicalCopAmountLimitsRemainStrings(): void
+    {
+        $fixture = self::fixturePayload();
+        $fixture['obligations'] = [[
+            ...$fixture['obligations'][0],
+            'amount_cop' => '999999999999',
+        ]];
+        $result = PayablesPreview::preview($fixture);
+        self::assertSame('999999999999', $result['total_amount_cop']);
+        self::assertSame('999999999999', $result['obligations'][0]['amount_cop']);
+        self::assertFalse($result['accounting_posted']);
+    }
+
     public function testInvalidScopePiiRealSuppliersPaymentsAndAmountsFailClosed(): void
     {
         $base = self::fixturePayload();
