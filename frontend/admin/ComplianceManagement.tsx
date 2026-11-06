@@ -709,14 +709,15 @@ export function LegalComplianceManagement({ branchId, permissions, csrfToken }: 
     } catch { setNotice('No fue posible cambiar el escenario: acceso denegado o servicio no disponible.'); }
     finally { setBusy(false); }
   }
-  return <section className="catalog-panel" aria-labelledby="legal-m06-title">
-    <h2 id="legal-m06-title">Cumplimiento legal · vista de pruebas M06</h2>
+  return <section className="ui-page catalog-panel" aria-label="Cumplimiento legal de prueba M06">
+    <PageHeader title="Cumplimiento legal · vista de pruebas M06" description="Seis submódulos de demostración, con consulta por sede y permisos del servidor." />
+    <MetricStrip label="Resumen del cumplimiento sintético" items={[{ label: 'Registros visibles', value: load.status === 'ready' ? load.rows.length : '—' }, { label: 'Submódulos', value: legalSections.length }, { label: 'Validez legal', value: 'No certifica', tone: 'warn' }]} />
     <p role="alert">Solo referencias ficticias. No certifica cumplimiento ni habilita operación.</p>
-    <label>Submódulo
+    <Toolbar trailing={<span className="ui-count">Solo referencias ficticias</span>}><label>Submódulo
       <select value={section} onChange={event => setSection(event.target.value as LegalSection)}>
         {legalSections.map(([value, title]) => <option key={value} value={value}>{title}</option>)}
       </select>
-    </label>
+    </label></Toolbar>
     {allowed && <div>
       {canCreate && <button type="button" disabled={busy}
         onClick={() => { void scenario('demo', 'POST'); }}>Cargar demostración sintética</button>}
@@ -727,13 +728,7 @@ export function LegalComplianceManagement({ branchId, permissions, csrfToken }: 
     {load.status === 'loading' && <p role="status">Cargando vista ficticia…</p>}
     {load.status === 'denied' && <p role="alert">Acceso denegado: falta permiso de lectura.</p>}
     {load.status === 'error' && <p role="alert">No fue posible consultar el módulo de prueba.</p>}
-    {load.status === 'ready' && (load.rows.length === 0
-      ? <p role="status">Sin datos ficticios en este submódulo.</p>
-      : <ul>{load.rows.map((row, index) => <li key={index}>
-          <dl>{Object.entries(row).map(([key, value]) => <div key={key}>
-            <dt>{key.replaceAll('_', ' ')}</dt><dd><code>{JSON.stringify(value)}</code></dd>
-          </div>)}</dl>
-        </li>)}</ul>)}
+    {load.status === 'ready' && <DataTable caption="Vista de cumplimiento legal sintética" rows={load.rows.map((row, index) => ({ row, index }))} rowKey={item => String(item.index)} empty="Sin datos ficticios en este submódulo." columns={[{ key: 'number', header: 'Fila', render: item => String(item.index + 1) }, { key: 'fields', header: 'Detalle de prueba', render: item => <dl className="ui-details">{Object.entries(item.row).map(([key, value]) => <div key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd><code>{JSON.stringify(value)}</code></dd></div>)}</dl> }]} />}
     <p>Las evaluaciones y auditorías requieren revisión profesional; ningún cierre es automático.</p>
   </section>;
 }
