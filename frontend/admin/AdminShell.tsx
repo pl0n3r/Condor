@@ -377,7 +377,9 @@ export function AdminShell({
       activeGroup = entry.group;
       activeLabel = hit.label.replace(' (pruebas)', '');
       activeId = variant === 'platform'
-        ? (hit.href.slice('/adminpl0n3r'.length).replace(/^\\//, '') || 'inicio')
+        ? (hit.href.startsWith('/adminpl0n3r/')
+          ? hit.href.slice('/adminpl0n3r/'.length)
+          : 'inicio')
         : hit.href.slice(hit.href.indexOf('#') + 1);
     }
   }
