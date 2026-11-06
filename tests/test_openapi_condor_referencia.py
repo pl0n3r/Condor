@@ -296,12 +296,14 @@ class OpenApiCondorReferenciaTests(unittest.TestCase):
                 ))
 
     def test_regeneracion_determinista_y_serie_de_errores(self) -> None:
-        self.assertEqual(rendered(), rendered())
+        primera_generacion = rendered()
+        segunda_generacion = rendered()
+        self.assertEqual(primera_generacion, segunda_generacion)
         self.assertEqual(rendered(), REFERENCE.read_text(encoding="utf-8"))
         spec = build_reference()
         for operations in spec["paths"].values():
             for op in operations.values():
-                self.assertTrue({"400", "401", "403", "404", "409", "422", "429", "500"} <= set(op["responses"]))
+                self.assertLessEqual({"400", "401", "403", "404", "409", "422", "429", "500"}, set(op["responses"]))
                 self.assertEqual([{"sessionAuth": []}], op["security"])
 
     def test_detecta_deriva_de_rutas_y_metodos(self) -> None:
