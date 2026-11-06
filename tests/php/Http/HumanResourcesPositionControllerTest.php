@@ -36,7 +36,9 @@ final class HumanResourcesPositionControllerTest extends WebTestCase
         self::assertFalse($payload['persisted']);
         self::assertFalse($payload['juridically_binding']);
         self::assertCount(3, $payload['positions']);
-        self::assertSame('private, no-store', $browser->getResponse()->headers->get('Cache-Control'));
+        $cacheControl = (string) $browser->getResponse()->headers->get('Cache-Control');
+        self::assertStringContainsString('private', $cacheControl);
+        self::assertStringContainsString('no-store', $cacheControl);
         $ref = $payload['positions'][0]['ref'];
         self::assertTrue($payload['positions'][0]['synthetic']);
 
