@@ -134,7 +134,7 @@ final class ComplianceController extends AbstractController
             $this->occupationalStore($request), $this->occupationalScope($tenant, $branch),
         ));
         $this->occupationalAudit($tenant, $actor, 'listed', 'fixture:sgsst-record/list');
-        return $this->json(['records' => $rows, 'synthetic_only' => true]);
+        return $this->occupationalResponse(['records' => $rows, 'synthetic_only' => true]);
     }
 
     #[Route('/api/v1/branches/{branchId}/sgsst/records/{slug}', name: 'api_sgsst_record_view', methods: ['GET'])]
@@ -149,7 +149,7 @@ final class ComplianceController extends AbstractController
             throw new NotFoundHttpException('Registro SG-SST ficticio no encontrado.');
         }
         $this->occupationalAudit($tenant, $actor, 'viewed', $ref);
-        return $this->json(['record' => $row, 'synthetic_only' => true]);
+        return $this->occupationalResponse(['record' => $row, 'synthetic_only' => true]);
     }
 
     #[Route('/api/v1/branches/{branchId}/sgsst/records', name: 'api_sgsst_record_create', methods: ['POST'])]
@@ -162,7 +162,7 @@ final class ComplianceController extends AbstractController
         ));
         $this->occupationalAudit($tenant, $actor, 'created', $outcome['record']['record_ref']);
         $request->getSession()->set('condor_sgsst_synthetic', $outcome['store']);
-        return $this->json(['record' => $outcome['record']], Response::HTTP_CREATED);
+        return $this->occupationalResponse(['record' => $outcome['record']], Response::HTTP_CREATED);
     }
 
     #[Route('/api/v1/branches/{branchId}/sgsst/records/{slug}/state', name: 'api_sgsst_record_state', methods: ['PATCH'])]
@@ -177,7 +177,7 @@ final class ComplianceController extends AbstractController
         ));
         $this->occupationalAudit($tenant, $actor, 'state_changed', $ref);
         $request->getSession()->set('condor_sgsst_synthetic', $outcome['store']);
-        return $this->json(['record' => $outcome['record']]);
+        return $this->occupationalResponse(['record' => $outcome['record']]);
     }
 
     /** @return array{User,Tenant,Branch} */
@@ -220,4 +220,11 @@ final class ComplianceController extends AbstractController
         $this->entityManager->flush();
     }
 
+    /** Synthetic previews must not be stored by intermediaries. */
+    private function occupationalResponse(array $payload, int $status = Response::HTTP_OK): JsonResponse
+    {
+        $response = $this->json($payload, $status);
+        $response->headers->set('Cache-Control', 'private, no-store');
+        return $response;
+    }
 }

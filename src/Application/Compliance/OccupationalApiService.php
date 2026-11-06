@@ -13,7 +13,10 @@ use DomainException;
 final class OccupationalApiService
 {
     private const LIMIT = 100;
-    private const KINDS = ['PELIGRO', 'INSPECCION', 'INCIDENTE', 'EPP', 'CAPACITACION', 'EMERGENCIA'];
+    private const KINDS = [
+        'PERFIL_ESTANDARES', 'PELIGRO', 'CONTROL', 'INSPECCION', 'INCIDENTE',
+        'INVESTIGACION', 'EPP', 'CAPACITACION', 'EMERGENCIA', 'COMITE_VIGIA',
+    ];
     private const STATES = ['PENDIENTE', 'EN_REVISION', 'REQUIERE_REVISION'];
 
     /**
