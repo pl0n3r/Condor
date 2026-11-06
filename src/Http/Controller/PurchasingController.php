@@ -7,6 +7,7 @@ namespace App\Http\Controller;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Application\Purchasing\MaterialCostService;
+use App\Application\Purchasing\PayablesPreview;
 use App\Application\Purchasing\PurchaseOrderService;
 use App\Application\Purchasing\PurchaseRequestPreview;
 use App\Application\Purchasing\QuotationPreview;
@@ -260,6 +261,26 @@ final class PurchasingController extends AbstractController
         }
 
         return $this->json(['supplier_contract_preview' => $preview, 'synthetic_only' => true]);
+    }
+
+    /**
+     * M09/S08: obligations in COP are synthetic, unpaid and unreconciled.
+     * No suppliers, accounting ledger, payments, or persistence are accessed.
+     */
+    #[Route('/api/v1/branches/{branchId}/purchasing/payables/preview', name: 'api_purchasing_payables_preview', methods: ['POST'])]
+    public function previewPayables(string $branchId, Request $request): JsonResponse
+    {
+        $this->requirePurchasingPreviewEnabled();
+        $this->requireCsrf($request);
+        $this->authorizedBranchScope($branchId, 'inventory.create');
+
+        try {
+            $preview = PayablesPreview::preview($this->syntheticPurchasingPayload($request));
+        } catch (\InvalidArgumentException $exception) {
+            throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
+        }
+
+        return $this->json(['payables_preview' => $preview, 'synthetic_only' => true]);
     }
 
     private function requirePurchasingPreviewEnabled(): void
