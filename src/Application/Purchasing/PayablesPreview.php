@@ -113,14 +113,10 @@ final class PayablesPreview
      */
     private static function requireFields(array $input, array $required): void
     {
-        $allowed = array_fill_keys($required, true);
-        if (count($input) !== count($allowed)) {
+        // A valid schema has exactly the required keys; no optional or free-text fields.
+        if (count($input) !== count($required)
+            || array_diff(array_keys($input), $required) !== []) {
             throw new InvalidArgumentException('UNEXPECTED_FIELDS');
-        }
-        foreach (array_keys($input) as $field) {
-            if (!isset($allowed[$field])) {
-                throw new InvalidArgumentException('UNEXPECTED_FIELDS');
-            }
         }
     }
 
