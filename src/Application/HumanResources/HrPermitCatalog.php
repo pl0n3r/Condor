@@ -9,62 +9,65 @@ use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use DomainException;
 
-/** Deterministic read-only permission requests; never employees, balances or HR records. */
+/** Immutable fictional permits: never reads employees, HR records, or balances. */
 final class HrPermitCatalog
 {
-    private const PERMITS = [
-        ['slug' => 'personal', 'label' => 'Permiso personal ficticio', 'starts_on' => '2030-01-10', 'ends_on' => '2030-01-10'],
-        ['slug' => 'tramite', 'label' => 'Trámite ficticio', 'starts_on' => '2030-02-12', 'ends_on' => '2030-02-12'],
-        ['slug' => 'familiar', 'label' => 'Permiso familiar ficticio', 'starts_on' => '2030-03-15', 'ends_on' => '2030-03-15'],
+    private const EXAMPLES = [
+        'personal' => ['Permiso personal ficticio', '2030-01-10'],
+        'tramite' => ['Trámite ficticio', '2030-02-12'],
+        'familiar' => ['Permiso familiar ficticio', '2030-03-15'],
     ];
 
-    /** @return list<array{ref: string, label: string, starts_on: string, ends_on: string, state: string, synthetic: bool, automatically_approved: bool}> */
+    /** @return list<array{ref:string,label:string,starts_on:string,ends_on:string,state:string,synthetic:bool,automatically_approved:bool}> */
     public function listFor(Tenant $tenant, LegalEntity $company, Branch $branch): array
     {
-        self::assertScope($tenant, $company, $branch);
-        $scope = substr(hash('sha256', implode('|', [
-            $tenant->id(), $company->id(), $branch->id(),
-        ])), 0, 16);
-
-        $result = [];
-        foreach (self::PERMITS as $permit) {
-            $result[] = [
-                'ref' => 'fixture-permit-'.$scope.'-'.$permit['slug'],
-                'label' => $permit['label'],
-                'starts_on' => $permit['starts_on'],
-                'ends_on' => $permit['ends_on'],
-                'state' => 'PENDIENTE',
-                'synthetic' => true,
-                'automatically_approved' => false,
-            ];
+        $prefix = $this->scopePrefix($tenant, $company, $branch);
+        $examples = [];
+        foreach (self::EXAMPLES as $slug => [$description, $date]) {
+            $examples[] = self::example($prefix, $slug, $description, $date);
         }
-
-        return $result;
+        return $examples;
     }
 
-    /** @return array{ref: string, label: string, starts_on: string, ends_on: string, state: string, synthetic: bool, automatically_approved: bool}|null */
+    /** @return array{ref:string,label:string,starts_on:string,ends_on:string,state:string,synthetic:bool,automatically_approved:bool}|null */
     public function findFor(Tenant $tenant, LegalEntity $company, Branch $branch, string $ref): ?array
     {
-        // Scope is checked even when a reference is malformed or belongs elsewhere.
-        $permits = $this->listFor($tenant, $company, $branch);
-        if (strlen($ref) > 80 || !preg_match('/\Afixture-permit-[a-f0-9]{16}-[a-z]+\z/D', $ref)) {
+        $prefix = $this->scopePrefix($tenant, $company, $branch);
+        if (strlen($ref) > 80 || !preg_match('/\Afixture-permit-[0-9a-f]{16}-[a-z]+\z/D', $ref)) {
             return null;
         }
-        foreach ($permits as $permit) {
-            if ($permit['ref'] === $ref) {
-                return $permit;
+        foreach (self::EXAMPLES as $slug => [$description, $date]) {
+            $candidate = self::example($prefix, $slug, $description, $date);
+            if (hash_equals($candidate['ref'], $ref)) {
+                return $candidate;
             }
         }
-
         return null;
     }
 
-    private static function assertScope(Tenant $tenant, LegalEntity $company, Branch $branch): void
+    /** @return array{ref:string,label:string,starts_on:string,ends_on:string,state:string,synthetic:bool,automatically_approved:bool} */
+    private static function example(string $prefix, string $slug, string $description, string $date): array
     {
-        if ($company->tenant()->id() !== $tenant->id()
-            || $branch->tenant()->id() !== $tenant->id()
-            || $branch->legalEntity()?->id() !== $company->id()) {
-            throw new DomainException('Contexto de permisos ficticios no disponible.');
+        return [
+            'ref' => 'fixture-permit-'.$prefix.'-'.$slug,
+            'label' => $description,
+            'starts_on' => $date,
+            'ends_on' => $date,
+            'state' => 'PENDIENTE',
+            'synthetic' => true,
+            'automatically_approved' => false,
+        ];
+    }
+
+    private function scopePrefix(Tenant $tenant, LegalEntity $company, Branch $branch): string
+    {
+        $tenantKey = $tenant->id();
+        if ($company->tenant()->id() !== $tenantKey || $branch->tenant()->id() !== $tenantKey) {
+            throw new DomainException('Tenant ficticio inválido para el catálogo de permisos.');
         }
+        if ($branch->legalEntity()?->id() !== $company->id()) {
+            throw new DomainException('Sede ficticia fuera de su empresa.');
+        }
+        return substr(hash('sha256', $tenantKey.'|'.$company->id().'|'.$branch->id()), 0, 16);
     }
 }

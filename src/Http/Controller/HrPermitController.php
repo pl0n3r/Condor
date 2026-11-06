@@ -18,7 +18,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
-/** S07: synthetic-only GET preview; no employee data, approvals or persistence. */
+/** A read-only synthetic preview. Never touches payroll or real personnel. */
 final class HrPermitController extends AbstractController
 {
     use BranchApiSupport;
@@ -27,82 +27,76 @@ final class HrPermitController extends AbstractController
         private readonly CurrentTenantForUser $currentTenantForUser,
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
-        private readonly HrPermitCatalog $permits,
+        private readonly HrPermitCatalog $catalog,
     ) {
     }
 
     #[Route('/api/v1/branches/{branchId}/hr/permits', name: 'api_hr_permits_index', methods: ['GET'])]
     public function index(string $branchId, Request $request): JsonResponse
     {
-        $this->requireSynthetic();
-        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
-
-        return $this->privateJson([
-            'permits' => $this->permits->listFor($tenant, $company, $branch),
-            'synthetic' => true,
-            'persisted' => false,
-            'juridically_binding' => false,
-        ]);
+        [$tenant, $company, $branch] = $this->readScope($branchId, $request);
+        return $this->result('permits', $this->catalog->listFor($tenant, $company, $branch));
     }
 
     #[Route('/api/v1/branches/{branchId}/hr/permits/{ref}', name: 'api_hr_permits_detail', methods: ['GET'])]
     public function detail(string $branchId, string $ref, Request $request): JsonResponse
     {
-        $this->requireSynthetic();
-        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
-        $permit = $this->permits->findFor($tenant, $company, $branch, $ref);
+        [$tenant, $company, $branch] = $this->readScope($branchId, $request);
+        $permit = $this->catalog->findFor($tenant, $company, $branch, $ref);
         if ($permit === null) {
-            throw new NotFoundHttpException('Permiso ficticio no encontrado.');
+            throw new NotFoundHttpException('Solicitud ficticia de permiso no encontrada.');
         }
+        return $this->result('permit', $permit);
+    }
 
-        return $this->privateJson([
-            'permit' => $permit,
+    /** @return array{Tenant,LegalEntity,Branch} */
+    private function readScope(string $branchId, Request $request): array
+    {
+        $this->rejectUnsafeContext();
+        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
+        $company = $branch->legalEntity();
+        if (!$company instanceof LegalEntity || $company->tenant()->id() !== $tenant->id()) {
+            throw new NotFoundHttpException('Empresa ficticia no disponible.');
+        }
+        $query = $request->query->all();
+        foreach (array_keys($query) as $key) {
+            if ($key !== 'company_id') {
+                throw new BadRequestHttpException('Consulta no admitida.');
+            }
+        }
+        if (array_key_exists('company_id', $query)
+            && (!is_string($query['company_id']) || $query['company_id'] !== $company->id())) {
+            throw new NotFoundHttpException('Empresa ficticia no disponible.');
+        }
+        return [$tenant, $company, $branch];
+    }
+
+    private function rejectUnsafeContext(): void
+    {
+        $enabled = getenv('HR_REAL_DATA_ENABLED');
+        $off = $enabled === false || in_array(strtolower(trim($enabled)), ['', 'false', '0', 'off', 'no'], true);
+        $environment = $this->getParameter('kernel.environment');
+        $allowed = $environment === 'test' || (
+            $environment === 'dev'
+            && getenv('CONDOR_HR_SYNTHETIC_API') === '1'
+            && getenv('CONDOR_PRODUCTION_STAGE') === 'construccion'
+        );
+        if (!$off || !$allowed) {
+            throw new NotFoundHttpException('Vista de permisos ficticios deshabilitada.');
+        }
+    }
+
+    /** @param array<string,mixed>|list<array<string,mixed>> $content */
+    private function result(string $key, array $content): JsonResponse
+    {
+        return new JsonResponse([
+            $key => $content,
             'synthetic' => true,
             'persisted' => false,
             'juridically_binding' => false,
+        ], 200, [
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
-    }
-
-    private function requireSynthetic(): void
-    {
-        $real = getenv('HR_REAL_DATA_ENABLED');
-        if ($real !== false && !in_array(strtolower(trim($real)), ['', 'false', '0', 'off', 'no'], true)) {
-            throw new NotFoundHttpException('Permisos sintéticos no disponibles.');
-        }
-        $environment = $this->getParameter('kernel.environment');
-        if ($environment !== 'test' && ($environment !== 'dev'
-            || getenv('CONDOR_HR_SYNTHETIC_API') !== '1'
-            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion')) {
-            throw new NotFoundHttpException('Permisos sintéticos no disponibles.');
-        }
-    }
-
-    private function companyFor(Tenant $tenant, Branch $branch, Request $request): LegalEntity
-    {
-        $query = $request->query->all();
-        if (array_diff(array_keys($query), ['company_id']) !== []) {
-            throw new BadRequestHttpException('Parámetros de consulta no permitidos.');
-        }
-        $company = $branch->legalEntity();
-        if (!$company instanceof LegalEntity || $company->tenant()->id() !== $tenant->id()) {
-            throw new NotFoundHttpException('Empresa no disponible.');
-        }
-        $provided = $query['company_id'] ?? null;
-        if ($provided !== null && (!is_string($provided) || $provided !== $company->id())) {
-            throw new NotFoundHttpException('Empresa no disponible.');
-        }
-
-        return $company;
-    }
-
-    /** @param array<string,mixed> $payload */
-    private function privateJson(array $payload): JsonResponse
-    {
-        $response = $this->json($payload);
-        $response->headers->set('Cache-Control', 'private, no-store');
-        $response->headers->set('X-Content-Type-Options', 'nosniff');
-        return $response;
     }
 }
