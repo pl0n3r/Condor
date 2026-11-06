@@ -1,11 +1,11 @@
 /// <reference types="vite/client" />
-import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 
 /**
- * M10: simulador exclusivamente en memoria para construcción.
- * No consulta API, no persiste datos y NO representa auditoría oficial.
+ * M10: interfaz de construcción contra API sintética protegida.
+ * No admite datos reales, archivos jurídicos, aprobación ni operación live.
  */
-type AssetState = 'INVENTARIADO' | 'ASIGNADO' | 'MANTENIMIENTO_PENDIENTE' | 'BAJA_REQUIERE_REVISION';
+type AssetState = 'PENDIENTE' | 'ASIGNADO' | 'EN_REVISION' | 'BAJA_REQUIERE_REVISION';
 type AssetAction = 'ASIGNAR' | 'MANTENIMIENTO' | 'SOLICITAR_BAJA';
 type Asset = Readonly<{
   ref: string;
@@ -31,8 +31,15 @@ const assetRefPattern = /^fixture:asset\/[a-z][a-z0-9_-]{0,47}$/;
 const responsibleRefPattern = /^fixture:responsible\/[a-z][a-z0-9_-]{0,47}$/;
 const evidenceRefPattern = /^fixture:evidence\/[a-z][a-z0-9_-]{0,47}$/;
 const states: AssetState[] = [
-  'INVENTARIADO', 'ASIGNADO', 'MANTENIMIENTO_PENDIENTE', 'BAJA_REQUIERE_REVISION',
+  'PENDIENTE', 'ASIGNADO', 'EN_REVISION', 'BAJA_REQUIERE_REVISION',
 ];
+type ApiAsset = Readonly<{
+  asset_ref: string;
+  responsible_ref: string | null;
+  evidence_ref: string | null;
+  state: AssetState;
+}>;
+type LoadState = 'loading' | 'ready' | 'error' | 'permission-denied';
 
 function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const hasCompany = companyId !== '__unassigned__';
@@ -49,6 +56,98 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [responsible, setResponsible] = useState('');
   const [evidence, setEvidence] = useState('');
   const [notice, setNotice] = useState('');
+  const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [csrfToken, setCsrfToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const apiPath = '/api/v1/branches/' + encodeURIComponent(branchId) + '/assets';
+
+  function fromApi(row: ApiAsset): Asset {
+    if (!assetRefPattern.test(row.asset_ref) ||
+        !['PENDIENTE', 'ASIGNADO', 'EN_REVISION', 'BAJA_REQUIERE_REVISION'].includes(row.state) ||
+        (row.responsible_ref !== null && !responsibleRefPattern.test(row.responsible_ref)) ||
+        (row.evidence_ref !== null && !evidenceRefPattern.test(row.evidence_ref))) {
+      throw new Error('El servidor entregó datos no sintéticos.');
+    }
+    return {
+      ref: row.asset_ref, tenantId, companyId, branchId,
+      responsibleRef: row.responsible_ref,
+      evidenceRef: row.evidence_ref,
+      state: row.state,
+    };
+  }
+
+  useEffect(() => {
+    if (!canView) {
+      setLoadState('permission-denied');
+      return;
+    }
+    const abort = new AbortController();
+    setLoadState('loading');
+    setCsrfToken('');
+    setRecords([]);
+    setSelected('');
+    void fetch(apiPath, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+      signal: abort.signal,
+    }).then(async response => {
+      if (response.status === 401 || response.status === 403) {
+        if (!abort.signal.aborted) setLoadState('permission-denied');
+        return;
+      }
+      if (!response.ok) throw new Error('No fue posible consultar los activos de prueba.');
+      const data = await response.json() as { assets: ApiAsset[]; 'csrf_token': string };
+      if (!Array.isArray(data.assets) || typeof data.csrf_token !== 'string' ||
+          data.csrf_token.length === 0) throw new Error('Respuesta sintética inválida.');
+      if (!abort.signal.aborted) {
+        setRecords(data.assets.map(fromApi));
+        setCsrfToken(data.csrf_token);
+        setLoadState('ready');
+      }
+    }).catch(() => {
+      if (!abort.signal.aborted) setLoadState('error');
+    });
+    return () => abort.abort();
+  }, [apiPath, canView, tenantId, companyId, branchId, attempt]);
+
+  async function persist(method: 'POST' | 'PATCH', path: string, payload: object): Promise<Asset | null> {
+    if (!csrfToken || busy) {
+      setNotice('Operación no autorizada o ya en curso.');
+      return null;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch(path, {
+        method,
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (response.status === 401 || response.status === 403) {
+        setRecords([]);
+        setSelected('');
+        setLoadState('permission-denied');
+        return null;
+      }
+      if (!response.ok) throw new Error('El servidor rechazó la operación sintética.');
+      const result = await response.json() as { asset: ApiAsset };
+      const record = fromApi(result.asset);
+      setRecords(previous => {
+        const existing = previous.some(row => row.ref === record.ref);
+        return existing ? previous.map(row => row.ref === record.ref ? record : row)
+          : [...previous, record];
+      });
+      return record;
+    } catch {
+      setNotice('Error de red o validación: no se confirmó ninguna escritura.');
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function audit(assetRef: string, operation: AuditEvent['operation']) {
     setEvents(previous => [...previous, { scope, assetRef, operation }].slice(-100));
@@ -61,14 +160,12 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       setNotice('Referencia no válida o repetida. Usa solo fixture:asset/demo.');
       return;
     }
-    const record: Asset = {
-      ref: reference, tenantId, companyId, branchId,
-      responsibleRef: null, evidenceRef: null, state: 'INVENTARIADO',
-    };
-    setRecords(previous => [...previous, record]);
-    audit(reference, 'created');
-    setReference('');
-    setNotice('Activo ficticio inventariado. Ningún estado se aprobó.');
+    void persist('POST', apiPath, { asset_ref: reference }).then(record => {
+      if (!record) return;
+      audit(record.ref, 'created');
+      setReference('');
+      setNotice('Activo ficticio guardado por API sintética, sin aprobación.');
+    });
   }
 
   function view(assetRef: string) {
@@ -89,24 +186,35 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       setNotice('Operación denegada: exige permiso y referencias ficticias válidas.');
       return;
     }
-    const next: AssetState = action === 'ASIGNAR' ? 'ASIGNADO'
-      : action === 'MANTENIMIENTO' ? 'MANTENIMIENTO_PENDIENTE'
-      : 'BAJA_REQUIERE_REVISION';
-    setRecords(previous => previous.map(row => row.ref === selected
-      && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId
-      ? { ...row, state: next,
-          responsibleRef: action === 'ASIGNAR' ? responsible : row.responsibleRef,
-          evidenceRef: action === 'SOLICITAR_BAJA' ? evidence : row.evidenceRef }
-      : row));
-    audit(selected, 'state_changed');
-    setResponsible('');
-    setEvidence('');
-    setNotice('Acción explícita registrada solo en memoria; pendiente de autorización real.');
+    const path = apiPath + '/' + encodeURIComponent(selected.slice('fixture:asset/'.length));
+    const assignment = action === 'ASIGNAR';
+    const payload = assignment ? { responsible_ref: responsible } : action === 'SOLICITAR_BAJA'
+      ? { state: 'BAJA_REQUIERE_REVISION', evidence_ref: evidence }
+      : { state: 'EN_REVISION' };
+    void persist('PATCH', path + (assignment ? '/responsible' : '/state'), payload).then(record => {
+      if (!record) return;
+      audit(selected, 'state_changed');
+      setResponsible('');
+      setEvidence('');
+      setNotice('Transición sintética auditada en servidor; pendiente de revisión humana.');
+    });
   }
 
   if (!canView) return (
     <section id="assets-management" aria-label="Activos empresariales (pruebas)">
       <p role="alert">No tienes permiso o razón social activa para consultar activos ficticios.</p>
+    </section>
+  );
+
+  if (loadState === 'loading') return (
+    <section id="assets-management"><p role="status">Cargando activos sintéticos…</p></section>
+  );
+  if (loadState === 'permission-denied') return (
+    <section id="assets-management"><p role="alert">Permiso denegado (401/403).</p></section>
+  );
+  if (loadState === 'error') return (
+    <section id="assets-management"><p role="alert">Error de red o API sintética no habilitada.</p>
+      <button type="button" onClick={() => setAttempt(value => value + 1)}>Reintentar</button>
     </section>
   );
 
@@ -119,7 +227,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       <div className="section-heading"><div>
         <span className="eyebrow">M10 · Exclusivo construcción</span>
         <h2 id="assets-title">Activos empresariales</h2>
-        <p className="muted">Simulador ficticio sin API, persistencia ni auditoría de servidor.</p>
+        <p className="muted">API sintética DEV. auditoría de servidor, sin validez jurídica ni datos reales.</p>
       </div></div>
       {notice && <output aria-live="polite" role="status">{notice}</output>}
       <div className="production-layout">
@@ -146,7 +254,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
                 placeholder="fixture:asset/demo" value={reference}
                 onChange={(event: ChangeEvent<HTMLInputElement>) => setReference(event.target.value)} />
             </label>
-            <button className="button" type="submit">Inventariar activo ficticio</button>
+            <button className="button" type="submit" disabled={busy}>Inventariar activo ficticio</button>
           </form>
         </section>}
         <section className="catalog-card" aria-labelledby="assets-detail-title">
@@ -175,7 +283,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
                   pattern="fixture:evidence/[a-z][a-z0-9_-]{0,47}"
                   value={evidence} onChange={event => setEvidence(event.target.value)} />
               </label>}
-              <button type="submit">Registrar transición ficticia explícita</button>
+              <button type="submit" disabled={busy}>Registrar transición ficticia explícita</button>
             </form>}
             <p className="muted">Ningún activo se aprueba, da de baja o cierra automáticamente.</p>
           </> : <p role="status">Selecciona un activo para consultar su detalle.</p>}

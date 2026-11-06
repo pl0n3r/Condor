@@ -58,6 +58,21 @@ final readonly class AssetApiService
     /** @param array<string,mixed> $payload
      *  @return array<string,mixed>
      */
+    public function assignResponsible(Tenant $tenant, Branch $office, string $slug, array $payload): array
+    {
+        self::allowFields($payload, ['responsible_ref']);
+        $responsible = $payload['responsible_ref'] ?? null;
+        if (!is_string($responsible)) {
+            throw new DomainException('Responsable sintético obligatorio.');
+        }
+        return $this->records->assignResponsible(
+            self::scope($tenant, $office), self::assetRef($slug), self::ACTOR, true, $responsible,
+        );
+    }
+
+    /** @param array<string,mixed> $payload
+     *  @return array<string,mixed>
+     */
     public function changeState(Tenant $tenant, Branch $office, string $slug, array $payload): array
     {
         self::allowFields($payload, ['state', 'evidence_ref']);
