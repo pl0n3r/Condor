@@ -39,12 +39,13 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
   const [state, setState] = useState<State>({ status: 'loading', employees: [] });
   const [history, setHistory] = useState<History>({ status: 'idle', events: [] });
   const [selected, setSelected] = useState('');
-  const [panel, setPanel] = useState<'create' | 'attendance' | null>(null);
-  const [search, setSearch] = useState('');
   const [code, setCode] = useState('');
   const [userId, setUserId] = useState('');
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
+  // Keep existing hook positions stable for fail-closed behavioral tests.
+  const [panel, setPanel] = useState<'create' | 'attendance' | null>(null);
+  const [search, setSearch] = useState('');
   const sequence = useRef(0);
   const reader = useRef<AbortController | null>(null);
   const writer = useRef<AbortController | null>(null);

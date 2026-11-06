@@ -181,22 +181,22 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       onClose={() => setPanel(null)}>
       <form className="catalog-editor" onSubmit={create}>
         <label>Referencia ficticia
-          <input required maxLength={64} pattern="fixture:payroll/[a-z][a-z0-9_-]{0,47}"
+          <input required maxLength={64} pattern="fixture:payroll/[a-z][a-z0-9_\-]{0,47}"
             placeholder="fixture:payroll/demo" value={reference}
             onChange={event => setReference(event.target.value)} />
         </label>
         <label>Periodo ficticio
-          <input required maxLength={64} pattern="fixture:period/[a-z][a-z0-9_-]{0,47}"
+          <input required maxLength={64} pattern="fixture:period/[a-z][a-z0-9_\-]{0,47}"
             placeholder="fixture:period/demo" value={periodRef}
             onChange={event => setPeriodRef(event.target.value)} />
         </label>
         <label>Colaborador ficticio (sin nombres ni identificaciones)
-          <input required maxLength={64} pattern="fixture:employee/[a-z][a-z0-9_-]{0,47}"
+          <input required maxLength={64} pattern="fixture:employee/[a-z][a-z0-9_\-]{0,47}"
             placeholder="fixture:employee/demo" value={employeeRef}
             onChange={event => setEmployeeRef(event.target.value)} />
         </label>
         <label>Concepto ficticio (sin importes reales)
-          <input required maxLength={64} pattern="fixture:concept/[a-z][a-z0-9_-]{0,47}"
+          <input required maxLength={64} pattern="fixture:concept/[a-z][a-z0-9_\-]{0,47}"
             placeholder="fixture:concept/demo" value={conceptRef}
             onChange={event => setConceptRef(event.target.value)} />
         </label>
