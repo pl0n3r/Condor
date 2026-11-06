@@ -18,7 +18,8 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
-/** Owner-authorized synthetic vacation calendar. Never reads real HR records. */
+/** HTTP facade for fictional leave dates. Never loads real employee records. */
+#[Route('/api/v1/branches/{branchId}/hr/vacations')]
 final class HrVacationController extends AbstractController
 {
     use BranchApiSupport;
@@ -31,79 +32,77 @@ final class HrVacationController extends AbstractController
     ) {
     }
 
-    #[Route('/api/v1/branches/{branchId}/hr/vacations', name: 'api_hr_vacations_index', methods: ['GET'])]
+    #[Route('', name: 'api_hr_vacations_index', methods: ['GET'])]
     public function index(string $branchId, Request $request): JsonResponse
     {
-        $this->requireSynthetic();
-        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
-
-        return $this->privateJson([
-            'vacations' => $this->vacations->listFor($tenant, $company, $branch),
-            'synthetic' => true,
-            'persisted' => false,
-            'juridically_binding' => false,
-        ]);
+        $scope = $this->resolveSafeScope($branchId, $request);
+        return $this->calendarResponse('vacations', $this->vacations->listFor(...$scope));
     }
 
-    #[Route('/api/v1/branches/{branchId}/hr/vacations/{ref}', name: 'api_hr_vacations_detail', methods: ['GET'])]
+    #[Route('/{ref}', name: 'api_hr_vacations_detail', methods: ['GET'])]
     public function detail(string $branchId, string $ref, Request $request): JsonResponse
     {
-        $this->requireSynthetic();
+        $scope = $this->resolveSafeScope($branchId, $request);
+        $entry = $this->vacations->findFor(...[...$scope, $ref]);
+        if ($entry === null) {
+            throw new NotFoundHttpException('No existe una vacación ficticia con esa referencia.');
+        }
+        return $this->calendarResponse('vacation', $entry);
+    }
+
+    /** @return array{Tenant, LegalEntity, Branch} */
+    private function resolveSafeScope(string $branchId, Request $request): array
+    {
+        $this->guardPreviewMode();
         [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
-        $vacation = $this->vacations->findFor($tenant, $company, $branch, $ref);
-        if ($vacation === null) {
-            throw new NotFoundHttpException('Vacación ficticia no encontrada.');
-        }
 
-        return $this->privateJson([
-            'vacation' => $vacation,
-            'synthetic' => true,
-            'persisted' => false,
-            'juridically_binding' => false,
-        ]);
-    }
-
-    private function requireSynthetic(): void
-    {
-        $real = getenv('HR_REAL_DATA_ENABLED');
-        if ($real !== false && !in_array(strtolower(trim($real)), ['', 'false', '0', 'off', 'no'], true)) {
-            throw new NotFoundHttpException('Calendario sintético no disponible.');
-        }
-
-        $environment = $this->getParameter('kernel.environment');
-        if ($environment !== 'test' && ($environment !== 'dev'
-            || getenv('CONDOR_HR_SYNTHETIC_API') !== '1'
-            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion')) {
-            throw new NotFoundHttpException('Calendario sintético no disponible.');
-        }
-    }
-
-    private function companyFor(Tenant $tenant, Branch $branch, Request $request): LegalEntity
-    {
-        $query = $request->query->all();
-        if (array_diff(array_keys($query), ['company_id']) !== []) {
-            throw new BadRequestHttpException('Parámetros de consulta no permitidos.');
+        $parameters = $request->query->all();
+        $unknown = array_filter(array_keys($parameters), static fn (string $key): bool => $key !== 'company_id');
+        if ($unknown !== []) {
+            throw new BadRequestHttpException('Este calendario no admite filtros adicionales.');
         }
 
         $company = $branch->legalEntity();
-        if (!$company instanceof LegalEntity || $company->tenant()->id() !== $tenant->id()) {
-            throw new NotFoundHttpException('Empresa no disponible.');
+        if ($company === null || $company->tenant()->id() !== $tenant->id()) {
+            throw new NotFoundHttpException('La empresa del contexto no está disponible.');
         }
-        $provided = $query['company_id'] ?? null;
-        if ($provided !== null && (!is_string($provided) || $provided !== $company->id())) {
-            throw new NotFoundHttpException('Empresa no disponible.');
+
+        if (array_key_exists('company_id', $parameters)) {
+            $requested = $parameters['company_id'];
+            if (!is_string($requested) || $requested !== $company->id()) {
+                throw new NotFoundHttpException('No hay empresa autorizada para el filtro solicitado.');
+            }
         }
-        return $company;
+        return [$tenant, $company, $branch];
     }
 
-    /** @param array<string, mixed> $payload */
-    private function privateJson(array $payload): JsonResponse
+    private function guardPreviewMode(): void
     {
-        $response = $this->json($payload);
-        $response->headers->set('Cache-Control', 'private, no-store');
-        $response->headers->set('X-Content-Type-Options', 'nosniff');
-        return $response;
+        $flag = getenv('HR_REAL_DATA_ENABLED');
+        $falseValues = ['', '0', 'off', 'no', 'false'];
+        $realDataOff = $flag === false || in_array(strtolower(trim($flag)), $falseValues, true);
+        $environment = $this->getParameter('kernel.environment');
+        $testMode = $environment === 'test';
+        $explicitDevelopment = $environment === 'dev'
+            && getenv('CONDOR_PRODUCTION_STAGE') === 'construccion'
+            && getenv('CONDOR_HR_SYNTHETIC_API') === '1';
+
+        if (!$realDataOff || (!$testMode && !$explicitDevelopment)) {
+            throw new NotFoundHttpException('La vista de vacaciones ficticias está deshabilitada.');
+        }
+    }
+
+    /** @param list<mixed>|array<string, mixed> $rows */
+    private function calendarResponse(string $name, array $rows): JsonResponse
+    {
+        return new JsonResponse([
+            $name => $rows,
+            'synthetic' => true,
+            'persisted' => false,
+            'juridically_binding' => false,
+        ], 200, [
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 }

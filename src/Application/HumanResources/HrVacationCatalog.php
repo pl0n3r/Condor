@@ -9,62 +9,72 @@ use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use DomainException;
 
-/**
- * Deterministic M01 S08 calendar fixtures. No employee rows, accrued leave,
- * payroll calculations, mutable balances, persistence or legal effect.
- */
+/** A fictional calendar, not employee leave or accrued employment benefits. */
 final class HrVacationCatalog
 {
-    private const VACATIONS = [
-        ['key' => 'enero-a', 'label' => 'Descanso ficticio A', 'starts_on' => '2027-01-12', 'ends_on' => '2027-01-16'],
-        ['key' => 'abril-b', 'label' => 'Descanso ficticio B', 'starts_on' => '2027-04-05', 'ends_on' => '2027-04-09'],
-        ['key' => 'julio-c', 'label' => 'Descanso ficticio C', 'starts_on' => '2027-07-19', 'ends_on' => '2027-07-23'],
+    /** @var array<string, array{label: string, from: string, until: string}> */
+    private const CALENDAR = [
+        'cal-01' => ['label' => 'Jornada ficticia de descanso A', 'from' => '2027-01-12', 'until' => '2027-01-16'],
+        'cal-02' => ['label' => 'Jornada ficticia de descanso B', 'from' => '2027-04-05', 'until' => '2027-04-09'],
+        'cal-03' => ['label' => 'Jornada ficticia de descanso C', 'from' => '2027-07-19', 'until' => '2027-07-23'],
     ];
 
     /** @return list<array{ref: string, label: string, starts_on: string, ends_on: string, state: string, synthetic: bool}> */
     public function listFor(Tenant $tenant, LegalEntity $company, Branch $branch): array
     {
-        self::assertScope($tenant, $company, $branch);
-        $scope = substr(hash('sha256', implode('|', [
-            $tenant->id(), $company->id(), $branch->id(),
-        ])), 0, 16);
+        $this->requireMembership($tenant, $company, $branch);
 
-        $rows = [];
-        foreach (self::VACATIONS as $fixture) {
-            $rows[] = [
-                'ref' => 'fixture-vacation-'.$scope.'-'.$fixture['key'],
-                'label' => $fixture['label'],
-                'starts_on' => $fixture['starts_on'],
-                'ends_on' => $fixture['ends_on'],
+        $calendar = [];
+        foreach (self::CALENDAR as $slot => $period) {
+            $calendar[] = [
+                'ref' => $this->scopedToken($tenant, $company, $branch, $slot),
+                'label' => $period['label'],
+                'starts_on' => $period['from'],
+                'ends_on' => $period['until'],
                 'state' => 'ficticio',
                 'synthetic' => true,
             ];
         }
-        return $rows;
+
+        return $calendar;
     }
 
     /** @return array{ref: string, label: string, starts_on: string, ends_on: string, state: string, synthetic: bool}|null */
     public function findFor(Tenant $tenant, LegalEntity $company, Branch $branch, string $ref): ?array
     {
-        // Always validate scope before resolving even opaque fixture identifiers.
-        $rows = $this->listFor($tenant, $company, $branch);
-        if (strlen($ref) > 96 || !preg_match('/\Afixture-vacation-[a-f0-9]{16}-[a-z0-9-]+\z/D', $ref)) {
+        $candidates = $this->listFor($tenant, $company, $branch);
+        if (preg_match('/\Afixture-vacation-[a-f0-9]{24}\z/D', $ref) !== 1) {
             return null;
         }
-        foreach ($rows as $row) {
-            if ($row['ref'] === $ref) {
-                return $row;
+
+        foreach ($candidates as $candidate) {
+            if (hash_equals($candidate['ref'], $ref)) {
+                return $candidate;
             }
         }
         return null;
     }
 
-    private static function assertScope(Tenant $tenant, LegalEntity $company, Branch $branch): void
+    private function requireMembership(Tenant $tenant, LegalEntity $company, Branch $branch): void
     {
-        if ($company->tenant()->id() !== $tenant->id()
-            || $branch->tenant()->id() !== $tenant->id()
-            || $branch->legalEntity()?->id() !== $company->id()) {
-            throw new DomainException('Contexto de vacaciones ficticias no disponible.');
+        $tenantId = $tenant->id();
+        $isCompanyOwned = $company->tenant()->id() === $tenantId;
+        $isBranchOwned = $branch->tenant()->id() === $tenantId;
+        $matchesLegalEntity = $branch->legalEntity()?->id() === $company->id();
+        if (!($isCompanyOwned && $isBranchOwned && $matchesLegalEntity)) {
+            throw new DomainException('No se puede consultar un calendario ficticio de otro contexto.');
         }
+    }
+
+    private function scopedToken(Tenant $tenant, LegalEntity $company, Branch $branch, string $slot): string
+    {
+        $scope = json_encode([
+            'tenant' => $tenant->id(),
+            'company' => $company->id(),
+            'branch' => $branch->id(),
+            'slot' => $slot,
+        ], JSON_THROW_ON_ERROR);
+
+        return 'fixture-vacation-'.substr(hash('sha256', $scope), 0, 24);
     }
 }

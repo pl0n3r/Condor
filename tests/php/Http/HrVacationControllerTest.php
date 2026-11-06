@@ -14,142 +14,161 @@ use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
-/** M01 S08: real Symfony HTTP, fictional identities and no HR personal data. */
+/** M01 S08: the HTTP kernel uses only fictional records in its test database. */
 final class HrVacationControllerTest extends WebTestCase
 {
-    public function testOwnerSeesOnlyAuthorizedSyntheticVacationCalendar(): void
+    public function testCalendarAndDetailAreScopeBoundAndStrictlyFictional(): void
     {
         $browser = static::createClient();
-        $database = static::getContainer()->get(EntityManagerInterface::class);
-        self::assertInstanceOf(EntityManagerInterface::class, $database);
-        [$tenant, $company, $otherCompany, $branch, $sibling, $foreignBranch, $owner] =
-            $this->fixtures($database);
-        $browser->loginUser($owner);
+        $fixture = $this->seed();
+        $browser->loginUser($fixture['owner']);
 
-        $path = '/api/v1/branches/'.$branch->id().'/hr/vacations';
-        $browser->request('GET', $path.'?company_id='.$company->id());
-        self::assertResponseStatusCodeSame(200);
-        $result = json_decode((string) $browser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertTrue($result['synthetic']);
-        self::assertFalse($result['persisted']);
-        self::assertFalse($result['juridically_binding']);
-        self::assertCount(3, $result['vacations']);
-        $first = $result['vacations'][0];
-        self::assertTrue($first['synthetic']);
-        self::assertSame('ficticio', $first['state']);
-        self::assertSame('2027-01-12', $first['starts_on']);
-        self::assertSame('2027-01-16', $first['ends_on']);
-        self::assertMatchesRegularExpression('/\Afixture-vacation-[a-f0-9]{16}-enero-a\z/', $first['ref']);
-        self::assertArrayNotHasKey('employee_id', $first);
-        self::assertArrayNotHasKey('balance', $first);
+        $path = $this->endpoint($fixture['branch']);
+        $body = $this->read($browser, $path.'?company_id='.$fixture['company']->id(), 200);
+        self::assertSame(['synthetic' => true, 'persisted' => false, 'juridically_binding' => false], [
+            'synthetic' => $body['synthetic'],
+            'persisted' => $body['persisted'],
+            'juridically_binding' => $body['juridically_binding'],
+        ]);
+        self::assertCount(3, $body['vacations']);
+        $entry = $body['vacations'][0];
+        self::assertMatchesRegularExpression('/\Afixture-vacation-[a-f0-9]{24}\z/D', $entry['ref']);
+        self::assertSame('2027-01-12', $entry['starts_on']);
+        self::assertSame('2027-01-16', $entry['ends_on']);
+        self::assertTrue($entry['synthetic']);
+        foreach (['employee', 'employee_id', 'balance', 'salary', 'person_id'] as $forbidden) {
+            self::assertArrayNotHasKey($forbidden, $entry);
+        }
         self::assertStringContainsString('private', (string) $browser->getResponse()->headers->get('Cache-Control'));
         self::assertStringContainsString('no-store', (string) $browser->getResponse()->headers->get('Cache-Control'));
         self::assertSame('nosniff', $browser->getResponse()->headers->get('X-Content-Type-Options'));
 
-        $browser->request('GET', $path.'/'.$first['ref']);
-        self::assertResponseStatusCodeSame(200);
-        $detail = json_decode((string) $browser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame($first, $detail['vacation']);
-        self::assertFalse($detail['persisted']);
-        self::assertFalse($detail['juridically_binding']);
+        $detail = $this->read($browser, $path.'/'.$entry['ref'], 200);
+        self::assertSame($entry, $detail['vacation']);
 
-        $browser->request('GET', '/api/v1/branches/'.$sibling->id().'/hr/vacations');
-        self::assertResponseStatusCodeSame(200);
-        $otherScope = json_decode((string) $browser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertNotSame($first['ref'], $otherScope['vacations'][0]['ref']);
-        $browser->request('GET', '/api/v1/branches/'.$sibling->id().'/hr/vacations/'.$first['ref']);
-        self::assertResponseStatusCodeSame(404);
-
-        $browser->request('GET', $path.'?company_id='.$otherCompany->id());
-        self::assertResponseStatusCodeSame(404);
-        $browser->request('GET', '/api/v1/branches/'.$foreignBranch->id().'/hr/vacations');
-        self::assertResponseStatusCodeSame(404);
-        self::assertStringNotContainsString($foreignBranch->id(), (string) $browser->getResponse()->getContent());
-        $browser->request('GET', $path.'?tenant_id='.$tenant->id());
-        self::assertResponseStatusCodeSame(400);
-        $browser->request('GET', $path.'?company_id%5B%5D='.$company->id());
-        self::assertResponseStatusCodeSame(404);
-        $browser->request('GET', $path.'/invalid-ref');
-        self::assertResponseStatusCodeSame(404);
-        $browser->request('GET', $path.'/fixture-vacation-0000000000000000-enero-a');
-        self::assertResponseStatusCodeSame(404);
+        foreach (['sameCompanyBranch', 'otherCompanyBranch'] as $sibling) {
+            $otherPath = $this->endpoint($fixture[$sibling]);
+            $different = $this->read($browser, $otherPath, 200);
+            self::assertNotSame($entry['ref'], $different['vacations'][0]['ref']);
+            $this->read($browser, $otherPath.'/'.$entry['ref'], 404);
+        }
     }
 
-    public function testPermissionAndRealDataFlagAreFailClosed(): void
+    public function testInvalidFiltersForeignTenantAndOpaqueReferenceFailClosed(): void
     {
         $browser = static::createClient();
-        $database = static::getContainer()->get(EntityManagerInterface::class);
-        self::assertInstanceOf(EntityManagerInterface::class, $database);
-        [, , , $branch, , , $owner, $delegate] = $this->fixtures($database);
-        $path = '/api/v1/branches/'.$branch->id().'/hr/vacations';
+        $fixture = $this->seed();
+        $browser->loginUser($fixture['owner']);
+        $path = $this->endpoint($fixture['branch']);
 
-        $browser->loginUser($delegate);
-        $browser->request('GET', $path);
-        self::assertResponseStatusCodeSame(403);
-
-        $browser->loginUser($owner);
-        $old = getenv('HR_REAL_DATA_ENABLED');
-        putenv('HR_REAL_DATA_ENABLED=true');
-        try {
-            $browser->request('GET', $path);
-            self::assertResponseStatusCodeSame(404);
-            $browser->request('GET', $path.'/fixture-vacation-0000000000000000-enero-a');
-            self::assertResponseStatusCodeSame(404);
-        } finally {
-            if ($old === false) {
-                putenv('HR_REAL_DATA_ENABLED');
-            } else {
-                putenv('HR_REAL_DATA_ENABLED='.$old);
-            }
+        $attempts = [
+            [$path.'?company_id='.$fixture['otherCompany']->id(), 404],
+            [$path.'?tenant_id='.$fixture['tenant']->id(), 400],
+            [$path.'?company_id%5B%5D='.$fixture['company']->id(), 404],
+            [$path.'/random-opaque-reference', 404],
+            [$path.'/fixture-vacation-'.str_repeat('0', 24), 404],
+            [$this->endpoint($fixture['foreignBranch']), 404],
+        ];
+        foreach ($attempts as [$url, $expected]) {
+            $this->read($browser, $url, $expected);
+            self::assertStringNotContainsString(
+                $fixture['foreignBranch']->id(),
+                (string) $browser->getResponse()->getContent(),
+            );
         }
     }
 
-    public function testCatalogRejectsCrossScopeAndReferencesWithoutRecords(): void
+    public function testDeniedPermissionAndRealDataFlagCannotShowSyntheticPreview(): void
     {
-        $tenant = new Tenant('Tenant ficticio', 'vacation-main');
-        $foreign = new Tenant('Tenant ajeno ficticio', 'vacation-other');
-        $company = new LegalEntity($tenant, 'Empresa ficticia', null);
-        $otherCompany = new LegalEntity($foreign, 'Empresa ajena ficticia', null);
-        $branch = new Branch($tenant, 'Sede ficticia', 'local', $company);
-        $otherBranch = new Branch($foreign, 'Sede ajena', 'foreign', $otherCompany);
-        $catalog = new HrVacationCatalog();
+        $browser = static::createClient();
+        $fixture = $this->seed();
+        $browser->loginUser($fixture['delegate']);
+        $path = $this->endpoint($fixture['branch']);
+        $this->read($browser, $path, 403);
 
-        $list = $catalog->listFor($tenant, $company, $branch);
-        self::assertCount(3, $list);
-        self::assertSame($list[0], $catalog->findFor($tenant, $company, $branch, $list[0]['ref']));
-        self::assertNull($catalog->findFor($tenant, $company, $branch, 'fixture-vacation-0000000000000000-enero-a'));
-        self::assertNull($catalog->findFor($tenant, $company, $branch, 'untrusted-ref'));
-        self::assertNotSame($list[0]['ref'], $catalog->listFor($foreign, $otherCompany, $otherBranch)[0]['ref']);
+        $browser->loginUser($fixture['owner']);
+        $oldValue = getenv('HR_REAL_DATA_ENABLED');
+        putenv('HR_REAL_DATA_ENABLED=1');
+        try {
+            $this->read($browser, $path, 404);
+            $this->read($browser, $path.'/fixture-vacation-'.str_repeat('0', 24), 404);
+        } finally {
+            putenv($oldValue === false ? 'HR_REAL_DATA_ENABLED' : 'HR_REAL_DATA_ENABLED='.$oldValue);
+        }
+    }
+
+    public function testServiceRefusesAnUnrelatedLegalEntity(): void
+    {
+        $tenant = new Tenant('M01 ficticio', 'm01-vac-main');
+        $foreign = new Tenant('M01 externo', 'm01-vac-other');
+        $company = new LegalEntity($tenant, 'Entidad de ensayo', null);
+        $foreignCompany = new LegalEntity($foreign, 'Entidad externa ficticia', null);
+        $branch = new Branch($tenant, 'Sede de ensayo', 'principal', $company);
+        $catalog = new HrVacationCatalog();
+        $entries = $catalog->listFor($tenant, $company, $branch);
+        self::assertCount(3, $entries);
+        self::assertSame($entries[0], $catalog->findFor($tenant, $company, $branch, $entries[0]['ref']));
+        self::assertNull($catalog->findFor($tenant, $company, $branch, 'invalid'));
+        self::assertNull($catalog->findFor($tenant, $company, $branch, 'fixture-vacation-'.str_repeat('0', 24)));
 
         $this->expectException(DomainException::class);
-        $catalog->listFor($tenant, $otherCompany, $branch);
+        $catalog->listFor($tenant, $foreignCompany, $branch);
     }
 
-    /** @return array{Tenant,LegalEntity,LegalEntity,Branch,Branch,Branch,User,User} */
-    private function fixtures(EntityManagerInterface $database): array
+    private function endpoint(Branch $branch): string
     {
-        $id = bin2hex(random_bytes(5));
-        $tenant = new Tenant('Vacation principal', 'vac-main-'.$id);
-        $foreign = new Tenant('Vacation externo', 'vac-external-'.$id);
-        $company = new LegalEntity($tenant, 'Razón social sintética', null, true);
-        $otherCompany = new LegalEntity($tenant, 'Otra empresa ficticia', null);
-        $foreignCompany = new LegalEntity($foreign, 'Empresa ficticia ajena', null);
-        $branch = new Branch($tenant, 'Sede inicial', 'inicial', $company, true);
-        $sibling = new Branch($tenant, 'Sede secundaria', 'secundaria', $otherCompany);
-        $foreignBranch = new Branch($foreign, 'Sede externa', 'externa', $foreignCompany);
-        $owner = new User('vac-owner-'.$id.'@example.test', 'Owner ficticio');
-        $delegate = new User('vac-delegate-'.$id.'@example.test', 'Delegado ficticio');
-        $ownerMember = new Membership($tenant, $owner, Membership::ROLE_OWNER);
-        $delegateMember = new Membership($tenant, $delegate, 'ADMIN');
-        $limited = new Role($tenant, 'Permiso limitado', ['catalog.view']);
+        return '/api/v1/branches/'.$branch->id().'/hr/vacations';
+    }
 
-        foreach ([$tenant, $foreign, $company, $otherCompany, $foreignCompany, $branch, $sibling, $foreignBranch, $owner, $delegate, $ownerMember, $delegateMember, $limited] as $record) {
-            $database->persist($record);
+    /** @return array<string, mixed> */
+    private function read(KernelBrowser $browser, string $uri, int $status): array
+    {
+        $browser->request('GET', $uri);
+        self::assertResponseStatusCodeSame($status);
+        if ($status !== 200) {
+            return [];
         }
-        $database->persist(new BranchRoleAssignment($delegateMember, $branch, $limited));
+        return json_decode((string) $browser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    /** @return array{tenant: Tenant, company: LegalEntity, otherCompany: LegalEntity, branch: Branch, sameCompanyBranch: Branch, otherCompanyBranch: Branch, foreignBranch: Branch, owner: User, delegate: User} */
+    private function seed(): array
+    {
+        $database = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $database);
+        $suffix = bin2hex(random_bytes(5));
+        $tenant = new Tenant('Vista principal ficticia', 'cal-main-'.$suffix);
+        $foreignTenant = new Tenant('Vista externa ficticia', 'cal-foreign-'.$suffix);
+        $company = new LegalEntity($tenant, 'Compañía de ensayo', null, true);
+        $otherCompany = new LegalEntity($tenant, 'Compañía secundaria', null);
+        $foreignCompany = new LegalEntity($foreignTenant, 'Compañía ajena', null);
+        $branch = new Branch($tenant, 'Sede principal de prueba', 'principal', $company, true);
+        $sameCompanyBranch = new Branch($tenant, 'Sede satélite', 'satelite', $company);
+        $otherCompanyBranch = new Branch($tenant, 'Sede secundaria', 'secundaria', $otherCompany);
+        $foreignBranch = new Branch($foreignTenant, 'Sede ajena', 'externa', $foreignCompany);
+        $owner = new User('vac-owner-'.$suffix.'@example.test', 'Propietario de prueba');
+        $delegate = new User('vac-reader-'.$suffix.'@example.test', 'Rol limitado');
+        $member = new Membership($tenant, $owner, Membership::ROLE_OWNER);
+        $limitedMember = new Membership($tenant, $delegate, 'ADMIN');
+        $role = new Role($tenant, 'Sin permiso para RRHH', ['catalog.view']);
+
+        $entities = [
+            $tenant, $foreignTenant, $company, $otherCompany, $foreignCompany,
+            $branch, $sameCompanyBranch, $otherCompanyBranch, $foreignBranch,
+            $owner, $delegate, $member, $limitedMember, $role,
+        ];
+        foreach ($entities as $entity) {
+            $database->persist($entity);
+        }
+        $database->persist(new BranchRoleAssignment($limitedMember, $branch, $role));
         $database->flush();
-        return [$tenant, $company, $otherCompany, $branch, $sibling, $foreignBranch, $owner, $delegate];
+
+        return compact(
+            'tenant', 'company', 'otherCompany', 'branch', 'sameCompanyBranch',
+            'otherCompanyBranch', 'foreignBranch', 'owner', 'delegate',
+        );
     }
 }
