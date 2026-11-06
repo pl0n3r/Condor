@@ -259,8 +259,10 @@ final class PurchasingController extends AbstractController
         $this->requirePurchasingPreviewEnabled();
         $this->requireCsrf($request);
         $this->authorizedBranchScope($branchId, 'inventory.create');
+        // Parsing is a transport boundary; only the projection accepts a validated fixture.
+        $fixture = $this->syntheticPurchasingPayload($request);
         try {
-            $result = $project($this->syntheticPurchasingPayload($request));
+            $result = $project($fixture);
         } catch (\InvalidArgumentException $exception) {
             throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
         }
