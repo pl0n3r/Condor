@@ -34,11 +34,6 @@ final class GestM14PrivacyControllerTest extends WebTestCase
         [$tenant, $branch, $owner] = $this->fixture($em);
         [, $foreign] = $this->fixture($em);
         $url = '/api/v1/branches/'.$branch->id().'/privacy/requests';
-        $client->request('GET', $url);
-        self::assertResponseStatusCodeSame(401); // API authenticator rejects anonymous before branch guard.
-        $client->loginUser($owner);
-        $client->request('GET', '/api/v1/branches/'.$foreign->id().'/privacy/requests');
-        self::assertResponseStatusCodeSame(404);
         $viewer = new User('m14-viewer-'.bin2hex(random_bytes(5)).'@example.test', 'Persona ficticia');
         $membership = new Membership($tenant, $viewer, 'ADMIN');
         $role = new Role($tenant, 'Solo inventario', ['inventory.view']);
@@ -46,6 +41,11 @@ final class GestM14PrivacyControllerTest extends WebTestCase
             $em->persist($entity);
         }
         $em->flush();
+        $client->request('GET', $url);
+        self::assertResponseStatusCodeSame(401); // API authenticator rejects anonymous before branch guard.
+        $client->loginUser($owner);
+        $client->request('GET', '/api/v1/branches/'.$foreign->id().'/privacy/requests');
+        self::assertResponseStatusCodeSame(404);
         $client->loginUser($viewer);
         $client->request('GET', $url);
         self::assertResponseStatusCodeSame(403);
