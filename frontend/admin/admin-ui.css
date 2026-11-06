@@ -195,6 +195,8 @@
 .admin-shell-tenant .workspace[data-module="workflows"] > section#workflows,
 .admin-shell-tenant .workspace[data-module="operations-processes"] > section#operations-processes,
 .admin-shell-tenant .workspace[data-module="roles"] > section#roles { display: grid; }
+/* M08: wrapper único, oculto en Inicio y visible sólo al seleccionar Gestión documental. */
+.admin-shell-tenant .workspace[data-module="documents"] > section#documents-module { display: grid; }
 .admin-shell-tenant .workspace:not([data-module="inicio"]) > .foundation-grid,
 .admin-shell-tenant .workspace:not([data-module="inicio"]) > .module-directory { display: none; }
 .admin-shell .module-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; color: var(--ui-muted); margin: 0 0 -8px; }

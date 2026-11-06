@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Documents\DocumentApiService;
+use App\Application\Documents\VerifiedSignature;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\User;
@@ -44,6 +45,7 @@ final class DocumentsController extends AbstractController
         $this->constructionOnly();
         [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
         $payload = $this->documents->export($this->store($request), $this->scope($branch));
+        $payload['signature_gate'] = VerifiedSignature::gate();
         $this->recordSyntheticAudit($tenant, $user, $branch, 'documents_synthetic.exported', $branch->id());
         $response = $this->json($payload);
         $response->headers->set('Content-Disposition', 'attachment; filename="condor-m08-fixtures.json"');
@@ -102,7 +104,8 @@ final class DocumentsController extends AbstractController
             'branch_id' => $branch->id(), 'synthetic' => true,
         ]);
         $this->entityManager->flush();
-        return $this->json(['documents' => $result, 'synthetic' => true, 'can_close' => false]);
+        return $this->json(['documents' => $result, 'synthetic' => true,
+            'can_close' => false, 'signature_gate' => VerifiedSignature::gate()]);
     }
 
     #[Route('/api/v1/branches/{branchId}/documents/{documentKey}', name: 'api_documents_detail',

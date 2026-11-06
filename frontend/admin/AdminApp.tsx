@@ -383,16 +383,18 @@ export function AdminApp({
           <ModuleDirectory entries={navEntries} />
 
           {DevDocumentsManagement && (
-            <Suspense fallback={<p role="status">Cargando gestión documental ficticia…</p>}>
-              <DevDocumentsManagement
-                key={'documents-' + context.data.tenant.id + '-' + (context.data.active_branch.legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
-                tenantId={context.data.tenant.id}
-                legalEntityId={context.data.active_branch.legal_entity?.id ?? '__unassigned__'}
-                branchId={context.data.active_branch.id}
-                permissions={context.data.permissions}
-                csrfToken={accessToken}
-              />
-            </Suspense>
+            <section id="documents-module" aria-label="Gestión documental (pruebas)">
+              <Suspense fallback={<p role="status">Cargando gestión documental ficticia…</p>}>
+                <DevDocumentsManagement
+                  key={'documents-' + context.data.tenant.id + '-' + (context.data.active_branch.legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                  tenantId={context.data.tenant.id}
+                  legalEntityId={context.data.active_branch.legal_entity?.id ?? '__unassigned__'}
+                  branchId={context.data.active_branch.id}
+                  permissions={context.data.permissions}
+                  csrfToken={accessToken}
+                />
+              </Suspense>
+            </section>
           )}
 
           <CatalogManagement
