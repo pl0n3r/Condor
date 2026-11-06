@@ -93,6 +93,9 @@ class CookieConsentTests(unittest.TestCase):
         rights = RIGHTS.read_text(encoding='utf-8')
         self.assertIn('id="politica-de-cookies"', rights)
         self.assertNotIn('pendiente de revisión y aprobación del abogado', rights.lower())
+        self.assertNotIn('Información provisional', rights)
+        self.assertIn('Las cookies opcionales solo se activan si las aceptas', rights)
+        self.assertIn('responsable.rights_email', rights)
         self.assertIn('src="/cookie-consent.js" defer', html)
         self.assertIn('href="/cookie-consent.css"', html)
         # El smoke HTTP usa curl|grep -q para la versión: dejar el footer
