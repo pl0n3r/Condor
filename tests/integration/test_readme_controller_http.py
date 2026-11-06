@@ -287,6 +287,13 @@ def _require_disposable_doctrine_destination(environment: dict[str, str]) -> Non
             or ("test" not in destination and "_ci_" not in destination)
         ):
             raise ValueError("Destino MariaDB fuera de la base local descartable.")
+        # Parseo de query sobre claves *crudas*: parse_qsl decodifica %73 o '+',
+        # y de otro modo un alias codificado parecería una clave autorizada.
+        # No admitir codificación en nombres, aunque el valor sea legítimo.
+        for raw_pair in parsed.query.split("&") if parsed.query else []:
+            raw_key = raw_pair.partition("=")[0]
+            if raw_key not in ("serverVersion", "charset"):
+                raise ValueError("Clave de query codificada/desconocida.")
         options = parse_qsl(
             parsed.query, keep_blank_values=True, strict_parsing=True,
             max_num_fields=8,
@@ -307,6 +314,22 @@ def _require_disposable_doctrine_destination(environment: dict[str, str]) -> Non
             raise ValueError("Opción de DATABASE_URL no permitida.")
     except ValueError as exc:
         raise ValueError("No se autoriza conexión a destino Doctrine no aislado.") from exc
+
+
+def _safe_child_environment(parent: dict[str, str]) -> dict[str, str]:
+    """Congela la URL validada y desactiva el marcador que la sobrescribiría.
+
+    Symfony Dotenv::bootEnv() trata las claves de SYMFONY_DOTENV_VARS como
+    valores originados en .env y puede sustituirlos por los del fichero.
+    Eliminando el marcador, DATABASE_URL heredada del proceso sigue siendo
+    una variable del sistema, que bootEnv no sobreescribe.
+    """
+    _require_disposable_doctrine_destination(parent)
+    child = parent.copy()
+    child.pop("SYMFONY_DOTENV_VARS", None)
+    child["DATABASE_URL"] = parent["DATABASE_URL"]
+    child["APP_ENV"] = "test"
+    return child
 
 
 class ReadmeControllerHttpIntegrationTests(unittest.TestCase):
@@ -337,6 +360,9 @@ class ReadmeControllerHttpIntegrationTests(unittest.TestCase):
             allowed + "?charset=utf8mb4&dbname=production",
             allowed + "?charset=utf8mb4&charset=utf8mb4",
             allowed + "?charset=utf8mb4&unrecognized=x",
+            allowed + "?char%73et=utf8mb4",
+            allowed + "?server%56ersion=mariadb-11.4.0",
+            allowed + "?charset=utf8mb4&server%56ersion=mariadb-11.4.0",
             allowed + "?serverVersion=mariadb-11.4.0&serverVersion=mariadb-11.5.0",
             allowed + "?unknown",
             "mysql://root@remote.example.test:3306/condor_test",
@@ -358,16 +384,38 @@ class ReadmeControllerHttpIntegrationTests(unittest.TestCase):
                         "APP_ENV": environment, "DATABASE_URL": allowed,
                     })
 
+    def test_subprocesos_no_pueden_cambiar_la_base_validada_via_dotenv(self) -> None:
+        url = (
+            "mysql://root@127.0.0.1:3306/condor_ci_bridge_28"
+            "?serverVersion=mariadb-11.4.0&charset=utf8mb4"
+        )
+        parent = {
+            "APP_ENV": "test",
+            "DATABASE_URL": url,
+            "SYMFONY_DOTENV_VARS": "APP_ENV,DATABASE_URL,APP_SECRET",
+        }
+        child = _safe_child_environment(parent)
+        self.assertEqual("test", child["APP_ENV"])
+        self.assertEqual(url, child["DATABASE_URL"])
+        self.assertNotIn("SYMFONY_DOTENV_VARS", child)
+        self.assertIn("SYMFONY_DOTENV_VARS", parent)
+        for invalid in (
+            {**parent, "APP_ENV": "prod"},
+            {**parent, "DATABASE_URL": url + "&host=remote.example.test"},
+        ):
+            with self.assertRaises(ValueError):
+                _safe_child_environment(invalid)
+
     def test_real_symfony_mariadb_tenant_and_permission_guards(self) -> None:
         """Ejecuta los cuatro controladores en kernel Symfony y DB descartable."""
         # Primer paso de test: falla antes de Composer, migrations o fixtures.
-        _require_disposable_doctrine_destination(dict(os.environ))
+        # Compartir EXACTAMENTE la URL validada con Composer, Symfony
+        # Console y PHPUnit; impedir que Dotenv reimporte URL desde .env.
+        env = _safe_child_environment(dict(os.environ))
         for path in CONTROLLERS:
             self.assertTrue(path.is_file(), f"Controlador faltante: {path}")
         php = shutil.which("php")
         self.assertIsNotNone(php, "PHP 8.5 CLI es obligatorio")
-        env = dict(os.environ)
-        env["APP_ENV"] = "test"
         env.setdefault("APP_SECRET", secrets.token_hex(32))
         vendor = ROOT / "vendor"
         # El CI ejecuta el validador de documentación después de esta
