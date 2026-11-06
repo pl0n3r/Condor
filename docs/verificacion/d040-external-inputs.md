@@ -1,14 +1,12 @@
 # D-040-S17/S18 — entradas externas sintéticas (#1604)
 
-**Fase:** construcción. Esta hoja no certifica que exista un upload o un fetch
-HTTP real integrado, ni acredita seguridad en producción. Todas las pruebas
+**Fase:** construcción. Esta hoja no certifica que exista un upload o un fetch HTTP real integrado, ni acredita seguridad en producción. Todas las pruebas
 son bytes ficticios y respuestas DNS inyectadas, sin red, secretos ni clientes.
 
 ## D-040-S17 — archivos
 
 `ExternalInputPolicy::inspectUpload()` analiza los bytes con `finfo`;
-rechaza vacíos, >5 MiB, formatos fuera de PDF/JPEG/PNG, MIME declarado
-distinto del detectado, imágenes inválidas o con >25 millones de píxeles
+rechaza vacíos, >5 MiB, formatos fuera de PDF/JPEG/PNG, MIME declarado distinto del detectado, imágenes inválidas o con >25 millones de píxeles
 y nombres cliente con rutas/controles. Devuelve exclusivamente un nombre
 interno aleatorio de 128 bits y extensión derivada del tipo real; no conserva
 rutas, nombres ni extensiones suministradas. Regresión: quitar cualquiera
@@ -24,9 +22,8 @@ consumidores están fuera de los claims de #1604.
 ## D-040-S18 — destinos y redirects
 
 `inspectExternalUrl()` acepta solo `http`/`https` en puertos 80/443,
-sin credenciales ni fragmentos; valida forma de host, impide localhost/
-.local/.internal y deniega direcciones privadas, loopback, link-local,
-metadata (169.254.169.254), CGNAT, benchmark, reservadas y respuestas DNS
+sin credenciales ni fragmentos; valida forma de host, impide localhost/.local/.internal y deniega direcciones privadas, loopback, link-local,
+metadata (169.254.169.254), CGNAT, benchmark, IPv6 documental (2001:db8::/32), reservadas y respuestas DNS
 mixtas o no verificables. Resuelve únicamente mediante una callback
 inyectada; no hay peticiones de red desde esta clase.
 
@@ -37,8 +34,7 @@ maliciosos y puertos no permitidos. Las IPs verificadas se devuelven como
 `approved_ips` para **pinning**: el futuro adaptador HTTP deberá conectar
 exclusivamente a la IP verificada en cada salto, deshabilitar redirects
 automáticos, fijar budgets de tiempo/bytes, no enviar cookies/secretos
-internos y evitar nueva resolución DNS en la conexión. Validar una URL y
-luego hacer `fetch(url)` sin pinning **no es seguro**; se prohíbe.
+internos y evitar nueva resolución DNS en la conexión. Validar una URL y luego hacer `fetch(url)` sin pinning **no es seguro**; se prohíbe.
 
 ## Aceptación y límites
 
