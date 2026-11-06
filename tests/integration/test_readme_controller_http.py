@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
 PHPUNIT = ROOT / "vendor/bin/simple-phpunit"
@@ -68,13 +68,19 @@ final class ReadmeControllersHttpSmokeTest extends WebTestCase
         $ownerA = new User('readme-owner-a-'.$suffix.'@example.test', 'Owner A');
         $ownerB = new User('readme-owner-b-'.$suffix.'@example.test', 'Owner B');
         $viewer = new User('readme-viewer-'.$suffix.'@example.test', 'Viewer A');
+        $noRead = new User('readme-no-read-'.$suffix.'@example.test', 'Sin lectura A');
         $ownerMembershipA = new Membership($tenantA, $ownerA, Membership::ROLE_OWNER);
         $ownerMembershipB = new Membership($tenantB, $ownerB, Membership::ROLE_OWNER);
         $viewerMembership = new Membership($tenantA, $viewer, 'ADMIN');
+        $noReadMembership = new Membership($tenantA, $noRead, 'ADMIN');
         $viewRole = new Role($tenantA, 'README lectura '.$suffix, [
             'orders.view', 'customers.view', 'inventory.view',
         ]);
         $viewAssignment = new BranchRoleAssignment($viewerMembership, $branchA, $viewRole);
+        $noReadRole = new Role($tenantA, 'README sin lectura '.$suffix, [
+            'orders.create', 'customers.create', 'inventory.create',
+        ]);
+        $noReadAssignment = new BranchRoleAssignment($noReadMembership, $branchA, $noReadRole);
         $sourceA = new InventorySource(
             $tenantA, $legalA, 'Fuente A', 'readme-fuente-a-'.$suffix,
             InventorySource::TYPE_BRANCH, $branchA,
@@ -96,8 +102,9 @@ final class ReadmeControllersHttpSmokeTest extends WebTestCase
 
         foreach ([
             $tenantA, $tenantB, $legalA, $legalB, $branchA, $branchB,
-            $ownerA, $ownerB, $viewer, $ownerMembershipA, $ownerMembershipB,
-            $viewerMembership, $viewRole, $viewAssignment, $sourceA, $sourceB,
+            $ownerA, $ownerB, $viewer, $noRead, $ownerMembershipA, $ownerMembershipB,
+            $viewerMembership, $noReadMembership, $viewRole, $viewAssignment,
+            $noReadRole, $noReadAssignment, $sourceA, $sourceB,
             $productA, $productB, $variantA, $variantB, $priceList,
             $price, $channel, $customerB,
         ] as $entity) {
@@ -155,6 +162,13 @@ final class ReadmeControllersHttpSmokeTest extends WebTestCase
             $client->request('GET', $prefixA.$path);
             self::assertResponseStatusCodeSame(200, $name.' GET A');
         }
+        // Antes de crear un proveedor, el recurso ausente devuelve lista vacía,
+        // no inventa un proveedor ni consulta registros de otro tenant.
+        $client->request('GET', $prefixA.'/purchasing/suppliers');
+        self::assertResponseStatusCodeSame(200, 'GET A sin proveedores');
+        $absentSuppliers = json_decode((string) $client->getResponse()->getContent(), true);
+        self::assertIsArray($absentSuppliers);
+        self::assertSame([], $absentSuppliers['suppliers'] ?? null);
         $client->request('GET', $prefixA.'/customers');
         self::assertStringNotContainsString(
             'Cliente B '.$suffix, (string) $client->getResponse()->getContent(),
@@ -215,6 +229,14 @@ final class ReadmeControllersHttpSmokeTest extends WebTestCase
             self::assertResponseStatusCodeSame(403, $name.' POST viewer');
         }
 
+        // La pertenencia a la misma empresa/sede y los permisos de escritura
+        // NO conceden por sí solos permiso de lectura en ningún GET.
+        $client->loginUser($noRead);
+        foreach ($paths as $name => $path) {
+            $client->request('GET', $prefixA.$path);
+            self::assertResponseStatusCodeSame(403, $name.' GET sin permiso de lectura');
+        }
+
         // La ruta no protege sólo la UI: incluso sin sesión devuelve 401.
         $client->restart();
         foreach ($paths as $name => $path) {
@@ -245,26 +267,155 @@ def _command(argv: list[str], env: dict[str, str], timeout: int) -> subprocess.C
     )
 
 
+def _require_disposable_doctrine_destination(environment: dict[str, str]) -> None:
+    """Valida el destino efectivo de Doctrine DBAL ANTES de cualquier efecto.
+
+    Doctrine admite parámetros query que prevalecen sobre host/base del URL;
+    por eso solo se aceptan opciones no relacionadas con el destino.
+    """
+    if environment.get("APP_ENV") != "test":
+        raise ValueError("Se exige APP_ENV=test para preparar la base descartable.")
+    try:
+        parsed = urlsplit(environment.get("DATABASE_URL", ""))
+        destination = parsed.path.removeprefix("/")
+        if (
+            parsed.scheme not in ("mysql", "mariadb")
+            or parsed.hostname not in ("127.0.0.1", "localhost", "::1")
+            or parsed.port != 3306
+            or parsed.fragment
+            or not re.fullmatch(r"condor_[a-z0-9_]+", destination)
+            or ("test" not in destination and "_ci_" not in destination)
+        ):
+            raise ValueError("Destino MariaDB fuera de la base local descartable.")
+        # Parseo de query sobre claves *crudas*: parse_qsl decodifica %73 o '+',
+        # y de otro modo un alias codificado parecería una clave autorizada.
+        # No admitir codificación en nombres, aunque el valor sea legítimo.
+        for raw_pair in parsed.query.split("&") if parsed.query else []:
+            raw_key = raw_pair.partition("=")[0]
+            if raw_key not in ("serverVersion", "charset"):
+                raise ValueError("Clave de query codificada/desconocida.")
+        options = parse_qsl(
+            parsed.query, keep_blank_values=True, strict_parsing=True,
+            max_num_fields=8,
+        )
+        recognized = set()
+        for key, value in options:
+            if key in recognized:
+                raise ValueError("Opción repetida en DATABASE_URL.")
+            recognized.add(key)
+            if key == "serverVersion" and re.fullmatch(
+                r"mariadb-[0-9]+(?:\.[0-9]+){1,2}", value,
+            ):
+                continue
+            if key == "charset" and value == "utf8mb4":
+                continue
+            # Bloquea host/dbname/port/socket/path/url, alias codificados y
+            # cualquier override desconocido de la configuración DBAL.
+            raise ValueError("Opción de DATABASE_URL no permitida.")
+    except ValueError as exc:
+        raise ValueError("No se autoriza conexión a destino Doctrine no aislado.") from exc
+
+
+def _safe_child_environment(parent: dict[str, str]) -> dict[str, str]:
+    """Congela la URL validada y desactiva el marcador que la sobrescribiría.
+
+    Symfony Dotenv::bootEnv() trata las claves de SYMFONY_DOTENV_VARS como
+    valores originados en .env y puede sustituirlos por los del fichero.
+    Eliminando el marcador, DATABASE_URL heredada del proceso sigue siendo
+    una variable del sistema, que bootEnv no sobreescribe.
+    """
+    _require_disposable_doctrine_destination(parent)
+    child = parent.copy()
+    child.pop("SYMFONY_DOTENV_VARS", None)
+    child["DATABASE_URL"] = parent["DATABASE_URL"]
+    child["APP_ENV"] = "test"
+    return child
+
+
 class ReadmeControllerHttpIntegrationTests(unittest.TestCase):
+    def test_guard_rechaza_overrides_antes_de_composer_migraciones_o_fixtures(self) -> None:
+        allowed = "mysql://root@127.0.0.1:3306/condor_ci_bridge_28"
+        for url in (
+            allowed,
+            allowed + "?serverVersion=mariadb-11.4.0&charset=utf8mb4",
+            allowed + "?charset=utf8mb4",
+        ):
+            with self.subTest(allowed=url.split("?")[1:] or ["no-query"]):
+                _require_disposable_doctrine_destination({
+                    "APP_ENV": "test", "DATABASE_URL": url,
+                })
+
+        rejected = [
+            allowed + "?host=remote.example.test",
+            allowed + "?HOST=remote.example.test",
+            allowed + "?ho%73t=remote.example.test",
+            allowed + "?dbname=production",
+            allowed + "?dbName=production",
+            allowed + "?unix_socket=/var/run/mysql/mysql.sock",
+            allowed + "?socket=/var/run/mysql/mysql.sock",
+            allowed + "?path=/tmp/prod.sock",
+            allowed + "?port=3307",
+            allowed + "?url=mysql://remote.example.test/production",
+            allowed + "?serverVersion=mariadb-11.4.0&host=remote.example.test",
+            allowed + "?charset=utf8mb4&dbname=production",
+            allowed + "?charset=utf8mb4&charset=utf8mb4",
+            allowed + "?charset=utf8mb4&unrecognized=x",
+            allowed + "?char%73et=utf8mb4",
+            allowed + "?server%56ersion=mariadb-11.4.0",
+            allowed + "?charset=utf8mb4&server%56ersion=mariadb-11.4.0",
+            allowed + "?serverVersion=mariadb-11.4.0&serverVersion=mariadb-11.5.0",
+            allowed + "?unknown",
+            "mysql://root@remote.example.test:3306/condor_test",
+            "mysql://root@127.0.0.1:3306/production",
+            "mysql://root@127.0.0.1:3306/condor_ci_bridge_28/other",
+            "mysql://root@127.0.0.1:3307/condor_test",
+            "mysql://root@127.0.0.1:3306/condor_test#fragment",
+        ]
+        for url in rejected:
+            with self.subTest(rejected=url):
+                with self.assertRaises(ValueError):
+                    _require_disposable_doctrine_destination({
+                        "APP_ENV": "test", "DATABASE_URL": url,
+                    })
+        for environment in ("prod", "dev", "", "production"):
+            with self.subTest(app_env=environment):
+                with self.assertRaises(ValueError):
+                    _require_disposable_doctrine_destination({
+                        "APP_ENV": environment, "DATABASE_URL": allowed,
+                    })
+
+    def test_subprocesos_no_pueden_cambiar_la_base_validada_via_dotenv(self) -> None:
+        url = (
+            "mysql://root@127.0.0.1:3306/condor_ci_bridge_28"
+            "?serverVersion=mariadb-11.4.0&charset=utf8mb4"
+        )
+        parent = {
+            "APP_ENV": "test",
+            "DATABASE_URL": url,
+            "SYMFONY_DOTENV_VARS": "APP_ENV,DATABASE_URL,APP_SECRET",
+        }
+        child = _safe_child_environment(parent)
+        self.assertEqual("test", child["APP_ENV"])
+        self.assertEqual(url, child["DATABASE_URL"])
+        self.assertNotIn("SYMFONY_DOTENV_VARS", child)
+        self.assertIn("SYMFONY_DOTENV_VARS", parent)
+        for invalid in (
+            {**parent, "APP_ENV": "prod"},
+            {**parent, "DATABASE_URL": url + "&host=remote.example.test"},
+        ):
+            with self.assertRaises(ValueError):
+                _safe_child_environment(invalid)
+
     def test_real_symfony_mariadb_tenant_and_permission_guards(self) -> None:
         """Ejecuta los cuatro controladores en kernel Symfony y DB descartable."""
+        # Primer paso de test: falla antes de Composer, migrations o fixtures.
+        # Compartir EXACTAMENTE la URL validada con Composer, Symfony
+        # Console y PHPUnit; impedir que Dotenv reimporte URL desde .env.
+        env = _safe_child_environment(dict(os.environ))
         for path in CONTROLLERS:
             self.assertTrue(path.is_file(), f"Controlador faltante: {path}")
-        self.assertEqual("test", os.environ.get("APP_ENV"), "Solo APP_ENV=test")
-        url = os.environ.get("DATABASE_URL", "")
-        parsed = urlsplit(url)
-        database_name = parsed.path.lstrip("/")
-        self.assertIn(parsed.scheme, ("mysql", "mariadb"))
-        self.assertIn(parsed.hostname, ("127.0.0.1", "localhost", "::1"))
-        self.assertTrue(
-            database_name.startswith("condor_")
-            and ("test" in database_name or "_ci_" in database_name),
-            "Sólo se permite MariaDB local y descartable; nunca Hostinger.",
-        )
         php = shutil.which("php")
         self.assertIsNotNone(php, "PHP 8.5 CLI es obligatorio")
-        env = dict(os.environ)
-        env["APP_ENV"] = "test"
         env.setdefault("APP_SECRET", secrets.token_hex(32))
         vendor = ROOT / "vendor"
         # El CI ejecuta el validador de documentación después de esta

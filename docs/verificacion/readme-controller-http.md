@@ -1,4 +1,4 @@
-# Condor #1555 · pruebas HTTP README con tenant A/B y permisos
+# Condor #1555 / #1628 · pruebas HTTP README, destino Doctrine y permisos
 
 **Alcance:** HTTP ejecutado con kernel Symfony, Doctrine y MariaDB descartable; datos sintéticos. No demuestra go-live, Hostinger, clientes reales ni disponibilidad productiva. No modificar `docs/matriz-cobertura.md`.
 
@@ -19,12 +19,20 @@ La prueba canónica es `tests/integration/test_readme_controller_http.py`. Gener
 
 ## Ejecución en CI y límites de seguridad
 
-`CI Condor / Pruebas de contrato e integración` ejecuta `python3 -m unittest discover -s tests/integration -p 'test_*.py'`. El paso está antes de Composer ordinario. El test prepara el autoload Composer **solo cuando falta**, genera un `APP_SECRET` efímero en el proceso, migra un esquema **descartable** y ejecuta PHPUnit con kernel real. No hace llamadas HTTP productivas.
+`CI Condor / Pruebas de contrato e integración` ejecuta `python3 -m unittest discover -s tests/integration -p 'test_*.py'`. El paso está antes de Composer ordinario. El test prepara el autoload Composer **solo cuando falta**, genera un `APP_SECRET` efímero en el proceso, migra un esquema **descartable** y ejecuta PHPUnit con kernel real. **Antes de comprobar PHP, instalar Composer, ejecutar migraciones o construir fixtures**, `_require_disposable_doctrine_destination` valida `APP_ENV` y la URL efectiva de Doctrine DBAL, incluidas todas sus opciones de consulta. No hace llamadas HTTP productivas.
 
-La preparación está protegida por `APP_ENV=test`, URL de MariaDB con host de loopback (`127.0.0.1`, `localhost` o `::1`) y nombre de base `condor_*` que contenga `test` o `_ci_`. Una URL de Hostinger, una base no aislada o un entorno distinto **fallan cerrado**. Cada fixture usa `@example.test` y sufijo aleatorio; no se escriben datos identificables, claves o tokens persistentes en GitHub.
+La preparación exige **`APP_ENV=test`, esquema `mysql`/`mariadb`, host de loopback** (`127.0.0.1`, `localhost` o `::1`), puerto 3306, y **una sola ruta de base `condor_[a-z0-9_]+`** que contenga `test` o `_ci_`. No basta inferir aislamiento del nombre: es una defensa parcial, complementada por la procedencia explícita del servicio MariaDB 11.4 descartable de GitHub Actions; no es prueba de que cualquier servicio local sea aislado.
+
+**El parámetro `DATABASE_URL` de Doctrine DBAL puede sobreescribir el host/base de la ruta del URL mediante query.** Se rechazan primero las **claves crudas** ajenas a `serverVersion` y `charset` para impedir que `parse_qsl` normalice claves codificadas (por ejemplo `char%73et=utf8mb4`); después se analizan las parejas con `parse_qsl(..., strict_parsing=True)`, rechazando duplicados, opciones desconocidas y cualquier `host`, `dbname`, `dbName`, `unix_socket`, `socket`, `path`, `port` o `url` (incluyendo variantes de mayúsculas). La lista positiva permite **solo** `serverVersion=mariadb-X.Y[.Z]` y `charset=utf8mb4`; ambos son parámetros no relacionados con el destino, necesarios para la URL real del CI. Un query malformado, fragmento, host remoto, ruta adicional, puerto no autorizado, base no admitida o entorno distinto fallan **antes de Composer/migraciones/fixtures**. La prueba negativa es ejecutable sin servidor de DB; no imprime credenciales de conexión. El **entorno de todos los subprocesos** se deriva con `_safe_child_environment`: valida de nuevo la URL, preserva `DATABASE_URL` exactamente igual para Composer, Symfony Console y PHPUnit, conserva `APP_ENV=test` y **elimina `SYMFONY_DOTENV_VARS` heredado**, cuya presencia podría hacer que `Dotenv::bootEnv()` reemplace la URL comprobada por la de `.env` o `.env.test`. La prueba negativa inyecta ese marcador contaminado y exige que desaparezca del entorno hijo sin mutar el entorno padre.
+
+El fixture usa solo `@example.test` y sufijos aleatorios; no escribe datos identificables, claves o tokens persistentes en GitHub.
 
 ## Criterios de aceptación
 
-**AC-01:** cuatro GET 200 y cuatro POST 201 reales; B lee únicamente su propia sede; solicitudes A a B devuelven 404. **AC-02:** cuatro POST de lector A devuelven 403, cuatro GET anónimos 401; una autorización omitida no es intercambiable con 422, 200 o 201. **AC-03:** checks de CI exact-HEAD terminales verdes; lo contrario permanece `NO_VERIFICABLE`.
+**AC-01 (#1628):** la guardia Python prueba URLs válidas (incluida URL real de CI) y una matriz negativa de overrides `DATABASE_URL`, query ambiguo/duplicado o clave codificada (`char%73et`), marcador `SYMFONY_DOTENV_VARS` contaminado y URL del entorno hijo inmutable, host remoto, base no aislada, `APP_ENV != test`, puerto y ruta no autorizados **antes de cualquier efecto externo**. No se llama a Doctrine para descubrir el destino: se permite exclusivamente la configuración que DBAL no puede redirigir mediante query.
 
-**Riesgo y reversión:** solo test Python y esta hoja de evidencia, dentro de claims V3 #1555. Sin runtime, matriz consolidada, operaciones irreversibles, deploy ni gasto. Revert del squash para deshacer el añadido.
+**AC-02 (#1628):** cuatro GET 200 y cuatro POST 201 reales; B lee solo B; A no puede acceder a B (404). Antes de crear el primer proveedor, GET de proveedores retorna 200 con `suppliers=[]` (proveedor ausente). Cuatro POST de lector devuelven 403, **cuatro GET de usuario A con permisos de escritura pero sin `*.view` devuelven 403**, cuatro GET anónimos 401. El test usa `WebTestCase` real y falla ante diferencias, sin dobles de controladores.
+
+**AC-03 / AC-04 (#1628):** los checks `CI Factory v1 / Validar`, `Validar`, SonarCloud y CodeQL se acreditan solo cuando sean terminales y `success` sobre el HEAD exacto, con revisión CodeRabbit FINAL una sola vez después de CI verde. El texto por sí solo no acredita CI, permiso jurídico ni aislamiento productivo.
+
+**Riesgo y reversión:** solo test Python y esta hoja de evidencia, dentro de claims V3 propios de #1628, con el antecedente #1555/#1619 ya fusionado. Sin runtime, matriz consolidada, operaciones irreversibles, deploy ni gasto. Revert del squash para deshacer el añadido.
