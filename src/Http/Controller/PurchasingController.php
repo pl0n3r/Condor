@@ -187,99 +187,64 @@ final class PurchasingController extends AbstractController
     }
 
 
-    /**
-     * Synthetic-only quotation: no supplier contact, orders, persistence or money movement.
-     */
+    /** Construction-only quotation; no supplier contact or order placement. */
     #[Route('/api/v1/branches/{branchId}/purchasing/quotations/preview', name: 'api_purchasing_quotation_preview', methods: ['POST'])]
     public function previewQuotation(string $branchId, Request $request): JsonResponse
     {
-        $this->requirePurchasingPreviewEnabled();
-        $this->requireCsrf($request);
-        $this->authorizedBranchScope($branchId, 'inventory.create');
-
-        try {
-            $preview = QuotationPreview::preview($this->syntheticPurchasingPayload($request));
-        } catch (\InvalidArgumentException $exception) {
-            throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
-        }
-
-        return $this->json(['quotation_preview' => $preview, 'synthetic_only' => true]);
+        return $this->syntheticPurchasingPreview(
+            $branchId, $request, 'quotation_preview', QuotationPreview::preview(...),
+        );
     }
 
-    /**
-     * Synthetic-only purchase request: never approves, places or pays for an order.
-     */
+    /** Construction-only purchase request; never approves or pays an order. */
     #[Route('/api/v1/branches/{branchId}/purchasing/requests/preview', name: 'api_purchasing_request_preview', methods: ['POST'])]
     public function previewRequest(string $branchId, Request $request): JsonResponse
     {
-        $this->requirePurchasingPreviewEnabled();
-        $this->requireCsrf($request);
-        $this->authorizedBranchScope($branchId, 'inventory.create');
-
-        try {
-            $preview = PurchaseRequestPreview::preview($this->syntheticPurchasingPayload($request));
-        } catch (\InvalidArgumentException $exception) {
-            throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
-        }
-
-        return $this->json(['request_preview' => $preview, 'synthetic_only' => true]);
+        return $this->syntheticPurchasingPreview(
+            $branchId, $request, 'request_preview', PurchaseRequestPreview::preview(...),
+        );
     }
 
-    /**
-     * Construction-only supplier evaluation; no supplier lookup, award or persistence.
-     */
+    /** Synthetic supplier evaluation; no lookup, award or persistence. */
     #[Route('/api/v1/branches/{branchId}/purchasing/suppliers/evaluations/preview', name: 'api_purchasing_supplier_evaluation_preview', methods: ['POST'])]
     public function previewSupplierEvaluation(string $branchId, Request $request): JsonResponse
     {
-        $this->requirePurchasingPreviewEnabled();
-        $this->requireCsrf($request);
-        $this->authorizedBranchScope($branchId, 'inventory.create');
-
-        try {
-            $preview = SupplierEvaluationPreview::preview($this->syntheticPurchasingPayload($request));
-        } catch (\InvalidArgumentException $exception) {
-            throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
-        }
-
-        return $this->json(['supplier_evaluation_preview' => $preview, 'synthetic_only' => true]);
+        return $this->syntheticPurchasingPreview(
+            $branchId, $request, 'supplier_evaluation_preview', SupplierEvaluationPreview::preview(...),
+        );
     }
 
-    /**
-     * Synthetic contract metadata only: no signatures, legal validity or persistence.
-     */
+    /** Synthetic contract metadata; never signs a legally valid contract. */
     #[Route('/api/v1/branches/{branchId}/purchasing/suppliers/contracts/preview', name: 'api_purchasing_supplier_contract_preview', methods: ['POST'])]
     public function previewSupplierContract(string $branchId, Request $request): JsonResponse
     {
-        $this->requirePurchasingPreviewEnabled();
-        $this->requireCsrf($request);
-        $this->authorizedBranchScope($branchId, 'inventory.create');
-
-        try {
-            $preview = SupplierContractPreview::preview($this->syntheticPurchasingPayload($request));
-        } catch (\InvalidArgumentException $exception) {
-            throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
-        }
-
-        return $this->json(['supplier_contract_preview' => $preview, 'synthetic_only' => true]);
+        return $this->syntheticPurchasingPreview(
+            $branchId, $request, 'supplier_contract_preview', SupplierContractPreview::preview(...),
+        );
     }
 
-    /** M09/S08: never reads or pays real obligations. */
+    /** M09/S08: never reads, reconciles or pays real obligations. */
     #[Route('/api/v1/branches/{branchId}/purchasing/payables/preview', name: 'api_purchasing_payables_preview', methods: ['POST'])]
     public function previewPayables(string $branchId, Request $request): JsonResponse
     {
+        return $this->syntheticPurchasingPreview(
+            $branchId, $request, 'payables_preview', PayablesPreview::preview(...),
+        );
+    }
+
+    /** @param callable(array<string,mixed>):array<string,mixed> $project */
+    private function syntheticPurchasingPreview(
+        string $branchId, Request $request, string $responseKey, callable $project,
+    ): JsonResponse {
         $this->requirePurchasingPreviewEnabled();
         $this->requireCsrf($request);
         $this->authorizedBranchScope($branchId, 'inventory.create');
-        $fixture = $this->syntheticPurchasingPayload($request);
-
         try {
-            return $this->json([
-                'payables_preview' => PayablesPreview::preview($fixture),
-                'synthetic_only' => true,
-            ]);
+            $result = $project($this->syntheticPurchasingPayload($request));
         } catch (\InvalidArgumentException $exception) {
             throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
         }
+        return $this->json([$responseKey => $result, 'synthetic_only' => true]);
     }
 
     private function requirePurchasingPreviewEnabled(): void
