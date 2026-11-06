@@ -35,7 +35,7 @@ final class GestM14PrivacyControllerTest extends WebTestCase
         [, $foreign] = $this->fixture($em);
         $url = '/api/v1/branches/'.$branch->id().'/privacy/requests';
         $client->request('GET', $url);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(401); // API authenticator rejects anonymous before branch guard.
         $client->loginUser($owner);
         $client->request('GET', '/api/v1/branches/'.$foreign->id().'/privacy/requests');
         self::assertResponseStatusCodeSame(404);
