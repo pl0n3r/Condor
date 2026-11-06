@@ -49,16 +49,26 @@ def validate_synthetic_receipt(receipt, expected_sha):
     backup, restore, continuity = receipt["backup"], receipt["restore"], receipt["continuity"]
     if not all(isinstance(x, dict) for x in (backup, restore, continuity)):
         raise ValueError("bloques inválidos")
-    if set(backup) != {"status", "sha256", "file_count"} or backup["status"] != "created":
+    if set(backup) != {"status", "sha256", "file_count", "created_at", "archive_name"} or backup["status"] != "created":
         raise ValueError("copia incompleta")
     if not isinstance(backup["sha256"], str) or re.fullmatch(r"[a-f0-9]{64}", backup["sha256"]) is None:
         raise ValueError("hash inválido")
+    if (not isinstance(backup["archive_name"], str) or
+            re.fullmatch(r"condor-files-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{10}\.tar\.gz",
+                         backup["archive_name"]) is None):
+        raise ValueError("nombre del backup fuera de sandbox")
+    try:
+        backup_time = datetime.fromisoformat(backup["created_at"])
+    except (TypeError, ValueError) as error:
+        raise ValueError("fecha de backup inválida") from error
+    if backup_time.tzinfo is None or backup_time.utcoffset().total_seconds() != 0:
+        raise ValueError("fecha de backup sin UTC")
     if type(backup["file_count"]) is not int or backup["file_count"] <= 0:
         raise ValueError("inventario inválido")
-    if set(restore) != {"status", "sha256", "file_count", "bytes_match", "private_modes"}:
+    if set(restore) != {"status", "sha256", "file_count", "created_at", "bytes_match", "private_modes"}:
         raise ValueError("recuperación incompleta")
     if (restore["status"] != "restored" or restore["sha256"] != backup["sha256"]
-            or restore["file_count"] != backup["file_count"]
+            or restore["file_count"] != backup["file_count"] or restore["created_at"] != backup["created_at"]
             or restore["bytes_match"] is not True or restore["private_modes"] is not True):
         raise ValueError("falta prueba de restore íntegro y privado")
     if set(continuity) != {"status", "service_observed", "rto_seconds", "rpo_seconds"}:
@@ -74,9 +84,11 @@ def synthetic_receipt(backup, restored, byte_match, private, sha=SYNTHETIC_SHA):
         "version": 1, "mode": "SIMULADO", "head_sha": sha,
         "observed_at_utc": datetime.now(timezone.utc).isoformat(),
         "environment": "sandbox descartable", "authority": None, "window": None,
-        "backup": {"status": backup["status"], "sha256": backup["sha256"], "file_count": backup["file_count"]},
+        "backup": {"status": backup["status"], "sha256": backup["sha256"], "file_count": backup["file_count"], "created_at": backup["created_at"],
+                   "archive_name": backup["archive_name"]},
         "restore": {"status": restored["status"], "sha256": restored["sha256"],
-                    "file_count": restored["file_count"], "bytes_match": byte_match, "private_modes": private},
+                    "file_count": restored["file_count"], "created_at": restored["created_at"],
+                    "bytes_match": byte_match, "private_modes": private},
         "continuity": {"status": "NOT_OBSERVED", "service_observed": False,
                        "rto_seconds": None, "rpo_seconds": None},
         "result": "SOLO_ENSAYO_OFFLINE", "s05": "NO_VERIFICABLE_REAL", "s07": "NO_VERIFICABLE_REAL",
@@ -85,8 +97,11 @@ def synthetic_receipt(backup, restored, byte_match, private, sha=SYNTHETIC_SHA):
 
 class M14RecoveryEvidenceTests(unittest.TestCase):
     def good_receipt(self):
-        backup = {"status": "created", "sha256": "b" * 64, "file_count": 2}
-        restored = {"status": "restored", "sha256": "b" * 64, "file_count": 2}
+        backup = {"status": "created", "sha256": "b" * 64, "file_count": 2,
+                  "created_at": "2026-11-06T12:00:00+00:00",
+                  "archive_name": "condor-files-20261106T120000Z-0123456789.tar.gz"}
+        restored = {"status": "restored", "sha256": "b" * 64, "file_count": 2,
+                    "created_at": "2026-11-06T12:00:00+00:00"}
         return synthetic_receipt(backup, restored, True, True)
 
     def test_synthetic_evidence_cannot_be_presented_as_real(self):
@@ -112,6 +127,9 @@ class M14RecoveryEvidenceTests(unittest.TestCase):
     def test_rejects_inconsistent_hash_restore_permissions_and_fake_rto(self):
         for group, key, value in (("backup", "sha256", "short"),
                                   ("backup", "file_count", 0),
+                                  ("backup", "archive_name", "../../escape"),
+                                  ("backup", "created_at", "2026-11-06T10:00:00"),
+                                  ("restore", "created_at", "2026-11-05T12:00:00+00:00"),
                                   ("restore", "sha256", "c" * 64),
                                   ("restore", "bytes_match", False),
                                   ("restore", "private_modes", False),
