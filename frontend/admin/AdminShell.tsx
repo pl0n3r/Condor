@@ -405,11 +405,8 @@ export function AdminShell({
         </form>
       </aside>
 
-      <div className="workspace" data-module={activeLabel ? 'activo' : 'inicio'}>
-        {/* Solo el módulo elegido se muestra; el resto sigue montado pero oculto. El id sale del menú y se valida. */}
-        {/^[a-z0-9-]+$/.test(activeId) && (
-          <style>{'.admin-shell .workspace > section#' + activeId + ' { display: grid; }'}</style>
-        )}
+      <div className="workspace" data-module={/^[a-z0-9-]+$/.test(activeId) ? activeId : 'inicio'}>
+        {/* El CSS estático activa solo el módulo elegido: compatible con CSP sin estilos embebidos. */}
         {variant === 'tenant' && <AdminGlobalSearch />}
         {activeLabel && (
           <nav className="module-breadcrumb" aria-label="Ruta">

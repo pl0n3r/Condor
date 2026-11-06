@@ -167,9 +167,36 @@
 }
 
 /* ---------- Un módulo por pantalla: cada entrada del menú abre su módulo; el inicio muestra el mapa ---------- */
-.admin-shell .workspace > section[id] { display: none; }
-.admin-shell .workspace[data-module="activo"] > .foundation-grid,
-.admin-shell .workspace[data-module="activo"] > .module-directory { display: none; }
+/* Los paneles de Platform Owner no usan el selector tenant y siguen visibles. */
+.admin-shell-tenant .workspace > section[id] { display: none; }
+/* Reglas declarativas CSP-safe: no generar una etiqueta style en tiempo de ejecución. */
+.admin-shell-tenant .workspace[data-module="commerce"] > section#commerce,
+.admin-shell-tenant .workspace[data-module="orders"] > section#orders,
+.admin-shell-tenant .workspace[data-module="sales-reports"] > section#sales-reports,
+.admin-shell-tenant .workspace[data-module="reports-downloads"] > section#reports-downloads,
+.admin-shell-tenant .workspace[data-module="customer-service"] > section#customer-service,
+.admin-shell-tenant .workspace[data-module="catalog"] > section#catalog,
+.admin-shell-tenant .workspace[data-module="inventory"] > section#inventory,
+.admin-shell-tenant .workspace[data-module="stock-alerts"] > section#stock-alerts,
+.admin-shell-tenant .workspace[data-module="stock-transfers"] > section#stock-transfers,
+.admin-shell-tenant .workspace[data-module="production"] > section#production,
+.admin-shell-tenant .workspace[data-module="purchasing"] > section#purchasing,
+.admin-shell-tenant .workspace[data-module="assets-management"] > section#assets-management,
+.admin-shell-tenant .workspace[data-module="seo-settings"] > section#seo-settings,
+.admin-shell-tenant .workspace[data-module="employees-management"] > section#employees-management,
+.admin-shell-tenant .workspace[data-module="human-resources-management"] > section#human-resources-management,
+.admin-shell-tenant .workspace[data-module="payroll-management"] > section#payroll-management,
+.admin-shell-tenant .workspace[data-module="contracts-management"] > section#contracts-management,
+.admin-shell-tenant .workspace[data-module="social-security-management"] > section#social-security-management,
+.admin-shell-tenant .workspace[data-module="finance-management"] > section#finance-management,
+.admin-shell-tenant .workspace[data-module="compliance-management"] > section#compliance-management,
+.admin-shell-tenant .workspace[data-module="compliance-evidence-management"] > section#compliance-evidence-management,
+.admin-shell-tenant .workspace[data-module="governance-management"] > section#governance-management,
+.admin-shell-tenant .workspace[data-module="workflows"] > section#workflows,
+.admin-shell-tenant .workspace[data-module="operations-processes"] > section#operations-processes,
+.admin-shell-tenant .workspace[data-module="roles"] > section#roles { display: grid; }
+.admin-shell-tenant .workspace:not([data-module="inicio"]) > .foundation-grid,
+.admin-shell-tenant .workspace:not([data-module="inicio"]) > .module-directory { display: none; }
 .admin-shell .module-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; color: var(--ui-muted); margin: 0 0 -8px; }
 .admin-shell .module-breadcrumb a { color: var(--ui-muted); text-decoration: none; }
 .admin-shell .module-breadcrumb a:hover { color: var(--ui-text); text-decoration: underline; }
@@ -193,7 +220,7 @@
 .admin-shell .workspace > .workspace-heading[role="search"] .field > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .admin-shell .workspace > .module-breadcrumb { order: 2; margin: 0; }
 .admin-shell .workspace > .foundation-grid, .admin-shell .workspace > .module-directory, .admin-shell .workspace > section[id] { order: 3; }
-.admin-shell .workspace[data-module="activo"] > .workspace-heading:not([role="search"]) h1 { font-size: 1.125rem; letter-spacing: -0.01em; }
-.admin-shell .workspace[data-module="activo"] > .workspace-heading:not([role="search"]) { padding-bottom: 12px; border-bottom: 1px solid var(--ui-border); }
+.admin-shell-tenant .workspace:not([data-module="inicio"]) > .workspace-heading:not([role="search"]) h1 { font-size: 1.125rem; letter-spacing: -0.01em; }
+.admin-shell-tenant .workspace:not([data-module="inicio"]) > .workspace-heading:not([role="search"]) { padding-bottom: 12px; border-bottom: 1px solid var(--ui-border); }
 .admin-shell .workspace-heading .branch-picker { min-width: 240px; }
 .admin-shell .workspace-heading .role-actions { display: flex; gap: 12px; }
