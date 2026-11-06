@@ -669,3 +669,83 @@ async function requestJson(url: string, method = 'GET',
     </section>
   );
 }
+/** M06: six authorized read-only projections over disposable server-side fixtures. */
+const legalSections = [
+  ['perfil', 'Perfil legal'], ['catalogo', 'Catálogo normativo'],
+  ['matriz', 'Obligaciones y prohibiciones'], ['calendario', 'Calendario'],
+  ['evaluaciones', 'Evaluaciones'], ['auditorias', 'Auditorías'],
+] as const;
+type LegalSection = typeof legalSections[number][0];
+type LegalLoad = { status: 'loading' | 'error' | 'denied' }
+  | { status: 'ready'; rows: Record<string, unknown>[] };
+export function LegalComplianceManagement({ branchId, permissions, csrfToken }: Readonly<{
+  branchId: string; permissions: string[]; csrfToken : string;
+}>) {
+  const allowed = permissions.includes('settings.view');
+  const canCreate = permissions.includes('settings.create');
+  const canUpdate = permissions.includes('settings.update');
+  const base = '/api/v1/branches/' + encodeURIComponent(branchId) + '/legal-compliance/';
+  const [section, setSection] = useState<LegalSection>('perfil');
+  const [load, setLoad] = useState<LegalLoad>({ status: 'loading' });
+  const [version, setVersion] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  useEffect(() => {
+    if (!allowed) { setLoad({ status: 'denied' }); return; }
+    const controller = new AbortController();
+    setLoad({ status: 'loading' });
+    void globalThis.fetch.call(globalThis, base + section, { credentials: 'same-origin', signal: controller.signal,
+      headers: { Accept: 'application/json' } })
+      .then(async response => {
+        if (response.status === 401 || response.status === 403) { setLoad({ status: 'denied' }); return; }
+        if (!response.ok) throw new Error('UNAVAILABLE');
+        const data = await response.json() as { rows?: unknown; synthetic_only?: boolean };
+        if (!controller.signal.aborted) setLoad(data.synthetic_only === true && Array.isArray(data.rows)
+          ? { status: 'ready', rows: data.rows as Record<string, unknown>[] } : { status: 'error' });
+      })
+      .catch(() => { if (!controller.signal.aborted) setLoad({ status: 'error' }); });
+    return () => controller.abort();
+  }, [allowed, base, section, version]);
+  async function scenario(mode: 'demo' | 'vacio', method: 'POST' | 'PATCH'): Promise<void> {
+    if (busy || !allowed || (method === 'POST' ? !canCreate : !canUpdate)) return;
+    setBusy(true); setNotice('');
+    try {
+      const response = await globalThis.fetch.call(globalThis, base + 'fixtures', {
+        method, credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ scenario: mode }),
+      });
+      if (!response.ok) throw new Error('DENIED');
+      setVersion(previous => previous + 1);
+      setNotice('Escenario ficticio actualizado. Sin efecto legal ni operativo.');
+    } catch { setNotice('No fue posible cambiar el escenario: acceso denegado o servicio no disponible.'); }
+    finally { setBusy(false); }
+  }
+  return <section className="catalog-panel" aria-labelledby="legal-m06-title">
+    <h2 id="legal-m06-title">Cumplimiento legal · vista de pruebas M06</h2>
+    <p role="alert">Solo referencias ficticias. No certifica cumplimiento ni habilita operación.</p>
+    <label>Submódulo
+      <select value={section} onChange={event => setSection(event.target.value as LegalSection)}>
+        {legalSections.map(([value, title]) => <option key={value} value={value}>{title}</option>)}
+      </select>
+    </label>
+    {allowed && <div>
+      {canCreate && <button type="button" disabled={busy}
+        onClick={() => { void scenario('demo', 'POST'); }}>Cargar demostración sintética</button>}
+      {canUpdate && <button type="button" disabled={busy}
+        onClick={() => { void scenario('vacio', 'PATCH'); }}>Vaciar demostración</button>}
+    </div>}
+    {notice && <p role="status">{notice}</p>}
+    {load.status === 'loading' && <p role="status">Cargando vista ficticia…</p>}
+    {load.status === 'denied' && <p role="alert">Acceso denegado: falta permiso de lectura.</p>}
+    {load.status === 'error' && <p role="alert">No fue posible consultar el módulo de prueba.</p>}
+    {load.status === 'ready' && (load.rows.length === 0
+      ? <p role="status">Sin datos ficticios en este submódulo.</p>
+      : <ul>{load.rows.map((row, index) => <li key={index}>
+          <dl>{Object.entries(row).map(([key, value]) => <div key={key}>
+            <dt>{key.replaceAll('_', ' ')}</dt><dd><code>{JSON.stringify(value)}</code></dd>
+          </div>)}</dl>
+        </li>)}</ul>)}
+    <p>Las evaluaciones y auditorías requieren revisión profesional; ningún cierre es automático.</p>
+  </section>;
+}
