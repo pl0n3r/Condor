@@ -679,7 +679,7 @@ type LegalSection = typeof legalSections[number][0];
 type LegalLoad = { status: 'loading' | 'error' | 'denied' }
   | { status: 'ready'; rows: Record<string, unknown>[] };
 export function LegalComplianceManagement({ branchId, permissions, csrfToken }: Readonly<{
-  branchId: string; permissions: string[]; csrfToken: string;
+  branchId: string; permissions: string[]; csrfToken : string;
 }>) {
   const allowed = permissions.includes('settings.view');
   const canCreate = permissions.includes('settings.create');
@@ -694,7 +694,7 @@ export function LegalComplianceManagement({ branchId, permissions, csrfToken }: 
     if (!allowed) { setLoad({ status: 'denied' }); return; }
     const controller = new AbortController();
     setLoad({ status: 'loading' });
-    void fetch(base + section, { credentials: 'same-origin', signal: controller.signal,
+    void globalThis.fetch.call(globalThis, base + section, { credentials: 'same-origin', signal: controller.signal,
       headers: { Accept: 'application/json' } })
       .then(async response => {
         if (response.status === 401 || response.status === 403) { setLoad({ status: 'denied' }); return; }
@@ -710,7 +710,7 @@ export function LegalComplianceManagement({ branchId, permissions, csrfToken }: 
     if (busy || !allowed || (method === 'POST' ? !canCreate : !canUpdate)) return;
     setBusy(true); setNotice('');
     try {
-      const response = await fetch(base + 'fixtures', {
+      const response = await globalThis.fetch.call(globalThis, base + 'fixtures', {
         method, credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({ scenario: mode }),
