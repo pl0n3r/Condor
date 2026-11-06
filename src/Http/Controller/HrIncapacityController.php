@@ -86,7 +86,7 @@ final class HrIncapacityController extends AbstractController
             return false;
         }
 
-        $environment = (string) $this->getParameter('kernel.environment');
+        $environment = $this->getParameter('kernel.environment');
         if ($environment === 'test') {
             return true;
         }
