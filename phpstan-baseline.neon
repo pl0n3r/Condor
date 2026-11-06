@@ -385,24 +385,6 @@ parameters:
 			path: src/Infrastructure/Http/ApiExceptionSubscriber.php
 
 		-
-			message: '#^Method App\\Infrastructure\\Observability\\ErrorSanitizer\:\:fingerprint\(\) has parameter \$trace with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Infrastructure/Observability/ErrorSanitizer.php
-
-		-
-			message: '#^Offset ''function'' on array\{function\: string, line\?\: int, file\?\: string, class\?\: class\-string, type\?\: ''\-\>''\|''\:\:'', args\?\: list\<mixed\>, object\?\: object\} in isset\(\) always exists and is not nullable\.$#'
-			identifier: isset.offset
-			count: 1
-			path: src/Infrastructure/Observability/ErrorSanitizer.php
-
-		-
-			message: '#^Right side of && is always true\.$#'
-			identifier: booleanAnd.rightAlwaysTrue
-			count: 5
-			path: src/Infrastructure/Observability/ErrorSanitizer.php
-
-		-
 			message: '#^Offset ''file'' on array\{file\: string, line\: int\|null, call\?\: string\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
