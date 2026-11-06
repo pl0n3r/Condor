@@ -977,3 +977,170 @@ input:focus-visible {
 :where(table, [role="grid"]) {
   font-variant-numeric: tabular-nums;
 }
+
+
+/* #1644: kit añadido en ruta reclamada; conserva admin-ui.css de #1643. */
+.admin-shell .workspace[data-module="activo"] > .module-directory,
+.admin-shell .workspace[data-module="activo"] > .ui-page { display: none; }
+
+/* ---------- Plataforma: páginas con cabecera, métricas, filtros, tabla y panel lateral ---------- */
+.admin-shell .workspace > section.ui-module { background: transparent; border: 0; padding: 0; gap: 0; }
+.admin-shell .ui-page { display: grid; gap: 20px; }
+.admin-shell .ui-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.admin-shell .ui-page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.admin-shell .ui-page-header h2 { font-size: 1.5rem; letter-spacing: -0.02em; font-weight: 700; padding: 0; border: 0; }
+.admin-shell .ui-page-header p { color: var(--ui-muted); margin-top: 4px; }
+.admin-shell .ui-page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.admin-shell .ui-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 12px; margin: 0; }
+.admin-shell .ui-metric { background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); padding: 14px 16px; display: grid; gap: 2px; }
+.admin-shell .ui-metric dt { font-size: 0.8125rem; color: var(--ui-muted); font-weight: 600; }
+.admin-shell .ui-metric dd { line-height: 1.3; margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.admin-shell .ui-metric-hint { font-size: 0.8125rem; color: var(--ui-muted); }
+.admin-shell .ui-tone-ok { color: var(--ui-ok); } .admin-shell .ui-tone-warn { color: var(--ui-warn); } .admin-shell .ui-tone-danger { color: var(--ui-danger); }
+
+.admin-shell .ui-card { min-width: 0; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); padding: 0; overflow: hidden; display: block; }
+.admin-shell .ui-card > header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--ui-border); }
+.admin-shell .ui-card > header h3 { font-size: 0.9375rem; }
+.admin-shell .ui-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; align-items: start; }
+
+.admin-shell .ui-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--ui-border); background: var(--ui-surface); }
+.admin-shell .ui-toolbar-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex: 1 1 auto; }
+.admin-shell .ui-toolbar label { display: block; }
+.admin-shell .ui-search { flex: 1 1 260px; max-width: 360px; }
+.admin-shell .ui-toolbar select { width: auto; min-width: 150px; max-width: 100%; }
+.admin-shell .ui-count { font-size: 0.8125rem; color: var(--ui-muted); font-variant-numeric: tabular-nums; }
+
+.admin-shell .ui-table-wrap { overflow-x: auto; max-width: 100%; }
+.admin-shell .ui-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.admin-shell .ui-table th { position: sticky; top: 0; text-align: left; padding: 10px 16px; font-size: 0.75rem; font-weight: 650; color: var(--ui-muted); background: var(--ui-surface-2); border-bottom: 1px solid var(--ui-border); white-space: nowrap; }
+.admin-shell .ui-table td { padding: 12px 16px; border-bottom: 1px solid var(--ui-border); vertical-align: middle; }
+.admin-shell .ui-table tbody tr:last-child td { border-bottom: 0; }
+.admin-shell .ui-table tbody tr:hover td { background: var(--ui-surface-2); }
+.admin-shell .ui-right { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.admin-shell .ui-cell-main { display: grid; gap: 1px; } .admin-shell .ui-cell-main small { color: var(--ui-muted); font-size: 0.75rem; }
+.admin-shell .workspace .ui-link { min-height: 0; padding: 0; border: 0; background: none; color: var(--ui-text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; display: inline; }
+.admin-shell .workspace .ui-link:hover { color: var(--ui-brand); background: none; text-decoration: underline; }
+.admin-shell .ui-empty { min-height: 150px; display: grid; gap: 4px; justify-items: center; padding: 40px 16px; text-align: center; color: var(--ui-muted); }
+.admin-shell .ui-empty strong { color: var(--ui-text); }
+
+.admin-shell .ui-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 650; background: #eef0f4; color: #3a4457; }
+.admin-shell .ui-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .8; }
+.admin-shell .ui-pill-ok { background: var(--ui-ok-soft); color: var(--ui-ok); }
+.admin-shell .ui-pill-warn { background: var(--ui-warn-soft); color: var(--ui-warn); }
+.admin-shell .ui-pill-danger { background: var(--ui-danger-soft); color: var(--ui-danger); }
+.admin-shell .ui-pill-info { background: var(--ui-brand-soft); color: var(--ui-brand-strong); }
+
+.admin-shell .ui-tasks { list-style: none; margin: 0; padding: 4px; display: grid; }
+.admin-shell .ui-tasks a { display: grid; gap: 2px; padding: 12px; border-radius: 8px; text-decoration: none; color: inherit; transition: background-color .12s ease; }
+.admin-shell .ui-tasks a:hover { background: var(--ui-surface-2); }
+.admin-shell .ui-tasks span { color: var(--ui-muted); font-size: 0.8125rem; }
+.admin-shell .ui-shortcuts { align-items: start; display: flex; flex-wrap: wrap; gap: 8px; padding: 16px; }
+.admin-shell .ui-shortcuts a.button { text-decoration: none; }
+.admin-shell .ui-note { padding: 0 16px 16px; color: var(--ui-muted); font-size: 0.8125rem; }
+
+/* Panel lateral */
+.admin-shell dialog.ui-sidepanel, dialog.ui-sidepanel { margin: 0 0 0 auto; padding: 0; border: 0; height: 100dvh; max-height: 100dvh; width: min(480px, 100vw); background: var(--ui-surface, #fff); color: var(--ui-text, #0f1626); box-shadow: -8px 0 32px rgba(15, 22, 38, .18); }
+dialog.ui-sidepanel::backdrop { background: rgba(15, 22, 38, .4); }
+dialog.ui-sidepanel[open] { animation: ui-sheet-in .2s cubic-bezier(.22, 1, .36, 1); }
+@keyframes ui-sheet-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.ui-sidepanel-card { display: grid; grid-template-rows: auto 1fr auto; height: 100%; font-family: inherit; }
+.ui-sidepanel-card > header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e2e6ed; }
+.ui-sidepanel-card > header h3 { margin: 0; font-size: 1.0625rem; font-weight: 650; }
+.ui-sidepanel-body { padding: 20px; overflow-y: auto; display: grid; gap: 16px; align-content: start; }
+.ui-sidepanel-card > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid #e2e6ed; background: #f8f9fb; }
+.ui-sidepanel-body form { display: grid; gap: 14px; }
+.ui-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ui-icon-button { width: 36px; height: 36px; min-height: 36px; padding: 0; display: inline-grid; place-items: center; border-radius: 8px; border: 0; background: transparent; color: #566073; cursor: pointer; }
+.ui-icon-button:hover { background: #eef0f4; color: #0f1626; }
+.ui-details { display: grid; margin: 0; }
+.ui-details > div { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid #e2e6ed; font-size: 0.9375rem; }
+.ui-details dt { color: #566073; font-weight: 600; font-size: 0.8125rem; } .ui-details dd { margin: 0; }
+@media (prefers-reduced-motion: reduce) { dialog.ui-sidepanel[open] { animation: none; } .admin-shell .ui-tasks a { transition: none; } }
+
+/* Condor #1644 — componentes documentados del kit, sin alterar admin-ui.css ni terceros.
+   Motion: Transitions.dev accordion existente; el panel se anima solo fuera de reduce. */
+.admin-shell {
+  --ui-duration-quick: 140ms;
+  --ui-duration-enter: 220ms;
+  --ui-ease-out: cubic-bezier(.2, 0, 0, 1);
+}
+.admin-shell .ui-preview { display: grid; gap: 16px; min-width: 0; }
+.admin-shell .ui-preview-banner {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
+  padding: 12px 16px; background: var(--ui-brand-soft); border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius); color: var(--ui-text); font-size: .875rem;
+}
+.admin-shell .ui-preview-banner span { color: var(--ui-muted); }
+.admin-shell .ui-preview-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--ui-border); }
+.admin-shell .ui-preview-tab { min-height: 44px; min-width: 44px; padding: 8px 16px; border-radius: var(--ui-radius);
+  border: 1px solid var(--ui-border-strong); color: var(--ui-text); background: var(--ui-surface);
+  font: inherit; font-weight: 600; cursor: pointer;
+  transition: background-color var(--ui-duration-quick) var(--ui-ease-out), border-color var(--ui-duration-quick) var(--ui-ease-out);
+}
+.admin-shell .ui-preview-tab[aria-pressed="true"] { background: var(--ui-brand-soft); border-color: var(--ui-brand); color: var(--ui-text); }
+.admin-shell .ui-preview-tab:hover { border-color: var(--ui-brand); }
+.admin-shell .ui-preview-tab:focus-visible,
+.admin-shell .ui-icon-button:focus-visible,
+.admin-shell .ui-link:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 3px; }
+.admin-shell .ui-preview-tab:disabled, .admin-shell button:disabled { cursor: not-allowed; opacity: .65; }
+
+
+
+
+
+
+.admin-shell .ui-row-action:focus-within td { background: var(--ui-surface-2); }
+.admin-shell .ui-table td, .admin-shell .ui-table th { overflow-wrap: anywhere; }
+
+
+.admin-shell .ui-card > :not(header) { min-width: 0; }
+.admin-shell .ui-preview .ui-card > .ui-tasks { padding: 8px 12px; }
+.admin-shell .ui-preview .ui-card > .ui-note { padding: 0 16px 16px; }
+.admin-shell .ui-preview .ui-shortcuts .button { width: auto; }
+.admin-shell .ui-metric dd, .admin-shell .overview-value { font-variant-numeric: tabular-nums; }
+.admin-shell .ui-preview p, .admin-shell .ui-cell-main { overflow-wrap: anywhere; }
+
+.admin-shell .ui-page-actions .button:disabled { opacity: .55; }
+
+.admin-shell .ui-sidepanel-card > header, .admin-shell .ui-sidepanel-card > footer,
+.admin-shell .ui-details > div { border-color: var(--ui-border); }
+.admin-shell .ui-sidepanel-card > footer { background: var(--ui-surface-2); }
+.admin-shell .ui-details dt, .admin-shell .ui-icon-button { color: var(--ui-muted); }
+.admin-shell .ui-icon-button:hover { background: var(--ui-surface-2); color: var(--ui-text); }
+.admin-shell .ui-sidepanel-body { min-width: 0; }
+.admin-shell .ui-sidepanel-body input, .admin-shell .ui-sidepanel-body select { min-width: 0; }
+.admin-shell .ui-metric, .admin-shell .ui-card { box-shadow: 0 2px 6px rgba(13, 24, 48, .035); }
+.admin-shell .ui-pill, .admin-shell .ui-card, .admin-shell .ui-metric { transition: border-color var(--ui-duration-quick) var(--ui-ease-out); }
+@media (max-width: 500px) {
+  .admin-shell .ui-page-header { align-items: flex-start; }
+  .admin-shell .ui-page-actions { width: 100%; }
+  .admin-shell .ui-page-actions > * { flex: 1 1 auto; }
+  .admin-shell .ui-toolbar-filters { flex-direction: column; align-items: stretch; }
+  .admin-shell .ui-search { max-width: 100%; flex-basis: auto; }
+  .admin-shell .ui-toolbar select { width: 100%; }
+  .admin-shell .ui-two { grid-template-columns: 1fr; }
+  .admin-shell .ui-details > div { grid-template-columns: 100px minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell .ui-preview-tab, .admin-shell .ui-pill,
+  .admin-shell .ui-card, .admin-shell .ui-metric { animation: none; transition: none; }
+}
+@media (prefers-color-scheme: dark) {
+  .admin-shell:not([data-theme="light"]) {
+    --ui-bg: #0d1626; --ui-surface: #142238; --ui-surface-2: #1b2b45;
+    --ui-border: #344964; --ui-border-strong: #66809b; --ui-text: #f0f5ff;
+    --ui-muted: #b7c7da; --ui-brand: #98b4ff; --ui-brand-strong: #c2d3ff;
+    --ui-brand-soft: #233b62; --ui-ok: #91e2b2; --ui-ok-soft: #164533;
+    --ui-warn: #f5c67e; --ui-warn-soft: #4d371d; --ui-danger: #ffafa8;
+    --ui-danger-soft: #4c252b; --ui-focus: #b5ccff;
+    --bg: var(--ui-bg); --surface: var(--ui-surface); --text: var(--ui-text);
+    --muted: var(--ui-muted); --border: var(--ui-border); color-scheme: dark;
+  }
+  .admin-shell:not([data-theme="light"]) .button:not(.button-secondary) { background: #3154ba; color: #fff; }
+  .admin-shell:not([data-theme="light"]) .ui-pill { background: #2b3d58; color: #e3edff; }
+  .admin-shell:not([data-theme="light"]) .ui-pill-ok { background: var(--ui-ok-soft); color: var(--ui-ok); }
+  .admin-shell:not([data-theme="light"]) .ui-pill-warn { background: var(--ui-warn-soft); color: var(--ui-warn); }
+  .admin-shell:not([data-theme="light"]) .ui-pill-danger { background: var(--ui-danger-soft); color: var(--ui-danger); }
+  .admin-shell:not([data-theme="light"]) .ui-pill-info { background: var(--ui-brand-soft); color: var(--ui-brand-strong); }
+}
