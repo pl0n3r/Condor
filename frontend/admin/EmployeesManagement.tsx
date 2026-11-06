@@ -184,11 +184,11 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
   const employees = state.status === 'ready' ? state.employees : [];
   const visible = employees.filter(employee => employee.code.toLowerCase().includes(search.trim().toLowerCase()));
 
-  return <section id="employees-management" className="catalog-panel" aria-label="Empleados y asistencia">
+  return <section id="employees-management" className="catalog-panel ui-page" aria-label="Empleados y asistencia">
     <PageHeader title="Empleados y asistencia"
       description="Consulta el directorio, el vínculo de usuario y los registros de asistencia de tu sede."
       actions={state.status === 'ready'
-        ? <button type="button" onClick={() => setPanel('create')}>Crear empleado</button>
+        ? <button type="button" className="button" onClick={() => setPanel('create')}>Crear empleado</button>
         : undefined} />
     {state.status === 'loading' && <output>Cargando empleados…</output>}
     {state.status === 'denied' && <p role="alert">No tienes permiso para gestionar empleados.</p>}

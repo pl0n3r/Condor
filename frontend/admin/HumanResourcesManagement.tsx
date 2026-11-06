@@ -172,16 +172,16 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
     || row.position_ref.includes(search.trim().toLowerCase()));
   const current = records.find(row => row.record_ref === selected);
 
-  if (!canView) return <section id="human-resources-management" className="catalog-panel">
+  if (!canView) return <section id="human-resources-management" className="catalog-panel ui-page">
     <PageHeader title="Talento humano" description="Gestión de cargos y novedades por empresa y sede." />
     <p role="alert">No tienes permiso para consultar esta empresa o sede.</p>
   </section>;
 
-  return <section id="human-resources-management" className="catalog-panel" aria-label="Talento humano">
+  return <section id="human-resources-management" className="catalog-panel ui-page" aria-label="Talento humano">
     <PageHeader title="Talento humano · gestión de cargos y novedades"
       description="Registros por empresa y sede, con autorización del servidor y trazabilidad de versiones."
       actions={canCreate && view.status === 'ready'
-        ? <button type="button" onClick={() => setPanel('create')}>Nuevo registro</button>
+        ? <button type="button" className="button" onClick={() => setPanel('create')}>Nuevo registro</button>
         : undefined} />
     <p role="note">Entorno de construcción: usar únicamente referencias inventadas. No ingresar información personal real.</p>
     {view.status === 'loading' && <output>Cargando registros de talento humano…</output>}

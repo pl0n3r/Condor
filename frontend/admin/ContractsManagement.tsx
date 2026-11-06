@@ -88,15 +88,15 @@ function ContractPreview({ tenantId, companyId, branchId, permissions }: Props) 
     setNotice('Se registró una transición de prueba, no una firma ni un cierre.');
   }
 
-  if (!canRead) return <section id="contracts-management" className="catalog-panel" aria-label="Contratación ficticia">
+  if (!canRead) return <section id="contracts-management" className="catalog-panel ui-page" aria-label="Contratación ficticia">
     <PageHeader title="Contratación laboral · prueba local M02" />
     <p role="alert">No tienes permiso de lectura de la demostración o no hay empresa seleccionada.</p>
   </section>;
 
-  return <section id="contracts-management" className="catalog-panel" aria-label="Contratación ficticia">
+  return <section id="contracts-management" className="catalog-panel ui-page" aria-label="Contratación ficticia">
     <PageHeader title="Contratación laboral · prueba local M02"
       description="Borradores y revisiones manuales de demostración, separados por empresa y sede."
-      actions={canAdd ? <button type="button" onClick={() => setPanel('create')}>
+      actions={canAdd ? <button type="button" className="button" onClick={() => setPanel('create')}>
         Crear borrador ficticio
       </button> : undefined} />
     <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal, sin trámites, sin datos de trabajadores.</p>

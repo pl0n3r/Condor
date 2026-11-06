@@ -78,7 +78,7 @@ function Demo({ tenantId, companyId, branchId, permissions }: Props) {
     setMessage('Revisión ficticia registrada. Ningún estado se cierra automáticamente.');
   }
 
-  if (!canView) return <section id="social-security-management" className="catalog-panel">
+  if (!canView) return <section id="social-security-management" className="catalog-panel ui-page">
     <PageHeader title="Seguridad Social M05 · laboratorio ficticio" />
     <p role="alert">Demostración no disponible: empresa o permiso de consulta ausente.</p>
   </section>;
@@ -86,10 +86,10 @@ function Demo({ tenantId, companyId, branchId, permissions }: Props) {
   const filtered = visible.filter(item => item.id.includes(filter.trim().toLowerCase()));
   const scopedHistory = history.filter(entry => entry.scope === scope);
 
-  return <section id="social-security-management" className="catalog-panel" aria-label="Seguridad social de demostración">
+  return <section id="social-security-management" className="catalog-panel ui-page" aria-label="Seguridad social de demostración">
     <PageHeader title="Seguridad Social M05 · laboratorio ficticio"
       description="Afiliaciones y revisiones de prueba, sin trámites ni información personal."
-      actions={canCreate ? <button type="button" onClick={() => setPanel('create')}>
+      actions={canCreate ? <button type="button" className="button" onClick={() => setPanel('create')}>
         Nueva afiliación de prueba
       </button> : undefined} />
     <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal. No introducir información personal.</p>

@@ -114,7 +114,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     setNotice('Transición ficticia explícita registrada. No se aprueba, paga ni cierra nada.');
   }
 
-  if (!canView) return <section id="payroll-management" className="catalog-panel" aria-label="Nómina sintética">
+  if (!canView) return <section id="payroll-management" className="catalog-panel ui-page" aria-label="Nómina sintética">
     <PageHeader title="Nómina · simulador de empresa" />
     <p role="alert">Acceso denegado: no hay permiso de nómina o razón social activa.</p>
   </section>;
@@ -126,10 +126,10 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     && (search === '' || row.reference.includes(search.toLowerCase().trim())));
   const current = scoped.find(row => row.reference === selected);
 
-  return <section id="payroll-management" className="catalog-panel" aria-label="Nómina sintética">
+  return <section id="payroll-management" className="catalog-panel ui-page" aria-label="Nómina sintética">
     <PageHeader title="Nómina · simulador de empresa"
       description="Operación exclusivamente en memoria, disponible solo en construcción."
-      actions={canCreate ? <button type="button" onClick={() => setPanel('create')}>
+      actions={canCreate ? <button type="button" className="button" onClick={() => setPanel('create')}>
         Crear borrador sintético
       </button> : undefined} />
     <p role="alert">
