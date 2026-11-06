@@ -141,22 +141,23 @@ final class PayablesPreviewTest extends WebTestCase
         $submit = static function (array $body, array $headers = []) use ($client, $url): void {
             $client->jsonRequest('POST', $url, $body, $headers);
         };
-        $submit($payload);
-        self::assertResponseStatusCodeSame(401);
+        // Each HTTP scenario makes its expected authorization outcome explicit.
+        $expect = static function (int $status, array $body, array $headers = []) use ($submit): void {
+            $submit($body, $headers);
+            self::assertResponseStatusCodeSame($status);
+        };
+        $expect(401, $payload);
         $client->loginUser($owner);
         $client->request('GET', '/admin');
         self::assertResponseIsSuccessful();
         $csrf = ['HTTP_X_CSRF_TOKEN' => $this->csrfToken($client, 'branch_access')];
-        $submit($payload);
-        self::assertResponseStatusCodeSame(403);
+        $expect(403, $payload);
         $client->request('POST', $url, [], [], [
             'CONTENT_TYPE' => 'application/json', 'HTTP_X_CSRF_TOKEN' => $csrf['HTTP_X_CSRF_TOKEN'],
         ], '{"broken"');
         self::assertResponseStatusCodeSame(400);
-        $submit([...$payload, 'padding' => str_repeat('x', 70000)], $csrf);
-        self::assertResponseStatusCodeSame(400);
-        $submit($payload, $csrf);
-        self::assertResponseStatusCodeSame(200);
+        $expect(400, [...$payload, 'padding' => str_repeat('x', 70000)], $csrf);
+        $expect(200, $payload, $csrf);
         $response = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
         self::assertTrue($response['synthetic_only']);
         self::assertSame('154500', $response['payables_preview']['total_amount_cop']);
@@ -172,14 +173,12 @@ final class PayablesPreviewTest extends WebTestCase
             [...$payload, 'supplier_name' => 'Persona'],
             [...$payload, 'obligations' => [[...$payload['obligations'][0], 'payment_status' => 'paid']]],
         ] as $invalid) {
-            $submit($invalid, $csrf);
-            self::assertResponseStatusCodeSame(422);
+            $expect(422, $invalid, $csrf);
         }
         $client->loginUser($viewer);
         $client->request('GET', '/admin');
         $viewerCsrf = ['HTTP_X_CSRF_TOKEN' => $this->csrfToken($client, 'branch_access')];
-        $submit($payload, $viewerCsrf);
-        self::assertResponseStatusCodeSame(403);
+        $expect(403, $payload, $viewerCsrf);
     }
 
     /** @return array{Tenant,Branch,User} */
