@@ -74,14 +74,13 @@ final readonly class ErrorSanitizer
                 break;
             }
 
+            // Throwable::getTrace() tipa function como string; el resto de claves es opcional.
             $class = $frame['class'] ?? '';
             $type = $frame['type'] ?? '';
             $function = $frame['function'];
 
             $frames[] = [
-                'file' => $this->safeFile(
-                    $frame['file'] ?? ''
-                ),
+                'file' => $this->safeFile($frame['file'] ?? ''),
                 'line' => $frame['line'] ?? null,
                 'call' => substr($class.$type.$function, 0, 255),
             ];
