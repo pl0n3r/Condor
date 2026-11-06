@@ -104,6 +104,19 @@ final class FinanceController extends AbstractController
             'fixture_ref', 'tenant_ref', 'legal_entity_ref', 'as_of',
             'ledger_entries', 'bank_movements', 'budgets', 'periods',
         ]);
+        // The shared JSON boundary preserves nested objects as stdClass;
+        // only adapt the four synthetic fixture lists for the pure projector.
+        // Unknown fields, non-lists and invalid states still fail closed there.
+        foreach (['ledger_entries', 'bank_movements', 'budgets', 'periods'] as $section) {
+            if (is_array($payload[$section] ?? null)) {
+                $payload[$section] = array_map(
+                    static fn (mixed $record): mixed => $record instanceof \stdClass
+                        ? get_object_vars($record)
+                        : $record,
+                    $payload[$section],
+                );
+            }
+        }
         $projection = FinanceReconciliationBudget::project(
             $payload, 'fixture:tenant/current', 'fixture:legal-entity/current',
         );

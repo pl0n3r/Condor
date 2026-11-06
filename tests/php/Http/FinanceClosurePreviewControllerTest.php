@@ -125,5 +125,19 @@ final class FinanceClosurePreviewControllerTest extends WebTestCase
         self::assertSame([], $decoded['closure_preview']['periods']);
         self::assertFalse($decoded['closure_preview']['can_close']);
         self::assertStringNotContainsString('fixture:tenant/foreign', $body);
+
+        foreach ([
+            ['periods', 'CERRADO'],
+            ['ledger_entries', 'APROBADO'],
+        ] as [$section, $state]) {
+            $invalid = $this->payload();
+            $invalid[$section][0]['state'] = $state;
+            $client->jsonRequest('POST', $url, $invalid, ['HTTP_X_CSRF_TOKEN' => $csrf]);
+            self::assertResponseIsSuccessful();
+            $invalidResult = json_decode((string) $client->getResponse()->getContent(), true, 32, JSON_THROW_ON_ERROR);
+            self::assertSame([], $invalidResult['closure_preview']['periods']);
+            self::assertFalse($invalidResult['closure_preview']['can_close']);
+            self::assertFalse($invalidResult['closure_preview']['can_approve']);
+        }
     }
 }
