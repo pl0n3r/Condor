@@ -18,7 +18,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
-/** Synthetic, authorized M01 S10 evaluations. Never reads actual HR records. */
+/** M01 S10: demonstration-only performance evaluations without personnel records. */
 final class HrEvaluationController extends AbstractController
 {
     use BranchApiSupport;
@@ -27,82 +27,94 @@ final class HrEvaluationController extends AbstractController
         private readonly CurrentTenantForUser $currentTenantForUser,
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
-        private readonly HrEvaluationCatalog $evaluations,
+        private readonly HrEvaluationCatalog $catalog,
     ) {
     }
 
-    #[Route('/api/v1/branches/{branchId}/hr/evaluations', name: 'api_hr_evaluations_index', methods: ['GET'])]
+    #[Route(
+        '/api/v1/branches/{branchId}/hr/evaluations',
+        name: 'api_hr_evaluations_index',
+        methods: ['GET'],
+    )]
     public function index(string $branchId, Request $request): JsonResponse
     {
-        $this->requireSynthetic();
-        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
-
-        return $this->privateJson([
-            'evaluations' => $this->evaluations->listFor($tenant, $company, $branch),
-            'synthetic' => true,
-            'persisted' => false,
-            'juridically_binding' => false,
-        ]);
+        return $this->respondToRead($request, $branchId, null);
     }
 
-    #[Route('/api/v1/branches/{branchId}/hr/evaluations/{ref}', name: 'api_hr_evaluations_detail', methods: ['GET'])]
+    #[Route(
+        '/api/v1/branches/{branchId}/hr/evaluations/{ref}',
+        name: 'api_hr_evaluations_detail',
+        methods: ['GET'],
+    )]
     public function detail(string $branchId, string $ref, Request $request): JsonResponse
     {
-        $this->requireSynthetic();
+        return $this->respondToRead($request, $branchId, $ref);
+    }
+
+    private function respondToRead(Request $request, string $branchId, ?string $ref): JsonResponse
+    {
+        $this->requireDemoEnvironment();
         [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
-        $evaluation = $this->evaluations->findFor($tenant, $company, $branch, $ref);
-        if ($evaluation === null) {
-            throw new NotFoundHttpException('Evaluación ficticia no encontrada.');
+        $company = $this->companyFromAuthorizedBranch($tenant, $branch, $request);
+
+        if ($ref === null) {
+            $payload = ['evaluations' => $this->catalog->listFor($tenant, $company, $branch)];
+        } else {
+            $evaluation = $this->catalog->findFor($tenant, $company, $branch, $ref);
+            if ($evaluation === null) {
+                throw new NotFoundHttpException('Evaluación ficticia no encontrada.');
+            }
+            $payload = ['evaluation' => $evaluation];
         }
 
-        return $this->privateJson([
-            'evaluation' => $evaluation,
+        return $this->json($payload + [
             'synthetic' => true,
             'persisted' => false,
             'juridically_binding' => false,
+        ], 200, [
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
-    private function requireSynthetic(): void
-    {
-        $real = getenv('HR_REAL_DATA_ENABLED');
-        if ($real !== false && !in_array(strtolower(trim($real)), ['', 'false', '0', 'off', 'no'], true)) {
-            throw new NotFoundHttpException('Catálogo sintético no disponible.');
-        }
-        $environment = $this->getParameter('kernel.environment');
-        if ($environment !== 'test' && ($environment !== 'dev'
-            || getenv('CONDOR_HR_SYNTHETIC_API') !== '1'
-            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion')) {
-            throw new NotFoundHttpException('Catálogo sintético no disponible.');
-        }
-    }
-
-    private function companyFor(Tenant $tenant, Branch $branch, Request $request): LegalEntity
+    private function companyFromAuthorizedBranch(Tenant $tenant, Branch $branch, Request $request): LegalEntity
     {
         $query = $request->query->all();
-        if (array_diff(array_keys($query), ['company_id']) !== []) {
-            throw new BadRequestHttpException('Parámetros de consulta no permitidos.');
+        foreach (array_keys($query) as $parameter) {
+            if ($parameter !== 'company_id') {
+                throw new BadRequestHttpException('Filtro no permitido.');
+            }
         }
+
         $company = $branch->legalEntity();
-        if (!$company instanceof LegalEntity || $company->tenant()->id() !== $tenant->id()) {
-            throw new NotFoundHttpException('Empresa no disponible.');
+        if ($company === null || $company->tenant()->id() !== $tenant->id()) {
+            throw new NotFoundHttpException('Razón social fuera del alcance autorizado.');
         }
-        $provided = $query['company_id'] ?? null;
-        if ($provided !== null && (!is_string($provided) || $provided !== $company->id())) {
-            throw new NotFoundHttpException('Empresa no disponible.');
+        if (array_key_exists('company_id', $query)) {
+            $asked = $query['company_id'];
+            if (!is_string($asked) || !hash_equals($company->id(), $asked)) {
+                throw new NotFoundHttpException('Razón social fuera del alcance autorizado.');
+            }
         }
 
         return $company;
     }
 
-    /** @param array<string,mixed> $payload */
-    private function privateJson(array $payload): JsonResponse
+    private function requireDemoEnvironment(): void
     {
-        $response = $this->json($payload);
-        $response->headers->set('Cache-Control', 'private, no-store');
-        $response->headers->set('X-Content-Type-Options', 'nosniff');
-        return $response;
+        $configured = getenv('HR_REAL_DATA_ENABLED');
+        $disabled = $configured === false
+            || in_array(strtolower(trim($configured)), ['', 'false', '0', 'off', 'no'], true);
+        if (!$disabled) {
+            throw new NotFoundHttpException('Evaluaciones sintéticas no disponibles con datos reales habilitados.');
+        }
+
+        $mode = $this->getParameter('kernel.environment');
+        $devPreview = $mode === 'dev'
+            && getenv('CONDOR_HR_SYNTHETIC_API') === '1'
+            && getenv('CONDOR_PRODUCTION_STAGE') === 'construccion';
+        if ($mode !== 'test' && !$devPreview) {
+            throw new NotFoundHttpException('Evaluaciones sintéticas no disponibles.');
+        }
     }
 }

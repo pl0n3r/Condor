@@ -9,49 +9,45 @@ use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use DomainException;
 
-/**
- * Read-only, deterministic fictional evaluations, never a source of real
- * personnel records, ratings, rankings, approvals or HR decisions.
- */
+/** Pure fictional evaluation cases; never consult or store real personnel. */
 final class HrEvaluationCatalog
 {
-    private const EVALUATIONS = [
-        ['slug' => 'auto-borrador', 'kind' => 'AUTOEVALUACION', 'state' => 'BORRADOR'],
-        ['slug' => 'auto-revision', 'kind' => 'AUTOEVALUACION', 'state' => 'EN_REVISION'],
-        ['slug' => 'jefe-revision', 'kind' => 'JEFE', 'state' => 'EN_REVISION'],
+    private const CASES = [
+        ['tag' => 'auto-inicial', 'kind' => 'AUTOEVALUACION', 'state' => 'BORRADOR'],
+        ['tag' => 'auto-revision', 'kind' => 'AUTOEVALUACION', 'state' => 'EN_REVISION'],
+        ['tag' => 'jefe-revision', 'kind' => 'JEFE', 'state' => 'EN_REVISION'],
     ];
 
     /**
      * @return list<array{ref: string, cycle_ref: string, employee_ref: string,
-     *     evaluator_ref: string, kind: string, state: string, score: null,
-     *     needs_human_review: bool, automatically_approved: bool,
-     *     automatically_closed: bool, synthetic: bool}>
+     * evaluator_ref: string, kind: string, state: string, score: null,
+     * needs_human_review: bool, automatically_approved: bool,
+     * automatically_closed: bool, synthetic: bool}>
      */
     public function listFor(Tenant $tenant, LegalEntity $company, Branch $branch): array
     {
-        self::assertScope($tenant, $company, $branch);
-        $scope = self::scopeRef($tenant, $company, $branch);
-        $cycleRef = 'fixture:cycle/ensayo-'.substr(hash('sha256', $scope.'|cycle'), 0, 12);
-        $rows = [];
-        foreach (self::EVALUATIONS as $fixture) {
-            $slug = $fixture['slug'];
-            // Identifiers are derived solely from the authorized scope and
-            // fixed synthetic slugs; no employee repository is ever queried.
-            $employeeRef = 'fixture:employee/ensayo-'.substr(
-                hash('sha256', $scope.'|'.$slug.'|employee'), 0, 12,
+        $scope = self::scopeFingerprint($tenant, $company, $branch);
+        $result = [];
+        $cycle = 'fixture:cycle/ensayo-'.substr(hash('sha256', 'cycle|'.$scope), 0, 12);
+
+        foreach (self::CASES as $case) {
+            $label = $case['tag'];
+            $person = 'fixture:employee/evaluado-'.substr(
+                hash('sha256', 'person|'.$scope.'|'.$label), 0, 12,
             );
-            $evaluatorRef = $fixture['kind'] === 'AUTOEVALUACION'
-                ? $employeeRef
+            $reviewer = $case['kind'] === 'AUTOEVALUACION'
+                ? $person
                 : 'fixture:employee/revisor-'.substr(
-                    hash('sha256', $scope.'|'.$slug.'|evaluator'), 0, 12,
+                    hash('sha256', 'reviewer|'.$scope.'|'.$label), 0, 12,
                 );
-            $rows[] = [
-                'ref' => 'fixture-evaluation-'.$scope.'-'.$slug,
-                'cycle_ref' => $cycleRef,
-                'employee_ref' => $employeeRef,
-                'evaluator_ref' => $evaluatorRef,
-                'kind' => $fixture['kind'],
-                'state' => $fixture['state'],
+
+            $result[] = [
+                'ref' => 'fixture-evaluation-'.$scope.'-'.$label,
+                'cycle_ref' => $cycle,
+                'employee_ref' => $person,
+                'evaluator_ref' => $reviewer,
+                'kind' => $case['kind'],
+                'state' => $case['state'],
                 'score' => null,
                 'needs_human_review' => true,
                 'automatically_approved' => false,
@@ -60,44 +56,45 @@ final class HrEvaluationCatalog
             ];
         }
 
-        return $rows;
+        return $result;
     }
 
     /**
      * @return array{ref: string, cycle_ref: string, employee_ref: string,
-     *     evaluator_ref: string, kind: string, state: string, score: null,
-     *     needs_human_review: bool, automatically_approved: bool,
-     *     automatically_closed: bool, synthetic: bool}|null
+     * evaluator_ref: string, kind: string, state: string, score: null,
+     * needs_human_review: bool, automatically_approved: bool,
+     * automatically_closed: bool, synthetic: bool}|null
      */
     public function findFor(Tenant $tenant, LegalEntity $company, Branch $branch, string $ref): ?array
     {
-        // Revalidate the entire scope before resolving an opaque fixture ref.
-        $rows = $this->listFor($tenant, $company, $branch);
-        if (strlen($ref) > 80 || preg_match('/\Afixture-evaluation-[a-f0-9]{16}-[a-z-]+\z/D', $ref) !== 1) {
+        $catalog = $this->listFor($tenant, $company, $branch);
+        if ($ref === '' || strlen($ref) > 80) {
             return null;
         }
-        foreach ($rows as $row) {
-            if (hash_equals($row['ref'], $ref)) {
-                return $row;
+
+        foreach ($catalog as $entry) {
+            if (hash_equals($entry['ref'], $ref)) {
+                return $entry;
             }
         }
 
         return null;
     }
 
-    private static function assertScope(Tenant $tenant, LegalEntity $company, Branch $branch): void
+    private static function scopeFingerprint(Tenant $tenant, LegalEntity $company, Branch $branch): string
     {
-        if ($company->tenant()->id() !== $tenant->id()
-            || $branch->tenant()->id() !== $tenant->id()
-            || $branch->legalEntity()?->id() !== $company->id()) {
-            throw new DomainException('Contexto de evaluaciones ficticias no disponible.');
+        $tenantId = $tenant->id();
+        if ($company->tenant()->id() !== $tenantId) {
+            throw new DomainException('Razón social fuera del tenant autorizado.');
         }
-    }
+        if ($branch->tenant()->id() !== $tenantId || $branch->legalEntity()?->id() !== $company->id()) {
+            throw new DomainException('Sede fuera del alcance de evaluaciones ficticias.');
+        }
 
-    private static function scopeRef(Tenant $tenant, LegalEntity $company, Branch $branch): string
-    {
-        return substr(hash('sha256', implode('|', [
-            $tenant->id(), $company->id(), $branch->id(),
+        // Only the authorized organization IDs and fixed demo tags enter the
+        // opaque fixture references; there is no employee repository lookup.
+        return substr(hash('sha256', implode("\0", [
+            $tenantId, $company->id(), $branch->id(),
         ])), 0, 16);
     }
 }
