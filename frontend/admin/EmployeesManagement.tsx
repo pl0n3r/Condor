@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
 type Employee = { id: string; code: string; linked: boolean };
 type Mark = { id: string; employee_id: string; occurred_at: string; type: 'check_in' | 'check_out' };
@@ -38,6 +39,8 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
   const [state, setState] = useState<State>({ status: 'loading', employees: [] });
   const [history, setHistory] = useState<History>({ status: 'idle', events: [] });
   const [selected, setSelected] = useState('');
+  const [panel, setPanel] = useState<'create' | 'attendance' | null>(null);
+  const [search, setSearch] = useState('');
   const [code, setCode] = useState('');
   const [userId, setUserId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -54,6 +57,7 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
     reader.current = controller;
     setState({ status: 'loading', employees: [] });
     setHistory({ status: 'idle', events: [] }); setSelected('');
+    setPanel(null); setSearch('');
     // A previous branch's aborted mutation must not leave the new form locked.
     setSaving(false); setCode(''); setUserId(''); setNotice('');
     void (async () => {
@@ -81,7 +85,7 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
     reader.current?.abort();
     const controller = new AbortController();
     reader.current = controller;
-    setSelected(id); setHistory({ status: 'loading', events: [] });
+    setSelected(id); setPanel('attendance'); setHistory({ status: 'loading', events: [] });
     try {
       const response = await fetch(endpoint + '/' + encodeURIComponent(id) + '/attendance', {
         credentials: 'same-origin', headers: { Accept: 'application/json' }, signal: controller.signal,
@@ -156,7 +160,7 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
       }
       if (current !== sequence.current || controller.signal.aborted) return;
       setState(s => s.status === 'ready' ? { ...s, employees: [...s.employees, employee] } : s);
-      setCode(''); setUserId(''); setNotice('Empleado creado.');
+      setCode(''); setUserId(''); setNotice('Empleado creado.'); setPanel(null);
     } catch {
       if (current === sequence.current && !controller.signal.aborted) {
         if (createdEmployee !== null) {
@@ -177,37 +181,73 @@ export function EmployeesManagement({ branchId, csrfToken }: Props) {
       if (current === sequence.current) setSaving(false);
     }
   }
-  return <section id="employees-management" aria-label="Empleados y asistencia">
-    <h2>Empleados y asistencia</h2>
+  const employees = state.status === 'ready' ? state.employees : [];
+  const visible = employees.filter(employee => employee.code.toLowerCase().includes(search.trim().toLowerCase()));
+
+  return <section id="employees-management" className="catalog-panel" aria-label="Empleados y asistencia">
+    <PageHeader title="Empleados y asistencia"
+      description="Consulta el directorio, el vínculo de usuario y los registros de asistencia de tu sede."
+      actions={state.status === 'ready'
+        ? <button type="button" onClick={() => setPanel('create')}>Crear empleado</button>
+        : undefined} />
     {state.status === 'loading' && <output>Cargando empleados…</output>}
     {state.status === 'denied' && <p role="alert">No tienes permiso para gestionar empleados.</p>}
     {state.status === 'disabled' && <p role="alert">RR. HH. no está habilitado en este entorno.</p>}
     {state.status === 'error' && <p role="alert">No fue posible cargar empleados.</p>}
     {state.status === 'ready' && <>
-      <form onSubmit={event => { void create(event); }}>
-        <label>Código del empleado<input required maxLength={32} value={code}
-          onChange={event => setCode(event.target.value)} /></label>
-        <label>Usuario opcional (ULID)<input maxLength={26} value={userId}
-          onChange={event => setUserId(event.target.value)} /></label>
-        <button disabled={saving || !csrfToken} type="submit">{saving ? 'Guardando…' : 'Crear empleado'}</button>
-      </form>
-      {state.employees.length === 0 ? <p>No hay empleados registrados.</p>
-        : <ul>{state.employees.map(e => <li key={e.id}><strong>{e.code}</strong>
-          {e.linked ? ' · Usuario vinculado' : ' · Sin vínculo'}
-          <button type="button" onClick={() => { void showAttendance(e.id); }}>Ver asistencia</button>
-        </li>)}</ul>}
-      {selected && <div aria-live="polite"><h3>Asistencia del empleado</h3>
-        {history.status === 'loading' && <output>Cargando asistencia…</output>}
-        {history.status === 'denied' && <p role="alert">Sin permiso para consultar asistencia.</p>}
-        {history.status === 'disabled' && <p role="alert">Historial no habilitado.</p>}
-        {history.status === 'error' && <p role="alert">No fue posible cargar asistencia.</p>}
-        {history.status === 'ready' && (history.events.length === 0
-          ? <p>Sin eventos de asistencia.</p>
-          : <ul>{history.events.map(m => <li key={m.id}>
-            {m.type === 'check_in' ? 'Entrada' : 'Salida'} · {m.occurred_at}
-          </li>)}</ul>)}
-      </div>}
-      {notice && <p role="status">{notice}</p>}
+      <MetricStrip label="Indicadores de empleados" items={[
+        { label: 'Empleados', value: employees.length },
+        { label: 'Usuarios vinculados', value: employees.filter(employee => employee.linked).length },
+        { label: 'Sin vínculo', value: employees.filter(employee => !employee.linked).length },
+      ]} />
+      <Card title="Directorio de empleados">
+        <Toolbar trailing={<output aria-live="polite">{visible.length} empleados</output>}>
+          <label>Buscar por código
+            <input type="search" value={search} maxLength={32}
+              onChange={event => setSearch(event.target.value)} />
+          </label>
+        </Toolbar>
+        <DataTable<Employee> caption="Empleados de la sede"
+          rows={visible} rowKey={employee => employee.id}
+          columns={[
+            { key: 'code', header: 'Código', render: employee => employee.code },
+            { key: 'link', header: 'Usuario', render: employee =>
+              <StatusPill tone={employee.linked ? 'ok' : 'neutral'}>
+                {employee.linked ? 'Usuario vinculado' : 'Sin vínculo'}
+              </StatusPill> },
+            { key: 'attendance', header: 'Asistencia', render: employee =>
+              <button type="button" onClick={() => { void showAttendance(employee.id); }}>Ver asistencia</button> },
+          ]}
+          onOpen={employee => { void showAttendance(employee.id); }}
+          empty={<p>{employees.length === 0 ? 'No hay empleados registrados.' : 'Sin empleados para esta búsqueda.'}</p>} />
+      </Card>
+      {notice && <p role="status" aria-live="polite">{notice}</p>}
+      <SidePanel open={panel === 'create'} title="Crear empleado" onClose={() => setPanel(null)}>
+        <form className="catalog-editor" onSubmit={event => { void create(event); }}>
+          <label>Código del empleado<input required maxLength={32} value={code}
+            onChange={event => setCode(event.target.value)} /></label>
+          <label>Usuario opcional (ULID)<input maxLength={26} value={userId}
+            onChange={event => setUserId(event.target.value)} /></label>
+          <button disabled={saving || !csrfToken} type="submit">
+            {saving ? 'Guardando…' : 'Crear empleado'}
+          </button>
+        </form>
+      </SidePanel>
+      <SidePanel open={panel === 'attendance' && selected !== ''}
+        title="Asistencia del empleado" onClose={() => setPanel(null)}>
+        <p className="muted">Empleado: {employees.find(employee => employee.id === selected)?.code ?? 'No disponible'}</p>
+        <div aria-live="polite">
+          {history.status === 'loading' && <output>Cargando asistencia…</output>}
+          {history.status === 'denied' && <p role="alert">Sin permiso para consultar asistencia.</p>}
+          {history.status === 'disabled' && <p role="alert">Historial no habilitado.</p>}
+          {history.status === 'error' && <p role="alert">No fue posible cargar asistencia.</p>}
+          {history.status === 'ready' && (history.events.length === 0
+            ? <p>Sin eventos de asistencia.</p>
+            : <ul>{history.events.map(mark => <li key={mark.id}>
+              {mark.type === 'check_in' ? 'Entrada' : 'Salida'} · {mark.occurred_at}
+            </li>)}</ul>)}
+        </div>
+      </SidePanel>
     </>}
   </section>;
 }
