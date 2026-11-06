@@ -93,10 +93,27 @@ final class CommercialCatalogModelTest extends TestCase
         self::assertNull($quote->monthlyAmount());
         self::assertNull($quote->annualAmount());
 
+        $free = new PlanVersion(
+            new Plan('basic', 'Básico'),
+            1, 0, 0, false, [],
+            new DateTimeImmutable('2026-01-01T00:00:00Z'),
+        );
+        self::assertSame(0, $free->monthlyAmount());
+        self::assertSame(0, $free->annualAmount());
+        self::assertFalse($free->quoteRequired());
+
+        $undefined = new PlanVersion(
+            new Plan('business', 'Negocio'),
+            1, null, null, false, [],
+            new DateTimeImmutable('2026-01-01T00:00:00Z'),
+        );
+        self::assertNull($undefined->monthlyAmount());
+        self::assertFalse($undefined->quoteRequired());
+
         $this->expectException(DomainException::class);
         new PlanVersion(
             new Plan('basic', 'Básico'),
-            1, null, null, false, [],
+            2, 0, null, true, [],
             new DateTimeImmutable('2026-01-01T00:00:00Z'),
         );
     }
