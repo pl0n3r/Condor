@@ -112,12 +112,14 @@ final readonly class CommercialCatalogSeeder
 
             // En una base migrada se respeta exactamente la fecha de corte
             // registrada por Doctrine; una instalación nueva la fija en UTC.
-            if ($unpriced->effectiveUntil() === null) {
-                $unpriced->closeAt(new DateTimeImmutable('now', new DateTimeZone('UTC')));
+            $publishedAt = $unpriced->effectiveUntil();
+            if ($publishedAt === null) {
+                $publishedAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+                $unpriced->closeAt($publishedAt);
             }
             $priced = $this->version(
                 $plans[$key], 3, $monthly, $annual, $quoteRequired,
-                $unpriced->limits(), $unpriced->effectiveUntil(),
+                $unpriced->limits(), $publishedAt,
             );
             foreach ($unpriced->verticals() as $vertical) {
                 $priced->addVertical($vertical);
