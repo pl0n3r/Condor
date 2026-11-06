@@ -1,5 +1,5 @@
 import { OrderLifecyclePanel } from './OrderLifecyclePanel';
-import { MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import {
   orderCancelPath,
@@ -159,6 +159,7 @@ export function OrdersManagement({
   const latestRequest = useRef(0);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [exportFrom, setExportFrom] = useState('');
@@ -432,6 +433,7 @@ export function OrdersManagement({
   }
 
   const ready = state.status === 'ready' ? state.data : null;
+  const selectedOrder = ready?.orders.find((order) => order.id === selectedOrderId);
 
   return (
     <section
@@ -732,100 +734,79 @@ export function OrdersManagement({
       )}
 
       {ready && (
-        <div className="catalog-list">
-          {ready.orders.length === 0 ? (
-            <p className="muted" role="status">
-              No hay pedidos que coincidan con los filtros en esta sede.
-            </p>
-          ) : ready.orders.map((order) => (
-            <article className="catalog-card" key={order.id}>
-              <div className="section-heading">
-                <div>
-                  <span className="eyebrow">
-                    {order.order_status} · {order.fulfillment_status}
-                  </span>
-                  <h3>Pedido {order.id.slice(-8)}</h3>
-                  <p className="muted">
-                    {new Date(order.created_at).toLocaleString('es-CO')}
-                    {' · '}
-                    {money(order.total_amount_minor, order.currency)}
-                  </p>
-                </div>
-                {canView && (
-                  <a
-                    className="button button-secondary"
-                    href={`/api/orders/${encodeURIComponent(order.id)}/receipt`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Abrir comprobante del pedido ${order.id} en una pestaña nueva`}
-                  >
-                    Comprobante
-                  </a>
-                )}
-                {canUpdate && order.order_status === 'open'
-                  && order.fulfillment_status === 'reserved' && (
-                  <div className="catalog-actions">
-                    <button type="button" className="button button-secondary" disabled={busy}
-                      onClick={() => void transition(orderCancelPath(branchId, order.id),
-                        'Pedido cancelado y reserva liberada.')}>Cancelar</button>
-                    <button type="button" className="button" disabled={busy}
-                      onClick={() => void transition(orderConsumePath(branchId, order.id),
-                        'Inventario consumido.')}>Consumir inventario</button>
-                  </div>
-                )}
-              </div>
-
-              <div className="catalog-variant-list">
-                {order.lines.map((line) => {
-                  const variant = ready.variants.find(
-                    (candidate) => candidate.id === line.variant_id,
-                  );
-                  return (
-                    <div className="catalog-variant-row" key={line.id}>
-                      <div>
-                        <strong>
-                          {variant?.product_name ?? 'Producto'}
-                          {' · '}
-                          {variant?.sku ?? line.variant_id}
-                        </strong>
-                        <span className="muted">
-                          {line.quantity} ×{' '}
-                          {money(
-                            line.effective_amount_minor,
-                            line.currency,
-                          )}
-                          {' · reserva '}
-                          {line.reservation_status ?? 'sin reserva'}
-                        </span>
-                      </div>
-                      <strong>
-                        {money(line.line_total_minor, line.currency)}
-                      </strong>
-                    </div>
-                  );
-                })}
-              </div>
-              <button type="button" className="button button-secondary"
-                aria-expanded={expandedOrderId === order.id}
-                aria-controls={'order-lifecycle-' + order.id}
-                onClick={() => setExpandedOrderId((current) => current === order.id ? null : order.id)}>
-                {expandedOrderId === order.id ? 'Ocultar ciclo del pedido' : 'Ver ciclo del pedido'}
-              </button>
-              {expandedOrderId === order.id && (
-              <OrderLifecyclePanel
-                branchId={branchId}
-                order={order}
-                csrfToken={csrfToken}
-                canUpdate={canUpdate}
-                cancelPath={orderCancelPath(branchId, order.id)}
-                consumePath={orderConsumePath(branchId, order.id)}
-                onChanged={loadOrders}
-              />
-              )}
-            </article>
-          ))}
-        </div>
+        <Card title="Pedidos de la sede">
+          <DataTable caption="Pedidos registrados" rows={ready.orders} rowKey={(order) => order.id}
+            onOpen={(order) => { setSelectedOrderId(order.id); setExpandedOrderId(null); }}
+            empty={<p role="status">No hay pedidos que coincidan con los filtros en esta sede.</p>}
+            columns={[
+              { key: 'id', header: 'Pedido', render: (order) => 'Pedido ' + order.id.slice(-8) },
+              { key: 'customer', header: 'Cliente', render: (order) =>
+                ready.customers.find((customer) => customer.id === order.customer_id)?.name ?? 'Sin cliente' },
+              { key: 'date', header: 'Fecha', render: (order) =>
+                new Date(order.created_at).toLocaleString('es-CO') },
+              { key: 'status', header: 'Estado', render: (order) =>
+                <StatusPill tone={order.order_status === 'cancelled' ? 'danger' : 'info'}>
+                  {order.order_status} · {order.fulfillment_status}
+                </StatusPill> },
+              { key: 'total', header: 'Total', align: 'right', render: (order) =>
+                money(order.total_amount_minor, order.currency) },
+            ]} />
+        </Card>
       )}
+      <SidePanel open={Boolean(ready && selectedOrder)} title={selectedOrder
+        ? 'Pedido ' + selectedOrder.id.slice(-8) : 'Detalle de pedido'}
+        onClose={() => { setSelectedOrderId(null); setExpandedOrderId(null); }}>
+        {ready && selectedOrder && (
+          <>
+            <p className="muted">{new Date(selectedOrder.created_at).toLocaleString('es-CO')}</p>
+            <p><StatusPill tone={selectedOrder.order_status === 'cancelled' ? 'danger' : 'info'}>
+              {selectedOrder.order_status} · {selectedOrder.fulfillment_status}
+            </StatusPill></p>
+            <strong>{money(selectedOrder.total_amount_minor, selectedOrder.currency)}</strong>
+            <DataTable caption="Líneas del pedido" rows={selectedOrder.lines}
+              rowKey={(line) => line.id} empty={<p>Sin líneas registradas.</p>}
+              columns={[
+                { key: 'variant', header: 'Producto', render: (line) => {
+                  const variant = ready.variants.find((candidate) => candidate.id === line.variant_id);
+                  return (variant?.product_name ?? 'Producto') + ' · ' + (variant?.sku ?? line.variant_id);
+                } },
+                { key: 'quantity', header: 'Unidades', render: (line) => line.quantity, align: 'right' },
+                { key: 'total', header: 'Importe', render: (line) =>
+                  money(line.line_total_minor, line.currency), align: 'right' },
+              ]} />
+            <div className="catalog-actions">
+              {canView && <a className="button button-secondary"
+                href={`/api/orders/${encodeURIComponent(selectedOrder.id)}/receipt`}
+                target="_blank" rel="noopener noreferrer"
+                aria-label={`Abrir comprobante del pedido ${selectedOrder.id} en una pestaña nueva`}>
+                Comprobante
+              </a>}
+              {canUpdate && selectedOrder.order_status === 'open'
+                && selectedOrder.fulfillment_status === 'reserved' && <>
+                  <button type="button" className="button button-secondary" disabled={busy}
+                    onClick={() => void transition(orderCancelPath(branchId, selectedOrder.id),
+                      'Pedido cancelado y reserva liberada.')}>Cancelar</button>
+                  <button type="button" className="button" disabled={busy}
+                    onClick={() => void transition(orderConsumePath(branchId, selectedOrder.id),
+                      'Inventario consumido.')}>Consumir inventario</button>
+                </>}
+            </div>
+            <button type="button" className="button button-secondary"
+              aria-expanded={expandedOrderId === selectedOrder.id}
+              aria-controls={'order-lifecycle-' + selectedOrder.id}
+              onClick={() => setExpandedOrderId((current) => current === selectedOrder.id ? null : selectedOrder.id)}>
+              {expandedOrderId === selectedOrder.id ? 'Ocultar ciclo del pedido' : 'Ver ciclo del pedido'}
+            </button>
+            {expandedOrderId === selectedOrder.id && (
+              <OrderLifecyclePanel branchId={branchId} order={selectedOrder}
+                csrfToken={csrfToken} canUpdate={canUpdate}
+                cancelPath={orderCancelPath(branchId, selectedOrder.id)}
+                consumePath={orderConsumePath(branchId, selectedOrder.id)}
+                onChanged={loadOrders} />
+            )}
+          </>
+        )}
+      </SidePanel>
 
       {ready && (
         <nav className="catalog-actions" aria-label="Paginación de pedidos">
