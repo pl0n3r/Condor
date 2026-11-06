@@ -166,8 +166,13 @@ final class ExternalInputPolicy
         }
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
             $lower = strtolower($ip);
-            return !str_contains($lower, '.') && !str_contains($lower, '::ffff:')
-                && !str_starts_with($lower, '2002:') && !str_starts_with($lower, '2001:0:');
+            $packed = inet_pton($ip);
+            $head = $packed === false ? '' : bin2hex(substr($packed, 0, 4));
+            return $packed !== false && (str_starts_with($head, '2') || str_starts_with($head, '3'))
+                && $head !== '20010db8' && !str_starts_with($head, '2001000')
+                && !str_starts_with($head, '2001001') && !str_starts_with($head, '2001002')
+                && !str_starts_with($head, '2002')
+                && !str_contains($lower, '.') && !str_contains($lower, '::ffff:');
         }
         $value = ip2long($ip);
         if ($value === false) {
