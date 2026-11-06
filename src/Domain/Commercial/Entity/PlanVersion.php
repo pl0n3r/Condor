@@ -44,6 +44,10 @@ final class PlanVersion
     #[ORM\Column(type: 'json')]
     private array $limits;
 
+    /** @var array<string,mixed>|null */
+    #[ORM\Column(name: 'price_options', type: 'json', nullable: true)]
+    private ?array $priceOptions;
+
     #[ORM\Column(name: 'effective_from', type: 'datetime_immutable')]
     private DateTimeImmutable $effectiveFrom;
 
@@ -73,6 +77,7 @@ final class PlanVersion
 
     /**
      * @param array<array-key, mixed> $limits
+     * @param array<string,mixed> $priceOptions
      */
     public function __construct(
         Plan $plan,
@@ -84,6 +89,7 @@ final class PlanVersion
         DateTimeImmutable $effectiveFrom,
         ?DateTimeImmutable $effectiveUntil = null,
         string $currency = 'COP',
+        array $priceOptions = [],
     ) {
         if ($version < 1) {
             throw new DomainException('La versión comercial debe ser positiva.');
@@ -99,11 +105,10 @@ final class PlanVersion
                 throw new DomainException('Una versión cotizable no define precio.');
             }
         } elseif (
-            $monthlyAmount === null
-            || $monthlyAmount < 1
-            || ($annualAmount !== null && $annualAmount < 1)
+            ($monthlyAmount !== null && $monthlyAmount < 0)
+            || ($annualAmount !== null && $annualAmount < 0)
         ) {
-            throw new DomainException('El precio mensual debe ser positivo.');
+            throw new DomainException('Los importes comerciales no pueden ser negativos.');
         }
 
         if ($effectiveUntil !== null && $effectiveUntil <= $effectiveFrom) {
@@ -120,6 +125,7 @@ final class PlanVersion
         $this->effectiveFrom = $effectiveFrom;
         $this->effectiveUntil = $effectiveUntil;
         $this->currency = $currency;
+        $this->priceOptions = $priceOptions === [] ? null : $priceOptions;
         $this->verticals = new ArrayCollection();
         $this->capabilities = new ArrayCollection();
         $this->addOns = new ArrayCollection();
@@ -136,6 +142,16 @@ final class PlanVersion
     public function limits(): array { return $this->limits; }
     public function effectiveFrom(): DateTimeImmutable { return $this->effectiveFrom; }
     public function effectiveUntil(): ?DateTimeImmutable { return $this->effectiveUntil; }
+    /** @return array<string,mixed> */
+    public function priceOptions(): array { return $this->priceOptions ?? []; }
+
+    public function reopenAfterCancellation(DateTimeImmutable $scheduledAt): void
+    {
+        if ($this->effectiveUntil === null || $this->effectiveUntil != $scheduledAt) {
+            throw new DomainException('No se puede reabrir una vigencia distinta.');
+        }
+        $this->effectiveUntil = null;
+    }
 
     public function closeAt(DateTimeImmutable $at): void
     {

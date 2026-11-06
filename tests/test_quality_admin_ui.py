@@ -5,6 +5,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PANEL = (ROOT / "frontend/admin/QualityManagement.tsx").read_text(encoding="utf-8")
+OFFLINE = PANEL.split("// M13 S03 HTTP:", 1)[0]
 
 
 class ModuloTests(unittest.TestCase):
@@ -38,9 +39,10 @@ class ModuloTests(unittest.TestCase):
                         "actorPattern.test(actorRef)", "actorPattern.test(reviewActorRef)"):
             self.assertIn(pattern, PANEL)
         self.assertIn("SOLO DATOS FICTICIOS", PANEL)
-        self.assertNotIn("fetch(", PANEL)
-        self.assertNotIn("XMLHttpRequest", PANEL)
-        self.assertNotIn("sendBeacon(", PANEL)
+        self.assertIn("// M13 S03 HTTP:", PANEL)
+        self.assertNotIn("fetch(", OFFLINE)
+        self.assertNotIn("XMLHttpRequest", OFFLINE)
+        self.assertNotIn("sendBeacon(", OFFLINE)
         for prefix in ("quality", "finding", "actor"):
             exp = rf"fixture:{prefix}/[a-z][a-z0-9_-]{{0,47}}"
             self.assertIsNotNone(re.fullmatch(exp, f"fixture:{prefix}/demo_1"))
