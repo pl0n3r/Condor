@@ -1,3 +1,4 @@
+import { GestM14ReviewIncident } from './GestM14ReviewIncident';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   membershipRolePath,
@@ -293,7 +294,15 @@ export function AccessManagement({
       {canSeeRoles && (
         <div className="access-layout">
           <div>
-            <h3>Roles activos</h3>
+            {import.meta.env.DEV ? (
+              <>
+                <h3>Roles activos</h3>
+                <GestM14ReviewIncident branchId={branchId}
+                  csrfToken={csrfToken} canWrite={can('roles.update')} />
+              </>
+            ) : (
+              <h3>Roles activos</h3>
+            )}
             <div className="role-list">
               {roles.map((role) => (
                 <article className="role-card" key={role.id}>
