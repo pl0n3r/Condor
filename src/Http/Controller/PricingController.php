@@ -556,10 +556,7 @@ final class PricingController extends AbstractController
             static fn (PriceList $list): array => self::priceListPayload(
                 $list,
             ),
-            array_filter(
-                $lists,
-                static fn (mixed $value): bool => $value instanceof PriceList,
-            ),
+            $lists,
         ));
     }
 
@@ -582,9 +579,8 @@ final class PricingController extends AbstractController
             ],
             array_filter(
                 $variants,
-                static fn (mixed $value): bool => (
-                    $value instanceof ProductVariant
-                    && $value->product()->isActive()
+                static fn (ProductVariant $value): bool => (
+                    $value->product()->isActive()
                 ),
             ),
         ));
@@ -603,9 +599,8 @@ final class PricingController extends AbstractController
             ),
             array_filter(
                 $prices,
-                static fn (mixed $value): bool => (
-                    $value instanceof VariantPrice
-                    && $value->priceList()->isActive()
+                static fn (VariantPrice $value): bool => (
+                    $value->priceList()->isActive()
                     && $value->variant()->isActive()
                     && $value->variant()->product()->isActive()
                 ),
@@ -624,12 +619,11 @@ final class PricingController extends AbstractController
             static fn (PriceRule $rule): array => self::rulePayload($rule),
             array_filter(
                 $rules,
-                static fn (mixed $value): bool => (
-                    $value instanceof PriceRule
-                    && $value->priceList()->isActive()
+                static fn (PriceRule $value): bool => (
+                    $value->priceList()->isActive()
                     && (
                         $value->commercialCategory() === null
-                        || $value->commercialCategory()?->isActive()
+                        || $value->commercialCategory()->isActive()
                     )
                 ),
             ),
