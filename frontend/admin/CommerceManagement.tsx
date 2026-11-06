@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { AdminCsvImport } from './CatalogManagement';
+import { MetricStrip, PageHeader, SidePanel, Toolbar } from './ui/Kit';
 import {
   categoryPriceListPath,
   commercialCategoriesPath,
@@ -163,6 +164,7 @@ export function CommerceManagement({
   const canDeletePricing = can('pricing.delete');
 
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+  const [editor, setEditor] = useState<'category' | 'customer' | 'list' | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchSegment, setSearchSegment] = useState<CustomerSegment>('all');
   const [searchCategoryId, setSearchCategoryId] = useState('');
@@ -559,16 +561,21 @@ export function CommerceManagement({
       className="catalog-panel"
       aria-labelledby="commerce-title"
     >
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">Ventas</span>
-          <h2 id="commerce-title">Comercial</h2>
-          <p className="muted">
-            Clientes, categorías y precios reutilizables por los canales
-            de venta. Los pedidos reutilizan este contexto y conservan snapshots históricos.
-          </p>
-        </div>
-      </div>
+      <PageHeader title="Comercial"
+        description="Clientes, categorías y precios reutilizables por los canales de venta. Los pedidos reutilizan este contexto y conservan snapshots históricos."
+        actions={<>
+          {canCreateCustomers && <button type="button" className="button"
+            onClick={() => { setCustomerDraft(emptyCustomer); setEditor('customer'); }}>Nuevo cliente</button>}
+          {canCreateCustomers && <button type="button" className="button button-secondary"
+            onClick={() => { setCategoryDraft(emptyCategory); setEditor('category'); }}>Nueva categoría</button>}
+          {canCreatePricing && <button type="button" className="button button-secondary"
+            onClick={() => { setListDraft(emptyList); setEditor('list'); }}>Nueva lista</button>}
+        </>} />
+      {ready && <MetricStrip label="Resumen comercial" items={[
+        { label: 'Clientes', value: customers?.customers.length ?? 0 },
+        { label: 'Categorías', value: customers?.categories.length ?? 0 },
+        { label: 'Listas de precios', value: pricing?.price_lists.length ?? 0 },
+      ]} />}
 
       {notice && (
         <output
@@ -620,11 +627,9 @@ export function CommerceManagement({
               </p>
             </div>
 
-            {(canCreateCustomers || categoryDraft.id) && (
-              <form
-                className="catalog-editor"
-                onSubmit={saveCategory}
-              >
+            {(editor === 'category' || Boolean(categoryDraft.id)) && (
+              <SidePanel open={editor === 'category' || Boolean(categoryDraft.id)} title={categoryDraft.id ? 'Editar categoría' : 'Crear categoría'} onClose={() => { setEditor(null); setCategoryDraft(emptyCategory); }}>
+              <form className="catalog-editor" onSubmit={saveCategory}>
                 <div className="catalog-form-grid">
                   <label className="field">
                     <span>Nombre de categoría</span>
@@ -667,6 +672,7 @@ export function CommerceManagement({
                   )}
                 </div>
               </form>
+              </SidePanel>
             )}
 
             <div className="catalog-variant-list">
@@ -813,7 +819,8 @@ export function CommerceManagement({
             )}
 
 
-            {(canCreateCustomers || customerDraft.id) && (
+            {(editor === 'customer' || Boolean(customerDraft.id)) && (
+              <SidePanel open={editor === 'customer' || Boolean(customerDraft.id)} title={customerDraft.id ? 'Editar cliente' : 'Crear cliente'} onClose={() => { setEditor(null); setCustomerDraft(emptyCustomer); }}>
               <form className="catalog-editor" onSubmit={saveCustomer}>
                 <div className="catalog-form-grid">
                   <label className="field">
@@ -896,6 +903,7 @@ export function CommerceManagement({
                   )}
                 </div>
               </form>
+              </SidePanel>
             )}
 
             {visibleCustomers.length === 0 && searchResult.status !== 'error' && searchResult.status !== 'loading' ? (
@@ -1058,7 +1066,8 @@ export function CommerceManagement({
               </p>
             </div>
 
-            {(canCreatePricing || listDraft.id) && (
+            {(editor === 'list' || Boolean(listDraft.id)) && (
+              <SidePanel open={editor === 'list' || Boolean(listDraft.id)} title={listDraft.id ? 'Editar lista' : 'Crear lista'} onClose={() => { setEditor(null); setListDraft(emptyList); }}>
               <form className="catalog-editor" onSubmit={saveList}>
                 <div className="catalog-form-grid">
                   <label className="field">
@@ -1102,6 +1111,7 @@ export function CommerceManagement({
                   )}
                 </div>
               </form>
+              </SidePanel>
             )}
 
             <div className="catalog-variant-list">
