@@ -1,5 +1,7 @@
+import json
 import os
 import pathlib
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -8,6 +10,7 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "post-deploy.sh"
+STATUS_ENDPOINT = REPO_ROOT / "public" / "post-deploy-status.php"
 
 
 class PostDeployStageTest(unittest.TestCase):
@@ -84,13 +87,24 @@ class PostDeployStageTest(unittest.TestCase):
                     exit 1
                     ;;
                   *"doctrine:migrations:migrate"*"--dry-run"*)
+                    if [ "${FAKE_DRYRUN_HANG:-0}" = "1" ]; then
+                      while :; do sleep 1; done
+                    fi
+                    if [ "${FAKE_DRYRUN_FAILURE:-0}" = "1" ]; then
+                      printf '%s\n' 'sandbox-private-error-marker' >&2
+                      exit 23
+                    fi
                     sql_file=""
                     for arg in "$@"; do
                       case "$arg" in
                         --write-sql=*) sql_file="${arg#--write-sql=}" ;;
                       esac
                     done
-                    printf '%s\n' "${FAKE_MIGRATION_SQL:-CREATE TABLE safe_table (id INT);}" > "$sql_file"
+                    if [ "${FAKE_DRYRUN_EMPTY_SQL:-0}" = "1" ]; then
+                      : > "$sql_file"
+                    else
+                      printf '%s\n' "${FAKE_MIGRATION_SQL:-CREATE TABLE safe_table (id INT);}" > "$sql_file"
+                    fi
                     exit 0
                     ;;
                   *"doctrine:migrations:migrate"*)
@@ -128,6 +142,9 @@ class PostDeployStageTest(unittest.TestCase):
         migration_sql="CREATE TABLE safe_table (id INT);",
         postcheck_hang=False,
         migration_failure=False,
+        dryrun_failure=False,
+        dryrun_hang=False,
+        dryrun_empty_sql=False,
         backup_failure=False,
         backup_pdo_failure=False,
         backup_pdo_bootstrap_failure=False,
@@ -148,6 +165,9 @@ class PostDeployStageTest(unittest.TestCase):
         env["FAKE_MIGRATION_SQL"] = migration_sql
         env["FAKE_POSTCHECK_HANG"] = "1" if postcheck_hang else "0"
         env["FAKE_MIGRATION_FAILURE"] = "1" if migration_failure else "0"
+        env["FAKE_DRYRUN_FAILURE"] = "1" if dryrun_failure else "0"
+        env["FAKE_DRYRUN_HANG"] = "1" if dryrun_hang else "0"
+        env["FAKE_DRYRUN_EMPTY_SQL"] = "1" if dryrun_empty_sql else "0"
         env["FAKE_BACKUP_FAILURE"] = "1" if backup_failure else "0"
         env["FAKE_BACKUP_PDO_FAILURE"] = "1" if backup_pdo_failure else "0"
         env["FAKE_BACKUP_PDO_BOOTSTRAP_FAILURE"] = (
@@ -176,6 +196,131 @@ class PostDeployStageTest(unittest.TestCase):
         calls_path = root / "php-calls.log"
         calls = calls_path.read_text(encoding="utf-8") if calls_path.exists() else ""
         return result, calls, root
+
+
+    def test_dry_run_failures_emit_finite_public_codes_without_backup(self):
+        """Cinco causas exactas, sin comprometer la guarda D-054 ni filtrar logs."""
+        cases = (
+            ("timeout", {"dryrun_hang": True}, "dry_run_timeout", 124),
+            ("cli", {"dryrun_failure": True}, "dry_run_command_failure", 23),
+            ("missing", {"dryrun_empty_sql": True}, "dry_run_sql_missing", 4),
+            (
+                "destructive",
+                {"migration_sql": "DROP TABLE condor_customer;"},
+                "dry_run_sql_destructive",
+                2,
+            ),
+            (
+                "unapproved",
+                {"migration_sql": "GRANT ALL ON *.* TO 'fake'@'%';"},
+                "dry_run_sql_unapproved",
+                3,
+            ),
+        )
+        for label, kwargs, reason, subcode in cases:
+            with self.subTest(case=label):
+                result, calls, root = self.run_script("construction", **kwargs)
+                self.assertEqual(2, result.returncode, result.stderr)
+                status = json.loads(
+                    (root / "var/runtime/post-deploy-status.json").read_text(
+                        encoding="utf-8",
+                    )
+                )
+                self.assertEqual("dry-run", status["phase"])
+                self.assertEqual("failure", status["result"])
+                self.assertEqual(2, status["code"])
+                self.assertEqual(reason, status["reason"])
+                self.assertEqual(subcode, status["subcode"])
+                self.assertEqual("unknown", status["backup_client"])
+                self.assertIn("--dry-run", calls)
+                self.assertNotIn("backup", calls.splitlines())
+                self.assertFalse((root / "backup-created").exists())
+                self.assertFalse((root / "migrated").exists())
+                self.assertNotIn("app:commercial:seed", calls)
+                self.assertNotIn("cache:clear", calls)
+                self.assertNotIn("cache:warmup", calls)
+                self.assertNotIn("sandbox-private-error-marker", json.dumps(status))
+                self.assertNotIn("GRANT ALL", json.dumps(status))
+                self.assertNotIn("DROP TABLE", json.dumps(status))
+
+    def test_comment_only_sql_reports_missing_without_executing_migration(self):
+        result, calls, root = self.run_script(
+            "construction",
+            migration_sql="-- only a SQL comment, no statement",
+        )
+        self.assertEqual(2, result.returncode, result.stderr)
+        status = json.loads(
+            (root / "var/runtime/post-deploy-status.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("dry_run_sql_missing", status["reason"])
+        self.assertEqual(4, status["subcode"])
+        self.assertNotIn("backup", calls.splitlines())
+        self.assertFalse((root / "migrated").exists())
+
+    @unittest.skipUnless(shutil.which("php"), "PHP CLI no disponible")
+    def test_public_endpoint_allowlists_only_five_dry_run_reasons(self):
+        """Contrato público jamás serializa SQL, stderr ni campos adicionales."""
+        temp, root, _ = self.sandbox()
+        self.addCleanup(temp.cleanup)
+        (root / "public").mkdir()
+        (root / "config").mkdir()
+        (root / "public" / "post-deploy-status.php").write_text(
+            STATUS_ENDPOINT.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+        (root / "config" / "version.php").write_text(
+            "<?php return ['version' => '0.1.198'];", encoding="utf-8"
+        )
+        path = root / "var/runtime/post-deploy-status.json"
+        path.parent.mkdir(parents=True)
+        all_reasons = (
+            "dry_run_timeout",
+            "dry_run_command_failure",
+            "dry_run_sql_missing",
+            "dry_run_sql_destructive",
+            "dry_run_sql_unapproved",
+        )
+        for reason in (*all_reasons, "private-sql-and-credentials"):
+            with self.subTest(reason=reason):
+                payload = {
+                    "version": "0.1.198",
+                    "phase": "dry-run",
+                    "result": "failure",
+                    "code": 2,
+                    "reason": reason,
+                    "subcode": 23,
+                    "backup_client": "unknown",
+                    "updated_at": "2026-11-06T16:00:05Z",
+                    "private_log": "sandbox-private-error-marker",
+                }
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                result = subprocess.run(
+                    ["php", str(root / "public/post-deploy-status.php")],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+                self.assertEqual(0, result.returncode, result.stderr)
+                exposed = json.loads(result.stdout)["post_deploy"]
+                self.assertEqual(
+                    reason if reason in all_reasons else "unknown",
+                    exposed["reason"],
+                )
+                self.assertEqual(
+                    "dry-run" if reason in all_reasons else "missing",
+                    exposed["phase"],
+                )
+                self.assertEqual(
+                    {
+                        "version", "phase", "result", "code", "reason",
+                        "subcode", "backup_client", "updated_at",
+                    },
+                    set(exposed),
+                )
+                self.assertNotIn("sandbox-private-error-marker", result.stdout)
+                self.assertNotIn("private_log", result.stdout)
+                self.assertNotIn("private-sql-and-credentials", result.stdout)
 
     def test_construction_reconciles_pending_schema_before_cache(self):
         """Construction valida SQL, migra y solo después regenera caché."""
