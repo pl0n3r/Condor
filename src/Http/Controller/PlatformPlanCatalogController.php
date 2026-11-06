@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Commercial\CommercialCatalogReader;
+use App\Application\Commercial\PlanPriceAdminService;
 use App\Domain\Audit\Entity\PlatformAuditEvent;
 use App\Domain\Commercial\Entity\Capability;
 use App\Domain\Commercial\Entity\Plan;
@@ -23,7 +24,7 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
-/** Owner-only plan configuration; does not establish prices or charge anyone. */
+/** Owner-only plan configuration; never charges or invoices anyone. */
 final class PlatformPlanCatalogController extends PlatformOwnerApiController
 {
     private const CSRF_ID = 'platform_plan_catalog_management';
@@ -33,6 +34,7 @@ final class PlatformPlanCatalogController extends PlatformOwnerApiController
         private readonly PlanVersionTimeline $timeline,
         private readonly CommercialCatalogReader $catalog,
         private readonly CsrfTokenManagerInterface $csrf,
+        private readonly PlanPriceAdminService $prices,
     ) {
     }
 
@@ -47,7 +49,7 @@ final class PlatformPlanCatalogController extends PlatformOwnerApiController
             . '<meta name="viewport" content="width=device-width, initial-scale=1">'
             . '<title>Catálogo de planes — Condor</title></head><body>'
             . '<main><h1>Catálogo de planes</h1>'
-            . '<p>Los precios no se definen aquí. Solo el dueño decide tarifas y cobros en live.</p>';
+            . '<p>Tarifas configurables únicamente por el propietario; configurar no activa pagos.</p>';
 
         if ($plans === []) {
             $html .= '<p>No hay planes vigentes para editar.</p>';
@@ -59,7 +61,10 @@ final class PlatformPlanCatalogController extends PlatformOwnerApiController
             $capabilities = self::escape(implode(', ', $plan['capabilities']));
             $action = '/adminpl0n3r/planes/' . rawurlencode($plan['key']);
             $html .= '<section><h2>' . $name . '</h2>'
-                . '<p>Tarifa: sin definir para nuevas versiones. Versión ' . (int) $plan['version'] . '.</p>'
+                . '<p>Versión ' . (int) $plan['version'] . ': mensual '
+                . self::escape($plan['monthly_amount'] === null ? 'Sin tarifa' : (string) $plan['monthly_amount'])
+                . ', anual ' . self::escape($plan['annual_amount'] === null ? 'Sin tarifa' : (string) $plan['annual_amount'])
+                . ($plan['quote_required'] ? ' (Cotizar)' : '') . '.</p>'
                 . '<form method="post" action="' . self::escape($action) . '">'
                 . '<input type="hidden" name="_csrf_token" value="' . self::escape($token) . '">'
                 . '<input type="hidden" name="expected_version" value="' . (int) $plan['version'] . '">'
@@ -67,7 +72,16 @@ final class PlatformPlanCatalogController extends PlatformOwnerApiController
                 . '<label>Límites (objeto JSON) <textarea name="limits" required>' . $limits . '</textarea></label>'
                 . '<label>Funcionalidades (claves separadas por coma)'
                 . '<input name="capabilities" value="' . $capabilities . '"></label>'
-                . '<button type="submit">Guardar cambios de ' . $key . '</button></form></section>';
+                . '<button type="submit">Guardar cambios de ' . $key . '</button></form>'
+                . '<form method="post" action="' . self::escape($action . '/precios') . '">'
+                . '<input type="hidden" name="_csrf_token" value="' . self::escape($token) . '">'
+                . '<input type="hidden" name="expected_version" value="' . (int) $plan['version'] . '">'
+                . '<label>Moneda <input name="currency" maxlength="3" required value="' . self::escape($plan['currency']) . '"></label>'
+                . '<label>Mensual (unidades menores; vacío = sin tarifa) <input name="monthly_amount" inputmode="numeric" value="' . self::escape($plan['monthly_amount'] === null ? '' : (string) $plan['monthly_amount']) . '"></label>'
+                . '<label>Anual (unidades menores; vacío = sin tarifa) <input name="annual_amount" inputmode="numeric" value="' . self::escape($plan['annual_amount'] === null ? '' : (string) $plan['annual_amount']) . '"></label>'
+                . '<label>Cotizar <input type="checkbox" name="quote_required" value="1" ' . ($plan['quote_required'] ? 'checked' : '') . '></label>'
+                . '<label>Vigencia futura UTC (vacío = ahora) <input type="date" name="effective_from"></label>'
+                . '<button type="submit">Crear versión de tarifas</button></form></section>';
         }
         return new Response($html . '</main></body></html>', Response::HTTP_OK);
     }
@@ -126,6 +140,80 @@ final class PlatformPlanCatalogController extends PlatformOwnerApiController
         }
     }
 
+
+    #[Route('/adminpl0n3r/planes/{key}/precios', name: 'platform_plan_prices_form', methods: ['POST'])]
+    public function savePricesForm(string $key, Request $request): Response
+    {
+        $actor = $this->platformOwner();
+        $fields = array_keys($request->request->all());
+        $allowed = ['_csrf_token', 'annual_amount', 'currency', 'effective_from', 'expected_version', 'monthly_amount', 'quote_required'];
+        if (array_diff($fields, $allowed) !== []) {
+            throw new UnprocessableEntityHttpException('Campo de tarifa no permitido.');
+        }
+        if (!$this->isCsrfTokenValid(self::CSRF_ID, (string) $request->request->get('_csrf_token', ''))) {
+            throw new AccessDeniedHttpException('CSRF inválido.');
+        }
+        try {
+            $expectedRaw = (string) $request->request->get('expected_version', '');
+            if (!preg_match('/^[1-9][0-9]*$/D', $expectedRaw)) {
+                throw new DomainException('Versión esperada inválida.');
+            }
+            $quote = $request->request->get('quote_required', null);
+            if ($quote !== null && $quote !== '1') {
+                throw new DomainException('Valor de cotización inválido.');
+            }
+            $date = (string) $request->request->get('effective_from', '');
+            $this->prices->schedule($key, [
+                'expected_version' => (int) $expectedRaw,
+                'currency' => $request->request->get('currency'),
+                'monthly_amount' => self::formAmount((string) $request->request->get('monthly_amount', '')),
+                'annual_amount' => self::formAmount((string) $request->request->get('annual_amount', '')),
+                'quote_required' => $quote === '1',
+                'effective_from' => $date === '' ? null : $date,
+                'addons' => [],
+                'verticals' => [],
+            ], $actor->id());
+        } catch (DomainException $exception) {
+            throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
+        }
+        return $this->redirectToRoute('platform_plan_catalog_panel');
+    }
+
+    #[Route('/adminpl0n3r/api/plans/{key}/prices', name: 'platform_plan_prices_api', methods: ['POST'])]
+    public function savePricesApi(string $key, Request $request): JsonResponse
+    {
+        $actor = $this->platformOwner();
+        $this->requireManagementCsrf($request, self::CSRF_ID);
+        try {
+            return $this->json($this->prices->schedule($key, $this->jsonPayload($request), $actor->id()));
+        } catch (DomainException $exception) {
+            return $this->json(['error' => $exception->getMessage()], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        }
+    }
+
+    #[Route('/adminpl0n3r/api/plans/{key}/prices/cancel', name: 'platform_plan_prices_cancel', methods: ['POST'])]
+    public function cancelPricesApi(string $key, Request $request): JsonResponse
+    {
+        $actor = $this->platformOwner();
+        $this->requireManagementCsrf($request, self::CSRF_ID);
+        try {
+            return $this->json($this->prices->cancelScheduled($key, $this->jsonPayload($request), $actor->id()));
+        } catch (DomainException $exception) {
+            return $this->json(['error' => $exception->getMessage()], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        }
+    }
+
+    private static function formAmount(string $raw): ?int
+    {
+        if ($raw === '') {
+            return null;
+        }
+        if (preg_match('/^(0|[1-9][0-9]{0,9})$/D', $raw) !== 1) {
+            throw new DomainException('Importe entero inválido.');
+        }
+        return (int) $raw;
+    }
+
     /**
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
@@ -180,7 +268,10 @@ final class PlatformPlanCatalogController extends PlatformOwnerApiController
 
             $before = self::snapshot($plan, $current);
             $next = new PlanVersion(
-                $plan, $current->version() + 1, null, null, true, $payload['limits'], $now,
+                $plan, $current->version() + 1,
+                $current->monthlyAmount(), $current->annualAmount(),
+                $current->quoteRequired(), $payload['limits'], $now,
+                null, $current->currency(), $current->priceOptions(),
             );
             foreach ($current->verticals() as $vertical) {
                 $next->addVertical($vertical);
