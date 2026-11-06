@@ -96,14 +96,14 @@ final class PlanesV3PreciosTest extends WebTestCase
         self::assertCount(4, $cards);
         foreach ($tariffs as $key => [$monthly, $annual]) {
             $card = $cards->reduce(
-                static fn ($node) => $node->attr('data-plan-key') === $key,
+                static fn ($node) => $node->getAttribute('data-plan-key') === $key,
             )->first();
             self::assertSame('3', $card->attr('data-plan-version'));
             self::assertStringContainsString(number_format($monthly, 0, ',', '.'), $card->text());
             self::assertStringContainsString(number_format($annual, 0, ',', '.'), $card->text());
         }
         $enterprise = $cards->reduce(
-            static fn ($node) => $node->attr('data-plan-key') === 'enterprise',
+            static fn ($node) => $node->getAttribute('data-plan-key') === 'enterprise',
         )->first();
         self::assertStringContainsString('Solicitar propuesta', $enterprise->text());
         self::assertStringNotContainsString('0 COP', $enterprise->text());
