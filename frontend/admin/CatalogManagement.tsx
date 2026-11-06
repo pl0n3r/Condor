@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { ServiceItemsPanel } from './ServiceItemsPanel';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 import {
   catalogProductPath,
   catalogProductsPath,
@@ -74,6 +75,8 @@ export function CatalogManagement({
     useState<VariantDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [search, setSearch] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
   const can = (permission: string) => permissions.includes(permission);
   const canView = can('catalog.view');
@@ -384,32 +387,22 @@ export function CatalogManagement({
   return (
     <section
       id="catalog"
-      className="catalog-panel"
-      aria-labelledby="catalog-title"
+      className="catalog-panel ui-page"
+      aria-label="Catálogo"
     >
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">Productos físicos</span>
-          <h2 id="catalog-title">Catálogo</h2>
-          <p className="muted">
-            Define productos, variantes y su política de backorder.
-            Las existencias se gestionan en la sección Inventario.
-          </p>
-        </div>
-        {canCreate && !productEditorOpen && (
-          <button
-            type="button"
-            className="button catalog-primary-action"
-            onClick={() => {
-              setProductDraft(emptyProductDraft);
-              setProductEditorOpen(true);
-              setNotice(null);
-            }}
-          >
-            Nuevo producto
-          </button>
-        )}
-      </div>
+      <PageHeader title="Catálogo"
+        description="Define productos, variantes y su política de backorder. Las existencias se gestionan en la sección Inventario."
+        actions={canCreate && <button type="button" className="button" onClick={() => {
+          setProductDraft(emptyProductDraft);
+          setProductEditorOpen(true);
+          setSelectedProductId(null);
+          setNotice(null);
+        }}>Nuevo producto</button>} />
+      {state.status === 'ready' && <MetricStrip label="Resumen de catálogo" items={[
+        { label: 'Productos físicos', value: state.products.length },
+        { label: 'Variantes activas', value: state.products.reduce((count, product) => count + product.variants.length, 0) },
+        { label: 'Con backorder', value: state.products.filter(product => product.allow_backorder).length },
+      ]} />}
 
       {notice && (
         <output
@@ -429,7 +422,8 @@ export function CatalogManagement({
           csrfToken={csrfToken} onCompleted={() => void loadCatalog()} />
       )}
 
-      {productEditorOpen && (
+      <SidePanel open={productEditorOpen} title={productDraft.id ? 'Editar producto' : 'Nuevo producto'}
+        onClose={() => { setProductEditorOpen(false); setProductDraft(emptyProductDraft); }}>
         <form className="catalog-editor" onSubmit={saveProduct}>
           <div className="section-heading compact">
             <div>
@@ -519,7 +513,7 @@ export function CatalogManagement({
             )}
           </button>
         </form>
-      )}
+      </SidePanel>
 
       {state.status === 'loading' && (
         <output className="catalog-state muted" aria-live="polite">
@@ -541,24 +535,34 @@ export function CatalogManagement({
         </div>
       )}
 
-      {state.status === 'ready' && state.products.length === 0 && (
-        <div className="catalog-state catalog-empty">
-          <strong>Aún no hay productos físicos.</strong>
-          <span className="muted">
-            Crea el primer producto para empezar a construir el catálogo
-            de esta empresa.
-          </span>
-          {!canCreate && (
-            <span className="muted">
-              Tu rol permite consultar, pero no crear productos.
-            </span>
-          )}
-        </div>
-      )}
-
-      {state.status === 'ready' && state.products.length > 0 && (
-        <div className="catalog-list">
-          {state.products.map((product) => (
+      {state.status === 'ready' && (
+        <Card title="Productos físicos">
+          <Toolbar trailing={<span className="ui-count">{state.products.length} productos</span>}>
+            <label className="ui-search"><span className="ui-sr-only">Buscar productos</span>
+              <input type="search" placeholder="Buscar nombre, slug o variante" value={search}
+                onChange={(event) => setSearch(event.target.value)} />
+            </label>
+          </Toolbar>
+          <DataTable caption="Catálogo de productos físicos"
+            rows={state.products.filter((product) =>
+              (product.name + ' ' + product.slug + ' ' + product.variants.map(variant => variant.sku).join(' '))
+                .toLocaleLowerCase('es-CO').includes(search.toLocaleLowerCase('es-CO')))}
+            rowKey={product => product.id} onOpen={product => setSelectedProductId(product.id)}
+            empty={<><strong>Sin productos</strong><span>{search
+              ? 'Prueba otro nombre, slug o SKU.'
+              : 'Aún no hay productos físicos. Crea el primero para empezar.'}</span></>}
+            columns={[
+              { key: 'name', header: 'Producto', render: product => <span className="ui-cell-main"><strong>{product.name}</strong><small>{product.slug}</small></span> },
+              { key: 'variants', header: 'Variantes', render: product => product.variants.length, align: 'right' },
+              { key: 'backorder', header: 'Backorder', render: product =>
+                <StatusPill tone={product.allow_backorder ? 'info' : 'neutral'}>
+                  {product.allow_backorder ? 'Permitido' : 'Desactivado'}
+                </StatusPill> },
+            ]} />
+          <SidePanel open={Boolean(selectedProductId)} title="Detalle de producto"
+            onClose={() => { setSelectedProductId(null); setVariantDraft(null); }}>
+            <div className="catalog-list">
+              {state.products.filter(product => product.id === selectedProductId).map((product) => (
             <article className="catalog-card" key={product.id}>
               <div className="catalog-card-heading">
                 <div>
@@ -753,7 +757,9 @@ export function CatalogManagement({
               )}
             </article>
           ))}
-        </div>
+            </div>
+          </SidePanel>
+        </Card>
       )}
       <ServiceItemsPanel
         branchId={branchId}
