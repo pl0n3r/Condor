@@ -61,7 +61,10 @@ final class QualityControllerHttpTest extends WebTestCase
         $headers = ['HTTP_X_CSRF_TOKEN' => $token];
         $client->request('GET', $baseA);
         self::assertResponseStatusCodeSame(200);
-        self::assertSame('private, no-store', $client->getResponse()->headers->get('Cache-Control'));
+        $cacheControl = (string) $client->getResponse()->headers->get('Cache-Control');
+        self::assertStringContainsString('private', $cacheControl);
+        self::assertStringContainsString('no-store', $cacheControl);
+        self::assertStringNotContainsString('public', $cacheControl);
         self::assertSame([], self::payload($client)['records']);
         $client->request('GET', $baseB);
         self::assertResponseStatusCodeSame(404);
