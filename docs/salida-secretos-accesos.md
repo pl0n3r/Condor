@@ -24,7 +24,7 @@ Inventario **sin valores** de configuración, credenciales y permisos de Condor 
 | Credenciales S3-compatible (preparación) | Almacenamiento offsite de respaldo cifrado | Cuenta de proveedor aún no provisionada y almacén seguro de recovery | DUEÑO / recuperación | Sustituir identidad de servicio de privilegio mínimo | Revocar cuenta/credenciales según retención aprobada |
 | Cuenta Hostinger y acceso SSH | Administración del hosting y despliegue | Consola Hostinger y SSH nominal con MFA | DUEÑO | Revisar accesos, MFA y llaves en cambios de operador | Eliminar usuario, llaves y sesiones al perder autorización |
 | Cuenta GitHub y administradores GitHub Actions | Control de repositorio, CI, Secrets, permisos | Configuración de GitHub, con MFA y mínimo privilegio | DUEÑO | Auditar colaboradores, permisos y tokens externos si existen | Retirar colaboradores y revocar tokens/permisos |
-| Cuenta Resend y Sentry | Administración de integraciones; Resend elegido sin cuenta aprovisionada | Consolas de proveedor con MFA y configuración posterior por `/adminpl0n3r` | DUEÑO | Rotar credenciales de servicio y revisar miembros | Desconectar integración y retirar miembros autorizados |
+| Cuenta de correo y Sentry | Administración de integraciones; Resend elegido sin cuenta aprovisionada | Consolas de proveedor con MFA y configuración posterior por `/adminpl0n3r` | DUEÑO | Rotar credenciales de servicio y revisar miembros | Desconectar integración y retirar miembros autorizados |
 
 ## Procedimiento propuesto (no ejecutar sin autorización)
 
@@ -43,7 +43,7 @@ Inventario **sin valores** de configuración, credenciales y permisos de Condor 
 
 ## Puertas y decisiones exclusivas del dueño
 
-- **PROVEEDOR ELEGIDO POR EL DUEÑO (#1725):** Resend, plan gratuito; cuenta, dominio verificado, clave mínima, custodia y activación continúan pendientes de acciones expresamente autorizadas. Sin contratación de plan de pago, gasto ni correo real.
+- **PENDIENTE DE DECISIÓN DEL DUEÑO (alta/activación de cuenta y gastos):** proveedor elegido: Resend, plan gratuito (#1725). La cuenta, el dominio verificado, la clave mínima, la custodia y la activación requieren acciones expresamente autorizadas; ninguna contratación de pago ni envío real se presume.
 - **PENDIENTE DE DECISIÓN DEL DUEÑO:** alta de Sentry, datos transmitidos y aprobación legal; no activar DSN.
 - **PENDIENTE DE DECISIÓN DEL DUEÑO:** Hostinger, usuarios SSH, permisos GitHub, DNS/TLS y asignación nominal de custodios; no realizar rotación ni revocación real.
 - **PENDIENTE DE DECISIÓN DEL DUEÑO:** recovery offsite, proveedor S3-compatible, costos y restore real; sin provisionamiento.
