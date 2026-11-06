@@ -71,10 +71,13 @@ async function failure(response: Response): Promise<'denied' | 'disabled' | 'err
 }
 
 function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Props) {
+  // The admin entrypoint already receives this server-generated session CSRF
+  // token as data-access-token on the same-origin root. Never persist or log it.
+  const sessionCsrf = csrfToken || document.getElementById('condor-admin-root')?.dataset.accessToken || '';
   const canView = permissions.includes('users.view') && ulid.test(tenantId)
     && ulid.test(companyId) && ulid.test(branchId);
-  const canCreate = canView && permissions.includes('users.create') && !!csrfToken;
-  const canUpdate = canView && permissions.includes('users.update') && !!csrfToken;
+  const canCreate = canView && permissions.includes('users.create') && !!sessionCsrf;
+  const canUpdate = canView && permissions.includes('users.update') && !!sessionCsrf;
   const [view, setView] = useState<View>({ status: 'loading', records: [] });
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState('');
@@ -122,14 +125,14 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
   }, []);
 
   async function submit(url: string, method: 'POST' | 'PATCH', body: object) {
-    if (!csrfToken || view.status !== 'ready' || saving || writer.current) return;
+    if (!sessionCsrf || view.status !== 'ready' || saving || writer.current) return;
     const request = new AbortController();
     writer.current = request;
     setSaving(true); setNotice('');
     try {
       const response = await fetch(url, { method, credentials: 'same-origin',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json',
-          'X-CSRF-Token': csrfToken }, body: JSON.stringify(body), signal: request.signal });
+          'X-CSRF-Token': sessionCsrf }, body: JSON.stringify(body), signal: request.signal });
       if (!mounted.current || request.signal.aborted) return;
       if (!response.ok) {
         const denied = await failure(response);
@@ -226,7 +229,7 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
           <button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar registro'}</button>
         </form>
       </section>}
-      {!csrfToken && (permissions.includes('users.create') || permissions.includes('users.update')) &&
+      {!sessionCsrf && (permissions.includes('users.create') || permissions.includes('users.update')) &&
         <output>Edición deshabilitada hasta recibir el token de sesión del panel administrativo.</output>}
     </div>}
     {notice && <output role="status" aria-live="polite">{notice}</output>}
