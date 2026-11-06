@@ -18,6 +18,7 @@ test.describe('Slice 2 — roles y permisos por sede', () => {
     await page.getByRole('button', { name: 'Ingresar' }).click();
 
     await expect(page).toHaveURL(/\/admin$/);
+    await page.goto('/admin#roles');
     await expect(
       page.getByRole('heading', { name: 'Roles y permisos' })
     ).toBeVisible();

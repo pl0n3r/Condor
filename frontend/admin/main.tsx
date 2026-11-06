@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { AdminApp } from './AdminApp';
 import { PlatformOwnerApp } from './PlatformOwnerApp';
 import './admin.css';
+import './admin-ui.css';
 
 const adminRoot = document.getElementById('condor-admin-root');
 const platformRoot = document.getElementById('condor-platform-root');

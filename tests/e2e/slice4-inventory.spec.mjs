@@ -28,6 +28,7 @@ test.describe('Slice 4 — inventario', () => {
     await page.getByRole('button', { name: 'Ingresar' }).click();
 
     await expect(page).toHaveURL(/\/admin$/);
+    await page.goto('/admin#catalog');
 
     const catalog = page.locator('#catalog');
     await catalog.getByRole('button', { name: 'Nuevo producto' }).click();
@@ -45,6 +46,7 @@ test.describe('Slice 4 — inventario', () => {
     await productCard.getByRole('button', { name: 'Crear variante' }).click();
     await expect(catalog.getByText('Variante creada.')).toBeVisible();
 
+    await page.goto('/admin#inventory');
     const inventory = page.locator('#inventory');
     await expect(
       inventory.getByRole('heading', { name: 'Inventario', exact: true })
@@ -177,11 +179,13 @@ test.describe('Slice 4 — inventario', () => {
     ).toBeVisible();
 
     await page.reload();
+    await page.goto('/admin#catalog');
     productCard = page.locator('#catalog').locator('.catalog-card').filter({
       has: page.getByRole('heading', { name: productName }),
     });
     await expect(productCard).toBeVisible();
 
+    await page.goto('/admin#inventory');
     const reloadedInventory = page.locator('#inventory');
     await expect(
       reloadedInventory.locator('.catalog-card')
