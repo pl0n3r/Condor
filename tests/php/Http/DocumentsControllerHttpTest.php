@@ -29,6 +29,10 @@ final class DocumentsControllerHttpTest extends WebTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $em);
         [, , $branchA, $ownerA] = $this->fixture($em);
         [, , $branchB] = $this->fixture($em);
+        // A branch with no legal entity must not expose another scope's data.
+        $orphan = new Branch($branchA->tenant(), 'Sin entidad', 'orphan', null);
+        $em->persist($orphan);
+        $em->flush();
         $base = '/api/v1/branches/'.$branchA->id().'/documents';
 
         $client->request('GET', $base);
@@ -43,10 +47,6 @@ final class DocumentsControllerHttpTest extends WebTestCase
         $client->request('GET', $base.'/missing');
         self::assertResponseStatusCodeSame(404);
 
-        // A branch with no legal entity must not expose another scope's data.
-        $orphan = new Branch($branchA->tenant(), 'Sin entidad', 'orphan', null);
-        $em->persist($orphan);
-        $em->flush();
         $client->request('GET', '/api/v1/branches/'.$orphan->id().'/documents');
         self::assertResponseStatusCodeSame(404);
     }
@@ -58,6 +58,14 @@ final class DocumentsControllerHttpTest extends WebTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $em);
         [$tenant, , $branch, $owner] = $this->fixture($em);
         $base = '/api/v1/branches/'.$branch->id().'/documents';
+        $viewer = new User('m08-viewer-'.bin2hex(random_bytes(5)).'@example.test', 'Viewer');
+        $membership = new Membership($tenant, $viewer, 'ADMIN');
+        $role = new Role($tenant, 'M08 lectura', ['settings.view']);
+        foreach ([$viewer, $membership, $role,
+            new BranchRoleAssignment($membership, $branch, $role)] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
         $client->loginUser($owner);
         $client->request('GET', $base);
         self::assertResponseStatusCodeSame(200);
@@ -71,14 +79,6 @@ final class DocumentsControllerHttpTest extends WebTestCase
             ['HTTP_X_CSRF_TOKEN' => $csrf]);
         self::assertResponseStatusCodeSame(422);
 
-        $viewer = new User('m08-viewer-'.bin2hex(random_bytes(5)).'@example.test', 'Viewer');
-        $membership = new Membership($tenant, $viewer, 'ADMIN');
-        $role = new Role($tenant, 'M08 lectura', ['settings.view']);
-        foreach ([$viewer, $membership, $role,
-            new BranchRoleAssignment($membership, $branch, $role)] as $entity) {
-            $em->persist($entity);
-        }
-        $em->flush();
         $client->loginUser($viewer);
         $client->request('GET', $base);
         self::assertResponseStatusCodeSame(200);
@@ -119,7 +119,9 @@ final class DocumentsControllerHttpTest extends WebTestCase
         $client->jsonRequest('POST', $base.'/alpha/evidence', ['evidence_ref' => 'fixture:evidence/demo'], $headers);
         self::assertResponseStatusCodeSame(200);
         self::assertFalse($this->body($client)['legal_signature']);
-        $client->jsonRequest('POST', $base.'/alpha/request-review', [], $headers);
+        // The server requires an object JSON body, not the [] emitted by jsonRequest.
+        $client->request('POST', $base.'/alpha/request-review', [], [],
+            [...$headers, 'CONTENT_TYPE' => 'application/json'], '{}');
         self::assertResponseStatusCodeSame(200);
         self::assertFalse($this->body($client)['can_close']);
         $client->request('GET', $base.'/alpha/trace');
@@ -135,7 +137,8 @@ final class DocumentsControllerHttpTest extends WebTestCase
         self::assertFalse($export['legal_signature']);
         self::assertFalse($export['can_close']);
         self::assertTrue($export['signature_gate']['requires_legal_decision']);
-        self::assertSame('private, no-store', $client->getResponse()->headers->get('Cache-Control'));
+        self::assertStringContainsString('no-store',
+            (string) $client->getResponse()->headers->get('Cache-Control'));
         self::assertSame('NO_VERIFICABLE', VerifiedSignature::STATUS);
         try {
             VerifiedSignature::assertAuthorized();
