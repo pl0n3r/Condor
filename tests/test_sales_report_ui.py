@@ -40,8 +40,17 @@ class UiVentasPorProductoTests(unittest.TestCase):
         self.assertIn("role=\"status\"", panel)
         self.assertIn("No hay ventas por producto", panel)
         self.assertIn("No hay ventas por mes", panel)
-        self.assertIn('scope="col"', panel)
-        self.assertIn('scope="row"', panel)
+        # El panel usa el DataTable compartido: validar semántica HTML en
+        # el componente REAL y su uso específico, no exigir etiquetas JSX
+        # antiguas que ya no viven en esta pantalla.
+        kit = (ROOT / "frontend/admin/ui/Kit.tsx").read_text(encoding="utf-8")
+        self.assertIn("from './ui/Kit'", panel)
+        self.assertIn('<th scope="col"', kit)
+        self.assertIn('<caption className="ui-sr-only">', kit)
+        self.assertIn('DataTable caption="Ventas agrupadas por producto y variante"', panel)
+        self.assertIn('DataTable caption="Ventas agrupadas por mes y moneda"', panel)
+        self.assertIn('rowKey={(row) => row.currency', panel)
+        self.assertIn('rowKey={(row) => row.month', panel)
         self.assertIn("localeCompare", panel)
         self.assertIn("Intl.NumberFormat('es-CO'", panel)
         self.assertIn("participation_bps / 100", panel)
