@@ -176,7 +176,7 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
       <p className="muted">Registros por empresa y sede, con autorización del servidor y trazabilidad de versiones.</p>
       <p role="note">Entorno de construcción: usar únicamente referencias inventadas. No ingresar información personal real.</p>
     </header>
-    {view.status === 'loading' && <p role="status">Cargando registros de talento humano…</p>}
+    {view.status === 'loading' && <output>Cargando registros de talento humano…</output>}
     {view.status === 'denied' && <p role="alert">Acceso denegado: no tienes autorización para estos registros.</p>}
     {view.status === 'disabled' && <p role="alert">Talento humano todavía no está habilitado en el servidor.</p>}
     {view.status === 'error' && <div role="alert"><p>No se pudo consultar talento humano.</p>
@@ -184,10 +184,10 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
     {view.status === 'ready' && <div className="catalog-grid">
       <section className="catalog-card" aria-labelledby="hr-list-title">
         <h3 id="hr-list-title">Registros laborales</h3>
-        <label>Buscar por referencia o cargo
+        <label><span>Buscar por referencia o cargo</span>
           <input value={search} maxLength={64} onChange={event => setSearch(event.target.value)} />
         </label>
-        {visible.length === 0 ? <p role="status">No hay registros para esta empresa y filtro.</p>
+        {visible.length === 0 ? <output>No hay registros para esta empresa y filtro.</output>
           : <ul>{visible.map(row => <li key={row.record_ref}>
             <button type="button" onClick={() => setSelected(row.record_ref)}>
               {row.record_ref} · {labels[row.kind]} · {row.state === 'BORRADOR' ? 'Borrador' : 'En revisión'}
@@ -227,7 +227,7 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
         </form>
       </section>}
       {!csrfToken && (permissions.includes('users.create') || permissions.includes('users.update')) &&
-        <p role="status">Edición deshabilitada hasta recibir el token de sesión del panel administrativo.</p>}
+        <output>Edición deshabilitada hasta recibir el token de sesión del panel administrativo.</output>}
     </div>}
     {notice && <output role="status" aria-live="polite">{notice}</output>}
   </section>;
@@ -236,5 +236,5 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
 /** The production surface stays closed until owner/go-live gates authorize it. */
 export function HumanResourcesManagement(props: Props) {
   if (!import.meta.env.DEV) return null;
-  return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId + '|' + props.permissions.slice().sort().join(',')} {...props} />;
+  return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId + '|' + props.permissions.slice().sort((a, b) => a.localeCompare(b)).join(',')} {...props} />;
 }
