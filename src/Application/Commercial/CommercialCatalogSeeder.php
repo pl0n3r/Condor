@@ -66,9 +66,9 @@ final readonly class CommercialCatalogSeeder
         $this->verticalCapabilities($verticals, $capabilities);
 
         $effectiveFrom = new DateTimeImmutable('2026-09-27T00:00:00Z', new DateTimeZone('UTC'));
-        // La semilla previa incluía cifras históricas utilizadas por los
-        // contratos de 2026-09. Conservar la historia, pero no mantener
-        // tarifas por defecto desde la decisión del dueño del 2026-10-30.
+        // V1 y V2 son historial contractual inmutable en importes; la v3
+        // restablece solo las tarifas confirmadas por el propietario.
+        // La vigencia real es el instante UTC de creación, nunca retroactiva.
         $withoutPricesFrom = new DateTimeImmutable('2026-10-30T00:00:00Z', new DateTimeZone('UTC'));
         $definitions = [
             'basic' => [79900, 799000, false, ['companies'=>1,'users'=>3,'locations'=>1]],
@@ -95,9 +95,8 @@ final readonly class CommercialCatalogSeeder
                 $historical->closeAt($withoutPricesFrom);
             }
 
-            // La versión actual no inventa tarifas, conserva los límites
-            // históricos y las relaciones de capacidades; un cambio del
-            // propietario crea versiones posteriores de forma auditada.
+            // V2 sigue existiendo sin importes entre 2026-10-30 y el corte
+            // real a v3. No cambiar sus precios, límites ni relaciones.
             $unpriced = $this->version(
                 $plans[$key], 2, null, null, true, $limits, $withoutPricesFrom,
             );
@@ -109,6 +108,25 @@ final readonly class CommercialCatalogSeeder
             }
             foreach ($historical->addOns() as $addOn) {
                 $unpriced->addAddOn($addOn);
+            }
+
+            // En una base migrada se respeta exactamente la fecha de corte
+            // registrada por Doctrine; una instalación nueva la fija en UTC.
+            if ($unpriced->effectiveUntil() === null) {
+                $unpriced->closeAt(new DateTimeImmutable('now', new DateTimeZone('UTC')));
+            }
+            $priced = $this->version(
+                $plans[$key], 3, $monthly, $annual, $quoteRequired,
+                $unpriced->limits(), $unpriced->effectiveUntil(),
+            );
+            foreach ($unpriced->verticals() as $vertical) {
+                $priced->addVertical($vertical);
+            }
+            foreach ($unpriced->capabilities() as $capability) {
+                $priced->addCapability($capability);
+            }
+            foreach ($unpriced->addOns() as $addOn) {
+                $priced->addAddOn($addOn);
             }
         }
 
@@ -159,12 +177,16 @@ final readonly class CommercialCatalogSeeder
             $version = $plan instanceof Plan
                 ? $versions->findOneBy(['plan' => $plan, 'version' => 1])
                 : null;
+            $priced = $plan instanceof Plan
+                ? $versions->findOneBy(['plan' => $plan, 'version' => 3])
+                : null;
             if (
                 !($plan instanceof Plan)
                 || !($version instanceof PlanVersion)
+                || !($priced instanceof PlanVersion)
             ) {
                 throw new RuntimeException(
-                    sprintf('Falta PlanVersion v1 para %s.', $key),
+                    sprintf('Falta PlanVersion v1/v3 para %s.', $key),
                 );
             }
         }
