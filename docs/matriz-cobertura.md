@@ -570,7 +570,11 @@ Auditoría de los 96 IDs con [veredictos trazables](contraste-cd_ops.md) y suite
 
 ## Seguimiento M01 #1567 (6-nov-2026)
 
-Verificación incremental **sin promoción de estado**: [PR backend #1672](https://github.com/pl0n3r/Condor/pull/1672) fusionado aporta registros M01 persistentes por tenant y razón social, con puerta `HR_REAL_DATA_ENABLED` apagada por defecto; [PR UI #1713](https://github.com/pl0n3r/Condor/pull/1713) sigue en revisión y no equivale a una integración E2E de los diez submódulos.
+Verificación incremental **sin promoción de estado**: [PR backend #1672](https://github.com/pl0n3r/Condor/pull/1672) y [PR UI #1713](https://github.com/pl0n3r/Condor/pull/1713) están **fusionados** (UI squash [`1b84a5837c19153e8052e262ca50b5896afde917`](https://github.com/pl0n3r/Condor/commit/1b84a5837c19153e8052e262ca50b5896afde917)). Se dispone de registros M01 persistentes por tenant y razón social, y una pantalla que consume la API protegida con sesión/CSRF y estados de consulta/carga/error/sin permiso. `HR_REAL_DATA_ENABLED` sigue apagado por defecto: solo datos inventados en construcción, nunca datos laborales reales.
+
+**Límite de aceptación #1567:** la integración genérica de registros no constituye un endpoint específico con persistencia, validación y denegación cross-tenant/empresa/sede para cada S02–S11, ni acredita sus diez recorridos E2E por rol. Las filas de la tabla permanecen `NO_VERIFICABLE` hasta disponer de código, prueba negativa exacta y PR fusionado por cada alcance, sin heredar los gates de #1713 como evidencia integral.
+
+**Evidencia técnica de alcance limitado:** [`src/Application/HumanResources/HumanResourceRecordService.php`](../src/Application/HumanResources/HumanResourceRecordService.php), [`src/Http/Controller/HumanResourcesController.php`](../src/Http/Controller/HumanResourcesController.php) y [`tests/test_human_resource_records.py`](../tests/test_human_resource_records.py) acreditan controles de registros genéricos (incluida denegación por empresa y CSRF); [`frontend/admin/HumanResourcesManagement.tsx`](../frontend/admin/HumanResourcesManagement.tsx) integra esa API. Estos artefactos no prueban persistencia/HTTP/E2E propios de cargos, áreas, sedes, organigrama, novedades, permisos, vacaciones, incapacidades, evaluaciones ni portal. Se requieren pruebas sintéticas específicas sin habilitar datos reales.
 
 | IDs | Estado conservado | Evidencia parcial | Aceptación pendiente |
 | --- | --- | --- | --- |
