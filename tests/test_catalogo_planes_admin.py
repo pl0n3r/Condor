@@ -51,7 +51,7 @@ class CatalogoPlanesAdminTests(unittest.TestCase):
             resolver,
         )
 
-    def test_seed_preserves_history_but_current_rates_are_empty(self) -> None:
+    def test_seed_preserves_unpriced_v2_and_approved_v3_rates(self) -> None:
         seeder = self.source(SEEDER)
         # Los contratos que consultan la fecha histórica conservan sus cifras
         # anteriores: una nueva decisión no puede falsificar el pasado.
@@ -65,6 +65,14 @@ class CatalogoPlanesAdminTests(unittest.TestCase):
         )
         self.assertIn("'version' => $number", seeder)
         self.assertIn("$historical->capabilities()", seeder)
+        self.assertIn("$unpriced->capabilities()", seeder)
+        self.assertIn("$unpriced->addOns()", seeder)
+        self.assertIn("$unpriced->closeAt($publishedAt)", seeder)
+        self.assertRegex(
+            seeder,
+            r"\$plans\[\$key\],\s*3,\s*\$monthly,\s*\$annual,\s*\$quoteRequired",
+        )
+        self.assertIn("PlanVersion v1/v3", seeder)
 
     def test_owner_csrf_conflict_and_invalid_input_fail_closed(self) -> None:
         controller = self.source(CONTROLLER)
