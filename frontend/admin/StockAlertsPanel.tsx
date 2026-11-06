@@ -338,7 +338,7 @@ export function StockAlertsPanel({ branchId, permissions, csrfToken }: Props) {
           <dl className="ui-details">
             <div><dt>Variante</dt><dd>{selected.variantId}</dd></div>
             <div><dt>Fuente</dt><dd>{ready.sourceId}</dd></div>
-            <div><dt>Mínimo actual</dt><dd>{selected.minimum}</dd></div>
+            <div><dt>Mínimo actual:</dt><dd>{selected.minimum}</dd></div>
             {selected.alert && <>
               <div><dt>Existencia</dt><dd>{selected.alert.quantity}</dd></div>
               <div><dt>Mínimo al alertar</dt><dd>{selected.alert.minimum}</dd></div>
