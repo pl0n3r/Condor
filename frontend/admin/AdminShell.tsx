@@ -108,12 +108,22 @@ function isGroup(entry: AdminNavEntry): entry is AdminNavGroup {
   return 'group' in entry;
 }
 
+/** Enlace suelto, compatible con PlatformOwnerApp; el estado actual conserva su semántica ARIA. */
+function StandaloneNavLink({ item }: Readonly<{ item: AdminNavItem }>) {
+  return (
+    <a href={item.href} aria-current={item.current ? 'page' : undefined}>
+      <NavIcon name={item.icon} />
+      <span>{item.label}</span>
+    </a>
+  );
+}
+
 type AdminShellProps = Readonly<{
   version: string;
   logoutToken: string;
   ariaLabel: string;
   navLabel: string;
-  navItems: readonly AdminNavEntry[];
+  navItems: readonly AdminNavItem[] | readonly AdminNavEntry[];
   variant?: 'tenant' | 'platform';
   children: ReactNode;
 }>;
@@ -375,14 +385,10 @@ export function AdminShell({
             isGroup(entry) ? (
               <NavGroup entry={entry} hash={hash} key={entry.group} />
             ) : (
-              <a
-                href={entry.href}
-                aria-current={entry.current && !sectionInGroup ? 'page' : undefined}
+              <StandaloneNavLink
                 key={entry.href}
-              >
-                <NavIcon name={entry.icon} />
-                <span>{entry.label}</span>
-              </a>
+                item={entry.current && sectionInGroup ? { ...entry, current: false } : entry}
+              />
             )
           ))}
         </nav>
