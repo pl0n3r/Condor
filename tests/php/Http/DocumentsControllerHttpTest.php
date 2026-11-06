@@ -37,6 +37,7 @@ final class DocumentsControllerHttpTest extends WebTestCase
         $client->request('GET', $base);
         self::assertResponseStatusCodeSame(200);
         self::assertSame([], $this->body($client)['documents']);
+        self::assertFalse($this->body($client)['signature_gate']['can_close']);
         $client->request('GET', '/api/v1/branches/'.$branchB->id().'/documents');
         self::assertResponseStatusCodeSame(404);
         $client->request('GET', $base.'/missing');
