@@ -16,7 +16,7 @@ export function OverviewGrid({
   variant = 'standard',
 }: OverviewGridProps) {
   return (
-    <div
+    <section
       className={'foundation-grid foundation-grid-' + variant}
       aria-label={ariaLabel}
     >
@@ -29,6 +29,6 @@ export function OverviewGrid({
           )}
         </article>
       ))}
-    </div>
+    </section>
   );
 }
