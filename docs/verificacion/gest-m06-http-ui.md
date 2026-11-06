@@ -12,3 +12,9 @@ Fase **construcción**. Contrato del servidor: solo `dev`/`test`, `CONDOR_LEGAL_
 | GEST-M06-S07 | `/legal-compliance/auditorias` · ComplianceAuditCandidateProjection F2b | HTTP autenticado/DEV, UI |
 
 Prefijo de rutas: `/api/v1/branches/{branchId}`. `POST/PATCH /legal-compliance/fixtures` seleccionan solo escenario ficticio, no mutan datos legales. Pruebas: `tests/php/Http/LegalCompliance/LegalComplianceHttpTest.php` (Symfony WebTestCase con identidad, RBAC, cross-tenant, CSRF, bandera y payload); `tests/test_m06_http_ui_integration.py` (wiring/UX estático). Validación de navegador E2E y CI final deben verificarse contra ejecución real, no inferirse de este documento. Sin certificación legal, aprobación automática, notificaciones, gasto ni go-live.
+
+### Validación de integración y build (issue #1629)
+
+La pantalla M06 comparte la compilación del administrador con las demás áreas React. Para que la comprobación de frontend y Playwright sea reproducible, `public/build/admin.js` debe generarse con `npm run build:admin` desde el mismo HEAD; el artefacto queda reclamado explícitamente por la V3 renovada después de fusionarse #1644. El guard D-069 impide publicar builds si la reserva, el SHA o los claims no coinciden. No editar el bundle minificado manualmente.
+
+La vista mantiene escenarios únicamente sintéticos y los estados `loading`, `empty`, `error` y `permission-denied`. CI y las pruebas de navegador son la evidencia de ejecución, no este documento.
