@@ -66,6 +66,7 @@ final class ExternalInputPolicyTest extends TestCase
         $literal = ExternalInputPolicy::inspectExternalUrl('http://8.8.8.8/ping', $resolve);
         self::assertSame(['8.8.8.8'], $literal['approved_ips']);
         self::assertCount(1, $lookups); // literals never invoke the resolver
+        self::assertSame(['2001:4860:4860::8888'], ExternalInputPolicy::inspectExternalUrl('https://[2001:4860:4860::8888]/', $resolve)['approved_ips']);
     }
 
     public function testUrlRejectsSchemesCredentialHostsAndSensitiveAddresses(): void
@@ -76,7 +77,7 @@ final class ExternalInputPolicyTest extends TestCase
             'http://127.0.0.1/', 'https://10.0.0.2/',
             'http://169.254.169.254/latest/meta-data/',
             'http://100.64.0.1/', 'http://192.0.2.1/', 'http://198.18.0.1/',
-            'http://[::1]/', 'http://[::ffff:127.0.0.1]/',
+            'http://[::1]/', 'http://[::ffff:127.0.0.1]/', 'http://[2001:db8::1]/', 'http://[2001:10::1]/',
             'http://localhost/', 'https://metadata.google.internal/',
             'https://file.local/', 'https://media.example.com:8443/',
             'https://user:password@media.example.com/',
@@ -95,7 +96,7 @@ final class ExternalInputPolicyTest extends TestCase
             ['8.8.8.8', '10.10.10.10'],
             ['169.254.169.254'],
             ['100.64.0.1'],
-            ['198.51.100.9'],
+            ['198.51.100.9'], ['2001:db8::1'],
             ['not-an-ip'],
             [],
         ] as $answers) {
