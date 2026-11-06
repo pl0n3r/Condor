@@ -1,215 +1,243 @@
 /// <reference types="vite/client" />
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
-/** M01: simulación local de Talento Humano; no administra personas reales. */
-type HrState = 'BORRADOR' | 'REQUIERE_REVISION' | 'EN_REVISION';
-type HrKind = 'VINCULACION' | 'NOVEDAD' | 'MOVIMIENTO_INTERNO';
-type HrRecord = Readonly<{
-  reference: string;
-  employeeRef: string;
-  positionRef: string;
-  kind: HrKind;
-  state: HrState;
+type Props = Readonly<{
   tenantId: string;
   companyId: string;
   branchId: string;
+  permissions: string[];
+  /** Session token supplied by the authorized admin shell, never persisted here. */
+  csrfToken?: string;
 }>;
-type AuditEvent = Readonly<{ scope: string; reference: string; action: 'created' | 'viewed' | 'review_requested' | 'review_started' }>;
-type Props = Readonly<{ tenantId: string; companyId: string; branchId: string; permissions: string[] }>;
+type HrKind = 'vinculacion' | 'novedad' | 'movimiento_interno';
+type HrState = 'BORRADOR' | 'EN_REVISION';
+type HrRecord = Readonly<{
+  id: string;
+  tenant_id: string;
+  company_id: string;
+  record_ref: string;
+  collaborator_ref: string;
+  position_ref: string;
+  kind: HrKind;
+  state: HrState;
+  version: number;
+}>;
+type View =
+  | { status: 'loading'; records: HrRecord[] }
+  | { status: 'ready'; records: HrRecord[] }
+  | { status: 'denied' | 'disabled' | 'error'; records: [] };
 
-const recordPattern = /^fixture:human_resources\/[a-z][a-z0-9_-]{0,47}$/;
-const employeePattern = /^fixture:employee\/[a-z][a-z0-9_-]{0,47}$/;
-const positionPattern = /^fixture:position\/[a-z][a-z0-9_-]{0,47}$/;
-const kinds: HrKind[] = ['VINCULACION', 'NOVEDAD', 'MOVIMIENTO_INTERNO'];
-const states: HrState[] = ['BORRADOR', 'REQUIERE_REVISION', 'EN_REVISION'];
+const ulid = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+const alias = /^[a-z][a-z0-9_-]{0,63}$/;
+const kinds: HrKind[] = ['vinculacion', 'novedad', 'movimiento_interno'];
+const labels: Record<HrKind, string> = {
+  vinculacion: 'Vinculación', novedad: 'Novedad', movimiento_interno: 'Movimiento interno',
+};
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
-function isFixture(value: string, pattern: RegExp): boolean {
-  return pattern.test(value) && !/[0-9]{7,}/.test(value);
+/** Never render a row from another legal entity, even if the server regresses. */
+function parseRecords(payload: unknown, tenant: string, company: string): HrRecord[] {
+  if (!isObject(payload) || !Array.isArray(payload.records) || payload.records.length > 100) {
+    throw new Error('Respuesta de RR. HH. no verificable');
+  }
+  const seen = new Set<string>();
+  for (const item of payload.records as unknown[]) {
+    if (!isObject(item) || item.tenant_id !== tenant || item.company_id !== company
+      || typeof item.id !== 'string' || !ulid.test(item.id)
+      || typeof item.record_ref !== 'string' || !alias.test(item.record_ref)
+      || typeof item.collaborator_ref !== 'string' || !alias.test(item.collaborator_ref)
+      || typeof item.position_ref !== 'string' || !alias.test(item.position_ref)
+      || !kinds.includes(item.kind as HrKind)
+      || (item.state !== 'BORRADOR' && item.state !== 'EN_REVISION')
+      || !Number.isSafeInteger(item.version) || (item.version as number) < 1
+      || seen.has(item.record_ref)) {
+      throw new Error('Registro laboral fuera de alcance o inválido');
+    }
+    seen.add(item.record_ref);
+  }
+  return payload.records as HrRecord[];
 }
 
-function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
-  const scope = tenantId + '|' + companyId + '|' + branchId;
-  const canView = companyId !== '__unassigned__' && permissions.includes('users.view');
-  const canCreate = canView && permissions.includes('users.create');
-  const canReview = canView && permissions.includes('users.update');
-  const [records, setRecords] = useState<HrRecord[]>([]);
-  const [events, setEvents] = useState<AuditEvent[]>([]);
-  const [reference, setReference] = useState('');
-  const [employeeRef, setEmployeeRef] = useState('');
-  const [positionRef, setPositionRef] = useState('');
-  const [kind, setKind] = useState<HrKind>('VINCULACION');
-  const [selected, setSelected] = useState('');
-  const [search, setSearch] = useState('');
-  const [kindFilter, setKindFilter] = useState<'TODOS' | HrKind>('TODOS');
-  const [stateFilter, setStateFilter] = useState<'TODOS' | HrState>('TODOS');
-  const [notice, setNotice] = useState('');
+async function failure(response: Response): Promise<'denied' | 'disabled' | 'error'> {
+  if (response.status === 401 || response.status === 403) return 'denied';
+  if (response.status === 404) {
+    try {
+      const body: unknown = await response.json();
+      if (isObject(body) && body.error === 'feature_unavailable') return 'disabled';
+    } catch { /* An unknown 404 is not evidence of a disabled feature. */ }
+  }
+  return 'error';
+}
 
-  function audit(item: string, action: AuditEvent['action']) {
-    setEvents(previous => [...previous, { scope, reference: item, action }].slice(-100));
+function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Props) {
+  // The admin entrypoint already receives this server-generated session CSRF
+  // token as data-access-token on the same-origin root. Never persist or log it.
+  const sessionCsrf = csrfToken || document.getElementById('condor-admin-root')?.dataset.accessToken || '';
+  const canView = permissions.includes('users.view') && ulid.test(tenantId)
+    && ulid.test(companyId) && ulid.test(branchId);
+  const canCreate = canView && permissions.includes('users.create') && !!sessionCsrf;
+  const canUpdate = canView && permissions.includes('users.update') && !!sessionCsrf;
+  const [view, setView] = useState<View>({ status: 'loading', records: [] });
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState('');
+  const [recordRef, setRecordRef] = useState('');
+  const [collaboratorRef, setCollaboratorRef] = useState('');
+  const [positionRef, setPositionRef] = useState('');
+  const [kind, setKind] = useState<HrKind>('vinculacion');
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState('');
+  const reader = useRef<AbortController | null>(null);
+  const writer = useRef<AbortController | null>(null);
+  const mounted = useRef(true);
+  const path = '/api/v1/branches/' + encodeURIComponent(branchId) + '/hr/records';
+
+  async function load() {
+    if (!canView) { setView({ status: 'denied', records: [] }); return; }
+    reader.current?.abort();
+    const request = new AbortController();
+    reader.current = request;
+    setView({ status: 'loading', records: [] });
+    try {
+      const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store',
+        headers: { Accept: 'application/json' }, signal: request.signal });
+      if (request.signal.aborted || !mounted.current) return;
+      if (!response.ok) {
+        const status = await failure(response);
+        if (!request.signal.aborted && mounted.current) setView({ status, records: [] });
+        return;
+      }
+      const payload: unknown = await response.json();
+      if (!request.signal.aborted && mounted.current) {
+        setView({ status: 'ready', records: parseRecords(payload, tenantId, companyId) });
+      }
+    } catch {
+      if (!request.signal.aborted && mounted.current) setView({ status: 'error', records: [] });
+    }
+  }
+
+  useEffect(() => {
+    mounted.current = true;
+    void load();
+    return () => { mounted.current = false; reader.current?.abort(); writer.current?.abort(); };
+    // The component is remounted on every scope change by the key below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function submit(url: string, method: 'POST' | 'PATCH', body: object) {
+    if (!sessionCsrf || view.status !== 'ready' || saving || writer.current) return;
+    const request = new AbortController();
+    writer.current = request;
+    setSaving(true); setNotice('');
+    try {
+      const response = await fetch(url, { method, credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json',
+          'X-CSRF-Token': sessionCsrf }, body: JSON.stringify(body), signal: request.signal });
+      if (!mounted.current || request.signal.aborted) return;
+      if (!response.ok) {
+        const denied = await failure(response);
+        if (!mounted.current || request.signal.aborted) return;
+        if (denied === 'denied' || denied === 'disabled') setView({ status: denied, records: [] });
+        else setNotice('No se aplicó el cambio. Revisa permisos, versión y referencias.');
+        return;
+      }
+      // A successful write must be reloaded from server authority; never retry it automatically.
+      setNotice('Cambio confirmado por el servidor. Actualizando registros…');
+      setRecordRef(''); setCollaboratorRef(''); setPositionRef('');
+      await load();
+    } catch {
+      if (mounted.current && !request.signal.aborted)
+        setNotice('No se pudo confirmar el resultado. Recarga antes de intentar otra operación.');
+    } finally {
+      if (writer.current === request) writer.current = null;
+      if (mounted.current) setSaving(false);
+    }
   }
 
   function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canCreate || !isFixture(reference, recordPattern)
-      || !isFixture(employeeRef, employeePattern)
-      || !isFixture(positionRef, positionPattern)
-      || !kinds.includes(kind) || records.length >= 100
-      || records.some(row => row.reference === reference && row.tenantId === tenantId
-        && row.companyId === companyId && row.branchId === branchId)) {
-      setNotice('Rechazado: verifica permisos, duplicados y referencias de demostración.');
-      return;
+    if (!canCreate || !alias.test(recordRef) || !alias.test(collaboratorRef)
+      || !alias.test(positionRef) || !kinds.includes(kind)) {
+      setNotice('Utiliza referencias internas válidas y una sesión autorizada.'); return;
     }
-    setRecords(previous => [...previous, {
-      reference, employeeRef, positionRef, kind, state: 'BORRADOR',
-      tenantId, companyId, branchId,
-    }]);
-    audit(reference, 'created');
-    setSelected(reference);
-    setReference('');
-    setEmployeeRef('');
-    setPositionRef('');
-    setNotice('Borrador de prueba creado solo en memoria. Sin valor legal.');
+    void submit(path, 'POST', { record_ref: recordRef, collaborator_ref: collaboratorRef,
+      position_ref: positionRef, kind });
   }
 
-  function view(ref: string) {
-    if (!canView || !isFixture(ref, recordPattern) || !records.some(row =>
-      row.reference === ref && row.tenantId === tenantId
-      && row.companyId === companyId && row.branchId === branchId)) return;
-    setSelected(ref);
-    audit(ref, 'viewed');
-  }
+  const records = view.status === 'ready' ? view.records : [];
+  const visible = records.filter(row => row.record_ref.includes(search.trim().toLowerCase())
+    || row.position_ref.includes(search.trim().toLowerCase()));
+  const current = records.find(row => row.record_ref === selected);
 
-  function changeState(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const current = records.find(row => row.reference === selected
-      && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId);
-    if (!canReview || !current || !isFixture(selected, recordPattern)
-      || current.state === 'EN_REVISION') {
-      setNotice('No se cambió el estado: falta permiso o transición manual válida.');
-      return;
-    }
-    const next: HrState = current.state === 'BORRADOR' ? 'REQUIERE_REVISION' : 'EN_REVISION';
-    setRecords(previous => previous.map(row =>
-      row.reference === selected && row.tenantId === tenantId
-      && row.companyId === companyId && row.branchId === branchId
-        ? { ...row, state: next } : row));
-    audit(selected, current.state === 'BORRADOR' ? 'review_requested' : 'review_started');
-    setNotice('Se registró una revisión ficticia. No hay aprobación ni cierre automáticos.');
-  }
+  if (!canView) return <section id="human-resources-management" aria-label="Talento humano">
+    <h2>Talento humano</h2><p role="alert">No tienes permiso para consultar esta empresa o sede.</p>
+  </section>;
 
-  if (!canView) return (
-    <section id="human-resources-management" aria-label="Talento humano sintético">
-      <p role="alert">No tienes permiso para la demostración o no hay empresa activa.</p>
-    </section>
-  );
-
-  const scopeRecords = records.filter(row => row.tenantId === tenantId
-    && row.companyId === companyId && row.branchId === branchId);
-  const visible = scopeRecords.filter(row =>
-    (kindFilter === 'TODOS' || row.kind === kindFilter)
-    && (stateFilter === 'TODOS' || row.state === stateFilter)
-    && (search.trim() === '' || row.reference.includes(search.trim().toLowerCase())));
-  const current = scopeRecords.find(row => row.reference === selected);
-
-  return (
-    <section id="human-resources-management" className="catalog-panel" aria-labelledby="human-resources-title">
-      <header>
-        <h2 id="human-resources-title">Talento Humano · simulación M01</h2>
-        <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal. No ingresar nombres ni documentos reales.</p>
-        <p className="muted">Operaciones locales de demostración. Sin conexión, almacenamiento ni trámites oficiales.</p>
-      </header>
-      {notice && <output role="status" aria-live="polite">{notice}</output>}
-      <div className="catalog-grid">
-        <section className="catalog-card" aria-labelledby="human-resources-list-title">
-          <h3 id="human-resources-list-title">Registros ficticios</h3>
-          <label>Buscar referencia
-            <input aria-label="Buscar registro ficticio" maxLength={80} value={search}
-              onChange={event => setSearch(event.target.value)} />
-          </label>
-          <label>Tipo de novedad
-            <select aria-label="Filtrar tipo" value={kindFilter}
-              onChange={event => setKindFilter(event.target.value as typeof kindFilter)}>
-              <option value="TODOS">Todos</option>
-              {kinds.map(value => <option value={value} key={value}>{value}</option>)}
-            </select>
-          </label>
-          <label>Estado
-            <select aria-label="Filtrar estado" value={stateFilter}
-              onChange={event => setStateFilter(event.target.value as typeof stateFilter)}>
-              <option value="TODOS">Todos</option>
-              {states.map(value => <option value={value} key={value}>{value}</option>)}
-            </select>
-          </label>
-          {visible.length === 0 ? <p role="status">No hay registros ficticios para el filtro.</p> : (
-            <ul>{visible.map(row => <li key={row.reference}>
-              <button type="button" onClick={() => view(row.reference)}>
-                {row.reference} · {row.kind} · {row.state}
-              </button>
-            </li>)}</ul>
-          )}
-        </section>
-        {canCreate && (
-          <section className="catalog-card" aria-labelledby="human-resources-create-title">
-            <h3 id="human-resources-create-title">Crear registro de prueba</h3>
-            <form className="catalog-editor" onSubmit={create}>
-              <label>Referencia ficticia
-                <input required maxLength={64} pattern="fixture:human_resources/[a-z][a-z0-9_-]{0,47}"
-                  placeholder="fixture:human_resources/demo" value={reference}
-                  onChange={event => setReference(event.target.value)} />
-              </label>
-              <label>Colaborador ficticio
-                <input required maxLength={64} pattern="fixture:employee/[a-z][a-z0-9_-]{0,47}"
-                  placeholder="fixture:employee/demo" value={employeeRef}
-                  onChange={event => setEmployeeRef(event.target.value)} />
-              </label>
-              <label>Cargo ficticio
-                <input required maxLength={64} pattern="fixture:position/[a-z][a-z0-9_-]{0,47}"
-                  placeholder="fixture:position/demo" value={positionRef}
-                  onChange={event => setPositionRef(event.target.value)} />
-              </label>
-              <label>Tipo de registro
-                <select value={kind} onChange={event => setKind(event.target.value as HrKind)}>
-                  {kinds.map(value => <option value={value} key={value}>{value}</option>)}
-                </select>
-              </label>
-              <button type="submit">Crear borrador ficticio</button>
-            </form>
-          </section>
-        )}
-        <section className="catalog-card" aria-labelledby="human-resources-detail-title">
-          <h3 id="human-resources-detail-title">Detalle y revisión manual</h3>
-          {current ? <>
-            <dl>
-              <dt>Referencia</dt><dd>{current.reference}</dd>
-              <dt>Colaborador</dt><dd>{current.employeeRef}</dd>
-              <dt>Cargo</dt><dd>{current.positionRef}</dd>
-              <dt>Novedad</dt><dd>{current.kind}</dd>
-              <dt>Estado</dt><dd>{current.state}</dd>
-            </dl>
-            {canReview && current.state !== 'EN_REVISION' && (
-              <form className="catalog-editor" onSubmit={changeState}>
-                <button type="submit">{current.state === 'BORRADOR'
-                  ? 'Solicitar revisión ficticia' : 'Iniciar revisión ficticia'}</button>
-              </form>
-            )}
-            <p className="muted">Ninguna vinculación, contrato ni novedad se aprueba o cierra automáticamente.</p>
-          </> : <p role="status">Selecciona un registro ficticio para ver el detalle.</p>}
-        </section>
-        <section className="catalog-card" aria-labelledby="human-resources-audit-title">
-          <h3 id="human-resources-audit-title">Bitácora de demostración (no oficial)</h3>
-          <p className="muted">Las operaciones reales requieren permisos y auditoría de servidor.</p>
-          {events.filter(row => row.scope === scope).length === 0
-            ? <p role="status">Sin operaciones de prueba.</p>
-            : <ul>{events.filter(row => row.scope === scope).map((row, index) =>
-              <li key={index}>{row.action} · {row.reference}</li>)}</ul>}
-        </section>
-      </div>
-    </section>
-  );
+  return <section id="human-resources-management" className="catalog-panel" aria-labelledby="hr-title">
+    <header>
+      <h2 id="hr-title">Talento humano · gestión de cargos y novedades</h2>
+      <p className="muted">Registros por empresa y sede, con autorización del servidor y trazabilidad de versiones.</p>
+      <p role="note">Entorno de construcción: usar únicamente referencias inventadas. No ingresar información personal real.</p>
+    </header>
+    {view.status === 'loading' && <output>Cargando registros de talento humano…</output>}
+    {view.status === 'denied' && <p role="alert">Acceso denegado: no tienes autorización para estos registros.</p>}
+    {view.status === 'disabled' && <p role="alert">Talento humano todavía no está habilitado en el servidor.</p>}
+    {view.status === 'error' && <div role="alert"><p>No se pudo consultar talento humano.</p>
+      <button type="button" onClick={() => { void load(); }}>Reintentar consulta</button></div>}
+    {view.status === 'ready' && <div className="catalog-grid">
+      <section className="catalog-card" aria-labelledby="hr-list-title">
+        <h3 id="hr-list-title">Registros laborales</h3>
+        <label><span>Buscar por referencia o cargo</span>
+          <input value={search} maxLength={64} onChange={event => setSearch(event.target.value)} />
+        </label>
+        {visible.length === 0 ? <output>No hay registros para esta empresa y filtro.</output>
+          : <ul>{visible.map(row => <li key={row.record_ref}>
+            <button type="button" onClick={() => setSelected(row.record_ref)}>
+              {row.record_ref} · {labels[row.kind]} · {row.state === 'BORRADOR' ? 'Borrador' : 'En revisión'}
+            </button>
+          </li>)}</ul>}
+      </section>
+      <section className="catalog-card" aria-labelledby="hr-detail-title">
+        <h3 id="hr-detail-title">Detalle del registro</h3>
+        {current ? <>
+          <dl><dt>Referencia</dt><dd>{current.record_ref}</dd>
+            <dt>Colaborador</dt><dd>{current.collaborator_ref}</dd>
+            <dt>Cargo</dt><dd>{current.position_ref}</dd>
+            <dt>Clase</dt><dd>{labels[current.kind]}</dd>
+            <dt>Estado</dt><dd>{current.state}</dd><dt>Versión</dt><dd>{current.version}</dd></dl>
+          {canUpdate && current.state === 'BORRADOR' && <button type="button" disabled={saving}
+            onClick={() => { void submit(path + '/' + encodeURIComponent(current.record_ref) + '/state',
+              'PATCH', { state: 'EN_REVISION', expected_version: current.version }); }}>
+            Enviar a revisión
+          </button>}
+          <p className="muted">La revisión no implica aprobación contractual ni cierre automático.</p>
+        </> : <p>Selecciona un registro para consultar su detalle.</p>}
+      </section>
+      {canCreate && <section className="catalog-card" aria-labelledby="hr-create-title">
+        <h3 id="hr-create-title">Nuevo registro</h3>
+        <form className="catalog-editor" onSubmit={create}>
+          <label>Referencia del registro<input required value={recordRef} maxLength={64}
+            pattern="[a-z][a-z0-9_-]{0,63}" onChange={event => setRecordRef(event.target.value)} /></label>
+          <label>Referencia del colaborador<input required value={collaboratorRef} maxLength={64}
+            pattern="[a-z][a-z0-9_-]{0,63}" onChange={event => setCollaboratorRef(event.target.value)} /></label>
+          <label>Referencia del cargo<input required value={positionRef} maxLength={64}
+            pattern="[a-z][a-z0-9_-]{0,63}" onChange={event => setPositionRef(event.target.value)} /></label>
+          <label>Tipo de registro<select value={kind}
+            onChange={event => setKind(event.target.value as HrKind)}>
+            {kinds.map(value => <option value={value} key={value}>{labels[value]}</option>)}
+          </select></label>
+          <button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar registro'}</button>
+        </form>
+      </section>}
+      {!sessionCsrf && (permissions.includes('users.create') || permissions.includes('users.update')) &&
+        <output>Edición deshabilitada hasta recibir el token de sesión del panel administrativo.</output>}
+    </div>}
+    {notice && <output role="status" aria-live="polite">{notice}</output>}
+  </section>;
 }
 
-/** Exclusivo de Vite DEV: no montar ni ejecutar contra clientes reales. */
+/** The production surface stays closed until owner/go-live gates authorize it. */
 export function HumanResourcesManagement(props: Props) {
   if (!import.meta.env.DEV) return null;
-  return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId} {...props} />;
+  return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId + '|' + props.permissions.slice().sort((a, b) => a.localeCompare(b)).join(',')} {...props} />;
 }
