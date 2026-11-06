@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { Card, DataTable, MetricStrip, PageHeader, Toolbar } from './ui/Kit';
 
 type CurrencyTotal = {
   currency: string;
@@ -167,78 +168,64 @@ export function SalesReportPanel({ permissions }: Props) {
 
   if (!allowed) return null;
 
+  const summary = state.status === 'ready' ? state.data : null;
   return (
-    <section id="sales-reports" aria-labelledby="sales-reports-title">
-      <h2 id="sales-reports-title">Reportes de ventas</h2>
-      <p className="muted">Ventas por producto y por mes, limitadas a tus sedes autorizadas.</p>
-      <form onSubmit={(event) => { void submit(event); }}>
-        <label htmlFor="sales-from">Desde</label>
-        <input id="sales-from" type="date" required value={from}
-          onChange={(event) => setFrom(event.target.value)} />
-        <label htmlFor="sales-to">Hasta</label>
-        <input id="sales-to" type="date" required value={to}
-          onChange={(event) => setTo(event.target.value)} />
-        <button type="submit" disabled={state.status === 'loading'}>
-          Consultar ventas
-        </button>
-      </form>
-
-      <div aria-live="polite">
-        {state.status === 'idle' && <p>Selecciona un rango para consultar las ventas.</p>}
-        {state.status === 'loading' && <p role="status">Cargando reportes…</p>}
-        {state.status === 'error' && <p role="alert">{state.message}</p>}
-      </div>
-
-      {state.status === 'ready' && (
+    <section id="sales-reports" className="ui-page" aria-label="Reportes de ventas">
+      <PageHeader title="Reportes de ventas"
+        description="Ventas por producto y por mes, limitadas a tus sedes autorizadas." />
+      {summary && (
+        <MetricStrip label="Resumen de ventas" items={[
+          { label: 'Productos y variantes', value: summary.products.length },
+          { label: 'Meses con ventas', value: summary.months.length },
+        ]} />
+      )}
+      <Card>
+        <form onSubmit={(event) => { void submit(event); }}>
+          <Toolbar trailing={<button type="submit" className="button" disabled={state.status === 'loading'}>
+            Consultar ventas
+          </button>}>
+            <label htmlFor="sales-from">Desde
+              <input id="sales-from" type="date" required value={from}
+                onChange={(event) => setFrom(event.target.value)} />
+            </label>
+            <label htmlFor="sales-to">Hasta
+              <input id="sales-to" type="date" required value={to}
+                onChange={(event) => setTo(event.target.value)} />
+            </label>
+          </Toolbar>
+        </form>
+        <div aria-live="polite">
+          {state.status === 'idle' && <p>Selecciona un rango para consultar las ventas.</p>}
+          {state.status === 'loading' && <p role="status">Cargando reportes…</p>}
+          {state.status === 'error' && <p role="alert">{state.message}</p>}
+        </div>
+      </Card>
+      {summary && (
         <>
-          <h3>Ventas por producto</h3>
-          {state.data.products.length === 0 ? (
-            <p>No hay ventas por producto en el rango seleccionado.</p>
-          ) : (
-            <div className="table-responsive">
-              <table>
-                <caption>Ventas agrupadas por producto y variante</caption>
-                <thead><tr>
-                  <th scope="col">Producto</th>
-                  <th scope="col">Variante / SKU</th>
-                  <th scope="col">Unidades</th>
-                  <th scope="col">Ingreso</th>
-                  <th scope="col">Participación</th>
-                </tr></thead>
-                <tbody>{state.data.products.map((row) => (
-                  <tr key={row.currency + ':' + row.variant_id}>
-                    <th scope="row">{row.product_name}</th>
-                    <td>{row.variant_name} · {row.sku}</td>
-                    <td>{row.units}</td>
-                    <td>{money(row.revenue_minor, row.currency)}</td>
-                    <td>{(row.participation_bps / 100).toFixed(2)} %</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-          )}
-          <h3>Ventas por mes</h3>
-          {state.data.months.length === 0 ? (
-            <p>No hay ventas por mes en el rango seleccionado.</p>
-          ) : (
-            <div className="table-responsive">
-              <table>
-                <caption>Ventas agrupadas por mes y moneda</caption>
-                <thead><tr>
-                  <th scope="col">Mes</th>
-                  <th scope="col">Unidades</th>
-                  <th scope="col">Ingreso</th>
-                </tr></thead>
-                <tbody>{state.data.months.map((row) => (
-                  <tr key={row.month + ':' + row.currency}>
-                    <th scope="row">{row.month}</th>
-                    <td>{row.units}</td>
-                    <td>{money(row.revenue_minor, row.currency)}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-          )}
+          <Card title="Ventas por producto">
+            <DataTable caption="Ventas agrupadas por producto y variante"
+              rows={summary.products}
+              rowKey={(row) => row.currency + ':' + row.variant_id}
+              empty={<p>No hay ventas por producto en el rango seleccionado.</p>}
+              columns={[
+                { key: 'product', header: 'Producto', render: (row) => row.product_name },
+                { key: 'variant', header: 'Variante / SKU', render: (row) => row.variant_name + ' · ' + row.sku },
+                { key: 'units', header: 'Unidades', render: (row) => row.units, align: 'right' },
+                { key: 'revenue', header: 'Ingreso', render: (row) => money(row.revenue_minor, row.currency), align: 'right' },
+                { key: 'share', header: 'Participación', render: (row) => (row.participation_bps / 100).toFixed(2) + ' %', align: 'right' },
+              ]} />
+          </Card>
+          <Card title="Ventas por mes">
+            <DataTable caption="Ventas agrupadas por mes y moneda"
+              rows={summary.months}
+              rowKey={(row) => row.month + ':' + row.currency}
+              empty={<p>No hay ventas por mes en el rango seleccionado.</p>}
+              columns={[
+                { key: 'month', header: 'Mes', render: (row) => row.month },
+                { key: 'units', header: 'Unidades', render: (row) => row.units, align: 'right' },
+                { key: 'revenue', header: 'Ingreso', render: (row) => money(row.revenue_minor, row.currency), align: 'right' },
+              ]} />
+          </Card>
         </>
       )}
     </section>
