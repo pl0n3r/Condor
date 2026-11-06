@@ -38,7 +38,7 @@ final class AssetsController extends AbstractController
         [$tenant, $office] = $this->access($branchId, 'inventory.view');
         return $this->json([
             'assets' => $this->domain(fn (): array => $this->assets->listRecords($tenant, $office)),
-            'csrf_token' => (string) $this->csrfTokens->getToken('branch_access'),
+            'csrf_token' => $this->csrfTokens->getToken('branch_access')->getValue(),
         ]);
     }
 

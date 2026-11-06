@@ -160,6 +160,9 @@ class ModuloTests(unittest.TestCase):
         self.assertEqual('EN_REVISION', rows[3]['state'])
         self.assertIn('transactional(', REPOSITORY.read_text(encoding='utf-8'))
         self.assertIn('FOR UPDATE', REPOSITORY.read_text(encoding='utf-8'))
+        self.assertIn("->getValue()", source)
+        self.assertIn("['responsible_ref']", source)
+        self.assertIn("name: 'api_assets_responsible'", source)
 
     def test_asignacion_responsable_sintetico_con_auditoria_y_scope(self) -> None:
         rows = execute([

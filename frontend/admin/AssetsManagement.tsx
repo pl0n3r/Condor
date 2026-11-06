@@ -227,7 +227,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       <div className="section-heading"><div>
         <span className="eyebrow">M10 · Exclusivo construcción</span>
         <h2 id="assets-title">Activos empresariales</h2>
-        <p className="muted">API sintética DEV. Auditoría de servidor, sin validez jurídica ni datos reales.</p>
+        <p className="muted">API sintética DEV. auditoría de servidor, sin validez jurídica ni datos reales.</p>
       </div></div>
       {notice && <output aria-live="polite" role="status">{notice}</output>}
       <div className="production-layout">
