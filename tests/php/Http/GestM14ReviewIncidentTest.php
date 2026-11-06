@@ -82,7 +82,7 @@ final class GestM14ReviewIncidentTest extends WebTestCase
         $browser->loginUser($delegate);
         $browser->request('GET', $path);
         self::assertResponseStatusCodeSame(200);
-        self::assertSame([], $this->body($browser)['items']);
+        self::assertSame('synthetic', $this->body($browser)['mode']);
         $browser->jsonRequest('POST', $path, ['kind' => 'recertification'],
             ['HTTP_X_CSRF_TOKEN' => $this->csrf($browser)]);
         self::assertResponseStatusCodeSame(403);

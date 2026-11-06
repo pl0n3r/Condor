@@ -1,3 +1,4 @@
+import { GestM14ReviewIncident } from './GestM14ReviewIncident';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   membershipRolePath,
@@ -451,6 +452,10 @@ export function AccessManagement({
             ))}
           </div>
         </div>
+      )}
+      {import.meta.env.DEV && canSeeRoles && (
+        <GestM14ReviewIncident branchId={branchId}
+          csrfToken={csrfToken} canWrite={can('roles.update')} />
       )}
     </section>
   );
