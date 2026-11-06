@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { useEffect, useState, type FormEvent } from 'react';
+import { PageHeader, MetricStrip, Toolbar, DataTable, SidePanel, StatusPill } from './ui/Kit';
 
 /** M13 Calidad: prototipo efímero; solo referencias sintéticas, sin red ni datos reales. */
 type Status = 'PENDIENTE' | 'EN_REVISION' | 'CIERRE_REQUIERE_REVISION';
@@ -32,6 +33,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [actorRef, setActorRef] = useState('');
   const [reviewActorRef, setReviewActorRef] = useState('');
   const [selected, setSelected] = useState('');
+  const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'TODOS' | Status>('TODOS');
   const [notice, setNotice] = useState('');
@@ -63,6 +65,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     }]);
     audit(ref, 'created', actorRef);
     setSelected(ref);
+    setCreating(false);
     setRef(''); setFindingRef(''); setActorRef('');
     setNotice('Registro ficticio creado únicamente en memoria.');
   }
@@ -97,17 +100,16 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   );
 
   return (
-    <section id="quality-management" className="catalog-panel" aria-labelledby="quality-title">
-      <div className="section-heading"><div>
-        <span className="eyebrow">M13 · Calidad</span>
-        <h2 id="quality-title">Calidad de la empresa · pruebas</h2>
-        <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal ni auditoría de servidor.</p>
-        <p className="muted">Sesión local, efímera: no se envía ni almacena nada en un servidor.</p>
-      </div></div>
+    <section id="quality-management" className="ui-page catalog-panel" aria-label="Calidad de la empresa · pruebas">
+      <PageHeader title="Calidad de la empresa · pruebas" description="No conformidades de ensayo sin aprobación o cierre automático." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setCreating(true); }}>Nuevo registro ficticio</button> : undefined} />
+      <MetricStrip label="Indicadores de Calidad de la empresa · pruebas" items={[{ label: 'Registros', value: scoped.length }, { label: 'Resultados', value: visible.length }, { label: 'Eventos de esta sesión', value: history.filter(item => item.scope === scope).length }]} />
+      <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal ni auditoría de servidor.</p>
+      <p className="muted">Sesión local, efímera: no se envía ni almacena nada en un servidor.</p>
       {notice && <output role="status" aria-live="polite">{notice}</output>}
-      <div className="catalog-grid">
-        <section className="catalog-card" aria-labelledby="quality-list-title">
+      <div className="ui-grid-2 catalog-grid">
+        <section className="ui-card catalog-card" aria-labelledby="quality-list-title">
           <h3 id="quality-list-title">No conformidades de demostración</h3>
+          <Toolbar trailing={<span className="ui-count">{visible.length} de {scoped.length}</span>}>
           <label>Buscar referencia ficticia
             <input value={search} onChange={event => setSearch(event.target.value)} />
           </label>
@@ -118,16 +120,12 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               {states.map(item => <option key={item} value={item}>{item}</option>)}
             </select>
           </label>
-          {visible.length === 0 ? <p role="status">Sin registros ficticios para estos filtros.</p> : (
-            <ul>{visible.map(row => <li key={row.ref}>
-              <button type="button" onClick={() => view(row.ref)}>{row.ref} · {row.status}</button>
-            </li>)}</ul>
-          )}
+          </Toolbar>
+          <DataTable caption="Listado de Calidad de la empresa · pruebas" rows={visible} rowKey={row => row.ref} onOpen={row => view(row.ref)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.ref}</strong></span> }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.status === 'EN_REVISION' ? 'info' : row.status === 'REQUIERE_REVISION' || row.status === 'CIERRE_REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.status}</StatusPill> }]} />
         </section>
         {canCreate && (
-          <section className="catalog-card" aria-labelledby="quality-create-title">
-            <h3 id="quality-create-title">Nuevo registro ficticio</h3>
-            <form className="catalog-editor" onSubmit={create}>
+          <SidePanel open={creating && canCreate} title="Nuevo registro ficticio" onClose={() => setCreating(false)}>
+          <form className="catalog-editor" onSubmit={create}>
               <label>Referencia ficticia
                 <input required maxLength={70} pattern="fixture:quality/[a-z][a-z0-9_-]{0,47}"
                   placeholder="fixture:quality/demo" value={ref}
@@ -145,10 +143,10 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               </label>
               <button type="submit">Crear registro ficticio</button>
             </form>
-          </section>
+          
+        </SidePanel>
         )}
-        <section className="catalog-card" aria-labelledby="quality-detail-title">
-          <h3 id="quality-detail-title">Detalle y revisión explícita</h3>
+        <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión explícita" onClose={() => setSelected('')}>
           {detail ? <>
             <dl>
               <dt>Referencia</dt><dd>{detail.ref}</dd>
@@ -169,8 +167,9 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             )}
             <p className="muted">No hay transición automática a APROBADO ni CERRADO.</p>
           </> : <p role="status">Selecciona un registro para ver su detalle.</p>}
-        </section>
-        <section className="catalog-card" aria-labelledby="quality-audit-title">
+        
+        </SidePanel>
+        <section className="ui-card catalog-card" aria-labelledby="quality-audit-title">
           <h3 id="quality-audit-title">Bitácora ficticia de esta sesión</h3>
           <p className="muted">La bitácora local no sustituye la auditoría del servidor.</p>
           {history.filter(item => item.scope === scope).length === 0

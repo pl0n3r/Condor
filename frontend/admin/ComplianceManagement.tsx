@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { PageHeader, MetricStrip, Toolbar, DataTable, SidePanel, StatusPill } from './ui/Kit';
 
 /** SG-SST M03: prototipo exclusivamente sintético en memoria, sin red ni efectos legales. */
 type Estado = 'PENDIENTE' | 'EN_REVISION' | 'CIERRE_REQUIERE_REVISION';
@@ -28,6 +29,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [actorRef, setActorRef] = useState('');
   const [reviewActorRef, setReviewActorRef] = useState('');
   const [selected, setSelected] = useState('');
+  const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState<'TODOS' | Estado>('TODOS');
   const [notice, setNotice] = useState('');
@@ -49,6 +51,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     }]);
     audit(ref, 'created', actorRef);
     setSelected(ref);
+    setCreating(false);
     setRef(''); setEvidenceRef(''); setActorRef('');
     setNotice('Registro ficticio creado en memoria. No tiene valor legal.');
   }
@@ -92,16 +95,16 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     : detail?.state === 'EN_REVISION' ? 'CIERRE_REQUIERE_REVISION' : null;
 
   return (
-    <section id="compliance-management" className="catalog-panel" aria-labelledby="compliance-title">
-      <div className="section-heading"><div>
-        <h2 id="compliance-title">Seguridad y salud en el trabajo · pruebas</h2>
-        <p role="alert">SOLO DATOS FICTICIOS. Sin cumplimiento legal certificado, personas reales ni auditoría de servidor.</p>
-        <p className="muted">Simulación efímera: se borra al cambiar de empresa o recargar.</p>
-      </div></div>
+    <section id="compliance-management" className="ui-page catalog-panel" aria-label="Seguridad y salud en el trabajo · pruebas">
+      <PageHeader title="Seguridad y salud en el trabajo · pruebas" description="Registros sintéticos sin certificación legal ni datos personales." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setCreating(true); }}>Nuevo registro ficticio</button> : undefined} />
+      <MetricStrip label="Indicadores de Seguridad y salud en el trabajo · pruebas" items={[{ label: 'Registros', value: scoped.length }, { label: 'Resultados', value: filtered.length }, { label: 'Eventos de esta sesión', value: history.filter(item => item.scope === scope).length }]} />
+      <p role="alert">SOLO DATOS FICTICIOS. Sin cumplimiento legal certificado, personas reales ni auditoría de servidor.</p>
+      <p className="muted">Simulación efímera: se borra al cambiar de empresa o recargar.</p>
       {notice && <output role="status" aria-live="polite">{notice}</output>}
-      <div className="catalog-grid">
-        <section className="catalog-card" aria-labelledby="compliance-list-title">
+      <div className="ui-grid-2 catalog-grid">
+        <section className="ui-card catalog-card" aria-labelledby="compliance-list-title">
           <h3 id="compliance-list-title">Registros de demostración</h3>
+          <Toolbar trailing={<span className="ui-count">{filtered.length} de {scoped.length}</span>}>
           <label>Buscar referencia ficticia
             <input value={search}
               onChange={event => setSearch(event.target.value)} />
@@ -113,16 +116,12 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               {estados.map(item => <option key={item} value={item}>{item}</option>)}
             </select>
           </label>
-          {filtered.length === 0 ? <p role="status">Sin registros ficticios para estos filtros.</p> : (
-            <ul>{filtered.map(row => <li key={row.ref}>
-              <button type="button" onClick={() => view(row.ref)}>{row.ref} · {row.state}</button>
-            </li>)}</ul>
-          )}
+          </Toolbar>
+          <DataTable caption="Listado de Seguridad y salud en el trabajo · pruebas" rows={filtered} rowKey={row => row.ref} onOpen={row => view(row.ref)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.ref}</strong></span> }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'EN_REVISION' ? 'info' : row.state === 'REQUIERE_REVISION' || row.state === 'CIERRE_REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.state}</StatusPill> }]} />
         </section>
         {canCreate && (
-          <section className="catalog-card" aria-labelledby="compliance-create-title">
-            <h3 id="compliance-create-title">Nuevo registro ficticio</h3>
-            <form className="catalog-editor" onSubmit={create}>
+          <SidePanel open={creating && canCreate} title="Nuevo registro ficticio" onClose={() => setCreating(false)}>
+          <form className="catalog-editor" onSubmit={create}>
               <label>Referencia ficticia
                 <input required maxLength={70} pattern="fixture:occupational/[a-z][a-z0-9_\-]{0,47}"
                   value={ref} placeholder="fixture:occupational/demo"
@@ -140,10 +139,10 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               </label>
               <button type="submit">Crear registro de prueba</button>
             </form>
-          </section>
+          
+        </SidePanel>
         )}
-        <section className="catalog-card" aria-labelledby="compliance-detail-title">
-          <h3 id="compliance-detail-title">Detalle y revisión</h3>
+        <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión" onClose={() => setSelected('')}>
           {detail ? <>
             <dl>
               <dt>Referencia</dt><dd>{detail.ref}</dd>
@@ -168,8 +167,9 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             )}
             <p className="muted">Ningún estado se aprueba ni se cierra automáticamente.</p>
           </> : <p role="status">Selecciona un registro para ver su detalle.</p>}
-        </section>
-        <section className="catalog-card" aria-labelledby="compliance-audit-title">
+        
+        </SidePanel>
+        <section className="ui-card catalog-card" aria-labelledby="compliance-audit-title">
           <h3 id="compliance-audit-title">Bitácora de demostración (no oficial)</h3>
           <p className="muted">La bitácora local no sustituye la auditoría de servidor.</p>
           {history.length === 0 ? <p role="status">Sin operaciones de prueba.</p> : (
@@ -594,7 +594,7 @@ async function requestJson(url: string, method = 'GET',
       </p>}
       {loadState.status === 'ready' && (
         <div className="production-layout">
-          <section className="catalog-card" aria-labelledby="compliance-list-title">
+          <section className="ui-card catalog-card" aria-labelledby="compliance-list-title">
             <h3 id="compliance-list-title">Evidencias sintéticas</h3>
             <label className="field"><span>Filtrar por estado</span>
               <select value={filter} onChange={(event) =>
@@ -616,7 +616,7 @@ async function requestJson(url: string, method = 'GET',
                 {' · '}{displayStates[item.state]}
               </li>)}</ul>}
           </section>
-          {canCreate && <section className="catalog-card" aria-labelledby="compliance-create-title">
+          {canCreate && <section className="ui-card catalog-card" aria-labelledby="compliance-create-title">
             <h3 id="compliance-create-title">Crear evidencia de prueba</h3>
             <form className="catalog-editor" onSubmit={(event) => { void create(event); }}>
               <label className="field"><span>Referencia ficticia de evidencia</span>
@@ -639,7 +639,7 @@ async function requestJson(url: string, method = 'GET',
               </button>
             </form>
           </section>}
-          <section className="catalog-card" aria-labelledby="compliance-detail-title">
+          <section className="ui-card catalog-card" aria-labelledby="compliance-detail-title">
             <h3 id="compliance-detail-title">Detalle y revisión</h3>
             {!selected ? <p role="status">Selecciona una evidencia ficticia.</p> : <>
               <dl>

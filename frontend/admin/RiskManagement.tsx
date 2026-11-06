@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { useLayoutEffect, useState, type FormEvent } from 'react';
+import { PageHeader, MetricStrip, Toolbar, DataTable, SidePanel, StatusPill } from './ui/Kit';
 
 /**
  * M12 · Riesgos empresariales. Simulador local de construcción, no una evaluación
@@ -61,6 +62,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [probability, setProbability] = useState('1');
   const [impact, setImpact] = useState('1');
   const [selected, setSelected] = useState('');
+  const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'TODAS' | RiskCategory>('TODAS');
   const [stateFilter, setStateFilter] = useState<'TODOS' | RiskState>('TODOS');
@@ -96,6 +98,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     setRecords(previous => [...previous, record]);
     audit(riskRef, 'created', actorRef, 'PENDIENTE');
     setSelected(riskRef);
+    setCreating(false);
     setRiskRef('');
     setActorRef('');
     setNotice('Riesgo ficticio creado solo en memoria. Requiere revisión profesional.');
@@ -136,17 +139,16 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   }
 
   return (
-    <section id="risk-management" className="catalog-panel" aria-labelledby="risk-title">
-      <div className="section-heading"><div>
-        <span className="eyebrow">M12 · Exclusivo construcción</span>
-        <h2 id="risk-title">Riesgos empresariales</h2>
-        <p role="alert">SOLO DATOS FICTICIOS. No usar datos personales, empresas reales ni evaluar cumplimiento legal.</p>
-        <p className="muted">Simulación efímera: sin API, sin persistencia y sin auditoría de servidor.</p>
-      </div></div>
+    <section id="risk-management" className="ui-page catalog-panel" aria-label="Riesgos empresariales">
+      <PageHeader title="Riesgos empresariales" description="Escenarios ficticios sin evaluaciones legales ni datos reales." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setCreating(true); }}>Crear riesgo de prueba</button> : undefined} />
+      <MetricStrip label="Indicadores de Riesgos empresariales" items={[{ label: 'Registros', value: scoped.length }, { label: 'Resultados', value: visible.length }, { label: 'Eventos de esta sesión', value: history.filter(item => item.scope === scope).length }]} />
+      <p role="alert">SOLO DATOS FICTICIOS. No usar datos personales, empresas reales ni evaluar cumplimiento legal.</p>
+      <p className="muted">Simulación efímera: sin API, sin persistencia y sin auditoría de servidor.</p>
       {notice && <output role="status" aria-live="polite">{notice}</output>}
-      <div className="catalog-grid">
-        <section className="catalog-card" aria-labelledby="risk-list-title">
+      <div className="ui-grid-2 catalog-grid">
+        <section className="ui-card catalog-card" aria-labelledby="risk-list-title">
           <h3 id="risk-list-title">Riesgos de demostración</h3>
+          <Toolbar trailing={<span className="ui-count">{visible.length} de {scoped.length}</span>}>
           <label>Buscar referencia ficticia
             <input type="search" value={search} onChange={event => {
               const value = event.target.value.toLowerCase();
@@ -169,18 +171,12 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               {categories.map(item => <option key={item} value={item}>{item}</option>)}
             </select>
           </label>
-          {visible.length === 0 ? <p role="status">Sin riesgos ficticios para estos filtros.</p> : (
-            <ul>{visible.map(row => <li key={row.ref}>
-              <button type="button" aria-pressed={selected === row.ref}
-                onClick={() => view(row.ref)}>{row.ref}</button>
-              {' · '}{row.category} · {row.state}
-            </li>)}</ul>
-          )}
+          </Toolbar>
+          <DataTable caption="Listado de Riesgos empresariales" rows={visible} rowKey={row => row.ref} onOpen={row => view(row.ref)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.ref}</strong></span> }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'EN_REVISION' ? 'info' : row.state === 'REQUIERE_REVISION' || row.state === 'CIERRE_REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.state}</StatusPill> }]} />
         </section>
         {canCreate && (
-          <section className="catalog-card" aria-labelledby="risk-create-title">
-            <h3 id="risk-create-title">Crear riesgo de prueba</h3>
-            <form className="catalog-editor" onSubmit={create}>
+          <SidePanel open={creating && canCreate} title="Crear riesgo de prueba" onClose={() => setCreating(false)}>
+          <form className="catalog-editor" onSubmit={create}>
               <label>Referencia de riesgo ficticio
                 <input required maxLength={70} pattern="fixture:risk/[a-z][a-z0-9_\-]{0,47}"
                   value={riskRef} placeholder="fixture:risk/demo"
@@ -207,10 +203,10 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               </label>
               <button type="submit">Crear riesgo ficticio</button>
             </form>
-          </section>
+          
+        </SidePanel>
         )}
-        <section className="catalog-card" aria-labelledby="risk-detail-title">
-          <h3 id="risk-detail-title">Detalle y revisión</h3>
+        <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión" onClose={() => setSelected('')}>
           {detail ? <>
             <dl>
               <dt>Referencia</dt><dd>{detail.ref}</dd>
@@ -230,8 +226,9 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             </form>}
             <p className="muted">Ningún riesgo se aprueba ni se cierra automáticamente.</p>
           </> : <p role="status">Selecciona un riesgo para consultar su detalle.</p>}
-        </section>
-        <section className="catalog-card" aria-labelledby="risk-audit-title">
+        
+        </SidePanel>
+        <section className="ui-card catalog-card" aria-labelledby="risk-audit-title">
           <h3 id="risk-audit-title">Bitácora de demostración (no oficial)</h3>
           <p className="muted">La bitácora local no sustituye la auditoría de servidor.</p>
           {history.filter(item => item.scope === scope).length === 0
