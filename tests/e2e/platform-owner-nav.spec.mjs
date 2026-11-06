@@ -43,7 +43,7 @@ test.describe('Propietario — navegación agrupada sin enlaces inexistentes', (
     await page.getByLabel('Correo').fill(email);
     await page.getByLabel('Contraseña').fill(password);
     await page.getByRole('button', { name: 'Ingresar' }).click();
-    await expect(page).toHaveURL(/\\/adminpl0n3r$/);
+    await expect(page).toHaveURL(/\/adminpl0n3r$/);
 
     const nav = page.getByRole('navigation', { name: 'Navegación de plataforma' });
     await expect(nav.locator('button.nav-group-head')).toHaveCount(GROUPS.length);
@@ -94,7 +94,7 @@ test.describe('Propietario — navegación agrupada sin enlaces inexistentes', (
     }
 
     await nav.locator('a.nav-sub[href="/adminpl0n3r/suscripciones"]').click();
-    await expect(page).toHaveURL(/\\/adminpl0n3r\\/suscripciones$/);
+    await expect(page).toHaveURL(/\/adminpl0n3r\/suscripciones$/);
     const subscriptions = page.getByRole('navigation', { name: 'Navegación de plataforma' });
     await expect(subscriptions.getByRole('button', { name: 'Comercial' }))
       .toHaveAttribute('aria-expanded', 'true');
