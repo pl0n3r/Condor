@@ -57,7 +57,8 @@ final class GovernanceHttpIntegrationTest extends WebTestCase
         }
         $client->request('GET', $base);
         self::assertResponseStatusCodeSame(200);
-        self::assertSame($kinds, array_column(self::payload($client)['records'], 'kind'));
+        self::assertSame(['authorization', 'decision', 'faculty', 'shareholder'],
+            array_column(self::payload($client)['records'], 'kind'));
 
         $client->request('GET', '/api/v1/branches/'.$otherBranch->id().'/governance');
         self::assertResponseStatusCodeSame(200);
