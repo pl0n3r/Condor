@@ -552,9 +552,8 @@ export function InventoryManagement({
                 </StatusPill> },
               ]} />
           </Card>
-          {canCreate && (
+          {canCreate && <SidePanel open={activePanel === 'source'} title="Nueva fuente" onClose={() => setActivePanel(null)}>
             <form className="catalog-editor" onSubmit={(event) => void createSource(event)}>
-              <h3>Nueva fuente</h3>
               <div className="catalog-form-grid">
                 <label className="field">
                   <span>Nombre</span>
@@ -594,7 +593,7 @@ export function InventoryManagement({
                 {busy ? 'Guardando…' : 'Crear fuente'}
               </button>
             </form>
-          )}
+          </SidePanel>}
 
           <form className="catalog-editor" onSubmit={(event) => void scanVariant(event)}>
             <h3>Buscar variante por código</h3>
@@ -643,23 +642,35 @@ export function InventoryManagement({
             )}
           </form>
 
-          <div className="catalog-list">
-            {ready.balances.length === 0 ? (
-              <p className="muted">No hay saldos registrados todavía.</p>
-            ) : ready.balances.map((balance) => (
-              <article className="catalog-card" key={balance.id}>
-                <div>
-                  <span className="eyebrow">
-                    {sourceById.get(balance.source_id)?.name ?? 'Fuente'}
-                  </span>
-                  <h3>{balance.variant.product_name}</h3>
-                  <p>{balance.variant.sku} · {balance.variant.name}</p>
-                </div>
-                <strong>{balance.quantity} und.</strong>
-              </article>
-            ))}
-          </div>
-
+          <Card title="Existencias por variante">
+            <DataTable caption="Saldos por fuente y producto"
+              rows={ready.balances.filter(balance =>
+                (balance.variant.product_name + ' ' + balance.variant.sku + ' ' + balance.variant.name)
+                  .toLocaleLowerCase('es-CO').includes(search.toLocaleLowerCase('es-CO'))
+                || (sourceById.get(balance.source_id)?.name ?? '').toLocaleLowerCase('es-CO')
+                  .includes(search.toLocaleLowerCase('es-CO')))}
+              rowKey={balance => balance.id} onOpen={balance => setSelectedBalanceId(balance.id)}
+              empty={<><strong>Sin saldos</strong><span>No hay saldos registrados o no coinciden con la búsqueda.</span></>}
+              columns={[
+                { key: 'product', header: 'Producto', render: balance => <span className="ui-cell-main"><strong>{balance.variant.product_name}</strong><small>{balance.variant.sku} · {balance.variant.name}</small></span> },
+                { key: 'source', header: 'Fuente', render: balance => sourceById.get(balance.source_id)?.name ?? 'Fuente' },
+                { key: 'quantity', header: 'Cantidad', render: balance => balance.quantity, align: 'right' },
+              ]} />
+          </Card>
+          <SidePanel open={selectedSourceId !== null} title="Detalle de fuente" onClose={() => setSelectedSourceId(null)}>
+            {ready.sources.filter(source => source.id === selectedSourceId).map(source => <dl key={source.id} className="ui-details">
+              <div><dt>Nombre</dt><dd>{source.name}</dd></div><div><dt>Identificador</dt><dd>{source.slug}</dd></div>
+              <div><dt>Tipo</dt><dd>{source.type === 'branch' ? 'Sede' : 'Fuente lógica'}</dd></div>
+            </dl>)}
+          </SidePanel>
+          <SidePanel open={selectedBalanceId !== null} title="Detalle de existencias" onClose={() => setSelectedBalanceId(null)}>
+            {ready.balances.filter(balance => balance.id === selectedBalanceId).map(balance => <dl key={balance.id} className="ui-details">
+              <div><dt>Producto</dt><dd>{balance.variant.product_name}</dd></div>
+              <div><dt>Variante</dt><dd>{balance.variant.sku} · {balance.variant.name}</dd></div>
+              <div><dt>Fuente</dt><dd>{sourceById.get(balance.source_id)?.name ?? 'Fuente'}</dd></div>
+              <div><dt>Cantidad</dt><dd>{balance.quantity} und.</dd></div>
+            </dl>)}
+          </SidePanel>
           {canUpdate && ready.sources.length > 0 && ready.variants.length > 0 && (
             <div className="catalog-list">
               <form className="catalog-card" onSubmit={(event) => void adjust(event)}>
