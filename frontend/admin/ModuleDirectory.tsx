@@ -27,6 +27,7 @@ const HINTS: Record<string, string> = {
   workflows: 'Flujos de trabajo y aprobaciones.',
   'operations-processes': 'Procesos y procedimientos.',
   roles: 'Roles, permisos y accesos.',
+  documents: 'Expedientes y evidencias sintéticas; sin firma legal.',
 };
 
 function moduleId(href: string): string {
