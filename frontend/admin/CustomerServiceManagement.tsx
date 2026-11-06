@@ -38,6 +38,7 @@ function Workspace({ tenantId, branchId, permissions }: Props) {
     log(ref, 'created');
     setRef('');
     setNotice('Caso ficticio creado. Pendiente de revisión.');
+    setCreating(false);
   }
   function view(reference: string) {
     if (!canView || !syntheticRef.test(reference) || !records.some(r => r.ref === reference)) return;
@@ -97,7 +98,7 @@ function Workspace({ tenantId, branchId, permissions }: Props) {
           <li key={i}>{entry.operation}{' · '}{entry.ref.replace('fixture:case/', '')}</li>)}</ul>}
     </Card>
     <SidePanel open={creating && canCreate} title="Nuevo caso ficticio" onClose={() => setCreating(false)}>
-      <form className="catalog-editor" onSubmit={event => { create(event); if (syntheticRef.test(ref)) setCreating(false); }}>
+      <form className="catalog-editor" onSubmit={create}>
         <label className="field"><span>Referencia sintética</span>
           <input required maxLength={45} placeholder="fixture:case/demo"
             pattern="fixture:case/[a-z][a-z0-9_-]{0,31}"
