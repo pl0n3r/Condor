@@ -8,15 +8,10 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 use Doctrine\Migrations\Exception\IrreversibleMigration;
 use RuntimeException;
-use Throwable;
 
 /** #1726: additive platform-scoped settings; never migrates real credentials. */
 final class Version20261212120000 extends AbstractMigration // NOSONAR -- Doctrine naming
 {
-    private const SCHEMA_LOCK = 'condor_platform_settings_schema';
-
-    private bool $schemaLockHeld = false;
-
     public function getDescription(): string
     {
         return 'Ajustes globales cifrados y auditoría sin valores, reversión protegida.';
@@ -148,47 +143,40 @@ final class Version20261212120000 extends AbstractMigration // NOSONAR -- Doctri
         return true;
     }
 
-    public function preDown(Schema $schema): void
-    {
-        // Doctrine executes addSql() after down() and before postDown():
-        // hold this named lock across counts AND actual DDL, also in dry-run.
-        if ((int) $this->connection->fetchOne("SELECT GET_LOCK('".self::SCHEMA_LOCK."', 10)") !== 1) {
-            throw new IrreversibleMigration('No se obtuvo exclusión para revertir ajustes de plataforma.');
-        }
-        $this->schemaLockHeld = true;
-    }
-
     public function down(Schema $schema): void
     {
-        try {
-            if ((int) $this->connection->fetchOne(
-                'SELECT COUNT(*) FROM condor_platform_integration_setting',
-            ) > 0 || (int) $this->connection->fetchOne(
-                'SELECT COUNT(*) FROM condor_platform_setting_audit',
-            ) > 0) {
-                throw new IrreversibleMigration(
-                    'Ajustes o auditoría existentes: restaurar backup y obtener aprobación explícita.',
-                );
-            }
-
-            $this->addSql('DROP TABLE condor_platform_setting_audit');
-            $this->addSql('DROP TABLE condor_platform_integration_setting');
-        } catch (Throwable $error) {
-            $this->releaseSchemaLock();
-            throw $error;
+        // This early guard provides a human-readable diagnostic in normal
+        // Doctrine executions, but an exported --dry-run --write-sql script
+        // must recheck data independently at the moment it actually runs.
+        if ((int) $this->connection->fetchOne(
+            'SELECT COUNT(*) FROM condor_platform_integration_setting',
+        ) > 0 || (int) $this->connection->fetchOne(
+            'SELECT COUNT(*) FROM condor_platform_setting_audit',
+        ) > 0) {
+            throw new IrreversibleMigration(
+                'Ajustes o auditoría existentes: restaurar backup y obtener aprobación explícita.',
+            );
         }
-    }
 
-    public function postDown(Schema $schema): void
-    {
-        $this->releaseSchemaLock();
-    }
-
-    private function releaseSchemaLock(): void
-    {
-        if ($this->schemaLockHeld) {
-            $this->schemaLockHeld = false;
-            $this->connection->fetchOne("SELECT RELEASE_LOCK('".self::SCHEMA_LOCK."')");
-        }
+        // Doctrine queues all statements for real execution OR exports them
+        // for later use. Each exported statement stays in the same SQL session.
+        // Recheck both counts *after* obtaining the writers' advisory lock,
+        // then drop both tables in ONE prepared DDL statement. A failed
+        // condition prepares deliberately invalid SQL and aborts fail-closed;
+        // there is never an unguarded exported DROP.
+        $this->addSql("SET @condor_platform_schema_lock = GET_LOCK('condor_platform_settings_schema', 10)");
+        $this->addSql(<<<'SQL'
+            SET @condor_platform_schema_ddl = IF(
+                @condor_platform_schema_lock = 1
+                AND (SELECT COUNT(*) FROM condor_platform_integration_setting) = 0
+                AND (SELECT COUNT(*) FROM condor_platform_setting_audit) = 0,
+                'DROP TABLE condor_platform_setting_audit, condor_platform_integration_setting',
+                'SELECT FROM condor_platform_settings_rollback_denied'
+            )
+            SQL);
+        $this->addSql('PREPARE condor_platform_schema_stmt FROM @condor_platform_schema_ddl');
+        $this->addSql('EXECUTE condor_platform_schema_stmt');
+        $this->addSql('DEALLOCATE PREPARE condor_platform_schema_stmt');
+        $this->addSql("DO RELEASE_LOCK('condor_platform_settings_schema')");
     }
 }
