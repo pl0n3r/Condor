@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { AdminCsvImport } from './CatalogManagement';
-import { MetricStrip, PageHeader, SidePanel, Toolbar } from './ui/Kit';
+import { DataTable, MetricStrip, PageHeader, SidePanel, Toolbar } from './ui/Kit';
 import {
   categoryPriceListPath,
   commercialCategoriesPath,
@@ -678,65 +678,46 @@ export function CommerceManagement({
               </SidePanel>
             )}
 
-            <div className="catalog-variant-list">
-              {customers.categories.map((category) => (
-                <div className="catalog-variant-row" key={category.id}>
-                  <div>
-                    <strong>{category.name}</strong>
-                    <span className="muted">{category.slug}</span>
-                  </div>
+            <DataTable caption="Categorías comerciales"
+              rows={customers.categories} rowKey={(category) => category.id}
+              empty={<p>Todavía no hay categorías comerciales registradas.</p>}
+              columns={[
+                { key: 'name', header: 'Categoría', render: (category) =>
+                  <span className="ui-cell-main"><strong>{category.name}</strong><small>{category.slug}</small></span> },
+                { key: 'preferred', header: 'Lista preferida', render: (category) =>
+                  canViewPricing && pricing ? (
+                    <label className="field">
+                      <span className="ui-sr-only">{'Lista preferida de ' + category.name}</span>
+                      <select aria-label={'Lista preferida de ' + category.name}
+                        value={category.preferred_price_list_id ?? ''}
+                        disabled={!canUpdatePricing}
+                        onChange={(event) => void assignPreferredList(category, event.target.value)}>
+                        <option value="">Sin preferencia</option>
+                        {pricing.price_lists.map((list) => (
+                          <option value={list.id} key={list.id}>{list.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : 'Sin asignar' },
+                { key: 'actions', header: 'Acciones', render: (category) => (
                   <div className="catalog-actions">
-                    {canViewPricing && pricing && (
-                      <label className="field">
-                        <span>Lista preferida</span>
-                        <select
-                          aria-label={'Lista preferida de ' + category.name}
-                          value={category.preferred_price_list_id ?? ''}
-                          disabled={!canUpdatePricing}
-                          onChange={(event) => void assignPreferredList(
-                            category,
-                            event.target.value,
-                          )}
-                        >
-                          <option value="">Sin preferencia</option>
-                          {pricing.price_lists.map((list) => (
-                            <option value={list.id} key={list.id}>
-                              {list.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
                     {canUpdateCustomers && (
-                      <button
-                        type="button"
-                        className="button button-secondary"
+                      <button type="button" className="button button-secondary"
                         onClick={() => setCategoryDraft({
-                          id: category.id,
-                          name: category.name,
-                          slug: category.slug,
-                        })}
-                      >
-                        Editar
-                      </button>
+                          id: category.id, name: category.name, slug: category.slug,
+                        })}>Editar</button>
                     )}
                     {canDeleteCustomers && (
-                      <button
-                        type="button"
-                        className="button button-secondary"
+                      <button type="button" className="button button-secondary"
                         disabled={busy}
                         onClick={() => void deactivate(
                           commercialCategoryPath(branchId, category.id),
                           'Categoría desactivada.',
-                        )}
-                      >
-                        Desactivar
-                      </button>
+                        )}>Desactivar</button>
                     )}
                   </div>
-                </div>
-              ))}
-            </div>
+                ) },
+              ]} />
           </article>
 
           <article className="catalog-card">
