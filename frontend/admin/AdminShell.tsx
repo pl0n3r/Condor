@@ -4,14 +4,116 @@ export type AdminNavItem = Readonly<{
   href: string;
   label: string;
   current?: boolean;
+  icon?: NavIconName;
 }>;
+
+
+export type NavIconName =
+  | 'home' | 'sales' | 'catalog' | 'site' | 'people' | 'finance' | 'operations' | 'admin';
+
+/** Iconos propios de trazo uniforme (24x24, 1.75): geometría simple, sin recursos externos. */
+const NAV_ICON_PATHS: Record<NavIconName, string> = {
+  home: 'M3 11.5 12 4l9 7.5M5.5 10v9.5h13V10M10 19.5v-5h4v5',
+  sales: 'M4 5h2l2.2 9.5h9.3L19.5 8H7M9.5 19.5h.01M17 19.5h.01',
+  catalog: 'M12 3 4 7v10l8 4 8-4V7l-8-4ZM4 7l8 4 8-4M12 11v10',
+  site: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9S9.5 5.5 12 3Z',
+  people: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20c.4-3.3 3.1-5.5 6.5-5.5s6.1 2.2 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M17.5 14.7c2.2.5 3.7 2.4 4 5.3',
+  finance: 'M3 9.5 12 4l9 5.5M5 10v8M9.7 10v8M14.3 10v8M19 10v8M3 20h18',
+  operations: 'M5 4h5v5H5V4ZM14 15h5v5h-5v-5ZM10 6.5h3a2.5 2.5 0 0 1 2.5 2.5v3.5M14 17.5h-3A2.5 2.5 0 0 1 8.5 15v-3',
+  admin: 'M12 3 5 6v5.5c0 4.2 2.8 7.4 7 9 4.2-1.6 7-4.8 7-9V6l-7-3ZM9.5 12l2 2 3.5-4',
+};
+
+function NavIcon({ name }: Readonly<{ name?: NavIconName }>) {
+  if (!name) return null;
+  return (
+    <svg className="nav-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d={NAV_ICON_PATHS[name]} />
+    </svg>
+  );
+}
+
+/** Grupo de menú con submenú (se muestra plegable). */
+export type AdminNavGroup = Readonly<{
+  group: string;
+  icon?: NavIconName;
+  items: readonly AdminNavItem[];
+}>;
+
+export type AdminNavEntry = AdminNavItem | AdminNavGroup;
+
+function itemIsCurrent(item: AdminNavItem, hash: string): boolean {
+  if (item.current) return true;
+  const at = item.href.indexOf('#');
+  return at >= 0 && hash !== '' && item.href.slice(at) === hash;
+}
+
+/** Grupo plegable: el panel anima su altura con grid-template-rows (sin medir) y el chevron se voltea. */
+function NavGroup({ entry, hash }: Readonly<{ entry: AdminNavGroup; hash: string }>) {
+  const hasCurrent = entry.items.some((item) => itemIsCurrent(item, hash));
+  const [open, setOpen] = useState(hasCurrent);
+  const panelId = useId();
+
+  useEffect(() => {
+    if (hasCurrent) setOpen(true);
+  }, [hasCurrent]);
+
+  return (
+    <div className="nav-group t-acc" data-open={open ? 'true' : 'false'}>
+      <button
+        type="button"
+        className="nav-group-head t-acc-head"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <NavIcon name={entry.icon} />
+        <span>{entry.group}</span>
+        <span className="t-acc-chevron" aria-hidden="true">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor"
+            strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 6.5L8 10.5L12 6.5" />
+          </svg>
+        </span>
+      </button>
+      <div className="t-acc-panel" id={panelId} inert={!open || undefined}>
+        <div className="t-acc-panel-inner">
+          {entry.items.map((item) => (
+            <a
+              className="nav-sub"
+              href={item.href}
+              aria-current={itemIsCurrent(item, hash) ? 'page' : undefined}
+              key={item.href}
+            >
+              <span>{item.label}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function useLocationHash(): string {
+  const [hash, setHash] = useState(() => (typeof window === 'undefined' ? '' : window.location.hash));
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
+  }, []);
+  return hash;
+}
+
+function isGroup(entry: AdminNavEntry): entry is AdminNavGroup {
+  return 'group' in entry;
+}
 
 type AdminShellProps = Readonly<{
   version: string;
   logoutToken: string;
   ariaLabel: string;
   navLabel: string;
-  navItems: readonly AdminNavItem[];
+  navItems: readonly AdminNavEntry[];
   variant?: 'tenant' | 'platform';
   children: ReactNode;
 }>;
@@ -240,6 +342,23 @@ export function AdminShell({
   variant = 'tenant',
   children,
 }: AdminShellProps) {
+  const hash = useLocationHash();
+  // Si el ancla de la URL apunta a una sección dentro de un grupo, esa sección es la actual y «Inicio» deja de estarlo.
+  const sectionInGroup = navItems.some((entry) => isGroup(entry)
+    && entry.items.some((item) => !item.current && itemIsCurrent(item, hash)));
+  // Módulo activo (por el ancla de la URL): sirve para mostrar solo ese módulo y su ruta de navegación.
+  let activeGroup = '';
+  let activeLabel = '';
+  let activeId = '';
+  for (const entry of navItems) {
+    if (!isGroup(entry)) continue;
+    const hit = entry.items.find((item) => !item.current && itemIsCurrent(item, hash));
+    if (hit) {
+      activeGroup = entry.group;
+      activeLabel = hit.label.replace(' (pruebas)', '');
+      activeId = hit.href.slice(hit.href.indexOf('#') + 1);
+    }
+  }
   return (
     <section
       className={'admin-shell admin-shell-' + variant}
@@ -252,14 +371,19 @@ export function AdminShell({
         </div>
 
         <nav aria-label={navLabel}>
-          {navItems.map((item) => (
-            <a
-              href={item.href}
-              aria-current={item.current ? 'page' : undefined}
-              key={item.href}
-            >
-              {item.label}
-            </a>
+          {navItems.map((entry) => (
+            isGroup(entry) ? (
+              <NavGroup entry={entry} hash={hash} key={entry.group} />
+            ) : (
+              <a
+                href={entry.href}
+                aria-current={entry.current && !sectionInGroup ? 'page' : undefined}
+                key={entry.href}
+              >
+                <NavIcon name={entry.icon} />
+                <span>{entry.label}</span>
+              </a>
+            )
           ))}
         </nav>
 
@@ -275,8 +399,21 @@ export function AdminShell({
         </form>
       </aside>
 
-      <div className="workspace">
+      <div className="workspace" data-module={activeLabel ? 'activo' : 'inicio'}>
+        {/* Solo el módulo elegido se muestra; el resto sigue montado pero oculto. El id sale del menú y se valida. */}
+        {/^[a-z0-9-]+$/.test(activeId) && (
+          <style>{'.admin-shell .workspace > section#' + activeId + ' { display: grid; }'}</style>
+        )}
         {variant === 'tenant' && <AdminGlobalSearch />}
+        {activeLabel && (
+          <nav className="module-breadcrumb" aria-label="Ruta">
+            <a href="/admin">Inicio</a>
+            <span aria-hidden="true">/</span>
+            <span>{activeGroup}</span>
+            <span aria-hidden="true">/</span>
+            <strong aria-current="page">{activeLabel}</strong>
+          </nav>
+        )}
         {children}
       </div>
     </section>

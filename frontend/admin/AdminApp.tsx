@@ -18,7 +18,8 @@ import { CustomerServiceManagement } from './CustomerServiceManagement';
 import { AssetsManagement } from './AssetsManagement';
 import { PayrollManagement } from './PayrollManagement';
 import { ComplianceManagement } from './ComplianceManagement';
-import { AdminShell } from './AdminShell';
+import { AdminShell, type AdminNavEntry } from './AdminShell';
+import { ModuleDirectory } from './ModuleDirectory';
 import { OverviewGrid } from './OverviewGrid';
 import { contextPath } from './api';
 
@@ -170,41 +171,84 @@ export function AdminApp({
         === readyContext.active_legal_entity?.id
       ));
 
+  const navEntries: AdminNavEntry[] = [
+
+        { href: '/admin', label: 'Inicio', current: section === 'home', icon: 'home' },
+        {
+          group: 'Ventas',
+          icon: 'sales',
+          items: [
+            { href: '/admin#commerce', label: 'Comercial' },
+            { href: '/admin#orders', label: 'Pedidos' },
+            { href: '/admin#sales-reports', label: 'Reportes de ventas' },
+            { href: '/admin#reports-downloads', label: 'Descargas CSV' },
+            ...(import.meta.env.DEV ? [{ href: '/admin#customer-service', label: 'Servicio al cliente (pruebas)' }] : []),
+          ],
+        },
+        {
+          group: 'Catálogo e inventario',
+          icon: 'catalog',
+          items: [
+            { href: '/admin#catalog', label: 'Catálogo' },
+            { href: '/admin#inventory', label: 'Inventario' },
+            { href: '/admin#stock-alerts', label: 'Alertas de stock' },
+            { href: '/admin#stock-transfers', label: 'Transferencias' },
+            { href: '/admin#production', label: 'Producción' },
+            { href: '/admin#purchasing', label: 'Compras' },
+            ...(import.meta.env.DEV ? [{ href: '/admin#assets-management', label: 'Activos (pruebas)' }] : []),
+          ],
+        },
+        {
+          group: 'Sitio web',
+          icon: 'site',
+          items: [
+            { href: '/admin/sitio', label: 'Sitio', current: section === 'site' },
+            { href: '/admin#seo-settings', label: 'SEO' },
+          ],
+        },
+        {
+          group: 'Personas',
+          icon: 'people',
+          items: [
+            { href: '/admin#employees-management', label: 'Empleados y asistencia' },
+            ...(import.meta.env.DEV ? [{ href: '/admin#human-resources-management', label: 'Talento Humano (pruebas)' }] : []),
+            ...(import.meta.env.DEV ? [{ href: '/admin#payroll-management', label: 'Nómina (pruebas)' }] : []),
+            ...(import.meta.env.DEV ? [{ href: '/admin#contracts-management', label: 'Contratación (pruebas)' }] : []),
+            ...(import.meta.env.DEV ? [{ href: '/admin#social-security-management', label: 'Seguridad social (pruebas)' }] : []),
+          ],
+        },
+        {
+          group: 'Finanzas y cumplimiento',
+          icon: 'finance',
+          items: [
+            ...(import.meta.env.DEV ? [{ href: '/admin#finance-management', label: 'Finanzas (pruebas)' }] : []),
+            ...(import.meta.env.DEV ? [{ href: '/admin#compliance-management', label: 'SG-SST (pruebas)' }] : []),
+            ...(import.meta.env.DEV ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal (pruebas)' }] : []),
+            ...(import.meta.env.DEV ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo (pruebas)' }] : []),
+          ],
+        },
+        {
+          group: 'Operación',
+          icon: 'operations',
+          items: [
+            { href: '/admin#workflows', label: 'Workflows' },
+            ...(import.meta.env.DEV ? [{ href: '/admin#operations-processes', label: 'Procesos (pruebas)' }] : []),
+          ],
+        },
+        {
+          group: 'Administración',
+          icon: 'admin',
+          items: [{ href: '/admin#roles', label: 'Roles y permisos' }],
+        },
+  ];
+
   return (
     <AdminShell
       version={version}
       logoutToken={logoutToken}
       ariaLabel="Administrador de Condor"
       navLabel="Navegación principal"
-      navItems={[
-        { href: '/admin', label: 'Inicio', current: section === 'home' },
-        { href: '/admin/sitio', label: 'Sitio', current: section === 'site' },
-        { href: '/admin#catalog', label: 'Catálogo' },
-        { href: '/admin#inventory', label: 'Inventario' },
-        { href: '/admin#stock-alerts', label: 'Alertas de stock' },
-        { href: '/admin#stock-transfers', label: 'Transferencias' },
-        { href: '/admin#workflows', label: 'Workflows' },
-        ...(import.meta.env.DEV ? [{ href: '/admin#operations-processes', label: 'Procesos (pruebas)' }] : []),
-        { href: '/admin#seo-settings', label: 'SEO' },
-        { href: '/admin#production', label: 'Producción' },
-        { href: '/admin#purchasing', label: 'Compras' },
-        ...(import.meta.env.DEV ? [{ href: '/admin#customer-service', label: 'Servicio al cliente (pruebas)' }] : []),
-        ...(import.meta.env.DEV ? [{ href: '/admin#assets-management', label: 'Activos (pruebas)' }] : []),
-        ...(import.meta.env.DEV ? [{ href: '/admin#payroll-management', label: 'Nómina (pruebas)' }] : []),
-        ...(import.meta.env.DEV ? [{ href: '/admin#compliance-management', label: 'SG-SST (pruebas)' }] : []),
-        ...(import.meta.env.DEV ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal (pruebas)' }] : []),
-        ...(import.meta.env.DEV ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo (pruebas)' }] : []),
-        ...(import.meta.env.DEV ? [{ href: '/admin#human-resources-management', label: 'Talento Humano (pruebas)' }] : []),
-        ...(import.meta.env.DEV ? [{ href: '/admin#contracts-management', label: 'Contratación (pruebas)' }] : []),
-        ...(import.meta.env.DEV ? [{ href: '/admin#finance-management', label: 'Finanzas (pruebas)' }] : []),
-        ...(import.meta.env.DEV ? [{ href: '/admin#social-security-management', label: 'Seguridad social (pruebas)' }] : []),
-        { href: '/admin#commerce', label: 'Comercial' },
-        { href: '/admin#orders', label: 'Pedidos' },
-        { href: '/admin#sales-reports', label: 'Reportes de ventas' },
-        { href: '/admin#reports-downloads', label: 'Descargas CSV' },
-        { href: '/admin#roles', label: 'Roles y permisos' },
-        { href: '/admin#employees-management', label: 'Empleados y asistencia' },
-      ]}
+      navItems={navEntries}
     >
       <span className="eyebrow">Administrador</span>
 
@@ -328,6 +372,8 @@ export function AdminApp({
               },
             ]}
           />
+
+          <ModuleDirectory entries={navEntries} />
 
           <CatalogManagement
             key={'catalog-' + context.data.active_branch.id}
