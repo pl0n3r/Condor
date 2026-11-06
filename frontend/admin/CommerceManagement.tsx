@@ -386,6 +386,7 @@ export function CommerceManagement({
       editing ? 'Categoría actualizada.' : 'Categoría creada.',
     );
     if (succeeded) {
+      setEditor(null);
       setCategoryDraft(emptyCategory);
     }
   }
@@ -413,6 +414,7 @@ export function CommerceManagement({
       editing ? 'Cliente actualizado.' : 'Cliente creado.',
     );
     if (succeeded) {
+      setEditor(null);
       setCustomerDraft(emptyCustomer);
     }
   }
@@ -434,6 +436,7 @@ export function CommerceManagement({
       editing ? 'Lista actualizada.' : 'Lista creada.',
     );
     if (succeeded) {
+      setEditor(null);
       setListDraft(emptyList);
     }
   }
