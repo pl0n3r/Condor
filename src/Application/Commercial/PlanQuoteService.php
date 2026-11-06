@@ -130,9 +130,21 @@ final readonly class PlanQuoteService
             $options['limits'],
             $allowed,
         );
+        $verticalRate = $options['vertical']['price'];
+        if (is_array($verticalRate)) {
+            $verticalAmount = $cycle === 'monthly'
+                ? $verticalRate['monthly_amount'] : $verticalRate['annual_amount'];
+            if ($verticalRate['quote_required'] || !is_int($verticalAmount)) {
+                return $this->finish(
+                    $options, $cycle, $quantities, $selected,
+                    null, null, true, $at, $persist,
+                );
+            }
+            $extraAmount += $verticalAmount;
+        }
         foreach ($selected as $key) {
             $price = $allowed[$key]['monthly_amount'];
-            if (!is_int($price) || $price < 1) {
+            if (!is_int($price) || $price < 0) {
                 return $this->finish(
                     $options,
                     $cycle,
@@ -203,7 +215,7 @@ final readonly class PlanQuoteService
                 continue;
             }
             $price = $allowed[$addOnKey]['monthly_amount'] ?? null;
-            if (!is_int($price) || $price < 1) {
+            if (!is_int($price) || $price < 0) {
                 throw new DomainException('La cantidad excede el catálogo permitido.');
             }
             $amount += $units * $price;
