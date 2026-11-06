@@ -14,7 +14,7 @@ final class PayablesPreview
      */
     public static function preview(array $payload): array
     {
-        self::exactKeys($payload, [
+        self::requireFields($payload, [
             'tenant_ref', 'legal_entity_ref', 'site_ref', 'mode', 'obligations',
         ]);
         if ($payload['tenant_ref'] !== 'fixture:tenant/current'
@@ -72,7 +72,7 @@ final class PayablesPreview
         if (!is_array($candidate) || array_is_list($candidate)) {
             throw new InvalidArgumentException('INVALID_OBLIGATION');
         }
-        self::exactKeys($candidate, [
+        self::requireFields($candidate, [
             'obligation_ref', 'supplier_ref', 'tenant_ref', 'legal_entity_ref',
             'site_ref', 'amount_cop', 'currency', 'reconciliation_status',
             'payment_status',
@@ -105,15 +105,19 @@ final class PayablesPreview
         ];
     }
 
-    /** @param array<string,mixed> $data
-     *  @param list<string> $keys
+    /** @param array<string,mixed> $input
+     *  @param list<string> $required
      */
-    private static function exactKeys(array $data, array $keys): void
+    private static function requireFields(array $input, array $required): void
     {
-        $actual = array_keys($data);
-        if (count($actual) !== count($keys) || array_diff($actual, $keys) !== []
-            || array_diff($keys, $actual) !== []) {
+        $allowed = array_fill_keys($required, true);
+        if (count($input) !== count($allowed)) {
             throw new InvalidArgumentException('UNEXPECTED_FIELDS');
+        }
+        foreach (array_keys($input) as $field) {
+            if (!isset($allowed[$field])) {
+                throw new InvalidArgumentException('UNEXPECTED_FIELDS');
+            }
         }
     }
 

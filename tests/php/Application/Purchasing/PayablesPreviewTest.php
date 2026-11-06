@@ -68,6 +68,8 @@ final class PayablesPreviewTest extends WebTestCase
         self::assertSame(0, $expected['payments_created']);
         $payload['obligations'] = array_reverse($payload['obligations']);
         self::assertSame($expected, PayablesPreview::preview($payload));
+        $payload['obligations'][0] = array_reverse($payload['obligations'][0], true);
+        self::assertSame($expected, PayablesPreview::preview($payload));
     }
 
     public function testCanonicalCopAmountLimitsRemainStrings(): void
