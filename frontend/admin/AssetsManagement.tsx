@@ -97,7 +97,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
         return;
       }
       if (!response.ok) throw new Error('No fue posible consultar los activos de prueba.');
-      const data = await response.json() as { assets: ApiAsset[]; csrf_token: string };
+      const data = await response.json() as { assets: ApiAsset[]; 'csrf_token': string };
       if (!Array.isArray(data.assets) || typeof data.csrf_token !== 'string' ||
           data.csrf_token.length === 0) throw new Error('Respuesta sintética inválida.');
       if (!abort.signal.aborted) {
