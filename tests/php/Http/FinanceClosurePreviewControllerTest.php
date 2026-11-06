@@ -54,7 +54,7 @@ final class FinanceClosurePreviewControllerTest extends WebTestCase
         [, $branch, $owner] = $this->tenantFixture($em);
         $url = '/api/v1/branches/'.$branch->id().'/finance/closures/preview';
         $client->jsonRequest('POST', $url, $this->payload());
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(401); // Authentication precedes CSRF.
         $client->loginUser($owner);
         $client->jsonRequest('POST', $url, $this->payload());
         self::assertResponseStatusCodeSame(403);
