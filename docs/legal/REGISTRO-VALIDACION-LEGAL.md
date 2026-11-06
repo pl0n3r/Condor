@@ -1,0 +1,28 @@
+# Registro único de validación legal — Condor
+
+**Estado del registro:** generado, sin aprobar. Documento de seguimiento para revisión jurídica y decisión del dueño, no un dictamen ni autorización de publicación, go-live, datos reales o cambios de consentimiento. Fecha de corte: 2026-11-06.
+
+La columna **«Aprobado por / fecha»** se deja vacía hasta que exista aprobación trazable. Los textos fuente se conservan en sus rutas originales: este registro enlaza cada documento, pero no duplica su contenido. **Ningún estado en esta tabla implica que la revisión ya ocurrió.**
+
+| Documento o decisión por validar | Dónde se muestra / se usaría | Estado | Qué debe confirmar el abogado | Issue relacionado | Aprobado por / fecha |
+| --- | --- | --- | --- | --- | --- |
+| [Política de cookies](politica-cookies.md) | Aviso de cookies y sección «Política de cookies» de `/privacidad-y-mis-derechos` (resumen de alcance técnico) | generado, sin aprobar | Categorías, finalidades, duraciones, información al visitante y alcance real del consentimiento | Condor [#974](https://github.com/pl0n3r/Condor/issues/974), [#1711](https://github.com/pl0n3r/Condor/issues/1711) | |
+| [Política de tratamiento](../privacidad/politica-tratamiento.md) | Referencia documental; no publicada íntegramente | generado, sin aprobar | Bases, finalidades, derechos, destinatarios, transferencias y retenciones por tratamiento | Condor [#974](https://github.com/pl0n3r/Condor/issues/974), [#1497](https://github.com/pl0n3r/Condor/issues/1497) | |
+| [Aviso de privacidad y autorización](../privacidad/aviso-privacidad.md) | Referencia de pantallas futuras de autorización; no desplegado como formulario | generado, sin aprobar | Fundamentos y forma de obtener y probar consentimiento explícito cuando corresponda | Condor [#1497](https://github.com/pl0n3r/Condor/issues/1497) | |
+| [Canal de derechos](../privacidad/canal-derechos.md) | Página `/privacidad-y-mis-derechos` (informativa, sin recepción de solicitudes) | generado, sin aprobar | Identidad del responsable, contacto real, legitimación, procedimiento y plazos | Condor [#974](https://github.com/pl0n3r/Condor/issues/974), [#1497](https://github.com/pl0n3r/Condor/issues/1497) | |
+| [Términos y condiciones](../privacidad/terminos-condiciones.md) | Referencia documental; uso público sujeto a gate de publicación | generado, sin aprobar | Condiciones comerciales, SLA, garantías, jurisdicción, aceptación y versión por tenant | Condor [#1497](https://github.com/pl0n3r/Condor/issues/1497) | |
+| [Plantilla empresa cliente](../privacidad/plantilla-empresa-cliente.md) | Contratos y textos de empresas clientes; no publicación general | generado, sin aprobar | Roles responsable/encargado, condiciones contractuales, personalización por tenant | Condor [#1497](https://github.com/pl0n3r/Condor/issues/1497) | |
+| [Registro de tratamientos](../privacidad/registro-tratamientos.md) | Evidencia documental interna | generado, sin aprobar | Inventario de datos, bases, finalidades, retenciones y responsables | Condor [#974](https://github.com/pl0n3r/Condor/issues/974) | |
+| [Retención de datos](../privacidad/retencion.md) | Evidencia documental interna | generado, sin aprobar | Plazos, criterios de eliminación, conservación obligatoria y copias | Condor [#974](https://github.com/pl0n3r/Condor/issues/974) | |
+| [Baja de comunicaciones](baja-comunicaciones.md) | Canales de comunicaciones comerciales; sin activación de proveedores | generado, sin aprobar | Alcance de opt-out, prueba y tratamiento de la baja | Condor [#1497](https://github.com/pl0n3r/Condor/issues/1497) | |
+| [Política de reembolsos](politica-reembolsos.md) | Condiciones comerciales de tienda/pedidos; no autorización para operar pagos | generado, sin aprobar | Devoluciones, reembolsos, retracto, excepciones y requisitos aplicables | Condor [#1497](https://github.com/pl0n3r/Condor/issues/1497) | |
+| [Regla de datos de menores](regla-menores.md) | Política técnica interna, no aviso público aprobado | generado, sin aprobar | Tratamiento excepcional, minimización, supresión segura y garantías legales | Condor [#974](https://github.com/pl0n3r/Condor/issues/974) | |
+| Decisión de privacidad de workflows (Condor [#974](https://github.com/pl0n3r/Condor/issues/974)) | Puerta jurídica en GitHub; sin activar tratamientos | generado, sin aprobar | Finalidades, retención, seguridad y derechos de `workflow_definitions`/`workflow_executions` | Condor #974 | |
+| Revisión transversal de privacidad ([GrindFlow #457](https://github.com/pl0n3r/GrindFlow/issues/457)) | Auditoría de GrindFlow, independiente de Condor | generado, sin aprobar | Señales detectadas, base de tratamiento y alcance de terceros | GrindFlow #457 | |
+| Textos legales del producto [brvtal](https://github.com/pl0n3r/brvtal) | Producto independiente; coordinación sin aprobación cruzada | generado, sin aprobar | Inventario y validez de textos de brvtal por su propio responsable | brvtal | |
+
+## Fuentes técnicas enlazadas, sin sustituir la revisión
+
+Los expedientes existentes [normativa F0](COMPLIANCE-NORMATIVE-F0.md), [matriz F1](COMPLIANCE-MATRIX-F1-OFFLINE.md), [revisión F1B](COMPLIANCE-REVIEW-F1B-OFFLINE.md) y [atención F2A](COMPLIANCE-ATTENTION-F2A-OFFLINE.md) son evidencias técnicas, no aprobaciones legales ni textos que deban copiarse a las páginas.
+
+La identidad y el contacto del responsable continúan gobernados por `datos.yml`; los valores `[COMPLETAR POR EL DUEÑO]` permanecen hasta la puerta de go-live según D-059. La página de derechos no recoge solicitudes ni habilita tratamiento real. La publicación, los cambios legales materiales y la salida a producción conservan sus puertas humanas.
