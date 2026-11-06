@@ -5,7 +5,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import {
+
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';import {
   inventoryPath,
   productionBomsPath,
   productionMaterialAdjustmentPath,
@@ -243,6 +244,11 @@ export function ProductionManagement({
   const costRequestId = useRef(0);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
+  const [activePanel, setActivePanel] = useState<'material' | 'editMaterial' | 'adjustMaterial' | 'bom' | 'order' | null>(null);
+  const [search, setSearch] = useState('');
+  const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null);
+  const [selectedBomId, setSelectedBomId] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   const [materialCode, setMaterialCode] = useState('');
   const [materialName, setMaterialName] = useState('');
@@ -676,6 +682,7 @@ export function ProductionManagement({
       }
 
       setNotice({ kind: 'success', text: success });
+      setActivePanel(null);
       await loadProduction();
       return true;
     } catch (error) {
@@ -698,18 +705,16 @@ export function ProductionManagement({
   return (
     <section
       id="production"
-      className="catalog-panel production-panel"
-      aria-labelledby="production-title"
+      className="catalog-panel production-panel ui-page"
+      aria-label="Producción Lite"
     >
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">Operación</span>
-          <h2 id="production-title">Producción Lite</h2>
-          <p className="muted">
-            Materiales, recetas y órdenes de producción de la sede activa.
-          </p>
-        </div>
-      </div>
+      <PageHeader title="Producción Lite"
+        description="Materiales, recetas y órdenes de producción de la sede activa."
+        actions={ready && <>
+          {canCreate && <button type="button" className="button button-secondary" onClick={() => setActivePanel('material')}>Nuevo material</button>}
+          {canCreate && activeMaterials.length > 0 && ready.variants.length > 0 && <button type="button" className="button button-secondary" onClick={() => setActivePanel('bom')}>Nueva versión de BOM</button>}
+          {canCreate && activeBoms.length > 0 && <button type="button" className="button" onClick={() => setActivePanel('order')}>Nueva orden</button>}
+        </>} />
 
       {notice?.kind === 'error' && (
         <div className="alert alert-error" role="alert">
@@ -751,20 +756,11 @@ export function ProductionManagement({
 
       {ready && (
         <>
-          <div className="production-summary" aria-label="Resumen de producción">
-            <article>
-              <span>Materiales activos</span>
-              <strong>{activeMaterials.length}</strong>
-            </article>
-            <article>
-              <span>BOM activas</span>
-              <strong>{activeBoms.length}</strong>
-            </article>
-            <article>
-              <span>Órdenes abiertas</span>
-              <strong>{draftOrders.length}</strong>
-            </article>
-          </div>
+          <MetricStrip label="Resumen de producción" items={[
+            { label: 'Materiales activos', value: activeMaterials.length },
+            { label: 'BOM activas', value: activeBoms.length },
+            { label: 'Órdenes abiertas', value: draftOrders.length, tone: 'warn' },
+          ]} />
 
           <div className="production-layout">
             <section className="catalog-card" aria-labelledby="production-materials-title">
@@ -777,25 +773,31 @@ export function ProductionManagement({
                 </div>
               </div>
 
-              {ready.materials.materials.length === 0 ? (
-                <p className="catalog-variant-empty" role="status">
-                  Aún no hay materias primas registradas.
-                </p>
-              ) : (
-                <div className="production-list">
-                  {ready.materials.materials.map((material) => (
-                    <div className="production-row" key={material.id}>
-                      <div>
-                        <strong>{material.code} · {material.name}</strong>
-                        <span className="muted">
-                          {balanceByMaterial.get(material.id) ?? '0'} {material.unit}
-                          {material.active ? '' : ' · inactivo'}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <Toolbar trailing={<span className="ui-count">{ready.materials.materials.length} materiales</span>}>
+                <label className="ui-search"><span className="ui-sr-only">Buscar material</span>
+                  <input type="search" placeholder="Buscar código o material" value={search} onChange={event => setSearch(event.target.value)} />
+                </label>
+              </Toolbar>
+              <DataTable caption="Materiales de producción"
+                rows={ready.materials.materials.filter(material => (material.code + ' ' + material.name)
+                  .toLocaleLowerCase('es-CO').includes(search.toLocaleLowerCase('es-CO')))}
+                rowKey={material => material.id} onOpen={material => setSelectedMaterialId(material.id)}
+                empty={<><strong>Sin materiales</strong><span>Aún no hay materias primas registradas o no coinciden con la búsqueda.</span></>}
+                columns={[
+                  { key: 'name', header: 'Material', render: material => <span className="ui-cell-main"><strong>{material.name}</strong><small>{material.code}</small></span> },
+                  { key: 'stock', header: 'Stock', render: material => (balanceByMaterial.get(material.id) ?? '0') + ' ' + material.unit, align: 'right' },
+                  { key: 'state', header: 'Estado', render: material => <StatusPill tone={material.active ? 'ok' : 'neutral'}>{material.active ? 'Activo' : 'Inactivo'}</StatusPill> },
+                ]} />
+              {(canUpdate || canDelete) && <button type="button" className="button button-secondary" onClick={() => setActivePanel('editMaterial')}>Editar material</button>}
+              {canUpdate && activeMaterials.length > 0 && <button type="button" className="button button-secondary" onClick={() => setActivePanel('adjustMaterial')}>Ajustar materia prima</button>}
+              <SidePanel open={Boolean(selectedMaterialId)} title="Detalle de material" onClose={() => setSelectedMaterialId(null)}>
+                {ready.materials.materials.filter(material => material.id === selectedMaterialId).map(material => <dl key={material.id} className="ui-details">
+                  <div><dt>Código</dt><dd>{material.code}</dd></div><div><dt>Nombre</dt><dd>{material.name}</dd></div>
+                  <div><dt>Unidad</dt><dd>{material.unit}</dd></div>
+                  <div><dt>Stock</dt><dd>{balanceByMaterial.get(material.id) ?? '0'} {material.unit}</dd></div>
+                  <div><dt>Estado</dt><dd>{material.active ? 'Activo' : 'Inactivo'}</dd></div>
+                </dl>)}
+              </SidePanel>
 
               {canCreate && (
                 <form className="catalog-editor" onSubmit={(event) => void createMaterial(event)}>
