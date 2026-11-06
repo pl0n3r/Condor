@@ -77,6 +77,7 @@ final class PlanVersion
 
     /**
      * @param array<array-key, mixed> $limits
+     * @param array<string,mixed> $priceOptions
      */
     public function __construct(
         Plan $plan,

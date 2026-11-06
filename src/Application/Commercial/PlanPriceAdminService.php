@@ -193,7 +193,7 @@ final readonly class PlanPriceAdminService
     }
 
     /**
-     * @param array<string,mixed> $input
+     * @param array<array-key,mixed> $input
      * @return array<string,array{currency:string,monthly_amount:?int,annual_amount:?int,quote_required:bool}>
      */
     private static function validateMap(array $input, string $currency): array
