@@ -274,6 +274,7 @@ export function StockAlertsPanel({ branchId, permissions, csrfToken }: Props) {
     }
   }
 
+  const variantIds = displayed.map((item) => item.variantId);
   const rows = displayed.filter((item) => item.variantId.toLocaleLowerCase('es-CO')
     .includes(search.toLocaleLowerCase('es-CO')));
   const selected = ready && displayed.find((item) => item.variantId === selectedVariant);
@@ -282,7 +283,7 @@ export function StockAlertsPanel({ branchId, permissions, csrfToken }: Props) {
       <PageHeader title="Alertas de stock bajo"
         description="Alertas del inventario autorizado, sin notificaciones externas." />
       {ready && <MetricStrip label="Resumen de stock" items={[
-        { label: 'Variantes supervisadas', value: displayed.length },
+        { label: 'Variantes supervisadas', value: variantIds.length },
         { label: 'Alertas activas', value: ready.alerts.length, tone: 'warn' },
         { label: 'Mínimos configurados', value: ready.minimums.length },
       ]} />}
