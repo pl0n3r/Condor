@@ -135,7 +135,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     event.preventDefault();
     const draft = { reference, bodyRef, representativeRef, kind, state: 'BORRADOR' as const };
     const ref = 'fixture:' + draft.kind + '/' + draft.reference.slice('fixture:governance/'.length);
-    if (busy || !canCreate || !isFixture(draft.reference, governanceRefPattern)
+    if (!canCreate || busy || !isFixture(draft.reference, governanceRefPattern)
       || !isFixture(draft.bodyRef, bodyRefPattern)
       || !isFixture(draft.representativeRef, representativeRefPattern)
       || !kinds.includes(kind) || records.length >= 100
@@ -182,7 +182,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     event.preventDefault();
     const current = records.find(row => row.reference === selected
       && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId);
-    if (busy || !canReview || !current || !serverRefPattern.test(selected)
+    if (!canReview || busy || !current || !serverRefPattern.test(selected)
       || current.state === 'EN_REVISION') {
       setNotice('No se cambió el estado: falta permiso o la transición no aplica.');
       return;
