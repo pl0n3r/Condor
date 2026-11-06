@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import { Card, MetricStrip, PageHeader, SidePanel, StatusPill } from './ui/Kit';
 
 type Kind = 'inventory' | 'sales' | 'purchases';
 type Status = 'idle' | 'loading' | 'success' | 'empty'
@@ -28,6 +29,7 @@ export function ReportsDownloads({ branchId, permissions }: Props) {
   const [from, setFrom] = useState('');
   const [through, setThrough] = useState('');
   const [status, setStatus] = useState<Status>('idle');
+  const [panelOpen, setPanelOpen] = useState(false);
   const sequence = useRef(0);
   const active = useRef<AbortController | null>(null);
   const urls = useRef(new Set<string>());
@@ -127,46 +129,61 @@ export function ReportsDownloads({ branchId, permissions }: Props) {
   }
 
   if (allowed.length === 0) {
-    return <section id="reports-downloads" aria-label="Descargar reportes">
-      <h2>Descargar reportes</h2>
+    return <section id="reports-downloads" className="ui-page" aria-label="Descargar reportes">
+      <PageHeader title="Descargar reportes" description="Exporta registros de la sede activa como CSV." />
       <p role="alert">No tienes permisos para descargar reportes de esta sede.</p>
     </section>;
   }
   return (
-    <section id="reports-downloads" aria-label="Descargar reportes">
-      <h2>Descargar reportes</h2>
-      <p className="muted">Exporta registros de la sede activa como CSV.</p>
-      <form onSubmit={(event) => { event.preventDefault(); void download(); }}>
-        <label>Tipo de reporte
-          <select value={selected} onChange={(event) => {
-            cancel(); setKind(event.target.value as Kind);
-          }}>
-            {allowed.map((item) =>
-              <option key={item.kind} value={item.kind}>{item.label}</option>)}
-          </select>
-        </label>
-        <label>Desde
-          <input type="date" required value={from} onChange={(event) => {
-            cancel(); setFrom(event.target.value);
-          }} />
-        </label>
-        <label>Hasta
-          <input type="date" required value={through} onChange={(event) => {
-            cancel(); setThrough(event.target.value);
-          }} />
-        </label>
-        <button type="submit" disabled={!canDownload}>
-          {status === 'loading' ? 'Preparando CSV…' : 'Descargar CSV'}
-        </button>
-      </form>
-      {status === 'loading' && <output aria-live="polite">Generando reporte…</output>}
-      {status === 'success' && <output aria-live="polite">Descarga iniciada.</output>}
-      {status === 'empty' && <output aria-live="polite">Sin registros en el rango seleccionado.</output>}
-      {status === 'denied' && <p role="alert">Acceso denegado al reporte de esta sede.</p>}
-      {status === 'not-found' && <p role="alert">La sede o el reporte no está disponible.</p>}
-      {status === 'invalid' && <p role="alert">Selecciona un rango de fechas válido.</p>}
-      {status === 'unavailable' && <p role="alert">El servidor de reportes no está disponible. Puedes reintentar.</p>}
-      {status === 'error' && <p role="alert">No se pudo descargar el reporte. Puedes reintentar.</p>}
+    <section id="reports-downloads" className="ui-page" aria-label="Descargar reportes">
+      <PageHeader title="Descargar reportes"
+        description="Exporta registros de la sede activa como CSV."
+        actions={<button type="button" className="button" onClick={() => setPanelOpen(true)}>
+          Preparar descarga
+        </button>} />
+      <MetricStrip label="Opciones de exportación" items={[
+        { label: 'Tipos autorizados', value: allowed.length },
+        { label: 'Estado', value: status === 'loading' ? 'En preparación' : status === 'success' ? 'Descarga iniciada' : 'Disponible' },
+      ]} />
+      <Card title="Exportación de datos">
+        <p>Selecciona el tipo de reporte y un rango de fechas para preparar un archivo CSV.</p>
+        <StatusPill tone={status === 'error' || status === 'denied' ? 'danger' : status === 'success' ? 'ok' : status === 'loading' ? 'info' : 'neutral'}>
+          {status === 'loading' ? 'Generando reporte' : status === 'success' ? 'Descarga iniciada' : 'Listo para exportar'}
+        </StatusPill>
+        {status === 'success' && <output aria-live="polite">Descarga iniciada.</output>}
+        {status === 'empty' && <output aria-live="polite">Sin registros en el rango seleccionado.</output>}
+        {status === 'denied' && <p role="alert">Acceso denegado al reporte de esta sede.</p>}
+        {status === 'not-found' && <p role="alert">La sede o el reporte no está disponible.</p>}
+        {status === 'invalid' && <p role="alert">Selecciona un rango de fechas válido.</p>}
+        {status === 'unavailable' && <p role="alert">El servidor de reportes no está disponible. Puedes reintentar.</p>}
+        {status === 'error' && <p role="alert">No se pudo descargar el reporte. Puedes reintentar.</p>}
+      </Card>
+      <SidePanel open={panelOpen} title="Preparar descarga CSV" onClose={() => setPanelOpen(false)}>
+        <form onSubmit={(event) => { event.preventDefault(); void download(); }}>
+          <label>Tipo de reporte
+            <select value={selected} onChange={(event) => {
+              cancel(); setKind(event.target.value as Kind);
+            }}>
+              {allowed.map((item) =>
+                <option key={item.kind} value={item.kind}>{item.label}</option>)}
+            </select>
+          </label>
+          <label>Desde
+            <input type="date" required value={from} onChange={(event) => {
+              cancel(); setFrom(event.target.value);
+            }} />
+          </label>
+          <label>Hasta
+            <input type="date" required value={through} onChange={(event) => {
+              cancel(); setThrough(event.target.value);
+            }} />
+          </label>
+          <button type="submit" className="button" disabled={!canDownload}>
+            {status === 'loading' ? 'Preparando CSV…' : 'Descargar CSV'}
+          </button>
+        </form>
+        {status === 'loading' && <output aria-live="polite">Generando reporte…</output>}
+      </SidePanel>
     </section>
   );
 }
