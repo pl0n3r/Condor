@@ -223,6 +223,7 @@ function OccupationalHttpPanel({ branchId, permissions }: Pick<Props, 'branchId'
   const [sourceRef, setSourceRef] = useState('fixture:sgsst-source/demo');
   const [selected, setSelected] = useState<M03Record | null>(null);
   const [busy, setBusy] = useState(false);
+  const [httpCreating, setHttpCreating] = useState(false);
   const [notice, setNotice] = useState('');
 
   async function request(method: 'GET' | 'POST' | 'PATCH', url: string,
@@ -285,6 +286,7 @@ function OccupationalHttpPanel({ branchId, permissions }: Pick<Props, 'branchId'
         throw new Error('UNAVAILABLE');
       }
       setSelected(result.record);
+      setHttpCreating(false);
       setNotice('Registro ficticio creado en el servidor, sin valor legal.');
       await reload();
     } catch (error) {
@@ -315,8 +317,9 @@ function OccupationalHttpPanel({ branchId, permissions }: Pick<Props, 'branchId'
 
   if (!import.meta.env.DEV) return null;
   return (
-    <section id="sgsst-http-management" className="catalog-panel" aria-label="SG-SST HTTP sintético">
-      <h2>SG-SST · integración de prueba M03</h2>
+    <section id="sgsst-http-management" className="ui-page catalog-panel" aria-label="SG-SST HTTP sintético">
+       <PageHeader title="SG-SST · integración de prueba M03" description="Registro por sede con permisos del servidor, sin certificación legal." actions={canView && canCreate && load.status === 'ready' ? <button type="button" className="button" onClick={() => { setSelected(null); setHttpCreating(true); }}>Crear registro ficticio</button> : undefined} />
+       <MetricStrip label="Resumen SG-SST ficticio" items={[{ label: 'Registros de prueba', value: load.status === 'ready' ? load.rows.length : '—' }, { label: 'Submódulos', value: m03Kinds.length }, { label: 'Modo', value: 'Solo desarrollo', tone: 'info' }]} />
       <p role="alert">SOLO DATOS FICTICIOS. No certifica cumplimiento legal ni permite datos laborales reales.</p>
       {!canView && <p role="alert">Permiso denegado: se requiere settings.view.</p>}
       {canView && load.status === 'loading' && <p role="status">Cargando registros SG-SST ficticios…</p>}
@@ -326,14 +329,8 @@ function OccupationalHttpPanel({ branchId, permissions }: Pick<Props, 'branchId'
       {canView && load.status === 'ready' && <>
         <h3>Diez submódulos ficticios</h3>
         <p className="muted">{m03Kinds.join(' · ')}</p>
-        {load.rows.length === 0
-          ? <p role="status">Sin registros SG-SST ficticios.</p>
-          : <ul>{load.rows.map(row => <li key={row.record_ref}>
-            <button type="button" onClick={() => setSelected(row)}>
-              {row.kind} · {row.record_ref} · {row.state}
-            </button>
-          </li>)}</ul>}
-        {canCreate && <form onSubmit={(event) => { void create(event); }}>
+        <DataTable caption="Registros SG-SST ficticios" rows={load.rows} rowKey={row => row.record_ref} onOpen={row => setSelected(row)} empty="Sin registros SG-SST ficticios." columns={[{ key: 'ref', header: 'Referencia', render: row => <strong>{row.record_ref}</strong> }, { key: 'kind', header: 'Submódulo', render: row => row.kind }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'PENDIENTE' ? 'neutral' : 'warn'}>{row.state}</StatusPill> }]} />
+        {canCreate && <SidePanel open={httpCreating} title="Crear registro ficticio" onClose={() => setHttpCreating(false)}><form onSubmit={(event) => { void create(event); }}>
           <label>Submódulo
             <select value={kind} onChange={event => setKind(event.target.value as M03Kind)}>
               {m03Kinds.map(value => <option key={value} value={value}>{value}</option>)}
@@ -348,8 +345,8 @@ function OccupationalHttpPanel({ branchId, permissions }: Pick<Props, 'branchId'
               onChange={event => setSourceRef(event.target.value)} />
           </label>
           <button type="submit" disabled={busy}>Crear registro ficticio</button>
-        </form>}
-        {selected && <div role="group" aria-label="Revisión ficticia">
+        </form></SidePanel>}
+         {selected && <SidePanel open={!httpCreating} title={selected.record_ref} onClose={() => setSelected(null)}><div role="group" aria-label="Revisión ficticia">
           <p>{selected.record_ref}: {selected.state}. Revisión profesional requerida.</p>
           {canUpdate && <>
             <button type="button" disabled={busy}
@@ -357,9 +354,9 @@ function OccupationalHttpPanel({ branchId, permissions }: Pick<Props, 'branchId'
             <button type="button" disabled={busy}
               onClick={() => { void changeState('REQUIERE_REVISION'); }}>Requiere revisión</button>
           </>}
-        </div>}
-      </>}
-    </section>
+        </div></SidePanel>}
+       </>}
+     </section>
   );
 }
 
@@ -449,6 +446,7 @@ async function requestJson(url: string, method = 'GET',
   const detailId = useRef(0);
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
   const [selected, setSelected] = useState<Evidence | null>(null);
+  const [evidenceCreating, setEvidenceCreating] = useState(false);
   const [filter, setFilter] = useState<'TODOS' | EvidenceState>('TODOS');
   const [search, setSearch] = useState('');
   const [reference, setReference] = useState('');
@@ -526,6 +524,7 @@ async function requestJson(url: string, method = 'GET',
       setReference('');
       setObligation('');
       setSelected(result.evidence);
+      setEvidenceCreating(false);
       setNotice({ error: false, message: 'Evidencia ficticia creada y auditada en servidor.' });
       await reload();
     } catch {
@@ -573,16 +572,9 @@ async function requestJson(url: string, method = 'GET',
   );
 
   return (
-    <section id="compliance-evidence-management" className="catalog-panel"
-      aria-labelledby="compliance-management-title">
-      <div className="section-heading"><div>
-        <span className="eyebrow">M06 · Solo desarrollo</span>
-        <h2 id="compliance-management-title">Cumplimiento legal (pruebas)</h2>
-        <p className="muted">
-          Registros exclusivamente sintéticos. No certifica cumplimiento legal,
-          no contiene datos reales y nunca aprueba o cierra automáticamente.
-        </p>
-      </div></div>
+    <section id="compliance-evidence-management" className="ui-page catalog-panel" aria-label="Cumplimiento legal de prueba">
+      <PageHeader title="Cumplimiento legal · pruebas M06" description="Evidencias autorizadas por sede; revisión explícita y sin aprobación real." actions={canCreate && loadState.status === 'ready' ? <button type="button" className="button" onClick={() => { setSelected(null); setEvidenceCreating(true); }}>Crear evidencia de prueba</button> : undefined} />
+       <MetricStrip label="Resumen de evidencias de prueba" items={[{ label: 'Registros', value: rows.length }, { label: 'Resultados', value: filtered.length }, { label: 'Estados en revisión', value: rows.filter(row => row.state === 'EN_REVISION').length }]} />
       {notice && <output role={notice.error ? 'alert' : 'status'}
         aria-live="polite" className={notice.error ? 'alert alert-error' : 'alert alert-success'}>
         {notice.message}
@@ -596,6 +588,7 @@ async function requestJson(url: string, method = 'GET',
         <div className="production-layout">
           <section className="ui-card catalog-card" aria-labelledby="compliance-list-title">
             <h3 id="compliance-list-title">Evidencias sintéticas</h3>
+            <Toolbar trailing={<span className="ui-count">{filtered.length} de {rows.length}</span>}>
             <label className="field"><span>Filtrar por estado</span>
               <select value={filter} onChange={(event) =>
                 setFilter(event.target.value as 'TODOS' | EvidenceState)}>
@@ -608,15 +601,10 @@ async function requestJson(url: string, method = 'GET',
               <input value={search} maxLength={80} placeholder="fixture:evidence/demo"
                 onChange={(event) => setSearch(event.target.value)} />
             </label>
-            {filtered.length === 0 ? <p role="status">Sin evidencias ficticias para este filtro.</p>
-              : <ul>{filtered.map((item) => <li key={item.evidence_ref}>
-                <button type="button" onClick={() => { void view(item.evidence_ref); }}>
-                  {item.evidence_ref}
-                </button>
-                {' · '}{displayStates[item.state]}
-              </li>)}</ul>}
+            </Toolbar>
+            <DataTable caption="Evidencias de cumplimiento" rows={filtered} rowKey={row => row.evidence_ref} onOpen={row => { void view(row.evidence_ref); }} empty="Sin evidencias ficticias para este filtro." columns={[{ key: 'ref', header: 'Evidencia', render: row => <strong>{row.evidence_ref}</strong> }, { key: 'type', header: 'Tipo', render: row => row.type }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'PENDIENTE' ? 'neutral' : 'info'}>{displayStates[row.state]}</StatusPill> }]} />
           </section>
-          {canCreate && <section className="ui-card catalog-card" aria-labelledby="compliance-create-title">
+          {canCreate && <SidePanel open={evidenceCreating} title="Crear evidencia de prueba" onClose={() => setEvidenceCreating(false)}><section className="ui-card catalog-card" aria-labelledby="compliance-create-title">
             <h3 id="compliance-create-title">Crear evidencia de prueba</h3>
             <form className="catalog-editor" onSubmit={(event) => { void create(event); }}>
               <label className="field"><span>Referencia ficticia de evidencia</span>
@@ -638,8 +626,8 @@ async function requestJson(url: string, method = 'GET',
                 Registrar evidencia ficticia
               </button>
             </form>
-          </section>}
-          <section className="ui-card catalog-card" aria-labelledby="compliance-detail-title">
+          </section></SidePanel>}
+           <SidePanel open={selected !== null && !evidenceCreating} title="Detalle y revisión de evidencia" onClose={() => setSelected(null)}><section className="ui-card catalog-card" aria-labelledby="compliance-detail-title">
             <h3 id="compliance-detail-title">Detalle y revisión</h3>
             {!selected ? <p role="status">Selecciona una evidencia ficticia.</p> : <>
               <dl>
@@ -662,9 +650,9 @@ async function requestJson(url: string, method = 'GET',
                 </button>
               </form> : <p role="status">Sin permiso para actualizar estados.</p>}
             </>}
-          </section>
-        </div>
-      )}
+          </section></SidePanel>
+         </div>
+       )}
       <p className="muted">Auditoría de servidor en modo demostración. Ningún estado se cierra automáticamente.</p>
     </section>
   );
