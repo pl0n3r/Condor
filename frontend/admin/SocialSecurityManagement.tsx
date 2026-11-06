@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { useState, type FormEvent } from 'react';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
 // M05 es una maqueta: no almacena datos, procesa PILA ni representa trámites reales.
 type Stage = 'BORRADOR' | 'REQUIERE_REVISION' | 'EN_REVISION';
@@ -32,6 +33,7 @@ function Demo({ tenantId, companyId, branchId, permissions }: Props) {
   const [history, setHistory] = useState<Event[]>([]);
   const [form, setForm] = useState({ id: '', worker: '', plan: '' });
   const [active, setActive] = useState<string | null>(null);
+  const [panel, setPanel] = useState<'create' | 'detail' | null>(null);
   const [filter, setFilter] = useState('');
   const [message, setMessage] = useState('');
   const visible = items.filter(item => item.scope === scope);
@@ -54,14 +56,14 @@ function Demo({ tenantId, companyId, branchId, permissions }: Props) {
     }
     setItems(existing => existing.concat({ id, worker, plan, stage: 'BORRADOR', scope }));
     log('Creación manual de ' + id);
-    setActive(id);
+    setActive(id); setPanel('detail');
     setForm({ id: '', worker: '', plan: '' });
     setMessage('Registro de demostración en memoria. No tiene valor legal.');
   }
 
   function inspect(id: string) {
     if (!canView || !synthetic('affiliation', id) || !visible.some(item => item.id === id)) return;
-    setActive(id);
+    setActive(id); setPanel('detail');
     log('Consulta manual de ' + id);
   }
 
@@ -76,69 +78,87 @@ function Demo({ tenantId, companyId, branchId, permissions }: Props) {
     setMessage('Revisión ficticia registrada. Ningún estado se cierra automáticamente.');
   }
 
-  if (!canView) {
-    return <section id="social-security-management" role="alert">
-      Demostración no disponible: empresa o permiso de consulta ausente.
-    </section>;
-  }
+  if (!canView) return <section id="social-security-management" className="catalog-panel ui-page">
+    <PageHeader title="Seguridad Social M05 · laboratorio ficticio" />
+    <p role="alert">Demostración no disponible: empresa o permiso de consulta ausente.</p>
+  </section>;
 
-  return (
-    <section id="social-security-management" className="catalog-panel">
-      <h2>Seguridad Social M05 · laboratorio ficticio</h2>
-      <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal. No introducir información personal.</p>
-      <p className="muted">No se realizan afiliaciones, liquidaciones, pagos ni envíos a PILA.</p>
-      {message && <output role="status" aria-live="polite">{message}</output>}
-      <div className="catalog-grid">
-        {canCreate && <form className="catalog-card" onSubmit={register}>
-          <h3>Nueva afiliación de prueba</h3>
-          {(['id', 'worker', 'plan'] as const).map(field => {
-            const type: ReferenceType = field === 'id' ? 'affiliation' : field === 'worker' ? 'employee' : 'plan';
-            return <label key={field}>{field === 'id' ? 'Afiliación' : field === 'worker' ? 'Colaborador' : 'Plan'} ficticio
-              <input required maxLength={68} value={form[field]}
-                placeholder={'fixture:' + type + '/demo'}
-                onChange={event => setForm(previous => ({ ...previous, [field]: event.target.value }))} />
-            </label>;
-          })}
-          <button type="submit">Guardar borrador ficticio</button>
-        </form>}
-        <section className="catalog-card">
-          <h3>Afiliaciones del ámbito activo</h3>
-          <label>Filtrar por referencia
-            <input aria-label="Filtrar afiliaciones" value={filter} maxLength={68}
-              onChange={event => setFilter(event.target.value)} />
-          </label>
-          <ul>{visible.filter(item => item.id.includes(filter.trim().toLowerCase())).map(item =>
-            <li key={item.id}>
-              <button type="button" onClick={() => inspect(item.id)}>{item.id} · {item.stage}</button>
-            </li>)}</ul>
-          {visible.length === 0 && <p role="status">No hay registros ficticios.</p>}
-        </section>
-        <section className="catalog-card">
-          <h3>Revisión manual</h3>
-          {!picked ? <p role="status">Selecciona una afiliación ficticia.</p> : <div>
-            <dl>
-              <dt>Afiliación</dt><dd>{picked.id}</dd>
-              <dt>Colaborador</dt><dd>{picked.worker}</dd>
-              <dt>Plan</dt><dd>{picked.plan}</dd>
-              <dt>Estado</dt><dd>{picked.stage}</dd>
-            </dl>
-            {canReview && steps[picked.stage] !== null &&
-              <form onSubmit={move}>
-                <button type="submit">Registrar siguiente revisión ficticia</button>
-              </form>}
-          </div>}
-          <p className="muted">Sin aprobación, pago, envío ni cierre automático.</p>
-        </section>
-        <section className="catalog-card">
-          <h3>Auditoría local de demostración (no oficial)</h3>
-          <p>Solo eventos de esta sesión. Las operaciones reales exigen auditoría de servidor.</p>
-          <ul>{history.filter(entry => entry.scope === scope).map(entry =>
-            <li key={entry.key}>{entry.message}</li>)}</ul>
-          {history.length === 0 && <p role="status">Sin eventos ficticios.</p>}
-        </section>
-      </div>
-    </section>
-  );
+  const filtered = visible.filter(item => item.id.includes(filter.trim().toLowerCase()));
+  const scopedHistory = history.filter(entry => entry.scope === scope);
+
+  return <section id="social-security-management" className="catalog-panel ui-page" aria-label="Seguridad social de demostración">
+    <PageHeader title="Seguridad Social M05 · laboratorio ficticio"
+      description="Afiliaciones y revisiones de prueba, sin trámites ni información personal."
+      actions={canCreate ? <button type="button" className="button" onClick={() => setPanel('create')}>
+        Nueva afiliación de prueba
+      </button> : undefined} />
+    <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal. No introducir información personal.</p>
+    <p className="muted">No se realizan afiliaciones, liquidaciones, pagos ni envíos a PILA.</p>
+    {message && <output role="status" aria-live="polite">{message}</output>}
+    <MetricStrip label="Indicadores de seguridad social ficticia" items={[
+      { label: 'Afiliaciones ficticias', value: visible.length },
+      { label: 'Borradores', value: visible.filter(item => item.stage === 'BORRADOR').length },
+      { label: 'En revisión', value: visible.filter(item => item.stage !== 'BORRADOR').length },
+    ]} />
+    <Card title="Afiliaciones del ámbito activo">
+      <Toolbar trailing={<output aria-live="polite">{filtered.length} resultados</output>}>
+        <label>Filtrar por referencia
+          <input type="search" aria-label="Filtrar afiliaciones" value={filter} maxLength={68}
+            onChange={event => setFilter(event.target.value)} />
+        </label>
+      </Toolbar>
+      <DataTable<Entry> caption="Afiliaciones ficticias de la empresa"
+        rows={filtered} rowKey={item => item.id}
+        onOpen={item => inspect(item.id)}
+        columns={[
+          { key: 'id', header: 'Afiliación', render: item => item.id },
+          { key: 'worker', header: 'Colaborador', render: item => item.worker },
+          { key: 'plan', header: 'Plan', render: item => item.plan },
+          { key: 'state', header: 'Estado', render: item =>
+            <StatusPill tone={item.stage === 'BORRADOR' ? 'neutral' : 'info'}>{item.stage}</StatusPill> },
+        ]}
+        empty={<p role="status">{visible.length === 0
+          ? 'No hay registros ficticios.' : 'No hay afiliaciones para este filtro.'}</p>} />
+    </Card>
+    <Card title="Auditoría local de demostración (no oficial)">
+      <p>Solo eventos de esta sesión. Las operaciones reales exigen auditoría de servidor.</p>
+      {scopedHistory.length === 0
+        ? <p role="status">Sin eventos ficticios.</p>
+        : <ul>{scopedHistory.map(entry => <li key={entry.key}>{entry.message}</li>)}</ul>}
+    </Card>
+    <SidePanel open={panel === 'create' && canCreate} title="Nueva afiliación de prueba"
+      onClose={() => setPanel(null)}>
+      <form className="catalog-editor" onSubmit={register}>
+        {(['id', 'worker', 'plan'] as const).map(field => {
+          const type: ReferenceType = field === 'id' ? 'affiliation' : field === 'worker' ? 'employee' : 'plan';
+          return <label key={field}>{field === 'id' ? 'Afiliación' : field === 'worker' ? 'Colaborador' : 'Plan'} ficticio
+            <input required maxLength={68} value={form[field]}
+              placeholder={'fixture:' + type + '/demo'}
+              onChange={event => setForm(previous => ({ ...previous, [field]: event.target.value }))} />
+          </label>;
+        })}
+        <button type="submit">Guardar borrador ficticio</button>
+      </form>
+    </SidePanel>
+    <SidePanel open={panel === 'detail' && !!picked} title="Revisión manual"
+      onClose={() => setPanel(null)}>
+      {picked ? <>
+        <dl>
+          <dt>Afiliación</dt><dd>{picked.id}</dd>
+          <dt>Colaborador</dt><dd>{picked.worker}</dd>
+          <dt>Plan</dt><dd>{picked.plan}</dd>
+          <dt>Estado</dt><dd>
+            <StatusPill tone={picked.stage === 'BORRADOR' ? 'neutral' : 'info'}>{picked.stage}</StatusPill>
+          </dd>
+        </dl>
+        {canReview && steps[picked.stage] !== null &&
+          <form onSubmit={move}>
+            <button type="submit">Registrar siguiente revisión ficticia</button>
+          </form>}
+      </> : <p role="status">Selecciona una afiliación ficticia.</p>}
+      <p className="muted">Sin aprobación, pago, envío ni cierre automático.</p>
+    </SidePanel>
+  </section>;
 }
 
 export function SocialSecurityManagement(props: Props) {
