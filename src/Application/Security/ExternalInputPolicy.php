@@ -60,7 +60,7 @@ final class ExternalInputPolicy
     /**
      * Inspects a destination WITHOUT DNS/network I/O. The caller supplies a
      * trusted resolver and MUST connect to one of the returned approved IPs.
-     * @param callable(string):list<string> $resolve
+     * @param callable(string):mixed $resolve
      * @return array{url:string,scheme:string,host:string,port:int,approved_ips:list<string>}
      */
     public static function inspectExternalUrl(string $url, callable $resolve): array
@@ -100,10 +100,12 @@ final class ExternalInputPolicy
         if (!is_array($addresses) || $addresses === []) {
             throw new DomainException('Destino DNS sin direcciones verificables.');
         }
+        $safeAddresses = [];
         foreach ($addresses as $address) {
             if (!is_string($address) || !self::isPublicIp($address)) {
                 throw new DomainException('Destino interno/reservado o resolución ambigua.');
             }
+            $safeAddresses[] = $address;
         }
 
         return [
@@ -111,7 +113,7 @@ final class ExternalInputPolicy
             'scheme' => $scheme,
             'host' => $host,
             'port' => $port,
-            'approved_ips' => array_values(array_unique($addresses)),
+            'approved_ips' => array_values(array_unique($safeAddresses)),
         ];
     }
 
@@ -119,7 +121,7 @@ final class ExternalInputPolicy
      * Each redirect is re-resolved. The HTTP adapter must disable automatic
      * redirects, pin each approved IP, and enforce time/response-size budgets.
      * @param list<string> $redirects
-     * @param callable(string):list<string> $resolve
+     * @param callable(string):mixed $resolve
      * @return list<array{url:string,scheme:string,host:string,port:int,approved_ips:list<string>}>
      */
     public static function inspectRedirectChain(string $initial, array $redirects, callable $resolve): array
@@ -143,7 +145,7 @@ final class ExternalInputPolicy
     private static function assertPublicHostname(string $host): void
     {
         $labels = explode('.', $host);
-        $suffix = $labels[array_key_last($labels)];
+        $suffix = (string) end($labels);
         if (strlen($host) > 253 || count($labels) < 2
             || in_array($suffix, ['local', 'localhost', 'internal', 'test', 'invalid'], true)
             || str_ends_with($host, '.home.arpa')
