@@ -132,7 +132,7 @@ final class ExternalInputPolicy
         $targets = [];
         foreach ([$initial, ...$redirects] as $url) {
             $target = self::inspectExternalUrl($url, $resolve);
-            $previous = $targets[array_key_last($targets)] ?? null;
+            $previous = $targets === [] ? null : $targets[count($targets) - 1];
             if ($previous !== null && $previous['scheme'] === 'https' && $target['scheme'] !== 'https') {
                 throw new DomainException('Redirección que degrada HTTPS.');
             }
