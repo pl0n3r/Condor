@@ -10,6 +10,7 @@ use App\Application\Purchasing\MaterialCostService;
 use App\Application\Purchasing\PurchaseOrderService;
 use App\Application\Purchasing\PurchaseRequestPreview;
 use App\Application\Purchasing\QuotationPreview;
+use App\Application\Purchasing\SupplierEvaluationPreview;
 use App\Application\Purchasing\SupplierService;
 use App\Domain\Inventory\Entity\InventorySource;
 use App\Domain\Organization\Entity\Branch;
@@ -220,6 +221,25 @@ final class PurchasingController extends AbstractController
         }
 
         return $this->json(['request_preview' => $preview, 'synthetic_only' => true]);
+    }
+
+    /**
+     * Construction-only supplier evaluation; no supplier lookup, award or persistence.
+     */
+    #[Route('/api/v1/branches/{branchId}/purchasing/suppliers/evaluations/preview', name: 'api_purchasing_supplier_evaluation_preview', methods: ['POST'])]
+    public function previewSupplierEvaluation(string $branchId, Request $request): JsonResponse
+    {
+        $this->requirePurchasingPreviewEnabled();
+        $this->requireCsrf($request);
+        $this->authorizedBranchScope($branchId, 'inventory.create');
+
+        try {
+            $preview = SupplierEvaluationPreview::preview($this->syntheticPurchasingPayload($request));
+        } catch (\InvalidArgumentException $exception) {
+            throw new UnprocessableEntityHttpException($exception->getMessage(), $exception);
+        }
+
+        return $this->json(['supplier_evaluation_preview' => $preview, 'synthetic_only' => true]);
     }
 
     private function requirePurchasingPreviewEnabled(): void

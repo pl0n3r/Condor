@@ -39,7 +39,7 @@ final readonly class AssetRecordRepository
         AssetRecord::assertAuthority($tenantRef, $actorRef, $authorized);
         return $this->connection->transactional(function () use ($tenantRef, $actorRef): array {
             $rows = $this->connection->fetchAllAssociative(
-                'SELECT tenant_ref, asset_ref, actor_ref, state, evidence_ref, warranty_until, created_at, updated_at '
+                'SELECT tenant_ref, asset_ref, actor_ref, state, responsible_ref, evidence_ref, warranty_until, created_at, updated_at '
                 .'FROM condor_asset_record WHERE tenant_ref = ? ORDER BY asset_ref',
                 [$tenantRef],
             );
@@ -62,7 +62,7 @@ final readonly class AssetRecordRepository
         AssetRecord::assertAssetRef($assetRef);
         return $this->connection->transactional(function () use ($tenantRef, $assetRef, $actorRef): ?array {
             $row = $this->connection->fetchAssociative(
-                'SELECT tenant_ref, asset_ref, actor_ref, state, evidence_ref, warranty_until, created_at, updated_at '
+                'SELECT tenant_ref, asset_ref, actor_ref, state, responsible_ref, evidence_ref, warranty_until, created_at, updated_at '
                 .'FROM condor_asset_record WHERE tenant_ref = ? AND asset_ref = ?',
                 [$tenantRef, $assetRef],
             );
@@ -72,6 +72,38 @@ final readonly class AssetRecordRepository
             }
             $this->audit($tenantRef, $assetRef, $actorRef, 'synthetic.viewed');
             return $row === false ? null : $row;
+        });
+    }
+
+    /** @return array<string,mixed> */
+    public function assignResponsible(
+        string $tenantRef, string $assetRef, string $actorRef, bool $authorized, string $responsibleRef,
+    ): array {
+        AssetRecord::assertAuthority($tenantRef, $actorRef, $authorized);
+        AssetRecord::assertAssetRef($assetRef);
+        return $this->connection->transactional(function () use (
+            $tenantRef, $assetRef, $actorRef, $authorized, $responsibleRef,
+        ): array {
+            $row = $this->connection->fetchAssociative(
+                'SELECT tenant_ref, asset_ref, actor_ref, state, responsible_ref, evidence_ref, warranty_until, created_at, updated_at '
+                .'FROM condor_asset_record WHERE tenant_ref = ? AND asset_ref = ? FOR UPDATE',
+                [$tenantRef, $assetRef],
+            );
+            if ($row === false || ($row['tenant_ref'] ?? null) !== $tenantRef
+                || ($row['asset_ref'] ?? null) !== $assetRef) {
+                throw new DomainException('Activo sintético fuera de la empresa autorizada.');
+            }
+            $validation = new AssetRecord($tenantRef, $assetRef, $actorRef, $authorized);
+            $validation->assignResponsible($responsibleRef, $actorRef, $authorized);
+            $updated = ['responsible_ref' => $responsibleRef, 'state' => 'ASIGNADO',
+                'actor_ref' => $actorRef, 'updated_at' => gmdate('Y-m-d H:i:s')];
+            if ($this->connection->update('condor_asset_record', $updated, [
+                'tenant_ref' => $tenantRef, 'asset_ref' => $assetRef,
+            ]) !== 1) {
+                throw new DomainException('Concurrencia al asignar responsable sintético.');
+            }
+            $this->audit($tenantRef, $assetRef, $actorRef, 'synthetic.responsible_assigned');
+            return array_replace($row, $updated);
         });
     }
 
@@ -90,7 +122,7 @@ final readonly class AssetRecordRepository
             $tenantRef, $assetRef, $actorRef, $authorized, $state, $evidenceRef,
         ): array {
             $row = $this->connection->fetchAssociative(
-                'SELECT tenant_ref, asset_ref, actor_ref, state, evidence_ref, warranty_until, created_at, updated_at '
+                'SELECT tenant_ref, asset_ref, actor_ref, state, responsible_ref, evidence_ref, warranty_until, created_at, updated_at '
                 .'FROM condor_asset_record WHERE tenant_ref = ? AND asset_ref = ? FOR UPDATE',
                 [$tenantRef, $assetRef],
             );

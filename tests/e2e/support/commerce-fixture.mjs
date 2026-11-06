@@ -20,6 +20,7 @@ export async function provisionCommerceFixture(page, {
   await page.getByLabel('Contraseña').fill(password);
   await page.getByRole('button', { name: 'Ingresar' }).click();
   await expect(page).toHaveURL(/\/admin$/);
+  await page.goto('/admin#catalog');
 
   const contextResponse = await page.request.get('/api/v1/context');
   expect(contextResponse.ok()).toBeTruthy();
@@ -42,6 +43,7 @@ export async function provisionCommerceFixture(page, {
   await productCard.getByRole('button', { name: 'Crear variante' }).click();
   await expect(catalog.getByText('Variante creada.')).toBeVisible();
 
+  await page.goto('/admin#inventory');
   const inventory = page.locator('#inventory');
   await inventory.getByLabel('Nombre', { exact: true }).fill(sourceName);
   await inventory.getByLabel('Slug').fill(sourceSlug);
@@ -58,6 +60,7 @@ export async function provisionCommerceFixture(page, {
   await inventory.getByRole('button', { name: 'Aplicar ajuste' }).click();
   await expect(inventory.getByText('Ajuste aplicado.')).toBeVisible();
 
+  await page.goto('/admin#commerce');
   const commerce = page.locator('#commerce');
   await commerce.getByLabel('Nombre de lista').fill(listName);
   await commerce.getByLabel('Slug de lista').fill(listSlug);

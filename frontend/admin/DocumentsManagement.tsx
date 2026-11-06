@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { useState, type FormEvent, type ChangeEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ChangeEvent } from 'react';
 
 /** M08: Prototipo de datos ficticios. Sin API, persistencia ni auditoría de servidor. */
 export type Classification = 'PUBLICA' | 'INTERNA' | 'RESERVADA';
@@ -102,10 +102,171 @@ type Props = Readonly<{
   branchId: string;
   legalEntityId: string;
   permissions: readonly string[];
+  csrfToken?: string;
 }>;
 
-/** documents.* no existe todavía en PermissionCatalog; por defecto DENY para toda operación. */
-export function DocumentsManagement({ tenantId, branchId, legalEntityId, permissions }: Props) {
+type RemoteDocument = Readonly<{
+  reference: string; classification: Classification; status: DocumentStatus; evidence_ref?: string;
+}>;
+type RemoteState =
+  | { kind: 'loading' | 'denied' }
+  | { kind: 'error'; message: string }
+  | { kind: 'ready'; documents: readonly RemoteDocument[] };
+
+/** Server-authoritative M08 dev/test panel. All data and receipts are synthetic. */
+function HttpDocumentsPanel({ branchId, permissions, csrfToken }: Props) {
+  // Catalog does not yet define documents.*; dev/test HTTP uses restricted
+  // settings.* permissions. Never infer a grant from the client-side checkbox.
+  const canView = permissions.includes('settings.view');
+  const canWrite = canView && permissions.includes('settings.update');
+  const base = '/api/v1/branches/' + encodeURIComponent(branchId) + '/documents';
+  const [state, setState] = useState<RemoteState>({ kind: 'loading' });
+  const [reload, setReload] = useState(0);
+  const [selected, setSelected] = useState('');
+  const [trace, setTrace] = useState<string[]>([]);
+  const [evidence, setEvidence] = useState('fixture:evidence/demo');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (!canView) {
+      setState({ kind: 'denied' });
+      return;
+    }
+    const abort = new AbortController();
+    setState({ kind: 'loading' });
+    setMessage('');
+    void fetch(base, {
+      credentials: 'same-origin', signal: abort.signal, headers: { Accept: 'application/json' },
+    }).then(async (response) => {
+      if (response.status === 401 || response.status === 403) {
+        if (!abort.signal.aborted) setState({ kind: 'denied' });
+        return;
+      }
+      if (!response.ok) throw new Error('El servidor no permitió cargar documentos.');
+      const body = await response.json() as {
+        documents?: RemoteDocument[]; synthetic?: boolean; can_close?: boolean;
+        signature_gate?: { status?: string; legal_signature?: boolean };
+      };
+      if (!Array.isArray(body.documents) || body.synthetic !== true || body.can_close !== false
+        || body.signature_gate?.status !== 'NO_VERIFICABLE'
+        || body.signature_gate?.legal_signature !== false) {
+        throw new Error('Respuesta documental sin garantías de simulación.');
+      }
+      if (!abort.signal.aborted) setState({ kind: 'ready', documents: body.documents });
+    }).catch(() => {
+      if (!abort.signal.aborted) setState({ kind: 'error', message: 'Error al consultar M08.' });
+    });
+    return () => abort.abort();
+  }, [base, canView, reload]);
+
+  function keyOf(reference: string): string | null {
+    return /^fixture:doc\/[a-z][a-z0-9_-]{0,31}$/.test(reference)
+      ? reference.slice('fixture:doc/'.length) : null;
+  }
+  async function showTrace(reference: string) {
+    const key = keyOf(reference);
+    if (!canView || key === null) return;
+    setSelected(reference);
+    setTrace([]);
+    setMessage('');
+    try {
+      const response = await fetch(base + '/' + encodeURIComponent(key) + '/trace',
+        { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      if (response.status === 401 || response.status === 403) {
+        setState({ kind: 'denied' }); return;
+      }
+      if (!response.ok) throw new Error('No se encontró el historial.');
+      const result = await response.json() as {
+        synthetic?: boolean; can_close?: boolean;
+        events?: { sequence: number; action: string }[];
+      };
+      if (result.synthetic !== true || result.can_close !== false || !Array.isArray(result.events)) {
+        throw new Error('Historial sin garantías.');
+      }
+      setTrace(result.events.map((item) => item.sequence + '. ' + item.action));
+    } catch {
+      setMessage('Error al consultar la trazabilidad sintética.');
+    }
+  }
+  async function attachEvidence() {
+    const key = keyOf(selected);
+    if (!canWrite || key === null || !/^fixture:evidence\/[a-z][a-z0-9_-]{0,47}$/.test(evidence)
+      || busy) return;
+    const token = csrfToken
+      ?? document.getElementById('condor-admin-root')?.getAttribute('data-access-token') ?? '';
+    if (!token) { setMessage('Token de sesión requerido.'); return; }
+    setBusy(true);
+    setMessage('');
+    try {
+      const response = await fetch(base + '/' + encodeURIComponent(key) + '/evidence', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+        body: JSON.stringify({ evidence_ref: evidence }),
+      });
+      if (response.status === 401 || response.status === 403) {
+        setState({ kind: 'denied' }); return;
+      }
+      if (!response.ok) throw new Error('Evidencia rechazada.');
+      const result = await response.json() as { synthetic?: boolean; legal_signature?: boolean };
+      if (result.synthetic !== true || result.legal_signature !== false) {
+        throw new Error('Respuesta de evidencia inválida.');
+      }
+      setMessage('Referencia ficticia recibida; no es firma ni evidencia legal.');
+      setReload((value) => value + 1);
+    } catch {
+      setMessage('Error al adjuntar evidencia ficticia.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <section className="catalog-panel" aria-label="Gestión documental HTTP de prueba">
+    <h3>M08 · HTTP de desarrollo/pruebas</h3>
+    <p>Solo fixtures en sesión. Sin firma válida, cierre ni auditoría jurídica persistente.</p>
+    {state.kind === 'loading' && <output aria-live="polite">Cargando documentos…</output>}
+    {state.kind === 'denied' && <p role="alert">Permiso denegado para documentos.</p>}
+    {state.kind === 'error' && <div role="alert">{state.message}
+      <button type="button" onClick={() => setReload((n) => n + 1)}>Reintentar</button>
+    </div>}
+    {state.kind === 'ready' && <>
+      {state.documents.length === 0
+        ? <p role="status">Sin expedientes en la sesión de prueba.</p>
+        : <ul>{state.documents.map((doc) => <li key={doc.reference}>
+            <button type="button" onClick={() => void showTrace(doc.reference)}>
+              {doc.reference}
+            </button>{' · '}{doc.status}
+          </li>)}</ul>}
+      <a href={base + '/export'}>Exportar metadatos ficticios JSON</a>
+      {selected && <>
+        <p>Seleccionado: {selected}</p>
+        {trace.length === 0 ? <p role="status">Sin traza cargada.</p>
+          : <ol>{trace.map((entry) => <li key={entry}>{entry}</li>)}</ol>}
+        {canWrite && <>
+          <label>Referencia de evidencia ficticia
+            <input value={evidence} onChange={(e) => setEvidence(e.target.value)} />
+          </label>
+          <button type="button" disabled={busy} onClick={() => void attachEvidence()}>
+            Adjuntar evidencia ficticia
+          </button>
+        </>}
+      </>}
+    </>}
+    {message && <output aria-live="polite">{message}</output>}
+  </section>;
+}
+
+/** Combined M08 entrypoint; server paths are never called in production. */
+export function DocumentsManagement(props: Props) {
+  if (!import.meta.env.DEV) return null;
+  return <>
+    <HttpDocumentsPanel key={props.branchId} {...props} />
+    {props.permissions.includes('documents.view') && <LocalDocumentsPreview {...props} />}
+  </>;
+}
+
+/** Local reducer is retained for backwards-compatible synthetic tests only. */
+function LocalDocumentsPreview({ tenantId, branchId, legalEntityId, permissions }: Props) {
   const scope = `${tenantId}|${legalEntityId}|${branchId}`;
   const canView = permissions.includes('documents.view');
   const canCreate = canView && permissions.includes('documents.create');

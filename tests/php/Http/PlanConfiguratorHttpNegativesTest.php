@@ -89,11 +89,11 @@ final class PlanConfiguratorHttpNegativesTest extends WebTestCase
         $result = json_decode($response, true, 512, JSON_THROW_ON_ERROR);
         self::assertIsArray($result);
         self::assertArrayHasKey('quote', $result);
-        self::assertNull($result['quote']['total_amount']);
-        self::assertTrue($result['quote']['proposal_required']);
+        self::assertSame(229700, $result['quote']['total_amount']);
+        self::assertFalse($result['quote']['proposal_required']);
 
-        // El precio conocido se conserva únicamente en el intervalo
-        // histórico; la versión nueva no hereda ni inventa una tarifa.
+        // La versión histórica conserva su importe y la versión actual
+        // usa la tarifa v3 aprobada, nunca el total enviado por el cliente.
         $quotes = static::getContainer()->get(PlanQuoteService::class);
         self::assertInstanceOf(PlanQuoteService::class, $quotes);
         $historical = $quotes->preview(

@@ -89,12 +89,12 @@ final class CommercialPricingHttpSmokeTest extends WebTestCase
                 self::assertStringNotContainsString('0 COP', $card['text']);
             } else {
                 self::assertStringContainsString(
-                    $plan['currency'].' '.number_format($plan['monthly_amount'], 0, ',', '.'),
+                    ($plan['currency'] === 'COP' ? '$' : $plan['currency']).' '.number_format($plan['monthly_amount'], 0, ',', '.'),
                     $card['text'],
                 );
                 if ($plan['annual_amount'] !== null) {
                     self::assertStringContainsString(
-                        $plan['currency'].' '.number_format($plan['annual_amount'], 0, ',', '.'),
+                        ($plan['currency'] === 'COP' ? '$' : $plan['currency']).' '.number_format($plan['annual_amount'], 0, ',', '.'),
                         $card['text'],
                     );
                 }

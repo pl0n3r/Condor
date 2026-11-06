@@ -181,9 +181,197 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   );
 }
 
+
+/** M03 HTTP: server-authorized synthetic records; never an SG-SST compliance attestation. */
+const m03Kinds = [
+  'PERFIL_ESTANDARES', 'PELIGRO', 'CONTROL', 'INSPECCION', 'INCIDENTE',
+  'INVESTIGACION', 'EPP', 'CAPACITACION', 'EMERGENCIA', 'COMITE_VIGIA',
+] as const;
+type M03Kind = typeof m03Kinds[number];
+type M03Record = Readonly<{
+  record_ref: string; source_ref: string; kind: M03Kind;
+  state: 'PENDIENTE' | 'EN_REVISION' | 'REQUIERE_REVISION';
+  synthetic_only: true; requires_professional_review: true;
+  automatically_approved: false; automatically_closed: false;
+}>;
+type M03Load = { status: 'loading' | 'error' | 'denied' }
+  | { status: 'ready'; rows: M03Record[] };
+const m03Ref = /^fixture:sgsst-record\/[a-z][a-z0-9_-]{0,47}$/;
+const m03Source = /^fixture:sgsst-source\/[a-z][a-z0-9_-]{0,47}$/;
+
+function m03ValidRecord(input: unknown): input is M03Record {
+  if (!input || typeof input !== 'object') return false;
+  const row = input as Record<string, unknown>;
+  return typeof row.record_ref === 'string' && m03Ref.test(row.record_ref)
+    && typeof row.source_ref === 'string' && m03Source.test(row.source_ref)
+    && !/[0-9]{7,}/.test(row.record_ref + row.source_ref)
+    && m03Kinds.includes(row.kind as M03Kind)
+    && ['PENDIENTE', 'EN_REVISION', 'REQUIERE_REVISION'].includes(String(row.state))
+    && row.synthetic_only === true && row.requires_professional_review === true
+    && row.automatically_approved === false && row.automatically_closed === false;
+}
+
+function OccupationalHttpPanel({ branchId, permissions }: Pick<Props, 'branchId' | 'permissions'>) {
+  const canView = permissions.includes('settings.view');
+  const canCreate = canView && permissions.includes('settings.create');
+  const canUpdate = canView && permissions.includes('settings.update');
+  const path = '/api/v1/branches/' + encodeURIComponent(branchId) + '/sgsst/records';
+  const currentRequest = useRef(0);
+  const [load, setLoad] = useState<M03Load>({ status: 'loading' });
+  const [kind, setKind] = useState<M03Kind>('PERFIL_ESTANDARES');
+  const [recordRef, setRecordRef] = useState('fixture:sgsst-record/demo');
+  const [sourceRef, setSourceRef] = useState('fixture:sgsst-source/demo');
+  const [selected, setSelected] = useState<M03Record | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+
+  async function request(method: 'GET' | 'POST' | 'PATCH', url: string,
+    fields?: Record<string, string>): Promise<unknown> {
+    const csrf = document.getElementById('condor-admin-root')?.dataset.accessToken ?? '';
+    const response = await fetch (url, {
+      method, credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        ...(fields ? { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf } : {}),
+      },
+      ...(fields ? { body: JSON.stringify(fields) } : {}),
+    });
+    if (response.status === 401 || response.status === 403) throw new Error('DENIED');
+    if (!response.ok) throw new Error('UNAVAILABLE');
+    return await response.json() as unknown;
+  }
+
+  async function reload(): Promise<void> {
+    const id = ++currentRequest.current;
+    setLoad({ status: 'loading' });
+    try {
+      const payload = await request('GET', path);
+      if (id !== currentRequest.current) return;
+      if (!payload || typeof payload !== 'object' || !('records' in payload)
+        || !('synthetic_only' in payload) || payload.synthetic_only !== true
+        || !Array.isArray(payload.records) || payload.records.length > 100
+        || !payload.records.every(m03ValidRecord)) throw new Error('UNAVAILABLE');
+      setLoad({ status: 'ready', rows: payload.records });
+    } catch (error) {
+      if (id !== currentRequest.current) return;
+      setLoad({ status: error instanceof Error && error.message === 'DENIED'
+        ? 'denied' : 'error' });
+    }
+  }
+
+  useEffect(() => {
+    setSelected(null);
+    setNotice('');
+    if (canView) void reload();
+    return () => { currentRequest.current += 1; };
+  }, [branchId, canView]);
+
+  async function create(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!canCreate || busy) return;
+    if (!m03Ref.test(recordRef) || !m03Source.test(sourceRef)
+      || /[0-9]{7,}/.test(recordRef + sourceRef)) {
+      setNotice('Solo se admiten referencias ficticias válidas.');
+      return;
+    }
+    setBusy(true);
+    setNotice('');
+    try {
+      const result = await request('POST', path, {
+        record_ref: recordRef, source_ref: sourceRef, kind,
+      });
+      if (!result || typeof result !== 'object' || !('record' in result)
+        || !m03ValidRecord(result.record) || result.record.record_ref !== recordRef) {
+        throw new Error('UNAVAILABLE');
+      }
+      setSelected(result.record);
+      setNotice('Registro ficticio creado en el servidor, sin valor legal.');
+      await reload();
+    } catch (error) {
+      setNotice('No se pudo crear el registro ficticio.');
+      if (error instanceof Error && error.message === 'DENIED') setLoad({ status: 'denied' });
+    } finally { setBusy(false); }
+  }
+
+  async function changeState(next: 'EN_REVISION' | 'REQUIERE_REVISION'): Promise<void> {
+    if (!canUpdate || busy || !selected || !m03ValidRecord(selected)) return;
+    setBusy(true);
+    setNotice('');
+    try {
+      const slug = selected.record_ref.slice('fixture:sgsst-record/'.length);
+      const result = await request('PATCH', path + '/' + encodeURIComponent(slug) + '/state',
+        { state: next });
+      if (!result || typeof result !== 'object' || !('record' in result)
+        || !m03ValidRecord(result.record) || result.record.record_ref !== selected.record_ref
+        || result.record.state !== next) throw new Error('UNAVAILABLE');
+      setSelected(result.record);
+      setNotice('Revisión ficticia registrada; no existe aprobación ni cierre automático.');
+      await reload();
+    } catch (error) {
+      setNotice('No se pudo cambiar el estado ficticio.');
+      if (error instanceof Error && error.message === 'DENIED') setLoad({ status: 'denied' });
+    } finally { setBusy(false); }
+  }
+
+  if (!import.meta.env.DEV) return null;
+  return (
+    <section id="sgsst-http-management" className="catalog-panel" aria-label="SG-SST HTTP sintético">
+      <h2>SG-SST · integración de prueba M03</h2>
+      <p role="alert">SOLO DATOS FICTICIOS. No certifica cumplimiento legal ni permite datos laborales reales.</p>
+      {!canView && <p role="alert">Permiso denegado: se requiere settings.view.</p>}
+      {canView && load.status === 'loading' && <p role="status">Cargando registros SG-SST ficticios…</p>}
+      {canView && load.status === 'denied' && <p role="alert">Acceso denegado por el servidor.</p>}
+      {canView && load.status === 'error' && <p role="alert">Error: API SG-SST de prueba no disponible.</p>}
+      {notice && <output role="status" aria-live="polite">{notice}</output>}
+      {canView && load.status === 'ready' && <>
+        <h3>Diez submódulos ficticios</h3>
+        <p className="muted">{m03Kinds.join(' · ')}</p>
+        {load.rows.length === 0
+          ? <p role="status">Sin registros SG-SST ficticios.</p>
+          : <ul>{load.rows.map(row => <li key={row.record_ref}>
+            <button type="button" onClick={() => setSelected(row)}>
+              {row.kind} · {row.record_ref} · {row.state}
+            </button>
+          </li>)}</ul>}
+        {canCreate && <form onSubmit={(event) => { void create(event); }}>
+          <label>Submódulo
+            <select value={kind} onChange={event => setKind(event.target.value as M03Kind)}>
+              {m03Kinds.map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label>Referencia del registro ficticio
+            <input required value={recordRef} maxLength={70}
+              onChange={event => setRecordRef(event.target.value)} />
+          </label>
+          <label>Referencia de fuente ficticia
+            <input required value={sourceRef} maxLength={70}
+              onChange={event => setSourceRef(event.target.value)} />
+          </label>
+          <button type="submit" disabled={busy}>Crear registro ficticio</button>
+        </form>}
+        {selected && <div role="group" aria-label="Revisión ficticia">
+          <p>{selected.record_ref}: {selected.state}. Revisión profesional requerida.</p>
+          {canUpdate && <>
+            <button type="button" disabled={busy}
+              onClick={() => { void changeState('EN_REVISION'); }}>En revisión</button>
+            <button type="button" disabled={busy}
+              onClick={() => { void changeState('REQUIERE_REVISION'); }}>Requiere revisión</button>
+          </>}
+        </div>}
+      </>}
+    </section>
+  );
+}
+
 export function ComplianceManagement(props: Props) {
   if (!import.meta.env.DEV) return null;
-  return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId} {...props} />;
+  return <>
+    <OccupationalHttpPanel key={'http-' + props.tenantId + '|' + props.branchId}
+      branchId={props.branchId} permissions={props.permissions} />
+    <details open><summary>Simulación local anterior (sin conexión HTTP)</summary>
+      <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId} {...props} />
+    </details>
+  </>;
 }
 
 /** M06: independent synthetic compliance-evidence facade, distinct from SG-SST. */

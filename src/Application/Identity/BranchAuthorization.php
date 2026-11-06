@@ -95,6 +95,11 @@ final readonly class BranchAuthorization
     ): Membership {
         PermissionCatalog::normalize([$permission]);
 
+        // OWNER must never bypass the tenant boundary of the requested branch.
+        if ($branch->tenant()->id() !== $tenant->id()) {
+            throw new AccessDeniedException('La sede no pertenece a la empresa activa.');
+        }
+
         $membership = $this->membership($user, $tenant);
         if ($membership->roleKey() === Membership::ROLE_OWNER) {
             return $membership;

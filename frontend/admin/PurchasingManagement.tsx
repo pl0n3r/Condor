@@ -36,6 +36,20 @@ type LoadState =
   | { status: 'denied' }
   | { status: 'error'; message: string };
 type Props = Readonly<{ branchId: string; permissions: string[]; csrfToken: string }>;
+type PreviewKind = 'quotation' | 'request';
+type PreviewState =
+  | { status: 'empty' | 'loading' | 'denied' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; lineCount: number; totalCop?: number };
+
+// The fixtures are deliberately fixed: never derive a tenant, entity, site,
+// supplier or customer reference from a live purchasing record.
+const syntheticScope = {
+  tenant_ref: 'fixture:tenant/current',
+  legal_entity_ref: 'fixture:legal-entity/current',
+  site_ref: 'fixture:site/current',
+} as const;
+
 
 const emptyLine = (): Line => ({ material_id: '', quantity: '1', unit_cost: '0' });
 const quantityPattern = /^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?$/;
@@ -80,6 +94,11 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const receiveKeys = useRef(new Map<string, string>());
   const requestId = useRef(0);
+  const previewRequests = useRef<Record<PreviewKind, number>>({ quotation: 0, request: 0 });
+  const [previewStates, setPreviewStates] = useState<Record<PreviewKind, PreviewState>>({
+    quotation: { status: 'empty' },
+    request: { status: 'empty' },
+  });
 
   // The branch is resolved from the authenticated admin context, not from form input.
   // The server revalidates tenant, legal entity, branch and permissions on each call.
@@ -176,6 +195,87 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
     }
     return () => { requestId.current++; };
   }, [branchId, canView]);
+
+  useEffect(() => {
+    // Invalidate in-flight preview replies when the authorized branch changes.
+    previewRequests.current.quotation++;
+    previewRequests.current.request++;
+    setPreviewStates({ quotation: { status: 'empty' }, request: { status: 'empty' } });
+  }, [branchId, canView, canCreate]);
+
+  async function loadSyntheticPreview(kind: PreviewKind) {
+    if (!canView || !canCreate || previewStates[kind].status === 'loading') return;
+    const sequence = ++previewRequests.current[kind];
+    setPreviewStates((current) => ({ ...current, [kind]: { status: 'loading' } }));
+    const line = { ...syntheticScope, item_ref: 'fixture:item/paper', quantity: '2' };
+    const payload = {
+      ...syntheticScope,
+      currency: 'COP',
+      mode: 'preview_only',
+      lines: kind === 'quotation'
+        ? [{ ...line, unit_price_cop: '125.50' }]
+        : [line],
+    };
+    const path = kind === 'quotation' ? '/quotations/preview' : '/requests/preview';
+
+    try {
+      // The server enforces the development/test flag, CSRF and authenticated
+      // branch scope; this UI never creates an order or stores a request.
+      const response = await fetch(basePath + path, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (response.status === 401 || response.status === 403) {
+        throw new Error('PERMISSION_DENIED');
+      }
+      if (response.status === 404) {
+        throw new Error('Previews sintéticos no disponibles en este entorno.');
+      }
+      if (!response.ok) throw new Error(await messageFrom(response));
+      const envelope = await response.json() as Record<string, unknown>;
+      const result = envelope?.[kind === 'quotation' ? 'quotation_preview' : 'request_preview'];
+      if (envelope?.synthetic_only !== true || result === null
+        || typeof result !== 'object' || Array.isArray(result)) {
+        throw new Error('Respuesta sintética no verificable.');
+      }
+      const value = result as Record<string, unknown>;
+      if (value.mode !== 'preview_only' || value.currency !== 'COP'
+        || typeof value.line_count !== 'number' || !Number.isSafeInteger(value.line_count)
+        || value.line_count < 1 || value.can_order !== false
+        || value.can_approve !== false || value.can_pay !== false
+        || value.can_dispatch !== false || value.persisted !== false
+        || (kind === 'quotation'
+          ? value.status !== 'SYNTHETIC_PREVIEW'
+            || typeof value.total_cop !== 'number'
+            || !Number.isSafeInteger(value.total_cop) || value.total_cop < 0
+          : value.status !== 'pending' || value.notified !== false)) {
+        throw new Error('Respuesta sintética no verificable.');
+      }
+      if (sequence !== previewRequests.current[kind]) return;
+      setPreviewStates((current) => ({
+        ...current,
+        [kind]: {
+          status: 'ready',
+          lineCount: value.line_count as number,
+          ...(kind === 'quotation' ? { totalCop: value.total_cop as number } : {}),
+        },
+      }));
+    } catch (error) {
+      if (sequence !== previewRequests.current[kind]) return;
+      setPreviewStates((current) => ({
+        ...current,
+        [kind]: error instanceof Error && error.message === 'PERMISSION_DENIED'
+          ? { status: 'denied' }
+          : { status: 'error', message: error instanceof Error ? error.message : 'Vista previa no disponible.' },
+      }));
+    }
+  }
 
   async function mutate(url: string, payload: Record<string, unknown>, success: string): Promise<boolean> {
     if (busy) return false;
@@ -423,6 +523,48 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
           </section>
         </div>
       )}
+      <section className="catalog-card" aria-labelledby="synthetic-purchasing-title">
+        <h3 id="synthetic-purchasing-title">Previews ficticios de compras</h3>
+        <p className="muted">
+          Solo demostración sintética habilitada en pruebas/desarrollo. No crea órdenes,
+          no envía solicitudes, no aprueba, no paga ni persiste datos.
+        </p>
+        {(['quotation', 'request'] as const).map((kind) => {
+          const preview = previewStates[kind];
+          const title = kind === 'quotation' ? 'Cotización ficticia' : 'Solicitud ficticia';
+          return (
+            <section key={kind} aria-label={title}>
+              <h4>{title}</h4>
+              {!canCreate ? (
+                <p role="alert">No tienes permiso para generar este preview.</p>
+              ) : (
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  disabled={preview.status === 'loading'}
+                  onClick={() => void loadSyntheticPreview(kind)}
+                >
+                  {preview.status === 'loading' ? 'Consultando ejemplo…' : 'Consultar ejemplo sintético'}
+                </button>
+              )}
+              {canCreate && preview.status === 'empty' && (
+                <p role="status">Sin preview: consulta el ejemplo para ver la respuesta HTTP.</p>
+              )}
+              {preview.status === 'loading' && <output aria-live="polite">Cargando preview sintético…</output>}
+              {preview.status === 'denied' && <p role="alert">Permiso denegado para este preview en la sede.</p>}
+              {preview.status === 'error' && <p role="alert">{preview.message}</p>}
+              {preview.status === 'ready' && (
+                <output aria-live="polite">
+                  {kind === 'quotation'
+                    ? 'Cotización de ejemplo: ' + preview.lineCount + ' línea(s), ' + preview.totalCop + ' COP.'
+                    : 'Solicitud de ejemplo pendiente: ' + preview.lineCount + ' línea(s).'}
+                  {' '}Sin autorización para ordenar, aprobar, pagar, notificar o persistir.
+                </output>
+              )}
+            </section>
+          );
+        })}
+      </section>
     </section>
   );
 }
