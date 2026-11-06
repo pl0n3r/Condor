@@ -122,15 +122,7 @@ final class SupplierContractPreviewTest extends WebTestCase
         $client = static::createClient();
         $em = static::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $em);
-        [$tenant, $branch, $owner] = $this->fixtureUser($em);
-        [, $foreign] = $this->fixtureUser($em);
-        $viewer = new User('m09-contract-view-'.bin2hex(random_bytes(5)).'@example.test', 'Lector ficticio');
-        $membership = new Membership($tenant, $viewer, 'ADMIN');
-        $role = new Role($tenant, 'Lector ficticio', ['inventory.view']);
-        foreach ([$viewer, $membership, $role, new BranchRoleAssignment($membership, $branch, $role)] as $entity) {
-            $em->persist($entity);
-        }
-        $em->flush();
+        [$tenant, $branch, $owner, $viewer, $foreign] = $this->contractActors($em);
         $path = '/api/v1/branches/'.$branch->id().'/purchasing/suppliers/contracts/preview';
         $payload = self::fixturePayload();
         $client->jsonRequest('POST', $path, $payload);
@@ -177,19 +169,41 @@ final class SupplierContractPreviewTest extends WebTestCase
         self::assertResponseStatusCodeSame(403);
     }
 
+    /** @return array{Tenant,Branch,User,User,Branch} */
+    private function contractActors(EntityManagerInterface $em): array
+    {
+        [$tenant, $branch, $owner] = $this->fixtureUser($em);
+        [, $foreign] = $this->fixtureUser($em);
+        $viewer = new User('m09-contract-view-'.bin2hex(random_bytes(5)).'@example.test', 'Lector ficticio');
+        $membership = new Membership($tenant, $viewer, 'ADMIN');
+        $role = new Role($tenant, 'Lector ficticio', ['inventory.view']);
+        $assignedRole = new BranchRoleAssignment($membership, $branch, $role);
+        $em->persist($viewer);
+        $em->persist($membership);
+        $em->persist($role);
+        $em->persist($assignedRole);
+        $em->flush();
+
+        return [$tenant, $branch, $owner, $viewer, $foreign];
+    }
+
     /** @return array{Tenant,Branch,User} */
     private function fixtureUser(EntityManagerInterface $em): array
     {
-        $suffix = bin2hex(random_bytes(5));
-        $tenant = new Tenant('Contrato sintético '.$suffix, 'm09-contract-'.$suffix);
-        $legal = new LegalEntity($tenant, 'SAS ficticia '.$suffix, null, true);
-        $branch = new Branch($tenant, 'Sede ficticia', 'm09-contract-'.$suffix, $legal, true);
-        $owner = new User('m09-contract-'.$suffix.'@example.test', 'Dueño ficticio');
-        foreach ([$tenant, $legal, $branch, $owner,
-            new Membership($tenant, $owner, Membership::ROLE_OWNER)] as $row) {
-            $em->persist($row);
-        }
+        $token = bin2hex(random_bytes(5));
+        $tenant = new Tenant(sprintf('Contrato de prueba %s', $token), 'm09-contract-'.$token);
+        $legalEntity = new LegalEntity($tenant, 'SAS de prueba '.$token, null, true);
+        $site = new Branch($tenant, 'Sede para contratos', 'm09-contract-'.$token, $legalEntity, true);
+        $owner = new User('m09-contract-'.$token.'@example.test', 'Dueño ficticio');
+        $ownerMembership = new Membership($tenant, $owner, Membership::ROLE_OWNER);
+
+        $em->persist($tenant);
+        $em->persist($legalEntity);
+        $em->persist($site);
+        $em->persist($owner);
+        $em->persist($ownerMembership);
         $em->flush();
-        return [$tenant, $branch, $owner];
+
+        return [$tenant, $site, $owner];
     }
 }

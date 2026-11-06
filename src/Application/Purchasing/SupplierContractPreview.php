@@ -17,15 +17,15 @@ final class SupplierContractPreview
      */
     public static function preview(array $payload): array
     {
-        self::exactKeys($payload, [
+        self::requireExactFields($payload, [
             'tenant_ref', 'legal_entity_ref', 'site_ref', 'supplier_ref',
             'contract_ref', 'mode', 'metadata', 'reviews',
         ]);
-        self::fixture($payload['tenant_ref'], 'tenant');
-        self::fixture($payload['legal_entity_ref'], 'legal-entity');
-        self::fixture($payload['site_ref'], 'site');
-        self::fixture($payload['supplier_ref'], 'supplier');
-        self::fixture($payload['contract_ref'], 'contract');
+        self::requireFixture($payload['tenant_ref'], 'tenant');
+        self::requireFixture($payload['legal_entity_ref'], 'legal-entity');
+        self::requireFixture($payload['site_ref'], 'site');
+        self::requireFixture($payload['supplier_ref'], 'supplier');
+        self::requireFixture($payload['contract_ref'], 'contract');
         if ($payload['mode'] !== 'preview_only') {
             throw new InvalidArgumentException('PREVIEW_ONLY');
         }
@@ -34,8 +34,8 @@ final class SupplierContractPreview
         if (!is_array($metadata) || array_is_list($metadata)) {
             throw new InvalidArgumentException('INVALID_METADATA');
         }
-        self::exactKeys($metadata, ['template_ref', 'kind', 'revision']);
-        self::fixture($metadata['template_ref'], 'contract-template');
+        self::requireExactFields($metadata, ['template_ref', 'kind', 'revision']);
+        self::requireFixture($metadata['template_ref'], 'contract-template');
         if (!is_string($metadata['kind']) || !in_array($metadata['kind'], ['supplies', 'services'], true)) {
             throw new InvalidArgumentException('INVALID_KIND');
         }
@@ -52,7 +52,7 @@ final class SupplierContractPreview
             if (!is_array($review) || array_is_list($review)) {
                 throw new InvalidArgumentException('INVALID_REVIEW');
             }
-            self::exactKeys($review, ['stage', 'state', 'tenant_ref', 'legal_entity_ref', 'site_ref']);
+            self::requireExactFields($review, ['stage', 'state', 'tenant_ref', 'legal_entity_ref', 'site_ref']);
             $stage = $review['stage'];
             $state = $review['state'];
             if (!is_string($stage) || !in_array($stage, self::STAGES, true) || isset($reviews[$stage])) {
@@ -70,44 +70,50 @@ final class SupplierContractPreview
         }
         ksort($reviews);
 
-        // Even three reviewed steps can never approve, sign or legalize a contract.
-        return [
-            'tenant_ref' => $payload['tenant_ref'],
-            'legal_entity_ref' => $payload['legal_entity_ref'],
-            'site_ref' => $payload['site_ref'],
-            'supplier_ref' => $payload['supplier_ref'],
-            'contract_ref' => $payload['contract_ref'],
+        // Only allowlisted fixture identity survives: no legally binding action.
+        $identity = array_intersect_key($payload, array_flip([
+            'tenant_ref', 'legal_entity_ref', 'site_ref', 'supplier_ref', 'contract_ref',
+        ]));
+        $immutableControls = array_fill_keys([
+            'can_approve', 'can_sign', 'can_send', 'can_order',
+            'juridically_binding', 'persisted', 'notified',
+        ], false);
+
+        return $identity + [
             'metadata' => $metadata,
             'reviews' => $reviews,
             'status' => 'REQUIRES_HUMAN_REVIEW',
             'mode' => 'preview_only',
-            'can_approve' => false,
-            'can_sign' => false,
-            'can_send' => false,
-            'can_order' => false,
-            'juridically_binding' => false,
-            'persisted' => false,
-            'notified' => false,
-        ];
+        ] + $immutableControls;
     }
 
-    /** @param array<string,mixed> $data
-     *  @param list<string> $keys
+    /** @param array<string,mixed> $source
+     *  @param list<string> $fields
      */
-    private static function exactKeys(array $data, array $keys): void
+    private static function requireExactFields(array $source, array $fields): void
     {
-        $actual = array_keys($data);
-        sort($actual);
-        sort($keys);
-        if ($actual !== $keys) {
+        if (count($source) !== count($fields)) {
             throw new InvalidArgumentException('UNEXPECTED_FIELDS');
+        }
+        foreach ($fields as $field) {
+            if (!array_key_exists($field, $source)) {
+                throw new InvalidArgumentException('UNEXPECTED_FIELDS');
+            }
         }
     }
 
-    private static function fixture(mixed $value, string $kind): void
+    private static function requireFixture(mixed $reference, string $type): void
     {
-        if (!is_string($value)
-            || preg_match('~^fixture:'.preg_quote($kind, '~').'/[a-z0-9][a-z0-9-]{0,63}$~D', $value) !== 1) {
+        if (!is_string($reference)) {
+            throw new InvalidArgumentException('INVALID_FIXTURE');
+        }
+        $prefix = 'fixture:'.$type.'/';
+        if (!str_starts_with($reference, $prefix)) {
+            throw new InvalidArgumentException('INVALID_FIXTURE');
+        }
+        $identifier = substr($reference, strlen($prefix));
+        if ($identifier === '' || strlen($identifier) > 64
+            || preg_match('/\A[a-z0-9][a-z0-9-]*\z/D', $identifier) !== 1) {
             throw new InvalidArgumentException('INVALID_FIXTURE');
         }
     }
