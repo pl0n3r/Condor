@@ -12,7 +12,7 @@ Inventario **sin valores** de configuración, credenciales y permisos de Condor 
 | --- | --- | --- | --- | --- | --- |
 | DATABASE_URL | Acceso MariaDB | Runtime seguro Hostinger y GitHub Actions Secrets del deploy autorizado | DUEÑO / administrador DB | Sustituir usuario/credencial en ventana aprobada, verificar conexión y retirar anterior | Deshabilitar usuario antiguo y sus sesiones |
 | APP_SECRET | Firmas y sesiones Symfony | Variable segura en runtime Hostinger, nunca Git | DUEÑO / operador backend | Cambiar en ventana aprobada, anticipar cierre de sesiones y validar login | Invalidar valor y sesiones anteriores con autorización |
-| MAILER_DSN / cuenta SMTP (pendiente) | Notificación transaccional y recuperación de cuenta | Runtime protegido y consola de proveedor por elegir | DUEÑO / operador correo | Crear credencial mínima, probar sintéticamente, sustituir y retirar antigua | Desactivar credencial de proveedor |
+| CONDOR_MAILER_DSN / Resend SMTP (plan gratuito elegido) | Notificación transaccional y recuperación de cuenta | Preferente: ajustes cifrados del propietario en `/adminpl0n3r` cuando #1726–#1728 estén integrados; respaldo temporal: entorno protegido. Clave nunca en Git | DUEÑO / operador correo | Crear credencial Resend de permiso solo de envío, comprobar sin datos reales y rotar por canal privado | Revocar la clave en Resend y desactivar el ajuste / DSN |
 | SENTRY_DSN (pendiente) | Telemetría mínima de errores | Cuenta Sentry y runtime solo tras aprobación de proveedor y privacidad | DUEÑO / observabilidad | Sustituir DSN aprobado y validar solo estado de integración | Desactivar DSN/proyecto antiguo |
 | DEPLOY_SSH_KEY | Llave del despliegue SSH | GitHub Actions Secrets; contraparte pública en Hostinger | DUEÑO / infraestructura | Crear par nuevo fuera de Git, autorizar clave pública, actualizar Secret y probar antes de retirar | Quitar clave pública antigua y Secret asociado |
 | HOSTINGER_KNOWN_HOSTS | Identidad SSH del servidor, no contraseña | GitHub Actions Secrets según deploy-factory.yml | DUEÑO / infraestructura | Renovar tras comprobar huella por canal independiente | Retirar huella obsoleta del workflow |
@@ -24,7 +24,7 @@ Inventario **sin valores** de configuración, credenciales y permisos de Condor 
 | Credenciales S3-compatible (preparación) | Almacenamiento offsite de respaldo cifrado | Cuenta de proveedor aún no provisionada y almacén seguro de recovery | DUEÑO / recuperación | Sustituir identidad de servicio de privilegio mínimo | Revocar cuenta/credenciales según retención aprobada |
 | Cuenta Hostinger y acceso SSH | Administración del hosting y despliegue | Consola Hostinger y SSH nominal con MFA | DUEÑO | Revisar accesos, MFA y llaves en cambios de operador | Eliminar usuario, llaves y sesiones al perder autorización |
 | Cuenta GitHub y administradores GitHub Actions | Control de repositorio, CI, Secrets, permisos | Configuración de GitHub, con MFA y mínimo privilegio | DUEÑO | Auditar colaboradores, permisos y tokens externos si existen | Retirar colaboradores y revocar tokens/permisos |
-| Cuenta de correo y Sentry | Administración de integraciones opcionales | Consolas de proveedor con MFA tras decisión humana | DUEÑO | Rotar credenciales de servicio y revisar miembros | Desconectar integración y retirar miembros autorizados |
+| Cuenta Resend y Sentry | Administración de integraciones; Resend elegido sin cuenta aprovisionada | Consolas de proveedor con MFA y configuración posterior por `/adminpl0n3r` | DUEÑO | Rotar credenciales de servicio y revisar miembros | Desconectar integración y retirar miembros autorizados |
 
 ## Procedimiento propuesto (no ejecutar sin autorización)
 
@@ -43,7 +43,7 @@ Inventario **sin valores** de configuración, credenciales y permisos de Condor 
 
 ## Puertas y decisiones exclusivas del dueño
 
-- **PENDIENTE DE DECISIÓN DEL DUEÑO:** proveedor de correo SMTP, cuentas, contratos y gastos; no contratar ni enviar correo real.
+- **PROVEEDOR ELEGIDO POR EL DUEÑO (#1725):** Resend, plan gratuito; cuenta, dominio verificado, clave mínima, custodia y activación continúan pendientes de acciones expresamente autorizadas. Sin contratación de plan de pago, gasto ni correo real.
 - **PENDIENTE DE DECISIÓN DEL DUEÑO:** alta de Sentry, datos transmitidos y aprobación legal; no activar DSN.
 - **PENDIENTE DE DECISIÓN DEL DUEÑO:** Hostinger, usuarios SSH, permisos GitHub, DNS/TLS y asignación nominal de custodios; no realizar rotación ni revocación real.
 - **PENDIENTE DE DECISIÓN DEL DUEÑO:** recovery offsite, proveedor S3-compatible, costos y restore real; sin provisionamiento.
