@@ -18,7 +18,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
-/** Read-only M01 S06 synthetic changes: no employee entities, PII or writes. */
+/** M01 S06 read-only fixtures; real employee entities are never consulted. */
 final class HrChangeController extends AbstractController
 {
     use BranchApiSupport;
@@ -34,11 +34,9 @@ final class HrChangeController extends AbstractController
     #[Route('/api/v1/branches/{branchId}/hr/changes', name: 'api_hr_changes_index', methods: ['GET'])]
     public function index(string $branchId, Request $request): JsonResponse
     {
-        $this->requireSynthetic();
-        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
+        [$tenant, $company, $branch] = $this->scopeFor($branchId, $request);
 
-        return $this->privateJson([
+        return $this->privateResult([
             'changes' => $this->changes->listFor($tenant, $company, $branch),
             'synthetic' => true, 'persisted' => false, 'juridically_binding' => false,
         ]);
@@ -47,59 +45,68 @@ final class HrChangeController extends AbstractController
     #[Route('/api/v1/branches/{branchId}/hr/changes/{ref}', name: 'api_hr_changes_detail', methods: ['GET'])]
     public function detail(string $branchId, string $ref, Request $request): JsonResponse
     {
-        $this->requireSynthetic();
-        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
-        $change = $this->changes->findFor($tenant, $company, $branch, $ref);
-        if ($change === null) {
+        [$tenant, $company, $branch] = $this->scopeFor($branchId, $request);
+        $found = $this->changes->findFor($tenant, $company, $branch, $ref);
+        if ($found === null) {
             throw new NotFoundHttpException('Novedad ficticia no encontrada.');
         }
 
-        return $this->privateJson([
-            'change' => $change,
+        return $this->privateResult([
+            'change' => $found,
             'synthetic' => true, 'persisted' => false, 'juridically_binding' => false,
         ]);
     }
 
-    private function requireSynthetic(): void
+    /** @return array{Tenant,LegalEntity,Branch} */
+    private function scopeFor(string $branchId, Request $request): array
     {
-        $real = getenv('HR_REAL_DATA_ENABLED');
-        if ($real !== false && !in_array(strtolower(trim($real)), ['', 'false', '0', 'off', 'no'], true)) {
-            throw new NotFoundHttpException('Novedades sintéticas no disponibles.');
-        }
-        $environment = $this->getParameter('kernel.environment');
-        if ($environment !== 'test' && ($environment !== 'dev'
-            || getenv('CONDOR_HR_SYNTHETIC_API') !== '1'
-            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion')) {
-            throw new NotFoundHttpException('Novedades sintéticas no disponibles.');
-        }
-    }
-
-    private function companyFor(Tenant $tenant, Branch $branch, Request $request): LegalEntity
-    {
-        $query = $request->query->all();
-        if (array_diff(array_keys($query), ['company_id']) !== []) {
-            throw new BadRequestHttpException('Parámetros de consulta no permitidos.');
-        }
+        $this->ensureSyntheticOnly();
+        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
         $company = $branch->legalEntity();
         if (!$company instanceof LegalEntity || $company->tenant()->id() !== $tenant->id()) {
             throw new NotFoundHttpException('Empresa no disponible.');
         }
-        $provided = $query['company_id'] ?? null;
-        if ($provided !== null && (!is_string($provided) || $provided !== $company->id())) {
-            throw new NotFoundHttpException('Empresa no disponible.');
+
+        $parameters = $request->query->all();
+        foreach ($parameters as $key => $value) {
+            if ($key !== 'company_id') {
+                throw new BadRequestHttpException('Parámetros de consulta no permitidos.');
+            }
+            if (!is_string($value) || !hash_equals($company->id(), $value)) {
+                throw new NotFoundHttpException('Empresa no disponible.');
+            }
         }
 
-        return $company;
+        return [$tenant, $company, $branch];
+    }
+
+    private function ensureSyntheticOnly(): void
+    {
+        $enabled = getenv('HR_REAL_DATA_ENABLED');
+        if (is_string($enabled)
+            && !in_array(strtolower(trim($enabled)), ['', 'false', '0', 'off', 'no'], true)) {
+            throw new NotFoundHttpException('Novedades sintéticas no disponibles.');
+        }
+
+        $runtime = $this->getParameter('kernel.environment');
+        if ($runtime === 'test') {
+            return;
+        }
+        if ($runtime !== 'dev' || getenv('CONDOR_HR_SYNTHETIC_API') !== '1'
+            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion') {
+            throw new NotFoundHttpException('Novedades sintéticas no disponibles.');
+        }
     }
 
     /** @param array<string,mixed> $payload */
-    private function privateJson(array $payload): JsonResponse
+    private function privateResult(array $payload): JsonResponse
     {
-        $response = $this->json($payload);
-        $response->headers->set('Cache-Control', 'private, no-store');
-        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        $result = $this->json($payload);
+        $result->headers->add([
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
 
-        return $response;
+        return $result;
     }
 }

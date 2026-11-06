@@ -9,7 +9,7 @@ use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use DomainException;
 
-/** Deterministic M01 S06 fixtures; never reads employee records or writes data. */
+/** Deterministic M01 S06 fixtures: no employee repository or persistence. */
 final class HrChangeCatalog
 {
     private const CHANGES = [
@@ -26,31 +26,25 @@ final class HrChangeCatalog
             $tenant->id(), $company->id(), $branch->id(),
         ])), 0, 16);
 
-        $rows = [];
-        foreach (self::CHANGES as $entry) {
-            $rows[] = [
-                'ref' => 'fixture-hr-change-'.$scope.'-'.$entry['slug'],
-                'kind' => $entry['kind'],
-                'label' => $entry['label'],
-                'effective_on' => $entry['date'],
-                'state' => 'SOLO_LECTURA',
-                'synthetic' => true,
-            ];
-        }
-
-        return $rows;
+        return array_map(static fn (array $item): array => [
+            'ref' => 'fixture-hr-change-'.$scope.'-'.$item['slug'],
+            'kind' => $item['kind'],
+            'label' => $item['label'],
+            'effective_on' => $item['date'],
+            'state' => 'SOLO_LECTURA',
+            'synthetic' => true,
+        ], self::CHANGES);
     }
 
     /** @return array{ref:string,kind:string,label:string,effective_on:string,state:string,synthetic:bool}|null */
     public function findFor(Tenant $tenant, LegalEntity $company, Branch $branch, string $ref): ?array
     {
-        $items = $this->listFor($tenant, $company, $branch);
         if (strlen($ref) > 90 || preg_match('/\Afixture-hr-change-[a-f0-9]{16}-[a-z]+\z/D', $ref) !== 1) {
             return null;
         }
-        foreach ($items as $item) {
-            if ($item['ref'] === $ref) {
-                return $item;
+        foreach ($this->listFor($tenant, $company, $branch) as $candidate) {
+            if (hash_equals($candidate['ref'], $ref)) {
+                return $candidate;
             }
         }
 
