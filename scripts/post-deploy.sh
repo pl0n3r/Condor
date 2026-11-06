@@ -428,6 +428,8 @@ validate_construction_migrations() {
     fi
 
     if [ "$validation_status" -eq 124 ]; then
+        POST_DEPLOY_REASON="dry_run_timeout"
+        POST_DEPLOY_SUBCODE=124
         print_log_tail "$MIGRATION_LOG"
         cleanup_migration_log
         echo "post-deploy.sh: dry-run de migraciones excedió ${MIGRATION_TIMEOUT_SECONDS}s; caché no modificada." >&2
@@ -435,6 +437,13 @@ validate_construction_migrations() {
     fi
 
     if [ "$validation_status" -ne 0 ]; then
+        POST_DEPLOY_REASON="dry_run_command_failure"
+        # Shell exit codes are 1..255; the public status never exports stderr.
+        if [ "$validation_status" -ge 1 ] && [ "$validation_status" -le 255 ]; then
+            POST_DEPLOY_SUBCODE="$validation_status"
+        else
+            POST_DEPLOY_SUBCODE=1
+        fi
         print_log_tail "$MIGRATION_LOG"
         cleanup_migration_log
         echo "post-deploy.sh: no fue posible validar las migraciones pendientes de construcción (código $validation_status); caché no modificada." >&2
@@ -442,6 +451,8 @@ validate_construction_migrations() {
     fi
 
     if [ ! -s "$MIGRATION_SQL_FILE" ]; then
+        POST_DEPLOY_REASON="dry_run_sql_missing"
+        POST_DEPLOY_SUBCODE=4
         print_log_tail "$MIGRATION_LOG"
         cleanup_migration_log
         echo "post-deploy.sh: Doctrine no produjo SQL para validar las migraciones pendientes; se falla cerrado." >&2
@@ -494,6 +505,12 @@ validate_construction_migrations() {
     ' || guard_status=$?
 
     if [ "$guard_status" -ne 0 ]; then
+        POST_DEPLOY_SUBCODE="$guard_status"
+        case "$guard_status" in
+            2) POST_DEPLOY_REASON="dry_run_sql_destructive" ;;
+            4) POST_DEPLOY_REASON="dry_run_sql_missing" ;;
+            *) POST_DEPLOY_REASON="dry_run_sql_unapproved" ;;
+        esac
         cleanup_migration_log
         if [ "$guard_status" -eq 2 ]; then
             echo "post-deploy.sh: migración destructiva/contract detectada; requiere autorización explícita. Caché no modificada." >&2

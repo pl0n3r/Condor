@@ -64,6 +64,11 @@ if (is_file($statusPath) && is_readable($statusPath)) {
         $allowedResults = ['running', 'success', 'failure', 'skipped'];
         $allowedReasons = [
             'none',
+            'dry_run_timeout',
+            'dry_run_command_failure',
+            'dry_run_sql_missing',
+            'dry_run_sql_destructive',
+            'dry_run_sql_unapproved',
             'database_url_missing',
             'client_missing',
             'configuration',
