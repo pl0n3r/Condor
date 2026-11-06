@@ -213,4 +213,26 @@ final class GestM04VerificationTest extends TestCase
         self::assertSame('tenant-test-demo', $result['tenant_ref']);
         self::assertSame('fixture:company/demo', $result['company_ref']);
     }
+
+    public function testUiSinteticaConEstadosSeguros(): void
+    {
+        // La UI local no consulta red: no hay estado de carga remoto que simular.
+        $source = file_get_contents(__DIR__.'/../../../../frontend/admin/PayrollManagement.tsx');
+        self::assertIsString($source);
+        foreach ([
+            'if (!canView)', 'if (!canCreate', 'if (!canReview',
+            'row.tenantId === tenantId', 'row.companyId === companyId',
+            'row.branchId === branchId',
+            'Sin nóminas ficticias para este filtro.',
+            'No se guardó: permiso insuficiente',
+            'role="alert"', 'role="status"', 'aria-live="polite"',
+            'if (!import.meta.env.DEV) return null;',
+        ] as $guard) {
+            self::assertStringContainsString($guard, $source);
+        }
+        foreach (['fetch(', 'localStorage', 'sessionStorage', 'indexedDB'] as $api) {
+            self::assertStringNotContainsString($api, $source);
+        }
+    }
+
 }
