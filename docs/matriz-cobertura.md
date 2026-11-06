@@ -567,3 +567,15 @@ Auditoría de los 96 IDs con [veredictos trazables](contraste-cd_ops.md) y suite
 **Hojas nuevas creadas: 0.** No apareció ningún `SIN_COBERTURA` demostrado sin seguimiento; faltas de evidencia se mantuvieron `NO_VERIFICABLE` para no fabricar backlog bajo Factory #1289.
 
 **Verificación del corte:** fuentes `ESPECIFICACIONES.md`, `README.md`, `AGENTES.md`, `docs/gestion-empresarial-integral.md`, `docs/modulos-operativos.md` y sus decisiones; rutas de código/pruebas versionadas y PRs fusionados. Persisten límites de RR. HH. bajo #742/B, aislamiento tenant/legal, lectura real de Hostinger y release D-043 separados de este análisis.
+
+## Seguimiento M01 #1567 (6-nov-2026)
+
+Verificación incremental **sin promoción de estado**: [PR backend #1672](https://github.com/pl0n3r/Condor/pull/1672) fusionado aporta registros M01 persistentes por tenant y razón social, con puerta `HR_REAL_DATA_ENABLED` apagada por defecto; [PR UI #1713](https://github.com/pl0n3r/Condor/pull/1713) sigue en revisión y no equivale a una integración E2E de los diez submódulos.
+
+| IDs | Estado conservado | Evidencia parcial | Aceptación pendiente |
+| --- | --- | --- | --- |
+| `GEST-M01-S02`–`GEST-M01-S05` | `NO_VERIFICABLE` | Backend de registros #1672 y UI por empresa #1713; no acreditan cargos, áreas, sedes ni organigrama completos. | Endpoint y prueba HTTP/rol/cross-tenant/empresa/sede por cada submódulo, E2E con cuatro estados, PR fusionado. |
+| `GEST-M01-S06`–`GEST-M01-S09` | `NO_VERIFICABLE` | Registro de novedades genérico; no demuestra flujos reales de permisos, vacaciones e incapacidades. | Servicios y endpoints independientes, estados y pruebas negativas, reglas y autorizaciones aplicables. |
+| `GEST-M01-S10`–`GEST-M01-S11` | `NO_VERIFICABLE` | Preview sintético y UI M01 parcial; sin evaluación laboral o portal completo. | Aserciones reales por rol, aislamiento, E2E y control de acceso. |
+
+La revisión jurídica, los datos personales, las autorizaciones de operación y el go-live siguen separados. Ninguna fila cambia a `CUBIERTO` sin **código + regresión exacta + PR fusionado**, ni se alteran los totales de esta matriz por evidencia parcial.
