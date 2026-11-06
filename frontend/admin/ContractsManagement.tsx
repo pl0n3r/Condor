@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { useState, type FormEvent } from 'react';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
 // M02: demostración local, nunca un contrato de trabajo ejecutable ni una firma.
 type Phase = 'BORRADOR' | 'REQUIERE_REVISION' | 'EN_REVISION';
@@ -35,6 +36,7 @@ function ContractPreview({ tenantId, companyId, branchId, permissions }: Props) 
   const [sourceTemplate, setSourceTemplate] = useState('');
   const [category, setCategory] = useState<ContractType>('CONTRATO');
   const [picked, setPicked] = useState<string | null>(null);
+  const [panel, setPanel] = useState<'create' | 'detail' | null>(null);
   const [filter, setFilter] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -60,7 +62,7 @@ function ContractPreview({ tenantId, companyId, branchId, permissions }: Props) 
       ref, fictionalPerson, sourceTemplate, category, scope, phase: 'BORRADOR',
     }));
     record(ref, 'borrador_creado');
-    setPicked(ref);
+    setPicked(ref); setPanel('detail');
     setRef('');
     setFictionalPerson('');
     setSourceTemplate('');
@@ -69,7 +71,7 @@ function ContractPreview({ tenantId, companyId, branchId, permissions }: Props) 
 
   function inspect(item: Draft) {
     if (!canRead || item.scope !== scope) return;
-    setPicked(item.ref);
+    setPicked(item.ref); setPanel('detail');
     record(item.ref, 'consulta_ficticia');
   }
 
@@ -86,90 +88,102 @@ function ContractPreview({ tenantId, companyId, branchId, permissions }: Props) 
     setNotice('Se registró una transición de prueba, no una firma ni un cierre.');
   }
 
-  if (!canRead) return (
-    <section aria-label="Contratación ficticia"><p role="alert">
-      No tienes permiso de lectura de la demostración o no hay empresa seleccionada.
-    </p></section>
-  );
+  if (!canRead) return <section id="contracts-management" className="catalog-panel" aria-label="Contratación ficticia">
+    <PageHeader title="Contratación laboral · prueba local M02" />
+    <p role="alert">No tienes permiso de lectura de la demostración o no hay empresa seleccionada.</p>
+  </section>;
 
-  return (
-    <section id="contracts-management" className="catalog-panel" aria-labelledby="m02-title">
-      <header>
-        <h2 id="m02-title">Contratación laboral · prueba local M02</h2>
-        <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal, sin trámites, sin datos de trabajadores.</p>
-      </header>
-      {notice && <output aria-live="polite">{notice}</output>}
-      <div className="catalog-grid">
-        <section className="catalog-card" aria-label="Borradores de prueba">
-          <label><span>Filtrar por referencia ficticia</span>
-            <select value={filter} onChange={event => setFilter(event.target.value)}>
-              <option value="">Todas las referencias</option>
-              {scopedDrafts.map(item => <option key={item.ref} value={item.ref}>{item.ref}</option>)}
-            </select>
-          </label>
-          {listing.length === 0 ? <output>Sin registros en esta empresa y sede.</output> : (
-            <table aria-label="Contratos sintéticos"><thead><tr>
-              <th>Referencia</th><th>Clase</th><th>Estado</th><th>Acción</th>
-            </tr></thead><tbody>
-              {listing.map(item => <tr key={item.ref}>
-                <td>{item.ref}</td><td>{item.category}</td><td>{item.phase}</td>
-                <td><button type="button" onClick={() => inspect(item)}>Consultar prueba</button></td>
-              </tr>)}
-            </tbody></table>
-          )}
-        </section>
-        {canAdd && <section className="catalog-card" aria-label="Nuevo borrador de prueba">
-          <form className="catalog-editor" onSubmit={createDemo}>
-            <label><span>Contrato sintético</span>
-              <input value={ref} required maxLength={64}
-                placeholder="fixture:contracts/demo-01"
-                pattern="fixture:contracts/(demo|test|sample)-[0-9]{2,3}"
-                onChange={event => setRef(event.target.value)} />
-            </label>
-            <label><span>Persona sintética</span>
-              <input value={fictionalPerson} required maxLength={64}
-                placeholder="fixture:person/demo-01"
-                pattern="fixture:person/(demo|test|sample)-[0-9]{2,3}"
-                onChange={event => setFictionalPerson(event.target.value)} />
-            </label>
-            <label><span>Plantilla sintética</span>
-              <input value={sourceTemplate} required maxLength={64}
-                placeholder="fixture:template/demo-01"
-                pattern="fixture:template/(demo|test|sample)-[0-9]{2,3}"
-                onChange={event => setSourceTemplate(event.target.value)} />
-            </label>
-            <label><span>Tipo de borrador</span>
-              <select value={category} onChange={event => setCategory(event.target.value as ContractType)}>
-                {allowedType.map(item => <option key={item} value={item}>{item}</option>)}
-              </select>
-            </label>
-            <button type="submit">Crear borrador ficticio</button>
-          </form>
-        </section>}
-        <section className="catalog-card" aria-label="Ficha del borrador">
-          <h3>Revisión manual de prueba</h3>
-          {!selected ? <output>Selecciona una referencia sintética.</output> : <>
-            <dl><dt>Referencia</dt><dd>{selected.ref}</dd>
-              <dt>Persona ficticia</dt><dd>{selected.fictionalPerson}</dd>
-              <dt>Plantilla ficticia</dt><dd>{selected.sourceTemplate}</dd>
-              <dt>Estado</dt><dd>{selected.phase}</dd></dl>
-            {canAdvance && selected.phase !== 'EN_REVISION' && (
-              <form onSubmit={advance}><button type="submit">
-                {selected.phase === 'BORRADOR' ? 'Solicitar revisión de prueba' : 'Iniciar revisión de prueba'}
-              </button></form>
-            )}
-            <p className="muted">Ningún borrador se aprueba, firma o cierra automáticamente.</p>
-          </>}
-        </section>
-        <aside className="catalog-card" aria-label="Operaciones del simulador">
-          <h3>Bitácora local de demostración</h3>
-          <p className="muted">No es evidencia ni auditoría de servidor.</p>
-          <ol>{trail.filter(note => note.scope === scope).map(note =>
-            <li key={note.id}>{note.ref}: {note.operation}</li>)}</ol>
-        </aside>
-      </div>
-    </section>
-  );
+  return <section id="contracts-management" className="catalog-panel" aria-label="Contratación ficticia">
+    <PageHeader title="Contratación laboral · prueba local M02"
+      description="Borradores y revisiones manuales de demostración, separados por empresa y sede."
+      actions={canAdd ? <button type="button" onClick={() => setPanel('create')}>
+        Crear borrador ficticio
+      </button> : undefined} />
+    <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal, sin trámites, sin datos de trabajadores.</p>
+    {notice && <output role="status" aria-live="polite">{notice}</output>}
+    <MetricStrip label="Indicadores de contratación de prueba" items={[
+      { label: 'Borradores de prueba', value: scopedDrafts.length },
+      { label: 'Requieren revisión', value: scopedDrafts.filter(item => item.phase === 'REQUIERE_REVISION').length },
+      { label: 'En revisión', value: scopedDrafts.filter(item => item.phase === 'EN_REVISION').length },
+    ]} />
+    <Card title="Borradores de prueba">
+      <Toolbar trailing={<output aria-live="polite">{listing.length} registros</output>}>
+        <label>Filtrar por referencia ficticia
+          <select value={filter} onChange={event => setFilter(event.target.value)}>
+            <option value="">Todas las referencias</option>
+            {scopedDrafts.map(item => <option key={item.ref} value={item.ref}>{item.ref}</option>)}
+          </select>
+        </label>
+      </Toolbar>
+      <DataTable<Draft> caption="Contratos sintéticos"
+        rows={listing} rowKey={item => item.ref}
+        onOpen={item => inspect(item)}
+        columns={[
+          { key: 'ref', header: 'Referencia', render: item => item.ref },
+          { key: 'type', header: 'Clase', render: item => item.category },
+          { key: 'state', header: 'Estado', render: item =>
+            <StatusPill tone={item.phase === 'BORRADOR' ? 'neutral' : 'info'}>{item.phase}</StatusPill> },
+          { key: 'action', header: 'Acción', render: item =>
+            <button type="button" onClick={() => inspect(item)}>Consultar prueba</button> },
+        ]}
+        empty={<output>Sin registros en esta empresa y sede.</output>} />
+    </Card>
+    <Card title="Bitácora local de demostración">
+      <p className="muted">No es evidencia ni auditoría de servidor.</p>
+      {trail.filter(note => note.scope === scope).length === 0
+        ? <p role="status">Sin operaciones de prueba.</p>
+        : <ol>{trail.filter(note => note.scope === scope).map(note =>
+          <li key={note.id}>{note.ref}: {note.operation}</li>)}</ol>}
+    </Card>
+    <SidePanel open={panel === 'create' && canAdd} title="Nuevo borrador de prueba"
+      onClose={() => setPanel(null)}>
+      <form className="catalog-editor" onSubmit={createDemo}>
+        <label>Contrato sintético
+          <input value={ref} required maxLength={64}
+            placeholder="fixture:contracts/demo-01"
+            pattern="fixture:contracts/(demo|test|sample)-[0-9]{2,3}"
+            onChange={event => setRef(event.target.value)} />
+        </label>
+        <label>Persona sintética
+          <input value={fictionalPerson} required maxLength={64}
+            placeholder="fixture:person/demo-01"
+            pattern="fixture:person/(demo|test|sample)-[0-9]{2,3}"
+            onChange={event => setFictionalPerson(event.target.value)} />
+        </label>
+        <label>Plantilla sintética
+          <input value={sourceTemplate} required maxLength={64}
+            placeholder="fixture:template/demo-01"
+            pattern="fixture:template/(demo|test|sample)-[0-9]{2,3}"
+            onChange={event => setSourceTemplate(event.target.value)} />
+        </label>
+        <label>Tipo de borrador
+          <select value={category} onChange={event => setCategory(event.target.value as ContractType)}>
+            {allowedType.map(item => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+        <button type="submit">Crear borrador ficticio</button>
+      </form>
+    </SidePanel>
+    <SidePanel open={panel === 'detail' && !!selected} title="Revisión manual de prueba"
+      onClose={() => setPanel(null)}>
+      {selected ? <>
+        <dl>
+          <dt>Referencia</dt><dd>{selected.ref}</dd>
+          <dt>Persona ficticia</dt><dd>{selected.fictionalPerson}</dd>
+          <dt>Plantilla ficticia</dt><dd>{selected.sourceTemplate}</dd>
+          <dt>Estado</dt><dd>
+            <StatusPill tone={selected.phase === 'BORRADOR' ? 'neutral' : 'info'}>{selected.phase}</StatusPill>
+          </dd>
+        </dl>
+        {canAdvance && selected.phase !== 'EN_REVISION' && (
+          <form onSubmit={advance}><button type="submit">
+            {selected.phase === 'BORRADOR' ? 'Solicitar revisión de prueba' : 'Iniciar revisión de prueba'}
+          </button></form>
+        )}
+        <p className="muted">Ningún borrador se aprueba, firma o cierra automáticamente.</p>
+      </> : <output>Selecciona una referencia sintética.</output>}
+    </SidePanel>
+  </section>;
 }
 
 // Un montaje por ámbito y solo en DEV. No habilita rutas reales ni persistencia.
