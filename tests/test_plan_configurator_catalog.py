@@ -42,6 +42,21 @@ class PlanConfiguratorCatalogTests(unittest.TestCase):
     def test_addons_come_from_plan_version_relations(self) -> None:
         self.phpunit("testAddonsComeFromPlanVersionRelations")
 
+    def test_current_rates_use_single_catalog_for_public_and_quotes(self) -> None:
+        reader = (ROOT / "src/Application/Commercial/PlanConfiguratorCatalogReader.php").read_text(encoding="utf-8")
+        quote = (ROOT / "src/Application/Commercial/PlanQuoteService.php").read_text(encoding="utf-8")
+        pricing = (ROOT / "templates/pricing/index.html.twig").read_text(encoding="utf-8")
+        seeder = (ROOT / "src/Application/Commercial/CommercialCatalogSeeder.php").read_text(encoding="utf-8")
+        self.assertIn("$this->catalog->current($at)", reader)
+        self.assertIn("$options['plan']['monthly_amount']", quote)
+        self.assertIn("$options['plan']['annual_amount']", quote)
+        self.assertIn("unset($clientSuppliedTotal)", quote)
+        self.assertIn("plan.monthly_amount|number_format", pricing)
+        self.assertIn("plan.annual_amount|number_format", pricing)
+        self.assertIn("plan.quote_required", pricing)
+        self.assertIn("'business' => [199900, 1999000, false", seeder)
+        self.assertRegex(seeder, r"\$plans\[\$key\],\s*3,\s*\$monthly")
+
     def test_compatibility_migration_and_seed_are_idempotent(self) -> None:
         source = MIGRATION.read_text(encoding="utf-8")
         up = source.split("public function up", 1)[1].split("public function down", 1)[0]
