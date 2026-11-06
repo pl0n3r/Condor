@@ -368,7 +368,7 @@ export function ComplianceManagement(props: Props) {
   return <>
     <OccupationalHttpPanel key={'http-' + props.tenantId + '|' + props.branchId}
       branchId={props.branchId} permissions={props.permissions} />
-    <details><summary>Simulación local anterior (sin conexión HTTP)</summary>
+    <details open><summary>Simulación local anterior (sin conexión HTTP)</summary>
       <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId} {...props} />
     </details>
   </>;
