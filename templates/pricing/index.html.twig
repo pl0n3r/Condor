@@ -35,7 +35,54 @@
                     <dl>
                         <div>
                             <dt>Mensual</dt>
-                            <dd>{{ plan.currency }} {{ plan.monthly_amount|number_format(0, ',', '.') }}</dd>
+                            <dd>{{ plan.currency == 'COP' ? '</dd>
+                        </div>
+                        <div>
+                            <dt>Anual</dt>
+                            <dd>{{ plan.currency == 'COP' ? '</dd>
+                        </div>
+                    </dl>
+                {% endif %}
+
+                <a class="button" href="{{ path('app_plan_configurator') }}">Configurar este plan</a>
+            </article>
+        {% else %}
+            <p class="muted">No hay planes comerciales vigentes en este momento.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+ : plan.currency }} {{ plan.monthly_amount|number_format(0, ',', '.') }}</dd>
+                        </div>
+                        <div>
+                            <dt>Anual</dt>
+                            <dd>{{ plan.currency }} {{ plan.annual_amount|number_format(0, ',', '.') }}</dd>
+                        </div>
+                    </dl>
+                {% endif %}
+
+                <a class="button" href="{{ path('app_plan_configurator') }}">Configurar este plan</a>
+            </article>
+        {% else %}
+            <p class="muted">No hay planes comerciales vigentes en este momento.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+ : plan.currency }} {{ plan.annual_amount|number_format(0, ',', '.') }}</dd>
+                        </div>
+                    </dl>
+                {% endif %}
+
+                <a class="button" href="{{ path('app_plan_configurator') }}">Configurar este plan</a>
+            </article>
+        {% else %}
+            <p class="muted">No hay planes comerciales vigentes en este momento.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+ : plan.currency }} {{ plan.monthly_amount|number_format(0, ',', '.') }}</dd>
                         </div>
                         <div>
                             <dt>Anual</dt>
