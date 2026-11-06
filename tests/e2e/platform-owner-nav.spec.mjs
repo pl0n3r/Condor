@@ -102,7 +102,7 @@ test.describe('Propietario — navegación agrupada sin enlaces inexistentes', (
       .toHaveAttribute('aria-current', 'page');
     const breadcrumb = page.getByRole('navigation', { name: 'Ruta' });
     await expect(breadcrumb).toContainText('Comercial');
-    await expect(breadcrumb).toContainText('Suscripciones');
+    await expect(breadcrumb).toContainText('Plan y suscripciones');
     await expect(breadcrumb.getByRole('link', { name: 'Inicio' }))
       .toHaveAttribute('href', '/adminpl0n3r');
   });

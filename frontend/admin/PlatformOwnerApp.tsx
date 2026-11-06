@@ -679,7 +679,7 @@ export function PlatformOwnerApp({
             },
             {
               href: '/adminpl0n3r/suscripciones',
-              label: 'Suscripciones',
+              label: 'Plan y suscripciones',
               current: currentSection === 'suscripciones',
             },
             {
