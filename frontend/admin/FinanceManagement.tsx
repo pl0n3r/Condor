@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { FinanceClosureAccessDenied, previewSyntheticFinanceClosure, type FinanceClosureMode, type FinanceClosureResult } from './api';
 
 /** M07: panel de prueba aislado: sin HTTP, persistencia ni operaciones financieras. */
 type FinanceState = 'BORRADOR' | 'REQUIERE_REVISION' | 'EN_REVISION';
@@ -15,6 +16,15 @@ type FinanceRecord = Readonly<{
   amountFixture: '0.00' | '100.00' | '250.00';
   state: FinanceState;
 }>;
+
+type ClosurePreviewStatus =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'empty' }
+  | { status: 'denied' }
+  | { status: 'error' }
+  | { status: 'ready'; result: FinanceClosureResult };
+
 type AuditEvent = Readonly<{ sequence: number; scope: string; reference: string; action: 'created' | 'viewed' | 'review_requested' | 'review_started' }>;
 type Props = Readonly<{ tenantId: string; companyId: string; branchId: string; permissions: string[] }>;
 
@@ -47,6 +57,36 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [kindFilter, setKindFilter] = useState<'TODOS' | FinanceKind>('TODOS');
   const [stateFilter, setStateFilter] = useState<'TODOS' | FinanceState>('TODOS');
   const [notice, setNotice] = useState('');
+
+  const [closurePreview, setClosurePreview] = useState<ClosurePreviewStatus>({ status: 'idle' });
+  const pendingClosurePreview = useRef<AbortController | null>(null);
+
+  useEffect(() => () => pendingClosurePreview.current?.abort(), []);
+
+  async function inspectClosure(mode: FinanceClosureMode) {
+    if (!canReview) {
+      setClosurePreview({ status: 'denied' });
+      return;
+    }
+    pendingClosurePreview.current?.abort();
+    const controller = new AbortController();
+    pendingClosurePreview.current = controller;
+    setClosurePreview({ status: 'loading' });
+    try {
+      const result = await previewSyntheticFinanceClosure(branchId, mode, controller.signal);
+      if (!controller.signal.aborted) {
+        setClosurePreview(result.periods.length === 0
+          ? { status: 'empty' } : { status: 'ready', result });
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setClosurePreview({
+          status: error instanceof FinanceClosureAccessDenied ? 'denied' : 'error',
+        });
+      }
+    }
+  }
+
 
   function audit(item: string, action: AuditEvent['action']) {
     setEvents(previous => [...previous, {
@@ -123,6 +163,42 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
         <p className="muted">Registros locales descartables. Sin transferencias, facturas ni operaciones bancarias.</p>
       </header>
       {notice && <output role="status" aria-live="polite">{notice}</output>}
+
+
+      <section className="catalog-card" aria-labelledby="finance-closure-title"
+        aria-busy={closurePreview.status === 'loading'}>
+        <h3 id="finance-closure-title">Vista previa HTTP de cierre (solo laboratorio)</h3>
+        <p>Consulta autenticada por sede. No aprueba, registra ni cierra períodos contables.</p>
+        {canReview ? (
+          <div>
+            <button type="button" disabled={closurePreview.status === 'loading'}
+              onClick={() => void inspectClosure('reconciled')}>
+              Consultar conciliación ficticia
+            </button>
+            <button type="button" disabled={closurePreview.status === 'loading'}
+              onClick={() => void inspectClosure('empty')}>
+              Consultar período vacío ficticio
+            </button>
+          </div>
+        ) : <p role="alert">Permiso denegado para consultar cierres sintéticos.</p>}
+        {closurePreview.status === 'loading' && <p role="status">Consultando el servidor…</p>}
+        {closurePreview.status === 'empty' && <p role="status">Sin períodos de prueba en la respuesta HTTP.</p>}
+        {closurePreview.status === 'denied' && <p role="alert">Acceso denegado por el servidor o token inválido.</p>}
+        {closurePreview.status === 'error' && <p role="alert">No fue posible consultar el preview HTTP. Intenta de nuevo.</p>}
+        {closurePreview.status === 'ready' && (
+          <div role="status" aria-live="polite">
+            <p>{closurePreview.result.matched_candidate_count} coincidencia(s) ficticia(s).
+              Ningún cierre habilitado.</p>
+            <ul aria-label="Períodos ficticios consultados">
+              {closurePreview.result.periods.map(period => (
+                <li key={period.period_ref}>{period.period_ref} ·
+                  {period.review_candidate ? ' candidato a revisión' : ' sin conciliación suficiente'}.
+                  Sin cierre permitido.</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
 
       <div className="catalog-grid">
         <section className="catalog-card" aria-labelledby="finance-create-title">
