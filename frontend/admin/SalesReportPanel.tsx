@@ -216,27 +216,15 @@ export function SalesReportPanel({ permissions }: Props) {
               ]} />
           </Card>
           <Card title="Ventas por mes">
-            {summary.months.length === 0 ? (
-              <p className="ui-empty">No hay ventas por mes en el rango seleccionado.</p>
-            ) : (
-              <div className="ui-table-wrap">
-                <table className="ui-table">
-                  <caption className="ui-sr-only">Ventas agrupadas por mes y moneda</caption>
-                  <thead><tr>
-                    <th scope="col">Mes</th>
-                    <th scope="col">Unidades</th>
-                    <th scope="col">Ingreso</th>
-                  </tr></thead>
-                  <tbody>{summary.months.map((row) => (
-                    <tr key={row.month + ':' + row.currency}>
-                      <th scope="row">{row.month}</th>
-                      <td className="ui-right">{row.units}</td>
-                      <td className="ui-right">{money(row.revenue_minor, row.currency)}</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
-            )}
+            <DataTable caption="Ventas agrupadas por mes y moneda"
+              rows={summary.months}
+              rowKey={(row) => row.month + ':' + row.currency}
+              empty={<p>No hay ventas por mes en el rango seleccionado.</p>}
+              columns={[
+                { key: 'month', header: 'Mes', render: (row) => row.month },
+                { key: 'units', header: 'Unidades', render: (row) => row.units, align: 'right' },
+                { key: 'revenue', header: 'Ingreso', render: (row) => money(row.revenue_minor, row.currency), align: 'right' },
+              ]} />
           </Card>
         </>
       )}
