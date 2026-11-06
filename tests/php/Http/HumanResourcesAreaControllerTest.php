@@ -14,121 +14,166 @@ use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
-/** M01 S03: authorization + three-scope isolation with synthetic identities. */
+/** Kernel-level M01 S03 contract: synthetic fixtures only, zero real people. */
 final class HumanResourcesAreaControllerTest extends WebTestCase
 {
-    public function testOwnerSeesOnlyTheAuthorizedSyntheticBranchCatalog(): void
+    public function testHttpListingAndDetailsUseOnlyTheAuthorizedCompanyAndBranch(): void
     {
         $browser = static::createClient();
-        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
-        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
-        [$tenant, $company, $otherCompany, $branch, $sameTenantBranch, $foreignBranch, $owner] =
-            $this->fixtures($entityManager);
+        $fixtures = $this->seed();
+        $browser->loginUser($fixtures['owner']);
 
-        $browser->loginUser($owner);
-        $path = '/api/v1/branches/'.$branch->id().'/hr/areas';
-        $browser->request('GET', $path.'?company_id='.$company->id());
-        self::assertResponseStatusCodeSame(200);
-        $payload = json_decode((string) $browser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertTrue($payload['synthetic']);
-        self::assertFalse($payload['persisted']);
-        self::assertFalse($payload['juridically_binding']);
-        self::assertCount(3, $payload['areas']);
-        $cacheControl = (string) $browser->getResponse()->headers->get('Cache-Control');
-        self::assertStringContainsString('private', $cacheControl);
-        self::assertStringContainsString('no-store', $cacheControl);
-        $ref = $payload['areas'][0]['ref'];
-        self::assertTrue($payload['areas'][0]['synthetic']);
+        $route = $this->endpoint($fixtures['branch']);
+        $list = $this->load($browser, $route.'?company_id='.$fixtures['company']->id(), 200);
+        self::assertTrue($list['synthetic']);
+        self::assertFalse($list['persisted']);
+        self::assertFalse($list['juridically_binding']);
+        self::assertCount(3, $list['areas']);
+        $first = $list['areas'][0];
+        self::assertTrue($first['synthetic']);
+        self::assertMatchesRegularExpression('/\Afixture-area-[a-f0-9]{24}\z/D', $first['ref']);
+        self::assertStringNotContainsString($fixtures['tenant']->id(), $first['ref']);
+        self::assertStringNotContainsString($fixtures['company']->id(), $first['ref']);
+        self::assertStringNotContainsString($fixtures['branch']->id(), $first['ref']);
+        $cache = (string) $browser->getResponse()->headers->get('Cache-Control');
+        self::assertStringContainsString('private', $cache);
+        self::assertStringContainsString('no-store', $cache);
+        self::assertSame('nosniff', $browser->getResponse()->headers->get('X-Content-Type-Options'));
 
-        $browser->request('GET', $path.'/'.$ref);
-        self::assertResponseStatusCodeSame(200);
-        $detail = json_decode((string) $browser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame($ref, $detail['area']['ref']);
+        $found = $this->load($browser, $route.'/'.$first['ref'], 200);
+        self::assertSame($first, $found['area']);
+        self::assertTrue($found['synthetic']);
 
-        $browser->request('GET', '/api/v1/branches/'.$sameTenantBranch->id().'/hr/areas');
-        self::assertResponseStatusCodeSame(200);
-        $different = json_decode((string) $browser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertNotSame($ref, $different['areas'][0]['ref']);
-        $browser->request('GET', '/api/v1/branches/'.$sameTenantBranch->id().'/hr/areas/'.$ref);
-        self::assertResponseStatusCodeSame(404);
-
-        $browser->request('GET', $path.'?company_id='.$otherCompany->id());
-        self::assertResponseStatusCodeSame(404);
-        $browser->request('GET', '/api/v1/branches/'.$foreignBranch->id().'/hr/areas');
-        self::assertResponseStatusCodeSame(404);
-        self::assertStringNotContainsString($foreignBranch->id(), (string) $browser->getResponse()->getContent());
-        $browser->request('GET', $path.'?tenant_id='.$tenant->id());
-        self::assertResponseStatusCodeSame(400);
-        $browser->request('GET', $path.'?company_id%5B%5D='.$company->id());
-        self::assertResponseStatusCodeSame(404);
-        $browser->request('GET', $path.'/invalid-ref');
-        self::assertResponseStatusCodeSame(404);
-    }
-
-    public function testMissingPermissionAndRealDataFlagFailClosed(): void
-    {
-        $browser = static::createClient();
-        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
-        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
-        [, , , $branch, , , $owner, $delegate] = $this->fixtures($entityManager);
-        $path = '/api/v1/branches/'.$branch->id().'/hr/areas';
-
-        $browser->loginUser($delegate);
-        $browser->request('GET', $path);
-        self::assertResponseStatusCodeSame(403);
-
-        $browser->loginUser($owner);
-        $before = getenv('HR_REAL_DATA_ENABLED');
-        putenv('HR_REAL_DATA_ENABLED=true');
-        try {
-            $browser->request('GET', $path);
-            self::assertResponseStatusCodeSame(404);
-        } finally {
-            if ($before === false) {
-                putenv('HR_REAL_DATA_ENABLED');
-            } else {
-                putenv('HR_REAL_DATA_ENABLED='.$before);
-            }
+        foreach (['otherCompanyBranch', 'sameCompanyBranch'] as $key) {
+            $differentRoute = $this->endpoint($fixtures[$key]);
+            $other = $this->load($browser, $differentRoute, 200);
+            self::assertNotSame($first['ref'], $other['areas'][0]['ref']);
+            $this->load($browser, $differentRoute.'/'.$first['ref'], 404);
         }
     }
 
-    public function testServiceRejectsCrossTenantCompanyAndBranchWithoutReadingRecords(): void
+    public function testHttpDeniesForeignScopesAndInvalidInputWithoutEnumeratingRecords(): void
     {
-        $tenant = new Tenant('Fixture principal', 'hr-a');
-        $other = new Tenant('Fixture externa', 'hr-b');
-        $company = new LegalEntity($tenant, 'Empresa ficticia', null);
-        $otherCompany = new LegalEntity($other, 'Ajena ficticia', null);
-        $branch = new Branch($tenant, 'Local', 'local', $company);
+        $browser = static::createClient();
+        $fixtures = $this->seed();
+        $browser->loginUser($fixtures['owner']);
+        $route = $this->endpoint($fixtures['branch']);
+
+        foreach ([
+            [$route.'?company_id='.$fixtures['otherCompany']->id(), 404],
+            [$this->endpoint($fixtures['foreignBranch']), 404],
+            [$route.'?tenant_id='.$fixtures['tenant']->id(), 400],
+            [$route.'?company_id%5B%5D='.$fixtures['company']->id(), 404],
+            [$route.'/unknown', 404],
+            [$route.'/fixture-area-'.str_repeat('a', 25), 404],
+        ] as [$url, $status]) {
+            $this->load($browser, $url, $status);
+            self::assertStringNotContainsString(
+                $fixtures['foreignBranch']->id(),
+                (string) $browser->getResponse()->getContent(),
+            );
+        }
+    }
+
+    public function testReadPermissionAndRealModeCannotExposePreview(): void
+    {
+        $browser = static::createClient();
+        $fixtures = $this->seed();
+        $route = $this->endpoint($fixtures['branch']);
+
+        $browser->loginUser($fixtures['delegate']);
+        $this->load($browser, $route, 403);
+
+        $browser->loginUser($fixtures['owner']);
+        $originalFlag = getenv('HR_REAL_DATA_ENABLED');
+        putenv('HR_REAL_DATA_ENABLED=on');
+        try {
+            $this->load($browser, $route, 404);
+            $this->load($browser, $route.'/fixture-area-'.str_repeat('a', 24), 404);
+        } finally {
+            putenv($originalFlag === false ? 'HR_REAL_DATA_ENABLED' : 'HR_REAL_DATA_ENABLED='.$originalFlag);
+        }
+    }
+
+    public function testDomainRejectsCompanyTenantAndBranchMismatches(): void
+    {
+        $tenant = new Tenant('Ficticio A', 'area-a');
+        $external = new Tenant('Ficticio B', 'area-b');
+        $company = new LegalEntity($tenant, 'Entidad A', null);
+        $foreignCompany = new LegalEntity($external, 'Entidad B', null);
+        $branch = new Branch($tenant, 'Sede A', 'a', $company);
         $catalog = new AreaCatalog();
         self::assertCount(3, $catalog->listFor($tenant, $company, $branch));
         $this->expectException(DomainException::class);
-        $catalog->listFor($tenant, $otherCompany, $branch);
+        $catalog->findFor($tenant, $foreignCompany, $branch, 'invalid');
     }
 
-    /** @return array{Tenant,LegalEntity,LegalEntity,Branch,Branch,Branch,User,User} */
-    private function fixtures(EntityManagerInterface $database): array
+    /** @return array<string,mixed> */
+    private function load(KernelBrowser $browser, string $url, int $expected): array
     {
-        $id = bin2hex(random_bytes(5));
-        $tenant = new Tenant('HR principal', 'hr-main-'.$id);
-        $foreign = new Tenant('HR externo', 'hr-external-'.$id);
-        $company = new LegalEntity($tenant, 'Razón social sintética', null, true);
-        $otherCompany = new LegalEntity($tenant, 'Razón social ficticia secundaria', null);
-        $foreignCompany = new LegalEntity($foreign, 'Razón social externa ficticia', null);
-        $branch = new Branch($tenant, 'Sede inicial', 'inicial', $company, true);
-        $sameTenant = new Branch($tenant, 'Sede secundaria', 'secundaria', $otherCompany);
-        $foreignBranch = new Branch($foreign, 'Sede externa', 'externa', $foreignCompany);
-        $owner = new User('hr-owner-'.$id.'@example.test', 'Owner sintético');
-        $delegate = new User('hr-delegate-'.$id.'@example.test', 'Delegado sintético');
-        $ownerMember = new Membership($tenant, $owner, Membership::ROLE_OWNER);
-        $delegateMember = new Membership($tenant, $delegate, 'ADMIN');
-        $limited = new Role($tenant, 'Catálogo limitado', ['catalog.view']);
-        foreach ([$tenant, $foreign, $company, $otherCompany, $foreignCompany, $branch, $sameTenant, $foreignBranch, $owner, $delegate, $ownerMember, $delegateMember, $limited] as $row) {
-            $database->persist($row);
+        $browser->request('GET', $url);
+        self::assertResponseStatusCodeSame($expected);
+
+        $text = (string) $browser->getResponse()->getContent();
+        if ($expected !== 200) {
+            return [];
         }
-        $database->persist(new BranchRoleAssignment($delegateMember, $branch, $limited));
+
+        $document = json_decode($text, true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($document);
+        return $document;
+    }
+
+    private function endpoint(Branch $branch): string
+    {
+        return '/api/v1/branches/'.$branch->id().'/hr/areas';
+    }
+
+    /** @return array{tenant:Tenant,company:LegalEntity,otherCompany:LegalEntity,branch:Branch,otherCompanyBranch:Branch,sameCompanyBranch:Branch,foreignBranch:Branch,owner:User,delegate:User} */
+    private function seed(): array
+    {
+        $database = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $database);
+        $suffix = bin2hex(random_bytes(5));
+
+        $tenant = new Tenant('A ficticio', 'area-a-'.$suffix);
+        $foreign = new Tenant('B ficticio', 'area-b-'.$suffix);
+        $company = new LegalEntity($tenant, 'Primera ficticia', null, true);
+        $another = new LegalEntity($tenant, 'Segunda ficticia', null);
+        $outside = new LegalEntity($foreign, 'Externa ficticia', null);
+        $branch = new Branch($tenant, 'Principal', 'principal', $company, true);
+        $second = new Branch($tenant, 'Otra empresa', 'otra', $another);
+        $third = new Branch($tenant, 'Otra sede', 'segunda', $company);
+        $external = new Branch($foreign, 'Externa', 'externa', $outside);
+
+        $owner = new User('hr-area-owner-'.$suffix.'@example.test', 'Owner de prueba');
+        $delegate = new User('hr-area-reader-'.$suffix.'@example.test', 'Reader de prueba');
+        $membership = new Membership($tenant, $delegate, 'ADMIN');
+        $limitedRole = new Role($tenant, 'Permisos de catálogo', ['catalog.view']);
+
+        foreach ([
+            $tenant, $foreign, $company, $another, $outside,
+            $branch, $second, $third, $external, $owner, $delegate,
+            new Membership($tenant, $owner, Membership::ROLE_OWNER), $membership, $limitedRole,
+            new BranchRoleAssignment($membership, $branch, $limitedRole),
+        ] as $entity) {
+            $database->persist($entity);
+        }
         $database->flush();
-        return [$tenant, $company, $otherCompany, $branch, $sameTenant, $foreignBranch, $owner, $delegate];
+
+        return [
+            'tenant' => $tenant,
+            'company' => $company,
+            'otherCompany' => $another,
+            'branch' => $branch,
+            'otherCompanyBranch' => $second,
+            'sameCompanyBranch' => $third,
+            'foreignBranch' => $external,
+            'owner' => $owner,
+            'delegate' => $delegate,
+        ];
     }
 }

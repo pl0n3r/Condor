@@ -18,7 +18,8 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
-/** Synthetic, authorized M01 S03 areas. Never reads actual HR records. */
+/** Read-only fake catalogue; accessible only within explicitly authorized scopes. */
+#[Route('/api/v1/branches/{branchId}/hr/areas')]
 final class HumanResourcesAreaController extends AbstractController
 {
     use BranchApiSupport;
@@ -31,78 +32,78 @@ final class HumanResourcesAreaController extends AbstractController
     ) {
     }
 
-    #[Route('/api/v1/branches/{branchId}/hr/areas', name: 'api_hr_areas_index', methods: ['GET'])]
+    #[Route('', name: 'api_hr_areas_index', methods: ['GET'])]
     public function index(string $branchId, Request $request): JsonResponse
     {
-        $this->requireSynthetic();
-        [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
+        [$tenant, $company, $branch] = $this->scopedRequest($branchId, $request);
+        $document = ['areas' => $this->areas->listFor($tenant, $company, $branch)];
 
-        return $this->privateJson([
-            'areas' => $this->areas->listFor($tenant, $company, $branch),
-            'synthetic' => true,
-            'persisted' => false,
-            'juridically_binding' => false,
-        ]);
+        return $this->respond($document);
     }
 
-    #[Route('/api/v1/branches/{branchId}/hr/areas/{ref}', name: 'api_hr_areas_detail', methods: ['GET'])]
+    #[Route('/{ref}', name: 'api_hr_areas_detail', methods: ['GET'])]
     public function detail(string $branchId, string $ref, Request $request): JsonResponse
     {
-        $this->requireSynthetic();
+        [$tenant, $company, $branch] = $this->scopedRequest($branchId, $request);
+        $found = $this->areas->findFor($tenant, $company, $branch, $ref);
+
+        if ($found === null) {
+            throw new NotFoundHttpException('Área ficticia no encontrada.');
+        }
+
+        return $this->respond(['area' => $found]);
+    }
+
+    /** @return array{Tenant,LegalEntity,Branch} */
+    private function scopedRequest(string $branchId, Request $request): array
+    {
+        $this->ensurePreviewIsSafe();
         [, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'users.view');
-        $company = $this->companyFor($tenant, $branch, $request);
-        $area = $this->areas->findFor($tenant, $company, $branch, $ref);
-        if ($area === null) {
-            throw new NotFoundHttpException('Área ficticio no encontrado.');
+
+        $params = $request->query->all();
+        foreach (array_keys($params) as $key) {
+            if ($key !== 'company_id') {
+                throw new BadRequestHttpException('Parámetro de consulta no permitido.');
+            }
         }
 
-        return $this->privateJson([
-            'area' => $area,
-            'synthetic' => true,
-            'persisted' => false,
-            'juridically_binding' => false,
-        ]);
-    }
-
-    private function requireSynthetic(): void
-    {
-        $real = getenv('HR_REAL_DATA_ENABLED');
-        if ($real !== false && !in_array(strtolower(trim($real)), ['', 'false', '0', 'off', 'no'], true)) {
-            throw new NotFoundHttpException('Catálogo sintético no disponible.');
-        }
-        $environment = $this->getParameter('kernel.environment');
-        if ($environment !== 'test' && ($environment !== 'dev'
-            || getenv('CONDOR_HR_SYNTHETIC_API') !== '1'
-            || getenv('CONDOR_PRODUCTION_STAGE') !== 'construccion')) {
-            throw new NotFoundHttpException('Catálogo sintético no disponible.');
-        }
-    }
-
-    private function companyFor(Tenant $tenant, Branch $branch, Request $request): LegalEntity
-    {
-        $query = $request->query->all();
-        if (array_diff(array_keys($query), ['company_id']) !== []) {
-            throw new BadRequestHttpException('Parámetros de consulta no permitidos.');
-        }
         $company = $branch->legalEntity();
-        if (!$company instanceof LegalEntity || $company->tenant()->id() !== $tenant->id()) {
-            throw new NotFoundHttpException('Empresa no disponible.');
-        }
-        $provided = $query['company_id'] ?? null;
-        if ($provided !== null && (!is_string($provided) || $provided !== $company->id())) {
+        $requested = $params['company_id'] ?? null;
+        if (!$company instanceof LegalEntity
+            || $company->tenant()->id() !== $tenant->id()
+            || ($requested !== null && (!is_string($requested) || $requested !== $company->id()))) {
             throw new NotFoundHttpException('Empresa no disponible.');
         }
 
-        return $company;
+        return [$tenant, $company, $branch];
+    }
+
+    private function ensurePreviewIsSafe(): void
+    {
+        $flag = getenv('HR_REAL_DATA_ENABLED');
+        $disabled = $flag === false || in_array(strtolower(trim($flag)), [
+            '', 'false', '0', 'off', 'no',
+        ], true);
+        $environment = $this->getParameter('kernel.environment');
+        $allowed = $environment === 'test'
+            || ($environment === 'dev' && getenv('CONDOR_HR_SYNTHETIC_API') === '1'
+                && getenv('CONDOR_PRODUCTION_STAGE') === 'construccion');
+
+        if (!$disabled || !$allowed) {
+            throw new NotFoundHttpException('Vista sintética no disponible.');
+        }
     }
 
     /** @param array<string,mixed> $payload */
-    private function privateJson(array $payload): JsonResponse
+    private function respond(array $payload): JsonResponse
     {
-        $response = $this->json($payload);
-        $response->headers->set('Cache-Control', 'private, no-store');
-        $response->headers->set('X-Content-Type-Options', 'nosniff');
-        return $response;
+        $payload['synthetic'] = true;
+        $payload['persisted'] = false;
+        $payload['juridically_binding'] = false;
+
+        return new JsonResponse($payload, 200, [
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 }

@@ -9,63 +9,66 @@ use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use DomainException;
 
-/** Read-only fixture catalog: no personnel data, database port or legal effect. */
+/** Scope-bound fictional areas. No repository, person, contract or write path. */
 final class AreaCatalog
 {
-    private const AREAS = [
-        ['slug' => 'operaciones', 'label' => 'Área de operaciones', 'area' => 'operaciones'],
-        ['slug' => 'soporte', 'label' => 'Área de soporte', 'area' => 'soporte'],
-        ['slug' => 'calidad', 'label' => 'Área de calidad', 'area' => 'calidad'],
+    /** @var array<string,string> */
+    private const FIXTURE_NAMES = [
+        'operations' => 'Área ficticia de operaciones',
+        'assistance' => 'Área ficticia de soporte',
+        'review' => 'Área ficticia de calidad',
     ];
 
-    /** @return list<array{ref: string, label: string, area: string, synthetic: bool}> */
+    /** @return list<array{ref: string, label: string, synthetic: bool}> */
     public function listFor(Tenant $tenant, LegalEntity $company, Branch $branch): array
     {
-        self::assertScope($tenant, $company, $branch);
-        $scope = self::scopeRef($tenant, $company, $branch);
-        $result = [];
-        foreach (self::AREAS as $area) {
-            $result[] = [
-                'ref' => 'fixture-area-'.$scope.'-'.$area['slug'],
-                'label' => $area['label'],
-                'area' => $area['area'],
+        $this->verifyOwnership($tenant, $company, $branch);
+
+        $rows = [];
+        foreach (self::FIXTURE_NAMES as $code => $label) {
+            $rows[] = [
+                'ref' => $this->reference($tenant, $company, $branch, $code),
+                'label' => $label,
                 'synthetic' => true,
             ];
         }
 
-        return $result;
+        return $rows;
     }
 
-    /** @return array{ref: string, label: string, area: string, synthetic: bool}|null */
-    public function findFor(Tenant $tenant, LegalEntity $company, Branch $branch, string $ref): ?array
+    /** @return array{ref: string, label: string, synthetic: bool}|null */
+    public function findFor(Tenant $tenant, LegalEntity $company, Branch $branch, string $reference): ?array
     {
-        // Validate the entire scope before looking up even a synthetic identifier.
-        $areas = $this->listFor($tenant, $company, $branch);
-        if (strlen($ref) > 80 || !preg_match('/\Afixture-area-[a-f0-9]{16}-[a-z]+\z/D', $ref)) {
+        // Invalid references still undergo authorization of all three boundaries.
+        $rows = $this->listFor($tenant, $company, $branch);
+        if (preg_match('/\Afixture-area-[a-f0-9]{24}\z/D', $reference) !== 1) {
             return null;
         }
-        foreach ($areas as $area) {
-            if ($area['ref'] === $ref) {
-                return $area;
+
+        foreach ($rows as $row) {
+            if (hash_equals($row['ref'], $reference)) {
+                return $row;
             }
         }
 
         return null;
     }
 
-    private static function assertScope(Tenant $tenant, LegalEntity $company, Branch $branch): void
+    private function verifyOwnership(Tenant $tenant, LegalEntity $company, Branch $branch): void
     {
-        if ($company->tenant()->id() !== $tenant->id()
-            || $branch->tenant()->id() !== $tenant->id()
-            || $branch->legalEntity()?->id() !== $company->id()) {
-            throw new DomainException('Contexto de áreas ficticios no disponible.');
+        $correctTenant = $company->tenant()->id() === $tenant->id();
+        $correctBranch = $branch->tenant()->id() === $tenant->id();
+        $correctCompany = $branch->legalEntity()?->id() === $company->id();
+
+        if (!$correctTenant || !$correctBranch || !$correctCompany) {
+            throw new DomainException('Áreas de otro contexto no disponibles.');
         }
     }
 
-    private static function scopeRef(Tenant $tenant, LegalEntity $company, Branch $branch): string
+    private function reference(Tenant $tenant, LegalEntity $company, Branch $branch, string $code): string
     {
-        return substr(hash('sha256', implode('|', [
-            $tenant->id(), $company->id(), $branch->id(),
-        ])), 0, 16);
+        // The opaque reference does not expose the tenant, company, branch or label.
+        $identity = json_encode([$tenant->id(), $company->id(), $branch->id(), $code], JSON_THROW_ON_ERROR);
+        return 'fixture-area-'.substr(hash('sha256', $identity), 0, 24);
     }
 }
