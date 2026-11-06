@@ -306,35 +306,10 @@ parameters:
 			count: 1
 			path: src/Http/Controller/PlatformTenantController.php
 
-		-
-			message: '#^Instanceof between App\\Domain\\Catalog\\Entity\\ProductVariant and App\\Domain\\Catalog\\Entity\\ProductVariant will always evaluate to true\.$#'
-			identifier: instanceof.alwaysTrue
-			count: 1
-			path: src/Http/Controller/PricingController.php
 
-		-
-			message: '#^Instanceof between App\\Domain\\Commerce\\Entity\\PriceList and App\\Domain\\Commerce\\Entity\\PriceList will always evaluate to true\.$#'
-			identifier: instanceof.alwaysTrue
-			count: 1
-			path: src/Http/Controller/PricingController.php
 
-		-
-			message: '#^Instanceof between App\\Domain\\Commerce\\Entity\\PriceRule and App\\Domain\\Commerce\\Entity\\PriceRule will always evaluate to true\.$#'
-			identifier: instanceof.alwaysTrue
-			count: 1
-			path: src/Http/Controller/PricingController.php
 
-		-
-			message: '#^Instanceof between App\\Domain\\Commerce\\Entity\\VariantPrice and App\\Domain\\Commerce\\Entity\\VariantPrice will always evaluate to true\.$#'
-			identifier: instanceof.alwaysTrue
-			count: 1
-			path: src/Http/Controller/PricingController.php
 
-		-
-			message: '#^Using nullsafe method call on non\-nullable type App\\Domain\\Commerce\\Entity\\CommercialCategory\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: src/Http/Controller/PricingController.php
 
 		-
 			message: '#^Instanceof between App\\Domain\\Commerce\\Entity\\PriceList and App\\Domain\\Commerce\\Entity\\PriceList will always evaluate to true\.$#'
