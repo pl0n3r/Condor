@@ -5,13 +5,8 @@ declare(strict_types=1);
 namespace App\Tests\Http;
 
 use App\Application\HumanResources\HrBranchCatalog;
-use App\Domain\Identity\Entity\BranchRoleAssignment;
-use App\Domain\Identity\Entity\Membership;
-use App\Domain\Identity\Entity\Role;
-use App\Domain\Identity\Entity\User;
-use App\Domain\Organization\Entity\Branch;
-use App\Domain\Organization\Entity\LegalEntity;
-use App\Domain\Organization\Entity\Tenant;
+use App\Domain\Identity\Entity\{BranchRoleAssignment, Membership, Role, User};
+use App\Domain\Organization\Entity\{Branch, LegalEntity, Tenant};
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -129,27 +124,38 @@ final class HrBranchControllerTest extends WebTestCase
         $suffix = bin2hex(random_bytes(5));
         $tenant = new Tenant('Ensayo principal', 'branch-test-'.$suffix);
         $externalTenant = new Tenant('Ensayo externo', 'branch-external-'.$suffix);
-        $company = new LegalEntity($tenant, 'Entidad de prueba uno', null, true);
-        $anotherCompany = new LegalEntity($tenant, 'Entidad de prueba dos', null);
-        $foreignCompany = new LegalEntity($externalTenant, 'Entidad ficticia externa', null);
-        $branch = new Branch($tenant, 'Oficina de ensayo uno', 'oficina-uno', $company, true);
-        $secondary = new Branch($tenant, 'Oficina de ensayo dos', 'oficina-dos', $anotherCompany);
-        $foreign = new Branch($externalTenant, 'Oficina ajena', 'oficina-ajena', $foreignCompany);
 
-        $owner = new User('branch-owner-'.$suffix.'@example.test', 'Usuario ficticio autorizado');
-        $guest = new User('branch-guest-'.$suffix.'@example.test', 'Usuario ficticio limitado');
-        $ownerMembership = new Membership($tenant, $owner, Membership::ROLE_OWNER);
-        $guestMembership = new Membership($tenant, $guest, 'ADMIN');
-        $limited = new Role($tenant, 'Lectura de catálogo', ['catalog.view']);
-        $entities = compact(
-            'tenant', 'externalTenant', 'company', 'anotherCompany', 'foreignCompany',
-            'branch', 'secondary', 'foreign', 'owner', 'guest', 'ownerMembership',
-            'guestMembership', 'limited',
-        );
-        foreach ($entities as $entity) {
+        $companies = [
+            'primary' => new LegalEntity($tenant, 'Entidad de prueba uno', null, true),
+            'secondary' => new LegalEntity($tenant, 'Entidad de prueba dos', null),
+            'external' => new LegalEntity($externalTenant, 'Entidad ficticia externa', null),
+        ];
+        $company = $companies['primary'];
+        $anotherCompany = $companies['secondary'];
+        $sites = [
+            'main' => new Branch($tenant, 'Oficina de ensayo uno', 'oficina-uno', $company, true),
+            'secondary' => new Branch($tenant, 'Oficina de ensayo dos', 'oficina-dos', $anotherCompany),
+            'other' => new Branch($externalTenant, 'Oficina ajena', 'oficina-ajena', $companies['external']),
+        ];
+        $branch = $sites['main'];
+        $secondary = $sites['secondary'];
+        $foreign = $sites['other'];
+
+        $people = [
+            'owner' => new User('branch-owner-'.$suffix.'@example.test', 'Usuario ficticio autorizado'),
+            'guest' => new User('branch-guest-'.$suffix.'@example.test', 'Usuario ficticio limitado'),
+        ];
+        $owner = $people['owner'];
+        $guest = $people['guest'];
+        $members = [
+            'owner' => new Membership($tenant, $owner, Membership::ROLE_OWNER),
+            'guest' => new Membership($tenant, $guest, 'ADMIN'),
+        ];
+        $role = new Role($tenant, 'Lectura de catálogo', ['catalog.view']);
+        foreach ([$tenant, $externalTenant, ...array_values($companies), ...array_values($sites), ...array_values($people), ...array_values($members), $role] as $entity) {
             $db->persist($entity);
         }
-        $db->persist(new BranchRoleAssignment($guestMembership, $branch, $limited));
+        $db->persist(new BranchRoleAssignment($members['guest'], $branch, $role));
         $db->flush();
 
         return compact('owner', 'guest', 'tenant', 'company', 'anotherCompany', 'branch', 'secondary', 'foreign');
