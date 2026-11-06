@@ -672,8 +672,9 @@ export function InventoryManagement({
             </dl>)}
           </SidePanel>
           {canUpdate && ready.sources.length > 0 && ready.variants.length > 0 && (
-            <div className="catalog-list">
-              <form className="catalog-card" onSubmit={(event) => void adjust(event)}>
+            <>
+              <SidePanel open={activePanel === 'adjust'} title="Ajuste manual" onClose={() => setActivePanel(null)}>
+                <form className="catalog-editor" onSubmit={(event) => void adjust(event)}>
                 <div>
                   <span className="eyebrow">Movimiento</span>
                   <h3>Ajuste manual</h3>
@@ -727,9 +728,10 @@ export function InventoryManagement({
                   {busy ? 'Aplicando…' : 'Aplicar ajuste'}
                 </button>
               </form>
+              </SidePanel>
 
-              {ready.sources.length > 1 && (
-                <form className="catalog-card" onSubmit={(event) => void transfer(event)}>
+              {ready.sources.length > 1 && <SidePanel open={activePanel === 'transfer'} title="Transferencia" onClose={() => setActivePanel(null)}>
+                <form className="catalog-editor" onSubmit={(event) => void transfer(event)}>
                   <div>
                     <span className="eyebrow">Movimiento</span>
                     <h3>Transferencia</h3>
@@ -791,8 +793,8 @@ export function InventoryManagement({
                     {busy ? 'Transfiriendo…' : 'Transferir'}
                   </button>
                 </form>
-              )}
-            </div>
+              </SidePanel>}
+            </>
           )}
 
           <div className="catalog-list">
