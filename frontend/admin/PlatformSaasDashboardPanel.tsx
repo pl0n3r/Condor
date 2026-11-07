@@ -142,8 +142,12 @@ export function PlatformSaasDashboardPanel({
 
   const visible: ViewState = allowed ? state : { status: 'unknown' };
   return (
-    <section className="platform-section" aria-label="Métricas SaaS por empresa" aria-live="polite">
-      <header><h2>Control Center · Métricas SaaS</h2><p>Consulta sintética, solo lectura.</p></header>
+    <section className="platform-section ui-page" aria-label="Métricas SaaS por empresa" aria-live="polite">
+      <header className="ui-page-header">
+        <div><h2>Control Center · Métricas SaaS</h2>
+          <p>Indicadores comerciales de prueba; no representan ingresos ni clientes reales.</p></div>
+        <span className="ui-pill ui-pill-info">Solo lectura · datos sintéticos</span>
+      </header>
       {visible.status === 'loading' && <p role="status">Cargando proyección…</p>}
       {visible.status === 'empty' && <p role="status">Sin métricas verificables para esta empresa.</p>}
       {visible.status === 'unknown' && (
@@ -153,7 +157,7 @@ export function PlatformSaasDashboardPanel({
         </div>
       )}
       {visible.status === 'ready' && (
-        <div className="tenant-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(11rem, 1fr))', gap: '1rem' }}>
+        <dl className="ui-metrics" aria-label="Indicadores comerciales sintéticos">
           {([
             ['MRR', money(visible.data.mrr_minor, visible.data.currency)],
             ['ARR', money(visible.data.arr_minor, visible.data.currency)],
@@ -167,11 +171,11 @@ export function PlatformSaasDashboardPanel({
             ['NRR', ratio(visible.data.nrr_percent_exact)],
             ['Eventos auditados', String(visible.data.audit_count)],
           ] as const).map(([label, value]) => (
-            <article className="platform-card" key={label} aria-label={label}>
-              <h3>{label}</h3><output>{value}</output>
-            </article>
+            <div className="ui-metric" key={label}>
+              <dt>{label}</dt><dd>{value}</dd>
+            </div>
           ))}
-        </div>
+        </dl>
       )}
     </section>
   );

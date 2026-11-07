@@ -5,6 +5,55 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../frontend/admin/ContractsManagement.tsx', import.meta.url), 'utf8');
 const scenario = process.argv[2];
 const mutation = process.argv[3] ?? '';
+// Real synthetic HTTP integration: exercise the actual TS logic without npm packages.
+if (source.includes('export async function syntheticContractRequest')) {
+  const { stripTypeScriptTypes } = await import('node:module');
+  let code = source.slice(source.indexOf('type Phase ='), source.indexOf('function ContractPreview('));
+  assert.ok(code.includes('export async function syntheticContractRequest'), 'HTTP handler missing');
+  if (mutation === '--mutate-scope') {
+    assert.ok(code.includes('if (!options.allowed)'), 'isolation guard missing');
+    code = code.replace('if (!options.allowed)', 'if (false)');
+  }
+  if (mutation === '--mutate-transition') {
+    assert.ok(code.includes('if (!options.enabled)'), 'isolation gate missing');
+    code = code.replace('if (!options.enabled)', 'if (false)');
+  }
+  const js = stripTypeScriptTypes(code, { mode: 'strip' });
+  const api = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'));
+  const base = { enabled: true, allowed: true, branchId: 'test-branch', scope: 'tenant-A|company-A|branch-A' };
+  const record = { kind: 'contract', ref: 'fixture:contract/demo', state: 'REQUIERE_REVISION', synthetic_only: true };
+  let count = 0;
+  const json = payload => new Response(JSON.stringify(payload), { status: 200 });
+  const backend = async (url, options) => {
+    count++;
+    assert.equal(options.credentials, 'same-origin');
+    assert.equal(options.cache, 'no-store');
+    return json({ synthetic_only: true, records: [record] });
+  };
+  if (scenario === 'scope') {
+    assert.deepEqual(await api.syntheticContractRequest({ ...base, allowed: false }, backend),
+      { status: 'denied' }, 'isolation: RBAC must block unauthorised requests');
+    assert.deepEqual(await api.syntheticContractRequest({ ...base, enabled: false }, backend),
+      { status: 'disabled' }, 'isolation: disabled gate must block requests');
+    assert.equal(count, 0, 'isolation: never send HTTP for denied scope');
+    const a = await api.syntheticContractRequest(base, backend);
+    const b = await api.syntheticContractRequest({ ...base, scope: 'tenant-B|company-B|branch-B' }, backend);
+    assert.equal(a.records[0].scope, base.scope, 'isolation: tenant A');
+    assert.equal(b.records[0].scope, 'tenant-B|company-B|branch-B', 'isolation: tenant B');
+    assert.equal(count, 2);
+  } else if (scenario === 'validation') {
+    assert.equal((await api.syntheticContractRequest(base, backend)).status, 'ready');
+    assert.equal((await api.syntheticContractRequest({ ...base, method: 'POST', ref: record.ref,
+      kind: 'contract' }, backend)).status, 'error', 'missing CSRF');
+    assert.equal((await api.syntheticContractRequest({ ...base, method: 'PATCH', ref: record.ref,
+      state: 'APROBADO', csrf: 'test' }, backend)).status, 'error', 'legal transition not allowed');
+    assert.equal((await api.syntheticContractRequest({ ...base, method: 'POST',
+      ref: 'fixture:contract/12345678', kind: 'contract', csrf: 'test' }, backend)).status, 'error');
+    assert.equal(count, 1, 'invalid changes must not send HTTP');
+  } else throw new Error('unknown HTTP test scenario');
+  console.log('M02 HTTP behavior passed:', scenario);
+  process.exit(0);
+}
 const constantsStart = source.indexOf('const permitted = {');
 const functionStart = source.indexOf('function ContractPreview(');
 const functionEnd = source.indexOf('  if (!canRead) return <section', functionStart);

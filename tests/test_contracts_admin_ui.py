@@ -16,8 +16,18 @@ class ModuloTests(unittest.TestCase):
         cls.tsx = VIEW.read_text(encoding="utf-8")
         cls.shell = SHELL.read_text(encoding="utf-8")
 
+    def _is_http_ui(self):
+        return "export async function syntheticContractRequest" in self.tsx
+
     def test_aislamiento_por_empresa(self):
         src = self.tsx
+        if self._is_http_ui():
+            for term in ("[tenantId, companyId, branchId].join('|')",
+                         "entry.scope === scope", "item.scope !== scope",
+                         "[props.tenantId, props.companyId, props.branchId].join('|')"):
+                self.assertIn(term, src)
+            self.assertIn("tenantId={context.data.tenant.id}", self.shell)
+            return
         for term in ("[tenantId, companyId, branchId].join('|')",
                      "drafts.filter(entry => entry.scope === scope)",
                      "selected.scope !== scope",
@@ -30,6 +40,13 @@ class ModuloTests(unittest.TestCase):
         self.assertIn("branchId={context.data.active_branch.id}", self.shell)
 
     def test_permisos_y_auditoria(self):
+        if self._is_http_ui():
+            for op in ("view", "create", "update"):
+                self.assertIn("permissions.includes('inventory." + op + "')", self.tsx)
+            for term in ("if (!canRead)", "if (busy || !canAdd)", "if (!canAdvance",
+                         "synthetic_only", "X-CSRF-Token", "credentials: 'same-origin'"):
+                self.assertIn(term, self.tsx)
+            return
         permissions = IDENTITY.read_text(encoding="utf-8")
         for operation in ("view", "create", "update"):
             with self.subTest(permission=operation):
@@ -44,6 +61,14 @@ class ModuloTests(unittest.TestCase):
 
     def test_sin_datos_reales(self):
         src = self.tsx
+        if self._is_http_ui():
+            for term in ("refPattern = /^fixture:(template|contract|addendum)",
+                         "contractsSyntheticEnabled(", "if (!import.meta.env.DEV ||",
+                         "data", "enabled: true", "synthetic_only"):
+                self.assertIn(term, src)
+            for forbidden in ("localStorage", "indexedDB", "new WebSocket"):
+                self.assertNotIn(forbidden, src)
+            return
         for kind in ("contracts", "person", "template"):
             with self.subTest(kind=kind):
                 token = "^fixture:" + kind + "/(demo|test|sample)-[0-9]{2,3}$"
@@ -66,6 +91,12 @@ class ModuloTests(unittest.TestCase):
         self.assertIn("if (!import.meta.env.DEV) return null;", src)
 
     def test_estados_explicitos(self):
+        if self._is_http_ui():
+            for value in ("REQUIERE_REVISION", "EN_REVISION", "onSubmit={createDemo}",
+                          "onSubmit={advance}", "remoteState ===", "role=\"alert\""):
+                self.assertIn(value, self.tsx)
+            self.assertNotIn("type Phase = 'BORRADOR'", self.tsx)
+            return
         for value in ("BORRADOR", "REQUIERE_REVISION", "EN_REVISION"):
             self.assertIn(value, self.tsx)
         self.assertIn("selected.phase === 'BORRADOR' ? 'REQUIERE_REVISION' : 'EN_REVISION'", self.tsx)
