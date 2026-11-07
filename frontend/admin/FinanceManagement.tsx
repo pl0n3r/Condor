@@ -59,6 +59,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [kindFilter, setKindFilter] = useState<'TODOS' | FinanceKind>('TODOS');
   const [stateFilter, setStateFilter] = useState<'TODOS' | FinanceState>('TODOS');
   const [notice, setNotice] = useState('');
+  const [panelError, setPanelError] = useState('');
 
   const [closurePreview, setClosurePreview] = useState<ClosurePreviewStatus>({ status: 'idle' });
   const pendingClosurePreview = useRef<AbortController | null>(null);
@@ -105,6 +106,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       || records.some(row => row.reference === reference && row.tenantId === tenantId
         && row.companyId === companyId && row.branchId === branchId)) {
       setNotice('No se guardó: permiso insuficiente, duplicado o referencias no ficticias. Usa fixture:.../demo.');
+      setPanelError('No se guardó: permiso insuficiente, duplicado o referencias no ficticias. Usa fixture:.../demo.');
       return;
     }
     setRecords(previous => [...previous, {
@@ -114,6 +116,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     audit(reference, 'created');
     setSelected(reference);
     setCreating(false);
+    setPanelError('');
     setReference('');
     setPeriodRef('');
     setConceptRef('');
@@ -125,6 +128,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       row.reference === ref && row.tenantId === tenantId
       && row.companyId === companyId && row.branchId === branchId)) return;
     setSelected(ref);
+    setPanelError('');
     audit(ref, 'viewed');
   }
 
@@ -134,6 +138,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId);
     if (!canReview || !current || !isDemoReference(selected, financeRefPattern) || current.state === 'EN_REVISION') {
       setNotice('No se cambió el estado: permiso insuficiente o transición inválida.');
+      setPanelError('No se cambió el estado: permiso insuficiente o transición inválida.');
       return;
     }
     const next: FinanceState = current.state === 'BORRADOR' ? 'REQUIERE_REVISION' : 'EN_REVISION';
@@ -141,6 +146,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId
       ? { ...row, state: next } : row));
     audit(selected, current.state === 'BORRADOR' ? 'review_requested' : 'review_started');
+    setPanelError('');
     setNotice('Transición ficticia explícita. Ningún registro fue aprobado, pagado ni cerrado.');
   }
 
@@ -160,7 +166,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
 
   return (
     <section id="finance-management" className="ui-page catalog-panel" aria-label="Finanzas y contabilidad · laboratorio M07">
-      <PageHeader title="Finanzas y contabilidad · laboratorio M07" description="Registros ficticios y cierres de prueba sin efecto financiero." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setCreating(true); }}>Nuevo asiento ilustrativo</button> : undefined} />
+      <PageHeader title="Finanzas y contabilidad · laboratorio M07" description="Registros ficticios y cierres de prueba sin efecto financiero." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setPanelError(''); setCreating(true); }}>Nuevo asiento ilustrativo</button> : undefined} />
       <MetricStrip label="Indicadores de Finanzas y contabilidad · laboratorio M07" items={[{ label: 'Registros', value: scoped.length }, { label: 'Resultados', value: visible.length }, { label: 'Eventos de esta sesión', value: events.filter(item => item.scope === scope).length }]} />
       <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal, contable, bancario ni tributario.</p>
       <p className="muted">Registros locales descartables. Sin transferencias, facturas ni operaciones bancarias.</p>
@@ -203,7 +209,8 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       </section>
 
       <div className="ui-grid-2 catalog-grid">
-        <SidePanel open={creating && canCreate} title="Nuevo asiento ilustrativo" onClose={() => setCreating(false)}>
+        <SidePanel open={creating && canCreate} title="Nuevo asiento ilustrativo" onClose={() => { setCreating(false); setPanelError(''); }}>
+          {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
           <form className="catalog-editor" onSubmit={create}>
             <fieldset disabled={!canCreate} aria-label="Datos sintéticos del asiento">
               <label htmlFor="finance-demo-ref">Identificador de laboratorio</label>
@@ -263,7 +270,8 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
           <DataTable caption="Listado de Finanzas y contabilidad · laboratorio M07" rows={visible} rowKey={row => row.reference} onOpen={row => view(row.reference)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.reference}</strong></span> }, { key: 'kind', header: 'Clase', render: row => row.kind }, { key: 'amount', header: 'COP ilustrativo', render: row => row.amountFixture, align: 'right' as const }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'EN_REVISION' ? 'info' : row.state === 'REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.state}</StatusPill> }]} />
         </section>
 
-        <SidePanel open={Boolean(current) && !creating} title="Inspección y control manual" onClose={() => setSelected('')}>
+        <SidePanel open={Boolean(current) && !creating} title="Inspección y control manual" onClose={() => { setSelected(''); setPanelError(''); }}>
+          {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
           {current ? (
             <>
               <dl>
