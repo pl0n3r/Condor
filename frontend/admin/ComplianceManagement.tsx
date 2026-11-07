@@ -139,7 +139,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               </label>
               <button type="submit">Crear registro de prueba</button>
             </form>
-          
+
         </SidePanel>
         )}
         <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión" onClose={() => setSelected('')}>
@@ -167,7 +167,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             )}
             <p className="muted">Ningún estado se aprueba ni se cierra automáticamente.</p>
           </> : <p role="status">Selecciona un registro para ver su detalle.</p>}
-        
+
         </SidePanel>
         <section className="ui-card catalog-card" aria-labelledby="compliance-audit-title">
           <h3 id="compliance-audit-title">Bitácora de demostración (no oficial)</h3>

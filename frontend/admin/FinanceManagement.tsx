@@ -235,13 +235,13 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             </fieldset>
           </form>
           {!canCreate && <p role="status">Solo lectura: falta permiso para crear.</p>}
-        
+
         </SidePanel>
 
         <section className="ui-card catalog-card" aria-labelledby="finance-register-title">
           <h3 id="finance-register-title">Libro de muestra, aislado por empresa</h3>
           <Toolbar trailing={<span className="ui-count">{visible.length} de {scoped.length}</span>}>
-          
+
             <label htmlFor="finance-find">Buscar identificador</label>
             <input id="finance-find" maxLength={80} value={search}
               onChange={event => setSearch(event.target.value)} />
@@ -257,7 +257,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               <option value="TODOS">Todas</option>
               {states.map(value => <option value={value} key={value}>{value}</option>)}
             </select>
-          
+
           </Toolbar>
           <p role="status">{visible.length} registro(s) ficticio(s) en el ámbito actual.</p>
           <DataTable caption="Listado de Finanzas y contabilidad · laboratorio M07" rows={visible} rowKey={row => row.reference} onOpen={row => view(row.reference)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.reference}</strong></span> }, { key: 'kind', header: 'Clase', render: row => row.kind }, { key: 'amount', header: 'COP ilustrativo', render: row => row.amountFixture, align: 'right' as const }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'EN_REVISION' ? 'info' : row.state === 'REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.state}</StatusPill> }]} />
@@ -284,7 +284,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               <p>Ningún registro se aprueba, contabiliza, paga ni cierra automáticamente.</p>
             </>
           ) : <p role="status">Todavía no se ha seleccionado un asiento de prueba.</p>}
-        
+
         </SidePanel>
 
         <aside className="ui-card catalog-card" aria-labelledby="finance-trace-title">
