@@ -10,9 +10,14 @@ UNIT = "tests/php/Application/Contracts/GestM02PreviewTest.php"
 BASIC = "tests/php/Http/ContractsSyntheticHttpAcceptanceTest.php"
 LIFE = "tests/php/Http/ContractsLifecyclePreviewControllerTest.php"
 UI = "frontend/admin/ContractsManagement.test.mjs"
+LIFE_UI = "frontend/admin/ContractsLifecyclePreview.test.mjs"
+LIFE_UI_TITLE = "Montaje AdminApp S04–S08: DEV, opt-in SSR, RBAC y aislamiento de empresa"
 MERGES = {"1794": "1055555e5357bb1a539d37766c5db2ce275fe2f3",
           "1803": "a8356ab16bf37877fc2b5d7f912d0d9917b1e9af",
-          "1811": "3f108784e4870b473f5251ca8856c187bc50dee8"}
+          "1811": "3f108784e4870b473f5251ca8856c187bc50dee8",
+          "1824": "28e6a1ff3c17a7c9b221873ec1763dd6f75f070e",
+          "1834": "92918f10299262dccb5cf1a6ea6ea26d05dfa0ef",
+          "1846": "2eb2920cb754c86053fc2272a1b1795a54600b6d"}
 UNITS = ["testS01PlantillaVersionadaRequiereRevision",
          "testS02ContratoRequiereVersionDePlantillaYNoValidaFirma",
          "testS03OtrosiRechazaContratoAjenoYMotivoInvalido",
@@ -33,7 +38,7 @@ def validate(doc):
     if len(rows) != 8 or [r[0] for r in rows] != ["GEST-M02-S%02d" % x for x in range(1, 9)]:
         errors.append("Faltan filas S01-S08 o hay duplicados")
     sources = {f: (ROOT / f).read_text(encoding="utf-8")
-               for f in (UNIT, BASIC, LIFE, UI)}
+               for f in (UNIT, BASIC, LIFE, UI, LIFE_UI)}
     for idx, row in enumerate(rows):
         if len(row) != 8:
             errors.append("Fila con columnas incorrectas")
@@ -52,9 +57,11 @@ def validate(doc):
             expected_ui = UI + "::" + TITLES[idx]
             if row[3] != expected_ui or ("test('" + TITLES[idx] + "'") not in sources[UI]:
                 errors.append("Test de UI ausente " + row[0])
-        elif row[3] != "NO_APLICA":
-            errors.append("UI no acreditada " + row[0])
-        prs = ("1794", "1803") if basic else ("1811",)
+        else:
+            expected_ui = LIFE_UI + "::" + LIFE_UI_TITLE
+            if row[3] != expected_ui or ("test('" + LIFE_UI_TITLE + "'") not in sources[LIFE_UI]:
+                errors.append("UI S04-S08 no acreditada " + row[0])
+        prs = ("1794", "1803") if basic else ("1811", "1834", "1846")
         expected = {(number, MERGES[number]) for number in prs}
         actual = set(re.findall(r"#(\d+)@([0-9a-f]{40})", row[5]))
         if actual != expected or len(row[5].split()) != len(prs):
@@ -63,6 +70,8 @@ def validate(doc):
             errors.append("Cobertura real inflada " + row[0])
         if any(word in row[7] for word in ("CUBIERTO", "VALIDATED_IN_PRODUCTION", "PRODUCTION_GREEN")):
             errors.append("Estado productivo no probado " + row[0])
+    if doc.count("#1824@" + MERGES["1824"]) != 1:
+        errors.append("Consolidacion inicial sin SHA #1824")
     for gate in ("#742", "D-059", "D-063", "datos.yml", "docs/matriz-cobertura.md",
                  "CONDOR_CONTRACTS_SYNTHETIC_API", "APP_ENV=test"):
         if gate not in doc:
@@ -81,6 +90,10 @@ class GestM02EvidenceIntegrityTests(unittest.TestCase):
             content.replace("#1794@", "#9999@"),
             content.replace("testOwnerIsolationAndManualReviewOverActualHttp", "testNoExiste"),
             content.replace(TITLES[0], "test UI inexistente"),
+            content.replace(MERGES["1846"], "0" * 40, 1),
+            content.replace(MERGES["1824"], "0" * 40, 1),
+            content.replace(LIFE_UI_TITLE, "UI S04 inexistente", 1),
+            content.replace("`" + LIFE_UI + "::" + LIFE_UI_TITLE + "`", "NO_APLICA", 1),
             content.replace("| LOCAL_PARTIAL |", "| CUBIERTO |", 1),
             content.replace("| UNKNOWN:", "| VALIDATED_IN_PRODUCTION:", 1),
             "\n".join(x for x in content.splitlines() if not x.startswith("| GEST-M02-S08 |")),
