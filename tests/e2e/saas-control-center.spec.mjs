@@ -91,6 +91,55 @@ async function renderOwner(page, commercialRead, contextRead = () => context(), 
 }
 
 test.describe('SaaS Control Center — navegación y errores reales en Chromium', () => {
+
+  test('suscripciones usa tabla, métricas y panel lateral con estado canónico', async ({ page }) => {
+    const global = {
+      ...context(true), mode: 'global', selected_tenant: null,
+      commercial_portfolio: [{
+        tenant: { id: TENANT, name: 'Empresa sintética', slug: 'empresa-sintetica' },
+        commercial_subscription: subscription, usage: [],
+      }],
+    };
+    await renderOwner(page, () => ({ status: 200, body: ready() }),
+      (url) => url.includes('tenant=') ? context(true) : global, 'suscripciones');
+    const view = page.getByRole('region', { name: 'Plan y suscripciones' });
+    await expect(view.getByRole('heading', { name: 'Plan y suscripciones' })).toBeVisible();
+    const table = view.getByRole('table', { name: 'Suscripciones de esta página' });
+    await expect(table.getByRole('row').filter({ hasText: 'Empresa sintética' }))
+      .toContainText('Inicial');
+    await view.getByPlaceholder('Buscar empresa').fill('sintética');
+    await table.getByRole('button', { name: 'Empresa sintética' }).click();
+    const detail = page.getByRole('dialog', { name: 'Empresa sintética' });
+    await expect(detail).toContainText('Plan: Inicial');
+    await detail.getByRole('button', { name: 'Cerrar' }).click();
+    await table.getByRole('button', { name: 'Ver suscripción' }).click();
+    await expect(page.getByRole('heading', { name: 'Control SaaS por empresa' })).toBeVisible();
+  });
+
+  test('catálogo comercial usa tablas owner-only y detalle con uso observado', async ({ page }) => {
+    const global = {
+      ...context(true), mode: 'global', selected_tenant: null,
+      commercial_portfolio: [{
+        tenant: { id: TENANT, name: 'Empresa sintética', slug: 'empresa-sintetica' },
+        commercial_subscription: subscription,
+        usage: [{ tenant_id: TENANT, metric: 'storage_mb', aggregation: 'sum',
+          quantity: 2, window_start: '2026-11-01T00:00:00Z',
+          window_end: '2026-11-07T00:00:00Z', observed_at: '2026-11-07T00:00:00Z' }],
+      }],
+    };
+    await renderOwner(page, () => ({ status: 200, body: ready() }), () => global, 'catalogo');
+    const view = page.getByRole('region', { name: 'Catálogo comercial de plataforma' });
+    await expect(view.getByRole('heading', { name: 'Catálogo comercial' })).toBeVisible();
+    const portfolio = view.getByRole('table', { name: 'Cartera comercial de esta página' });
+    await portfolio.getByRole('button', { name: 'Empresa sintética' }).click();
+    await expect(page.getByRole('dialog', { name: 'Empresa sintética' }))
+      .toContainText('storage_mb');
+    await page.getByRole('dialog', { name: 'Empresa sintética' })
+      .getByRole('button', { name: 'Cerrar' }).click();
+    const catalog = view.getByRole('table', { name: 'Catálogo de planes vigentes' });
+    await catalog.getByRole('button', { name: 'Inicial' }).click();
+    await expect(page.getByRole('dialog', { name: 'Inicial' })).toContainText('Versión v1');
+  });
   test.skip(!BASE_URL, 'Requiere el servidor E2E y el bundle compilado de Condor.');
 
   test('ruta /suscripciones muestra el SaaS Control Center y el menú propio', async ({ page }) => {
