@@ -1,38 +1,39 @@
-# M01 S02–S11: aceptación visual sintética pendiente (#1817)
+# M01 S02–S11: recorridos visuales sintéticos (#1817)
 
-**Estado: PREPARACIÓN, NO ACEPTADO.** Ningún check verde de otros PR ni esta hoja documental certifica los recorridos E2E, la legalidad de tratamientos ni la operación en vivo. Epic #1567.
+**Estado: REGRESIÓN SINTÉTICA VERIFICADA EN CI; NO VALIDADO EN PRODUCCIÓN.** Esta entrega acredita una UI de prueba, no el tratamiento legal de datos laborales ni toda la aceptación integral de #1567. La reconciliación de la matriz sigue siendo responsabilidad de su titular, con evidencia de sus otras dimensiones.
 
 ## Autoridad y antecedentes
 
-- Condor #742 mantiene decisión humana autenticada **opción B**; RR. HH. y asistencia con datos reales siguen deshabilitados. #1497 no tiene aprobación jurídica profesional.
-- #1651/PR #1777 incorporó la UI genérica de registros, no las diez pantallas de catálogos.
-- #1799/PR #1809 incorporó el test HTTP Symfony de los diez endpoints. Su evidencia documenta aislamiento y consultas sintéticas, **no** recorrido Chromium.
-- #1553/PR #1780 ya consolidó la matriz. Se mantienen S02–S11 en `NO_VERIFICABLE` hasta evidencias específicas completas.
+- Condor #742 mantiene elección humana **B**; RR. HH. y asistencia con datos reales permanecen deshabilitados. #1497 carece de aprobación jurídica profesional.
+- #1651/PR #1777 introdujo la pantalla genérica de registros; #1799/PR #1809 cubrió la frontera HTTP Symfony sintética de los diez catálogos. Son precondiciones ya fusionadas.
+- #1553/PR #1780 construyó la matriz. No promover sus S02–S11 desde `NO_VERIFICABLE` únicamente por esta regresión UI: la tríada completa y la decisión jurídica permanecen pendientes.
 
-## Contrato HTTP real de las vistas de prueba
+## Recorridos comprobados
 
-Los diez catálogos son únicamente de lectura. Rutas de ámbito `/api/v1/branches/{branchId}/hr/{segmento}?company_id={companyId}`. El servidor, no el navegador, verifica el tenant del usuario, la entidad legal de la sede, `users.view` y el modo sintético. Con `HR_REAL_DATA_ENABLED=true` o fuera de su entorno dev/test autorizado, los catálogos deben devolver 404, no datos de empleados.
+Cada consulta de prueba usa `GET /api/v1/branches/{branchId}/hr/{segmento}?company_id={companyId}`, con `credentials: same-origin` y `cache: no-store`. El servidor conserva la autoridad final sobre tenant, empresa, sede, `users.view` y entorno. El navegador rechaza respuestas sin `synthetic=true`, `persisted=false`, `juridically_binding=false`, filas sintéticas o referencias opacas válidas.
 
-| Submódulo | Segmento | Campo de lista | Recorrido Chromium pendiente |
+| Submódulo | Segmento | Campo de respuesta | Regresión Chromium sintética |
 | --- | --- | --- | --- |
-| S02 · cargos | `positions` | `positions` | carga, vacío, error, denegación, detalle sin mezcla de sedes |
-| S03 · áreas | `areas` | `areas` | mismos cinco casos |
-| S04 · sedes | `branch-preview` | `branches` | mismos cinco casos |
-| S05 · organigrama | `org-chart` | `nodes` | mismos cinco casos |
-| S06 · novedades | `changes` | `changes` | mismos cinco casos |
-| S07 · permisos | `permits` | `permits` | mismos cinco casos |
-| S08 · vacaciones | `vacations` | `vacations` | mismos cinco casos |
-| S09 · incapacidades | `incapacities` | `incapacities` | mismos cinco casos |
-| S10 · evaluaciones | `evaluations` | `evaluations` | mismos cinco casos |
-| S11 · portal ficticio | `employee-portal` | `items` | mismos cinco casos |
+| S02 · Cargos | `positions` | `positions` | carga, dato ficticio, vacío, error, 403, ámbito ajeno |
+| S03 · Áreas | `areas` | `areas` | mismos seis escenarios |
+| S04 · Sedes | `branch-preview` | `branches` | mismos seis escenarios |
+| S05 · Organigrama | `org-chart` | `nodes` | mismos seis escenarios |
+| S06 · Novedades | `changes` | `changes` | mismos seis escenarios |
+| S07 · Permisos | `permits` | `permits` | mismos seis escenarios |
+| S08 · Vacaciones | `vacations` | `vacations` | mismos seis escenarios |
+| S09 · Incapacidades | `incapacities` | `incapacities` | mismos seis escenarios |
+| S10 · Evaluaciones | `evaluations` | `evaluations` | mismos seis escenarios |
+| S11 · Portal ficticio | `employee-portal` | `items` | mismos seis escenarios |
 
-Para cada lista, exigir `synthetic=true`, `persisted=false`, `juridically_binding=false`, items con `synthetic=true` y referencias opacas; nunca confiar en HTTP 200 sin validar su esquema. Las peticiones se realizan con `credentials: same-origin`, `cache: no-store` y sin almacenamiento local.
+`tests/e2e/hr-m01-synthetic-catalogs.spec.mjs` monta **los componentes React/TSX reales** mediante Vite en un navegador Chromium de pruebas, intercepta exclusivamente HTTP ficticio y exige los estados de cada módulo, negativas sin permiso, ausencia de HTTP sin opt-in y cambio entre **dos empresas/sedes ficticias** sin persistencia de filas del contexto anterior. Las respuestas 401/403 son denegadas; 404 deshabilita la vista, y 500/payload inválido/ámbito ajeno fallan cerrado. No se crean personas ni relaciones laborales reales.
 
-## Evidencia pendiente antes del cierre
+El acceso está limitado a `import.meta.env.DEV` y al opt-in explícito `data-hr-synthetic-preview-enabled=true` con `HR_REAL_DATA_ENABLED` apagado. Sin opt-in no aparece la vista ni se realizan consultas laborales. El bundle de producción no habilita el módulo sintético; la compilación Vite de CI mostró **`Build ya reconciliado; no hay commit generado`**, por lo que `public/build/admin.js` no requirió cambio en el diff. Esto no equivale a probar la interfaz sobre un despliegue productivo.
 
-1. Vista de los diez catálogos montada efectivamente en la aplicación Admin de prueba mediante opt-in **deshabilitado por defecto**, sin habilitar HR real.
-2. Playwright Chromium sobre el bundle Vite compilado: permisos correctos, vacío, error, carga y 403/404 fail-closed por catálogo, al menos dos contextos ficticios sin cruces. Sin guardar fixtures que representen personas reales.
-3. CI `Validar`, TypeScript/build, PHP, Playwright, SonarCloud y CodeQL exact-HEAD terminales; CodeRabbit FINAL una sola vez conforme a PLAN-AGENTES.
-4. Un PR propio fusionado, con su UUID V3, y solo entonces reconciliación de la matriz por el titular autorizado.
+## Evidencia verificable y límite de aceptación
 
-La entrega sintética **no resuelve** la puerta jurídica B, #1497, persistencia laboral real ni los AC integrales del padre #1567.
+- [PR #1818](https://github.com/pl0n3r/Condor/pull/1818): implementación de componentes, opt-in y pruebas sobre rutas declaradas de la reserva V3 original.
+- [CI Condor #42357892267, intento 2](https://github.com/pl0n3r/Condor/actions/runs/42357892267): `Frontend TypeScript / build`, `Playwright Chromium`, `Backend PHP / MariaDB`, `Validar coordinación`, `CI Factory v1 / Validar` y `Validar` terminales `success` sobre el HEAD probado `bafda562b8b79523a430ad4d489f45bcb00ee5c6`. La modificación de este documento requiere **validación de nuevo HEAD** antes de fusionar; no transportar el verde por inferencia.
+- SonarCloud y CodeQL tienen checks terminales `success` en el SHA probado. La revisión **CodeRabbit FINAL única** solo se solicita después de estabilizar el HEAD definitivo y obtener su CI verde.
+- La matriz del padre #1567 se reconcilia exclusivamente tras el squash y la evidencia de su titular. Ningún check concede permiso para desplegar, gestionar PII, activar `HR_REAL_DATA_ENABLED` ni declarar conformidad jurídica.
+
+**Reversión:** squash reversible de un módulo dev/test; no se han emitido órdenes, permisos, secretos, cambios reales de datos ni operaciones live.
