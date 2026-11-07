@@ -45,7 +45,7 @@ final class ElectronicPayrollReadiness
         }
 
         foreach (array_keys($input) as $field) {
-            if (!is_string($field) || !in_array($field, self::ALLOWED_FIELDS, true)) {
+            if (!in_array($field, self::ALLOWED_FIELDS, true)) {
                 $errors[] = 'UNRECOGNIZED_FIELD';
                 break;
             }
