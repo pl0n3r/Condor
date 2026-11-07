@@ -82,5 +82,3 @@ Esto no acredita aislamiento por firewall a nivel de SO, Web Vitals de campo,
 INP/p75, paneles autenticados, Safari nativo, WCAG completa o autorización
 de release. El recibo SHA declarado exige verificación independiente del
 checkout y la evidencia del laboratorio nunca reemplaza #1499.
-
-[executed on device: 192.168.40.25 (ef502d75-f294-409c-8a9f-ab01b9e4ce65)]

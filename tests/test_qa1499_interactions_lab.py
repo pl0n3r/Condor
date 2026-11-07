@@ -184,5 +184,3 @@ class InteractionsLabContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-[executed on device: 192.168.40.25 (ef502d75-f294-409c-8a9f-ab01b9e4ce65)]

@@ -230,5 +230,3 @@ if (process.argv.length === 3 && process.argv[2] === '--self-test') {
 } else {
   run().catch(() => { console.error('Preflight o navegador local no disponibles'); process.exitCode = 2; });
 }
-
-[executed on device: 192.168.40.25 (ef502d75-f294-409c-8a9f-ab01b9e4ce65)]
