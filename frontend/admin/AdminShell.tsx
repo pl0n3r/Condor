@@ -362,17 +362,25 @@ export function AdminShell({
   // Si el ancla de la URL apunta a una sección dentro de un grupo, esa sección es la actual y «Inicio» deja de estarlo.
   const sectionInGroup = navItems.some((entry) => isGroup(entry)
     && entry.items.some((item) => !item.current && itemIsCurrent(item, hash)));
-  // Módulo activo (por el ancla de la URL): sirve para mostrar solo ese módulo y su ruta de navegación.
+  // Los grupos del propietario son rutas completas; los del tenant son anclas.
+  // Conservar la selección anterior del tenant y reconocer current en plataforma.
+  const isActiveGroupItem = (item: AdminNavItem): boolean => (
+    variant === 'platform' ? item.current === true : !item.current && itemIsCurrent(item, hash)
+  );
   let activeGroup = '';
   let activeLabel = '';
   let activeId = '';
   for (const entry of navItems) {
     if (!isGroup(entry)) continue;
-    const hit = entry.items.find((item) => !item.current && itemIsCurrent(item, hash));
+    const hit = entry.items.find(isActiveGroupItem);
     if (hit) {
       activeGroup = entry.group;
       activeLabel = hit.label.replace(' (pruebas)', '');
-      activeId = hit.href.slice(hit.href.indexOf('#') + 1);
+      activeId = variant === 'platform'
+        ? (hit.href.startsWith('/adminpl0n3r/')
+          ? hit.href.slice('/adminpl0n3r/'.length)
+          : 'inicio')
+        : hit.href.slice(hit.href.indexOf('#') + 1);
     }
   }
   return (
@@ -414,9 +422,9 @@ export function AdminShell({
       <main className="workspace" aria-label="Área de trabajo" data-module={/^[a-z0-9-]+$/.test(activeId) ? activeId : 'inicio'}>
         {/* El CSS estático activa solo el módulo elegido: compatible con CSP sin estilos embebidos. */}
         {variant === 'tenant' && <AdminGlobalSearch />}
-        {activeLabel && (
+        {activeLabel && (variant === 'tenant' || activeId !== 'inicio') && (
           <nav className="module-breadcrumb" aria-label="Ruta">
-            <a href="/admin">Inicio</a>
+            <a href={variant === 'platform' ? '/adminpl0n3r' : '/admin'}>Inicio</a>
             <span aria-hidden="true">/</span>
             <span>{activeGroup}</span>
             <span aria-hidden="true">/</span>

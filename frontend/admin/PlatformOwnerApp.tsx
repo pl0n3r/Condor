@@ -648,34 +648,65 @@ export function PlatformOwnerApp({
       variant="platform"
       navItems={[
         {
-          href: '/adminpl0n3r',
-          label: 'Centro de control',
-          current: currentSection === 'control',
+          group: 'Resumen',
+          icon: 'home',
+          items: [
+            {
+              href: '/adminpl0n3r',
+              label: 'Centro de control',
+              current: currentSection === 'control',
+            },
+          ],
         },
         {
-          href: '/adminpl0n3r/empresas',
-          label: 'Empresas',
-          current: currentSection === 'empresas',
+          group: 'Empresas',
+          icon: 'people',
+          items: [
+            {
+              href: '/adminpl0n3r/empresas',
+              label: 'Empresas',
+              current: currentSection === 'empresas',
+            },
+          ],
         },
         {
-          href: '/adminpl0n3r/suscripciones',
-          label: 'Plan y suscripciones',
-          current: currentSection === 'suscripciones',
+          group: 'Comercial',
+          icon: 'sales',
+          items: [
+            {
+              href: '/adminpl0n3r/planes',
+              label: 'Planes y precios',
+            },
+            {
+              href: '/adminpl0n3r/suscripciones',
+              label: 'Plan y suscripciones',
+              current: currentSection === 'suscripciones',
+            },
+            {
+              href: '/adminpl0n3r/catalogo',
+              label: 'Catálogo comercial',
+              current: currentSection === 'catalogo',
+            },
+          ],
         },
         {
-          href: '/adminpl0n3r/catalogo',
-          label: 'Catálogo comercial',
-          current: currentSection === 'catalogo',
+          group: 'Plataforma',
+          icon: 'admin',
+          items: [
+            {
+              href: '/adminpl0n3r/staff',
+              label: 'Staff y permisos',
+              current: currentSection === 'staff',
+            },
+            {
+              href: '/adminpl0n3r/diagnosticos',
+              label: 'Diagnósticos',
+            },
+          ],
         },
-        {
-          href: '/adminpl0n3r/staff',
-          label: 'Staff',
-          current: currentSection === 'staff',
-        },
-        {
-          href: '/adminpl0n3r/diagnosticos',
-          label: 'Diagnósticos',
-        },
+        // Cumplimiento y Soporte no se muestran hasta tener pantallas
+        // del propietario; tampoco hay enlaces ficticios a Ingresos,
+        // Auditoría o Estado del sistema.
       ]}
     >
       {selected && (
