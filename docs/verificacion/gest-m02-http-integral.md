@@ -16,7 +16,7 @@ PHPUnit descubre automáticamente el archivo en la suite tests/php. El WebTestCa
 | GEST-M02-S02: contratos | POST/GET de borrador, PATCH EN_REVISION y rechazo de APROBADO | LOCAL_PARTIAL tras CI verde | No existe contrato firmado, expediente laboral ni liquidación real |
 | GEST-M02-S03: otrosíes | POST de addendum ficticio con CSRF; mismo aislamiento de sesión y compañía | LOCAL_PARTIAL tras CI verde | No valida todavía motivos, versión original ni aprobación jurídica |
 | Empresa/sede y tenancy | Dos tenants, dos razones sociales de A y dos sedes en una; listas cruzadas vacías y tenant B responde 404 | LOCAL_PARTIAL tras CI verde | No cubre todas las rutas multiempresa ni operación productiva |
-| Autorización y validación | Anónimo 403, delegated viewer no puede crear (403), sin CSRF 403, campos extra y referencias no sintéticas 422 | LOCAL_PARTIAL tras CI verde | Permisos legacy inventory.*; no acredita RBAC laboral definitivo |
+| Autorización y validación | Anónimo 401, delegated viewer no puede crear (403), sin CSRF 403, campos extra y referencias no sintéticas 422 | LOCAL_PARTIAL tras CI verde | Permisos legacy inventory.*; no acredita RBAC laboral definitivo |
 
 ## Brechas y puertas que NO resuelve este PR
 
