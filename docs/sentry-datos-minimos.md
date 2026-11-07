@@ -1,7 +1,29 @@
 # Sentry: datos mínimos y fail-closed (#647)
 
-Estado: construcción. **No** habilita `SENTRY_DSN`, no envía eventos y no sustituye la revisión
+Estado: construcción. **No** establece un DSN real ni ejecuta envíos por esta hoja; no sustituye la revisión
 jurídica pendiente del tratamiento `error_incidents` (#617). `config/packages/sentry.php` no cambia.
+
+## Configuración del DSN desde el propietario (#1730)
+
+La pantalla del propietario /adminpl0n3r gestiona el campo Sentry. El backend cifra
+el secreto global como sentry.dsn en el almacén #1726 (nunca por tenant, en una
+respuesta de API ni en la bitácora). La lectura se realiza al resolver
+SENTRY_DSN en ejecución: **el almacén cifrado tiene prioridad sobre el entorno**.
+Si el registro no existe, la BD falla o el cifrado es inválido, se usa la variable
+del entorno como respaldo. Sin ninguno, el DSN es vacío y no hay transmisión.
+
+StoredSentryDsnEnvLoader implementa EnvVarLoaderInterface y, para respetar
+la prioridad también cuando ya existe una variable de entorno, implementa
+EnvVarProcessorInterface exclusivamente para el procesador string.
+Los demás nombres conservan el procesamiento estándar de Symfony y el
+cargador nunca publica otro nombre distinto de SENTRY_DSN. La conexión
+es diferida y el secreto se guarda temporalmente en memoria del proceso,
+no en logs. Los fallos (tabla, BD, APP_SECRET o autenticación del cifrado)
+retornan vacío sin excepción ni revelar causa o DSN.
+
+**Seguridad:** este cambio no configura ningún DSN real, no activa Sentry
+productivo ni autoriza salida de datos. Se mantiene la puerta legal #617,
+la revisión humana de seguridad de esta hoja y el saneado de eventos.
 
 ## Qué puede salir en un evento
 
