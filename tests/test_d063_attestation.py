@@ -29,7 +29,8 @@ TREATMENTS = frozenset({
     "diagnostic_shares", "error_incidents", "notification_delivery",
     "notification_preferences", "self_service_trial_application",
     "workflow_definitions", "workflow_executions",
-    "payroll_synthetic_records", "social_security_synthetic_records",
+    "payroll_real_records", "payroll_synthetic_records",
+    "social_security_synthetic_records",
     "human_resources_synthetic_records",
     "human_resources_real_records",
 })
@@ -73,6 +74,14 @@ class D063AttestationTests(unittest.TestCase):
         self.assertEqual("review_required", payroll["purpose"])
         self.assertEqual("review_required", payroll["retention"])
         self.assertEqual([], payroll["providers"])
+
+        # El tratamiento nuevo es declarado, pero sigue sin aprobación legal.
+        real = next(t for t in data["treatments"] if t["id"] == "payroll_real_records")
+        self.assertEqual("usage", real["category"])
+        self.assertEqual("payroll_record_management", real["purpose"])
+        for name in ("basis", "retention", "consent"):
+            self.assertEqual("review_required", real[name])
+        self.assertEqual([], real["providers"])
 
         # No hay fallback a phase=construccion ni inferencia de autorización.
         cases = {
