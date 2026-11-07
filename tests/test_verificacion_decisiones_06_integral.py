@@ -52,7 +52,7 @@ def external_evidence_state(envelope: object, expected_sha: object) -> str:
             or envelope["source_ref"] == "observed:"
             or envelope["operator_ref"] == "owner-approved:"
             or envelope["permission_ref"] == "permission:"
-            or any(len(value) > 250 or "\\n" in value or "\\r" in value
+            or any(len(value) > 250 or "\n" in value or "\r" in value
                    for value in envelope.values())
             or envelope["result"] not in {"PASS", "FAIL", "UNKNOWN"}):
         return "REJECTED"
@@ -133,7 +133,7 @@ class VerificacionDecisiones06IntegralTests(unittest.TestCase):
             {**candidate, "source_ref": "observed:"},
             {**candidate, "operator_ref": "owner-approved:"},
             {**candidate, "permission_ref": "permission:"},
-            {**candidate, "source_ref": "observed:host\\ninjected"},
+            {**candidate, "source_ref": "observed:host\ninjected"},
             {**candidate, "result": "READY"},
             {**candidate, "result": True},
             {**candidate, "observed_at": "2026-02-30T00:00:00Z"},
