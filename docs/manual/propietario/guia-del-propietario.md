@@ -45,21 +45,23 @@ Los filtros solo abarcan la página mostrada, no necesariamente todas las empres
 ## 3. Planes y precios
 
 ### Para qué sirve
-Abrir la sección destinada a consultar o gestionar los planes comerciales.
+Consultar las versiones de los planes comerciales y, cuando el servidor lo permita, preparar cambios de tarifas, límites y capacidades. Configurar una tarifa no activa cobros.
 
 ### Antes de empezar
-Comprueba tus permisos y la disponibilidad de la sección en la instalación utilizada.
+Accede con permisos de propietario y confirma que la edición está habilitada en tu instalación. No cambies condiciones comerciales sin autorización.
 
 ### Cómo se usa (paso a paso)
 1. En el grupo «Comercial», selecciona «Planes y precios».
-2. Desde «Catálogo comercial» también existe el enlace «Editar planes y tarifas».
-3. Comprueba qué controles ofrece realmente la pantalla antes de intentar cambios.
+2. Usa «Buscar por nombre o clave» y el filtro «Tarifa» para ver «Todas», «Con tarifa», «Sin tarifa» o «Cotizar».
+3. Abre un plan en «Planes y precios vigentes». Se muestra un panel lateral con «Precios», «Límites y capacidades» e «Historial».
+4. En «Precios», revisa «Moneda», «Precio mensual (unidades menores; vacío = Sin tarifa)», «Precio anual (unidades menores; 0 = precio cero)» y «Requiere cotización». Antes de confirmar una modificación autorizada, pulsa «Revisar versión» y comprueba la vista previa; después «Confirmar versión».
+5. En «Límites y capacidades», examina los campos y, solo si tienes autorización, usa «Guardar nueva versión». En «Historial», consulta los eventos disponibles del plan.
 
 ### Avisos y mensajes
-La navegación contiene «Planes y precios», pero el menú por sí solo no confirma que el editor esté habilitado.
+Puede aparecer «Cargando autorización de edición…» o «No se pudo completar la operación. No se presupone ningún cambio.». Si cambió una versión, usa «Cerrar y recargar catálogo». Una tarifa registrada indica «Versión de tarifas registrada; el cobro real permanece desactivado.».
 
 ### Limitaciones
-La nueva pantalla de edición de planes estaba en desarrollo independiente y no forma parte de la interfaz verificada para esta guía. No se garantizan cambios de tarifas, cobros ni modificaciones de contratos desde este enlace.
+El editor está incorporado al código, pero esta guía no acredita su activación productiva ni autoriza cambios reales. Las tarifas se introducen en unidades menores; no se generan cobros por configurar una versión.
 
 ## 4. Plan y suscripciones
 
@@ -101,7 +103,7 @@ Accede con permisos de propietario de plataforma.
 Una cartera vacía puede mostrar «No hay empresas en la cartera mostrada.».
 
 ### Limitaciones
-Esta vista presenta «Datos canónicos solo de lectura.». El enlace a planes no confirma que un editor esté listo o publicado. La búsqueda solo abarca la página cargada.
+Esta vista presenta «Datos canónicos solo de lectura.». «Catálogo comercial» es una vista de consulta; el editor de «Planes y precios» está separado y no activa cobros. La búsqueda solo abarca la página cargada.
 
 ## 6. Staff y permisos
 
