@@ -164,6 +164,16 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `account_lifecycle`
 
+## occupational_safety_real_records
+
+- Categoría: `usage`
+- Campos de software: `id`, `tenant_id`, `company_id`, `record_ref`, `kind`, `state`, `version`, `previous_id`, `actor_id`, `occurred_at`
+- Finalidad: `occupational_safety_record_management`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## payroll_real_records
 
 - Categoría: `usage`

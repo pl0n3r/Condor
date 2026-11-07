@@ -27,7 +27,7 @@ TREATMENTS = frozenset({
     "contract_synthetic_records", "contracts_real_records",
     "controlbot_staff_operations", "customer_contact",
     "diagnostic_shares", "error_incidents", "finance_real_records", "notification_delivery",
-    "notification_preferences", "self_service_trial_application",
+    "notification_preferences", "occupational_safety_real_records", "self_service_trial_application",
     "workflow_definitions", "workflow_executions",
     "payroll_real_records", "payroll_synthetic_records",
     "social_security_real_records",

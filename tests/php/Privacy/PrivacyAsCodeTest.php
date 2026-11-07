@@ -42,6 +42,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'human_resources_synthetic_records',
                 'notification_delivery',
                 'notification_preferences',
+                'occupational_safety_real_records',
                 'payroll_real_records',
                 'payroll_synthetic_records',
                 'self_service_trial_application',
