@@ -123,7 +123,12 @@ class SalidaTests(unittest.TestCase):
         # El inlining seguro solo corresponde a tokens globales fijos.
         for token, pixels in {2: 8, 3: 12, 4: 16, 6: 24, 8: 32}.items():
             self.assertRegex(base, rf"--space-{token}:\s*{pixels}px;")
-            self.assertNotIn(f"var(--space-{token})", legacy)
+            if token == 4:
+                # D-041-S02 requiere un testigo exacto de la escala
+                # de espaciado en el grid administrativo.
+                self.assertEqual(legacy.count("gap: var(--space-4);"), 1)
+            else:
+                self.assertNotIn(f"var(--space-{token})", legacy)
 
         self.assertIn("@scope (.admin-shell)", visual)
         self.assertIn(":scope .catalog-panel", visual)
