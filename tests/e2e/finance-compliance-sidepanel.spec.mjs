@@ -37,29 +37,6 @@ function fixturePlugin() {
         "window.renderFinanceCompliance = (name, props) => root.render(React.createElement(modules[name], props));",
       ].join('\n');
     },
-    configureServer(devServer) {
-      const root = '/__sidepanel_fixture__';
-      devServer.middlewares.use(root, async (request, response, next) => {
-        if (request.url && request.url !== '/') {
-          next();
-          return;
-        }
-        const template = [
-          '<!doctype html><html lang="es"><body>',
-          '<div id="condor-admin-root" data-access-token="fixture-csrf"></div>',
-          '<main id="root"></main>',
-          '<script type="module" src="/__sidepanel_entry__.js"></script>',
-          '</body></html>',
-        ].join('');
-        try {
-          const document = await devServer.transformIndexHtml(root, template);
-          response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-          response.end(document);
-        } catch (failure) {
-          next(failure);
-        }
-      });
-    },
   };
 }
 
@@ -108,6 +85,18 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
   });
 
   async function open(page, name) {
+    // Solo el documento HTML se simula; los módulos TSX se sirven por Vite real.
+    await page.route(origin + '/__sidepanel_fixture__', route => route.fulfill({
+      status: 200,
+      contentType: 'text/html; charset=utf-8',
+      body: [
+        '<!doctype html><html lang="es"><body>',
+        '<div id="condor-admin-root" data-access-token="fixture-csrf"></div>',
+        '<main id="root"></main>',
+        '<script type="module" src="/__sidepanel_entry__.js"></script>',
+        '</body></html>',
+      ].join(''),
+    }));
     await page.goto(origin + '/__sidepanel_fixture__');
     await page.waitForFunction(() => typeof window.renderFinanceCompliance === 'function');
     await page.evaluate(({ name, props }) => window.renderFinanceCompliance(name, props), { name, props: PROPS });
