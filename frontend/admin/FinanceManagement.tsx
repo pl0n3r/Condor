@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { PageHeader, MetricStrip, Toolbar, DataTable, SidePanel, StatusPill } from './ui/Kit';
 import { FinanceClosureAccessDenied, previewSyntheticFinanceClosure, type FinanceClosureMode, type FinanceClosureResult } from './api';
 
 /** M07: panel de prueba aislado: sin HTTP, persistencia ni operaciones financieras. */
@@ -53,6 +54,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [kind, setKind] = useState<FinanceKind>('INGRESO');
   const [amountFixture, setAmountFixture] = useState<FinanceRecord['amountFixture']>('100.00');
   const [selected, setSelected] = useState('');
+  const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<'TODOS' | FinanceKind>('TODOS');
   const [stateFilter, setStateFilter] = useState<'TODOS' | FinanceState>('TODOS');
@@ -111,6 +113,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     }]);
     audit(reference, 'created');
     setSelected(reference);
+    setCreating(false);
     setReference('');
     setPeriodRef('');
     setConceptRef('');
@@ -156,16 +159,15 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const current = scoped.find(row => row.reference === selected);
 
   return (
-    <section id="finance-management" className="catalog-panel" aria-labelledby="finance-title">
-      <header>
-        <h2 id="finance-title">Finanzas y contabilidad · laboratorio M07</h2>
-        <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal, contable, bancario ni tributario.</p>
-        <p className="muted">Registros locales descartables. Sin transferencias, facturas ni operaciones bancarias.</p>
-      </header>
+    <section id="finance-management" className="ui-page catalog-panel" aria-label="Finanzas y contabilidad · laboratorio M07">
+      <PageHeader title="Finanzas y contabilidad · laboratorio M07" description="Registros ficticios y cierres de prueba sin efecto financiero." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setCreating(true); }}>Nuevo asiento ilustrativo</button> : undefined} />
+      <MetricStrip label="Indicadores de Finanzas y contabilidad · laboratorio M07" items={[{ label: 'Registros', value: scoped.length }, { label: 'Resultados', value: visible.length }, { label: 'Eventos de esta sesión', value: events.filter(item => item.scope === scope).length }]} />
+      <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal, contable, bancario ni tributario.</p>
+      <p className="muted">Registros locales descartables. Sin transferencias, facturas ni operaciones bancarias.</p>
       {notice && <output role="status" aria-live="polite">{notice}</output>}
 
 
-      <section className="catalog-card" aria-labelledby="finance-closure-title"
+      <section className="ui-card catalog-card" aria-labelledby="finance-closure-title"
         aria-busy={closurePreview.status === 'loading'}>
         <h3 id="finance-closure-title">Vista previa HTTP de cierre (solo laboratorio)</h3>
         <p>Consulta autenticada por sede. No aprueba, registra ni cierra períodos contables.</p>
@@ -200,9 +202,8 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
         )}
       </section>
 
-      <div className="catalog-grid">
-        <section className="catalog-card" aria-labelledby="finance-create-title">
-          <h3 id="finance-create-title">Nuevo asiento ilustrativo</h3>
+      <div className="ui-grid-2 catalog-grid">
+        <SidePanel open={creating && canCreate} title="Nuevo asiento ilustrativo" onClose={() => setCreating(false)}>
           <form className="catalog-editor" onSubmit={create}>
             <fieldset disabled={!canCreate} aria-label="Datos sintéticos del asiento">
               <label htmlFor="finance-demo-ref">Identificador de laboratorio</label>
@@ -234,11 +235,13 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             </fieldset>
           </form>
           {!canCreate && <p role="status">Solo lectura: falta permiso para crear.</p>}
-        </section>
 
-        <section className="catalog-card" aria-labelledby="finance-register-title">
+        </SidePanel>
+
+        <section className="ui-card catalog-card" aria-labelledby="finance-register-title">
           <h3 id="finance-register-title">Libro de muestra, aislado por empresa</h3>
-          <fieldset aria-label="Filtros de registros ficticios">
+          <Toolbar trailing={<span className="ui-count">{visible.length} de {scoped.length}</span>}>
+
             <label htmlFor="finance-find">Buscar identificador</label>
             <input id="finance-find" maxLength={80} value={search}
               onChange={event => setSearch(event.target.value)} />
@@ -254,19 +257,13 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               <option value="TODOS">Todas</option>
               {states.map(value => <option value={value} key={value}>{value}</option>)}
             </select>
-          </fieldset>
+
+          </Toolbar>
           <p role="status">{visible.length} registro(s) ficticio(s) en el ámbito actual.</p>
-          <ul aria-label="Asientos simulados">
-            {visible.map(row => <li key={row.reference}>
-              <button type="button" onClick={() => view(row.reference)}>
-                {row.reference} / {row.kind} / {row.state}
-              </button>
-            </li>)}
-          </ul>
+          <DataTable caption="Listado de Finanzas y contabilidad · laboratorio M07" rows={visible} rowKey={row => row.reference} onOpen={row => view(row.reference)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.reference}</strong></span> }, { key: 'kind', header: 'Clase', render: row => row.kind }, { key: 'amount', header: 'COP ilustrativo', render: row => row.amountFixture, align: 'right' as const }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'EN_REVISION' ? 'info' : row.state === 'REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.state}</StatusPill> }]} />
         </section>
 
-        <section className="catalog-card" aria-labelledby="finance-preview-title">
-          <h3 id="finance-preview-title">Inspección y control manual</h3>
+        <SidePanel open={Boolean(current) && !creating} title="Inspección y control manual" onClose={() => setSelected('')}>
           {current ? (
             <>
               <dl>
@@ -287,9 +284,10 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               <p>Ningún registro se aprueba, contabiliza, paga ni cierra automáticamente.</p>
             </>
           ) : <p role="status">Todavía no se ha seleccionado un asiento de prueba.</p>}
-        </section>
 
-        <aside className="catalog-card" aria-labelledby="finance-trace-title">
+        </SidePanel>
+
+        <aside className="ui-card catalog-card" aria-labelledby="finance-trace-title">
           <h3 id="finance-trace-title">Bitácora de demostración (no oficial)</h3>
           <p className="muted">La auditoría de servidor es obligatoria para operaciones reales.</p>
           <ol>
