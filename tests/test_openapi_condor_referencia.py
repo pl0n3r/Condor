@@ -12,8 +12,11 @@ from __future__ import annotations
 import json
 import re
 import sys
+import tempfile
 import unittest
+from collections import Counter
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTROLLERS = ROOT / "src" / "Http" / "Controller"
@@ -31,10 +34,11 @@ PERMISSION = re.compile(
 QUERY = re.compile(
     r"(?:->query->(?:get|getInt|getBoolean|all|has)|->query\.get)\s*\(\s*'([^']+)'"
 )
-PAYLOAD = re.compile(r"->payload\s*\([\s\S]{0,85}?\[([\s\S]{0,500}?)\]")
+# Only an explicit literal request allow-list may define input fields.
+PAYLOAD = re.compile(r"->payload\s*\(\s*\$request\s*,\s*\[([^\]]*)\]", re.S)
 FIELD = re.compile(r"'([^']+)'")
 VARIABLE_PERMISSION = re.compile(
-    r"(?:secureScope|productionScope|respond|occupationalAccess)"
+    r"(?:secureScope|productionScope|respond|occupationalAccess|recordScope|realScope)"
     r"\s*\([\s\S]{0,190}?'([a-z][\w-]*\.[a-z][\w-]*)'"
 )
 ERRORS = {
@@ -58,7 +62,7 @@ def relevant(path: str) -> bool:
 
 def parse_routes() -> list[dict]:
     routes: list[dict] = []
-    for file in sorted(CONTROLLERS.glob("*Controller.php")):
+    for file in sorted(CONTROLLERS.rglob("*.php")):
         source = file.read_text(encoding="utf-8")
         class_match = CLASS.search(source)
         if class_match is None:
@@ -98,13 +102,13 @@ def parse_routes() -> list[dict]:
                 routes.append({
                     "path": path,
                     "method": method.lower(),
-                    "file": file.name,
+                    "file": file.relative_to(CONTROLLERS).as_posix(),
                     "handler": function.group(1),
                     "name": route_name.group(1) if route_name else "",
                     "permissions": permission,
                     "query": unique(QUERY.findall(body)),
                     "bodyFields": FIELD.findall(payload.group(1)) if payload else [],
-                    "csrf": bool(re.search(r"require(?:Management)?Csrf|assertCsrf|isCsrfTokenValid", body)),
+                    "csrf": bool(re.search(r"require(?:[A-Za-z]+)?Csrf|assertCsrf|isCsrfTokenValid", body)),
                     "created": "HTTP_CREATED" in body,
                     "noContent": "HTTP_NO_CONTENT" in body,
                     "owner": path.startswith("/adminpl0n3r/"),
@@ -123,17 +127,47 @@ def parse_routes() -> list[dict]:
 def required_permissions(route: dict) -> list[str]:
     if route["owner"]:
         return ["ROLE_PLATFORM_OWNER"]
-    if route["permissions"]:
-        return route["permissions"]
-    name = route["file"]
+    name = Path(route["file"]).name
     handler = route["handler"]
+    if name == "ReportsController.php":
+        # One permission by kind, not an AND requirement.
+        return ["inventory.view", "orders.view"]
+    if name == "ContractsController.php" and handler.startswith("real"):
+        permission = {
+            "realList": "inventory.view", "realDetail": "inventory.view",
+            "realCreate": "inventory.create", "realState": "inventory.update",
+        }.get(handler)
+        if permission is None:
+            raise ValueError(f"Contrato real desconocido: {handler}")
+        return [permission, "tenant_owner"]
+    if route["permissions"]:
+        permissions = route["permissions"]
+        if name == "SocialSecurityController.php":
+            return unique(permissions + ["tenant_owner"])
+        return permissions
     if name == "ContractsController.php":
-        return [{
+        permission = {
             "list": "inventory.view", "view": "inventory.view",
             "create": "inventory.create", "state": "inventory.update",
-        }[handler]]
-    if name == "ReportsController.php":
-        return ["inventory.view", "orders.view"]
+        }.get(handler)
+        if permission:
+            return [permission]
+    # Existing read-only HR synthetic endpoints delegate users.view to helpers.
+    if name in {
+        "HumanResourcesAreaController.php", "HrChangeController.php",
+        "HrPortalController.php", "HrEvaluationController.php",
+        "HrIncapacityController.php", "HrOrgChartController.php",
+        "HrPermitController.php", "HrVacationController.php",
+    } and handler in {"index", "detail"}:
+        return ["users.view"]
+    # access() chooses the permission from the HTTP verb and enforces CSRF.
+    if name == "LegalComplianceController.php" and handler == "fixture":
+        return ["settings.create" if route["method"] == "post" else "settings.update"]
+    # These three handlers delegate RBAC and CSRF to syntheticPurchasingPreview().
+    if name == "PurchasingController.php" and handler in {
+        "previewSupplierEvaluation", "previewSupplierContract", "previewPayables",
+    }:
+        return ["inventory.create"]
     if name == "ApiContextController.php":
         return ["tenant_membership_and_accessible_branch"]
     if name == "EmployeeController.php":
@@ -150,10 +184,21 @@ def operation(route: dict) -> dict:
     ]
     args += [
         {"in": "query", "name": name, "required": False, "schema": {"type": "string"}}
-        for name in route["query"]
+        for name in (["from", "through"] if route["file"] == "ReportsController.php" else route["query"])
     ]
+    if route["file"] == "ReportsController.php":
+        for arg in args:
+            if arg["in"] == "query" and arg["name"] in {"from", "through"}:
+                arg["required"] = True
     csrf = route["csrf"] or (
-        route["file"] == "ContractsController.php" and method in {"post", "patch"}
+        Path(route["file"]).name == "ContractsController.php" and method in {"post", "patch"}
+    )
+    csrf = csrf or (
+        route["file"] == "LegalComplianceController.php" and route["handler"] == "fixture"
+    ) or (
+        route["file"] == "PurchasingController.php" and route["handler"] in {
+            "previewSupplierEvaluation", "previewSupplierContract", "previewPayables",
+        }
     )
     if csrf:
         args.append({
@@ -169,6 +214,13 @@ def operation(route: dict) -> dict:
         "x-required-permissions": required_permissions(route),
         "x-csrf-required": csrf,
     }
+    if route["file"] == "ReportsController.php":
+        result["x-required-permissions-by-kind"] = {
+            "inventory": "inventory.view",
+            "purchases": "inventory.view",
+            "sales": "orders.view",
+        }
+        result["x-permission-selection"] = "exactly_one_by_kind"
     if args:
         result["parameters"] = args
     if method in {"post", "put", "patch"}:
@@ -196,6 +248,11 @@ def operation(route: dict) -> dict:
                 "schema": {"type": "object", "additionalProperties": True}
             }}
     responses = {code: success}
+    if route["file"] == "OrderPaymentController.php" and route["handler"] == "create":
+        responses["200"] = success
+        responses["201"] = success
+    if route["file"] == "ContractsController.php" and route["handler"] == "realCreate":
+        responses["201"] = success
     for status in ERRORS:
         responses[status] = {"$ref": "#/components/responses/Http" + status}
     responses["500"] = {"$ref": "#/components/responses/Http500"}
@@ -205,8 +262,18 @@ def operation(route: dict) -> dict:
 
 def build_reference() -> dict:
     paths: dict[str, dict] = {}
-    for route in parse_routes():
-        paths.setdefault(route["path"], {})[route["method"]] = operation(route)
+    routes = parse_routes()
+    operations = [operation(route) for route in routes]
+    repeated = {name for name, count in Counter(
+        item["operationId"] for item in operations
+    ).items() if count > 1}
+    for route, item in zip(routes, operations):
+        if item["operationId"] in repeated:
+            item["operationId"] += "_" + route["method"]
+        paths.setdefault(route["path"], {})[route["method"]] = item
+    names = [op["operationId"] for op in operations]
+    if len(names) != len(set(names)):
+        raise ValueError("operationId duplicado")
     return {
         "openapi": "3.1.0",
         "info": {
@@ -247,7 +314,7 @@ def build_reference() -> dict:
             "schemas": {
                 "ApiError": {
                     "type": "object",
-                    "required": ["error", "message", "status", "request_id"],
+                    "required": ["error"],
                     "properties": {
                         "error": {"type": "string"},
                         "message": {"type": "string"},
@@ -307,11 +374,83 @@ class OpenApiCondorReferenciaTests(unittest.TestCase):
                 self.assertEqual([{"sessionAuth": []}], op["security"])
 
     def test_detecta_deriva_de_rutas_y_metodos(self) -> None:
-        actual = json.loads(REFERENCE.read_text(encoding="utf-8"))
-        routes = parse_routes()
-        first = routes[0]
-        del actual["paths"][first["path"]][first["method"]]
-        self.assertNotEqual(actual, build_reference())
+        # Real new PHP route from a nested filename without Controller.php suffix.
+        with tempfile.TemporaryDirectory() as directory:
+            controllers = Path(directory)
+            nested = controllers / "Nested"
+            nested.mkdir()
+            (nested / "ApiFixture.php").write_text(
+                """<?php
+                #[Route('/api/v1/fixture')]
+                final class ApiFixture {
+                    #[Route('/new', name: 'fixture_dual', methods: ['GET', 'POST'])]
+                    public function action($request) {
+                        $this->authorizedBranchScope('fixture', 'inventory.view');
+                        $this->requireCsrf($request);
+                        $this->payload($request, ['value']);
+                    }
+                }
+                """, encoding="utf-8",
+            )
+            with patch.dict(globals(), {"CONTROLLERS": controllers}):
+                spec = build_reference()
+                routes = parse_routes()
+            self.assertEqual(2, len(routes))
+            self.assertEqual("Nested/ApiFixture.php", routes[0]["file"])
+            self.assertEqual({"get", "post"}, set(spec["paths"]["/api/v1/fixture/new"]))
+            ids = [item["operationId"] for item in spec["paths"]["/api/v1/fixture/new"].values()]
+            self.assertEqual(len(ids), len(set(ids)))
+            self.assertNotIn("/api/v1/fixture/new", json.loads(
+                REFERENCE.read_text(encoding="utf-8")
+            )["paths"])
+
+    def test_csv_reportes_permisos_y_fechas(self) -> None:
+        op = build_reference()["paths"]["/api/v1/branches/{branchId}/reports/{kind}.csv"]["get"]
+        params = {p["name"]: p for p in op["parameters"]}
+        self.assertTrue(params["from"]["required"])
+        self.assertTrue(params["through"]["required"])
+        self.assertEqual({
+            "inventory": "inventory.view", "purchases": "inventory.view",
+            "sales": "orders.view",
+        }, op["x-required-permissions-by-kind"])
+        self.assertEqual("exactly_one_by_kind", op["x-permission-selection"])
+
+    def test_csrf_delegado_y_propiedad_tenant(self) -> None:
+        paths = build_reference()["paths"]
+        for suffix in ("evidence", "request-review"):
+            op = paths[f"/api/v1/branches/{{branchId}}/documents/{{documentKey}}/{suffix}"]["post"]
+            self.assertTrue(op["x-csrf-required"])
+            self.assertTrue(any(p["name"] == "X-CSRF-Token" for p in op["parameters"]))
+        for path, actions in paths.items():
+            if "/social-security/" in path:
+                for op in actions.values():
+                    self.assertIn("tenant_owner", op["x-required-permissions"])
+
+    def test_payload_dinamico_no_inventa_propiedades(self) -> None:
+        op = build_reference()["paths"][
+            "/api/v1/branches/{branchId}/hr/extension/previews/{kind}"
+        ]["post"]
+        schema = op["requestBody"]["content"]["application/json"]["schema"]
+        self.assertTrue(schema["additionalProperties"])
+        self.assertNotIn("properties", schema)
+
+    def test_pagos_errores_y_ids(self) -> None:
+        ref = build_reference()
+        paths = ref["paths"]
+        payment = paths["/api/v1/branches/{branchId}/orders/{orderId}/payments"]["post"]
+        self.assertIn("200", payment["responses"])
+        self.assertIn("201", payment["responses"])
+        self.assertEqual(["error"], ref["components"]["schemas"]["ApiError"]["required"])
+        for p in ("/adminpl0n3r/api/plans/{key}",
+                  "/adminpl0n3r/api/plans/{key}/prices",
+                  "/adminpl0n3r/api/plans/{key}/prices/cancel"):
+            self.assertIn("422", paths[p]["post"]["responses"])
+        names = [op["operationId"] for methods in paths.values() for op in methods.values()]
+        self.assertEqual(len(names), len(set(names)))
+        real = paths["/api/v1/branches/{branchId}/contracts/real-records"]
+        self.assertIn("tenant_owner", real["get"]["x-required-permissions"])
+        self.assertIn("201", real["post"]["responses"])
+
 
 
 if __name__ == "__main__":
