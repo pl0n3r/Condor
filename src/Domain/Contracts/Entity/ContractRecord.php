@@ -165,13 +165,25 @@ final class ContractRecord
         if (($row['tenant_id'] ?? null) !== $tenant || ($row['company_id'] ?? null) !== $company) {
             throw new DomainException('Lectura de contratación fuera de empresa.');
         }
-        return self::persisted($tenant, $company,
-            (string) $row['record_ref'], (string) $row['worker_ref'],
-            (string) $row['template_ref'], (string) $row['kind'],
-            (string) $row['state'], (int) $row['version'],
-            ($row['previous_id'] ?? null) === null ? null : (string) $row['previous_id'],
-            (string) $row['actor_id'], (string) $row['id'],
-            new DateTimeImmutable((string) $row['occurred_at'], new DateTimeZone('UTC')));
+
+        // Read and type the persisted fields before constructing the immutable event.
+        // A mismatched tenant/company cannot be converted into a different event.
+        $record = (string) $row['record_ref'];
+        $personAlias = (string) $row['worker_ref'];
+        $documentAlias = (string) $row['template_ref'];
+        $category = (string) $row['kind'];
+        $currentState = (string) $row['state'];
+        $sequence = (int) $row['version'];
+        $prior = $row['previous_id'] ?? null;
+        $priorId = $prior === null ? null : (string) $prior;
+        $actor = (string) $row['actor_id'];
+        $id = (string) $row['id'];
+        $when = new DateTimeImmutable((string) $row['occurred_at'], new DateTimeZone('UTC'));
+
+        return self::persisted(
+            $tenant, $company, $record, $personAlias, $documentAlias,
+            $category, $currentState, $sequence, $priorId, $actor, $id, $when,
+        );
     }
 
     public function transitionReal(string $next, string $actor, int $expectedVersion): self
