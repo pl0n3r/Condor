@@ -51,7 +51,7 @@ final class HrM01CatalogHttpJourneyTest extends WebTestCase
             'S08' => ['vacations', 'vacations'],
             'S09' => ['incapacities', 'incapacities'],
             'S10' => ['evaluations', 'evaluations'],
-            'S11' => ['employee-portal', 'entries'],
+            'S11' => ['employee-portal', 'items'],
         ];
     }
 
