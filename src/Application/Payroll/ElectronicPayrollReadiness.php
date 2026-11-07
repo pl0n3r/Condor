@@ -20,6 +20,14 @@ final class ElectronicPayrollReadiness
         ...self::REQUIRED_FIELDS, 'request_send',
     ];
 
+    // Only canonical, invented fixtures are accepted. A typed prefix alone
+    // cannot prove that a suffix is not a real personal identifier.
+    private const FIXTURE_CATALOG = [
+        'tenant' => ['fixture:tenant/demo', 'fixture:tenant/foreign'],
+        'company' => ['fixture:company/demo', 'fixture:company/foreign'],
+        'document' => ['fixture:document/demo', 'fixture:document/example'],
+    ];
+
     /**
      * All actor scope and permission arguments MUST come from trusted server
      * authentication/authorization, never from the submitted fixture. This pure
@@ -100,6 +108,6 @@ final class ElectronicPayrollReadiness
     private static function syntheticRef(mixed $value, string $kind): bool
     {
         return is_string($value)
-            && preg_match('~^fixture:'.preg_quote($kind, '~').'/[A-Za-z0-9_-]{1,60}$~D', $value) === 1;
+            && in_array($value, self::FIXTURE_CATALOG[$kind] ?? [], true);
     }
 }

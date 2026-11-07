@@ -135,6 +135,27 @@ final class ElectronicPayrollReadinessTest extends TestCase
         }
     }
 
+    public function testRejectsRealLookingIdentifiersEvenWithFixturePrefix(): void
+    {
+        foreach ([
+            ['synthetic_document_ref', 'fixture:document/123456789'],
+            ['synthetic_document_ref', 'fixture:document/real_123'],
+            ['tenant_ref', 'fixture:tenant/987654321'],
+            ['company_ref', 'fixture:company/900123456'],
+        ] as [$field, $reference]) {
+            $payload = self::syntheticInput();
+            $payload[$field] = $reference;
+            $result = ElectronicPayrollReadiness::plan(
+                $payload, self::TENANT, self::COMPANY, true,
+            );
+            self::assertAlwaysDisabled($result);
+            self::assertContains('INVALID_SYNTHETIC_REFERENCE', $result['errors']);
+            self::assertStringNotContainsString(
+                $reference, json_encode($result, JSON_THROW_ON_ERROR),
+            );
+        }
+    }
+
     public function testUnexpectedFieldsCannotEnablePublication(): void
     {
         $payload = self::syntheticInput();
