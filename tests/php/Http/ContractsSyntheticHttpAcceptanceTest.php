@@ -49,7 +49,7 @@ final class ContractsSyntheticHttpAcceptanceTest extends WebTestCase
 
         $baseA = '/api/v1/branches/'.$branchA->id().'/contracts';
         $client->request('GET', $baseA);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(401);
         $client->loginUser($ownerA);
         $csrf = self::csrf($client);
 
