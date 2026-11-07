@@ -37,14 +37,27 @@ function fixturePlugin() {
         "window.renderFinanceCompliance = (name, props) => root.render(React.createElement(modules[name], props));",
       ].join('\n');
     },
-    configureServer(server) {
-      server.middlewares.use('/__sidepanel_fixture__', (req, res, next) => {
-        if (req.url && req.url !== '/') return next();
-        const html = '<!doctype html><html lang="es"><body><div id="condor-admin-root" data-access-token="fixture-csrf"></div><main id="root"></main><script type="module" src="/__sidepanel_entry__.js"></script></body></html>';
-        server.transformIndexHtml('/__sidepanel_fixture__', html).then(transformed => {
-          res.setHeader('Content-Type', 'text/html; charset=utf-8');
-          res.end(transformed);
-        }).catch(next);
+    configureServer(devServer) {
+      const root = '/__sidepanel_fixture__';
+      devServer.middlewares.use(root, async (request, response, next) => {
+        if (request.url && request.url !== '/') {
+          next();
+          return;
+        }
+        const template = [
+          '<!doctype html><html lang="es"><body>',
+          '<div id="condor-admin-root" data-access-token="fixture-csrf"></div>',
+          '<main id="root"></main>',
+          '<script type="module" src="/__sidepanel_entry__.js"></script>',
+          '</body></html>',
+        ].join('');
+        try {
+          const document = await devServer.transformIndexHtml(root, template);
+          response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          response.end(document);
+        } catch (failure) {
+          next(failure);
+        }
       });
     },
   };
@@ -74,18 +87,25 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
   test.describe.configure({ mode: 'serial' });
 
   test.beforeAll(async () => {
-    vite = await createServer({
+    const options = {
       configFile: false,
       root: process.cwd(),
-      plugins: [react(), fixturePlugin()],
-      server: { host: '127.0.0.1', port: 0 },
       appType: 'custom',
-    });
+      plugins: [fixturePlugin(), react()],
+      server: { host: '127.0.0.1', port: 0, strictPort: false },
+    };
+    vite = await createServer(options);
     await vite.listen();
-    origin = 'http://127.0.0.1:' + vite.httpServer.address().port;
+    const boundPort = vite.httpServer.address().port;
+    origin = new URL('/__sidepanel_fixture__', 'http://127.0.0.1:' + boundPort).origin;
   });
 
-  test.afterAll(async () => { if (vite) await vite.close(); });
+  test.afterAll(async () => {
+    if (!vite) return;
+    const disposableServer = vite;
+    vite = null;
+    await disposableServer.close();
+  });
 
   async function open(page, name) {
     await page.goto(origin + '/__sidepanel_fixture__');
