@@ -146,34 +146,47 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
     await dialog.getByRole('button', { name: submitName }).click();
   }
 
-  test('AC-01 Finanzas: duplicado accesible dentro del modal; Escape devuelve foco', async ({ page }, testInfo) => {
-    await mockHttp(page, emptyHttp);
-    await open(page, 'finance');
-    const opener = page.getByRole('button', { name: 'Nuevo asiento ilustrativo' });
-    await opener.click();
-    const dialog = page.getByRole('dialog', { name: 'Nuevo asiento ilustrativo' });
-    await exerciseDuplicateCreation(page, opener, dialog, [
-      ['Identificador de laboratorio', 'fixture:finance/demo'],
-      ['Período simulado', 'fixture:period/demo'],
-      ['Concepto simulado', 'fixture:concept/demo'],
-    ], 'Crear borrador ficticio', 'Inspección y control manual');
-    await verifyErrorAndEscape(page, dialog, opener, 'No se guardó', testInfo);
-  });
+  // Un test independiente por módulo, sin duplicar el flujo de creación.
+  const duplicateCreations = [
+    {
+      name: 'AC-01 Finanzas: duplicado accesible dentro del modal; Escape devuelve foco',
+      module: 'finance', opener: 'Nuevo asiento ilustrativo',
+      submit: 'Crear borrador ficticio', detail: 'Inspección y control manual',
+      fields: [
+        ['Identificador de laboratorio', 'fixture:finance/demo'],
+        ['Período simulado', 'fixture:period/demo'],
+        ['Concepto simulado', 'fixture:concept/demo'],
+      ],
+    },
+    {
+      name: 'AC-01 Compliance: referencia duplicada permanece editable y se anuncia en modal',
+      module: 'compliance', opener: 'Nuevo registro ficticio',
+      submit: 'Crear registro de prueba', detail: 'Detalle y revisión',
+      fields: [
+        ['Referencia ficticia', 'fixture:occupational/demo'],
+        ['Evidencia ficticia', 'fixture:evidence/demo'],
+        ['Actor ficticio, sin identificación', 'fixture:actor/demo'],
+      ],
+      checkCreatedRow: true,
+    },
+  ];
 
-  test('AC-01 Compliance: referencia duplicada permanece editable y se anuncia en modal', async ({ page }, testInfo) => {
-    await mockHttp(page, emptyHttp);
-    await open(page, 'compliance');
-    const opener = page.getByRole('button', { name: 'Nuevo registro ficticio' });
-    await opener.click();
-    const dialog = page.getByRole('dialog', { name: 'Nuevo registro ficticio' });
-    await exerciseDuplicateCreation(page, opener, dialog, [
-      ['Referencia ficticia', 'fixture:occupational/demo'],
-      ['Evidencia ficticia', 'fixture:evidence/demo'],
-      ['Actor ficticio, sin identificación', 'fixture:actor/demo'],
-    ], 'Crear registro de prueba', 'Detalle y revisión');
-    await verifyErrorAndEscape(page, dialog, opener, 'No se guardó', testInfo);
-    await expect(page.getByRole('button', { name: /fixture:occupational\/demo/ })).toBeVisible();
-  });
+  for (const scenario of duplicateCreations) {
+    test(scenario.name, async ({ page }, testInfo) => {
+      await mockHttp(page, emptyHttp);
+      await open(page, scenario.module);
+      const opener = page.getByRole('button', { name: scenario.opener });
+      await opener.click();
+      const dialog = page.getByRole('dialog', { name: scenario.opener });
+      await exerciseDuplicateCreation(
+        page, opener, dialog, scenario.fields, scenario.submit, scenario.detail,
+      );
+      await verifyErrorAndEscape(page, dialog, opener, 'No se guardó', testInfo);
+      if (scenario.checkCreatedRow) {
+        await expect(page.getByRole('button', { name: /fixture:occupational\/demo/ })).toBeVisible();
+      }
+    });
+  }
 
   // Las cuatro rutas de creación HTTP comparten el mismo contrato accesible.
   // Cada caso sigue siendo una prueba independiente con captura en claro/oscuro.
