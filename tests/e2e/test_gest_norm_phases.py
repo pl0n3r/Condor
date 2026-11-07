@@ -76,10 +76,10 @@ final class GestNormPhasesSyntheticHttpTest extends WebTestCase
             NormativeApplicability::evaluate($rule, $unknown, $reference)['kind']);
         foreach ([
             [...$rule, 'approved' => false],
-            [...$rule, 'reviewer_ref' => 'UNKNOWN'],
+            [...$rule, 'reviewer_ref' => ''],
             [...$rule, 'effective_until' => '2026-04-01'],
             [...$rule, 'verified_on' => '2027-01-01'],
-            [...$rule, 'source' => [...$rule['source'], 'version' => 'UNKNOWN']],
+            [...$rule, 'source' => [...$rule['source'], 'version' => '']],
             [...$rule, 'source' => [...$rule['source'], 'kind' => 'unverified']],
         ] as $untrusted) {
             self::assertSame('REQUIERE_REVISION',
