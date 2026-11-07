@@ -1,241 +1,274 @@
 /// <reference types="vite/client" />
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
-/**
- * M04 Nómina: demostración exclusivamente sintética en memoria local.
- * No calcula obligaciones legales, no ejecuta pagos ni tiene auditoría oficial.
- */
-type PayrollState = 'BORRADOR' | 'PENDIENTE_REVISION' | 'REVISION_EN_CURSO';
-type PayrollRecord = Readonly<{
-  reference: string;
+/** M04: interfaz de registros persistidos, no activa nómina ni pagos reales. */
+export type PayrollRecord = Readonly<{
+  ref: string;
+  tenantId: string;
+  companyId: string;
+  employeeRef: string;
+  periodRef: string;
+  state: 'BORRADOR' | 'EN_REVISION';
+  version: number;
+}>;
+type Result = { status: 'disabled' | 'denied' | 'error' }
+  | { status: 'ready'; records: PayrollRecord[] }
+  | { status: 'ready'; record: PayrollRecord };
+
+export type PayrollRequest = Readonly<{
+  enabled: boolean;
+  allowed: boolean;
   tenantId: string;
   companyId: string;
   branchId: string;
-  periodRef: string;
-  employeeRef: string;
-  conceptRef: string;
-  state: PayrollState;
-}>;
-type AuditEvent = Readonly<{
-  scope: string;
-  reference: string;
-  operation: 'created' | 'viewed' | 'review_requested' | 'review_started';
+  method?: 'GET' | 'POST' | 'PATCH';
+  ref?: string;
+  employeeRef?: string;
+  periodRef?: string;
+  state?: PayrollRecord['state'];
+  expectedVersion?: number;
+  csrf?: string;
 }>;
 type Props = Readonly<{
+  enabled: boolean;
   tenantId: string;
   companyId: string;
   branchId: string;
   permissions: string[];
+  csrfToken: string;
 }>;
 
-const payrollRefPattern = /^fixture:payroll\/[a-z][a-z0-9_-]{0,47}$/;
-const periodRefPattern = /^fixture:period\/[a-z][a-z0-9_-]{0,47}$/;
-const employeeRefPattern = /^fixture:employee\/[a-z][a-z0-9_-]{0,47}$/;
-const conceptRefPattern = /^fixture:concept\/[a-z][a-z0-9_-]{0,47}$/;
-const states: PayrollState[] = ['BORRADOR', 'PENDIENTE_REVISION', 'REVISION_EN_CURSO'];
+const opaque = /^[a-z][a-z0-9_-]{0,63}$/;
 
-function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
-  const hasCompany = companyId !== '__unassigned__';
-  const canView = hasCompany && permissions.includes('payroll.view');
-  const canCreate = canView && permissions.includes('payroll.create');
-  const canReview = canView && permissions.includes('payroll.review');
-  const scope = tenantId + '|' + companyId + '|' + branchId;
-  const [records, setRecords] = useState<PayrollRecord[]>([]);
-  const [events, setEvents] = useState<AuditEvent[]>([]);
-  const [reference, setReference] = useState('');
-  const [periodRef, setPeriodRef] = useState('');
-  const [employeeRef, setEmployeeRef] = useState('');
-  const [conceptRef, setConceptRef] = useState('');
-  const [selected, setSelected] = useState('');
-  const [panel, setPanel] = useState<'create' | 'detail' | null>(null);
-  const [search, setSearch] = useState('');
-  const [stateFilter, setStateFilter] = useState<'TODOS' | PayrollState>('TODOS');
-  const [nextAction, setNextAction] = useState<'SOLICITAR_REVISION' | 'INICIAR_REVISION'>('SOLICITAR_REVISION');
-  const [notice, setNotice] = useState('');
-
-  function audit(item: string, operation: AuditEvent['operation']) {
-    setEvents(previous => [...previous, { scope, reference: item, operation }].slice(-100));
-  }
-
-  function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!canCreate
-      || !payrollRefPattern.test(reference)
-      || !periodRefPattern.test(periodRef)
-      || !employeeRefPattern.test(employeeRef)
-      || !conceptRefPattern.test(conceptRef)
-      || records.length >= 100
-      || records.some(row => row.reference === reference
-        && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId)) {
-      setNotice('No se guardó: permiso insuficiente, duplicado o referencia no ficticia. Usa fixture:.../demo.');
-      return;
-    }
-
-    const record: PayrollRecord = {
-      reference, tenantId, companyId, branchId, periodRef, employeeRef, conceptRef,
-      state: 'BORRADOR',
-    };
-    setRecords(previous => [...previous, record]);
-    audit(reference, 'created');
-    setSelected(reference); setPanel('detail');
-    setReference('');
-    setPeriodRef('');
-    setEmployeeRef('');
-    setConceptRef('');
-    setNotice('Borrador de nómina ficticio creado solo en memoria. Sin efecto legal.');
-  }
-
-  function view(item: string) {
-    if (!canView || !payrollRefPattern.test(item)
-      || !records.some(row => row.reference === item
-        && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId)) {
-      return;
-    }
-    setSelected(item); setPanel('detail');
-    audit(item, 'viewed');
-  }
-
-  function changeState(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const record = records.find(row => row.reference === selected
-      && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId);
-    const expected = nextAction === 'SOLICITAR_REVISION' ? 'BORRADOR' : 'PENDIENTE_REVISION';
-    if (!canReview || !payrollRefPattern.test(selected) || !record || record.state !== expected) {
-      setNotice('No se cambió el estado: falta permiso, selección o transición válida.');
-      return;
-    }
-    const next: PayrollState = nextAction === 'SOLICITAR_REVISION'
-      ? 'PENDIENTE_REVISION' : 'REVISION_EN_CURSO';
-    setRecords(previous => previous.map(row => row.reference === selected
-      && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId
-      ? { ...row, state: next } : row));
-    audit(selected, nextAction === 'SOLICITAR_REVISION' ? 'review_requested' : 'review_started');
-    setNotice('Transición ficticia explícita registrada. No se aprueba, paga ni cierra nada.');
-  }
-
-  if (!canView) return <section id="payroll-management" className="catalog-panel ui-page" aria-label="Nómina sintética">
-    <PageHeader title="Nómina · simulador de empresa" />
-    <p role="alert">Acceso denegado: no hay permiso de nómina o razón social activa.</p>
-  </section>;
-
-  const scoped = records.filter(row => row.tenantId === tenantId
-    && row.companyId === companyId && row.branchId === branchId);
-  const visible = scoped.filter(row =>
-    (stateFilter === 'TODOS' || row.state === stateFilter)
-    && (search === '' || row.reference.includes(search.toLowerCase().trim())));
-  const current = scoped.find(row => row.reference === selected);
-
-  return <section id="payroll-management" className="catalog-panel ui-page" aria-label="Nómina sintética">
-    <PageHeader title="Nómina · simulador de empresa"
-      description="Operación exclusivamente en memoria, disponible solo en construcción."
-      actions={canCreate ? <button type="button" className="button" onClick={() => setPanel('create')}>
-        Crear borrador sintético
-      </button> : undefined} />
-    <p role="alert">
-      SOLO DATOS FICTICIOS. Sin valor legal, tributario ni laboral.
-      No representa liquidación, pago, desprendible oficial ni auditoría de servidor.
-    </p>
-    {notice && <output role="status" aria-live="polite">{notice}</output>}
-    <MetricStrip label="Indicadores de nómina sintética" items={[
-      { label: 'Periodos y novedades', value: scoped.length },
-      { label: 'Borradores', value: scoped.filter(row => row.state === 'BORRADOR').length },
-      { label: 'En revisión', value: scoped.filter(row => row.state !== 'BORRADOR').length },
-    ]} />
-    <Card title="Periodos y novedades de demostración">
-      <Toolbar trailing={<output aria-live="polite">{visible.length} resultados</output>}>
-        <label>Filtrar por referencia
-          <input type="search" aria-label="Filtrar nóminas ficticias" value={search}
-            onChange={event => setSearch(event.target.value)} />
-        </label>
-        <label>Estado
-          <select aria-label="Filtrar por estado" value={stateFilter}
-            onChange={event => setStateFilter(event.target.value as typeof stateFilter)}>
-            <option value="TODOS">Todos</option>
-            {states.map(state => <option key={state} value={state}>{state}</option>)}
-          </select>
-        </label>
-      </Toolbar>
-      <DataTable<PayrollRecord> caption="Nóminas de demostración por empresa y sede"
-        rows={visible} rowKey={row => row.reference}
-        onOpen={row => view(row.reference)}
-        columns={[
-          { key: 'reference', header: 'Referencia', render: row => row.reference },
-          { key: 'period', header: 'Periodo', render: row => row.periodRef },
-          { key: 'employee', header: 'Colaborador', render: row => row.employeeRef },
-          { key: 'state', header: 'Estado', render: row =>
-            <StatusPill tone={row.state === 'BORRADOR' ? 'neutral'
-              : row.state === 'PENDIENTE_REVISION' ? 'warn' : 'info'}>{row.state}</StatusPill> },
-        ]}
-        empty={<p role="status">Sin nóminas ficticias para este filtro.</p>} />
-    </Card>
-    <Card title="Bitácora de demostración (no oficial)">
-      <p className="muted">Los permisos y la auditoría de servidor son obligatorios para una implementación real.</p>
-      {events.filter(row => row.scope === scope).length === 0
-        ? <p role="status">Sin operaciones de prueba.</p>
-        : <ul>{events.filter(row => row.scope === scope).map((row, index) => (
-          <li key={index}>{row.operation} · {row.reference}</li>
-        ))}</ul>}
-    </Card>
-    <SidePanel open={panel === 'create' && canCreate} title="Crear borrador sintético"
-      onClose={() => setPanel(null)}>
-      <form className="catalog-editor" onSubmit={create}>
-        <label>Referencia ficticia
-          <input required maxLength={64} pattern="fixture:payroll/[a-z][a-z0-9_\-]{0,47}"
-            placeholder="fixture:payroll/demo" value={reference}
-            onChange={event => setReference(event.target.value)} />
-        </label>
-        <label>Periodo ficticio
-          <input required maxLength={64} pattern="fixture:period/[a-z][a-z0-9_\-]{0,47}"
-            placeholder="fixture:period/demo" value={periodRef}
-            onChange={event => setPeriodRef(event.target.value)} />
-        </label>
-        <label>Colaborador ficticio (sin nombres ni identificaciones)
-          <input required maxLength={64} pattern="fixture:employee/[a-z][a-z0-9_\-]{0,47}"
-            placeholder="fixture:employee/demo" value={employeeRef}
-            onChange={event => setEmployeeRef(event.target.value)} />
-        </label>
-        <label>Concepto ficticio (sin importes reales)
-          <input required maxLength={64} pattern="fixture:concept/[a-z][a-z0-9_\-]{0,47}"
-            placeholder="fixture:concept/demo" value={conceptRef}
-            onChange={event => setConceptRef(event.target.value)} />
-        </label>
-        <button type="submit">Crear borrador ficticio</button>
-      </form>
-    </SidePanel>
-    <SidePanel open={panel === 'detail' && !!current} title="Detalle y revisión de prueba"
-      onClose={() => setPanel(null)}>
-      {current ? <>
-        <dl>
-          <dt>Referencia</dt><dd>{current.reference}</dd>
-          <dt>Periodo</dt><dd>{current.periodRef}</dd>
-          <dt>Colaborador</dt><dd>{current.employeeRef}</dd>
-          <dt>Concepto</dt><dd>{current.conceptRef}</dd>
-          <dt>Estado</dt><dd>
-            <StatusPill tone={current.state === 'BORRADOR' ? 'neutral' : 'info'}>{current.state}</StatusPill>
-          </dd>
-        </dl>
-        {canReview && current.state !== 'REVISION_EN_CURSO' && (
-          <form className="catalog-editor" onSubmit={changeState}>
-            <label>Acción explícita de prueba
-              <select aria-label="Acción de revisión" value={nextAction}
-                onChange={event => setNextAction(event.target.value as typeof nextAction)}>
-                <option value="SOLICITAR_REVISION">Solicitar revisión</option>
-                <option value="INICIAR_REVISION">Iniciar revisión pendiente</option>
-              </select>
-            </label>
-            <button type="submit">Registrar transición ficticia explícita</button>
-          </form>
-        )}
-        <p className="muted">Ningún estado se aprueba, liquida, paga o cierra automáticamente.</p>
-      </> : <p role="status">Selecciona una nómina ficticia para consultar su detalle.</p>}
-    </SidePanel>
-  </section>;
+function normalizeRow(value: unknown, tenant: string, company: string): PayrollRecord | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (row.tenant_id !== tenant || row.company_id !== company
+    || typeof row.record_ref !== 'string' || !opaque.test(row.record_ref)
+    || typeof row.employee_ref !== 'string' || !opaque.test(row.employee_ref)
+    || typeof row.period_ref !== 'string' || !opaque.test(row.period_ref)
+    || (row.state !== 'BORRADOR' && row.state !== 'EN_REVISION')) return null;
+  const revision = Number(row.version);
+  if (!Number.isInteger(revision) || revision < 1 || revision > 1_000_000) return null;
+  return { ref: row.record_ref, tenantId: tenant, companyId: company,
+    employeeRef: row.employee_ref, periodRef: row.period_ref,
+    state: row.state, version: revision };
 }
 
-/** El import no activa la pantalla en un bundle de producción. */
+/** Fail-closed: sin flag/permiso/CSRF/scope válido no se emite HTTP. */
+export async function payrollRequest(options: PayrollRequest, transport: typeof fetch = fetch): Promise<Result> {
+  if (!options.enabled) return { status: 'disabled' };
+  if (!options.allowed) return { status: 'denied' };
+  if (!options.branchId || !options.tenantId || !options.companyId
+    || options.companyId === '__unassigned__') return { status: 'denied' };
+  const method = options.method ?? 'GET';
+  if (options.ref !== undefined && !opaque.test(options.ref)) return { status: 'error' };
+  if (method === 'POST' && (!options.csrf || !options.ref || !options.employeeRef
+    || !options.periodRef || !opaque.test(options.employeeRef)
+    || !opaque.test(options.periodRef))) return { status: 'error' };
+  if (method === 'PATCH' && (!options.csrf || !options.ref
+    || !['BORRADOR', 'EN_REVISION'].includes(options.state ?? '')
+    || !Number.isInteger(options.expectedVersion)
+    || (options.expectedVersion ?? 0) < 1)) return { status: 'error' };
+  if (method !== 'GET' && method !== 'POST' && method !== 'PATCH') return { status: 'error' };
+  const endpoint = '/api/v1/branches/' + encodeURIComponent(options.branchId) + '/payroll/real-records';
+  const url = options.ref && method !== 'POST'
+    ? endpoint + '/' + encodeURIComponent(options.ref) + (method === 'PATCH' ? '/state' : '') : endpoint;
+  const body = method === 'POST' ? { record_ref: options.ref,
+    employee_ref: options.employeeRef, period_ref: options.periodRef }
+    : { state: options.state, expected_version: options.expectedVersion };
+
+  try {
+    const response = await transport(url, {
+      method, credentials: 'same-origin', cache: 'no-store',
+      headers: { Accept: 'application/json', ...(method === 'GET' ? {}
+        : { 'Content-Type': 'application/json', 'X-CSRF-Token': options.csrf ?? '' }) },
+      ...(method === 'GET' ? {} : { body: JSON.stringify(body) }),
+    });
+    if (response.status === 401 || response.status === 403) return { status: 'denied' };
+    if (response.status === 404) return { status: 'disabled' };
+    if (!response.ok) return { status: 'error' };
+    const payload: unknown = await response.json();
+    if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return { status: 'error' };
+    const parsed = payload as Record<string, unknown>;
+    if (method === 'GET' && options.ref === undefined) {
+      if (!Array.isArray(parsed.records) || parsed.records.length > 100) return { status: 'error' };
+      const rows = parsed.records.map(item => normalizeRow(item, options.tenantId, options.companyId));
+      if (rows.some(item => item === null)) return { status: 'error' };
+      const safeRows = rows as PayrollRecord[];
+      if (new Set(safeRows.map(row => row.ref)).size !== safeRows.length) return { status: 'error' };
+      return { status: 'ready', records: safeRows };
+    }
+    const record = normalizeRow(parsed.record, options.tenantId, options.companyId);
+    if (!record || (options.ref && record.ref !== options.ref)) return { status: 'error' };
+    return { status: 'ready', record };
+  } catch {
+    return { status: 'error' };
+  }
+}
+
 export function PayrollManagement(props: Props) {
-  if (!import.meta.env.DEV) return null;
-  return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId}
-    {...props} />;
+  const { enabled, tenantId, companyId, branchId, permissions, csrfToken } = props;
+  const canView = permissions.includes('users.view') && companyId !== '__unassigned__';
+  const canCreate = canView && permissions.includes('users.create');
+  const canUpdate = canView && permissions.includes('users.update');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error' | 'denied' | 'disabled'>('loading');
+  const [rows, setRows] = useState<PayrollRecord[]>([]);
+  const [notice, setNotice] = useState('');
+  const [panel, setPanel] = useState<'create' | 'detail' | null>(null);
+  const [selected, setSelected] = useState('');
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<'TODOS' | PayrollRecord['state']>('TODOS');
+  const [ref, setRef] = useState('');
+  const [employee, setEmployee] = useState('');
+  const [period, setPeriod] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!enabled || !canView) return;
+    let mounted = true;
+    setStatus('loading');
+    void payrollRequest({ enabled, allowed: canView, tenantId, companyId, branchId })
+      .then(result => {
+        if (!mounted) return;
+        if (result.status === 'ready' && 'records' in result) {
+          setRows(result.records);
+          setStatus('ready');
+        } else setStatus(result.status === 'ready' ? 'error' : result.status);
+      });
+    return () => { mounted = false; };
+  }, [enabled, canView, tenantId, companyId, branchId]);
+
+  async function create(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    const result = await payrollRequest({ enabled, allowed: canCreate,
+      tenantId, companyId, branchId, method: 'POST', ref, employeeRef: employee,
+      periodRef: period, csrf: csrfToken });
+    setBusy(false);
+    if (result.status === 'ready' && 'record' in result) {
+      setRows(previous => [...previous, result.record]);
+      setSelected(result.record.ref); setPanel('detail'); setStatus('ready');
+      setRef(''); setEmployee(''); setPeriod('');
+      setNotice('Registro guardado. No se ha liquidado ni pagado nómina.');
+    } else {
+      if (result.status === 'denied') setStatus('denied');
+      if (result.status === 'disabled') setStatus('disabled');
+      setNotice('No se creó el registro. Revisa permiso, referencias y conexión.');
+    }
+  }
+
+  async function transition(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const current = rows.find(row => row.ref === selected);
+    if (!current || busy) return;
+    const state = current.state === 'BORRADOR' ? 'EN_REVISION' : 'BORRADOR';
+    setBusy(true);
+    const result = await payrollRequest({ enabled, allowed: canUpdate,
+      tenantId, companyId, branchId, method: 'PATCH', ref: current.ref,
+      state, expectedVersion: current.version, csrf: csrfToken });
+    setBusy(false);
+    if (result.status === 'ready' && 'record' in result) {
+      setRows(previous => previous.map(row => row.ref === result.record.ref ? result.record : row));
+      setNotice('Estado actualizado y versionado en el servidor.');
+    } else {
+      if (result.status === 'denied') setStatus('denied');
+      if (result.status === 'disabled') setStatus('disabled');
+      setNotice('No se pudo guardar la transición. Actualiza el módulo antes de reintentar.');
+    }
+  }
+
+  if (!enabled) return <section id="payroll-management" className="catalog-panel ui-page" aria-label="Nómina">
+    <PageHeader title="Nómina" description="El módulo aún no está habilitado." />
+    <p role="status">La gestión persistente de Nómina permanece desactivada por el servidor. No se han consultado registros.</p>
+  </section>;
+  if (!canView || status === 'denied') return <section id="payroll-management" className="catalog-panel ui-page" aria-label="Nómina">
+    <PageHeader title="Nómina" />
+    <p role="alert">Acceso denegado: se requiere empresa activa y permiso de consulta.</p>
+  </section>;
+  if (status === 'disabled') return <section id="payroll-management" className="catalog-panel ui-page" aria-label="Nómina">
+    <PageHeader title="Nómina" />
+    <p role="alert">El servidor no tiene habilitada esta función.</p>
+  </section>;
+
+  const visible = rows.filter(row => (filter === 'TODOS' || row.state === filter)
+    && [row.ref, row.employeeRef, row.periodRef].some(value =>
+      value.includes(search.trim().toLowerCase())));
+  const current = rows.find(row => row.ref === selected);
+  return <section id="payroll-management" className="catalog-panel ui-page" aria-label="Nómina">
+    <PageHeader title="Nómina" description="Registros internos de nómina por razón social y sede."
+      actions={canCreate ? <button type="button" className="button" onClick={() => setPanel('create')}>Nuevo registro</button> : undefined} />
+    <p className="muted">Referencias opacas únicamente. Esta interfaz no liquida, aprueba ni ejecuta pagos.</p>
+    {notice && <output role="status" aria-live="polite">{notice}</output>}
+    {status === 'loading' && <p role="status">Cargando registros de nómina…</p>}
+    {status === 'error' && <p role="alert">No fue posible cargar los registros. Comprueba tu conexión.</p>}
+    {status === 'ready' && <>
+      <MetricStrip label="Indicadores de nómina" items={[
+        { label: 'Registros', value: rows.length },
+        { label: 'Borradores', value: rows.filter(row => row.state === 'BORRADOR').length },
+        { label: 'En revisión', value: rows.filter(row => row.state === 'EN_REVISION').length },
+      ]} />
+      <Card title="Registros por empresa">
+        <Toolbar trailing={<output aria-live="polite">{visible.length} resultados</output>}>
+          <label>Buscar referencias
+            <input type="search" value={search} onChange={event => setSearch(event.target.value)} />
+          </label>
+          <label>Estado
+            <select value={filter} onChange={event => setFilter(event.target.value as typeof filter)}>
+              <option value="TODOS">Todos</option>
+              <option value="BORRADOR">Borrador</option>
+              <option value="EN_REVISION">En revisión</option>
+            </select>
+          </label>
+        </Toolbar>
+        <DataTable<PayrollRecord> caption="Registros de nómina por razón social"
+          rows={visible} rowKey={row => row.ref}
+          onOpen={row => { setSelected(row.ref); setPanel('detail'); }}
+          columns={[
+            { key: 'ref', header: 'Registro', render: row => row.ref },
+            { key: 'period', header: 'Periodo', render: row => row.periodRef },
+            { key: 'employee', header: 'Colaborador', render: row => row.employeeRef },
+            { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'BORRADOR' ? 'neutral' : 'warn'}>
+              {row.state === 'BORRADOR' ? 'Borrador' : 'En revisión'}
+            </StatusPill> },
+          ]}
+          empty={<p role="status">No hay registros para este filtro.</p>} />
+      </Card>
+    </>}
+    <SidePanel open={panel === 'create' && canCreate && status === 'ready'}
+      title="Nuevo registro de nómina" onClose={() => setPanel(null)}>
+      <form className="catalog-editor" onSubmit={event => void create(event)}>
+        <p className="muted">Utiliza únicamente alias sin datos identificables.</p>
+        <label>Referencia del registro
+          <input required pattern="[a-z][a-z0-9_\-]{0,63}" maxLength={64} value={ref}
+            onChange={event => setRef(event.target.value)} placeholder="registro_demo" />
+        </label>
+        <label>Referencia del colaborador
+          <input required pattern="[a-z][a-z0-9_\-]{0,63}" maxLength={64} value={employee}
+            onChange={event => setEmployee(event.target.value)} placeholder="colaborador_demo" />
+        </label>
+        <label>Periodo
+          <input required pattern="[a-z][a-z0-9_\-]{0,63}" maxLength={64} value={period}
+            onChange={event => setPeriod(event.target.value)} placeholder="periodo_demo" />
+        </label>
+        <button type="submit" disabled={busy}>{busy ? 'Guardando…' : 'Guardar registro'}</button>
+      </form>
+    </SidePanel>
+    <SidePanel open={panel === 'detail' && !!current && status === 'ready'}
+      title="Detalle de nómina" onClose={() => setPanel(null)}>
+      {current ? <>
+        <dl><dt>Registro</dt><dd>{current.ref}</dd>
+          <dt>Periodo</dt><dd>{current.periodRef}</dd>
+          <dt>Colaborador</dt><dd>{current.employeeRef}</dd>
+          <dt>Estado</dt><dd>{current.state === 'BORRADOR' ? 'Borrador' : 'En revisión'}</dd>
+          <dt>Versión auditada</dt><dd>{current.version}</dd></dl>
+        {canUpdate && <form onSubmit={event => void transition(event)}>
+          <button type="submit" disabled={busy}>{busy ? 'Guardando…'
+            : current.state === 'BORRADOR' ? 'Enviar a revisión' : 'Devolver a borrador'}</button>
+        </form>}
+      </> : <p role="status">Selecciona un registro para consultar sus datos.</p>}
+    </SidePanel>
+  </section>;
 }
