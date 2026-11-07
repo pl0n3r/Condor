@@ -1,228 +1,248 @@
+/* Tokens PRIVADOS del administrador, abreviados para conservar el budget raw
+ * de 32 KiB. La API pública de Theme Studio no utiliza estos nombres;
+ * la equivalencia se mantiene entre admin.css y admin-ui.css:
+ * --z0 = --ui-bg
+ * --z1 = --ui-border
+ * --z2 = --ui-border-strong
+ * --z3 = --ui-brand
+ * --z4 = --ui-brand-soft
+ * --z5 = --ui-brand-strong
+ * --z6 = --ui-danger
+ * --z7 = --ui-danger-soft
+ * --z8 = --ui-duration-enter
+ * --z9 = --ui-duration-quick
+ * --za = --ui-ease-out
+ * --zb = --ui-focus
+ * --zc = --ui-gap
+ * --zd = --ui-muted
+ * --ze = --ui-ok
+ * --zf = --ui-ok-soft
+ * --zg = --ui-radius
+ * --zh = --ui-radius-lg
+ * --zi = --ui-surface
+ * --zj = --ui-surface-2
+ * --zk = --ui-text
+ * --zl = --ui-warn
+ * --zm = --ui-warn-soft
+ */
 /* Sistema visual del administrador de Condor (interfaz de operación: precisión, densidad cómoda, familiaridad).
    Se aplica sobre el vocabulario compartido que ya usan todos los módulos (field, button, alert, catalog-*, tenant-*,
    table, status-pill) y sobre los controles nativos de los paneles de laboratorio. Sin recursos externos. */
 
 .admin-shell {
-  --ui-bg: #f3f5f8;
-  --ui-surface: #ffffff;
-  --ui-surface-2: #f8f9fb;
-  --ui-border: #e2e6ed;
-  --ui-border-strong: #c9d0db;
-  --ui-text: #0f1626;
-  --ui-muted: #566073;
-  --ui-brand: #2447e5;
-  --ui-brand-strong: #1b37b8;
-  --ui-brand-soft: #eaeefd;
-  --ui-ok: #17653a;
-  --ui-ok-soft: #e6f4ec;
-  --ui-warn: #8a4b00;
-  --ui-warn-soft: #fff3df;
-  --ui-danger: #b42318;
-  --ui-danger-soft: #fdecea;
-  --ui-focus: #2447e5;
-  --ui-radius: 8px;
-  --ui-radius-lg: 12px;
-  --ui-gap: 16px;
-  background: var(--ui-bg);
-  color: var(--ui-text);
+  --z0: #f3f5f8;
+  --zi: #ffffff;
+  --zj: #f8f9fb;
+  --z1: #e2e6ed;
+  --z2: #c9d0db;
+  --zk: #0f1626;
+  --zd: #566073;
+  --z3: #2447e5;
+  --z5: #1b37b8;
+  --z4: #eaeefd;
+  --ze: #17653a;
+  --zf: #e6f4ec;
+  --zl: #8a4b00;
+  --zm: #fff3df;
+  --z6: #b42318;
+  --z7: #fdecea;
+  --zb: #2447e5;
+  --zg: 8px;
+  --zh: 12px;
+  --zc: 16px;
+  background: var(--z0);
+  color: var(--zk);
   font-size: 0.9375rem;
   line-height: 1.5;
 }
 
 /* ---------- Área de trabajo y tipografía ---------- */
-.admin-shell .workspace { background: var(--ui-bg); padding: clamp(20px, 3vw, 40px); max-width: 1280px; }
-.admin-shell .workspace { display: flex; flex-direction: column; gap: 20px; }
-.admin-shell .workspace > .eyebrow { display: none; }
-.admin-shell .workspace h1 { font-size: 1.75rem; line-height: 1.15; letter-spacing: -0.02em; font-weight: 700; margin: 4px 0 0; text-wrap: balance; }
-.admin-shell .workspace h2 { font-size: 1.125rem; line-height: 1.3; letter-spacing: -0.01em; font-weight: 650; margin: 0; text-wrap: balance; }
-.admin-shell .workspace h3 { font-size: 1rem; line-height: 1.35; font-weight: 650; margin: 0; }
-.admin-shell .workspace p { margin: 0; text-wrap: pretty; max-width: 72ch; }
-.admin-shell .workspace .muted, .admin-shell .muted { color: var(--ui-muted); }
-.admin-shell .eyebrow { display: block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em; color: var(--ui-muted); text-transform: none; }
-.admin-shell .workspace h1 + .muted, .admin-shell .workspace h2 + .muted, .admin-shell .workspace h2 + p { margin-top: 4px; }
-.admin-shell .workspace strong { font-weight: 650; }
-.admin-shell .workspace output, .admin-shell .workspace small { font-size: 0.8125rem; }
-.admin-shell .workspace code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em; background: var(--ui-surface-2); border: 1px solid var(--ui-border); border-radius: 4px; padding: 1px 5px; }
+@scope (.admin-shell) {
+.workspace { background: var(--z0); padding: clamp(20px, 3vw, 40px); max-width: 1280px; }
+.workspace { display: flex; flex-direction: column; gap: 20px; }
+.workspace > .eyebrow { display: none; }
+:scope .workspace h1 { font-size: 1.75rem; line-height: 1.15; letter-spacing: -0.02em; font-weight: 700; margin: 4px 0 0; text-wrap: balance; }
+.workspace h2 { font-size: 1.125rem; line-height: 1.3; letter-spacing: -0.01em; font-weight: 650; margin: 0; text-wrap: balance; }
+.workspace h3 { font-size: 1rem; line-height: 1.35; font-weight: 650; margin: 0; }
+.workspace p { margin: 0; text-wrap: pretty; max-width: 72ch; }
+.workspace .muted, .muted { color: var(--zd); }
+.eyebrow { display: block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em; color: var(--zd); text-transform: none; }
+.workspace h1 + .muted, .workspace h2 + .muted, .workspace h2 + p { margin-top: 4px; }
+.workspace strong { font-weight: 650; }
+.workspace output, .workspace small { font-size: 0.8125rem; }
+.workspace code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em; background: var(--zj); border: 1px solid var(--z1); border-radius: 4px; padding: 1px 5px; }
+}
 
 /* ---------- Paneles y tarjetas: una sola elevación (borde), sin acentos de color ---------- */
-.admin-shell .workspace > section,
-.admin-shell .catalog-panel,
-.admin-shell .platform-section {
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border);
-  border-top: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-lg);
+@scope (.admin-shell) {
+.workspace > section, :scope .catalog-panel, .platform-section {
+  background: var(--zi);
+  border: 1px solid var(--z1);
+  border-top: 1px solid var(--z1);
+  border-radius: var(--zh);
   padding: clamp(16px, 2.2vw, 24px);
   box-shadow: none;
   display: grid;
-  gap: var(--ui-gap);
+  gap: var(--zc);
   align-content: start;
 }
-.admin-shell .workspace > section > h2:first-child,
-.admin-shell .workspace > section > h3:first-child { padding-bottom: 12px; border-bottom: 1px solid var(--ui-border); }
-.admin-shell .catalog-card,
-.admin-shell .tenant-card,
-.admin-shell .foundation-grid article {
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border);
-  border-top: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-lg);
+.workspace > section > h2:first-child, .workspace > section > h3:first-child { padding-bottom: 12px; border-bottom: 1px solid var(--z1); }
+:scope .catalog-card, :scope .tenant-card, :scope .foundation-grid article {
+  background: var(--zi);
+  border: 1px solid var(--z1);
+  border-top: 1px solid var(--z1);
+  border-radius: var(--zh);
   padding: 16px;
   box-shadow: none;
 }
-.admin-shell .catalog-card, .admin-shell .catalog-editor { background: var(--ui-surface-2); }
-.admin-shell .foundation-grid { gap: var(--ui-gap); margin-top: 0; }
-.admin-shell .foundation-grid article strong { font-size: 0.8125rem; font-weight: 600; color: var(--ui-muted); }
-.admin-shell .overview-value { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.admin-shell .overview-detail { color: var(--ui-muted); font-size: 0.8125rem; }
-.admin-shell .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.admin-shell .section-heading > div { display: grid; gap: 2px; }
+:scope .catalog-card, .catalog-editor { background: var(--zj); }
+.foundation-grid { gap: var(--zc); margin-top: 0; }
+.foundation-grid article strong { font-size: 0.8125rem; font-weight: 600; color: var(--zd); }
+:scope .overview-value { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+:scope .overview-detail { color: var(--zd); font-size: 0.8125rem; }
+.section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.section-heading > div { display: grid; gap: 2px; }
+}
 
 /* ---------- Formularios: etiqueta arriba, control de 40 px, foco claro ---------- */
-.admin-shell fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 14px; }
-.admin-shell fieldset > legend, .admin-shell legend { padding: 0; margin: 0 0 4px; font-size: 0.9375rem; font-weight: 650; color: var(--ui-text); }
-.admin-shell form { display: grid; gap: 14px; }
-.admin-shell label, .admin-shell .field { display: grid; gap: 6px; font-size: 0.8125rem; font-weight: 600; color: var(--ui-text); }
-.admin-shell .field { color: var(--ui-text); }
-.admin-shell input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
-.admin-shell select,
-.admin-shell textarea {
-  width: 100%; min-height: 40px; padding: 8px 12px; font: inherit; font-size: 0.9375rem; font-weight: 400; color: var(--ui-text);
-  background-color: var(--ui-surface); border: 1px solid var(--ui-border-strong); border-radius: var(--ui-radius);
+@scope (.admin-shell) {
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 14px; }
+fieldset > legend, legend { padding: 0; margin: 0 0 4px; font-size: 0.9375rem; font-weight: 650; color: var(--zk); }
+form { display: grid; gap: 14px; }
+label, .field { display: grid; gap: 6px; font-size: 0.8125rem; font-weight: 600; color: var(--zk); }
+.field { color: var(--zk); }
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]), select, textarea {
+  width: 100%; min-height: 40px; padding: 8px 12px; font: inherit; font-size: 0.9375rem; font-weight: 400; color: var(--zk);
+  background-color: var(--zi); border: 1px solid var(--z2); border-radius: var(--zg);
   transition: border-color .12s ease, box-shadow .12s ease, background-color .12s ease;
 }
-.admin-shell textarea { min-height: 88px; resize: vertical; line-height: 1.45; }
-.admin-shell select {
+textarea { min-height: 88px; resize: vertical; line-height: 1.45; }
+select {
   appearance: none; padding-right: 36px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23566073' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6.5 8 10.5 12 6.5'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 12px center;
 }
-.admin-shell input::placeholder, .admin-shell textarea::placeholder { color: #7a8499; }
-.admin-shell input:not([type="checkbox"]):not([type="radio"]):hover, .admin-shell select:hover, .admin-shell textarea:hover { border-color: #aab3c2; }
-.admin-shell input:focus-visible, .admin-shell select:focus-visible, .admin-shell textarea:focus-visible {
-  outline: none; border-color: var(--ui-focus); box-shadow: 0 0 0 3px rgba(36, 71, 229, .2);
+input::placeholder, textarea::placeholder { color: #7a8499; }
+input:not([type="checkbox"]):not([type="radio"]):hover, select:hover, textarea:hover { border-color: #aab3c2; }
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: none; border-color: var(--zb); box-shadow: 0 0 0 3px rgba(36, 71, 229, .2);
 }
-.admin-shell input:disabled, .admin-shell select:disabled, .admin-shell textarea:disabled { background: var(--ui-surface-2); color: #8a93a5; cursor: not-allowed; }
-.admin-shell input[aria-invalid="true"], .admin-shell select[aria-invalid="true"] { border-color: var(--ui-danger); }
-.admin-shell input[type="checkbox"], .admin-shell input[type="radio"] { width: 18px; height: 18px; accent-color: var(--ui-brand); margin: 0; }
-.admin-shell label:has(> input[type="checkbox"]), .admin-shell label:has(> input[type="radio"]) { display: flex; align-items: center; gap: 10px; font-weight: 500; }
-.admin-shell input[type="file"] { font: inherit; font-size: 0.875rem; color: var(--ui-muted); }
-.admin-shell input[type="file"]::file-selector-button {
-  min-height: 36px; margin-right: 12px; padding: 0 14px; font: inherit; font-weight: 600; color: var(--ui-text);
-  background: var(--ui-surface); border: 1px solid var(--ui-border-strong); border-radius: var(--ui-radius); cursor: pointer;
+input:disabled, select:disabled, textarea:disabled { background: var(--zj); color: #8a93a5; cursor: not-allowed; }
+input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--z6); }
+input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-color: var(--z3); margin: 0; }
+label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) { display: flex; align-items: center; gap: 10px; font-weight: 500; }
+input[type="file"] { font: inherit; font-size: 0.875rem; color: var(--zd); }
+input[type="file"]::file-selector-button {
+  min-height: 36px; margin-right: 12px; padding: 0 14px; font: inherit; font-weight: 600; color: var(--zk);
+  background: var(--zi); border: 1px solid var(--z2); border-radius: var(--zg); cursor: pointer;
 }
-.admin-shell .catalog-form-grid, .admin-shell .platform-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 16px; }
-.admin-shell .catalog-form-wide { grid-column: 1 / -1; }
-.admin-shell .catalog-actions, .admin-shell .platform-form-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.catalog-form-grid, .platform-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 16px; }
+.catalog-form-wide { grid-column: 1 / -1; }
+.catalog-actions, .platform-form-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+}
 
 /* ---------- Botones: primario, secundario, discreto; cada estado definido ---------- */
-.admin-shell .workspace button, .admin-shell .workspace .button, .admin-shell .workspace a.button {
+@scope (.admin-shell) {
+.workspace button, .workspace .button, .workspace a.button {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px;
   font: inherit; font-size: 0.9rem; font-weight: 600; line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer;
-  color: var(--ui-text); background: var(--ui-surface); border: 1px solid var(--ui-border-strong); border-radius: var(--ui-radius);
+  color: var(--zk); background: var(--zi); border: 1px solid var(--z2); border-radius: var(--zg);
   transition: background-color .12s ease, border-color .12s ease, color .12s ease, transform .12s ease;
 }
-.admin-shell .workspace .button:not(.button-secondary):not(.button-quiet):not(.button-context),
-.admin-shell .workspace button[type="submit"]:not(.button-secondary):not(.button-quiet) {
-  color: #fff; background: var(--ui-brand); border-color: var(--ui-brand);
+.workspace .button:not(.button-secondary):not(.button-quiet):not(.button-context), .workspace button[type="submit"]:not(.button-secondary):not(.button-quiet) {
+  color: #fff; background: var(--z3); border-color: var(--z3);
 }
-.admin-shell .workspace .button:not(.button-secondary):not(.button-quiet):not(.button-context):hover,
-.admin-shell .workspace button[type="submit"]:not(.button-secondary):not(.button-quiet):hover { background: var(--ui-brand-strong); border-color: var(--ui-brand-strong); }
-.admin-shell .workspace .button-secondary, .admin-shell .workspace .button-quiet, .admin-shell .workspace button:not(.button):not([type="submit"]) { color: var(--ui-text); background: var(--ui-surface); border-color: var(--ui-border-strong); width: auto; }
-.admin-shell .workspace .button-secondary:hover, .admin-shell .workspace .button-quiet:hover, .admin-shell .workspace button:not(.button):not([type="submit"]):hover { background: var(--ui-surface-2); border-color: #aab3c2; }
-.admin-shell .workspace .button:active, .admin-shell .workspace button:active { transform: scale(0.98); }
-.admin-shell .workspace .button.compact, .admin-shell .workspace button.compact { min-height: 32px; padding: 0 12px; font-size: 0.8125rem; }
-.admin-shell .workspace button:disabled, .admin-shell .workspace .button:disabled, .admin-shell .workspace .button[aria-disabled="true"] { opacity: .55; cursor: not-allowed; transform: none; }
-.admin-shell .workspace button:focus-visible, .admin-shell .workspace .button:focus-visible, .admin-shell a:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
+.workspace .button:not(.button-secondary):not(.button-quiet):not(.button-context):hover, .workspace button[type="submit"]:not(.button-secondary):not(.button-quiet):hover { background: var(--z5); border-color: var(--z5); }
+.workspace .button-secondary, .workspace .button-quiet, .workspace button:not(.button):not([type="submit"]) { color: var(--zk); background: var(--zi); border-color: var(--z2); width: auto; }
+.workspace .button-secondary:hover, .workspace .button-quiet:hover, .workspace button:not(.button):not([type="submit"]):hover { background: var(--zj); border-color: #aab3c2; }
+.workspace .button:active, .workspace button:active { transform: scale(0.98); }
+.workspace .button.compact, .workspace button.compact { min-height: 32px; padding: 0 12px; font-size: 0.8125rem; }
+.workspace button:disabled, .workspace .button:disabled, .workspace .button[aria-disabled="true"] { opacity: .55; cursor: not-allowed; transform: none; }
+.workspace button:focus-visible, .workspace .button:focus-visible, a:focus-visible { outline: 2px solid var(--zb); outline-offset: 2px; }
+}
 
 /* ---------- Avisos, estados y píldoras ---------- */
-.admin-shell .alert { margin: 0; padding: 12px 14px; font-size: 0.875rem; line-height: 1.45; border: 1px solid var(--ui-border); border-radius: var(--ui-radius); background: var(--ui-surface-2); color: var(--ui-text); }
-.admin-shell .alert-error, .admin-shell .catalog-error { background: var(--ui-danger-soft); border-color: #f4c2bd; color: #8c1d14; }
-.admin-shell .alert-success { background: var(--ui-ok-soft); border-color: #b9e0c8; color: var(--ui-ok); }
-.admin-shell .catalog-state, .admin-shell .platform-empty, .admin-shell .catalog-empty, .admin-shell .catalog-variant-empty {
-  padding: 16px; text-align: center; color: var(--ui-muted); font-size: 0.875rem; background: var(--ui-surface-2);
-  border: 1px dashed var(--ui-border-strong); border-radius: var(--ui-radius);
+@scope (.admin-shell) {
+.alert { margin: 0; padding: 12px 14px; font-size: 0.875rem; line-height: 1.45; border: 1px solid var(--z1); border-radius: var(--zg); background: var(--zj); color: var(--zk); }
+.alert-error, .catalog-error { background: var(--z7); border-color: #f4c2bd; color: #8c1d14; }
+.alert-success { background: var(--zf); border-color: #b9e0c8; color: var(--ze); }
+.catalog-state, .platform-empty, .catalog-empty, .catalog-variant-empty {
+  padding: 16px; text-align: center; color: var(--zd); font-size: 0.875rem; background: var(--zj);
+  border: 1px dashed var(--z2); border-radius: var(--zg);
 }
-.admin-shell .status-pill { display: inline-flex; align-items: center; min-height: 22px; padding: 0 9px; font-size: 0.75rem; font-weight: 650; border-radius: 999px; background: var(--ui-brand-soft); color: var(--ui-brand-strong); border: 0; }
+.status-pill { display: inline-flex; align-items: center; min-height: 22px; padding: 0 9px; font-size: 0.75rem; font-weight: 650; border-radius: 999px; background: var(--z4); color: var(--z5); border: 0; }
+}
 
 /* ---------- Tablas ---------- */
-.admin-shell .table-responsive { overflow-x: auto; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
-.admin-shell table { width: 100%; border-collapse: collapse; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
-.admin-shell th { text-align: left; padding: 10px 14px; font-size: 0.75rem; font-weight: 650; color: var(--ui-muted); background: var(--ui-surface-2); border-bottom: 1px solid var(--ui-border); white-space: nowrap; }
-.admin-shell td { padding: 12px 14px; border-bottom: 1px solid var(--ui-border); vertical-align: middle; }
-.admin-shell tbody tr:last-child td { border-bottom: 0; }
-.admin-shell tbody tr:hover td { background: var(--ui-surface-2); }
+@scope (.admin-shell) {
+table { width: 100%; border-collapse: collapse; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+th { text-align: left; padding: 10px 14px; font-size: 0.75rem; font-weight: 650; color: var(--zd); background: var(--zj); border-bottom: 1px solid var(--z1); white-space: nowrap; }
+td { padding: 12px 14px; border-bottom: 1px solid var(--z1); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: var(--zj); }
+}
 
 /* ---------- Listas ---------- */
-.admin-shell .catalog-list, .admin-shell .production-list, .admin-shell .staff-list { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; }
-.admin-shell .catalog-grid, .admin-shell .tenant-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--ui-gap); }
+@scope (.admin-shell) {
+.catalog-list { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.catalog-grid, .tenant-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--zc); }
+}
 
 @media (max-width: 860px) {
-  .admin-shell .workspace { padding: 16px; }
-  .admin-shell .workspace h1 { font-size: 1.5rem; }
+  @scope (.admin-shell) {
+  .workspace { padding: 16px; }
+  :scope .workspace h1 { font-size: 1.5rem; }
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .admin-shell input, .admin-shell select, .admin-shell textarea, .admin-shell .workspace button, .admin-shell .workspace .button { transition: none; }
-  .admin-shell .workspace button:active, .admin-shell .workspace .button:active { transform: none; }
+  @scope (.admin-shell) {
+  input, select, textarea, .workspace button, .workspace .button { transition: none; }
+  .workspace button:active, .workspace .button:active { transform: none; }
+  }
 }
 
 /* ---------- Un módulo por pantalla: cada entrada del menú abre su módulo; el inicio muestra el mapa ---------- */
 /* Los paneles de Platform Owner no usan el selector tenant y siguen visibles. */
 .admin-shell-tenant .workspace > section[id] { display: none; }
 /* Reglas declarativas CSP-safe: no generar una etiqueta style en tiempo de ejecución. */
-.admin-shell-tenant .workspace[data-module="commerce"] > section#commerce,
-.admin-shell-tenant .workspace[data-module="orders"] > section#orders,
-.admin-shell-tenant .workspace[data-module="sales-reports"] > section#sales-reports,
-.admin-shell-tenant .workspace[data-module="reports-downloads"] > section#reports-downloads,
-.admin-shell-tenant .workspace[data-module="customer-service"] > section#customer-service,
-.admin-shell-tenant .workspace[data-module="catalog"] > section#catalog,
-.admin-shell-tenant .workspace[data-module="inventory"] > section#inventory,
-.admin-shell-tenant .workspace[data-module="stock-alerts"] > section#stock-alerts,
-.admin-shell-tenant .workspace[data-module="stock-transfers"] > section#stock-transfers,
-.admin-shell-tenant .workspace[data-module="production"] > section#production,
-.admin-shell-tenant .workspace[data-module="purchasing"] > section#purchasing,
-.admin-shell-tenant .workspace[data-module="assets-management"] > section#assets-management,
-.admin-shell-tenant .workspace[data-module="seo-settings"] > section#seo-settings,
-.admin-shell-tenant .workspace[data-module="employees-management"] > section#employees-management,
-.admin-shell-tenant .workspace[data-module="human-resources-management"] > section#human-resources-management,
-.admin-shell-tenant .workspace[data-module="payroll-management"] > section#payroll-management,
-.admin-shell-tenant .workspace[data-module="contracts-management"] > section#contracts-management,
-.admin-shell-tenant .workspace[data-module="social-security-management"] > section#social-security-management,
-.admin-shell-tenant .workspace[data-module="finance-management"] > section#finance-management,
-.admin-shell-tenant .workspace[data-module="compliance-management"] > section#compliance-management,
-.admin-shell-tenant .workspace[data-module="compliance-evidence-management"] > section#compliance-evidence-management,
-.admin-shell-tenant .workspace[data-module="governance-management"] > section#governance-management,
-.admin-shell-tenant .workspace[data-module="workflows"] > section#workflows,
-.admin-shell-tenant .workspace[data-module="operations-processes"] > section#operations-processes,
-.admin-shell-tenant .workspace[data-module="roles"] > section#roles { display: grid; }
+.admin-shell-tenant :is(.workspace[data-module="commerce"] > section#commerce, .workspace[data-module="orders"] > section#orders, .workspace[data-module="sales-reports"] > section#sales-reports, .workspace[data-module="reports-downloads"] > section#reports-downloads, .workspace[data-module="customer-service"] > section#customer-service, .workspace[data-module="catalog"] > section#catalog, .workspace[data-module="inventory"] > section#inventory, .workspace[data-module="stock-alerts"] > section#stock-alerts, .workspace[data-module="stock-transfers"] > section#stock-transfers, .workspace[data-module="production"] > section#production, .workspace[data-module="purchasing"] > section#purchasing, .workspace[data-module="assets-management"] > section#assets-management, .workspace[data-module="seo-settings"] > section#seo-settings, .workspace[data-module="employees-management"] > section#employees-management, .workspace[data-module="human-resources-management"] > section#human-resources-management, .workspace[data-module="payroll-management"] > section#payroll-management, .workspace[data-module="contracts-management"] > section#contracts-management, .workspace[data-module="social-security-management"] > section#social-security-management, .workspace[data-module="finance-management"] > section#finance-management, .workspace[data-module="compliance-management"] > section#compliance-management, .workspace[data-module="compliance-evidence-management"] > section#compliance-evidence-management, .workspace[data-module="governance-management"] > section#governance-management, .workspace[data-module="workflows"] > section#workflows, .workspace[data-module="operations-processes"] > section#operations-processes, .workspace[data-module="roles"] > section#roles) { display: grid; }
 /* M08: wrapper único, oculto en Inicio y visible sólo al seleccionar Gestión documental. */
-.admin-shell-tenant .workspace[data-module="documents"] > section#documents-module { display: grid; }
-.admin-shell-tenant .workspace:not([data-module="inicio"]) > .foundation-grid,
-.admin-shell-tenant .workspace:not([data-module="inicio"]) > .module-directory { display: none; }
-.admin-shell .module-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; color: var(--ui-muted); margin: 0 0 -8px; }
-.admin-shell .module-breadcrumb a { color: var(--ui-muted); text-decoration: none; }
-.admin-shell .module-breadcrumb a:hover { color: var(--ui-text); text-decoration: underline; }
-.admin-shell .module-breadcrumb strong { color: var(--ui-text); font-weight: 650; }
-.admin-shell .workspace > section.module-directory { background: transparent; border: 0; padding: 0; gap: 16px; display: grid; }
-.admin-shell .workspace > section.module-directory > h2 { padding: 0; border: 0; }
-.admin-shell .module-directory-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; align-items: start; }
-.admin-shell .module-directory-group { background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); padding: 16px 8px 8px; }
-.admin-shell .module-directory-group h3 { padding: 0 8px 10px; font-size: 0.8125rem; font-weight: 650; color: var(--ui-muted); letter-spacing: 0.01em; }
-.admin-shell .module-directory-group ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.admin-shell .module-directory-group a { display: grid; gap: 2px; padding: 10px 12px; border-radius: 8px; text-decoration: none; color: inherit; position: relative; transition: background-color .12s ease; }
-.admin-shell .module-directory-group a:hover { background: var(--ui-surface-2); }
-.admin-shell .module-directory-group a strong { font-size: 0.9375rem; font-weight: 650; }
-.admin-shell .module-directory-group a span { font-size: 0.8125rem; color: var(--ui-muted); }
-.admin-shell .module-directory-group a em { position: absolute; right: 12px; top: 10px; font-style: normal; font-size: 0.6875rem; font-weight: 650; color: var(--ui-warn); background: var(--ui-warn-soft); border-radius: 999px; padding: 1px 8px; }
+@scope (.admin-shell-tenant) {
+.workspace[data-module="documents"] > section#documents-module { display: grid; }
+.workspace:not([data-module="inicio"]) > .foundation-grid, .workspace:not([data-module="inicio"]) > .module-directory { display: none; }
+}
+@scope (.admin-shell) {
+.module-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; color: var(--zd); margin: 0 0 -8px; }
+.module-breadcrumb a { color: var(--zd); text-decoration: none; }
+.module-breadcrumb a:hover { color: var(--zk); text-decoration: underline; }
+.module-breadcrumb strong { color: var(--zk); font-weight: 650; }
+.workspace > section.module-directory { background: transparent; border: 0; padding: 0; gap: 16px; display: grid; }
+.workspace > section.module-directory > h2 { padding: 0; border: 0; }
+.module-directory-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; align-items: start; }
+.module-directory-group { background: var(--zi); border: 1px solid var(--z1); border-radius: var(--zh); padding: 16px 8px 8px; }
+.module-directory-group h3 { padding: 0 8px 10px; font-size: 0.8125rem; font-weight: 650; color: var(--zd); letter-spacing: 0.01em; }
+.module-directory-group ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.module-directory-group a { display: grid; gap: 2px; padding: 10px 12px; border-radius: 8px; text-decoration: none; color: inherit; position: relative; transition: background-color .12s ease; }
+.module-directory-group a:hover { background: var(--zj); }
+.module-directory-group a strong { font-size: 0.9375rem; font-weight: 650; }
+.module-directory-group a span { font-size: 0.8125rem; color: var(--zd); }
+.module-directory-group a em { position: absolute; right: 12px; top: 10px; font-style: normal; font-size: 0.6875rem; font-weight: 650; color: var(--zl); background: var(--zm); border-radius: 999px; padding: 1px 8px; }
+}
 @media (prefers-reduced-motion: reduce) { .admin-shell .module-directory-group a { transition: none; } }
 
 /* ---------- Cabecera de contexto: empresa y sede arriba, búsqueda debajo, luego la ruta y el módulo ---------- */
-.admin-shell .workspace > .workspace-heading:not([role="search"]) { order: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
-.admin-shell .workspace > .workspace-heading[role="search"] { order: 1; max-width: 420px; width: 100%; }
-.admin-shell .workspace > .workspace-heading[role="search"] .field > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.admin-shell .workspace > .module-breadcrumb { order: 2; margin: 0; }
-.admin-shell .workspace > .foundation-grid, .admin-shell .workspace > .module-directory, .admin-shell .workspace > section[id] { order: 3; }
-.admin-shell-tenant .workspace:not([data-module="inicio"]) > .workspace-heading:not([role="search"]) h1 { font-size: 1.125rem; letter-spacing: -0.01em; }
-.admin-shell-tenant .workspace:not([data-module="inicio"]) > .workspace-heading:not([role="search"]) { padding-bottom: 12px; border-bottom: 1px solid var(--ui-border); }
-.admin-shell .workspace-heading .branch-picker { min-width: 240px; }
-.admin-shell .workspace-heading .role-actions { display: flex; gap: 12px; }
+@scope (.admin-shell) {
+.workspace > .workspace-heading:not([role="search"]) { order: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
+.workspace > .workspace-heading[role="search"] { order: 1; max-width: 420px; width: 100%; }
+.workspace > .workspace-heading[role="search"] .field > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.workspace > .module-breadcrumb { order: 2; margin: 0; }
+.workspace > .foundation-grid, .workspace > .module-directory, .workspace > section[id] { order: 3; }
+}
+@scope (.admin-shell-tenant) {
+.workspace:not([data-module="inicio"]) > .workspace-heading:not([role="search"]) h1 { font-size: 1.125rem; letter-spacing: -0.01em; }
+.workspace:not([data-module="inicio"]) > .workspace-heading:not([role="search"]) { padding-bottom: 12px; border-bottom: 1px solid var(--z1); }
+}
+@scope (.admin-shell) {
+.workspace-heading .branch-picker { min-width: 240px; }
+.workspace-heading .role-actions { display: flex; gap: 12px; }
+}
