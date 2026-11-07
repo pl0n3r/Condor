@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
 // M05 es una maqueta: no almacena datos, procesa PILA ni representa trámites reales.
@@ -164,4 +164,249 @@ function Demo({ tenantId, companyId, branchId, permissions }: Props) {
 export function SocialSecurityManagement(props: Props) {
   if (!import.meta.env.DEV) return null;
   return <Demo key={[props.tenantId, props.companyId, props.branchId].join('|')} {...props} />;
+}
+
+/** M05: registros de empresa versionados, sin afiliaciones, pagos o trámites PILA. */
+export type SocialRealRecord = Readonly<{
+  ref: string; tenantId: string; companyId: string;
+  category: 'afiliacion' | 'aporte' | 'novedad' | 'soporte';
+  state: 'PENDIENTE' | 'REQUIERE_REVISION'; version: number;
+}>;
+
+export type SocialRealRequest = Readonly<{
+  enabled: boolean; allowed: boolean;
+  tenantId: string; companyId: string; branchId: string;
+  method?: 'GET' | 'POST' | 'PATCH';
+  ref?: string; category?: SocialRealRecord['category'];
+  state?: SocialRealRecord['state']; expectedVersion?: number; csrf?: string;
+}>;
+
+type SocialRealResult =
+  | { status: 'disabled' | 'denied' | 'error' }
+  | { status: 'ready'; records: SocialRealRecord[] }
+  | { status: 'ready'; record: SocialRealRecord };
+
+type SocialRealProps = Props & { enabled: boolean; csrfToken: string };
+const realSocialRef = /^[a-z][a-z0-9_-]{0,63}$/;
+const socialCategories: SocialRealRecord['category'][] = ['afiliacion', 'aporte', 'novedad', 'soporte'];
+const socialCategoryLabels: Record<SocialRealRecord['category'], string> = {
+  afiliacion: 'Afiliación', aporte: 'Aporte', novedad: 'Novedad', soporte: 'Soporte',
+};
+
+function verifiedSocialRealRow(value: unknown, tenantId: string, companyId: string): SocialRealRecord | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (row.tenant_id !== tenantId || row.company_id !== companyId
+    || typeof row.record_ref !== 'string' || !realSocialRef.test(row.record_ref)
+    || typeof row.category !== 'string'
+    || !socialCategories.includes(row.category as SocialRealRecord['category'])
+    || (row.state !== 'PENDIENTE' && row.state !== 'REQUIERE_REVISION')) return null;
+  const version = Number(row.version);
+  if (!Number.isInteger(version) || version < 1 || version > 1_000_000) return null;
+  return {
+    ref: row.record_ref, tenantId, companyId,
+    category: row.category as SocialRealRecord['category'],
+    state: row.state, version,
+  };
+}
+
+/** FAIL-CLOSED: flag apagado, permiso ausente o scope inválido nunca llegan a fetch. */
+export async function socialSecurityRealRequest(
+  options: SocialRealRequest, transport: typeof fetch = fetch,
+): Promise<SocialRealResult> {
+  if (!options.enabled) return { status: 'disabled' };
+  if (!options.allowed || !options.tenantId || !options.branchId
+    || !options.companyId || options.companyId === '__unassigned__') return { status: 'denied' };
+  const method = options.method ?? 'GET';
+  if (!['GET', 'POST', 'PATCH'].includes(method)
+    || (options.ref !== undefined && !realSocialRef.test(options.ref))) return { status: 'error' };
+  if (method === 'POST' && (!options.csrf || !options.ref || !options.category
+    || !socialCategories.includes(options.category))) return { status: 'error' };
+  if (method === 'PATCH' && (!options.csrf || !options.ref
+    || (options.state !== 'PENDIENTE' && options.state !== 'REQUIERE_REVISION')
+    || !Number.isInteger(options.expectedVersion)
+    || (options.expectedVersion ?? 0) < 1)) return { status: 'error' };
+
+  const root = '/api/v1/branches/' + encodeURIComponent(options.branchId) + '/social-security/records';
+  const url = options.ref && method !== 'POST'
+    ? root + '/' + encodeURIComponent(options.ref) + (method === 'PATCH' ? '/state' : '')
+    : root;
+  const payload = method === 'POST'
+    ? { record_ref: options.ref, category: options.category }
+    : { state: options.state, expected_version: options.expectedVersion };
+  try {
+    const response = await transport(url, {
+      method, credentials: 'same-origin', cache: 'no-store',
+      headers: { Accept: 'application/json', ...(method === 'GET' ? {}
+        : { 'Content-Type': 'application/json', 'X-CSRF-Token': options.csrf ?? '' }) },
+      ...(method === 'GET' ? {} : { body: JSON.stringify(payload) }),
+    });
+    if (response.status === 401 || response.status === 403) return { status: 'denied' };
+    if (response.status === 404) return { status: 'disabled' };
+    if (!response.ok) return { status: 'error' };
+    const body: unknown = await response.json();
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) return { status: 'error' };
+    const data = body as Record<string, unknown>;
+    if (method === 'GET' && options.ref === undefined) {
+      if (!Array.isArray(data.records) || data.records.length > 100) return { status: 'error' };
+      const mapped = data.records.map(item => verifiedSocialRealRow(item, options.tenantId, options.companyId));
+      if (mapped.some(item => item === null)) return { status: 'error' };
+      const rows = mapped as SocialRealRecord[];
+      if (new Set(rows.map(item => item.ref)).size !== rows.length) return { status: 'error' };
+      return { status: 'ready', records: rows };
+    }
+    const record = verifiedSocialRealRow(data.record, options.tenantId, options.companyId);
+    if (record === null || (options.ref && record.ref !== options.ref)) return { status: 'error' };
+    return { status: 'ready', record };
+  } catch { return { status: 'error' }; }
+}
+
+export function SocialSecurityRealManagement({
+  enabled, tenantId, companyId, branchId, permissions, csrfToken,
+}: SocialRealProps) {
+  const canRead = permissions.includes('users.view') && companyId !== '__unassigned__';
+  const canCreate = canRead && permissions.includes('users.create');
+  const canUpdate = canRead && permissions.includes('users.update');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'denied' | 'disabled' | 'error'>('loading');
+  const [rows, setRows] = useState<SocialRealRecord[]>([]);
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [panel, setPanel] = useState<'create' | 'detail' | null>(null);
+  const [selected, setSelected] = useState('');
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<'TODOS' | SocialRealRecord['state']>('TODOS');
+  const [ref, setRef] = useState('');
+  const [category, setCategory] = useState<SocialRealRecord['category']>('afiliacion');
+
+  useEffect(() => {
+    if (!enabled || !canRead) return;
+    let active = true;
+    setStatus('loading');
+    setRows([]);
+    setPanel(null);
+    void socialSecurityRealRequest({ enabled, allowed: canRead, tenantId, companyId, branchId })
+      .then(result => {
+        if (!active) return;
+        if (result.status === 'ready' && 'records' in result) {
+          setRows(result.records);
+          setStatus('ready');
+        } else setStatus(result.status === 'ready' ? 'error' : result.status);
+      });
+    return () => { active = false; };
+  }, [enabled, canRead, tenantId, companyId, branchId]);
+
+  async function create(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || status !== 'ready') return;
+    setBusy(true);
+    const result = await socialSecurityRealRequest({ enabled, allowed: canCreate, tenantId,
+      companyId, branchId, method: 'POST', ref, category, csrf: csrfToken });
+    setBusy(false);
+    if (result.status === 'ready' && 'record' in result) {
+      setRows(previous => [...previous, result.record]);
+      setSelected(result.record.ref);
+      setPanel('detail');
+      setRef('');
+      setNotice('Registro guardado. No se ha tramitado ni pagado seguridad social.');
+    } else {
+      if (result.status === 'denied') setStatus('denied');
+      if (result.status === 'disabled') setStatus('disabled');
+      setNotice('No se pudo crear. Comprueba el permiso, la referencia y la conexión.');
+    }
+  }
+
+  async function advance(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const record = rows.find(row => row.ref === selected);
+    if (!record || busy || status !== 'ready') return;
+    const next = record.state === 'PENDIENTE' ? 'REQUIERE_REVISION' : 'PENDIENTE';
+    setBusy(true);
+    const result = await socialSecurityRealRequest({ enabled, allowed: canUpdate,
+      tenantId, companyId, branchId, method: 'PATCH', ref: record.ref, state: next,
+      expectedVersion: record.version, csrf: csrfToken });
+    setBusy(false);
+    if (result.status === 'ready' && 'record' in result) {
+      setRows(previous => previous.map(row => row.ref === result.record.ref ? result.record : row));
+      setNotice('Estado versionado y registrado por el servidor.');
+    } else {
+      if (result.status === 'denied') setStatus('denied');
+      if (result.status === 'disabled') setStatus('disabled');
+      setNotice('No se pudo cambiar el estado. Actualiza el módulo antes de reintentar.');
+    }
+  }
+
+  const shell = (message: string, role: 'status' | 'alert') =>
+    <section id="social-security-management" className="catalog-panel ui-page" aria-label="Seguridad social">
+      <PageHeader title="Seguridad social" />
+      <p role={role}>{message}</p>
+    </section>;
+  if (!enabled) return shell('El módulo de Seguridad social aún no está habilitado. No se consultaron registros.', 'status');
+  if (!canRead || status === 'denied') return shell('Acceso denegado: empresa, razón social o permiso insuficientes.', 'alert');
+  if (status === 'disabled') return shell('El servidor no tiene habilitada esta función.', 'alert');
+
+  const visible = rows.filter(row => (filter === 'TODOS' || row.state === filter)
+    && [row.ref, socialCategoryLabels[row.category]].some(x => x.toLowerCase().includes(search.trim().toLowerCase())));
+  const current = rows.find(row => row.ref === selected);
+  return <section id="social-security-management" className="catalog-panel ui-page" aria-label="Seguridad social">
+    <PageHeader title="Seguridad social" description="Registros internos de seguridad social por empresa y razón social."
+      actions={canCreate ? <button type="button" onClick={() => setPanel('create')}>Nuevo registro</button> : undefined} />
+    <p className="muted">Solo identificadores opacos. No realiza afiliaciones, aportes ni envíos a PILA.</p>
+    {notice && <output role="status" aria-live="polite">{notice}</output>}
+    {status === 'loading' && <p role="status">Cargando registros de seguridad social…</p>}
+    {status === 'error' && <p role="alert">No fue posible cargar los registros.</p>}
+    {status === 'ready' && <>
+      <MetricStrip label="Resumen de seguridad social" items={[
+        { label: 'Registros', value: rows.length },
+        { label: 'Pendientes', value: rows.filter(row => row.state === 'PENDIENTE').length },
+        { label: 'Requieren revisión', value: rows.filter(row => row.state === 'REQUIERE_REVISION').length },
+      ]} />
+      <Card title="Registros por razón social">
+        <Toolbar trailing={<output aria-live="polite">{visible.length} resultados</output>}>
+          <label>Buscar referencia <input type="search" value={search}
+            onChange={event => setSearch(event.target.value)} /></label>
+          <label>Estado <select value={filter}
+            onChange={event => setFilter(event.target.value as typeof filter)}>
+            <option value="TODOS">Todos</option>
+            <option value="PENDIENTE">Pendiente</option>
+            <option value="REQUIERE_REVISION">Requiere revisión</option>
+          </select></label>
+        </Toolbar>
+        <DataTable<SocialRealRecord> caption="Registros de seguridad social" rows={visible}
+          rowKey={row => row.ref} onOpen={row => { setSelected(row.ref); setPanel('detail'); }}
+          columns={[
+            { key: 'ref', header: 'Referencia', render: row => row.ref },
+            { key: 'category', header: 'Categoría', render: row => socialCategoryLabels[row.category] },
+            { key: 'state', header: 'Estado', render: row =>
+              <StatusPill tone={row.state === 'PENDIENTE' ? 'neutral' : 'warn'}>
+                {row.state === 'PENDIENTE' ? 'Pendiente' : 'Requiere revisión'}
+              </StatusPill> },
+          ]} empty={<p role="status">No hay registros para este filtro.</p>} />
+      </Card>
+    </>}
+    <SidePanel open={panel === 'create' && canCreate && status === 'ready'}
+      title="Nuevo registro de seguridad social" onClose={() => setPanel(null)}>
+      <form onSubmit={event => void create(event)}>
+        <p>Usa referencias opacas, nunca datos personales.</p>
+        <label>Referencia <input required pattern="[a-z][a-z0-9_\-]{0,63}" maxLength={64}
+          value={ref} onChange={event => setRef(event.target.value)} /></label>
+        <label>Categoría <select value={category}
+          onChange={event => setCategory(event.target.value as SocialRealRecord['category'])}>
+          {socialCategories.map(value => <option key={value} value={value}>{socialCategoryLabels[value]}</option>)}
+        </select></label>
+        <button type="submit" disabled={busy}>{busy ? 'Guardando…' : 'Guardar registro'}</button>
+      </form>
+    </SidePanel>
+    <SidePanel open={panel === 'detail' && current !== undefined && status === 'ready'}
+      title="Detalle del registro" onClose={() => setPanel(null)}>
+      {current && <><dl>
+        <dt>Referencia</dt><dd>{current.ref}</dd>
+        <dt>Categoría</dt><dd>{socialCategoryLabels[current.category]}</dd>
+        <dt>Estado</dt><dd>{current.state === 'PENDIENTE' ? 'Pendiente' : 'Requiere revisión'}</dd>
+        <dt>Versión auditada</dt><dd>{current.version}</dd>
+      </dl>{canUpdate && <form onSubmit={event => void advance(event)}>
+        <button type="submit" disabled={busy}>{busy ? 'Guardando…'
+          : current.state === 'PENDIENTE' ? 'Enviar a revisión' : 'Devolver a pendiente'}</button>
+      </form>}</>}
+    </SidePanel>
+  </section>;
 }
