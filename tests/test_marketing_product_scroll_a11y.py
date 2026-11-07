@@ -40,10 +40,9 @@ class _ProductRegions(HTMLParser):
         if (
             tag == "div"
             and "mk-bd" in classes
-            and any(
-                ancestor_tag == "article" and ancestor_attrs.get("id") == "modulo-catalogo"
-                for ancestor_tag, ancestor_attrs in self.ancestors
-            )
+            and self.ancestors
+            and self.ancestors[-1][0] == "article"
+            and self.ancestors[-1][1].get("id") == "modulo-catalogo"
         ):
             self.catalog_bodies.append(values)
         if tag not in self.VOID_TAGS:
