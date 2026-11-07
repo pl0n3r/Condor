@@ -27,7 +27,9 @@ test.describe('Super Admin — clientes y staff de plataforma', () => {
       page.getByRole('heading', { name: 'Administración global' }),
     ).toBeVisible();
 
-    await page.getByRole('link', { name: 'Empresas' }).click();
+    const platformNav = page.getByRole('navigation', { name: 'Navegación de plataforma' });
+    await platformNav.getByRole('button', { name: 'Empresas', exact: true }).click();
+    await platformNav.getByRole('link', { name: 'Empresas', exact: true }).click();
     await expect(page).toHaveURL(/\/adminpl0n3r\/empresas$/);
 
     await page.getByLabel('Nombre comercial').fill(tenantName);
@@ -58,7 +60,8 @@ test.describe('Super Admin — clientes y staff de plataforma', () => {
       page.locator('.tenant-card').filter({ hasText: tenantName }),
     ).toBeVisible();
 
-    await page.getByRole('link', { name: 'Staff' }).click();
+    await platformNav.getByRole('button', { name: 'Plataforma', exact: true }).click();
+    await platformNav.getByRole('link', { name: 'Staff y permisos', exact: true }).click();
     await expect(page).toHaveURL(/\/adminpl0n3r\/staff$/);
 
     const staffSection = page.locator('.platform-section').filter({

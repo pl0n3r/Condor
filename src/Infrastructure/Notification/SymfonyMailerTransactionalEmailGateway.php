@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Notification;
 
+use App\Application\Notification\MailProviderConfiguration;
 use App\Application\Notification\TransactionalEmailGateway;
 use App\Application\Notification\TransactionalEmailMessage;
 use JsonException;
@@ -19,6 +20,7 @@ final readonly class SymfonyMailerTransactionalEmailGateway implements Transacti
     public function __construct(
         private MailerFactory $mailerFactory,
         private string $projectDir,
+        private ?MailProviderConfiguration $mailProviderConfiguration = null,
     ) {
     }
 
@@ -48,6 +50,13 @@ final readonly class SymfonyMailerTransactionalEmailGateway implements Transacti
     /** @return array{dsn: string, from: string, provider: string}|null */
     private function configuration(): ?array
     {
+        if ($this->mailProviderConfiguration !== null) {
+            // Use owner-managed settings when available; the resolver retains
+            // environment fallback, validating all fields and redacting errors.
+            return $this->mailProviderConfiguration->resolve();
+        }
+
+        // Compatibility for explicitly constructed gateways without the resolver.
         $dsn = self::env('CONDOR_MAILER_DSN');
         $from = self::env('CONDOR_MAIL_FROM');
         $provider = self::env('CONDOR_MAIL_PROVIDER');
