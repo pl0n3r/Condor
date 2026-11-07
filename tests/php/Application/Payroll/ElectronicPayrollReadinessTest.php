@@ -56,7 +56,9 @@ final class ElectronicPayrollReadinessTest extends TestCase
 
     public function testRejectsTenantCrossingWithoutLeakingIdentifiers(): void
     {
-        $plan = ElectronicPayrollReadiness::plan(self::syntheticInput(), 'fixture:tenant/foreign');
+        $plan = ElectronicPayrollReadiness::plan(
+            self::syntheticInput(), 'fixture:tenant/foreign', self::COMPANY, true,
+        );
         self::assertAlwaysDisabled($plan);
         self::assertContains('TENANT_MISMATCH', $plan['errors']);
         $response = json_encode($plan, JSON_THROW_ON_ERROR);
