@@ -23,7 +23,7 @@ final class ContractsSyntheticHttpAcceptanceTest extends WebTestCase
         $client = static::createClient();
         $em = static::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $em);
-        $suffix = bin2hex(random_bytes(5));
+        $suffix = self::syntheticSuffix();
 
         $tenantA = new Tenant('Contratante A '.$suffix, 'contract-a-'.$suffix);
         $tenantB = new Tenant('Contratante B '.$suffix, 'contract-b-'.$suffix);
@@ -111,7 +111,7 @@ final class ContractsSyntheticHttpAcceptanceTest extends WebTestCase
         $client = static::createClient();
         $em = static::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $em);
-        $suffix = bin2hex(random_bytes(5));
+        $suffix = self::syntheticSuffix();
         $tenant = new Tenant('Contratante delegado '.$suffix, 'contract-role-'.$suffix);
         $company = new LegalEntity($tenant, 'Empresa lectura '.$suffix.' SAS', null, true);
         $branch = new Branch($tenant, 'Sede lectura', 'lectura', $company, true);
@@ -143,7 +143,7 @@ final class ContractsSyntheticHttpAcceptanceTest extends WebTestCase
         $client = static::createClient();
         $em = static::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $em);
-        $suffix = bin2hex(random_bytes(5));
+        $suffix = self::syntheticSuffix();
         $tenant = new Tenant('Contrato validación '.$suffix, 'contract-valid-'.$suffix);
         $company = new LegalEntity($tenant, 'Servicios validación '.$suffix.' SAS', null, true);
         $branch = new Branch($tenant, 'Sede', 'sede', $company, true);
@@ -172,6 +172,16 @@ final class ContractsSyntheticHttpAcceptanceTest extends WebTestCase
         }
         $client->request('GET', $base);
         self::assertSame([], self::json($client)['records']);
+    }
+
+    /** Nunca genera una referencia con siete dígitos consecutivos (restricción del API). */
+    private static function syntheticSuffix(): string
+    {
+        $hex = bin2hex(random_bytes(5));
+        $suffix = substr($hex, 0, 5).'a'.substr($hex, 5);
+        self::assertDoesNotMatchRegularExpression('/[0-9]{7,}/', $suffix);
+
+        return $suffix;
     }
 
     /** Obtener el token real del admin para el contexto de sesión bajo prueba. */
