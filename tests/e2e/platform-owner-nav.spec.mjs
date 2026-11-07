@@ -50,7 +50,7 @@ test.describe('Propietario — navegación agrupada sin enlaces inexistentes', (
 
     for (const { name, links } of GROUPS) {
       const group = nav.locator('.nav-group').filter({
-        has: nav.getByRole('button', { name, exact: true }),
+        has: page.getByRole('button', { name, exact: true }),
       });
       await expect(group).toHaveCount(1);
       const button = group.getByRole('button', { name, exact: true });
