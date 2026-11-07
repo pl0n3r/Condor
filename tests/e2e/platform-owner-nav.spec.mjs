@@ -95,6 +95,15 @@ test.describe('Propietario — navegación agrupada sin enlaces inexistentes', (
       expect(finalURL.pathname + finalURL.search, href).toBe(href);
     }
 
+    // #1693: no basta un HTTP 200: el destino debe montar la pantalla real.
+    await nav.locator('a.nav-sub[href="/adminpl0n3r/catalogo?vista=ingresos"]').click();
+    await expect(page).toHaveURL(/\/adminpl0n3r\/catalogo\?vista=ingresos$/);
+    await expect(page.getByRole('heading', { name: 'Ingresos SaaS', exact: true }))
+      .toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Navegación de plataforma' })
+      .locator('a.nav-sub[href="/adminpl0n3r/catalogo?vista=ingresos"]'))
+      .toHaveAttribute('aria-current', 'page');
+
     await nav.locator('a.nav-sub[href="/adminpl0n3r/suscripciones"]').click();
     await expect(page).toHaveURL(/\/adminpl0n3r\/suscripciones$/);
     const subscriptions = page.getByRole('navigation', { name: 'Navegación de plataforma' });
