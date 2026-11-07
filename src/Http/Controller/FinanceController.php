@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Finance\FinanceApiService;
+use App\Application\Finance\FinanceEntryService;
 use App\Application\Finance\FinanceReconciliationBudget;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\User;
+use App\Domain\Identity\Entity\Membership;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
@@ -17,6 +19,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -31,6 +34,7 @@ final class FinanceController extends AbstractController
         private readonly CurrentTenantForUser $currentTenantForUser,
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
+        private readonly FinanceEntryService $financeEntries,
     ) {
     }
 
@@ -123,6 +127,87 @@ final class FinanceController extends AbstractController
         $this->auditPreview($tenant, $actor, 'closure_preview', 'fixture:finance-reconciliation/preview');
 
         return $this->json(['closure_preview' => $projection, 'synthetic_only' => true]);
+    }
+
+
+    /**
+     * Persisted review cases are separate from session-only financial previews.
+     * The default state is OFF, including missing or malformed flags.
+     */
+    #[Route('/api/v1/branches/{branchId}/finance/real-records', name: 'api_finance_real_list', methods: ['GET'])]
+    public function realList(string $branchId): JsonResponse
+    {
+        if (($off = $this->financeRealDisabled()) !== null) { return $off; }
+        [, $tenant, $company] = $this->financeRealScope($branchId, 'settings.view');
+        $rows = $this->domain(fn (): array => $this->financeEntries->all($tenant, $company));
+        return $this->safeJson(['records' => $rows]);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/finance/real-records/{ref}', name: 'api_finance_real_detail', methods: ['GET'])]
+    public function realView(string $branchId, string $ref): JsonResponse
+    {
+        if (($off = $this->financeRealDisabled()) !== null) { return $off; }
+        [, $tenant, $company] = $this->financeRealScope($branchId, 'settings.view');
+        $row = $this->domain(fn (): ?array => $this->financeEntries->one($tenant, $company, $ref));
+        if ($row === null) { throw new NotFoundHttpException('Registro financiero no encontrado.'); }
+        return $this->safeJson(['record' => $row]);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/finance/real-records', name: 'api_finance_real_create', methods: ['POST'])]
+    public function realCreate(string $branchId, Request $request): JsonResponse
+    {
+        if (($off = $this->financeRealDisabled()) !== null) { return $off; }
+        $this->requireCsrf($request);
+        [$actor, $tenant, $company] = $this->financeRealScope($branchId, 'settings.create');
+        $data = $this->payload($request, ['entry_ref', 'kind']);
+        $row = $this->domain(fn (): array => $this->financeEntries->add($tenant, $company, $actor, $data));
+        return $this->safeJson(['record' => $row], Response::HTTP_CREATED);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/finance/real-records/{ref}/state', name: 'api_finance_real_state', methods: ['PATCH'])]
+    public function realState(string $branchId, string $ref, Request $request): JsonResponse
+    {
+        if (($off = $this->financeRealDisabled()) !== null) { return $off; }
+        $this->requireCsrf($request);
+        $data = $this->payload($request, ['state', 'expected_version']);
+        if (!is_string($data['state'] ?? null) || !is_int($data['expected_version'] ?? null)) {
+            throw new BadRequestHttpException('Estado y versión válidos son obligatorios.');
+        }
+        [$actor, $tenant, $company] = $this->financeRealScope($branchId, 'settings.update');
+        $row = $this->domain(fn (): array => $this->financeEntries->transition(
+            $tenant, $company, $actor, $ref, $data['state'], $data['expected_version'],
+        ));
+        return $this->safeJson(['record' => $row]);
+    }
+
+    /** @return array{string,string,string} */
+    private function financeRealScope(string $branchId, string $permission): array
+    {
+        [$actor, $tenant, $branch, $membership] = $this->authorizedBranchScope($branchId, $permission);
+        if (!$actor->isActive() || !$membership->isActive()
+            || $membership->roleKey() !== Membership::ROLE_OWNER) {
+            throw new AccessDeniedHttpException('Solo el propietario puede gestionar Finanzas.');
+        }
+        $entity = $branch->legalEntity();
+        if ($entity === null || $entity->tenant()->id() !== $tenant->id()) {
+            throw new NotFoundHttpException('Razón social no disponible.');
+        }
+        return [$actor->id(), $tenant->id(), $entity->id()];
+    }
+
+    private function financeRealDisabled(): ?JsonResponse
+    {
+        if (getenv('FINANCE_REAL_DATA_ENABLED') === 'true') { return null; }
+        return $this->safeJson(['error' => 'feature_unavailable'], Response::HTTP_NOT_FOUND);
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function safeJson(array $payload, int $status = Response::HTTP_OK): JsonResponse
+    {
+        $response = $this->json($payload, $status);
+        $response->headers->set('Cache-Control', 'private, no-store');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        return $response;
     }
 
     /** @return array{User,Tenant,Branch} */
