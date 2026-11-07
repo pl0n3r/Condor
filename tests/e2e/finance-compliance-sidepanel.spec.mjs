@@ -86,16 +86,20 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
 
   async function open(page, name) {
     // Solo el documento HTML se simula; los módulos TSX se sirven por Vite real.
+    const template = [
+      '<!doctype html><html lang="es"><body>',
+      '<div id="condor-admin-root" data-access-token="fixture-csrf"></div>',
+      '<main id="root"></main>',
+      '<script type="module" src="/__sidepanel_entry__.js"></script>',
+      '</body></html>',
+    ].join('');
+    // Vite/React necesita su preámbulo para módulos TSX; sin esta transformación
+    // el navegador no ejecuta el entrypoint y las pruebas expiran.
+    const transformedHtml = await vite.transformIndexHtml('/__sidepanel_fixture__', template);
     await page.route(origin + '/__sidepanel_fixture__', route => route.fulfill({
       status: 200,
       contentType: 'text/html; charset=utf-8',
-      body: [
-        '<!doctype html><html lang="es"><body>',
-        '<div id="condor-admin-root" data-access-token="fixture-csrf"></div>',
-        '<main id="root"></main>',
-        '<script type="module" src="/__sidepanel_entry__.js"></script>',
-        '</body></html>',
-      ].join(''),
+      body: transformedHtml,
     }));
     await page.goto(origin + '/__sidepanel_fixture__');
     await page.waitForFunction(() => typeof window.renderFinanceCompliance === 'function');
