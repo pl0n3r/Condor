@@ -120,16 +120,16 @@ export function ContractsLifecyclePreview({ tenantId, companyId, branchId, permi
   const enabled = import.meta.env.DEV && root?.dataset.contractsSyntheticApiEnabled === 'true';
   const allowed = permissions.includes('inventory.view') && companyId !== '__unassigned__';
   const [result, setResult] = useState<Result>({ status: 'loading' });
-  const scope = [tenantId, companyId, branchId].join('|');
+  const csrf = root?.dataset.accessToken ?? '';
   useEffect(() => {
     if (!enabled || !allowed) return;
     let active = true;
     setResult({ status: 'loading' });
     void syntheticLifecycleRequest({ enabled, allowed, tenantId, companyId, branchId,
-      csrf: root?.dataset.accessToken ?? '', referenceDate: new Date().toISOString().slice(0, 10) })
+      csrf, referenceDate: new Date().toISOString().slice(0, 10) })
       .then(value => { if (active) setResult(value); });
     return () => { active = false; };
-  }, [scope, enabled, allowed]);
+  }, [tenantId, companyId, branchId, csrf, enabled, allowed]);
   if (!enabled) return <section aria-label="Ciclo de contratación"><p role="status">Previsualización deshabilitada por el servidor.</p></section>;
   if (!allowed) return <section aria-label="Ciclo de contratación"><p role="alert">Sin permiso para consultar esta empresa.</p></section>;
   return <section aria-label="Ciclo de contratación" className="catalog-panel ui-page">
