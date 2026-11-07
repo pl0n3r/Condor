@@ -39,6 +39,7 @@ Estado: documented_not_legally_approved. Documentos fuente íntegros a continuac
 | human_resources_synthetic_records | usage | tenant_ref, company_ref, employee_ref, category, state, version, previous_id, previous_state, audit_action, actor_ref, occurred_at, fingerprint | review_required | review_required | review_required | ninguno_declarado | review_required |
 | notification_delivery | usage | user_id, event_key, channel_key, payload, status, attempt_count, last_error, available_at, delivered_at | notification_delivery | review_required | review_required | resend | review_required |
 | notification_preferences | usage | user_id, event_key, channel_key, enabled | notification_preferences | review_required | review_required | ninguno_declarado | account_lifecycle |
+| payroll_real_records | usage | id, tenant_id, company_id, record_ref, employee_ref, period_ref, state, version, previous_id, actor_id, occurred_at | payroll_record_management | review_required | review_required | ninguno_declarado | review_required |
 | payroll_synthetic_records | usage | tenant_ref, legal_entity_ref, record_ref, employee_ref, period_ref, actor_ref, amount_hundredths, state, created_at, fingerprint | review_required | review_required | review_required | ninguno_declarado | review_required |
 | self_service_trial_application | contact | email, trial_quote_id, trial_consent_recorded_at | self_service_trial_application | review_required | review_required | ninguno_declarado | review_required |
 | social_security_synthetic_records | usage | tenant_ref, company_ref, social_security_ref, category, state, version, previous_id, previous_state, audit_action, actor_ref, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
@@ -113,6 +114,7 @@ El canal debe contemplar solicitudes de acceso, rectificación/corrección, actu
 | human_resources_synthetic_records | usage | tenant_ref, company_ref, employee_ref, category, state, version, previous_id, previous_state, audit_action, actor_ref, occurred_at, fingerprint | review_required | review_required | review_required | ninguno_declarado | review_required |
 | notification_delivery | usage | user_id, event_key, channel_key, payload, status, attempt_count, last_error, available_at, delivered_at | notification_delivery | review_required | review_required | resend | review_required |
 | notification_preferences | usage | user_id, event_key, channel_key, enabled | notification_preferences | review_required | review_required | ninguno_declarado | account_lifecycle |
+| payroll_real_records | usage | id, tenant_id, company_id, record_ref, employee_ref, period_ref, state, version, previous_id, actor_id, occurred_at | payroll_record_management | review_required | review_required | ninguno_declarado | review_required |
 | payroll_synthetic_records | usage | tenant_ref, legal_entity_ref, record_ref, employee_ref, period_ref, actor_ref, amount_hundredths, state, created_at, fingerprint | review_required | review_required | review_required | ninguno_declarado | review_required |
 | self_service_trial_application | contact | email, trial_quote_id, trial_consent_recorded_at | self_service_trial_application | review_required | review_required | ninguno_declarado | review_required |
 | social_security_synthetic_records | usage | tenant_ref, company_ref, social_security_ref, category, state, version, previous_id, previous_state, audit_action, actor_ref, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
@@ -273,6 +275,16 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `account_lifecycle`
 
+## payroll_real_records
+
+- Categoría: `usage`
+- Campos de software: `id`, `tenant_id`, `company_id`, `record_ref`, `employee_ref`, `period_ref`, `state`, `version`, `previous_id`, `actor_id`, `occurred_at`
+- Finalidad: `payroll_record_management`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## payroll_synthetic_records
 
 - Categoría: `usage`
@@ -349,6 +361,7 @@ Producto: `pl0n3r/Condor`
 | human_resources_synthetic_records | usage | review_required | review_required |
 | notification_delivery | usage | review_required | review_required |
 | notification_preferences | usage | account_lifecycle | review_required |
+| payroll_real_records | usage | review_required | review_required |
 | payroll_synthetic_records | usage | review_required | review_required |
 | self_service_trial_application | contact | review_required | review_required |
 | social_security_synthetic_records | usage | review_required | review_required |
