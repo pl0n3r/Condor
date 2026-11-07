@@ -15,9 +15,9 @@ use DomainException;
  * Actors and tenant/company scopes must be authorized by the trusted caller.
  */
 #[ORM\Entity]
-#[ORM\Table(name: 'condor_contract_real_record')]
-#[ORM\UniqueConstraint(name: 'uniq_contract_scope_version', columns: ['tenant_id', 'company_id', 'record_ref', 'version'])]
 #[ORM\Index(name: 'idx_contract_company_state', columns: ['tenant_id', 'company_id', 'state'])]
+#[ORM\UniqueConstraint(name: 'uniq_contract_scope_version', columns: ['tenant_id', 'company_id', 'record_ref', 'version'])]
+#[ORM\Table(name: 'condor_contract_real_record')]
 final class ContractRecord
 {
     public const STATE = 'REQUIERE_REVISION';
