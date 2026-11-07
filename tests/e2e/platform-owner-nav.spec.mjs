@@ -26,6 +26,7 @@ const GROUPS = [
     name: 'Plataforma',
     links: [
       '/adminpl0n3r/staff',
+      '/adminpl0n3r/integraciones',
       '/adminpl0n3r/diagnosticos',
     ],
   },
@@ -39,7 +40,7 @@ test.describe('Propietario — navegación agrupada sin enlaces inexistentes', (
     'Requiere aplicación E2E y credenciales de propietario.',
   );
 
-  test('acordeones accesibles, ocho enlaces funcionales y sección activa', async ({ page }) => {
+  test('acordeones accesibles, nueve enlaces funcionales y sección activa', async ({ page }) => {
     await page.goto('/admin/login');
     await page.getByLabel('Correo').fill(email);
     await page.getByLabel('Contraseña').fill(password);

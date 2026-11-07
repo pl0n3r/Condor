@@ -9,6 +9,7 @@ import {
   type FunctionalSignalCounts,
 } from './FunctionalSignalsPanel';
 import { PlatformStaffPanel } from './PlatformStaffPanel';
+import { PlatformIntegrationsPanel } from './PlatformIntegrationsPanel';
 import { PlatformTenantCreationPanel } from './PlatformTenantCreationPanel';
 import { PlatformSubscriptionsPanel, isSyntheticTenant } from './PlatformSubscriptionsPanel';
 import { PlatformPlansPanel } from './PlatformPlansPanel';
@@ -392,7 +393,7 @@ type State =
       diagnostic?: OwnerDiagnostic;
     };
 
-type PlatformOwnerSection = 'control' | 'empresas' | 'staff' | 'suscripciones' | 'catalogo';
+type PlatformOwnerSection = 'control' | 'empresas' | 'staff' | 'suscripciones' | 'catalogo' | 'integraciones';
 
 function selectedTenantFromState(state: State): SelectedTenant | null {
   return state.status === 'ready' ? state.data.selected_tenant : null;
@@ -528,7 +529,9 @@ export function PlatformOwnerApp({
   const revenueView = window.location.pathname === '/adminpl0n3r/catalogo'
     && new URLSearchParams(window.location.search).get('vista') === 'ingresos';
   const currentSection: PlatformOwnerSection =
-    window.location.pathname === '/adminpl0n3r/suscripciones'
+    window.location.pathname === '/adminpl0n3r/integraciones'
+      ? 'integraciones'
+      : window.location.pathname === '/adminpl0n3r/suscripciones'
       ? 'suscripciones'
       : window.location.pathname === '/adminpl0n3r/catalogo'
         ? 'catalogo'
@@ -729,6 +732,11 @@ export function PlatformOwnerApp({
               href: '/adminpl0n3r/staff',
               label: 'Staff y permisos',
               current: currentSection === 'staff',
+            },
+            {
+              href: '/adminpl0n3r/integraciones',
+              label: 'Integraciones',
+              current: currentSection === 'integraciones',
             },
             {
               href: '/adminpl0n3r/diagnosticos',
@@ -1111,6 +1119,9 @@ export function PlatformOwnerApp({
               csrfToken={staffToken}
               refreshKey={platformRevision}
             />
+          )}
+          {!selected && currentSection === 'integraciones' && (
+            <PlatformIntegrationsPanel refreshKey={platformRevision} />
           )}
 
           {!selected && currentSection === 'suscripciones' && (
