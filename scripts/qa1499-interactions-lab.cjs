@@ -36,8 +36,10 @@ function selfTest() {
   for (const good of ['http://localhost:18777', 'http://127.0.0.1:18777/']) {
     assert.equal(localBase(good).port, '18777');
   }
+  const remote = new URL('http://127.0.0.1:18777/');
+  remote.hostname = 'condorapp.com.co'; // negative case, never navigated
   for (const bad of [
-    'https://condorapp.com.co', 'http://condorapp.com.co:18777',
+    'https://condorapp.com.co', remote.href,
     'https://127.0.0.1:18777', 'http://127.0.0.1',
     'http://127.0.0.1:18777/#x', 'http://127.0.0.1:18777/?token=secret',
     'http://user:pass@localhost:18777', 'http://127.0.0.2:18777',
@@ -48,7 +50,7 @@ function selfTest() {
   assert.equal(preflight(env).sha.length, 40);
   assert.throws(() => preflight({ ...env, QA1499_ACK_SYNTHETIC_TEST_ONLY: '' }), /confirmación/);
   assert.throws(() => preflight({ ...env, QA1499_HEAD_SHA: 'HEAD' }), /SHA/);
-  assert.throws(() => preflight({ ...env, QA1499_OUTPUT: '/tmp/other.json' }), /stdout/);
+  assert.throws(() => preflight({ ...env, QA1499_OUTPUT: 'reject-output.json' }), /stdout/);
   console.log('QA1499_INTERACTIONS_SELF_TEST_PASS');
 }
 
