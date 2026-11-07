@@ -67,6 +67,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [categoryFilter, setCategoryFilter] = useState<'TODAS' | RiskCategory>('TODAS');
   const [stateFilter, setStateFilter] = useState<'TODOS' | RiskState>('TODOS');
   const [notice, setNotice] = useState('');
+  const [panelError, setPanelError] = useState('');
 
   function audit(ref: string, action: AuditEvent['action'], actor: string, state: RiskState) {
     setHistory(previous => [...previous, { scope, riskRef: ref, action, actorRef: actor, state }].slice(-100));
@@ -89,6 +90,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       || !validScore(probability) || !validScore(impact)
       || scoped.length >= 50 || scoped.some(row => row.ref === riskRef)) {
       setNotice('No se creó: verifica permiso, cupo, referencias ficticias y valores de 1 a 5.');
+      setPanelError('No se creó: verifica permiso, cupo, referencias ficticias y valores de 1 a 5.');
       return;
     }
     const record: RiskRecord = {
@@ -99,6 +101,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     audit(riskRef, 'created', actorRef, 'PENDIENTE');
     setSelected(riskRef);
     setCreating(false);
+    setPanelError('');
     setRiskRef('');
     setActorRef('');
     setNotice('Riesgo ficticio creado solo en memoria. Requiere revisión profesional.');
@@ -108,6 +111,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     const row = scoped.find(item => item.ref === ref);
     if (!canView || !validFixture(ref, riskRefPattern) || !row) return;
     setSelected(ref);
+    setPanelError('');
     audit(ref, 'viewed', 'fixture:actor/consulta', row.state);
   }
 
@@ -116,6 +120,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     if (!canUpdate || !detail || !validFixture(reviewerRef, actorRefPattern)
       || !states.includes(detail.state)) {
       setNotice('Revisión denegada: permiso, actor ficticio o registro inválido.');
+      setPanelError('Revisión denegada: permiso, actor ficticio o registro inválido.');
       return;
     }
     // No terminal states exist. An explicit human operation is required on every transition.
@@ -127,6 +132,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
         ? { ...row, state: nextState } : row));
     audit(detail.ref, 'state_changed', reviewerRef, nextState);
     setReviewerRef('');
+    setPanelError('');
     setNotice('Cambio ficticio explícito registrado. No constituye aprobación ni cierre.');
   }
 
@@ -140,7 +146,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
 
   return (
     <section id="risk-management" className="ui-page catalog-panel" aria-label="Riesgos empresariales">
-      <PageHeader title="Riesgos empresariales" description="Escenarios ficticios sin evaluaciones legales ni datos reales." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setCreating(true); }}>Crear riesgo de prueba</button> : undefined} />
+      <PageHeader title="Riesgos empresariales" description="Escenarios ficticios sin evaluaciones legales ni datos reales." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setPanelError(''); setCreating(true); }}>Crear riesgo de prueba</button> : undefined} />
       <MetricStrip label="Indicadores de Riesgos empresariales" items={[{ label: 'Registros', value: scoped.length }, { label: 'Resultados', value: visible.length }, { label: 'Eventos de esta sesión', value: history.filter(item => item.scope === scope).length }]} />
       <p role="alert">SOLO DATOS FICTICIOS. No usar datos personales, empresas reales ni evaluar cumplimiento legal.</p>
       <p className="muted">Simulación efímera: sin API, sin persistencia y sin auditoría de servidor.</p>
@@ -175,7 +181,8 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
           <DataTable caption="Listado de Riesgos empresariales" rows={visible} rowKey={row => row.ref} onOpen={row => view(row.ref)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.ref}</strong></span> }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.state}</StatusPill> }]} />
         </section>
         {canCreate && (
-          <SidePanel open={creating && canCreate} title="Crear riesgo de prueba" onClose={() => setCreating(false)}>
+          <SidePanel open={creating && canCreate} title="Crear riesgo de prueba" onClose={() => { setCreating(false); setPanelError(''); }}>
+          {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
           <form className="catalog-editor" onSubmit={create}>
               <label>Referencia de riesgo ficticio
                 <input required maxLength={70} pattern="fixture:risk/[a-z][a-z0-9_\-]{0,47}"
@@ -206,7 +213,8 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
 
         </SidePanel>
         )}
-        <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión" onClose={() => setSelected('')}>
+        <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión" onClose={() => { setSelected(''); setPanelError(''); }}>
+          {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
           {detail ? <>
             <dl>
               <dt>Referencia</dt><dd>{detail.ref}</dd>
@@ -328,6 +336,7 @@ function RiskHttpWorkspace({
   const [impact, setImpact] = useState('1');
   const [selected, setSelected] = useState('');
   const [notice, setNotice] = useState('');
+  const [panelError, setPanelError] = useState('');
   const [busy, setBusy] = useState(false);
   const [httpCreating, setHttpCreating] = useState(false);
 
@@ -338,7 +347,8 @@ function RiskHttpWorkspace({
     }
     let alive = true;
     const request = requestRisk(endpoint);
-    setLoad({ kind: 'loading' });
+    setLoad(previous => previous.kind === 'ready' && revision > 0
+      ? previous : { kind: 'loading' });
     void request.promise.then(({ status, body }) => {
       if (!alive) return;
       if ([401, 403, 404].includes(status)) {
@@ -363,10 +373,12 @@ function RiskHttpWorkspace({
     const token = document.querySelector('#condor-admin-root')?.getAttribute('data-access-token');
     if (!token) {
       setNotice('Sin token CSRF de la sesión: escritura denegada.');
+      setPanelError('Sin token CSRF de la sesión: escritura denegada.');
       return;
     }
     setBusy(true);
     setNotice('');
+    setPanelError('');
     try {
       const response = await requestRisk(url, method, payload, token).promise;
       if ([401, 403, 404].includes(response.status)) {
@@ -379,9 +391,11 @@ function RiskHttpWorkspace({
         setNotice('Cambio ficticio confirmado por el servidor; no es aprobación.');
       } else {
         setNotice('El servidor rechazó la operación o devolvió datos inválidos.');
+        setPanelError('El servidor rechazó la operación o devolvió datos inválidos.');
       }
     } catch {
       setNotice('Error de red al operar sobre el riesgo ficticio.');
+      setPanelError('Error de red al operar sobre el riesgo ficticio.');
     } finally {
       setBusy(false);
     }
@@ -391,7 +405,7 @@ function RiskHttpWorkspace({
   const chosen = risks.find(row => row.risk_ref === selected);
   return (
     <section className="ui-page catalog-panel" aria-label="Riesgos ficticios desde API">
-       <PageHeader title="M12 S04 · riesgos ficticios desde API" description="Consulta autorizada por sede, sin datos personales." actions={load.kind === 'ready' && canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setHttpCreating(true); }}>Crear riesgo de prueba</button> : undefined} />
+       <PageHeader title="M12 S04 · riesgos ficticios desde API" description="Consulta autorizada por sede, sin datos personales." actions={load.kind === 'ready' && canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setPanelError(''); setHttpCreating(true); }}>Crear riesgo de prueba</button> : undefined} />
        <MetricStrip label="Resumen de riesgos de prueba" items={[{ label: 'Registros por sede', value: risks.length }, { label: 'Revisiones abiertas', value: risks.filter(row => row.state !== 'PENDIENTE').length }, { label: 'Entorno', value: 'Construcción', tone: 'info' }]} />
       <p className="muted">Solo construcción. Los permisos y la sede se validan en el servidor.
         Sin certificación jurídica, aprobación ni cierre automático.</p>
@@ -401,8 +415,9 @@ function RiskHttpWorkspace({
         <button type="button" onClick={() => setRevision(value => value + 1)}>Reintentar</button>
       </div>}
       {load.kind === 'ready' && risks.length === 0 && <p role="status">No hay riesgos ficticios en esta sede.</p>}
-      {load.kind === 'ready' && <DataTable caption="Riesgos ficticios por sede" rows={risks} rowKey={row => row.risk_ref} onOpen={row => setSelected(row.risk_ref)} empty="No hay riesgos ficticios." columns={[{ key: 'reference', header: 'Referencia', render: row => <strong>{row.risk_ref}</strong> }, { key: 'category', header: 'Categoría', render: row => row.category }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'PENDIENTE' ? 'neutral' : 'warn'}>{row.state}</StatusPill> }, { key: 'scenario', header: 'Escenario', render: row => row.scenario_ref ?? 'Sin escenario' }]} />}
-      {load.kind === 'ready' && chosen && <SidePanel open={!httpCreating} title={chosen.risk_ref} onClose={() => setSelected('')}><section aria-label="Estado del riesgo seleccionado">
+      {load.kind === 'ready' && <DataTable caption="Riesgos ficticios por sede" rows={risks} rowKey={row => row.risk_ref} onOpen={row => { setPanelError(''); setSelected(row.risk_ref); }} empty="No hay riesgos ficticios." columns={[{ key: 'reference', header: 'Referencia', render: row => <strong>{row.risk_ref}</strong> }, { key: 'category', header: 'Categoría', render: row => row.category }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'PENDIENTE' ? 'neutral' : 'warn'}>{row.state}</StatusPill> }, { key: 'scenario', header: 'Escenario', render: row => row.scenario_ref ?? 'Sin escenario' }]} />}
+      {load.kind === 'ready' && chosen && <SidePanel open={!httpCreating} title={chosen.risk_ref} onClose={() => { setSelected(''); setPanelError(''); }}><section aria-label="Estado del riesgo seleccionado">
+        {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
         <p>{chosen.risk_ref}: {chosen.state} · probabilidad {chosen.probability}
           {' · '}impacto {chosen.impact}</p>
         {canUpdate && <button type="button" disabled={busy}
@@ -412,12 +427,15 @@ function RiskHttpWorkspace({
           Registrar revisión ficticia en servidor
         </button>}
       </section></SidePanel>}
-       {load.kind === 'ready' && canCreate && <SidePanel open={httpCreating} title="Crear riesgo de prueba" onClose={() => setHttpCreating(false)}><form className="catalog-editor" onSubmit={event => {
+       {load.kind === 'ready' && canCreate && <SidePanel open={httpCreating} title="Crear riesgo de prueba" onClose={() => { setHttpCreating(false); setPanelError(''); }}>
+        {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
+        <form className="catalog-editor" onSubmit={event => {
         event.preventDefault();
         if (!validFixture(ref, riskRefPattern)
           || (category === 'reputacional' && !validFixture(scenario, scenarioRefPattern))
           || !/^[1-5]$/.test(probability) || !/^[1-5]$/.test(impact)) {
           setNotice('Solo se admiten referencias y puntajes ficticios válidos.');
+          setPanelError('Solo se admiten referencias y puntajes ficticios válidos.');
           return;
         }
         void mutate('POST', endpoint, {
