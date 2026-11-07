@@ -55,6 +55,11 @@ mod.filename = process.argv[1];
 mod.require = id => {
   if (id === 'react') return react;
   if (id === 'react/jsx-runtime') return {jsx, jsxs: jsx, Fragment: 'fragment'};
+  // El arnes de test ejecuta los handlers TSX; el kit de presentacion solo
+  // aporta elementos JSX sin alterar la capa de autorizacion / descargas.
+  if (id === './ui/Kit') return Object.fromEntries(
+    ['Card','MetricStrip','PageHeader','SidePanel','StatusPill'].map(name => [name, function UiKitMock() {}])
+  );
   return require(id);
 };
 mod._compile(output, process.argv[1]);

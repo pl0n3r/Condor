@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { AdminCsvImport } from './CatalogManagement';
+import { DataTable, MetricStrip, PageHeader, SidePanel, Toolbar } from './ui/Kit';
 import {
   categoryPriceListPath,
   commercialCategoriesPath,
@@ -163,6 +164,7 @@ export function CommerceManagement({
   const canDeletePricing = can('pricing.delete');
 
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+  const [editor, setEditor] = useState<'category' | 'customer' | 'list' | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchSegment, setSearchSegment] = useState<CustomerSegment>('all');
   const [searchCategoryId, setSearchCategoryId] = useState('');
@@ -384,6 +386,7 @@ export function CommerceManagement({
       editing ? 'Categoría actualizada.' : 'Categoría creada.',
     );
     if (succeeded) {
+      setEditor(null);
       setCategoryDraft(emptyCategory);
     }
   }
@@ -411,6 +414,7 @@ export function CommerceManagement({
       editing ? 'Cliente actualizado.' : 'Cliente creado.',
     );
     if (succeeded) {
+      setEditor(null);
       setCustomerDraft(emptyCustomer);
     }
   }
@@ -432,6 +436,7 @@ export function CommerceManagement({
       editing ? 'Lista actualizada.' : 'Lista creada.',
     );
     if (succeeded) {
+      setEditor(null);
       setListDraft(emptyList);
     }
   }
@@ -559,16 +564,21 @@ export function CommerceManagement({
       className="catalog-panel"
       aria-labelledby="commerce-title"
     >
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">Ventas</span>
-          <h2 id="commerce-title">Comercial</h2>
-          <p className="muted">
-            Clientes, categorías y precios reutilizables por los canales
-            de venta. Los pedidos reutilizan este contexto y conservan snapshots históricos.
-          </p>
-        </div>
-      </div>
+      <PageHeader title="Comercial"
+        description="Clientes, categorías y precios reutilizables por los canales de venta. Los pedidos reutilizan este contexto y conservan snapshots históricos."
+        actions={<>
+          {canCreateCustomers && <button type="button" className="button"
+            onClick={() => { setCustomerDraft(emptyCustomer); setEditor('customer'); }}>Nuevo cliente</button>}
+          {canCreateCustomers && <button type="button" className="button button-secondary"
+            onClick={() => { setCategoryDraft(emptyCategory); setEditor('category'); }}>Nueva categoría</button>}
+          {canCreatePricing && <button type="button" className="button button-secondary"
+            onClick={() => { setListDraft(emptyList); setEditor('list'); }}>Nueva lista</button>}
+        </>} />
+      {ready && <MetricStrip label="Resumen comercial" items={[
+        { label: 'Clientes', value: customers?.customers.length ?? 0 },
+        { label: 'Categorías', value: customers?.categories.length ?? 0 },
+        { label: 'Listas de precios', value: pricing?.price_lists.length ?? 0 },
+      ]} />}
 
       {notice && (
         <output
@@ -620,11 +630,9 @@ export function CommerceManagement({
               </p>
             </div>
 
-            {(canCreateCustomers || categoryDraft.id) && (
-              <form
-                className="catalog-editor"
-                onSubmit={saveCategory}
-              >
+            {(editor === 'category' || Boolean(categoryDraft.id)) && (
+              <SidePanel open={editor === 'category' || Boolean(categoryDraft.id)} title={categoryDraft.id ? 'Editar categoría' : 'Crear categoría'} onClose={() => { setEditor(null); setCategoryDraft(emptyCategory); }}>
+              <form className="catalog-editor" onSubmit={saveCategory}>
                 <div className="catalog-form-grid">
                   <label className="field">
                     <span>Nombre de categoría</span>
@@ -667,67 +675,57 @@ export function CommerceManagement({
                   )}
                 </div>
               </form>
+              </SidePanel>
             )}
 
-            <div className="catalog-variant-list">
-              {customers.categories.map((category) => (
-                <div className="catalog-variant-row" key={category.id}>
-                  <div>
-                    <strong>{category.name}</strong>
-                    <span className="muted">{category.slug}</span>
-                  </div>
+            <DataTable caption="Categorías comerciales"
+              rows={customers.categories} rowKey={(category) => category.id}
+              empty={<p>Todavía no hay categorías comerciales registradas.</p>}
+              columns={[
+                { key: 'name', header: 'Categoría', render: (category) =>
+                  <span className="ui-cell-main"><strong>{category.name}</strong><small>{category.slug}</small></span> },
+                { key: 'preferred', header: 'Lista preferida', render: (category) =>
+                  canViewPricing && pricing ? (
+                    <label className="field">
+                      <span className="ui-sr-only">{'Lista preferida de ' + category.name}</span>
+                      <select aria-label={'Lista preferida de ' + category.name}
+                        value={category.preferred_price_list_id ?? ''}
+                        disabled={!canUpdatePricing}
+                        onChange={(event) => {
+                          const control = event.currentTarget;
+                          void assignPreferredList(category, control.value).then(() => {
+                            // Revalidar el foco tras el refresco de la tabla.
+                            requestAnimationFrame(() => {
+                              if (control.isConnected) control.focus();
+                            });
+                          });
+                        }}>
+                        <option value="">Sin preferencia</option>
+                        {pricing.price_lists.map((list) => (
+                          <option value={list.id} key={list.id}>{list.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : 'Sin asignar' },
+                { key: 'actions', header: 'Acciones', render: (category) => (
                   <div className="catalog-actions">
-                    {canViewPricing && pricing && (
-                      <label className="field">
-                        <span>Lista preferida</span>
-                        <select
-                          aria-label={'Lista preferida de ' + category.name}
-                          value={category.preferred_price_list_id ?? ''}
-                          disabled={!canUpdatePricing}
-                          onChange={(event) => void assignPreferredList(
-                            category,
-                            event.target.value,
-                          )}
-                        >
-                          <option value="">Sin preferencia</option>
-                          {pricing.price_lists.map((list) => (
-                            <option value={list.id} key={list.id}>
-                              {list.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
                     {canUpdateCustomers && (
-                      <button
-                        type="button"
-                        className="button button-secondary"
+                      <button type="button" className="button button-secondary"
                         onClick={() => setCategoryDraft({
-                          id: category.id,
-                          name: category.name,
-                          slug: category.slug,
-                        })}
-                      >
-                        Editar
-                      </button>
+                          id: category.id, name: category.name, slug: category.slug,
+                        })}>Editar</button>
                     )}
                     {canDeleteCustomers && (
-                      <button
-                        type="button"
-                        className="button button-secondary"
+                      <button type="button" className="button button-secondary"
                         disabled={busy}
                         onClick={() => void deactivate(
                           commercialCategoryPath(branchId, category.id),
                           'Categoría desactivada.',
-                        )}
-                      >
-                        Desactivar
-                      </button>
+                        )}>Desactivar</button>
                     )}
                   </div>
-                </div>
-              ))}
-            </div>
+                ) },
+              ]} />
           </article>
 
           <article className="catalog-card">
@@ -813,7 +811,8 @@ export function CommerceManagement({
             )}
 
 
-            {(canCreateCustomers || customerDraft.id) && (
+            {(editor === 'customer' || Boolean(customerDraft.id)) && (
+              <SidePanel open={editor === 'customer' || Boolean(customerDraft.id)} title={customerDraft.id ? 'Editar cliente' : 'Crear cliente'} onClose={() => { setEditor(null); setCustomerDraft(emptyCustomer); }}>
               <form className="catalog-editor" onSubmit={saveCustomer}>
                 <div className="catalog-form-grid">
                   <label className="field">
@@ -896,6 +895,7 @@ export function CommerceManagement({
                   )}
                 </div>
               </form>
+              </SidePanel>
             )}
 
             {visibleCustomers.length === 0 && searchResult.status !== 'error' && searchResult.status !== 'loading' ? (
@@ -1058,7 +1058,8 @@ export function CommerceManagement({
               </p>
             </div>
 
-            {(canCreatePricing || listDraft.id) && (
+            {(editor === 'list' || Boolean(listDraft.id)) && (
+              <SidePanel open={editor === 'list' || Boolean(listDraft.id)} title={listDraft.id ? 'Editar lista' : 'Crear lista'} onClose={() => { setEditor(null); setListDraft(emptyList); }}>
               <form className="catalog-editor" onSubmit={saveList}>
                 <div className="catalog-form-grid">
                   <label className="field">
@@ -1102,6 +1103,7 @@ export function CommerceManagement({
                   )}
                 </div>
               </form>
+              </SidePanel>
             )}
 
             <div className="catalog-variant-list">
