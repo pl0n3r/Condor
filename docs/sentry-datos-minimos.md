@@ -17,7 +17,7 @@ la prioridad también cuando ya existe una variable de entorno, implementa
 EnvVarProcessorInterface exclusivamente para el procesador string.
 Los demás nombres conservan el procesamiento estándar de Symfony y el
 cargador nunca publica otro nombre distinto de SENTRY_DSN. La conexión
-es diferida y el secreto se guarda temporalmente en memoria del proceso,
+es diferida y el secreto se cachea como máximo 30 segundos en memoria del proceso,
 no en logs. Los fallos (tabla, BD, APP_SECRET o autenticación del cifrado)
 retornan vacío sin excepción ni revelar causa o DSN.
 

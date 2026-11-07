@@ -27,8 +27,10 @@ final class StoredSentryDsnEnvLoader implements EnvVarLoaderInterface, EnvVarPro
 {
     private const SETTING_KEY = 'sentry.dsn';
     private const CRYPTO_CONTEXT = 'condor-platform-settings-v1';
+    private const CACHE_TTL_SECONDS = 30;
 
     private bool $loaded = false;
+    private int $cacheExpiresAt = 0;
     private bool $loading = false;
     private ?string $cachedDsn = null;
 
@@ -81,9 +83,15 @@ final class StoredSentryDsnEnvLoader implements EnvVarLoaderInterface, EnvVarPro
 
     private function readStoredDsn(string $master): ?string
     {
-        if ($this->loaded || $this->loading) {
+        if ($this->loading) {
+            return null;
+        }
+        if ($this->loaded && time() < $this->cacheExpiresAt) {
             return $this->cachedDsn;
         }
+        // Expired entries are revalidated so owner changes become visible
+        // without restarting a long-lived worker.
+        $this->cachedDsn = null;
         $keyCandidate = trim($master);
         if (strlen($keyCandidate) < 32
             || preg_match('/change.?me|example|placeholder|replace.?me|sample|your.?secret/i', $keyCandidate) === 1
@@ -141,6 +149,7 @@ final class StoredSentryDsnEnvLoader implements EnvVarLoaderInterface, EnvVarPro
             return null;
         } finally {
             $this->loaded = true;
+            $this->cacheExpiresAt = time() + self::CACHE_TTL_SECONDS;
             $this->loading = false;
         }
     }

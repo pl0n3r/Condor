@@ -44,6 +44,23 @@ final class StoredSentryDsnEnvLoaderTest extends TestCase
         self::assertSame(1, $calls, 'Debe consultar una sola vez el almacén.');
     }
 
+    public function testShortProcessCacheRefreshesAfterExpiry(): void
+    {
+        $first = 'https://fixture-one@fixture.ingest.sentry.io/11';
+        $second = 'https://fixture-two@fixture.ingest.sentry.io/22';
+        $db = $this->createMock(Connection::class);
+        $db->expects(self::exactly(2))->method('fetchAssociative')
+            ->willReturnOnConsecutiveCalls($this->encryptedRow($first), $this->encryptedRow($second));
+        $loader = $this->loader($db);
+        self::assertSame($first, $loader->getEnv('', 'SENTRY_DSN', $this->envGetter()));
+        self::assertSame($first, $loader->getEnv('', 'SENTRY_DSN', $this->envGetter()));
+
+        // Simulate passage of time without waiting or mutating the clock.
+        $expiry = new \ReflectionProperty($loader, 'cacheExpiresAt');
+        $expiry->setValue($loader, time() - 1);
+        self::assertSame($second, $loader->getEnv('', 'SENTRY_DSN', $this->envGetter()));
+    }
+
     public function testStoredDsnWinsWithNoEnvironmentVariable(): void
     {
         $dsn = 'https://fixture-key@fixture.ingest.sentry.io/123';
