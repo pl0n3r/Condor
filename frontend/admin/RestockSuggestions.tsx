@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
 type Suggestion = {
   variant_id: string;
@@ -70,6 +71,8 @@ export function RestockSuggestions({ branchId, permissions }: Props) {
   const canView = permissions.includes('inventory.view');
   const [state, setState] = useState<State>({ status: 'loading' });
   const [reload, setReload] = useState(0);
+  const [search, setSearch] = useState('');
+  const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
 
   useEffect(() => {
     if (!canView) {
@@ -121,15 +124,22 @@ export function RestockSuggestions({ branchId, permissions }: Props) {
     };
   }, [branchId, canView, reload]);
 
+  const rows = state.status === 'ready'
+    ? state.suggestions.filter((item) =>
+      item.sku.toLocaleLowerCase('es-CO').includes(search.toLocaleLowerCase('es-CO')))
+    : [];
+  const selected = rows.find((item) => item.variant_id === selectedVariant);
   return (
-    <section className="catalog-panel" aria-labelledby="restock-suggestions-title">
-      <div className="catalog-heading">
-        <div>
-          <span className="eyebrow">Inventario</span>
-          <h3 id="restock-suggestions-title">Sugerencias de resurtido</h3>
-          <p className="muted">Estimación de solo lectura basada en consumo de los últimos 30 días.</p>
-        </div>
-      </div>
+    <section className="catalog-panel ui-page" aria-label="Sugerencias de resurtido">
+      <PageHeader title="Sugerencias de resurtido"
+        description="Estimación de solo lectura basada en consumo de los últimos 30 días." />
+      {state.status === 'ready' && (
+        <MetricStrip label="Resumen de resurtido" items={[
+          { label: 'Variantes para reponer', value: state.suggestions.length },
+          { label: 'Cantidad total sugerida', value: QUANTITY.format(state.suggestions.reduce((sum, item) => sum + item.suggested_quantity, 0)) },
+          { label: 'Menor cobertura', value: state.suggestions.length === 0 ? 'Sin datos' : QUANTITY.format(state.suggestions[0].coverage_days) + ' días' },
+        ]} />
+      )}
       {state.status === 'forbidden' && (
         <p className="alert alert-error" role="alert">
           No tienes permiso para consultar las sugerencias de resurtido.
@@ -146,40 +156,42 @@ export function RestockSuggestions({ branchId, permissions }: Props) {
           </button>
         </div>
       )}
-      {state.status === 'ready' && state.suggestions.length === 0 && (
-        <p className="muted" role="status">
-          No hay sugerencias de resurtido para esta sede con el consumo registrado.
-        </p>
+      {state.status === 'ready' && (
+        <Card title="Prioridad por menor cobertura disponible">
+          <Toolbar trailing={<span className="ui-count">{rows.length} de {state.suggestions.length}</span>}>
+            <label className="ui-search"><span className="ui-sr-only">Buscar por SKU</span>
+              <input type="search" placeholder="Buscar por SKU" value={search}
+                onChange={(event) => setSearch(event.target.value)} />
+            </label>
+          </Toolbar>
+          <DataTable caption="Sugerencias de resurtido por variante" rows={rows}
+            rowKey={(item) => item.variant_id} onOpen={(item) => setSelectedVariant(item.variant_id)}
+            empty={<><strong>Sin sugerencias</strong><span>{search
+              ? 'No hay coincidencias; prueba otro SKU.'
+              : 'No hay sugerencias de resurtido para esta sede con el consumo registrado.'}</span></>}
+            columns={[
+              { key: 'sku', header: 'SKU', render: (item) => item.sku },
+              { key: 'consumo', header: 'Consumo en 30 días', render: (item) => QUANTITY.format(item.consumed_30d), align: 'right' },
+              { key: 'promedio', header: 'Promedio diario', render: (item) => QUANTITY.format(item.average_daily), align: 'right' },
+              { key: 'cobertura', header: 'Cobertura', render: (item) => <StatusPill tone={item.coverage_days < 7 ? 'warn' : 'neutral'}>{QUANTITY.format(item.coverage_days)} días</StatusPill> },
+              { key: 'disponible', header: 'Disponible', render: (item) => QUANTITY.format(item.available_quantity), align: 'right' },
+              { key: 'sugerido', header: 'Cantidad sugerida', render: (item) => <strong>{QUANTITY.format(item.suggested_quantity)}</strong>, align: 'right' },
+            ]} />
+        </Card>
       )}
-      {state.status === 'ready' && state.suggestions.length > 0 && (
-        <div className="catalog-variant-list">
-          <table>
-            <caption>Prioridad por menor cobertura disponible</caption>
-            <thead>
-              <tr>
-                <th scope="col">SKU</th>
-                <th scope="col">Consumo en 30 días</th>
-                <th scope="col">Promedio diario</th>
-                <th scope="col">Cobertura (días)</th>
-                <th scope="col">Disponible</th>
-                <th scope="col">Cantidad sugerida</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.suggestions.map((item) => (
-                <tr key={item.variant_id}>
-                  <th scope="row">{item.sku}</th>
-                  <td>{QUANTITY.format(item.consumed_30d)}</td>
-                  <td>{QUANTITY.format(item.average_daily)}</td>
-                  <td>{QUANTITY.format(item.coverage_days)}</td>
-                  <td>{QUANTITY.format(item.available_quantity)}</td>
-                  <td><strong>{QUANTITY.format(item.suggested_quantity)}</strong></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <SidePanel open={Boolean(selected)} title={selected ? 'Resurtido · ' + selected.sku : 'Detalle de resurtido'}
+        onClose={() => setSelectedVariant(null)}
+        footer={<button className="button button-secondary" type="button" onClick={() => setSelectedVariant(null)}>Cerrar</button>}>
+        {selected && <dl className="ui-details">
+          <div><dt>SKU</dt><dd>{selected.sku}</dd></div>
+          <div><dt>Consumo en 30 días</dt><dd>{QUANTITY.format(selected.consumed_30d)}</dd></div>
+          <div><dt>Promedio diario</dt><dd>{QUANTITY.format(selected.average_daily)}</dd></div>
+          <div><dt>Cobertura</dt><dd>{QUANTITY.format(selected.coverage_days)} días</dd></div>
+          <div><dt>Disponible</dt><dd>{QUANTITY.format(selected.available_quantity)}</dd></div>
+          <div><dt>Cantidad sugerida</dt><dd>{QUANTITY.format(selected.suggested_quantity)}</dd></div>
+          <p className="muted">Estimación de solo lectura: no crea órdenes ni mueve existencias.</p>
+        </dl>}
+      </SidePanel>
     </section>
   );
 }
