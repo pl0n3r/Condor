@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { useEffect, useState, type FormEvent } from 'react';
+import { PageHeader, MetricStrip, Toolbar, DataTable, SidePanel, StatusPill } from './ui/Kit';
 
 /** M15: simulación local de gobierno corporativo; nunca es un libro de actas real. */
 type GovernanceState = 'BORRADOR' | 'REQUIERE_REVISION' | 'EN_REVISION';
@@ -96,6 +97,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [representativeRef, setRepresentativeRef] = useState('');
   const [kind, setKind] = useState<GovernanceKind>('shareholder');
   const [selected, setSelected] = useState('');
+  const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<'TODOS' | GovernanceKind>('TODOS');
   const [stateFilter, setStateFilter] = useState<'TODOS' | GovernanceState>('TODOS');
@@ -151,6 +153,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       setRecords(previous => [...previous, created]);
       audit(reference, 'created');
       setSelected(created.reference);
+    setCreating(false);
       setReference(''); setBodyRef(''); setRepresentativeRef('');
       setNotice('Registro ficticio confirmado por el servidor. Sin valor jurídico.');
     } catch (error) {
@@ -225,16 +228,16 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const current = scoped.find(row => row.reference === selected);
 
   return (
-    <section id="governance-management" className="catalog-panel" aria-labelledby="governance-title">
-      <header>
-        <h2 id="governance-title">Gobierno corporativo · simulación M15</h2>
-        <p role="alert">SOLO DATOS FICTICIOS. Sin valor jurídico ni facultades reales.</p>
-        <p className="muted">Servidor Symfony autenticado; sesión ficticia sin efecto jurídico ni guardado en este navegador.</p>
-      </header>
+    <section id="governance-management" className="ui-page catalog-panel" aria-label="Gobierno corporativo · simulación M15">
+      <PageHeader title="Gobierno corporativo · simulación M15" description="Actuaciones ficticias, revisión explícita y permisos vigentes." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setCreating(true); }}>Crear actuación de prueba</button> : undefined} />
+      <MetricStrip label="Indicadores de Gobierno corporativo · simulación M15" items={[{ label: 'Registros', value: scoped.length }, { label: 'Resultados', value: visible.length }, { label: 'Eventos de esta sesión', value: events.filter(item => item.scope === scope).length }]} />
+      <p role="alert">SOLO DATOS FICTICIOS. Sin valor jurídico ni facultades reales.</p>
+      <p className="muted">Servidor Symfony autenticado; sesión ficticia sin efecto jurídico ni guardado en este navegador.</p>
       {notice && <output role="status" aria-live="polite">{notice}</output>}
-      <div className="catalog-grid">
-        <section className="catalog-card" aria-labelledby="governance-list-title">
+      <div className="ui-grid-2 catalog-grid">
+        <section className="ui-card catalog-card" aria-labelledby="governance-list-title">
           <h3 id="governance-list-title">Actuaciones ficticias</h3>
+          <Toolbar trailing={<span className="ui-count">{visible.length} de {scoped.length}</span>}>
           <label>Buscar referencia
             <input aria-label="Buscar actuación ficticia" value={search} maxLength={80}
               onChange={event => setSearch(event.target.value)} />
@@ -253,20 +256,12 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               {states.map(item => <option key={item} value={item}>{item}</option>)}
             </select>
           </label>
-          {visible.length === 0 ? <p role="status">Sin actuaciones ficticias para el filtro.</p> : (
-            <ul>{visible.map(row => (
-              <li key={row.reference}>
-                <button type="button" onClick={() => view(row.reference)}>
-                  {row.reference} · {row.kind} · {row.state}
-                </button>
-              </li>
-            ))}</ul>
-          )}
+          </Toolbar>
+          <DataTable caption="Listado de Gobierno corporativo · simulación M15" rows={visible} rowKey={row => row.reference} onOpen={row => view(row.reference)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.reference}</strong></span> }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'EN_REVISION' ? 'info' : row.state === 'REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.state}</StatusPill> }]} />
         </section>
         {canCreate && (
-          <section className="catalog-card" aria-labelledby="governance-create-title">
-            <h3 id="governance-create-title">Crear actuación de prueba</h3>
-            <form className="catalog-editor" onSubmit={create}>
+          <SidePanel open={creating && canCreate} title="Crear actuación de prueba" onClose={() => setCreating(false)}>
+          <form className="catalog-editor" onSubmit={create}>
               <label>Referencia ficticia
                 <input required maxLength={64} pattern="fixture:governance/[a-z][a-z0-9_-]{0,47}"
                   placeholder="fixture:governance/demo" value={reference}
@@ -290,10 +285,10 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               </label>
               <button type="submit" disabled={busy}>Registrar solicitud ficticia</button>
             </form>
-          </section>
+
+        </SidePanel>
         )}
-        <section className="catalog-card" aria-labelledby="governance-detail-title">
-          <h3 id="governance-detail-title">Detalle y revisión manual</h3>
+        <SidePanel open={Boolean(current) && !creating} title="Detalle y revisión manual" onClose={() => setSelected('')}>
           {current ? <>
             <dl>
               <dt>Referencia</dt><dd>{current.reference}</dd>
@@ -309,8 +304,9 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             )}
             <p className="muted">Ningún acta, poder o decisión se aprueba ni cierra automáticamente.</p>
           </> : <p role="status">Selecciona una actuación ficticia para el detalle.</p>}
-        </section>
-        <section className="catalog-card" aria-labelledby="governance-audit-title">
+
+        </SidePanel>
+        <section className="ui-card catalog-card" aria-labelledby="governance-audit-title">
           <h3 id="governance-audit-title">Bitácora de demostración (no oficial)</h3>
           <p className="muted">Las operaciones reales exigen permisos y auditoría de servidor.</p>
           {events.filter(row => row.scope === scope).length === 0
