@@ -29,11 +29,8 @@ final class SocialSecuritySyntheticSlicesController extends AbstractController
     use BranchApiSupport;
 
     public function __construct(
-        /** @phpstan-ignore property.onlyWritten (Trait BranchApiSupport reads this dependency.) */
         private readonly CurrentTenantForUser $currentTenantForUser,
-        /** @phpstan-ignore property.onlyWritten (Trait BranchApiSupport reads this dependency.) */
         private readonly BranchAuthorization $authorization,
-        /** @phpstan-ignore property.onlyWritten (Trait BranchApiSupport reads this dependency.) */
         private readonly EntityManagerInterface $entityManager,
         private readonly SocialSecuritySyntheticSlicesService $service,
     ) {
