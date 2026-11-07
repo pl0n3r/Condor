@@ -53,9 +53,12 @@ class UiPedidosFiltrosTests(unittest.TestCase):
         self.assertIn("'orders.view'", PANEL)
         self.assertIn("if (state.status !== 'ready')", PANEL)
         self.assertIn("'X-CSRF-Token': csrfToken", PANEL)
-        self.assertIn("orderCancelPath(branchId, order.id)", PANEL)
-        self.assertIn("orderConsumePath(branchId, order.id)", PANEL)
-        self.assertRegex(PANEL, re.compile(r"ready\.orders\.map\(\(order\)", re.MULTILINE))
+        self.assertIn("orderCancelPath(branchId, selectedOrder.id)", PANEL)
+        self.assertIn("orderConsumePath(branchId, selectedOrder.id)", PANEL)
+        self.assertIn("rows={ready.orders}", PANEL)
+        self.assertIn("onOpen={(order)", PANEL)
+        self.assertIn("const selectedOrder = ready?.orders.find((order)", PANEL)
+        self.assertIn("<SidePanel open={Boolean(ready && selectedOrder)}", PANEL)
         self.assertNotIn("tenant_id:", PANEL)
 
     def test_api_remains_branch_scoped_and_bounds_pagination(self) -> None:

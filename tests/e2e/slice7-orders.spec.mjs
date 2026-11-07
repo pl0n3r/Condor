@@ -65,7 +65,8 @@ test.describe('Slice 7 — pedidos y reservas', () => {
     await expect(
       orders.getByRole('heading', { name: 'Pedidos', exact: true })
     ).toBeVisible();
-    const orderForm = orders.locator('form.catalog-card').filter({
+    await orders.getByRole('button', { name: 'Crear pedido' }).click();
+    const orderForm = orders.locator('form.catalog-editor').filter({
       has: page.getByRole('heading', { name: 'Crear pedido' }),
     });
     await orderForm.getByLabel('Fuente de inventario').selectOption({
@@ -131,12 +132,13 @@ test.describe('Slice 7 — pedidos y reservas', () => {
     );
     expect(balance.quantity).toBe(8);
 
-    const firstCard = orders.locator('article.catalog-card').filter({
-      has: page.getByRole('heading', {
-        name: 'Pedido ' + firstOrder.id.slice(-8),
-      }),
+    await orders.getByRole('button', {
+      name: 'Pedido ' + firstOrder.id.slice(-8),
+    }).click();
+    const firstDetails = orders.getByRole('dialog', {
+      name: 'Pedido ' + firstOrder.id.slice(-8),
     });
-    await firstCard.getByRole('button', { name: 'Cancelar' }).click();
+    await firstDetails.getByRole('button', { name: 'Cancelar' }).click();
     await expect(
       orders.getByText('Pedido cancelado y reserva liberada.')
     ).toBeVisible();
@@ -156,6 +158,8 @@ test.describe('Slice 7 — pedidos y reservas', () => {
     );
     expect(balance.quantity).toBe(8);
 
+    await firstDetails.getByRole('button', { name: 'Cerrar' }).click();
+    await orders.getByRole('button', { name: 'Crear pedido' }).click();
     await orderForm.getByLabel('Variante').selectOption({
       label: productName + ' · ' + sku,
     });
@@ -174,15 +178,13 @@ test.describe('Slice 7 — pedidos y reservas', () => {
     ));
     expect(secondOrder).toBeTruthy();
 
-    const secondCard = orders.locator('article.catalog-card').filter({
-      has: page.getByRole('heading', {
-        name: 'Pedido ' + secondOrder.id.slice(-8),
-      }),
+    await orders.getByRole('button', {
+      name: 'Pedido ' + secondOrder.id.slice(-8),
+    }).click();
+    const secondDetails = orders.getByRole('dialog', {
+      name: 'Pedido ' + secondOrder.id.slice(-8),
     });
-    await secondCard.getByRole(
-      'button',
-      { name: 'Consumir inventario' }
-    ).click();
+    await secondDetails.getByRole('button', { name: 'Consumir inventario' }).click();
     await expect(orders.getByText('Inventario consumido.')).toBeVisible();
 
     snapshot = await ordersSnapshot();
