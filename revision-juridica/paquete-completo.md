@@ -31,6 +31,7 @@ Estado: documented_not_legally_approved. Documentos fuente íntegros a continuac
 | audit_events | usage | actor_user_id, action, entity_type, entity_id, context, created_at | security_audit | review_required | review_required | ninguno_declarado | review_required |
 | condor_password_reset | authentication | user_id, token_hash, expires_at, consumed_at, revoked_at | account_recovery | review_required | review_required | resend | password_reset_lifecycle |
 | contract_synthetic_records | usage | tenant_ref, company_ref, contract_ref, worker_ref, template_ref, actor_ref, state, version, audit_action, fingerprint, created_at | review_required | review_required | review_required | ninguno_declarado | review_required |
+| contracts_real_records | usage | id, tenant_id, company_id, record_ref, worker_ref, template_ref, kind, state, version, previous_id, actor_id, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | controlbot_staff_operations | usage | action, actor_key_id, target_staff_user_id, result, request_id, request_nonce_hash, request_ip, created_at, context | staff_administration_audit | review_required | review_required | ninguno_declarado | review_required |
 | customer_contact | contact | name, email, phone, document_number, notes, commercial_category_id | customer_management | review_required | review_required | ninguno_declarado | review_required |
 | diagnostic_shares | authentication | token_hash, expires_at, revoked_at, created_at | support_diagnostics | review_required | review_required | ninguno_declarado | diagnostic_share_lifecycle |
@@ -42,6 +43,7 @@ Estado: documented_not_legally_approved. Documentos fuente íntegros a continuac
 | payroll_real_records | usage | id, tenant_id, company_id, record_ref, employee_ref, period_ref, state, version, previous_id, actor_id, occurred_at | payroll_record_management | review_required | review_required | ninguno_declarado | review_required |
 | payroll_synthetic_records | usage | tenant_ref, legal_entity_ref, record_ref, employee_ref, period_ref, actor_ref, amount_hundredths, state, created_at, fingerprint | review_required | review_required | review_required | ninguno_declarado | review_required |
 | self_service_trial_application | contact | email, trial_quote_id, trial_consent_recorded_at | self_service_trial_application | review_required | review_required | ninguno_declarado | review_required |
+| social_security_real_records | usage | id, tenant_id, company_id, record_ref, category, state, version, previous_id, actor_id, occurred_at | social_security_record_management | review_required | review_required | ninguno_declarado | review_required |
 | social_security_synthetic_records | usage | tenant_ref, company_ref, social_security_ref, category, state, version, previous_id, previous_state, audit_action, actor_ref, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | workflow_definitions | usage | tenant_id, workflow_id, trigger_name, conditions_json, actions_json, created_by_user_id, updated_by_user_id, created_at, updated_at | workflow_definition_management | review_required | review_required | ninguno_declarado | review_required |
 | workflow_executions | usage | tenant_id, workflow_id, definition_version, actor_user_id, result, created_at | workflow_execution_audit | review_required | review_required | ninguno_declarado | review_required |
@@ -106,6 +108,7 @@ El canal debe contemplar solicitudes de acceso, rectificación/corrección, actu
 | audit_events | usage | actor_user_id, action, entity_type, entity_id, context, created_at | security_audit | review_required | review_required | ninguno_declarado | review_required |
 | condor_password_reset | authentication | user_id, token_hash, expires_at, consumed_at, revoked_at | account_recovery | review_required | review_required | resend | password_reset_lifecycle |
 | contract_synthetic_records | usage | tenant_ref, company_ref, contract_ref, worker_ref, template_ref, actor_ref, state, version, audit_action, fingerprint, created_at | review_required | review_required | review_required | ninguno_declarado | review_required |
+| contracts_real_records | usage | id, tenant_id, company_id, record_ref, worker_ref, template_ref, kind, state, version, previous_id, actor_id, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | controlbot_staff_operations | usage | action, actor_key_id, target_staff_user_id, result, request_id, request_nonce_hash, request_ip, created_at, context | staff_administration_audit | review_required | review_required | ninguno_declarado | review_required |
 | customer_contact | contact | name, email, phone, document_number, notes, commercial_category_id | customer_management | review_required | review_required | ninguno_declarado | review_required |
 | diagnostic_shares | authentication | token_hash, expires_at, revoked_at, created_at | support_diagnostics | review_required | review_required | ninguno_declarado | diagnostic_share_lifecycle |
@@ -117,6 +120,7 @@ El canal debe contemplar solicitudes de acceso, rectificación/corrección, actu
 | payroll_real_records | usage | id, tenant_id, company_id, record_ref, employee_ref, period_ref, state, version, previous_id, actor_id, occurred_at | payroll_record_management | review_required | review_required | ninguno_declarado | review_required |
 | payroll_synthetic_records | usage | tenant_ref, legal_entity_ref, record_ref, employee_ref, period_ref, actor_ref, amount_hundredths, state, created_at, fingerprint | review_required | review_required | review_required | ninguno_declarado | review_required |
 | self_service_trial_application | contact | email, trial_quote_id, trial_consent_recorded_at | self_service_trial_application | review_required | review_required | ninguno_declarado | review_required |
+| social_security_real_records | usage | id, tenant_id, company_id, record_ref, category, state, version, previous_id, actor_id, occurred_at | social_security_record_management | review_required | review_required | ninguno_declarado | review_required |
 | social_security_synthetic_records | usage | tenant_ref, company_ref, social_security_ref, category, state, version, previous_id, previous_state, audit_action, actor_ref, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | workflow_definitions | usage | tenant_id, workflow_id, trigger_name, conditions_json, actions_json, created_by_user_id, updated_by_user_id, created_at, updated_at | workflow_definition_management | review_required | review_required | ninguno_declarado | review_required |
 | workflow_executions | usage | tenant_id, workflow_id, definition_version, actor_user_id, result, created_at | workflow_execution_audit | review_required | review_required | ninguno_declarado | review_required |
@@ -189,6 +193,16 @@ Producto: `pl0n3r/Condor`
 
 - Categoría: `usage`
 - Campos de software: `tenant_ref`, `company_ref`, `contract_ref`, `worker_ref`, `template_ref`, `actor_ref`, `state`, `version`, `audit_action`, `fingerprint`, `created_at`
+- Finalidad: `review_required`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
+## contracts_real_records
+
+- Categoría: `usage`
+- Campos de software: `id`, `tenant_id`, `company_id`, `record_ref`, `worker_ref`, `template_ref`, `kind`, `state`, `version`, `previous_id`, `actor_id`, `occurred_at`
 - Finalidad: `review_required`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
@@ -305,6 +319,16 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `review_required`
 
+## social_security_real_records
+
+- Categoría: `usage`
+- Campos de software: `id`, `tenant_id`, `company_id`, `record_ref`, `category`, `state`, `version`, `previous_id`, `actor_id`, `occurred_at`
+- Finalidad: `social_security_record_management`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## social_security_synthetic_records
 
 - Categoría: `usage`
@@ -353,6 +377,7 @@ Producto: `pl0n3r/Condor`
 | audit_events | usage | review_required | review_required |
 | condor_password_reset | authentication | password_reset_lifecycle | review_required |
 | contract_synthetic_records | usage | review_required | review_required |
+| contracts_real_records | usage | review_required | review_required |
 | controlbot_staff_operations | usage | review_required | review_required |
 | customer_contact | contact | review_required | review_required |
 | diagnostic_shares | authentication | diagnostic_share_lifecycle | review_required |
@@ -364,6 +389,7 @@ Producto: `pl0n3r/Condor`
 | payroll_real_records | usage | review_required | review_required |
 | payroll_synthetic_records | usage | review_required | review_required |
 | self_service_trial_application | contact | review_required | review_required |
+| social_security_real_records | usage | review_required | review_required |
 | social_security_synthetic_records | usage | review_required | review_required |
 | workflow_definitions | usage | review_required | review_required |
 | workflow_executions | usage | review_required | review_required |
