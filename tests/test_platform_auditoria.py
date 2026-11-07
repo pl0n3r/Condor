@@ -52,7 +52,7 @@ final class PlatformAuditPermissionsHttpSmokeTest extends WebTestCase
         self::assertResponseStatusCodeSame(403);
 
         $client->loginUser($owner);
-        $client->request('GET', $path, ['actor' => $owner->id(), 'action' => 'commercial.plan.updated']);
+        $client->request('GET', $path, ['actor' => $owner->id(), 'action' => 'commercial.plan.updated', 'type' => 'commercial_plan']);
         self::assertResponseStatusCodeSame(200);
         $body = (string) $client->getResponse()->getContent();
         self::assertStringNotContainsString('private@example.test', $body);
@@ -74,6 +74,10 @@ final class PlatformAuditPermissionsHttpSmokeTest extends WebTestCase
         self::assertResponseStatusCodeSame(200);
         $other = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
         self::assertSame(0, $other['total']);
+        $client->request('GET', $path, ['type' => 'unrelated_type']);
+        self::assertResponseStatusCodeSame(200);
+        $otherType = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(0, $otherType['total']);
     }
 }
 """

@@ -45,12 +45,14 @@ final class PlatformAuditController extends PlatformOwnerApiController
         $page = $this->page((string) $request->query->get('page', '1'));
         $actor = trim((string) $request->query->get('actor', ''));
         $action = trim((string) $request->query->get('action', ''));
+        $type = trim((string) $request->query->get('type', ''));
         $from = $this->date((string) $request->query->get('from', ''));
         $through = $this->date((string) $request->query->get('through', ''));
 
         if (
             ($actor !== '' && preg_match('/\A[A-Za-z0-9_-]{1,64}\z/D', $actor) !== 1)
             || ($action !== '' && preg_match('/\A[a-z][a-z0-9._-]{0,119}\z/D', $action) !== 1)
+            || ($type !== '' && (strlen($type) > 160 || strpbrk($type, "\r\n\0") !== false))
             || ($from !== null && $through !== null && $from > $through)
         ) {
             throw new BadRequestHttpException('Filtros de auditoría inválidos.');
@@ -66,6 +68,10 @@ final class PlatformAuditController extends PlatformOwnerApiController
         if ($action !== '') {
             $where[] = 'action = :action';
             $params['action'] = $action;
+        }
+        if ($type !== '') {
+            $where[] = 'entity_type = :type';
+            $params['type'] = $type;
         }
         if ($from !== null) {
             $where[] = 'created_at >= :from';

@@ -18,14 +18,14 @@ type AuditPage = {
   total: number;
   has_next: boolean;
 };
-type Filters = { actor: string; action: string; from: string; through: string };
+type Filters = { actor: string; action: string; type: string; from: string; through: string };
 type LoadState =
   | { status: 'loading' }
   | { status: 'denied' }
   | { status: 'error' }
   | { status: 'ready'; data: AuditPage };
 
-const emptyFilters: Filters = { actor: '', action: '', from: '', through: '' };
+const emptyFilters: Filters = { actor: '', action: '', type: '', from: '', through: '' };
 
 function readableDate(utc: string): string {
   const parsed = new Date(utc);
@@ -53,6 +53,7 @@ export function PlatformAuditPanel() {
       const params = new URLSearchParams({ page: String(page) });
       if (filters.actor) params.set('actor', filters.actor);
       if (filters.action) params.set('action', filters.action);
+      if (filters.type) params.set('type', filters.type);
       if (filters.from) params.set('from', filters.from);
       if (filters.through) params.set('through', filters.through);
       try {
@@ -104,6 +105,9 @@ export function PlatformAuditPanel() {
           </label>
           <label className="field"><span>Tipo de acción</span>
             <input value={draft.action} maxLength={120} onChange={e => setDraft(v => ({ ...v, action: e.target.value }))} />
+          </label>
+          <label className="field"><span>Tipo de objeto</span>
+            <input value={draft.type} maxLength={160} onChange={e => setDraft(v => ({ ...v, type: e.target.value }))} />
           </label>
           <label className="field"><span>Desde</span>
             <input type="date" value={draft.from} onChange={e => setDraft(v => ({ ...v, from: e.target.value }))} />
