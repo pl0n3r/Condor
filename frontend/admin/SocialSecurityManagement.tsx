@@ -24,6 +24,53 @@ function synthetic(type: ReferenceType, input: string): boolean {
   return allowed[type].test(input) && !/[0-9]{7,}/.test(input);
 }
 
+// Seis previsualizaciones SOLO de laboratorio: ninguna invoca API, PILA o datos reales.
+const M05_SYNTHETIC_MODULES = [
+  ['GEST-M05-S01', 'Afiliaciones'],
+  ['GEST-M05-S02', 'Novedades'],
+  ['GEST-M05-S03', 'Aportes'],
+  ['GEST-M05-S04', 'Soportes'],
+  ['GEST-M05-S05', 'Alertas'],
+  ['GEST-M05-S06', 'Preparación PILA'],
+] as const;
+type M05PreviewState = 'loading' | 'empty' | 'error' | 'permission-denied';
+const M05_PREVIEW_TEXT: Record<M05PreviewState, string> = {
+  loading: 'Simulación de carga. No se realizan solicitudes.',
+  empty: 'Sin registros ficticios. No hay operación habilitada.',
+  error: 'Error simulado, sin consultar servicios externos.',
+  'permission-denied': 'Acceso denegado para este ámbito de prueba.',
+};
+
+function SyntheticSliceStates({ state }: { state: M05PreviewState }) {
+  return <ul aria-label="Estados de seis submódulos sintéticos">
+    {M05_SYNTHETIC_MODULES.map(([code, label]) =>
+      <li key={code} data-m05-slice={code} data-ui-state={state}>
+        <strong>{label}</strong>
+        <p role={state === 'error' || state === 'permission-denied' ? 'alert' : 'status'}>
+          {M05_PREVIEW_TEXT[state]}
+        </p>
+      </li>)}
+  </ul>;
+}
+
+function SyntheticCoveragePanel({ denied }: { denied: boolean }) {
+  const [previewState, setPreviewState] = useState<M05PreviewState>('empty');
+  const state: M05PreviewState = denied ? 'permission-denied' : previewState;
+  return <Card title="Estados UX de M05-S01 a S06 · solo laboratorio">
+    <p>No hay API para novedades, aportes, soportes, alertas ni PILA. La previsualización no consulta la red.</p>
+    <label>Estado de demostración
+      <select aria-label="Previsualizar estados M05" value={state} disabled={denied}
+        onChange={event => setPreviewState(event.target.value as M05PreviewState)}>
+        <option value="loading">Carga simulada</option>
+        <option value="empty">Vacío</option>
+        <option value="error">Error simulado</option>
+        <option value="permission-denied">Permiso denegado</option>
+      </select>
+    </label>
+    <SyntheticSliceStates state={state} />
+  </Card>;
+}
+
 function Demo({ tenantId, companyId, branchId, permissions }: Props) {
   const scope = [tenantId, companyId, branchId].join('|');
   const canView = companyId !== '__unassigned__' && permissions.includes('users.view');
@@ -81,6 +128,7 @@ function Demo({ tenantId, companyId, branchId, permissions }: Props) {
   if (!canView) return <section id="social-security-management" className="catalog-panel ui-page">
     <PageHeader title="Seguridad Social M05 · laboratorio ficticio" />
     <p role="alert">Demostración no disponible: empresa o permiso de consulta ausente.</p>
+    <SyntheticCoveragePanel denied={true} />
   </section>;
 
   const filtered = visible.filter(item => item.id.includes(filter.trim().toLowerCase()));
@@ -120,6 +168,7 @@ function Demo({ tenantId, companyId, branchId, permissions }: Props) {
         empty={<p role="status">{visible.length === 0
           ? 'No hay registros ficticios.' : 'No hay afiliaciones para este filtro.'}</p>} />
     </Card>
+    <SyntheticCoveragePanel denied={false} />
     <Card title="Auditoría local de demostración (no oficial)">
       <p>Solo eventos de esta sesión. Las operaciones reales exigen auditoría de servidor.</p>
       {scopedHistory.length === 0
@@ -340,7 +389,12 @@ export function SocialSecurityRealManagement({
       <PageHeader title="Seguridad social" />
       <p role={role}>{message}</p>
     </section>;
-  if (!enabled) return shell('El módulo de Seguridad social aún no está habilitado. No se consultaron registros.', 'status');
+  if (!enabled) return <section id="social-security-management" className="catalog-panel ui-page"
+    aria-label="Seguridad social">
+    <PageHeader title="Seguridad social" />
+    <p role="status">El módulo de Seguridad social aún no está habilitado. No se consultaron registros.</p>
+    {import.meta.env.DEV && <SyntheticCoveragePanel denied={!canRead} />}
+  </section>;
   if (!canRead || status === 'denied') return shell('Acceso denegado: empresa, razón social o permiso insuficientes.', 'alert');
   if (status === 'disabled') return shell('El servidor no tiene habilitada esta función.', 'alert');
 

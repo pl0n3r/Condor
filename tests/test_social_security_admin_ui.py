@@ -25,7 +25,9 @@ class ModuloTests(unittest.TestCase):
         ):
             self.assertIn(contract, panel + app)
         self.assertIn("!canView", panel)
-        self.assertIn("<DevSocialSecurityManagement", app)
+        self.assertIn("<SocialSecurityRealManagement", app)
+        self.assertIn("enabled={socialSecurityRealDataEnabled}", app)
+        self.assertIn("context.data.active_branch.id", app)
 
     def test_permisos_y_auditoria(self) -> None:
         code = PANEL.read_text(encoding="utf-8")
@@ -74,9 +76,38 @@ class ModuloTests(unittest.TestCase):
         self.assertIn('type="button"', panel)
         self.assertIn('role="alert"', panel)
         self.assertIn('aria-live="polite"', panel)
-        self.assertIn("import.meta.env.DEV && DevSocialSecurityManagement", app)
+        self.assertIn("(socialSecurityRealDataEnabled || import.meta.env.DEV)", app)
+        self.assertIn("if (!enabled) return <section", panel)
+        self.assertIn("import.meta.env.DEV && <SyntheticCoveragePanel denied={!canRead}", panel)
+        self.assertIn("if (!canRead || status === 'denied')", panel)
         self.assertNotRegex(panel, r"(state|stage): '(APROBADO|CERRADO|PAGADO|ENVIADO)'")
         self.assertNotIn("setTimeout(", panel)
+
+
+    def test_seis_submodulos_ux_sin_trafico_ni_datos_reales(self) -> None:
+        panel = PANEL.read_text(encoding="utf-8")
+        declaration = re.search(
+            r"const M05_SYNTHETIC_MODULES = \[(.*?)\] as const;", panel, re.S
+        )
+        self.assertIsNotNone(declaration)
+        assert declaration is not None
+        for suffix in range(1, 7):
+            self.assertEqual(1, declaration.group(1).count(f"GEST-M05-S{suffix:02d}"))
+        for state in ("loading", "empty", "error", "permission-denied"):
+            self.assertIn(f"<option value=\"{state}\">", panel)
+        for invariant in (
+            "data-m05-slice={code}", "data-ui-state={state}",
+            "SyntheticSliceStates state={state}",
+            "SyntheticCoveragePanel denied={true}",
+            "SyntheticCoveragePanel denied={!canRead}",
+            "setPreviewState(event.target.value as M05PreviewState)",
+            "No hay API para novedades, aportes, soportes, alertas ni PILA.",
+            "La previsualización no consulta la red.",
+        ):
+            self.assertIn(invariant, panel)
+        laboratory = panel.split("export function SocialSecurityManagement", 1)[0]
+        for forbidden in ("fetch(", "axios.", "XMLHttpRequest", "localStorage"):
+            self.assertNotIn(forbidden, laboratory)
 
 
 if __name__ == "__main__":
