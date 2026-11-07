@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
 type Workflow = {
   workflow_id: string;
@@ -134,6 +135,8 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState('');
   const latest = useRef(0);
   const detailRequest = useRef(0);
 
@@ -212,6 +215,7 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
       }
       if (epoch !== latest.current) return;
       setSelected(result.workflow.workflow_id);
+      setCreating(false);
       setWorkflowId('');
       setTrigger('');
       setConditions([]);
@@ -307,22 +311,60 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
   }
 
   if (!allowed) return null;
+  const filtered = ready?.workflows.filter((item) =>
+    (item.workflow_id + ' ' + item.trigger)
+      .toLocaleLowerCase('es-CO').includes(search.toLocaleLowerCase('es-CO'))) ?? [];
   return (
-    <section id="workflows" aria-labelledby="workflows-title">
-      <h2 id="workflows-title">Automatizaciones · Workflows</h2>
-      <p className="muted">Configura acciones internas por sede. La simulación no produce efectos.</p>
+    <section id="workflows" className="ui-page" aria-label="Automatizaciones y workflows">
+      <PageHeader title="Automatizaciones · Workflows"
+        description="Configura acciones internas por sede. La simulación no produce efectos."
+        actions={ready ? <button type="button" className="button" disabled={busy}
+          onClick={() => setCreating(true)}>Nuevo workflow</button> : undefined} />
       <div aria-live="polite">
         {state.kind === 'loading' && <p role="status">Cargando workflows…</p>}
         {state.kind === 'error' && <p role="alert">{state.message}</p>}
         {notice !== null && <p role="status">{notice}</p>}
       </div>
-      {state.kind === 'error' && (
-        <button type="button" onClick={() => { void load(); }}>Reintentar</button>
-      )}
-      {ready !== null && (
-        <>
-          <h3>Crear workflow</h3>
-          <form onSubmit={(event) => { void create(event); }}>
+      {state.kind === 'error' && <button type="button" className="button button-secondary"
+        onClick={() => void load()}>Reintentar</button>}
+      {ready && <>
+        <MetricStrip label="Resumen de automatizaciones" items={[
+          { label: 'Workflows', value: ready.workflows.length },
+          { label: 'Activos', value: ready.workflows.filter((item) => item.active).length },
+          { label: 'Desactivados', value: ready.workflows.filter((item) => !item.active).length },
+        ]} />
+        <Card title="Workflows configurados">
+          <Toolbar trailing={<span className="ui-count">{filtered.length} de {ready.workflows.length}</span>}>
+            <label className="ui-search"><span className="ui-sr-only">Buscar workflow</span>
+              <input type="search" placeholder="Buscar por identificador o disparador"
+                value={search} onChange={(event) => setSearch(event.target.value)} />
+            </label>
+          </Toolbar>
+          <DataTable caption="Automatizaciones del tenant activo" rows={filtered}
+            rowKey={(item) => item.workflow_id} onOpen={(item) => { void showHistory(item); }}
+            empty={<><strong>No hay workflows para mostrar</strong><span>Crea uno desactivado o prueba otra búsqueda.</span></>}
+            columns={[
+              { key: 'id', header: 'Workflow', render: (item) => item.workflow_id },
+              { key: 'trigger', header: 'Disparador', render: (item) => item.trigger },
+              { key: 'state', header: 'Estado', render: (item) =>
+                <StatusPill tone={item.active ? 'ok' : 'neutral'}>
+                  {item.active ? 'Activo' : 'Desactivado'}</StatusPill> },
+              { key: 'version', header: 'Versión', render: (item) => item.version, align: 'right' },
+              { key: 'actions', header: 'Acciones', render: (item) => <span className="ui-row-actions">
+                <button type="button" className="button button-secondary" disabled={busy}
+                  onClick={() => void toggle(item)}>{item.active ? 'Desactivar' : 'Activar'}</button>
+                <button type="button" className="button button-secondary" disabled={busy}
+                  onClick={() => void simulate(item)}>Simular sin efectos</button>
+                <button type="button" className="button button-secondary" disabled={busy || detailLoading}
+                  onClick={() => void showHistory(item)}>Ver historial</button>
+              </span> },
+            ]} />
+        </Card>
+      </>}
+      <SidePanel open={creating && ready !== null} title="Crear workflow"
+        onClose={() => setCreating(false)}>
+        <p className="muted">Se crea desactivado. No se ejecutan acciones al guardar.</p>
+          <form className="ui-form" onSubmit={(event) => { void create(event); }}>
             <label htmlFor="workflow-id">Identificador</label>
             <input id="workflow-id" value={workflowId} maxLength={128} required
               onChange={(event) => setWorkflowId(event.target.value)}
@@ -380,63 +422,34 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
             <button type="submit" disabled={busy || !validNewId || !validTrigger
               || !validConditions || !ready.actions.includes(actionType)}>Crear desactivado</button>
           </form>
-          <h3>Workflows configurados</h3>
-          {ready.workflows.length === 0 ? (
-            <p>No hay workflows configurados para esta empresa.</p>
-          ) : (
-            <div className="table-responsive">
-              <table>
-                <caption>Automatizaciones disponibles en el tenant activo</caption>
-                <thead><tr>
-                  <th scope="col">Identificador</th>
-                  <th scope="col">Disparador</th>
-                  <th scope="col">Estado</th>
-                  <th scope="col">Versión</th>
-                  <th scope="col">Acciones</th>
-                </tr></thead>
-                <tbody>{ready.workflows.map((item) => (
-                  <tr key={item.workflow_id}>
-                    <th scope="row">{item.workflow_id}</th>
-                    <td>{item.trigger}</td>
-                    <td>{item.active ? 'Activo' : 'Desactivado'}</td>
-                    <td>{item.version}</td>
-                    <td>
-                      <button type="button" disabled={busy}
-                        onClick={() => { void toggle(item); }}>
-                        {item.active ? 'Desactivar' : 'Activar'}
-                      </button>{' '}
-                      <button type="button" disabled={busy}
-                        onClick={() => { void simulate(item); }}>Simular sin efectos</button>{' '}
-                      <button type="button" disabled={busy || detailLoading}
-                        onClick={() => { void showHistory(item); }}>Ver historial</button>
-                    </td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-          )}
-          {selected !== '' && (
-            <div aria-live="polite">
-              <h3>Detalle de {current?.workflow_id ?? selected}</h3>
-              {detailLoading && <p role="status">Cargando historial…</p>}
-              {history !== null && (history.length === 0 ? (
-                <p>No hay ejecuciones registradas para este workflow.</p>
-              ) : (
-                <ul>{history.map((item) => (
-                  <li key={item.id}>{item.created_at} · {item.result}
-                    {' · '}{item.reason} · versión {item.definition_version}</li>
-                ))}</ul>
-              ))}
-              {trace !== null && (
-                <>
-                  <p>Vista previa sintética, persisted: false.</p>
-                  <pre>{trace}</pre>
-                </>
-              )}
-            </div>
-          )}
-        </>
-      )}
+      </SidePanel>
+      <SidePanel open={selected !== '' && ready !== null} title={'Detalle de ' + (current?.workflow_id ?? selected)}
+        onClose={() => { detailRequest.current += 1; setSelected(''); setHistory(null); setTrace(null); }}>
+        {current && <dl className="ui-details">
+          <div><dt>Identificador</dt><dd>{current.workflow_id}</dd></div>
+          <div><dt>Disparador</dt><dd>{current.trigger}</dd></div>
+          <div><dt>Estado</dt><dd><StatusPill tone={current.active ? 'ok' : 'neutral'}>
+            {current.active ? 'Activo' : 'Desactivado'}</StatusPill></dd></div>
+          <div><dt>Versión</dt><dd>{current.version}</dd></div>
+        </dl>}
+        {detailLoading && <p role="status">Cargando historial…</p>}
+        {history !== null && (history.length === 0
+          ? <p>No hay ejecuciones registradas para este workflow.</p>
+          : <ul>{history.map((item) => <li key={item.id}>
+            {item.created_at} · {item.result} · {item.reason} · versión {item.definition_version}
+          </li>)}</ul>)}
+        {trace !== null && <>
+          <p>Vista previa sintética, sin persistencia.</p>
+          <pre>{trace}</pre>
+        </>}
+        {history === null && !detailLoading && trace === null && <p>Selecciona una acción para consultar el historial.</p>}
+        {current && <div className="ui-page-actions">
+          <button type="button" className="button button-secondary" disabled={busy}
+            onClick={() => void simulate(current)}>Simular sin efectos</button>
+          <button type="button" className="button button-secondary" disabled={busy || detailLoading}
+            onClick={() => void showHistory(current)}>Ver historial</button>
+        </div>}
+      </SidePanel>
     </section>
   );
 }
