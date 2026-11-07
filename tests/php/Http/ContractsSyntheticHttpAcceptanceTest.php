@@ -179,6 +179,7 @@ final class ContractsSyntheticHttpAcceptanceTest extends WebTestCase
     {
         $hex = bin2hex(random_bytes(5));
         $suffix = substr($hex, 0, 5).'a'.substr($hex, 5);
+        self::assertMatchesRegularExpression('/\A[a-f0-9]{5}a[a-f0-9]{5}\z/D', $suffix);
         self::assertDoesNotMatchRegularExpression('/[0-9]{7,}/', $suffix);
 
         return $suffix;
