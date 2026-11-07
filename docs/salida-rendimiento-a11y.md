@@ -23,7 +23,7 @@ En la tabla, **bytes** se calcula sobre el archivo UTF-8 versionado en HEAD medi
 
 ## Presupuesto de navegador y accesibilidad previo a live
 
-Los siguientes son **objetivos propuestos**, no resultados observados. Corresponden a cada una de las cuatro pantallas anteriores, bajo perfil móvil de red y CPU repetible con fixtures ficticias y sin servicios de pago. Toda ejecución futura debe conservar versión, SHA, URL o route sintética, viewport, dispositivo, herramienta, timestamp UTC y artefacto de resultados. Un resultado ausente es `NO VERIFICADO`; no se reemplaza por aprobación presunta.
+Los siguientes son **objetivos técnicos aprobados exclusivamente para el laboratorio pre-live por la decisión OWNER #1868/A**, no resultados observados ni metas comerciales definitivas. Corresponden a cada una de las cuatro pantallas anteriores, bajo perfil móvil de red y CPU repetible con fixtures ficticias y sin servicios de pago. Toda ejecución futura debe conservar versión, SHA, URL o route sintética, viewport, dispositivo, herramienta, timestamp UTC y artefacto de resultados. Un resultado ausente es `NO VERIFICADO`; no se reemplaza por aprobación presunta.
 
 | Pantalla | LCP p75 máximo (ms) | INP p75 máximo (ms) | CLS p75 máximo | Contraste texto normal mínimo | Contraste grande/UI mínimo | Violaciones axe serias/críticas máximas | Recorridos de teclado exigidos |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -47,5 +47,25 @@ Los siguientes son **objetivos propuestos**, no resultados observados. Correspon
 - **DECISIÓN DEL DUEÑO:** aprobar el presupuesto real por tipo de dispositivo, experiencia y clientes junto con el criterio comercial de excepción. Los números anteriores son metas técnicas propuestas, no aprobación comercial.
 - **DECISIÓN DEL DUEÑO:** autorizar explícitamente acceso a hosting, dominio real, pruebas productivas, datos reales, publicación y `go-live`; todas esas operaciones están **NO AUTORIZADAS** para esta entrega.
 - **DECISIÓN DEL DUEÑO:** designar responsable de atención a incidentes y de aceptación legal/accesibilidad previo a live. No se capturan nombres, emails de clientes, credenciales, tokens, trazas sensibles ni sesiones reales.
+
+## Matriz técnica pre-live aprobada — OWNER #1868/A
+
+**Decisión comprobada:** [Condor #1868](https://github.com/pl0n3r/Condor/issues/1868), voto OWNER aislado `/decidir A` (comentario #6713272297), journal BOT v2/A (comentario #6713278956) y puerta CLOSED/completada. **Corte documental:** `main@dacd54caaeb745c5c666422ca191aba6562b5aaa` (identidad de partida del contrato, no SHA de una medición). La autoridad es únicamente técnica y previa a live; no aprueba proveedores, presupuesto comercial, sesiones reales ni go-live.
+
+**Matriz objetivo, no resultados:** Chrome estable y **Playwright WebKit** (no Safari nativo) en escritorio **1440×900** y móvil **390×844**. Cinco rutas × dos motores × dos perfiles = **20 escenarios objetivo**. La hija #1819 observó **12** escenarios históricos exploratorios en rutas públicas/login; los otros **8** escenarios de paneles con sesiones exclusivamente ficticias permanecen **NO VERIFICADO**.
+
+<!-- QA1499-APPROVED-MATRIX-START -->
+| Flujo | Ruta | Chrome estable | Playwright WebKit | Estado de evidencia |
+| --- | --- | --- | --- | --- |
+| Inicio público | `/` | 2 | 2 | PARCIAL — axe de reglas seleccionadas, sin p75 de campo |
+| Producto público | `/producto` | 2 | 2 | PARCIAL — axe de reglas seleccionadas, sin p75 de campo |
+| Acceso administrativo | `/admin/login` | 2 | 2 | PARCIAL — axe de reglas seleccionadas, sin p75 de campo |
+| Panel tenant sintético | `/admin` | 2 | 2 | PENDIENTE — requiere sesión sintética y recorrido de navegador |
+| Panel plataforma sintético | `/adminpl0n3r` | 2 | 2 | PENDIENTE — requiere sesión sintética y recorrido de navegador |
+<!-- QA1499-APPROVED-MATRIX-END -->
+
+**Metas técnicas provisionales autorizadas solo para laboratorio:** LCP p75 ≤ 2500 ms; INP p75 ≤ 200 ms; CLS p75 ≤ 0,10; hallazgos **axe serios/críticos: 0**; recorrido de **teclado 100%**. Para futuras ejecuciones guardar método, tamaños de muestra, UTC, motor/versiones, viewport, fixtures ficticias, URL únicamente localhost, artefactos sanitizados y **SHA exacto del árbol servido**. Una muestra exploratoria no constituye field p75 representativo ni INP canónico; si faltan interacciones válidas registrar `NO VERIFICADO`, nunca PASS inferido.
+
+**Puertas independientes:** Safari nativo, dispositivos físicos, lectores de pantalla, conformidad integral WCAG 2.2 AA, presupuestos comerciales, proveedores externos, costes, datos reales, cuentas de clientes, host público, telemetría de campo y go-live **NO VERIFICADO / NO AUTORIZADO**. El laboratorio Chrome/Playwright WebKit no certifica Safari ni la release. La decisión de go-live sigue separada en #1498. Esta matriz no modifica presupuestos de bytes de CI.
 
 **Reversión:** revertir el squash de los dos archivos documentales; sin impacto sobre producto, infraestructura, migraciones, costos o producción.
