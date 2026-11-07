@@ -7,6 +7,7 @@ namespace App\Http\Controller;
 use App\Application\Compliance\ComplianceApiService;
 use App\Application\Compliance\OccupationalApiService;
 use App\Application\Compliance\OccupationalSafetyRecordService;
+use App\Application\Compliance\ComplianceEvidenceRecordService;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\User;
@@ -33,6 +34,7 @@ final class ComplianceController extends AbstractController
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
         private readonly OccupationalSafetyRecordService $occupationalRecords,
+        private readonly ComplianceEvidenceRecordService $complianceEvidenceRecords,
     ) {
     }
 
@@ -88,6 +90,111 @@ final class ComplianceController extends AbstractController
         $this->auditPreview($company, $actor, 'state_changed', $fixture);
         $request->getSession()->set('condor_compliance_synthetic', $outcome['store']);
         return $this->json(['evidence' => $outcome['record']]);
+    }
+
+    // Legal compliance real-record bridge: owner-only, opaque refs, flag OFF by default.
+    /**
+     * Owner-only persisted Cumplimiento legal bridge: both read routes use one guarded
+     * handler; both writes share flag, CSRF, and scope validation.
+     */
+    #[Route('/api/v1/branches/{branchId}/compliance/real-records', name: 'api_compliance_real_list', methods: ['GET'])]
+    public function complianceRealList(string $branchId): JsonResponse
+    {
+        return $this->complianceRealRead($branchId, null);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/compliance/real-records/{ref}', name: 'api_compliance_real_detail', methods: ['GET'])]
+    public function complianceRealView(string $branchId, string $ref): JsonResponse
+    {
+        return $this->complianceRealRead($branchId, $ref);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/compliance/real-records', name: 'api_compliance_real_create', methods: ['POST'])]
+    public function complianceRealCreate(string $branchId, Request $request): JsonResponse
+    {
+        return $this->complianceRealWrite($branchId, $request, null);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/compliance/real-records/{ref}/state', name: 'api_compliance_real_state', methods: ['PATCH'])]
+    public function complianceRealState(string $branchId, string $ref, Request $request): JsonResponse
+    {
+        return $this->complianceRealWrite($branchId, $request, $ref);
+    }
+
+    private function complianceRealRead(string $branchId, ?string $ref): JsonResponse
+    {
+        if (($off = $this->complianceRealDisabled()) !== null) {
+            return $off;
+        }
+        [, $tenant, $company] = $this->complianceRealScope($branchId, 'settings.view');
+        if ($ref === null) {
+            $rows = $this->domain(fn (): array => $this->complianceEvidenceRecords->all($tenant, $company));
+            return $this->complianceRealJson(['records' => $rows]);
+        }
+        $row = $this->domain(fn (): ?array => $this->complianceEvidenceRecords->one($tenant, $company, $ref));
+        if ($row === null) {
+            throw new NotFoundHttpException('Registro Cumplimiento legal no encontrado.');
+        }
+        return $this->complianceRealJson(['record' => $row]);
+    }
+
+    private function complianceRealWrite(string $branchId, Request $request, ?string $ref): JsonResponse
+    {
+        if (($off = $this->complianceRealDisabled()) !== null) {
+            return $off;
+        }
+        $this->requireCsrf($request);
+        $permission = $ref === null ? 'settings.create' : 'settings.update';
+        [$actor, $tenant, $company] = $this->complianceRealScope($branchId, $permission);
+
+        if ($ref === null) {
+            $input = $this->payload($request, ['record_ref', 'kind']);
+            $created = $this->domain(fn (): array => $this->complianceEvidenceRecords->add(
+                $tenant, $company, $actor, $input,
+            ));
+            return $this->complianceRealJson(['record' => $created], Response::HTTP_CREATED);
+        }
+
+        $change = $this->payload($request, ['state', 'expected_version']);
+        if (!is_string($change['state'] ?? null) || !is_int($change['expected_version'] ?? null)) {
+            throw new BadRequestHttpException('Estado y versión válidos son obligatorios.');
+        }
+        $updated = $this->domain(fn (): array => $this->complianceEvidenceRecords->transition(
+            $tenant, $company, $actor, $ref, $change['state'], $change['expected_version'],
+        ));
+        return $this->complianceRealJson(['record' => $updated]);
+    }
+
+    /** @return array{string,string,string} */
+    private function complianceRealScope(string $branchId, string $permission): array
+    {
+        [$actor, $tenant, $branch, $membership] = $this->authorizedBranchScope($branchId, $permission);
+        if (!$actor->isActive() || !$membership->isActive()
+            || $membership->roleKey() !== Membership::ROLE_OWNER) {
+            throw new AccessDeniedHttpException('Solo el propietario puede gestionar Cumplimiento legal.');
+        }
+        $entity = $branch->legalEntity();
+        if ($entity === null || $entity->tenant()->id() !== $tenant->id()) {
+            throw new NotFoundHttpException('Razón social no disponible.');
+        }
+        return [$actor->id(), $tenant->id(), $entity->id()];
+    }
+
+    private function complianceRealDisabled(): ?JsonResponse
+    {
+        if (getenv('LEGAL_COMPLIANCE_REAL_DATA_ENABLED') === 'true') {
+            return null;
+        }
+        return $this->complianceRealJson(['error' => 'feature_unavailable'], Response::HTTP_NOT_FOUND);
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function complianceRealJson(array $payload, int $status = Response::HTTP_OK): JsonResponse
+    {
+        $response = $this->json($payload, $status);
+        $response->headers->set('Cache-Control', 'private, no-store');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        return $response;
     }
 
     /** @return array{User,Tenant,Branch} */
