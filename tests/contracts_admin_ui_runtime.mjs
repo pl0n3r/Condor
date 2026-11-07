@@ -7,7 +7,7 @@ const scenario = process.argv[2];
 const mutation = process.argv[3] ?? '';
 const constantsStart = source.indexOf('const permitted = {');
 const functionStart = source.indexOf('function ContractPreview(');
-const functionEnd = source.indexOf('  if (!canRead) return (', functionStart);
+const functionEnd = source.indexOf('  if (!canRead) return <section', functionStart);
 assert.ok(constantsStart >= 0 && functionStart > constantsStart && functionEnd > functionStart,
   'M02 handler boundaries must exist; do not silently skip behavioral tests');
 let constants = source.slice(constantsStart, functionStart)
@@ -15,7 +15,7 @@ let constants = source.slice(constantsStart, functionStart)
   .replace('const allowedType: readonly ContractType[] =', 'const allowedType =');
 let handlers = source.slice(functionStart, functionEnd)
   .replace('}: Props) {', '}) {')
-  .replace(/useState<(?:Draft\[\]|Note\[\]|string \| null|ContractType)>/g, 'useState')
+  .replace(/useState<[^>]*>/g, 'useState')
   .replace(/(refToRecord|operation): string/g, '$1')
   .replace(/event: FormEvent<HTMLFormElement>/g, 'event')
   .replace(/item: Draft/g, 'item')

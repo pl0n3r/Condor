@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
 type Props = Readonly<{
   tenantId: string;
@@ -81,6 +82,7 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
   const [view, setView] = useState<View>({ status: 'loading', records: [] });
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState('');
+  const [panel, setPanel] = useState<'create' | 'detail' | null>(null);
   const [recordRef, setRecordRef] = useState('');
   const [collaboratorRef, setCollaboratorRef] = useState('');
   const [positionRef, setPositionRef] = useState('');
@@ -145,6 +147,7 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
       setNotice('Cambio confirmado por el servidor. Actualizando registros…');
       setRecordRef(''); setCollaboratorRef(''); setPositionRef('');
       await load();
+      if (mounted.current && !request.signal.aborted) setPanel(null);
     } catch {
       if (mounted.current && !request.signal.aborted)
         setNotice('No se pudo confirmar el resultado. Recarga antes de intentar otra operación.');
@@ -169,42 +172,63 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
     || row.position_ref.includes(search.trim().toLowerCase()));
   const current = records.find(row => row.record_ref === selected);
 
-  if (!canView) return <section id="human-resources-management" aria-label="Talento humano">
-    <h2>Talento humano</h2><p role="alert">No tienes permiso para consultar esta empresa o sede.</p>
+  if (!canView) return <section id="human-resources-management" className="catalog-panel ui-page">
+    <PageHeader title="Talento humano" description="Gestión de cargos y novedades por empresa y sede." />
+    <p role="alert">No tienes permiso para consultar esta empresa o sede.</p>
   </section>;
 
-  return <section id="human-resources-management" className="catalog-panel" aria-labelledby="hr-title">
-    <header>
-      <h2 id="hr-title">Talento humano · gestión de cargos y novedades</h2>
-      <p className="muted">Registros por empresa y sede, con autorización del servidor y trazabilidad de versiones.</p>
-      <p role="note">Entorno de construcción: usar únicamente referencias inventadas. No ingresar información personal real.</p>
-    </header>
+  return <section id="human-resources-management" className="catalog-panel ui-page" aria-label="Talento humano">
+    <PageHeader title="Talento humano · gestión de cargos y novedades"
+      description="Registros por empresa y sede, con autorización del servidor y trazabilidad de versiones."
+      actions={canCreate && view.status === 'ready'
+        ? <button type="button" className="button" onClick={() => setPanel('create')}>Nuevo registro</button>
+        : undefined} />
+    <p role="note">Entorno de construcción: usar únicamente referencias inventadas. No ingresar información personal real.</p>
     {view.status === 'loading' && <output>Cargando registros de talento humano…</output>}
     {view.status === 'denied' && <p role="alert">Acceso denegado: no tienes autorización para estos registros.</p>}
     {view.status === 'disabled' && <p role="alert">Talento humano todavía no está habilitado en el servidor.</p>}
-    {view.status === 'error' && <div role="alert"><p>No se pudo consultar talento humano.</p>
-      <button type="button" onClick={() => { void load(); }}>Reintentar consulta</button></div>}
-    {view.status === 'ready' && <div className="catalog-grid">
-      <section className="catalog-card" aria-labelledby="hr-list-title">
-        <h3 id="hr-list-title">Registros laborales</h3>
-        <label><span>Buscar por referencia o cargo</span>
-          <input value={search} maxLength={64} onChange={event => setSearch(event.target.value)} />
-        </label>
-        {visible.length === 0 ? <output>No hay registros para esta empresa y filtro.</output>
-          : <ul>{visible.map(row => <li key={row.record_ref}>
-            <button type="button" onClick={() => setSelected(row.record_ref)}>
-              {row.record_ref} · {labels[row.kind]} · {row.state === 'BORRADOR' ? 'Borrador' : 'En revisión'}
-            </button>
-          </li>)}</ul>}
-      </section>
-      <section className="catalog-card" aria-labelledby="hr-detail-title">
-        <h3 id="hr-detail-title">Detalle del registro</h3>
+    {view.status === 'error' && <Card title="No se pudo consultar talento humano">
+      <div role="alert"><p>No se pudo consultar talento humano.</p>
+        <button type="button" onClick={() => { void load(); }}>Reintentar consulta</button></div>
+    </Card>}
+    {view.status === 'ready' && <>
+      <MetricStrip label="Indicadores de talento humano" items={[
+        { label: 'Registros', value: records.length },
+        { label: 'Borradores', value: records.filter(row => row.state === 'BORRADOR').length },
+        { label: 'En revisión', value: records.filter(row => row.state === 'EN_REVISION').length },
+      ]} />
+      <Card title="Registros laborales">
+        <Toolbar trailing={<output aria-live="polite">{visible.length} registros</output>}>
+          <label>Buscar por referencia o cargo
+            <input type="search" value={search} maxLength={64}
+              onChange={event => setSearch(event.target.value)} />
+          </label>
+        </Toolbar>
+        <DataTable<HrRecord> caption="Registros laborales de la empresa"
+          rows={visible} rowKey={row => row.id}
+          onOpen={row => { setSelected(row.record_ref); setPanel('detail'); }}
+          columns={[
+            { key: 'reference', header: 'Referencia', render: row => row.record_ref },
+            { key: 'position', header: 'Cargo', render: row => row.position_ref },
+            { key: 'kind', header: 'Clase', render: row => labels[row.kind] },
+            { key: 'status', header: 'Estado', render: row =>
+              <StatusPill tone={row.state === 'BORRADOR' ? 'neutral' : 'info'}>
+                {row.state === 'BORRADOR' ? 'Borrador' : 'En revisión'}
+              </StatusPill> },
+          ]}
+          empty={<output>No hay registros para esta empresa y filtro.</output>} />
+      </Card>
+      {!sessionCsrf && (permissions.includes('users.create') || permissions.includes('users.update')) &&
+        <output>Edición deshabilitada hasta recibir el token de sesión del panel administrativo.</output>}
+      <SidePanel open={panel === 'detail' && !!current}
+        title="Detalle del registro" onClose={() => setPanel(null)}>
         {current ? <>
           <dl><dt>Referencia</dt><dd>{current.record_ref}</dd>
             <dt>Colaborador</dt><dd>{current.collaborator_ref}</dd>
             <dt>Cargo</dt><dd>{current.position_ref}</dd>
             <dt>Clase</dt><dd>{labels[current.kind]}</dd>
-            <dt>Estado</dt><dd>{current.state}</dd><dt>Versión</dt><dd>{current.version}</dd></dl>
+            <dt>Estado</dt><dd><StatusPill tone={current.state === 'BORRADOR' ? 'neutral' : 'info'}>{current.state}</StatusPill></dd>
+            <dt>Versión</dt><dd>{current.version}</dd></dl>
           {canUpdate && current.state === 'BORRADOR' && <button type="button" disabled={saving}
             onClick={() => { void submit(path + '/' + encodeURIComponent(current.record_ref) + '/state',
               'PATCH', { state: 'EN_REVISION', expected_version: current.version }); }}>
@@ -212,9 +236,8 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
           </button>}
           <p className="muted">La revisión no implica aprobación contractual ni cierre automático.</p>
         </> : <p>Selecciona un registro para consultar su detalle.</p>}
-      </section>
-      {canCreate && <section className="catalog-card" aria-labelledby="hr-create-title">
-        <h3 id="hr-create-title">Nuevo registro</h3>
+      </SidePanel>
+      <SidePanel open={panel === 'create' && canCreate} title="Nuevo registro" onClose={() => setPanel(null)}>
         <form className="catalog-editor" onSubmit={create}>
           <label>Referencia del registro<input required value={recordRef} maxLength={64}
             pattern="[a-z][a-z0-9_-]{0,63}" onChange={event => setRecordRef(event.target.value)} /></label>
@@ -228,10 +251,8 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
           </select></label>
           <button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar registro'}</button>
         </form>
-      </section>}
-      {!sessionCsrf && (permissions.includes('users.create') || permissions.includes('users.update')) &&
-        <output>Edición deshabilitada hasta recibir el token de sesión del panel administrativo.</output>}
-    </div>}
+      </SidePanel>
+    </>}
     {notice && <output role="status" aria-live="polite">{notice}</output>}
   </section>;
 }
