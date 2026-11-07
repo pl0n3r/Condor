@@ -12,6 +12,7 @@ import { PlatformStaffPanel } from './PlatformStaffPanel';
 import { PlatformTenantCreationPanel } from './PlatformTenantCreationPanel';
 import { PlatformSubscriptionsPanel, isSyntheticTenant } from './PlatformSubscriptionsPanel';
 import { PlatformPlansPanel } from './PlatformPlansPanel';
+import { PlatformRevenuePanel } from './PlatformRevenuePanel';
 import { platformOwnerContextPath } from './api';
 
 type CommercialPlan = {
@@ -524,6 +525,8 @@ export function PlatformOwnerApp({
   // owner-only navigation destinations here without widening another claim.
   const plansView = window.location.pathname === '/adminpl0n3r/catalogo'
     && new URLSearchParams(window.location.search).get('vista') === 'planes';
+  const revenueView = window.location.pathname === '/adminpl0n3r/catalogo'
+    && new URLSearchParams(window.location.search).get('vista') === 'ingresos';
   const currentSection: PlatformOwnerSection =
     window.location.pathname === '/adminpl0n3r/suscripciones'
       ? 'suscripciones'
@@ -709,7 +712,12 @@ export function PlatformOwnerApp({
             {
               href: '/adminpl0n3r/catalogo',
               label: 'Catálogo comercial',
-              current: currentSection === 'catalogo' && !plansView,
+              current: currentSection === 'catalogo' && !plansView && !revenueView,
+            },
+            {
+              href: '/adminpl0n3r/catalogo?vista=ingresos',
+              label: 'Ingresos',
+              current: revenueView,
             },
           ],
         },
@@ -729,8 +737,8 @@ export function PlatformOwnerApp({
           ],
         },
         // Cumplimiento y Soporte no se muestran hasta tener pantallas
-        // del propietario; tampoco hay enlaces ficticios a Ingresos,
-        // Auditoría o Estado del sistema.
+        // del propietario; tampoco hay enlaces ficticios a Auditoría
+        // o Estado del sistema.
       ]}
     >
       {selected && (
@@ -898,7 +906,11 @@ export function PlatformOwnerApp({
             />
           )}
 
-          {!selected && currentSection === 'catalogo' && !plansView && (
+          {!selected && currentSection === 'catalogo' && revenueView && (
+            <PlatformRevenuePanel />
+          )}
+
+          {!selected && currentSection === 'catalogo' && !plansView && !revenueView && (
             <section className="platform-section ui-page" aria-label="Catálogo comercial de plataforma">
               <PageHeader title="Catálogo comercial"
                 description="Planes vigentes, cartera de empresas y uso observado. Datos canónicos solo de lectura."

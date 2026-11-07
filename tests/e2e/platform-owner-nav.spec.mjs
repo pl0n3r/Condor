@@ -19,6 +19,7 @@ const GROUPS = [
       '/adminpl0n3r/catalogo?vista=planes',
       '/adminpl0n3r/suscripciones',
       '/adminpl0n3r/catalogo',
+      '/adminpl0n3r/catalogo?vista=ingresos',
     ],
   },
   {
@@ -38,7 +39,7 @@ test.describe('Propietario — navegación agrupada sin enlaces inexistentes', (
     'Requiere aplicación E2E y credenciales de propietario.',
   );
 
-  test('acordeones accesibles, siete enlaces funcionales y sección activa', async ({ page }) => {
+  test('acordeones accesibles, ocho enlaces funcionales y sección activa', async ({ page }) => {
     await page.goto('/admin/login');
     await page.getByLabel('Correo').fill(email);
     await page.getByLabel('Contraseña').fill(password);
@@ -68,7 +69,7 @@ test.describe('Propietario — navegación agrupada sin enlaces inexistentes', (
     expect(new Set(allHrefs).size).toBe(allHrefs.length);
 
     // No crear grupos o rutas de propietario para módulos sin pantalla.
-    for (const absent of ['Cumplimiento', 'Soporte', 'Ingresos', 'Auditoría', 'Estado del sistema']) {
+    for (const absent of ['Cumplimiento', 'Soporte', 'Auditoría', 'Estado del sistema']) {
       await expect(nav.getByRole('button', { name: absent, exact: true })).toHaveCount(0);
     }
 
@@ -93,6 +94,15 @@ test.describe('Propietario — navegación agrupada sin enlaces inexistentes', (
       const finalURL = new URL(response.url());
       expect(finalURL.pathname + finalURL.search, href).toBe(href);
     }
+
+    // #1693: no basta un HTTP 200: el destino debe montar la pantalla real.
+    await nav.locator('a.nav-sub[href="/adminpl0n3r/catalogo?vista=ingresos"]').click();
+    await expect(page).toHaveURL(/\/adminpl0n3r\/catalogo\?vista=ingresos$/);
+    await expect(page.getByRole('heading', { name: 'Ingresos SaaS', exact: true }))
+      .toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Navegación de plataforma' })
+      .locator('a.nav-sub[href="/adminpl0n3r/catalogo?vista=ingresos"]'))
+      .toHaveAttribute('aria-current', 'page');
 
     await nav.locator('a.nav-sub[href="/adminpl0n3r/suscripciones"]').click();
     await expect(page).toHaveURL(/\/adminpl0n3r\/suscripciones$/);
