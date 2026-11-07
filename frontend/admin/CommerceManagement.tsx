@@ -691,7 +691,15 @@ export function CommerceManagement({
                       <select aria-label={'Lista preferida de ' + category.name}
                         value={category.preferred_price_list_id ?? ''}
                         disabled={!canUpdatePricing}
-                        onChange={(event) => void assignPreferredList(category, event.target.value)}>
+                        onChange={(event) => {
+                          const control = event.currentTarget;
+                          void assignPreferredList(category, control.value).then(() => {
+                            // Revalidar el foco tras el refresco de la tabla.
+                            requestAnimationFrame(() => {
+                              if (control.isConnected) control.focus();
+                            });
+                          });
+                        }}>
                         <option value="">Sin preferencia</option>
                         {pricing.price_lists.map((list) => (
                           <option value={list.id} key={list.id}>{list.name}</option>
