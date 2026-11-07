@@ -33,7 +33,13 @@ async function renderPanel(page, onPrice) {
   });
   await page.route('**/adminpl0n3r/planes', async (route) => {
     await route.fulfill({ status: 200, contentType: 'text/html',
-      body: '<form><input type="hidden" name="_csrf_token" value="synthetic-csrf"></form>' });
+      body: plans.map((plan) => '<form action="/adminpl0n3r/planes/' + plan.key + '">' +
+        '<input type="hidden" name="_csrf_token" value="synthetic-csrf">' +
+        '<input type="hidden" name="expected_version" value="' + plan.version + '">' +
+        '<input name="name" value="' + plan.name + '">' +
+        '<textarea name="limits">' + JSON.stringify(plan.limits) + '</textarea>' +
+        '<input name="capabilities" value="' + plan.capabilities.join(', ') + '">' +
+        '</form>').join('') });
   });
   await page.route('**/adminpl0n3r/api/auditoria*', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
@@ -68,6 +74,21 @@ test.describe('Planes y precios · owner sintético', () => {
     await expect(table.getByRole('row').filter({ hasText: 'Personalizado' })).toContainText('Cotizar');
     await panel.getByPlaceholder('Buscar por nombre o clave').fill('Gratuito');
     await expect(table.getByRole('row')).toHaveCount(2); // encabezado + resultado
+  });
+
+  test('rechaza guardado si el servidor no confirma versión vigente', async ({ page }) => {
+    const panel = await renderPanel(page, (route) => route.abort());
+    await page.route('**/adminpl0n3r/planes', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'text/html',
+        body: '<form action="/adminpl0n3r/planes/starter"><input name="_csrf_token" value="token">' +
+          '<input name="expected_version" value="999"><input name="name" value="Inicial">' +
+          '<textarea name="limits">{}</textarea><input name="capabilities" value=""></form>' });
+    });
+    await panel.getByRole('button', { name: 'Inicial' }).click();
+    await expect(page.getByRole('dialog', { name: /Inicial/ }).getByRole('alert'))
+      .toContainText('catálogo cambió');
+    await expect(page.getByRole('dialog', { name: /Inicial/ })
+      .getByRole('button', { name: 'Revisar versión' })).toBeDisabled();
   });
 
   test('crea versión de precios con preview, 0 y null distintos y CSRF owner-only', async ({ page }) => {

@@ -131,8 +131,10 @@ export function PlatformPlansPanel({ plans, onChanged }: Readonly<{
     const abort = new AbortController();
     setDraft(initialDraft(selected));
     setName(selected.name);
-    setLimits(JSON.stringify(selected.limits, null, 2));
-    setCapabilities(selected.capabilities.join(', '));
+    // No asumir límites/capacidades en el resumen de /api/context:
+    // solo el formulario SSR canónico contiene el valor vigente de edición.
+    setLimits('');
+    setCapabilities('');
     setPreview(false);
     setMessage('');
     setState('loading');
@@ -144,9 +146,30 @@ export function PlatformPlansPanel({ plans, onChanged }: Readonly<{
       .then(async (response) => {
         if (!response.ok) throw new Error('No fue posible leer el editor de planes.');
         const document = new DOMParser().parseFromString(await response.text(), 'text/html');
-        const value = document.querySelector<HTMLInputElement>('input[name="_csrf_token"]')?.value;
-        if (!value) throw new Error('No se obtuvo autorización de edición.');
+        const canonicalPath = platformPlanCatalogPath() + '/' + encodeURIComponent(selected.key);
+        const currentForm = [...document.querySelectorAll<HTMLFormElement>('form[action]')]
+          .find((form) => form.getAttribute('action') === canonicalPath);
+        const value = currentForm?.querySelector<HTMLInputElement>('input[name="_csrf_token"]')?.value;
+        const version = currentForm?.querySelector<HTMLInputElement>('input[name="expected_version"]')?.value;
+        const canonicalLimits = currentForm?.querySelector<HTMLTextAreaElement>('textarea[name="limits"]')?.value;
+        const canonicalCapabilities = currentForm?.querySelector<HTMLInputElement>('input[name="capabilities"]')?.value;
+        const canonicalName = currentForm?.querySelector<HTMLInputElement>('input[name="name"]')?.value;
+        if (!value || canonicalLimits === undefined || canonicalCapabilities === undefined
+          || !canonicalName) throw new Error('No se pudo verificar el plan en el servidor.');
+        const parsed: unknown = JSON.parse(canonicalLimits);
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new Error('Los límites canónicos no tienen el formato previsto.');
+        }
         if (!abort.signal.aborted) {
+          if (version !== String(selected.version)) {
+            setToken('');
+            setState('conflict');
+            setMessage('El catálogo cambió mientras se abría el panel. Actualiza antes de guardar.');
+            return;
+          }
+          setName(canonicalName);
+          setLimits(JSON.stringify(parsed, null, 2));
+          setCapabilities(canonicalCapabilities);
           setToken(value);
           setState('ready');
         }
