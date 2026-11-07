@@ -30,6 +30,47 @@
 
 - **Reconciliación E2 #1351 / PR #1407 (29-oct-2026):** 120 filas de las hojas #1330–#1339 enlazadas individualmente a su test existente, referencia de código parcial y PR auténticamente MERGED (#1379/#1381/#1368/#1370/#1369/#1373/#1375/#1371/#1372/#1388). Clases: **64 A parciales**, **25 B externos**, **4 C normativas**, **27 D sin función integral**. **0 promociones:** los tests ejercitan componentes reales con datos ficticios o guardas negativas pero no el requisito completo/operación autorizada; los tests de integridad de estas hojas además exigen `NO_VERIFICABLE`. Se preservan las 472 filas, las fuentes/IDs/estados y el historial de contraste: 74 CUBIERTO, 355 NO_VERIFICABLE, 43 DESCARTADO. RR. HH. real sigue bloqueado por #742 y D-059/D-063; no hay producción, secretos, PII ni go-live.
 
+## Consolidación de las 27 hojas de verificación — #1553 (6-nov-2026)
+
+**Corte documental:** Condor `main@cd979918d03d3aacc8cd2888501e0fc3640079c4`, fase `construccion`. Se verificaron **27 PR efectivamente fusionados** de las hojas #1526–#1552, y se cruzaron los IDs de la primera columna de sus tablas con las claves únicas del inventario. Los informes complementarios fuera de estas hojas no permiten promover requisitos por inferencia.
+
+**Resultado por requisito:** 320 IDs distintos en 338 referencias documentales (18 `GEST-FLUJO` aparecen tanto en #1541 como en #1543). Todos conservan `NO_VERIFICABLE`: los informes registran código y testigos locales/sintéticos o de subcontratos, pero aún persisten brechas de integración, autorización, E2E, aplicabilidad normativa u operación real. Un PR de **verificación** MERGED no prueba por sí solo el requisito integral. Promover a `CUBIERTO` exige **código implementado + prueba conductual suficiente del alcance completo + PR de implementación MERGED**, sin brechas residuales. El motivo concreto por ID se conserva en la columna «Evidencia y límite de verificación» y en el informe respectivo.
+
+| Hoja | Informe de prueba y brechas por ID | IDs contrastados | PR realmente MERGED | Estado conservado |
+| --- | --- | ---: | --- | --- |
+| [#1526](https://github.com/pl0n3r/Condor/issues/1526) | [`gest-m01.md`](verificacion/gest-m01.md) | 10 | [#1570](https://github.com/pl0n3r/Condor/pull/1570) | `NO_VERIFICABLE` |
+| [#1527](https://github.com/pl0n3r/Condor/issues/1527) | [`gest-m02.md`](verificacion/gest-m02.md) | 8 | [#1586](https://github.com/pl0n3r/Condor/pull/1586) | `NO_VERIFICABLE` |
+| [#1528](https://github.com/pl0n3r/Condor/issues/1528) | [`gest-m03.md`](verificacion/gest-m03.md) | 10 | [#1562](https://github.com/pl0n3r/Condor/pull/1562) | `NO_VERIFICABLE` |
+| [#1529](https://github.com/pl0n3r/Condor/issues/1529) | [`gest-m04.md`](verificacion/gest-m04.md) | 9 | [#1635](https://github.com/pl0n3r/Condor/pull/1635) | `NO_VERIFICABLE` |
+| [#1530](https://github.com/pl0n3r/Condor/issues/1530) | [`gest-m05.md`](verificacion/gest-m05.md) | 6 | [#1708](https://github.com/pl0n3r/Condor/pull/1708) | `NO_VERIFICABLE` |
+| [#1531](https://github.com/pl0n3r/Condor/issues/1531) | [`gest-m06-cumplimiento-legal.md`](verificacion/gest-m06-cumplimiento-legal.md) | 6 | [#1631](https://github.com/pl0n3r/Condor/pull/1631) | `NO_VERIFICABLE` |
+| [#1532](https://github.com/pl0n3r/Condor/issues/1532) | [`gest-m07.md`](verificacion/gest-m07.md) | 1 | [#1569](https://github.com/pl0n3r/Condor/pull/1569) | `NO_VERIFICABLE` |
+| [#1533](https://github.com/pl0n3r/Condor/issues/1533) | [`gest-m08.md`](verificacion/gest-m08.md) | 3 | [#1572](https://github.com/pl0n3r/Condor/pull/1572) | `NO_VERIFICABLE` |
+| [#1534](https://github.com/pl0n3r/Condor/issues/1534) | [`gest-m09.md`](verificacion/gest-m09.md) | 8 | [#1592](https://github.com/pl0n3r/Condor/pull/1592) | `NO_VERIFICABLE` |
+| [#1535](https://github.com/pl0n3r/Condor/issues/1535) | [`gest-m10.md`](verificacion/gest-m10.md) | 2 | [#1559](https://github.com/pl0n3r/Condor/pull/1559) | `NO_VERIFICABLE` |
+| [#1536](https://github.com/pl0n3r/Condor/issues/1536) | [`gest-m11.md`](verificacion/gest-m11.md) | 7 | [#1584](https://github.com/pl0n3r/Condor/pull/1584) | `NO_VERIFICABLE` |
+| [#1537](https://github.com/pl0n3r/Condor/issues/1537) | [`gest-m12.md`](verificacion/gest-m12.md) | 1 | [#1587](https://github.com/pl0n3r/Condor/pull/1587) | `NO_VERIFICABLE` |
+| [#1538](https://github.com/pl0n3r/Condor/issues/1538) | [`gest-m13.md`](verificacion/gest-m13.md) | 1 | [#1585](https://github.com/pl0n3r/Condor/pull/1585) | `NO_VERIFICABLE` |
+| [#1539](https://github.com/pl0n3r/Condor/issues/1539) | [`gest-m14-seguridad-informacion.md`](verificacion/gest-m14-seguridad-informacion.md) | 8 | [#1593](https://github.com/pl0n3r/Condor/pull/1593) | `NO_VERIFICABLE` |
+| [#1540](https://github.com/pl0n3r/Condor/issues/1540) | [`gest-m15.md`](verificacion/gest-m15.md) | 4 | [#1563](https://github.com/pl0n3r/Condor/pull/1563) | `NO_VERIFICABLE` |
+| [#1541](https://github.com/pl0n3r/Condor/issues/1541) | [`gest-flows-e2e.md`](verificacion/gest-flows-e2e.md) | 18 | [#1622](https://github.com/pl0n3r/Condor/pull/1622) | `NO_VERIFICABLE` |
+| [#1542](https://github.com/pl0n3r/Condor/issues/1542) | [`gest-integrations.md`](verificacion/gest-integrations.md) | 6 | [#1618](https://github.com/pl0n3r/Condor/pull/1618) | `NO_VERIFICABLE` |
+| [#1543](https://github.com/pl0n3r/Condor/issues/1543) | [`gest-limits-norms-phases.md`](verificacion/gest-limits-norms-phases.md) | 41 | [#1624](https://github.com/pl0n3r/Condor/pull/1624) | `NO_VERIFICABLE` |
+| [#1544](https://github.com/pl0n3r/Condor/issues/1544) | [`decisiones-01.md`](verificacion/decisiones-01.md) | 20 | [#1609](https://github.com/pl0n3r/Condor/pull/1609) | `NO_VERIFICABLE` |
+| [#1545](https://github.com/pl0n3r/Condor/issues/1545) | [`decisiones-02.md`](verificacion/decisiones-02.md) | 20 | [#1615](https://github.com/pl0n3r/Condor/pull/1615) | `NO_VERIFICABLE` |
+| [#1546](https://github.com/pl0n3r/Condor/issues/1546) | [`decisiones-03.md`](verificacion/decisiones-03.md) | 20 | [#1607](https://github.com/pl0n3r/Condor/pull/1607) | `NO_VERIFICABLE` |
+| [#1547](https://github.com/pl0n3r/Condor/issues/1547) | [`decisiones-04.md`](verificacion/decisiones-04.md) | 20 | [#1595](https://github.com/pl0n3r/Condor/pull/1595) | `NO_VERIFICABLE` |
+| [#1548](https://github.com/pl0n3r/Condor/issues/1548) | [`decisiones-05.md`](verificacion/decisiones-05.md) | 20 | [#1598](https://github.com/pl0n3r/Condor/pull/1598) | `NO_VERIFICABLE` |
+| [#1549](https://github.com/pl0n3r/Condor/issues/1549) | [`decisiones-06.md`](verificacion/decisiones-06.md) | 18 | [#1600](https://github.com/pl0n3r/Condor/pull/1600) | `NO_VERIFICABLE` |
+| [#1550](https://github.com/pl0n3r/Condor/issues/1550) | [`verify-agent-rules.md`](verificacion/verify-agent-rules.md) | 26 | [#1560](https://github.com/pl0n3r/Condor/pull/1560) | `NO_VERIFICABLE` |
+| [#1551](https://github.com/pl0n3r/Condor/issues/1551) | [`verify-readme-claims.md`](verificacion/verify-readme-claims.md) | 29 | [#1557](https://github.com/pl0n3r/Condor/pull/1557) | `NO_VERIFICABLE` |
+| [#1552](https://github.com/pl0n3r/Condor/issues/1552) | [`verify-operational-modules.md`](verificacion/verify-operational-modules.md) | 16 | [#1601](https://github.com/pl0n3r/Condor/pull/1601) | `NO_VERIFICABLE` |
+
+**Seis filas sin enlace a esas 27 tablas de informes:** `GEST-M01`, `GEST-M02`, `GEST-M03`, `GEST-M04`, `GEST-M05`, `GEST-M14`. Mantienen su razón de brecha y `NO_VERIFICABLE` en el inventario, fuera de los 320 IDs contrastados. Las 18 coincidencias `GEST-FLUJO` se contabilizan una sola vez, no son requisitos nuevos.
+
+**Totales reconciliados y sin promociones:** 103 `CUBIERTO` + 0 `EN_CURSO` + 0 `SIN_COBERTURA` + 43 `DESCARTADO` + 326 `NO_VERIFICABLE` = **472 filas únicas**. Porcentaje acreditado: **103/472 = 21,8 %**. La tabla consolidada existente sigue vigente. No se acredita ERP integral, certificación jurídica ni go-live; los faltantes de evidencia no se convierten automáticamente en tickets.
+
+
 ## Inventario trazable
 
 | ID / fuente | Requisito resumido | Estado | Evidencia y límite de verificación | Issue |
