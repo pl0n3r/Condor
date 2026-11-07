@@ -1,0 +1,199 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Tests\Application\Purchasing;
+
+use App\Application\Purchasing\PayablesPreview;
+use App\Domain\Identity\Entity\{BranchRoleAssignment, Membership, Role, User};
+use App\Domain\Organization\Entity\{Branch, LegalEntity, Tenant};
+use App\Tests\Support\BrowserCsrfToken;
+use Doctrine\ORM\EntityManagerInterface;
+use InvalidArgumentException;
+use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+
+/** M09/S08: fake COP obligations; guarded HTTP, no payments or SQL ledger writes. */
+final class PayablesPreviewTest extends WebTestCase
+{
+    use BrowserCsrfToken;
+
+    /** @return array<string,mixed> */
+    private static function fixturePayload(): array
+    {
+        $scope = [
+            'tenant_ref' => 'fixture:tenant/current',
+            'legal_entity_ref' => 'fixture:legal-entity/current',
+            'site_ref' => 'fixture:site/current',
+        ];
+        $first = [
+            'obligation_ref' => 'fixture:payable/zeta',
+            'supplier_ref' => 'fixture:supplier/demo',
+            'amount_cop' => '120000',
+            'currency' => 'COP',
+            'reconciliation_status' => 'unreconciled',
+            'payment_status' => 'unpaid',
+        ] + $scope;
+        $second = array_replace($first, [
+            'obligation_ref' => 'fixture:payable/alpha',
+            'supplier_ref' => 'fixture:supplier/other',
+            'amount_cop' => '34500',
+        ]);
+        return $scope + [
+            'mode' => 'preview_only',
+            'obligations' => [$first, $second],
+        ];
+    }
+
+    public function testSyntheticCopProjectionIsDeterministicAndCannotPay(): void
+    {
+        $payload = self::fixturePayload();
+        $expected = PayablesPreview::preview($payload);
+        self::assertSame('154500', $expected['total_amount_cop']);
+        self::assertSame('COP', $expected['currency']);
+        self::assertSame('UNPAID_UNRECONCILED', $expected['status']);
+        self::assertSame(2, $expected['obligation_count']);
+        self::assertSame('fixture:payable/alpha', $expected['obligations'][0]['obligation_ref']);
+        foreach (['can_pay', 'can_reconcile', 'can_settle', 'accounting_posted', 'persisted', 'notified'] as $field) {
+            self::assertFalse($expected[$field]);
+        }
+        self::assertSame(0, $expected['payments_created']);
+        $payload['obligations'] = array_reverse($payload['obligations']);
+        self::assertSame($expected, PayablesPreview::preview($payload));
+        $payload['obligations'][0] = array_reverse($payload['obligations'][0], true);
+        self::assertSame($expected, PayablesPreview::preview($payload));
+    }
+
+    public function testCanonicalCopAmountLimitsRemainStrings(): void
+    {
+        $fixture = self::fixturePayload();
+        $fixture['obligations'] = [[
+            ...$fixture['obligations'][0],
+            'amount_cop' => '999999999999',
+        ]];
+        $result = PayablesPreview::preview($fixture);
+        self::assertSame('999999999999', $result['total_amount_cop']);
+        self::assertSame('999999999999', $result['obligations'][0]['amount_cop']);
+        self::assertFalse($result['accounting_posted']);
+    }
+
+    public function testInvalidScopePiiRealSuppliersPaymentsAndAmountsFailClosed(): void
+    {
+        $base = self::fixturePayload();
+        $cases = [];
+        foreach (['tenant_ref', 'legal_entity_ref', 'site_ref'] as $field) {
+            $v = $base; $v[$field] .= '-foreign'; $cases[] = $v;
+            $v = $base; $v['obligations'][0][$field] .= '-foreign'; $cases[] = $v;
+        }
+        foreach (['0', '001', '-1', '25.50', '1e4', '1000000000000', 120, 0.5, null] as $amount) {
+            $v = $base; $v['obligations'][0]['amount_cop'] = $amount; $cases[] = $v;
+        }
+        foreach ([
+            ['currency', 'USD'],
+            ['reconciliation_status', 'reconciled'],
+            ['payment_status', 'paid'],
+            ['supplier_ref', 'supplier-real-123'],
+            ['obligation_ref', 'https://pay.example.invalid'],
+        ] as [$field, $value]) {
+            $v = $base; $v['obligations'][0][$field] = $value; $cases[] = $v;
+        }
+        $v = $base; $v['mode'] = 'execute'; $cases[] = $v;
+        $v = $base; $v['supplier_email'] = 'person@example.test'; $cases[] = $v;
+        $v = $base; $v['create_payment'] = true; $cases[] = $v;
+        $v = $base; $v['obligations'][0]['supplier_name'] = 'Persona real'; $cases[] = $v;
+        $v = $base; $v['obligations'][0]['bank_account'] = '123456'; $cases[] = $v;
+        $v = $base; $v['obligations'][] = $v['obligations'][0]; $cases[] = $v;
+        $v = $base; $v['obligations'] = []; $cases[] = $v;
+        foreach ($cases as $index => $invalid) {
+            try {
+                PayablesPreview::preview($invalid);
+                self::fail('Debe rechazarse el fixture inválido '.$index);
+            } catch (InvalidArgumentException) {
+                self::assertTrue(true);
+            }
+        }
+    }
+
+    public function testHttpRejectsAnonymousCsrfForeignBranchInvalidScopeAndNoPermission(): void
+    {
+        $client = static::createClient();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $em);
+        [$tenant, $branch, $owner] = $this->fixtureUser($em);
+        [, $foreign] = $this->fixtureUser($em);
+        $viewer = $this->fixtureReadOnlyUser($em, $tenant, $branch);
+        $url = '/api/v1/branches/'.$branch->id().'/purchasing/payables/preview';
+        $payload = self::fixturePayload();
+        $submit = static function (array $body, array $headers = []) use ($client, $url): void {
+            $client->jsonRequest('POST', $url, $body, $headers);
+        };
+        // Each HTTP scenario makes its expected authorization outcome explicit.
+        $expect = static function (int $status, array $body, array $headers = []) use ($submit): void {
+            $submit($body, $headers);
+            self::assertResponseStatusCodeSame($status);
+        };
+        $expect(401, $payload);
+        $client->loginUser($owner);
+        $client->request('GET', '/admin');
+        self::assertResponseIsSuccessful();
+        $csrf = ['HTTP_X_CSRF_TOKEN' => $this->csrfToken($client, 'branch_access')];
+        $expect(403, $payload);
+        $client->request('POST', $url, [], [], [
+            'CONTENT_TYPE' => 'application/json', 'HTTP_X_CSRF_TOKEN' => $csrf['HTTP_X_CSRF_TOKEN'],
+        ], '{"broken"');
+        self::assertResponseStatusCodeSame(400);
+        $expect(400, [...$payload, 'padding' => str_repeat('x', 70000)], $csrf);
+        $expect(200, $payload, $csrf);
+        $response = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        self::assertTrue($response['synthetic_only']);
+        self::assertSame('154500', $response['payables_preview']['total_amount_cop']);
+        self::assertFalse($response['payables_preview']['can_pay']);
+        self::assertSame(0, $response['payables_preview']['payments_created']);
+
+        $client->jsonRequest('POST', '/api/v1/branches/'.$foreign->id().'/purchasing/payables/preview', $payload, $csrf);
+        self::assertResponseStatusCodeSame(404);
+        foreach ([
+            [...$payload, 'tenant_ref' => 'fixture:tenant/foreign'],
+            [...$payload, 'legal_entity_ref' => 'fixture:legal-entity/foreign'],
+            [...$payload, 'site_ref' => 'fixture:site/foreign'],
+            [...$payload, 'supplier_name' => 'Persona'],
+            [...$payload, 'obligations' => [[...$payload['obligations'][0], 'payment_status' => 'paid']]],
+        ] as $invalid) {
+            $expect(422, $invalid, $csrf);
+        }
+        $client->loginUser($viewer);
+        $client->request('GET', '/admin');
+        $viewerCsrf = ['HTTP_X_CSRF_TOKEN' => $this->csrfToken($client, 'branch_access')];
+        $expect(403, $payload, $viewerCsrf);
+    }
+
+    /** A non-privileged synthetic member verifies the branch permission boundary. */
+    private function fixtureReadOnlyUser(EntityManagerInterface $em, Tenant $tenant, Branch $branch): User
+    {
+        $viewer = new User('m09-pay-view-'.bin2hex(random_bytes(5)).'@example.test', 'Lector sintético');
+        $membership = new Membership($tenant, $viewer, 'ADMIN');
+        $role = new Role($tenant, 'Lectura sintética', ['inventory.view']);
+        $em->persist($viewer);
+        $em->persist($membership);
+        $em->persist($role);
+        $em->persist(new BranchRoleAssignment($membership, $branch, $role));
+        $em->flush();
+        return $viewer;
+    }
+
+    /** @return array{Tenant,Branch,User} */
+    private function fixtureUser(EntityManagerInterface $em): array
+    {
+        $suffix = 'm09-pay-'.bin2hex(random_bytes(5));
+        $tenant = new Tenant('Cuentas sintéticas '.$suffix, $suffix);
+        $em->persist($tenant);
+        $legal = new LegalEntity($tenant, 'SAS ficticia '.$suffix, null, true);
+        $em->persist($legal);
+        $branch = new Branch($tenant, 'Sede ficticia', $suffix, $legal, true);
+        $em->persist($branch);
+        $owner = new User($suffix.'@example.test', 'Dueño ficticio');
+        $em->persist($owner);
+        $em->persist(new Membership($tenant, $owner, Membership::ROLE_OWNER));
+        $em->flush();
+        return [$tenant, $branch, $owner];
+    }
+}
