@@ -85,6 +85,11 @@ class MarketingImageSlotsTests(unittest.TestCase):
         self.assertIn(".mk-img-frame img", CSS)
         self.assertIn("object-fit: cover;", CSS)
 
+    def test_hero_illustrations_are_distinct(self) -> None:
+        paths = [ROOT / "public" / "img" / "marketing" / name for name in PAGES.values()]
+        self.assertEqual(len(paths), 2)
+        self.assertNotEqual(paths[0].read_bytes(), paths[1].read_bytes())
+
     def test_invalid_webp_payload_fails_closed(self) -> None:
         with self.assertRaises(ValueError):
             webp_dimensions(b"not a webp")
