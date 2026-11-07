@@ -35,7 +35,7 @@ final class PlatformAuditPermissionsHttpSmokeTest extends WebTestCase
         $admin = new User('tenant-'.$suffix.'@example.test', 'Tenant Admin');
         $member = new Membership($tenant, $admin, Membership::ROLE_OWNER);
         $event = new PlatformAuditEvent(
-            $owner->id(), null, 'commercial.plan.updated', 'commercial_plan', 'synthetic-'.$suffix,
+            $owner->id(), null, 'commercial.plan.updated', 'commercial_plan', 'private-'.$suffix.'@example.test',
             ['old' => ['version' => 1, 'email' => 'private@example.test', 'token' => 'SHOULD_NOT_LEAK'],
              'new' => ['version' => 2, 'secret' => 'SHOULD_NOT_LEAK']],
         );
@@ -56,11 +56,13 @@ final class PlatformAuditPermissionsHttpSmokeTest extends WebTestCase
         self::assertResponseStatusCodeSame(200);
         $body = (string) $client->getResponse()->getContent();
         self::assertStringNotContainsString('private@example.test', $body);
+        self::assertStringNotContainsString('private-'.$suffix.'@example.test', $body);
         self::assertStringNotContainsString('SHOULD_NOT_LEAK', $body);
         self::assertStringNotContainsString('tenant-', $body);
         self::assertSame('private, no-store', $client->getResponse()->headers->get('Cache-Control'));
         $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
         self::assertSame(1, $data['total']);
+        self::assertSame('oculto', $data['items'][0]['object']['id']);
         self::assertSame(1, $data['items'][0]['before']['version']);
         self::assertSame(2, $data['items'][0]['after']['version']);
         self::assertArrayNotHasKey('email', $data['items'][0]['before']);
@@ -93,6 +95,7 @@ class PlatformAuditoriaTests(unittest.TestCase):
         self.assertNotIn("condor_audit_event", source)
         self.assertIn("PUBLIC_FIELDS", source)
         self.assertIn("publicSnapshot(", source)
+        self.assertIn("publicEntityId(", source)
         self.assertIn("private, no-store", source)
         for component in ("PageHeader", "MetricStrip", "Toolbar", "DataTable", "StatusPill", "SidePanel"):
             self.assertIn(component, panel)

@@ -115,7 +115,7 @@ final class PlatformAuditController extends PlatformOwnerApiController
                 'action' => (string) $row['action'],
                 'object' => [
                     'type' => (string) $row['entity_type'],
-                    'id' => (string) $row['entity_id'],
+                    'id' => self::publicEntityId((string) $row['entity_id']),
                 ],
                 'before' => self::publicSnapshot($context['old'] ?? null),
                 'after' => self::publicSnapshot($context['new'] ?? null),
@@ -163,6 +163,13 @@ final class PlatformAuditController extends PlatformOwnerApiController
         }
 
         return $raw;
+    }
+
+    /** Only canonical opaque ULIDs may be shown; entity_id is otherwise untrusted. */
+    private static function publicEntityId(string $raw): string
+    {
+        return preg_match('/\A[0-9A-HJKMNP-TV-Z]{26}\z/D', $raw) === 1
+            ? $raw : 'oculto';
     }
 
     /** @return array<string, bool|int|string|null> */
