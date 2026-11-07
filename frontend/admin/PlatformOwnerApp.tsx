@@ -1039,6 +1039,7 @@ export function PlatformOwnerApp({
               ]} />
               <Card title="Clientes de la plataforma">
                 <Toolbar trailing={<span className="ui-count">{filteredTenants.length} de {state.data.tenants.length} en esta página</span>}>
+                  <span className="muted">Filtros solo sobre esta página.</span>
                   <label className="ui-search">
                     <span className="ui-sr-only">Buscar empresas</span>
                     <input type="search" placeholder="Buscar por empresa o identificador"
@@ -1059,7 +1060,7 @@ export function PlatformOwnerApp({
                   rows={filteredTenants}
                   rowKey={(tenant) => tenant.id}
                   onOpen={setTenantPreview}
-                  empty={<><strong>Sin empresas para mostrar.</strong><span>Comprueba los filtros o cambia de página.</span></>}
+                  empty={<><strong>Sin empresas para mostrar en esta página.</strong><span>Comprueba los filtros o cambia de página.</span></>}
                   columns={[
                     { key: 'company', header: 'Empresa', render: (tenant) => <span className="ui-cell-main"><strong>{tenant.name}</strong><small>{tenant.slug}</small></span> },
                     { key: 'branches', header: 'Sedes', render: (tenant) => tenant.branch_count },
@@ -1106,7 +1107,7 @@ export function PlatformOwnerApp({
                 </dl>}
               </SidePanel>
               <SidePanel open={creatingTenant} title="Crear cliente" onClose={() => setCreatingTenant(false)}>
-                <PlatformTenantCreationPanel
+                {creatingTenant && <PlatformTenantCreationPanel
                   csrfToken={tenantToken}
                   onCreated={() => {
                     // El enlace de invitación es de un solo uso: mantener el
@@ -1114,7 +1115,7 @@ export function PlatformOwnerApp({
                     setPlatformRevision((current) => current + 1);
                     void loadContext(undefined, 1, false);
                   }}
-                />
+                />}
               </SidePanel>
             </section>
           )}
