@@ -50,6 +50,7 @@ final class AdminController extends AbstractController
             'app_version' => $version->human(),
             'tenant_name' => $tenant->name(),
             'section' => $section,
+            'hr_real_data_enabled' => getenv('HR_REAL_DATA_ENABLED') === 'true',
         ]);
     }
 }
