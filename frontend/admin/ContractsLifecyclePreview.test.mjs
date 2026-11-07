@@ -3,7 +3,7 @@ import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import React from 'react';
@@ -158,4 +158,23 @@ test('Estado vacío y guard de montaje servidor, sin datos de prueba al apagar',
     }));
     assert.match(denied, /Sin permiso/);
   } finally { globalThis.document = original; }
+});
+
+test('Montaje AdminApp S04–S08: DEV, opt-in SSR, RBAC y aislamiento de empresa', () => {
+  const source = readFileSync(join(root, 'frontend/admin/AdminApp.tsx'), 'utf8');
+  const required = [
+    "const DevContractsLifecyclePreview = import.meta.env.DEV",
+    "const contractsSyntheticPreviewEnabled = import.meta.env.DEV && !contractsRealDataEnabled",
+    "dataset.contractsSyntheticApiEnabled === 'true'",
+    "{contractsSyntheticPreviewEnabled && DevContractsLifecyclePreview",
+    "context.data.permissions.includes('inventory.view')",
+    "context.data.active_legal_entity?.id !== undefined",
+    "context.data.active_branch.legal_entity?.id === context.data.active_legal_entity?.id",
+    "<DevContractsLifecyclePreview",
+    "tenantId={context.data.tenant.id}",
+    "companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}",
+    "branchId={context.data.active_branch.id}",
+    "permissions={context.data.permissions}",
+  ];
+  for (const condition of required) assert.ok(source.includes(condition), condition);
 });

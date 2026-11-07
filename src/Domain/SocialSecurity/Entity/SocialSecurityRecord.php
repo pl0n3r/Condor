@@ -189,4 +189,80 @@ final class SocialSecurityRecord
         $fields['fingerprint'] = $this->fingerprint;
         return $fields;
     }
+    /** New DBAL-only representation: existing synthetic Doctrine mapping remains unchanged.
+     * @return array<string,mixed>
+     */
+    public static function openReal(string $tenant, string $company, string $ref, string $category, string $actor): array
+    {
+        self::realIdentity($tenant, $company, $actor);
+        self::realRef($ref);
+        if (!isset(self::CATEGORIES[$category])) {
+            throw new DomainException('Categoría social inválida.');
+        }
+        return [
+            'id' => UlidFactory::new(), 'tenant_id' => $tenant, 'company_id' => $company,
+            'record_ref' => $ref, 'category' => $category, 'state' => self::PENDING,
+            'version' => 1, 'previous_id' => null, 'actor_id' => $actor,
+            'occurred_at' => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d H:i:s'),
+        ];
+    }
+
+    /** @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
+    public static function fromRealRow(array $row, string $tenant, string $company): array
+    {
+        if (($row['tenant_id'] ?? null) !== $tenant || ($row['company_id'] ?? null) !== $company) {
+            throw new DomainException('Lectura fuera de empresa.');
+        }
+        self::realIdentity($tenant, $company, (string) ($row['actor_id'] ?? ''));
+        self::realRef((string) ($row['record_ref'] ?? ''));
+        if (preg_match('/\A[0-9A-HJKMNP-TV-Z]{26}\z/D', (string) ($row['id'] ?? '')) !== 1
+            || !isset(self::CATEGORIES[(string) ($row['category'] ?? '')])
+            || !in_array($row['state'] ?? null, [self::PENDING, self::REVIEW], true)
+            || !is_numeric($row['version'] ?? null)
+            || (int) $row['version'] < 1 || (int) $row['version'] > 1000000
+            || (($row['previous_id'] ?? null) !== null
+                && preg_match('/\A[0-9A-HJKMNP-TV-Z]{26}\z/D', (string) $row['previous_id']) !== 1)) {
+            throw new DomainException('Historial social inválido.');
+        }
+        $row['version'] = (int) $row['version'];
+        return $row;
+    }
+
+    /** @param array<string,mixed> $old
+     * @return array<string,mixed>
+     */
+    public static function transitionReal(
+        array $old, string $tenant, string $company, string $actor,
+        string $next, int $expectedVersion,
+    ): array {
+        $old = self::fromRealRow($old, $tenant, $company);
+        self::realIdentity($tenant, $company, $actor);
+        if ($expectedVersion !== $old['version'] || $old['version'] >= 1000000
+            || $next === $old['state'] || !in_array($next, [self::PENDING, self::REVIEW], true)) {
+            throw new DomainException('Transición social inválida.');
+        }
+        return [
+            ...$old, 'id' => UlidFactory::new(), 'state' => $next,
+            'version' => $old['version'] + 1, 'previous_id' => $old['id'], 'actor_id' => $actor,
+            'occurred_at' => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d H:i:s'),
+        ];
+    }
+
+    private static function realIdentity(string $tenant, string $company, string $actor): void
+    {
+        foreach ([$tenant, $company, $actor] as $id) {
+            if (preg_match('/\A[0-9A-HJKMNP-TV-Z]{26}\z/D', $id) !== 1) {
+                throw new DomainException('ULID social inválido.');
+            }
+        }
+    }
+
+    private static function realRef(string $ref): void
+    {
+        if (preg_match('/\A[a-z][a-z0-9_-]{0,63}\z/D', $ref) !== 1) {
+            throw new DomainException('Referencia social inválida.');
+        }
+    }
 }

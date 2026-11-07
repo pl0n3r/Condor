@@ -77,6 +77,10 @@ const DevContractsManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./ContractsManagement')).ContractsManagement }))
   : null;
 
+const DevContractsLifecyclePreview = import.meta.env.DEV
+  ? lazy(async () => ({ default: (await import('./ContractsLifecyclePreview')).ContractsLifecyclePreview }))
+  : null;
+
 const DevSocialSecurityManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./SocialSecurityManagement')).SocialSecurityManagement }))
   : null;
@@ -118,6 +122,10 @@ export function AdminApp({
   // This flag never enables the HR real-data API or overrides server permissions.
   const hrSyntheticPreviewEnabled = import.meta.env.DEV && typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.hrSyntheticPreviewEnabled === 'true';
+  // Solo DEV + opt-in SSR del servidor; la API de contratación real no habilita previews.
+  const contractsSyntheticPreviewEnabled = import.meta.env.DEV && !contractsRealDataEnabled
+    && typeof document !== 'undefined'
+    && document.getElementById('condor-admin-root')?.dataset.contractsSyntheticApiEnabled === 'true';
   const [context, setContext] = useState<ContextState>({
     status: 'loading',
   });
@@ -540,6 +548,20 @@ export function AdminApp({
                 <Suspense fallback={<p role="status">Cargando contratación ficticia…</p>}>
                   <DevContractsManagement
                     key={'contracts-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                    tenantId={context.data.tenant.id}
+                    companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
+                    branchId={context.data.active_branch.id}
+                    permissions={context.data.permissions}
+                  />
+                </Suspense>
+              )}
+              {contractsSyntheticPreviewEnabled && DevContractsLifecyclePreview
+                && context.data.permissions.includes('inventory.view')
+                && context.data.active_legal_entity?.id !== undefined
+                && context.data.active_branch.legal_entity?.id === context.data.active_legal_entity?.id && (
+                <Suspense fallback={<p role="status">Cargando ciclo contractual de prueba…</p>}>
+                  <DevContractsLifecyclePreview
+                    key={'contracts-lifecycle-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
                     tenantId={context.data.tenant.id}
                     companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
                     branchId={context.data.active_branch.id}
