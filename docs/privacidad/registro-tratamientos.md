@@ -114,6 +114,16 @@ Producto: `pl0n3r/Condor`
 - Proveedores: `sentry`
 - Retención: `review_required`
 
+## finance_real_records
+
+- Categoría: `usage`
+- Campos de software: `id`, `tenant_id`, `company_id`, `entry_ref`, `kind`, `state`, `version`, `previous_id`, `actor_id`, `occurred_at`
+- Finalidad: `finance_record_management`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## human_resources_real_records
 
 - Categoría: `usage`

@@ -26,7 +26,7 @@ TREATMENTS = frozenset({
     "audit_events", "condor_password_reset",
     "contract_synthetic_records", "contracts_real_records",
     "controlbot_staff_operations", "customer_contact",
-    "diagnostic_shares", "error_incidents", "notification_delivery",
+    "diagnostic_shares", "error_incidents", "finance_real_records", "notification_delivery",
     "notification_preferences", "self_service_trial_application",
     "workflow_definitions", "workflow_executions",
     "payroll_real_records", "payroll_synthetic_records",

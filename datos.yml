@@ -437,6 +437,27 @@
       "retention": "review_required",
       "consent": "review_required",
       "providers": []
+    },
+    {
+      "id": "finance_real_records",
+      "category": "usage",
+      "fields": [
+        "id",
+        "tenant_id",
+        "company_id",
+        "entry_ref",
+        "kind",
+        "state",
+        "version",
+        "previous_id",
+        "actor_id",
+        "occurred_at"
+      ],
+      "purpose": "finance_record_management",
+      "basis": "review_required",
+      "retention": "review_required",
+      "consent": "review_required",
+      "providers": []
     }
   ]
 }
