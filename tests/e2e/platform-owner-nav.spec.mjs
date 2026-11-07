@@ -19,6 +19,7 @@ const GROUPS = [
       '/adminpl0n3r/catalogo?vista=planes',
       '/adminpl0n3r/suscripciones',
       '/adminpl0n3r/catalogo',
+      '/adminpl0n3r/catalogo?vista=ingresos',
     ],
   },
   {
@@ -38,7 +39,7 @@ test.describe('Propietario — navegación agrupada sin enlaces inexistentes', (
     'Requiere aplicación E2E y credenciales de propietario.',
   );
 
-  test('acordeones accesibles, siete enlaces funcionales y sección activa', async ({ page }) => {
+  test('acordeones accesibles, ocho enlaces funcionales y sección activa', async ({ page }) => {
     await page.goto('/admin/login');
     await page.getByLabel('Correo').fill(email);
     await page.getByLabel('Contraseña').fill(password);
@@ -68,7 +69,7 @@ test.describe('Propietario — navegación agrupada sin enlaces inexistentes', (
     expect(new Set(allHrefs).size).toBe(allHrefs.length);
 
     // No crear grupos o rutas de propietario para módulos sin pantalla.
-    for (const absent of ['Cumplimiento', 'Soporte', 'Ingresos', 'Auditoría', 'Estado del sistema']) {
+    for (const absent of ['Cumplimiento', 'Soporte', 'Auditoría', 'Estado del sistema']) {
       await expect(nav.getByRole('button', { name: absent, exact: true })).toHaveCount(0);
     }
 
