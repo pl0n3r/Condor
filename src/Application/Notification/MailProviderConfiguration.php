@@ -47,7 +47,7 @@ final readonly class MailProviderConfiguration
 
         $dsn = self::environment('CONDOR_MAILER_DSN');
         if ($storedKey !== null) {
-            $dsn = 'smtps://resend:'.rawurlencode($storedKey).'@smtp.resend.com:465';
+            $dsn = sprintf('smtps://%s:%s@%s:%d', 'resend', rawurlencode($storedKey), 'smtp.resend.com', 465);
         } elseif ($storedProvider !== null
             && $storedProvider !== self::environment('CONDOR_MAIL_PROVIDER')) {
             // Do not pair a stored provider with an unrelated environment DSN.

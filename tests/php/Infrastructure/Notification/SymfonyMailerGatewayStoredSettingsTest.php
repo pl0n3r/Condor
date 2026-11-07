@@ -115,7 +115,9 @@ final class SymfonyMailerGatewayStoredSettingsTest extends TestCase
         );
         $factory = new StoredMailCapturingFactory();
         $gateway = new SymfonyMailerTransactionalEmailGateway(
-            $factory, $this->projectDir(['resend']), new MailProviderConfiguration($connection, $this->master),
+            $factory,
+            $this->projectDir(['resend']),
+            new MailProviderConfiguration($connection, $this->master),
         );
         $gateway->deliver(self::message());
         self::assertSame([$fallbackDsn], $factory->dsns);
@@ -141,8 +143,11 @@ final class SymfonyMailerGatewayStoredSettingsTest extends TestCase
     /** @param array<string, array<string, mixed>> $rows
      *  @param list<string> $providers
      */
-    private function gateway(array $rows, StoredMailCapturingFactory $factory, array $providers): SymfonyMailerTransactionalEmailGateway
-    {
+    private function gateway(
+        array $rows,
+        StoredMailCapturingFactory $factory,
+        array $providers,
+    ): SymfonyMailerTransactionalEmailGateway {
         $connection = $this->createMock(Connection::class);
         $connection->method('fetchAssociative')
             ->willReturnCallback(static function (string $sql, array $params) use ($rows): array|false {
@@ -237,9 +242,10 @@ final class SymfonyMailerGatewayStoredSettingsTest extends TestCase
         $dir = sys_get_temp_dir().'/condor-mail-settings-'.bin2hex(random_bytes(8));
         self::assertTrue(mkdir($dir, 0700));
         $this->temporaryDirs[] = $dir;
-        file_put_contents($dir.'/datos.yml', json_encode([
+        $contents = json_encode([
             'treatments' => [['id' => 'condor_password_reset', 'providers' => $providers]],
-        ], JSON_THROW_ON_ERROR));
+        ], JSON_THROW_ON_ERROR);
+        file_put_contents($dir.'/datos.yml', $contents);
         return $dir;
     }
 }
