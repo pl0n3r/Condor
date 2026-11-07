@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { PlatformAuditPanel } from './PlatformAuditPanel';
 
 /** El laboratorio solo existe en desarrollo; no activa datos ficticios en producción. */
 const DesignReference = import.meta.env.DEV
@@ -359,18 +360,39 @@ export function AdminShell({
 }: AdminShellProps) {
   const hash = useLocationHash();
   const designPreview = import.meta.env.DEV && variant === 'tenant' && hash === '#design-preview';
+  // La ruta del propietario ya está protegida en el servidor; solo la vista
+  // de auditoría usa su consulta, sin ampliar permisos ni tocar OwnerApp.
+  const auditView = variant === 'platform'
+    && window.location.pathname === '/adminpl0n3r'
+    && new URLSearchParams(window.location.search).get('view') === 'auditoria';
+  const visibleNav: readonly AdminNavEntry[] = variant === 'platform'
+    ? [
+      ...navItems.map((entry) => isGroup(entry)
+        ? {
+          ...entry,
+          items: entry.items.map((item) => ({ ...item, current: auditView ? false : item.current })),
+        }
+        : { ...entry, current: auditView ? false : entry.current }),
+      {
+        href: '/adminpl0n3r?view=auditoria',
+        label: 'Auditoría',
+        icon: 'admin',
+        current: auditView,
+      },
+    ]
+    : navItems;
   // Si el ancla de la URL apunta a una sección dentro de un grupo, esa sección es la actual y «Inicio» deja de estarlo.
-  const sectionInGroup = navItems.some((entry) => isGroup(entry)
+  const sectionInGroup = visibleNav.some((entry) => isGroup(entry)
     && entry.items.some((item) => !item.current && itemIsCurrent(item, hash)));
   // Los grupos del propietario son rutas completas; los del tenant son anclas.
   // Conservar la selección anterior del tenant y reconocer current en plataforma.
   const isActiveGroupItem = (item: AdminNavItem): boolean => (
     variant === 'platform' ? item.current === true : !item.current && itemIsCurrent(item, hash)
   );
-  let activeGroup = '';
-  let activeLabel = '';
-  let activeId = '';
-  for (const entry of navItems) {
+  let activeGroup = auditView ? 'Plataforma' : '';
+  let activeLabel = auditView ? 'Auditoría' : '';
+  let activeId = auditView ? 'auditoria' : '';
+  for (const entry of visibleNav) {
     if (!isGroup(entry)) continue;
     const hit = entry.items.find(isActiveGroupItem);
     if (hit) {
@@ -395,7 +417,7 @@ export function AdminShell({
         </div>
 
         <nav aria-label={navLabel}>
-          {navItems.map((entry) => (
+          {visibleNav.map((entry) => (
             isGroup(entry) ? (
               <NavGroup entry={entry} hash={hash} key={entry.group} />
             ) : (
@@ -435,7 +457,7 @@ export function AdminShell({
           <Suspense fallback={<output>Cargando laboratorio de diseño…</output>}>
             <DesignReference />
           </Suspense>
-        ) : children}
+        ) : (auditView ? <PlatformAuditPanel /> : children)}
       </main>
     </section>
   );
