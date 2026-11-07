@@ -144,9 +144,12 @@ final class PlatformSaasRevenueController extends PlatformOwnerApiController
     private static function filters(Request $request): array
     {
         $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
-        $from = $request->query->get('from', $now->format('Y-m-01'));
-        $to = $request->query->get('to', $now->format('Y-m-t'));
-        $plan = $request->query->get('plan', '');
+        // InputBag::get() narrows values to string at PHPStan level 8; read
+        // the raw query bag so arrays/objects supplied by an attacker fail closed.
+        $query = $request->query->all();
+        $from = $query['from'] ?? $now->format('Y-m-01');
+        $to = $query['to'] ?? $now->format('Y-m-t');
+        $plan = $query['plan'] ?? '';
         if (!is_string($from) || !is_string($to) || !is_string($plan)) {
             throw new BadRequestHttpException('Filtros inválidos.');
         }
