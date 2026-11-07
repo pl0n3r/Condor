@@ -363,7 +363,6 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
       </>}
       <SidePanel open={creating && ready !== null} title="Crear workflow"
         onClose={() => setCreating(false)}>
-        <p className="muted">Se crea desactivado. No se ejecutan acciones al guardar.</p>
           <form className="ui-form" onSubmit={(event) => { void create(event); }}>
             <label htmlFor="workflow-id">Identificador</label>
             <input id="workflow-id" value={workflowId} maxLength={128} required
@@ -375,7 +374,7 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
             <label htmlFor="workflow-action">Acción interna autorizada</label>
             <select id="workflow-action" value={actionType}
               onChange={(event) => setActionType(event.target.value)}>
-              {ready.actions.map((action) => (
+              {ready?.actions.map((action) => (
                 <option value={action} key={action}>{action}</option>
               ))}
             </select>
@@ -420,7 +419,7 @@ export function WorkflowsPanel({ branchId, permissions, csrfToken }: Props) {
             </fieldset>
             <p className="muted">Se crea desactivado. No se ejecutan acciones al guardar.</p>
             <button type="submit" disabled={busy || !validNewId || !validTrigger
-              || !validConditions || !ready.actions.includes(actionType)}>Crear desactivado</button>
+              || !validConditions || !ready?.actions.includes(actionType)}>Crear desactivado</button>
           </form>
       </SidePanel>
       <SidePanel open={selected !== '' && ready !== null} title={'Detalle de ' + (current?.workflow_id ?? selected)}
