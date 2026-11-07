@@ -80,16 +80,18 @@ export async function readM01SyntheticCatalog(
     const seen = new Set<string>();
     const rows: M01Row[] = [];
     for (const value of entries as unknown[]) {
-      if (!isRecord(value) || value.synthetic !== true || typeof value.ref !== 'string'
-        || value.ref.length < 8 || value.ref.length > 128
-        || !/^[a-z0-9_:-]+$/i.test(value.ref)
-        || [scope.tenantId, scope.companyId, scope.branchId].some(id => value.ref.includes(id))
-        || seen.has(value.ref)
+      if (!isRecord(value)) return { status: 'error', rows: [] };
+      const ref = value.ref;
+      if (value.synthetic !== true || typeof ref !== 'string'
+        || ref.length < 8 || ref.length > 128
+        || !/^[a-z0-9_:-]+$/i.test(ref)
+        || [scope.tenantId, scope.companyId, scope.branchId].some(id => ref.includes(id))
+        || seen.has(ref)
         || (value.label !== undefined && (typeof value.label !== 'string' || value.label.length > 120))) {
         return { status: 'error', rows: [] };
       }
-      seen.add(value.ref);
-      rows.push({ ref: value.ref, label: typeof value.label === 'string'
+      seen.add(ref);
+      rows.push({ ref, label: typeof value.label === 'string'
         ? value.label : 'Elemento ficticio sin nombre' });
     }
     return { status: 'ready', rows };
