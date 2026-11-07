@@ -57,6 +57,12 @@ APPROVED_INLINE_SVGS = {
     "marketing/producto.html.twig": {("0 0 760 330", "")},
 }
 
+# Only synthetic illustrations approved for their precise public-page route (#1425).
+APPROVED_MARKETING_ILLUSTRATIONS = {
+    "home/index.html.twig": "{{ asset('img/marketing/home-panel.webp') }}",
+    "marketing/empezar.html.twig": "{{ asset('img/marketing/empezar-negocio.webp') }}",
+}
+
 PERCENT = re.compile(r"\b\d+(?:[.,]\d+)?\s*%", re.IGNORECASE)
 CUSTOMER_METRIC = re.compile(
     r"\b(?:\d[\d.,]*\s*(?:clientes|usuarios|empresas|negocios|"
@@ -106,6 +112,7 @@ class _VisibleText(HTMLParser):
         self.parts: list[str] = []
         self.has_blockquote = False
         self.has_client_logo = False
+        self._approved_marketing_image_count = 0
         self._decorative_frames: list[bool] = []
         self._in_hero_lanes = False
         self._hero_svg_depth = 0
@@ -142,9 +149,29 @@ class _VisibleText(HTMLParser):
                         "og:title", "twitter:title"}:
                 self.parts.append(attributes.get("content") or "")
         elif tag in {"img", "image"}:
-            # No se ha aprobado ningún recurso de cliente; registrar cualquier
-            # nueva imagen para aprobación explícita, sin heurísticas de filename.
-            self.has_client_logo = True
+            # Only one strictly allowlisted, local, synthetic image per page.
+            # Client logos, remote assets, script-bearing attributes and duplicates
+            # remain forbidden even after the home image integration.
+            alt = attributes.get("alt") or ""
+            allowed = (
+                tag == "img"
+                and self._approved_marketing_image_count == 0
+                and self.page in APPROVED_MARKETING_ILLUSTRATIONS
+                and attributes.get("src") == APPROVED_MARKETING_ILLUSTRATIONS[self.page]
+                and attributes.get("width") == "1200"
+                and attributes.get("height") == "900"
+                and alt.strip().lower().startswith("ilustración sintética")
+                and CLIENT_LOGO.search(alt) is None
+                and attributes.get("loading") != "lazy"
+                and len(attrs) == len(attributes)
+                and set(attributes).issubset({
+                    "src", "width", "height", "alt", "decoding", "fetchpriority"
+                })
+            )
+            if allowed:
+                self._approved_marketing_image_count += 1
+            else:
+                self.has_client_logo = True
         elif tag == "svg":
             if self._hero_svg_depth:
                 # Los SVG anidados no forman parte del esquema aprobado.
@@ -327,6 +354,32 @@ class AfirmacionesSitioPublicoTests(unittest.TestCase):
         self.assertEqual([], problems)
         self.assertEqual(Counter(), examples)
 
+
+    def test_allowlist_de_imagenes_locales_sinteticas(self) -> None:
+        for page, src in APPROVED_MARKETING_ILLUSTRATIONS.items():
+            with self.subTest(page=page):
+                image = (f'<img src="{src}" width="1200" height="900" '
+                         'alt="Ilustración sintética de un panel ficticio"/>')
+                self.assertEqual([], scan_claims(page, image)[0])
+                forbidden = (
+                    image + image,
+                    image.replace('width="1200"', 'width="320"'),
+                    image.replace('alt="Ilustración sintética de un panel ficticio"', 'alt=""'),
+                    image.replace('Ilustración sintética de un panel ficticio', 'Logo de cliente'),
+                    image.replace('src="', 'srcset="https://ejemplo.org/img.png" src="'),
+                    image.replace(' src="', ' onerror="alert(1)" src="'),
+                    image.replace(' src="', ' onmouseover="alert(1)" src="'),
+                    image.replace(' src="', ' src="/fake.svg" src="'),
+                    image.replace(' src="', ' class="client-logo" src="'),
+                    image.replace(src, 'https://ejemplo.org/panel.webp'),
+                )
+                for sample in forbidden:
+                    with self.subTest(sample=sample[:110]):
+                        findings, _ = scan_claims(page, sample)
+                        self.assertIn("logotipo_cliente_sin_respaldo", findings)
+                other = ("marketing/empezar.html.twig" if page == "home/index.html.twig"
+                         else "home/index.html.twig")
+                self.assertIn("logotipo_cliente_sin_respaldo", scan_claims(other, image)[0])
 
     def test_svg_hero_decorativo_estrictamente_acotado(self) -> None:
         svg = (
