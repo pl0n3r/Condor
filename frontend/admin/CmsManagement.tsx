@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 import {
   cmsBlockPath,
   cmsBlocksPath,
@@ -79,6 +80,8 @@ export function CmsManagement({
   const canUpdate = permissions.includes('site.update');
   const [state, setState] = useState<State>({ status: 'loading' });
   const [notice, setNotice] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
 
   async function load() {
     if (!canView) {
@@ -118,76 +121,69 @@ export function CmsManagement({
     }
   }, [branchId, canView]);
 
+  const ready = state.status === 'ready' ? state : null;
+  const visiblePages = ready?.pages.filter((page) =>
+    (page.title + ' ' + page.slug + ' ' + page.theme.name)
+      .toLocaleLowerCase('es-CO').includes(search.toLocaleLowerCase('es-CO'))) ?? [];
+  const selectedPage = ready?.pages.find((page) => page.id === selectedPageId);
   if (!canView) {
-    return (
-      <section className="catalog-panel" aria-labelledby="cms-title">
-        <h2 id="cms-title">Sitio y contenido</h2>
-        <div className="alert alert-error" role="alert">
-          No tienes permiso para consultar el CMS de esta empresa.
-        </div>
-      </section>
-    );
+    return <section className="ui-page" aria-label="Sitio y contenido">
+      <PageHeader title="Sitio y contenido" description="Administración de páginas y bloques del sitio de la empresa." />
+      <p className="alert alert-error" role="alert">No tienes permiso para consultar el CMS de esta empresa.</p>
+    </section>;
   }
 
   return (
-    <section className="catalog-panel" aria-labelledby="cms-title">
-      <div className="section-heading">
-        <div>
-          <h2 id="cms-title">Sitio y contenido</h2>
-          <p className="muted">
-            Edita borradores y publícalos cuando el contenido esté listo.
-          </p>
-        </div>
-      </div>
-
-      {notice && (
-        <output className="catalog-notice" aria-live="polite">
-          {notice}
-        </output>
-      )}
-
-      {state.status === 'loading' && (
-        <output className="catalog-state" aria-live="polite">
-          Cargando páginas y bloques…
-        </output>
-      )}
-
-      {state.status === 'error' && (
-        <div className="catalog-state catalog-error" role="alert">
-          <span>{state.message}</span>
-          <button className="button button-secondary" onClick={() => void load()}>
-            Reintentar
-          </button>
-        </div>
-      )}
-
-      {state.status === 'ready' && state.pages.length === 0 && (
-        <div className="catalog-state">
-          <strong>No hay páginas CMS configuradas.</strong>
-          <span className="muted">
-            El editor aparecerá cuando exista una página tenant-scoped.
-          </span>
-        </div>
-      )}
-
-      {state.status === 'ready' && (
-        <div className="catalog-list">
-          {state.pages.map((page) => (
-            <CmsPageEditor
-              key={page.id}
-              branchId={branchId}
-              page={page}
-              themes={state.themes}
-              canUpdate={canUpdate}
-              csrfToken={csrfToken}
-              onChanged={async (message) => {
-                setNotice(message);
-                await load();
-              }}
-            />
-          ))}
-        </div>
-      )}
+    <section className="ui-page" aria-label="Sitio y contenido">
+      <PageHeader title="Sitio y contenido"
+        description="Edita borradores y publícalos cuando el contenido esté listo."
+        actions={<button type="button" className="button button-secondary"
+          onClick={() => void load()} disabled={state.status === 'loading'}>Actualizar páginas</button>} />
+      {notice && <output className="catalog-notice" aria-live="polite">{notice}</output>}
+      {state.status === 'loading' && <output className="catalog-state" role="status" aria-live="polite">Cargando páginas y bloques…</output>}
+      {state.status === 'error' && <div className="catalog-state catalog-error" role="alert">
+        <span>{state.message}</span>
+        <button type="button" className="button button-secondary" onClick={() => void load()}>Reintentar</button>
+      </div>}
+      {ready && <>
+        <MetricStrip label="Resumen de páginas del sitio" items={[
+          { label: 'Páginas', value: ready.pages.length },
+          { label: 'Borradores', value: ready.pages.filter((page) => page.status === 'draft').length },
+          { label: 'Publicadas', value: ready.pages.filter((page) => page.status === 'published').length },
+        ]} />
+        <Card title="Páginas del sitio">
+          <Toolbar trailing={<span className="ui-count">{visiblePages.length} de {ready.pages.length}</span>}>
+            <label className="ui-search"><span className="ui-sr-only">Buscar página o tema</span>
+              <input type="search" placeholder="Buscar por título, URL o tema"
+                value={search} onChange={(event) => setSearch(event.target.value)} />
+            </label>
+          </Toolbar>
+          <DataTable caption="Páginas y estados de publicación" rows={visiblePages}
+            rowKey={(page) => page.id} onOpen={(page) => setSelectedPageId(page.id)}
+            empty={<><strong>No hay páginas para mostrar</strong><span>Prueba otro término o espera a que se configure una página.</span></>}
+            columns={[
+              { key: 'title', header: 'Página', render: (page) => <span className="ui-cell-main"><strong>{page.title}</strong><small>/{page.slug}</small></span> },
+              { key: 'theme', header: 'Tema', render: (page) => page.theme.name },
+              { key: 'blocks', header: 'Bloques', render: (page) => page.blocks.length, align: 'right' },
+              { key: 'status', header: 'Publicación', render: (page) =>
+                <StatusPill tone={page.status === 'published' ? 'ok' : 'warn'}>
+                  {page.status === 'published' ? 'Publicada' : 'Borrador'}
+                </StatusPill> },
+            ]} />
+        </Card>
+      </>}
+      <SidePanel open={selectedPage !== undefined} title={selectedPage?.title ?? 'Detalle de página'}
+        onClose={() => setSelectedPageId(null)}>
+        {selectedPage && ready && <CmsPageEditor
+          key={selectedPage.id}
+          branchId={branchId}
+          page={selectedPage}
+          themes={ready.themes}
+          canUpdate={canUpdate}
+          csrfToken={csrfToken}
+          onChanged={async (message) => { setNotice(message); await load(); }}
+        />}
+      </SidePanel>
     </section>
   );
 }

@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
 /**
  * M10: interfaz de construcción contra API sintética protegida.
@@ -51,6 +52,8 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [reference, setReference] = useState('');
   const [selected, setSelected] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState<'TODOS' | AssetState>('TODOS');
   const [action, setAction] = useState<AssetAction>('ASIGNAR');
   const [responsible, setResponsible] = useState('');
@@ -164,6 +167,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       if (!record) return;
       audit(record.ref, 'created');
       setReference('');
+      setCreating(false);
       setNotice('Activo ficticio guardado por API sintética, sin aprobación.');
     });
   }
@@ -220,81 +224,98 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
 
   const scoped = records.filter(row => row.tenantId === tenantId
     && row.companyId === companyId && row.branchId === branchId);
-  const visible = scoped.filter(row => stateFilter === 'TODOS' || row.state === stateFilter);
+  const visible = scoped.filter(row => (stateFilter === 'TODOS' || row.state === stateFilter)
+    && row.ref.toLocaleLowerCase('es-CO').includes(search.toLocaleLowerCase('es-CO')));
   const detail = scoped.find(row => row.ref === selected);
+  const stateTone = (state: AssetState) =>
+    state === 'ASIGNADO' ? 'ok' as const : state === 'BAJA_REQUIERE_REVISION' ? 'danger' as const
+      : state === 'EN_REVISION' ? 'warn' as const : 'neutral' as const;
   return (
-    <section id="assets-management" className="catalog-panel" aria-labelledby="assets-title">
-      <div className="section-heading"><div>
-        <span className="eyebrow">M10 · Exclusivo construcción</span>
-        <h2 id="assets-title">Activos empresariales</h2>
-        <p className="muted">API sintética DEV. auditoría de servidor, sin validez jurídica ni datos reales.</p>
-      </div></div>
-      {notice && <output aria-live="polite" role="status">{notice}</output>}
-      <div className="production-layout">
-        <section className="catalog-card" aria-labelledby="assets-list-title">
-          <h3 id="assets-list-title">Inventario de prueba</h3>
-          <label className="field"><span>Filtrar por estado</span>
-            <select value={stateFilter} onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-              setStateFilter(event.target.value as typeof stateFilter)}>
+    <section id="assets-management" className="catalog-panel ui-page" aria-label="Activos empresariales">
+      <PageHeader title="Activos empresariales"
+        description="API sintética DEV. auditoría de servidor, sin validez jurídica ni datos reales."
+        actions={canCreate && <button className="button" type="button" onClick={() => setCreating(true)}>Alta ficticia</button>} />
+      <MetricStrip label="Resumen de activos de prueba" items={[
+        { label: 'Activos de prueba', value: scoped.length },
+        { label: 'Asignados', value: scoped.filter(row => row.state === 'ASIGNADO').length },
+        { label: 'Pendientes', value: scoped.filter(row => row.state === 'PENDIENTE').length },
+        { label: 'Requieren revisión', value: scoped.filter(row => row.state === 'EN_REVISION' || row.state === 'BAJA_REQUIERE_REVISION').length, tone: 'warn' },
+      ]} />
+      {notice && <output className="alert" aria-live="polite" role="status">{notice}</output>}
+      <Card title="Inventario de prueba">
+        <Toolbar trailing={<span className="ui-count">{visible.length} de {scoped.length}</span>}>
+          <label className="ui-search"><span className="ui-sr-only">Buscar referencia</span>
+            <input type="search" placeholder="Buscar referencia" value={search} onChange={(event) => setSearch(event.target.value)} />
+          </label>
+          <label><span className="ui-sr-only">Filtrar por estado</span>
+            <select value={stateFilter} aria-label="Filtrar por estado"
+              onChange={(event: ChangeEvent<HTMLSelectElement>) => setStateFilter(event.target.value as typeof stateFilter)}>
               <option value="TODOS">Todos</option>
               {states.map(state => <option key={state} value={state}>{state}</option>)}
             </select>
           </label>
-          {visible.length === 0 ? <p role="status">Sin activos ficticios.</p> :
-            <ul>{visible.map(row => <li key={row.ref}>
-              <button type="button" onClick={() => view(row.ref)}>{row.ref}</button>
-              {' · '}{row.state}
-            </li>)}</ul>}
-        </section>
-        {canCreate && <section className="catalog-card" aria-labelledby="assets-create-title">
-          <h3 id="assets-create-title">Alta ficticia</h3>
-          <form className="catalog-editor" onSubmit={create}>
-            <label className="field"><span>Referencia de activo de prueba</span>
-              <input required maxLength={64} pattern="fixture:asset/[a-z][a-z0-9_-]{0,47}"
-                placeholder="fixture:asset/demo" value={reference}
-                onChange={(event: ChangeEvent<HTMLInputElement>) => setReference(event.target.value)} />
-            </label>
+        </Toolbar>
+        <DataTable caption="Activos empresariales de prueba" rows={visible} rowKey={(row) => row.ref}
+          onOpen={(row) => view(row.ref)}
+          empty={<><strong>Sin activos ficticios.</strong><span>Comprueba el estado o la búsqueda.</span></>}
+          columns={[
+            { key: 'ref', header: 'Referencia', render: (row) => row.ref },
+            { key: 'state', header: 'Estado', render: (row) => <StatusPill tone={stateTone(row.state)}>{row.state}</StatusPill> },
+            { key: 'responsible', header: 'Responsable', render: (row) => row.responsibleRef ?? 'No asignado' },
+            { key: 'evidence', header: 'Evidencia', render: (row) => row.evidenceRef ?? 'No adjunta' },
+          ]} />
+      </Card>
+      <Card title="Bitácora de demostración (no oficial)">
+        {events.filter(row => row.scope === scope).length === 0
+          ? <p role="status">Sin operaciones de prueba.</p>
+          : <ul>{events.filter(row => row.scope === scope).map((row, index) =>
+            <li key={index}>{row.operation}{' · '}{row.assetRef}</li>)}</ul>}
+      </Card>
+      <SidePanel open={creating && canCreate} title="Alta ficticia" onClose={() => setCreating(false)}>
+        <form className="catalog-editor" onSubmit={create}>
+          <label className="field"><span>Referencia de activo de prueba</span>
+            <input required maxLength={64} pattern="fixture:asset/[a-z][a-z0-9_-]{0,47}"
+              placeholder="fixture:asset/demo" value={reference}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => setReference(event.target.value)} />
+          </label>
+          <div className="ui-page-actions">
+            <button className="button button-secondary" type="button" onClick={() => setCreating(false)} disabled={busy}>Cancelar</button>
             <button className="button" type="submit" disabled={busy}>Inventariar activo ficticio</button>
-          </form>
-        </section>}
-        <section className="catalog-card" aria-labelledby="assets-detail-title">
-          <h3 id="assets-detail-title">Detalle y acciones explícitas</h3>
-          {detail ? <>
-            <p><strong>Referencia:</strong> {detail.ref}</p>
-            <p><strong>Estado:</strong> {detail.state}</p>
-            <p><strong>Responsable:</strong> {detail.responsibleRef ?? 'No asignado'}</p>
-            <p><strong>Evidencia:</strong> {detail.evidenceRef ?? 'No adjunta'}</p>
-            {canUpdate && <form className="catalog-editor" onSubmit={changeState}>
-              <label className="field"><span>Acción ficticia</span>
-                <select value={action} onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                  setAction(event.target.value as AssetAction)}>
-                  <option value="ASIGNAR">Asignar responsable</option>
-                  <option value="MANTENIMIENTO">Solicitar mantenimiento</option>
-                  <option value="SOLICITAR_BAJA">Solicitar baja (no aprobar)</option>
-                </select>
-              </label>
-              {action === 'ASIGNAR' && <label className="field"><span>Responsable sintético</span>
-                <input required maxLength={70} placeholder="fixture:responsible/demo"
-                  pattern="fixture:responsible/[a-z][a-z0-9_-]{0,47}"
-                  value={responsible} onChange={event => setResponsible(event.target.value)} />
-              </label>}
-              {action === 'SOLICITAR_BAJA' && <label className="field"><span>Evidencia sintética</span>
-                <input required maxLength={70} placeholder="fixture:evidence/demo"
-                  pattern="fixture:evidence/[a-z][a-z0-9_-]{0,47}"
-                  value={evidence} onChange={event => setEvidence(event.target.value)} />
-              </label>}
-              <button type="submit" disabled={busy}>Registrar transición ficticia explícita</button>
-            </form>}
-            <p className="muted">Ningún activo se aprueba, da de baja o cierra automáticamente.</p>
-          </> : <p role="status">Selecciona un activo para consultar su detalle.</p>}
-        </section>
-        <section className="catalog-card" aria-labelledby="assets-audit-title">
-          <h3 id="assets-audit-title">Bitácora de demostración (no oficial)</h3>
-          {events.length === 0 ? <p role="status">Sin operaciones de prueba.</p> :
-            <ul>{events.filter(row => row.scope === scope).map((row, index) =>
-              <li key={index}>{row.operation}{' · '}{row.assetRef}</li>)}</ul>}
-        </section>
-      </div>
+          </div>
+        </form>
+      </SidePanel>
+      <SidePanel open={Boolean(detail)} title="Detalle y acciones explícitas" onClose={() => setSelected('')}>
+        {detail && <>
+          <dl className="ui-details">
+            <div><dt>Referencia</dt><dd>{detail.ref}</dd></div>
+            <div><dt>Estado</dt><dd><StatusPill tone={stateTone(detail.state)}>{detail.state}</StatusPill></dd></div>
+            <div><dt>Responsable</dt><dd>{detail.responsibleRef ?? 'No asignado'}</dd></div>
+            <div><dt>Evidencia</dt><dd>{detail.evidenceRef ?? 'No adjunta'}</dd></div>
+          </dl>
+          {canUpdate && <form className="catalog-editor" onSubmit={changeState}>
+            <label className="field"><span>Acción ficticia</span>
+              <select value={action} onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                setAction(event.target.value as AssetAction)}>
+                <option value="ASIGNAR">Asignar responsable</option>
+                <option value="MANTENIMIENTO">Solicitar mantenimiento</option>
+                <option value="SOLICITAR_BAJA">Solicitar baja (no aprobar)</option>
+              </select>
+            </label>
+            {action === 'ASIGNAR' && <label className="field"><span>Responsable sintético</span>
+              <input required maxLength={70} placeholder="fixture:responsible/demo"
+                pattern="fixture:responsible/[a-z][a-z0-9_-]{0,47}"
+                value={responsible} onChange={event => setResponsible(event.target.value)} />
+            </label>}
+            {action === 'SOLICITAR_BAJA' && <label className="field"><span>Evidencia sintética</span>
+              <input required maxLength={70} placeholder="fixture:evidence/demo"
+                pattern="fixture:evidence/[a-z][a-z0-9_-]{0,47}"
+                value={evidence} onChange={event => setEvidence(event.target.value)} />
+            </label>}
+            <button type="submit" className="button" disabled={busy}>Registrar transición ficticia explícita</button>
+          </form>}
+          <p className="muted">Ningún activo se aprueba, da de baja o cierra automáticamente.</p>
+        </>}
+      </SidePanel>
     </section>
   );
 }

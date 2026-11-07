@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 type Task = { id: string; name: string };
 type Procedure = { id: string; name: string; tasks: Task[] };
 type Process = { id: string; name: string; procedures: Procedure[] };
@@ -11,6 +12,8 @@ export function OperationsProcessesPanel({ branchId, permissions, csrfToken }: P
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [revision, setRevision] = useState(0);
   const [selected, setSelected] = useState(0);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const [taskState, setTaskState] = useState<'pending' | 'done'>('pending');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -74,32 +77,77 @@ export function OperationsProcessesPanel({ branchId, permissions, csrfToken }: P
       setBusy(false);
     }
   }
-  return <section id="operations-processes" className="catalog-panel" aria-label="Operaciones simuladas">
-    <h2>Procesos, procedimientos y tareas (solo pruebas)</h2>
-    {state.kind === 'denied' && <p role="alert">Sin permiso para ver procesos.</p>}
-    {state.kind === 'loading' && <output aria-live="polite">Cargando procesos ficticios…</output>}
-    {state.kind === 'error' && <div role="alert">{state.message}
-      <button type="button" onClick={() => setRevision((value) => value + 1)}>Reintentar</button>
-    </div>}
-    {state.kind === 'ready' && choices.length === 0 && <p>No hay tareas ficticias.</p>}
-    {state.kind === 'ready' && choices.length > 0 && <>
-      <label> Tarea ficticia
-        <select value={selected} onChange={(event) => setSelected(Number(event.target.value))}>
-          {choices.map(({ process, procedure, task }, index) =>
-            <option key={task.id} value={index}>{process.name} / {procedure.name} / {task.name}</option>)}
-        </select>
-      </label>
-      <label>Estado de prueba
-        <select value={taskState} onChange={(event) =>
-          setTaskState(event.target.value === 'done' ? 'done' : 'pending')}>
-          <option value="pending">Pendiente</option><option value="done">Completada (simulada)</option>
-        </select>
-      </label>
-      {!canUpdate && <p role="alert">Sin permiso para simular tareas.</p>}
-      <button type="button" disabled={!canUpdate || busy} onClick={() => void simulate()}>
-        Simular sin guardar
-      </button>
-      {message && <output aria-live="polite">{message}</output>}
-    </>}
-  </section>;
+  const filtered = choices.filter(({ process, procedure, task }) =>
+    (process.name + ' ' + procedure.name + ' ' + task.name)
+      .toLocaleLowerCase('es-CO').includes(search.toLocaleLowerCase('es-CO')));
+  const current = choices[selected];
+  return (
+    <section id="operations-processes" className="ui-page" aria-label="Operaciones simuladas">
+      <PageHeader title="Procesos y tareas" description="Consulta los procedimientos de la sede y ensaya cambios de estado sin guardar ni despachar tareas."
+        actions={canUpdate && choices.length > 0 ? (
+          <button type="button" className="button" disabled={busy} onClick={() => setDetailOpen(true)}>Simular tarea</button>
+        ) : undefined} />
+      {state.kind === 'loading' && <output role="status" aria-live="polite">Cargando procesos ficticios…</output>}
+      {state.kind === 'denied' && <p role="alert">Sin permiso para ver procesos.</p>}
+      {state.kind === 'error' && <div role="alert" className="alert alert-error">
+        {state.message} <button type="button" className="button button-secondary"
+          onClick={() => setRevision((value) => value + 1)}>Reintentar</button>
+      </div>}
+      {state.kind === 'ready' && <>
+        <MetricStrip label="Resumen de procesos ficticios" items={[
+          { label: 'Procesos', value: state.processes.length },
+          { label: 'Procedimientos', value: state.processes.reduce((sum, item) => sum + item.procedures.length, 0) },
+          { label: 'Tareas de prueba', value: choices.length },
+        ]} />
+        <Card title="Tareas de la sede">
+          <Toolbar trailing={<span className="ui-count">{filtered.length} de {choices.length}</span>}>
+            <label className="ui-search"><span className="ui-sr-only">Buscar tareas</span>
+              <input type="search" placeholder="Buscar proceso, procedimiento o tarea"
+                value={search} onChange={(event) => setSearch(event.target.value)} />
+            </label>
+          </Toolbar>
+          <DataTable caption="Tareas disponibles para simulación" rows={filtered}
+            rowKey={({ process, procedure, task }) => process.id + '/' + procedure.id + '/' + task.id}
+            onOpen={(choice) => { setSelected(choices.indexOf(choice)); setDetailOpen(true); }}
+            empty={<><strong>No hay tareas para esta búsqueda</strong><span>Prueba otro término o revisa los procesos de la sede.</span></>}
+            columns={[
+              { key: 'task', header: 'Tarea', render: ({ task }) => task.name },
+              { key: 'process', header: 'Proceso', render: ({ process }) => process.name },
+              { key: 'procedure', header: 'Procedimiento', render: ({ procedure }) => procedure.name },
+              { key: 'status', header: 'Modo', render: () => <StatusPill tone="info">Solo simulación</StatusPill> },
+            ]} />
+        </Card>
+      </>}
+      {message && <output className="alert" aria-live="polite">{message}</output>}
+      <SidePanel open={state.kind === 'ready' && detailOpen && current !== undefined}
+        title="Simular estado de tarea" onClose={() => setDetailOpen(false)}>
+        {current && <>
+          <dl className="ui-details">
+            <div><dt>Proceso</dt><dd>{current.process.name}</dd></div>
+            <div><dt>Procedimiento</dt><dd>{current.procedure.name}</dd></div>
+            <div><dt>Tarea</dt><dd>{current.task.name}</dd></div>
+          </dl>
+          <label className="field">Tarea ficticia
+            <select value={selected} onChange={(event) => setSelected(Number(event.target.value))}>
+              {choices.map(({ process, procedure, task }, index) =>
+                <option key={process.id + '/' + procedure.id + '/' + task.id} value={index}>
+                  {process.name} / {procedure.name} / {task.name}
+                </option>)}
+            </select>
+          </label>
+          <label className="field">Estado de prueba
+            <select value={taskState} onChange={(event) =>
+              setTaskState(event.target.value === 'done' ? 'done' : 'pending')}>
+              <option value="pending">Pendiente</option>
+              <option value="done">Completada (simulada)</option>
+            </select>
+          </label>
+          {!canUpdate && <p role="alert">Sin permiso para simular tareas.</p>}
+          <p className="muted">La simulación no escribe registros ni ejecuta tareas.</p>
+          <button type="button" className="button" disabled={!canUpdate || busy}
+            onClick={() => void simulate()}>Simular sin guardar</button>
+        </>}
+      </SidePanel>
+    </section>
+  );
 }

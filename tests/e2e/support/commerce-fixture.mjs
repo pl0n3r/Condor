@@ -51,7 +51,7 @@ export async function provisionCommerceFixture(page, {
   await inventory.getByRole('button', { name: 'Crear fuente' }).click();
   await expect(inventory.getByText('Fuente creada.')).toBeVisible();
 
-  await inventory.getByLabel('Fuente').selectOption({ label: sourceName });
+  await inventory.locator('label.field:has(> span:text-is("Fuente")) > select').selectOption({ label: sourceName });
   await inventory.getByLabel('Variante').first().selectOption({
     label: productName + ' · ' + sku,
   });
@@ -62,6 +62,7 @@ export async function provisionCommerceFixture(page, {
 
   await page.goto('/admin#commerce');
   const commerce = page.locator('#commerce');
+  await commerce.getByRole('button', { name: 'Nueva lista' }).click();
   await commerce.getByLabel('Nombre de lista').fill(listName);
   await commerce.getByLabel('Slug de lista').fill(listSlug);
   await commerce.getByRole('button', { name: 'Crear lista' }).click();

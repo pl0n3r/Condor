@@ -1,5 +1,6 @@
 import { GestM14ReviewIncident } from './GestM14ReviewIncident';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 import {
   membershipRolePath,
   membershipsPath,
@@ -61,6 +62,10 @@ export function AccessManagement({
   const [form, setForm] = useState<RoleForm>(emptyForm);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [rolePanelOpen, setRolePanelOpen] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [roleSearch, setRoleSearch] = useState('');
+  const [userSearch, setUserSearch] = useState('');
 
   const can = (permission: string) => permissions.includes(permission);
   const canSeeRoles = can('roles.view');
@@ -175,6 +180,7 @@ export function AccessManagement({
 
       const wasEditing = form.id !== null;
       setForm(emptyForm);
+      setRolePanelOpen(false);
       setMessage(wasEditing ? 'Rol actualizado.' : 'Rol creado.');
       await load();
     } catch {
@@ -253,98 +259,90 @@ export function AccessManagement({
     }
   }
 
+  const visibleRoles = roles.filter((role) => role.name.toLocaleLowerCase('es-CO')
+    .includes(roleSearch.toLocaleLowerCase('es-CO')));
+  const visibleMembers = memberships.filter((member) =>
+    (member.user.name + ' ' + member.user.email)
+      .toLocaleLowerCase('es-CO').includes(userSearch.toLocaleLowerCase('es-CO')));
+  const selectedMember = memberships.find((member) => member.id === selectedMemberId);
   if (!canSeeRoles && !canSeeUsers) {
-    return (
-      <section
-        id="roles"
-        className="access-panel"
-        aria-labelledby="access-title"
-      >
-        <h2 id="access-title">Roles y permisos</h2>
-        <p className="muted">
-          No tienes permisos para consultar la administración de accesos
-          en esta sede.
-        </p>
-      </section>
-    );
+    return <section id="roles" className="ui-page" aria-label="Roles y permisos">
+      <PageHeader title="Roles y permisos" description="Acceso por sede y asignación de responsabilidades." />
+      <p className="alert alert-error" role="alert">No tienes permisos para consultar la administración de accesos en esta sede.</p>
+    </section>;
   }
 
   return (
-    <section
-      id="roles"
-      className="access-panel"
-      aria-labelledby="access-title"
-    >
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">Acceso por sede</span>
-          <h2 id="access-title">Roles y permisos</h2>
-        </div>
-        <p className="muted">
-          Los permisos se acumulan cuando una persona tiene varios roles.
-        </p>
-      </div>
-
-      {message && (
-        <output className="access-message" aria-live="polite">
-          {message}
-        </output>
-      )}
-
-      {canSeeRoles && (
-        <div className="access-layout">
-          <div>
-            {import.meta.env.DEV ? (
-              <>
-                <h3>Roles activos</h3>
-                <GestM14ReviewIncident branchId={branchId}
-                  csrfToken={csrfToken} canWrite={can('roles.update')} />
-              </>
-            ) : (
-              <h3>Roles activos</h3>
-            )}
-            <div className="role-list">
-              {roles.map((role) => (
-                <article className="role-card" key={role.id}>
-                  <div>
-                    <strong>{role.name}</strong>
-                    <span>{role.permissions.length} permisos</span>
-                  </div>
-                  <div className="role-actions">
-                    {can('roles.update') && (
-                      <button
-                        className="button button-secondary"
-                        type="button"
-                        onClick={() => setForm({
-                          id: role.id,
-                          name: role.name,
-                          permissions: role.permissions,
-                        })}
-                      >
-                        Editar
-                      </button>
-                    )}
-                    {can('roles.delete') && (
-                      <button
-                        className="button button-secondary"
-                        type="button"
-                        onClick={() => void deactivate(role)}
-                      >
-                        Desactivar
-                      </button>
-                    )}
-                  </div>
-                </article>
-              ))}
-              {roles.length === 0 && (
-                <p className="muted">Aún no hay roles configurados.</p>
-              )}
-            </div>
-          </div>
-
-          {(can('roles.create') ||
-            (form.id !== null && can('roles.update'))) && (
-            <form className="role-editor" onSubmit={submitRole}>
+    <section id="roles" className="ui-page" aria-label="Roles y permisos">
+      <PageHeader title="Roles y permisos"
+        description="Los permisos se acumulan cuando una persona tiene varios roles."
+        actions={can('roles.create') ? <button type="button" className="button" disabled={busy}
+          onClick={() => { setForm(emptyForm); setRolePanelOpen(true); }}>Nuevo rol</button> : undefined} />
+      {message && <output className="access-message" aria-live="polite">{message}</output>}
+      <MetricStrip label="Resumen de acceso" items={[
+        { label: 'Roles disponibles', value: canSeeRoles ? roles.length : 'Sin acceso' },
+        { label: 'Usuarios', value: canSeeUsers ? memberships.length : 'Sin acceso' },
+        { label: 'Roles con permisos', value: canSeeRoles
+          ? roles.filter((role) => role.permissions.length > 0).length : 'Sin acceso' },
+      ]} />
+      {canSeeRoles && <>
+        <Card title="Roles activos">
+          <Toolbar trailing={<span className="ui-count">{visibleRoles.length} de {roles.length}</span>}>
+            <label className="ui-search"><span className="ui-sr-only">Buscar rol</span>
+              <input type="search" placeholder="Buscar por nombre del rol" value={roleSearch}
+                onChange={(event) => setRoleSearch(event.target.value)} />
+            </label>
+          </Toolbar>
+          <DataTable caption="Roles y permisos de la sede" rows={visibleRoles}
+            rowKey={(role) => role.id}
+            onOpen={can('roles.update') ? (role) => {
+              setForm({ id: role.id, name: role.name, permissions: role.permissions });
+              setRolePanelOpen(true);
+            } : undefined}
+            empty={<><strong>Sin roles para mostrar</strong><span>Prueba otro nombre o crea un rol cuando tengas permiso.</span></>}
+            columns={[
+              { key: 'name', header: 'Rol', render: (role) => role.name },
+              { key: 'permissions', header: 'Permisos', render: (role) => role.permissions.length, align: 'right' },
+              { key: 'status', header: 'Estado', render: () => <StatusPill tone="ok">Disponible</StatusPill> },
+              { key: 'actions', header: 'Acciones', render: (role) => <>
+                {can('roles.update') && <button type="button" className="button button-secondary" disabled={busy}
+                  onClick={() => {
+                    setForm({ id: role.id, name: role.name, permissions: role.permissions });
+                    setRolePanelOpen(true);
+                  }}>Editar</button>}
+                {can('roles.delete') && <button type="button" className="button button-secondary" disabled={busy}
+                  onClick={() => void deactivate(role)}>Desactivar</button>}
+              </> },
+            ]} />
+        </Card>
+        {import.meta.env.DEV && <GestM14ReviewIncident branchId={branchId}
+          csrfToken={csrfToken} canWrite={can('roles.update')} />}
+      </>}
+      {canSeeUsers && canSeeRoles && <Card title="Usuarios de la empresa">
+        <Toolbar trailing={<span className="ui-count">{visibleMembers.length} de {memberships.length}</span>}>
+          <label className="ui-search"><span className="ui-sr-only">Buscar usuario</span>
+            <input type="search" placeholder="Buscar nombre o correo de usuario" value={userSearch}
+              onChange={(event) => setUserSearch(event.target.value)} />
+          </label>
+        </Toolbar>
+        <DataTable caption="Usuarios y sus roles" rows={visibleMembers}
+          rowKey={(member) => member.id}
+          onOpen={(member) => setSelectedMemberId(member.id)}
+          empty={<><strong>No hay usuarios para mostrar</strong><span>Prueba otra búsqueda o revisa el acceso de la sede.</span></>}
+          columns={[
+            { key: 'name', header: 'Usuario', render: (member) =>
+              <span className="ui-cell-main"><strong>{member.user.name}</strong><small>{member.user.email}</small></span> },
+            { key: 'roles', header: 'Roles asignados', render: (member) => member.role_ids.length, align: 'right' },
+            { key: 'state', header: 'Acceso', render: (member) =>
+              <StatusPill tone={member.tenant_owner ? 'info' : 'neutral'}>
+                {member.tenant_owner ? 'Propietario del tenant' : 'Miembro'}</StatusPill> },
+          ]} />
+      </Card>}
+      <SidePanel open={rolePanelOpen && (can('roles.create') ||
+        (form.id !== null && can('roles.update')))}
+        title={form.id ? 'Editar rol y permisos' : 'Nuevo rol'}
+        onClose={() => { setRolePanelOpen(false); setForm(emptyForm); }}>
+          <form className="ui-form role-editor" onSubmit={submitRole}>
               <div className="section-heading compact">
                 <div>
                   <span className="eyebrow">
@@ -406,61 +404,27 @@ export function AccessManagement({
                 {form.id ? 'Guardar cambios' : 'Crear rol'}
               </button>
             </form>
-          )}
-        </div>
-      )}
-
-      {canSeeUsers && canSeeRoles && (
-        <div className="membership-section">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">Asignación</span>
-              <h3>Usuarios de la empresa</h3>
-            </div>
-          </div>
-
-          <div className="membership-list">
-            {memberships.map((member) => (
-              <article className="membership-card" key={member.id}>
-                <div>
-                  <strong>{member.user.name}</strong>
-                  <span>{member.user.email}</span>
-                  {member.tenant_owner && (
-                    <small>
-                      Propietario del tenant · acceso total compatible
-                    </small>
-                  )}
-                </div>
-                <div className="membership-roles">
-                  {roles.map((role) => {
-                    const checked = member.role_ids.includes(role.id);
-
-                    return (
-                      <label key={role.id}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={
-                            !can('users.update') ||
-                            member.tenant_owner ||
-                            busy
-                          }
-                          onChange={(event) => void toggleAssignment(
-                            member,
-                            role,
-                            event.target.checked,
-                          )}
-                        />
-                        <span>{role.name}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      )}
+      </SidePanel>
+      <SidePanel open={selectedMember !== undefined && canSeeRoles && canSeeUsers}
+        title={selectedMember?.user.name ?? 'Acceso de usuario'}
+        onClose={() => setSelectedMemberId(null)}>
+        {selectedMember && <>
+          <dl className="ui-details">
+            <div><dt>Correo</dt><dd>{selectedMember.user.email}</dd></div>
+            <div><dt>Tipo de acceso</dt><dd>{selectedMember.tenant_owner
+              ? 'Propietario del tenant · acceso total compatible' : 'Miembro de empresa'}</dd></div>
+          </dl>
+          <fieldset className="permission-matrix">
+            <legend>Roles asignados</legend>
+            {roles.map((role) => <label key={role.id} className="field">
+              <input type="checkbox" checked={selectedMember.role_ids.includes(role.id)}
+                disabled={!can('users.update') || selectedMember.tenant_owner || busy}
+                onChange={(event) => void toggleAssignment(selectedMember, role, event.target.checked)} />
+              <span>{role.name}</span>
+            </label>)}
+          </fieldset>
+        </>}
+      </SidePanel>
     </section>
   );
 }

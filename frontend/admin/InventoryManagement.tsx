@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { StockCsvAdjust } from './StockCsvAdjust';
 import { RestockSuggestions } from './RestockSuggestions';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 import {
   inventoryAdjustmentPath,
   inventoryPath,
@@ -91,6 +92,9 @@ export function InventoryManagement({
   const [state, setState] = useState<State>({ status: 'loading' });
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState('');
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [selectedBalanceId, setSelectedBalanceId] = useState<string | null>(null);
   const [scanCode, setScanCode] = useState('');
   const [scanStatus, setScanStatus] = useState<ScanStatus>('idle');
   const [scanMessage, setScanMessage] = useState('');
@@ -469,18 +473,22 @@ export function InventoryManagement({
   }
 
   return (
-    <section id="inventory" className="catalog-panel" aria-labelledby="inventory-title">
-      <div className="catalog-heading">
-        <div>
-          <span className="eyebrow">Operación</span>
-          <h2 id="inventory-title">Inventario</h2>
-          {ready && (
-            <p className="muted">
-              {ready.legal_entity.name} · {ready.branch.name}
-            </p>
-          )}
-        </div>
-      </div>
+    <section id="inventory" className="catalog-panel ui-page" aria-label="Inventario">
+      <PageHeader title="Inventario"
+        description={ready ? ready.legal_entity.name + ' · ' + ready.branch.name : 'Existencias y movimientos por sede autorizada.'}
+        actions={ready && <>
+          {canCreate && <button className="button button-secondary" type="button" onClick={() => document.getElementById('inventory-source-name')?.focus()}>Nueva fuente</button>}
+          {canUpdate && ready.sources.length > 0 && ready.variants.length > 0 && <>
+            <button className="button button-secondary" type="button" onClick={() => document.getElementById('inventory-adjust-source')?.focus()}>Ajuste manual</button>
+            {ready.sources.length > 1 && <button className="button" type="button" onClick={() => document.getElementById('inventory-transfer-origin')?.focus()}>Transferencia</button>}
+          </>}
+        </>} />
+      {ready && <MetricStrip label="Resumen de inventario" items={[
+        { label: 'Fuentes', value: ready.sources.length },
+        { label: 'Variantes', value: ready.variants.length },
+        { label: 'Saldos', value: ready.balances.length },
+        { label: 'Movimientos recientes', value: ready.movements.length },
+      ]} />}
 
       {notice?.kind === 'error' && (
         <div className="alert alert-error" role="alert">
@@ -522,29 +530,38 @@ export function InventoryManagement({
 
       {ready && (
         <>
-          <div className="catalog-list">
-            {ready.sources.length === 0 ? (
-              <p className="muted">Aún no hay fuentes de inventario configuradas.</p>
-            ) : ready.sources.map((source) => (
-              <article className="catalog-card" key={source.id}>
-                <div>
-                  <span className="eyebrow">
-                    {source.type === 'branch' ? 'Sede' : 'Fuente lógica'}
-                  </span>
-                  <h3>{source.name}</h3>
-                  <p className="muted">{source.slug}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-
-          {canCreate && (
+          <Card title="Fuentes de inventario">
+            <Toolbar trailing={<span className="ui-count">{ready.sources.length} fuentes</span>}>
+              <label className="ui-search"><span className="ui-sr-only">Buscar fuente o SKU</span>
+                <input type="search" placeholder="Buscar fuente, producto o SKU" value={search}
+                  onChange={event => setSearch(event.target.value)} />
+              </label>
+            </Toolbar>
+            <DataTable caption="Fuentes de inventario"
+              rows={ready.sources.filter(source => (source.name + ' ' + source.slug)
+                .toLocaleLowerCase('es-CO').includes(search.toLocaleLowerCase('es-CO')))}
+              rowKey={source => source.id} onOpen={source => setSelectedSourceId(source.id)}
+              empty={<><strong>Sin fuentes</strong><span>No hay fuentes configuradas o no coinciden con la búsqueda.</span></>}
+              columns={[
+                { key: 'name', header: 'Fuente', render: source => source.name },
+                { key: 'slug', header: 'Identificador', render: source => source.slug },
+                { key: 'type', header: 'Tipo', render: source => <StatusPill tone={source.type === 'branch' ? 'info' : 'neutral'}>
+                  {source.type === 'branch' ? 'Sede' : 'Fuente lógica'}
+                </StatusPill> },
+              ]} />
+            <div className="catalog-list" aria-label="Fichas de fuentes de inventario">
+              {ready.sources.map(source => <article className="catalog-card" key={source.id}>
+                <div><h3>{source.name}</h3><p className="muted">{source.slug}</p></div>
+              </article>)}
+            </div>
+          </Card>
+          {canCreate && <Card title="Nueva fuente">
             <form className="catalog-editor" onSubmit={(event) => void createSource(event)}>
-              <h3>Nueva fuente</h3>
               <div className="catalog-form-grid">
                 <label className="field">
                   <span>Nombre</span>
                   <input
+                    id="inventory-source-name"
                     required
                     maxLength={160}
                     value={sourceName}
@@ -580,7 +597,7 @@ export function InventoryManagement({
                 {busy ? 'Guardando…' : 'Crear fuente'}
               </button>
             </form>
-          )}
+          </Card>}
 
           <form className="catalog-editor" onSubmit={(event) => void scanVariant(event)}>
             <h3>Buscar variante por código</h3>
@@ -629,26 +646,48 @@ export function InventoryManagement({
             )}
           </form>
 
-          <div className="catalog-list">
-            {ready.balances.length === 0 ? (
-              <p className="muted">No hay saldos registrados todavía.</p>
-            ) : ready.balances.map((balance) => (
-              <article className="catalog-card" key={balance.id}>
-                <div>
-                  <span className="eyebrow">
-                    {sourceById.get(balance.source_id)?.name ?? 'Fuente'}
-                  </span>
-                  <h3>{balance.variant.product_name}</h3>
+          <Card title="Existencias por variante">
+            <DataTable caption="Saldos por fuente y producto"
+              rows={ready.balances.filter(balance =>
+                (balance.variant.product_name + ' ' + balance.variant.sku + ' ' + balance.variant.name)
+                  .toLocaleLowerCase('es-CO').includes(search.toLocaleLowerCase('es-CO'))
+                || (sourceById.get(balance.source_id)?.name ?? '').toLocaleLowerCase('es-CO')
+                  .includes(search.toLocaleLowerCase('es-CO')))}
+              rowKey={balance => balance.id} onOpen={balance => setSelectedBalanceId(balance.id)}
+              empty={<><strong>Sin saldos</strong><span>No hay saldos registrados o no coinciden con la búsqueda.</span></>}
+              columns={[
+                { key: 'product', header: 'Producto', render: balance => <span className="ui-cell-main"><strong>{balance.variant.product_name}</strong><small>{balance.variant.sku} · {balance.variant.name}</small></span> },
+                { key: 'source', header: 'Fuente', render: balance => sourceById.get(balance.source_id)?.name ?? 'Fuente' },
+                { key: 'quantity', header: 'Cantidad', render: balance => balance.quantity, align: 'right' },
+              ]} />
+            <div className="catalog-list" aria-label="Fichas de saldos">
+              {ready.balances.map(balance => <article className="catalog-card" key={balance.id}>
+                <div><h3>{balance.variant.product_name}</h3>
                   <p>{balance.variant.sku} · {balance.variant.name}</p>
+                  <p className="muted">{sourceById.get(balance.source_id)?.name ?? 'Fuente'}</p>
                 </div>
                 <strong>{balance.quantity} und.</strong>
-              </article>
-            ))}
-          </div>
-
+              </article>)}
+            </div>
+          </Card>
+          <SidePanel open={selectedSourceId !== null} title="Detalle de fuente" onClose={() => setSelectedSourceId(null)}>
+            {ready.sources.filter(source => source.id === selectedSourceId).map(source => <dl key={source.id} className="ui-details">
+              <div><dt>Nombre</dt><dd>{source.name}</dd></div><div><dt>Identificador</dt><dd>{source.slug}</dd></div>
+              <div><dt>Tipo</dt><dd>{source.type === 'branch' ? 'Sede' : 'Fuente lógica'}</dd></div>
+            </dl>)}
+          </SidePanel>
+          <SidePanel open={selectedBalanceId !== null} title="Detalle de existencias" onClose={() => setSelectedBalanceId(null)}>
+            {ready.balances.filter(balance => balance.id === selectedBalanceId).map(balance => <dl key={balance.id} className="ui-details">
+              <div><dt>Producto</dt><dd>{balance.variant.product_name}</dd></div>
+              <div><dt>Variante</dt><dd>{balance.variant.sku} · {balance.variant.name}</dd></div>
+              <div><dt>Fuente</dt><dd>{sourceById.get(balance.source_id)?.name ?? 'Fuente'}</dd></div>
+              <div><dt>Cantidad</dt><dd>{balance.quantity} und.</dd></div>
+            </dl>)}
+          </SidePanel>
           {canUpdate && ready.sources.length > 0 && ready.variants.length > 0 && (
-            <div className="catalog-list">
-              <form className="catalog-card" onSubmit={(event) => void adjust(event)}>
+            <>
+              <Card title="Ajuste manual">
+                <form className="catalog-editor" onSubmit={(event) => void adjust(event)}>
                 <div>
                   <span className="eyebrow">Movimiento</span>
                   <h3>Ajuste manual</h3>
@@ -656,6 +695,7 @@ export function InventoryManagement({
                 <label className="field">
                   <span>Fuente</span>
                   <select
+                    id="inventory-adjust-source"
                     required
                     value={adjustSource}
                     onChange={(event) => setAdjustSource(event.target.value)}
@@ -702,6 +742,7 @@ export function InventoryManagement({
                   {busy ? 'Aplicando…' : 'Aplicar ajuste'}
                 </button>
               </form>
+              </Card>
 
               {ready.sources.length > 1 && (
                 <form className="catalog-card" onSubmit={(event) => void transfer(event)}>
@@ -712,6 +753,7 @@ export function InventoryManagement({
                   <label className="field">
                     <span>Origen</span>
                     <select
+                      id="inventory-transfer-origin"
                       required
                       value={transferFrom}
                       onChange={(event) => setTransferFrom(event.target.value)}
@@ -767,7 +809,7 @@ export function InventoryManagement({
                   </button>
                 </form>
               )}
-            </div>
+            </>
           )}
 
           <div className="catalog-list">

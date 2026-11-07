@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { inventoryPath } from './api';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
 type Notification = { status?: string; created_at?: string };
 type SeoSettings = {
@@ -81,6 +82,8 @@ export function SeoSettingsPanel({ branchId, permissions, csrfToken }: Props) {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [gtmInput, setGtmInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editingGtm, setEditingGtm] = useState(false);
+  const [search, setSearch] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const requestId = useRef(0);
 
@@ -147,88 +150,78 @@ export function SeoSettingsPanel({ branchId, permissions, csrfToken }: Props) {
   }
 
   if (!canView) return null;
-
+  const notifications = ready?.indexnow.last_notifications.map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => ((entry.status ?? '') + ' ' + (entry.created_at ?? ''))
+      .toLocaleLowerCase('es-CO').includes(search.toLocaleLowerCase('es-CO'))) ?? [];
   return (
-    <section id="seo-settings" aria-labelledby="seo-settings-title">
-      <h2 id="seo-settings-title">Configuración SEO · IndexNow y GTM</h2>
-      <p className="muted">
-        Ajustes exclusivos de la sede activa. Configurar no publica scripts
-        ni envía notificaciones a proveedores externos.
-      </p>
+    <section id="seo-settings" className="ui-page" aria-label="Configuración SEO">
+      <PageHeader title="Configuración SEO · IndexNow y GTM"
+        description="Ajustes exclusivos de la sede. Configurar no publica scripts ni envía notificaciones a proveedores."
+        actions={ready && canUpdate ? <button type="button" className="button" disabled={busy}
+          onClick={() => setEditingGtm(true)}>Configurar GTM</button> : undefined} />
       <div aria-live="polite">
         {state.status === 'loading' && <p role="status">Cargando ajustes SEO…</p>}
         {state.status === 'error' && <p role="alert">{state.message}</p>}
         {notice !== null && <p role="status">{notice}</p>}
       </div>
-      {state.status === 'error' && (
-        <button type="button" onClick={() => { void load(); }}>Reintentar</button>
-      )}
-      {ready !== null && (
-        <>
-          <div>
-            <h3>IndexNow</h3>
-            <p>Estado de configuración: <strong>
-              {ready.indexnow.enabled ? 'Activado' : 'Desactivado'}
-            </strong></p>
-            {canUpdate && (
-              <button type="button" disabled={busy}
-                onClick={() => { void save(
-                  { indexnow: { enabled: !ready.indexnow.enabled } },
-                  ready.indexnow.enabled ? 'IndexNow desactivado.' : 'IndexNow configurado como activo.',
-                ); }}>
-                {ready.indexnow.enabled ? 'Desactivar IndexNow' : 'Activar IndexNow'}
-              </button>
-            )}
-            <h4>Últimas notificaciones</h4>
-            {ready.indexnow.last_notifications.length === 0 ? (
-              <p>No hay notificaciones IndexNow registradas.</p>
-            ) : (
-              <ul>{ready.indexnow.last_notifications.map((entry, i) => (
-                <li key={i}>
-                  {entry.created_at ?? 'Fecha no informada'} ·{' '}
-                  {entry.status ?? 'Estado no informado'}
-                </li>
-              ))}</ul>
-            )}
-          </div>
-          <div>
-            <h3>Google Tag Manager</h3>
-            <p>Estado de configuración: <strong>
-              {ready.gtm.enabled ? 'Activado' : 'Desactivado'}
-            </strong></p>
-            <form onSubmit={configureGtm}>
-              <label htmlFor="seo-gtm-id">Identificador GTM del contenedor</label>
-              <input id="seo-gtm-id" value={gtmInput}
-                placeholder="GTM-XXXXXXX" maxLength={64}
-                disabled={!canUpdate || busy}
-                aria-invalid={!validGtm}
-                aria-describedby="seo-gtm-hint"
-                onChange={(event) => setGtmInput(event.target.value)} />
-              <p id="seo-gtm-hint" className="muted">
-                Usa el formato GTM-XXXXXXX. Cambiar el identificador desactiva GTM
-                hasta que lo vuelvas a habilitar por separado.
-              </p>
-              {!validGtm && <p role="alert">Identificador GTM inválido.</p>}
-              {canUpdate && (
-                <button type="submit" disabled={busy || !validGtm || !gtmChanged}>
-                  Guardar identificador GTM
-                </button>
-              )}
-            </form>
-            {canUpdate && (
-              <button type="button" disabled={busy || ready.gtm.container_id === null || gtmChanged}
-                onClick={() => { void save({ gtm: { enabled: !ready.gtm.enabled } },
-                  ready.gtm.enabled ? 'GTM desactivado.' : 'GTM configurado como activo.'); }}>
-                {ready.gtm.enabled ? 'Desactivar GTM' : 'Activar GTM'}
-              </button>
-            )}
-            <p className="muted">
-              El renderizado público de GTM sigue condicionado a consentimiento,
-              contexto público autorizado y políticas CSP verificadas.
-            </p>
-          </div>
-        </>
-      )}
+      {state.status === 'error' &&
+        <button type="button" className="button button-secondary" onClick={() => void load()}>Reintentar</button>}
+      {ready && <>
+        <MetricStrip label="Resumen de configuración SEO" items={[
+          { label: 'IndexNow', value: ready.indexnow.enabled ? 'Activado' : 'Desactivado' },
+          { label: 'GTM', value: ready.gtm.enabled ? 'Activado' : 'Desactivado' },
+          { label: 'Notificaciones', value: ready.indexnow.last_notifications.length },
+        ]} />
+        <Card title="IndexNow" action={<StatusPill tone={ready.indexnow.enabled ? 'ok' : 'neutral'}>
+          {ready.indexnow.enabled ? 'Activado' : 'Desactivado'}</StatusPill>}>
+          <p>Estado de configuración: <strong>{ready.indexnow.enabled ? 'Activado' : 'Desactivado'}</strong></p>
+          {canUpdate && <button type="button" className="button button-secondary" disabled={busy}
+            onClick={() => void save({ indexnow: { enabled: !ready.indexnow.enabled } },
+              ready.indexnow.enabled ? 'IndexNow desactivado.' : 'IndexNow configurado como activo.')}>
+            {ready.indexnow.enabled ? 'Desactivar IndexNow' : 'Activar IndexNow'}
+          </button>}
+          <Toolbar trailing={<span className="ui-count">{notifications.length} notificaciones</span>}>
+            <label className="ui-search"><span className="ui-sr-only">Buscar notificación</span>
+              <input type="search" placeholder="Buscar por fecha o estado" value={search}
+                onChange={(event) => setSearch(event.target.value)} />
+            </label>
+          </Toolbar>
+          <DataTable caption="Últimas notificaciones IndexNow" rows={notifications}
+            rowKey={({ index }) => String(index)}
+            empty={<><strong>No hay notificaciones registradas</strong><span>Se mostrarán cuando la sede tenga actividad.</span></>}
+            columns={[
+              { key: 'date', header: 'Fecha', render: ({ entry }) => entry.created_at ?? 'Fecha no informada' },
+              { key: 'state', header: 'Estado', render: ({ entry }) =>
+                <StatusPill tone="info">{entry.status ?? 'Estado no informado'}</StatusPill> },
+            ]} />
+        </Card>
+        <Card title="Google Tag Manager" action={<StatusPill tone={ready.gtm.enabled ? 'ok' : 'neutral'}>
+          {ready.gtm.enabled ? 'Activado' : 'Desactivado'}</StatusPill>}>
+          <p>Contenedor: <strong>{ready.gtm.container_id ?? 'Sin configurar'}</strong></p>
+          {canUpdate && <button type="button" className="button button-secondary"
+            disabled={busy || ready.gtm.container_id === null || gtmChanged}
+            onClick={() => void save({ gtm: { enabled: !ready.gtm.enabled } },
+              ready.gtm.enabled ? 'GTM desactivado.' : 'GTM configurado como activo.')}>
+            {ready.gtm.enabled ? 'Desactivar GTM' : 'Activar GTM'}
+          </button>}
+          <p className="muted">El renderizado público de GTM requiere consentimiento, contexto público autorizado y CSP verificada.</p>
+        </Card>
+      </>}
+      <SidePanel open={editingGtm && ready !== null} title="Configurar contenedor GTM"
+        onClose={() => setEditingGtm(false)}>
+        <form onSubmit={configureGtm}>
+          <label className="field" htmlFor="seo-gtm-id">Identificador GTM del contenedor
+            <input id="seo-gtm-id" value={gtmInput} placeholder="GTM-XXXXXXX"
+              maxLength={64} disabled={!canUpdate || busy} aria-invalid={!validGtm}
+              aria-describedby="seo-gtm-hint" onChange={(event) => setGtmInput(event.target.value)} />
+          </label>
+          <p id="seo-gtm-hint" className="muted">Usa el formato GTM-XXXXXXX. Cambiar el identificador desactiva GTM hasta habilitarlo de nuevo.</p>
+          {!validGtm && <p role="alert">Identificador GTM inválido.</p>}
+          {canUpdate && <button type="submit" className="button" disabled={busy || !validGtm || !gtmChanged}>
+            Guardar identificador GTM
+          </button>}
+        </form>
+      </SidePanel>
     </section>
   );
 }
