@@ -61,93 +61,96 @@ final class ContractsController extends AbstractController
         return $this->execute($branchId, $request, 'state', 'fixture:'.$kind.'/'.$slug);
     }
 
-    /** Persisted contracts uses separate routes; synthetic records remain untouched. */
+    /**
+     * The persisted contract routes are separate from the fixture endpoints.
+     * Every operation runs through the same OFF/tenant/owner/CSRF gateway.
+     */
     #[Route('/api/v1/branches/{branchId}/contracts/real-records', name: 'api_contracts_real_list', methods: ['GET'], priority: 20)]
     public function realList(string $branchId): JsonResponse
     {
-        if (($off = $this->realDisabled()) !== null) { return $off; }
-        [, $tenant, $branch] = $this->realScope($branchId, 'inventory.view');
-        return $this->privateJson(['records' => $this->domain(
-            fn (): array => $this->records->listRecords(
-                $tenant->id(), $this->realCompany($tenant, $branch),
-            ),
-        )]);
+        return $this->realHandle($branchId, 'list');
     }
 
     #[Route('/api/v1/branches/{branchId}/contracts/real-records/{ref}', name: 'api_contracts_real_detail', methods: ['GET'], priority: 20)]
     public function realDetail(string $branchId, string $ref): JsonResponse
     {
-        if (($off = $this->realDisabled()) !== null) { return $off; }
-        [, $tenant, $branch] = $this->realScope($branchId, 'inventory.view');
-        $record = $this->domain(fn (): ?array => $this->records->detail(
-            $tenant->id(), $this->realCompany($tenant, $branch), $ref,
-        ));
-        if ($record === null) {
-            throw new NotFoundHttpException('Registro de contratación no encontrado.');
-        }
-        return $this->privateJson(['record' => $record]);
+        return $this->realHandle($branchId, 'detail', null, $ref);
     }
 
     #[Route('/api/v1/branches/{branchId}/contracts/real-records', name: 'api_contracts_real_create', methods: ['POST'], priority: 20)]
     public function realCreate(string $branchId, Request $request): JsonResponse
     {
-        if (($off = $this->realDisabled()) !== null) { return $off; }
-        $this->requireCsrf($request);
-        [$actor, $tenant, $branch] = $this->realScope($branchId, 'inventory.create');
-        $input = $this->payload($request, ['record_ref', 'worker_ref', 'template_ref', 'kind']);
-        return $this->privateJson(['record' => $this->domain(
-            fn (): array => $this->records->create(
-                $tenant->id(), $this->realCompany($tenant, $branch), $actor->id(), $input,
-            ),
-        )], Response::HTTP_CREATED);
+        return $this->realHandle($branchId, 'create', $request);
     }
 
     #[Route('/api/v1/branches/{branchId}/contracts/real-records/{ref}/state', name: 'api_contracts_real_state', methods: ['PATCH'], priority: 20)]
     public function realState(string $branchId, string $ref, Request $request): JsonResponse
     {
-        if (($off = $this->realDisabled()) !== null) { return $off; }
-        $this->requireCsrf($request);
-        [$actor, $tenant, $branch] = $this->realScope($branchId, 'inventory.update');
-        $update = $this->payload($request, ['state', 'expected_version']);
-        $nextState = $update['state'] ?? null;
-        $revision = $update['expected_version'] ?? null;
-        if (!is_string($nextState) || !is_int($revision)) {
-            throw new BadRequestHttpException('Estado y versión obligatorios.');
+        return $this->realHandle($branchId, 'state', $request, $ref);
+    }
+
+    /** A server-side switch is evaluated before session, identity, CSRF or SQL. */
+    private function realHandle(string $branchId, string $action, ?Request $request = null, ?string $ref = null): JsonResponse
+    {
+        if (getenv('CONTRACTS_REAL_DATA_ENABLED') !== 'true') {
+            return $this->privateJson(['error' => 'feature_unavailable'], Response::HTTP_NOT_FOUND);
         }
-        $companyId = $this->realCompany($tenant, $branch);
-        $record = $this->domain(
-            fn (): array => $this->records->changeState(
-                $tenant->id(), $companyId, $actor->id(), $ref, $nextState, $revision,
-            ),
-        );
-        return $this->privateJson(['record' => $record]);
-    }
 
-    /** Server flag must be checked before authorization, CSRF or any persistence read. */
-    private function realDisabled(): ?JsonResponse
-    {
-        if (getenv('CONTRACTS_REAL_DATA_ENABLED') === 'true') { return null; }
-        return $this->privateJson(['error' => 'feature_unavailable'], Response::HTTP_NOT_FOUND);
-    }
-
-    /** @return array{\App\Domain\Identity\Entity\User, Tenant, Branch} */
-    private function realScope(string $branchId, string $permission): array
-    {
+        $permission = match ($action) {
+            'list', 'detail' => 'inventory.view',
+            'create' => 'inventory.create',
+            'state' => 'inventory.update',
+            default => throw new NotFoundHttpException(),
+        };
+        if ($action === 'create' || $action === 'state') {
+            $this->requireCsrf($request ?? throw new BadRequestHttpException('Solicitud incompleta.'));
+        }
         [$actor, $tenant, $branch, $membership] = $this->authorizedBranchScope($branchId, $permission);
         if (!$actor->isActive() || !$membership->isActive()
             || $membership->roleKey() !== Membership::ROLE_OWNER) {
             throw new AccessDeniedHttpException('Contratación reservada al propietario autorizado.');
         }
-        return [$actor, $tenant, $branch];
-    }
-
-    private function realCompany(Tenant $tenant, Branch $branch): string
-    {
-        $company = $branch->legalEntity();
-        if ($company === null || $company->tenant()->id() !== $tenant->id()) {
+        $legalEntity = $branch->legalEntity();
+        if ($legalEntity === null || $legalEntity->tenant()->id() !== $tenant->id()) {
             throw new NotFoundHttpException('Razón social no disponible.');
         }
-        return $company->id();
+
+        $tenantId = $tenant->id();
+        $companyId = $legalEntity->id();
+        $record = $this->domain(function () use ($action, $request, $ref, $tenantId, $companyId, $actor): mixed {
+            return match ($action) {
+                'list' => $this->records->listRecords($tenantId, $companyId),
+                'detail' => $this->records->detail($tenantId, $companyId, $ref ?? ''),
+                'create' => $this->records->create(
+                    $tenantId, $companyId, $actor->id(),
+                    $this->payload($request ?? throw new BadRequestHttpException(), [
+                        'record_ref', 'worker_ref', 'template_ref', 'kind',
+                    ]),
+                ),
+                'state' => $this->changeRealContract($request, $tenantId, $companyId, $actor->id(), $ref),
+                default => throw new NotFoundHttpException(),
+            };
+        });
+        if ($action === 'detail' && $record === null) {
+            throw new NotFoundHttpException('Registro de contratación no encontrado.');
+        }
+        $name = $action === 'list' ? 'records' : 'record';
+        return $this->privateJson([$name => $record], $action === 'create' ? Response::HTTP_CREATED : Response::HTTP_OK);
+    }
+
+    /** @return array<string,mixed> */
+    private function changeRealContract(?Request $request, string $tenant, string $company, string $actor, ?string $ref): array
+    {
+        $input = $this->payload(
+            $request ?? throw new BadRequestHttpException(),
+            ['state', 'expected_version'],
+        );
+        if (!is_string($input['state'] ?? null) || !is_int($input['expected_version'] ?? null)) {
+            throw new BadRequestHttpException('Estado y versión obligatorios.');
+        }
+        return $this->records->changeState(
+            $tenant, $company, $actor, $ref ?? '', $input['state'], $input['expected_version'],
+        );
     }
 
     /** @param array<string,mixed> $data */

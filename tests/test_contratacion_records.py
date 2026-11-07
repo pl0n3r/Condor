@@ -102,15 +102,18 @@ echo json_encode([
 
     def test_http_guards_real_off_permissions_csrf(self):
         text = CONTROLLER.read_text()
-        self.assertEqual(4, text.count("($off = $this->realDisabled())"))
-        self.assertIn("getenv('CONTRACTS_REAL_DATA_ENABLED') === 'true'", text)
+        # The four routes share a single fail-closed gateway (OFF before identity/SQL).
+        self.assertEqual(4, text.count("return $this->realHandle($branchId,"))
+        self.assertIn("getenv('CONTRACTS_REAL_DATA_ENABLED') !== 'true'", text)
         self.assertIn("'feature_unavailable'", text)
         self.assertIn("Response::HTTP_NOT_FOUND", text)
-        for permission in ("inventory.view", "inventory.create", "inventory.update"):
-            self.assertIn(f"realScope($branchId, '{permission}')", text)
-        self.assertGreaterEqual(text.count("$this->requireCsrf($request)"), 3)
+        self.assertIn("'inventory.view'", text)
+        self.assertIn("'inventory.create'", text)
+        self.assertIn("'inventory.update'", text)
+        self.assertIn("$this->requireCsrf($request ??", text)
         self.assertIn("Membership::ROLE_OWNER", text)
-        self.assertIn("$company->tenant()->id() !== $tenant->id()", text)
+        self.assertIn("$legalEntity->tenant()->id() !== $tenant->id()", text)
+        self.assertIn("priority: 20", text)
         self.assertIn("real-records", text)
         self.assertIn("CONDOR_CONTRACTS_SYNTHETIC_API", text)
         self.assertNotIn("getSession()", SERVICE.read_text())
