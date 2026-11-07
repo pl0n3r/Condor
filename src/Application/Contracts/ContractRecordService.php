@@ -10,27 +10,30 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use DomainException;
 
 /**
- * Tenant and legal-entity scoped append-only persistence; no live activation.
- * Each state change inserts a new immutable version inside a transaction.
+ * Versioned contract events are append-only and always scoped to one tenant
+ * and one legal entity. No method authorizes use of live employment records.
  */
 final readonly class ContractRecordService
 {
     private const TABLE = 'condor_contract_real_record';
 
-    public function __construct(private Connection $db) {}
+    public function __construct(private Connection $db)
+    {
+    }
 
     /** @return list<array<string,mixed>> */
     public function listRecords(string $tenant, string $company): array
     {
-        $rows = $this->db->fetchAllAssociative(
-            'SELECT r.* FROM '.self::TABLE.' r WHERE r.tenant_id = ? AND r.company_id = ?'
-            .' AND r.version = (SELECT MAX(v.version) FROM '.self::TABLE.' v'
-            .' WHERE v.tenant_id = r.tenant_id AND v.company_id = r.company_id'
-            .' AND v.record_ref = r.record_ref) ORDER BY r.record_ref LIMIT 100',
-            [$tenant, $company],
-        );
-        foreach ($rows as $row) {
-            ContractRecord::fromRealRow($row, $tenant, $company);
+        $query = 'SELECT event.* FROM '.self::TABLE.' event INNER JOIN ('
+            .'SELECT record_ref, MAX(version) AS latest FROM '.self::TABLE
+            .' WHERE tenant_id = ? AND company_id = ? GROUP BY record_ref'
+            .') current ON event.record_ref = current.record_ref'
+            .' AND event.version = current.latest'
+            .' WHERE event.tenant_id = ? AND event.company_id = ?'
+            .' ORDER BY event.record_ref ASC LIMIT 100';
+        $rows = $this->db->fetchAllAssociative($query, [$tenant, $company, $tenant, $company]);
+        foreach ($rows as $event) {
+            ContractRecord::fromRealRow($event, $tenant, $company);
         }
         return $rows;
     }
@@ -38,43 +41,45 @@ final readonly class ContractRecordService
     /** @return array<string,mixed>|null */
     public function detail(string $tenant, string $company, string $ref): ?array
     {
-        self::ref($ref);
-        $row = $this->db->fetchAssociative(
+        self::assertReference($ref);
+        $result = $this->db->fetchAssociative(
             'SELECT * FROM '.self::TABLE
             .' WHERE tenant_id = ? AND company_id = ? AND record_ref = ?'
-            .' ORDER BY version DESC LIMIT 1', [$tenant, $company, $ref],
+            .' ORDER BY version DESC LIMIT 1',
+            [$tenant, $company, $ref],
         );
-        if ($row === false) {
+        if ($result === false) {
             return null;
         }
-        ContractRecord::fromRealRow($row, $tenant, $company);
-        return $row;
+        ContractRecord::fromRealRow($result, $tenant, $company);
+        return $result;
     }
 
-    /**
-     * @param array<string,mixed> $payload
+    /** @param array<string,mixed> $payload
      * @return array<string,mixed>
      */
     public function create(string $tenant, string $company, string $actor, array $payload): array
     {
-        $keys = array_keys($payload);
-        sort($keys);
-        if ($keys !== ['kind', 'record_ref', 'template_ref', 'worker_ref']
-            || !is_string($payload['record_ref'])
-            || !is_string($payload['worker_ref'])
-            || !is_string($payload['template_ref'])
-            || !is_string($payload['kind'])) {
+        $fields = ['kind', 'record_ref', 'template_ref', 'worker_ref'];
+        if (array_diff(array_keys($payload), $fields) !== []
+            || count($payload) !== count($fields)) {
             throw new DomainException('Campos de contratación obligatorios inválidos.');
         }
-        $record = ContractRecord::openReal($tenant, $company, $payload['record_ref'],
-            $payload['worker_ref'], $payload['template_ref'], $payload['kind'], $actor);
-        try {
-            return $this->db->transactional(
-                fn (): array => $this->insertFirstVersion($tenant, $company, $record),
-            );
-        } catch (UniqueConstraintViolationException $exception) {
-            throw new DomainException('Escritura de contratación concurrente rechazada.', 0, $exception);
+        foreach ($fields as $field) {
+            if (!is_string($payload[$field] ?? null)) {
+                throw new DomainException('Formato de contratación inválido.');
+            }
         }
+
+        return $this->atomic(function () use ($tenant, $company, $actor, $payload): array {
+            if ($this->detail($tenant, $company, $payload['record_ref']) !== null) {
+                throw new DomainException('Referencia de contratación duplicada.');
+            }
+            return $this->append(ContractRecord::openReal(
+                $tenant, $company, $payload['record_ref'], $payload['worker_ref'],
+                $payload['template_ref'], $payload['kind'], $actor,
+            ));
+        });
     }
 
     /** @return array<string,mixed> */
@@ -82,37 +87,39 @@ final readonly class ContractRecordService
         string $tenant, string $company, string $actor,
         string $ref, string $next, int $expectedVersion,
     ): array {
-        self::ref($ref);
+        return $this->atomic(function () use (
+            $tenant, $company, $actor, $ref, $next, $expectedVersion,
+        ): array {
+            $previous = $this->detail($tenant, $company, $ref);
+            if ($previous === null) {
+                throw new DomainException('Registro de contratación no encontrado.');
+            }
+            $event = ContractRecord::fromRealRow($previous, $tenant, $company);
+            return $this->append($event->transitionReal($next, $actor, $expectedVersion));
+        });
+    }
+
+    /** @param callable():array<string,mixed> $operation
+     * @return array<string,mixed>
+     */
+    private function atomic(callable $operation): array
+    {
         try {
-            return $this->db->transactional(function () use (
-                $tenant, $company, $actor, $ref, $next, $expectedVersion,
-            ): array {
-                $old = $this->detail($tenant, $company, $ref);
-                if ($old === null) {
-                    throw new DomainException('Registro de contratación no encontrado.');
-                }
-                $row = ContractRecord::fromRealRow($old, $tenant, $company)
-                    ->transitionReal($next, $actor, $expectedVersion)->realSnapshot();
-                $this->db->insert(self::TABLE, $row);
-                return $row;
-            });
+            return $this->db->transactional($operation);
         } catch (UniqueConstraintViolationException $exception) {
-            throw new DomainException('Cambio de contratación concurrente rechazado.', 0, $exception);
+            throw new DomainException('Versión concurrente de contratación rechazada.', 0, $exception);
         }
     }
 
     /** @return array<string,mixed> */
-    private function insertFirstVersion(string $tenant, string $company, ContractRecord $record): array
+    private function append(ContractRecord $event): array
     {
-        $row = $record->realSnapshot();
-        if ($this->detail($tenant, $company, $row['record_ref']) !== null) {
-            throw new DomainException('Referencia de contratación duplicada.');
-        }
-        $this->db->insert(self::TABLE, $row);
-        return $row;
+        $snapshot = $event->realSnapshot();
+        $this->db->insert(self::TABLE, $snapshot);
+        return $snapshot;
     }
 
-    private static function ref(string $ref): void
+    private static function assertReference(string $ref): void
     {
         if (preg_match('/\A[a-z][a-z0-9_-]{0,63}\z/D', $ref) !== 1) {
             throw new DomainException('Referencia de contratación inválida.');
