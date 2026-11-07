@@ -21,7 +21,7 @@ import { PayrollManagement } from './PayrollManagement';
 import { ContractsRealManagement } from './ContractsManagement';
 import { SocialSecurityRealManagement } from './SocialSecurityManagement';
 import { FinanceRealManagement } from './FinanceManagement';
-import { ComplianceManagement } from './ComplianceManagement';
+import { OccupationalRealManagement as ComplianceManagement } from './ComplianceManagement';
 import { AdminShell, type AdminNavEntry } from './AdminShell';
 import { ModuleDirectory } from './ModuleDirectory';
 import { OverviewGrid } from './OverviewGrid';
@@ -120,6 +120,8 @@ export function AdminApp({
     && document.getElementById('condor-admin-root')?.dataset.socialSecurityRealDataEnabled === 'true';
   const financeRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.financeRealDataEnabled === 'true';
+  const ohsRealDataEnabled = typeof document !== 'undefined'
+    && document.getElementById('condor-admin-root')?.dataset.ohsRealDataEnabled === 'true';
   // Synthetic catalogs are available only in dev with an explicit root opt-in.
   // This flag never enables the HR real-data API or overrides server permissions.
   const hrSyntheticPreviewEnabled = import.meta.env.DEV && typeof document !== 'undefined'
@@ -254,7 +256,8 @@ export function AdminApp({
           items: [
             ...(financeRealDataEnabled ? [{ href: '/admin#finance-management', label: 'Finanzas' }]
               : import.meta.env.DEV ? [{ href: '/admin#finance-management', label: 'Finanzas (pruebas)' }] : []),
-            ...(import.meta.env.DEV ? [{ href: '/admin#compliance-management', label: 'SG-SST (pruebas)' }] : []),
+            ...(ohsRealDataEnabled ? [{ href: '/admin#compliance-management', label: 'SG-SST' }]
+              : import.meta.env.DEV ? [{ href: '/admin#compliance-management', label: 'SG-SST (no habilitado)' }] : []),
             ...(import.meta.env.DEV ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal (pruebas)' }] : []),
             ...(import.meta.env.DEV ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo (pruebas)' }] : []),
           ],
@@ -548,13 +551,15 @@ export function AdminApp({
               enabled={contractsRealDataEnabled}
             />
           )}
-          {import.meta.env.DEV && (
+          {(ohsRealDataEnabled || import.meta.env.DEV) && (
             <ComplianceManagement
-              key={'compliance-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+              key={'compliance-real-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
               tenantId={context.data.tenant.id}
               companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
               branchId={context.data.active_branch.id}
               permissions={context.data.permissions}
+              csrfToken={accessToken}
+              enabled={ohsRealDataEnabled}
             />
           )}
 
