@@ -10,6 +10,7 @@ import {
 } from './FunctionalSignalsPanel';
 import { PlatformStaffPanel } from './PlatformStaffPanel';
 import { PlatformTenantCreationPanel } from './PlatformTenantCreationPanel';
+import { PlatformSubscriptionsPanel, isSyntheticTenant } from './PlatformSubscriptionsPanel';
 import { platformOwnerContextPath } from './api';
 
 type CommercialPlan = {
@@ -418,6 +419,12 @@ export function PlatformOwnerApp({
   const [tenantScopeFilter, setTenantScopeFilter] = useState<'all' | 'with-branches' | 'without-branches'>('all');
   const [tenantPreview, setTenantPreview] = useState<TenantSummary | null>(null);
   const [creatingTenant, setCreatingTenant] = useState(false);
+  const [subscriptionSearch, setSubscriptionSearch] = useState('');
+  const [subscriptionStatusFilter, setSubscriptionStatusFilter] = useState<'all' | 'configured' | 'missing'>('all');
+  const [subscriptionPreview, setSubscriptionPreview] = useState<TenantSummary | null>(null);
+  const [commercialSearch, setCommercialSearch] = useState('');
+  const [commercialPreview, setCommercialPreview] = useState<CommercialPortfolioItem | null>(null);
+  const [catalogPreview, setCatalogPreview] = useState<CommercialPlan | null>(null);
   // Any successful tenant refresh invalidates cached read-only SaaS entitlements.
   const [saasPanelRevision, setSaasPanelRevision] = useState(0);
   const [selectedPlanVersionId, setSelectedPlanVersionId] = useState('');
@@ -881,148 +888,104 @@ export function PlatformOwnerApp({
           )}
 
           {!selected && currentSection === 'catalogo' && (
-            <>
-              <section
-                className="platform-section"
-                aria-labelledby="commercial-portfolio-title"
-              >
-                <div className="section-heading compact">
-                  <div>
-                    <span className="eyebrow">SaaS Control Center</span>
-                    <h2 id="commercial-portfolio-title">Cartera comercial</h2>
-                  </div>
-                  <span className="status-pill">Owner only · Solo lectura</span>
-                </div>
-
-                {state.data.commercial_portfolio.length === 0 ? (
-                  <div className="platform-empty">
-                    Aún no hay empresas en la cartera comercial.
-                  </div>
-                ) : (
-                  <div className="tenant-grid">
-                    {state.data.commercial_portfolio.map((entry) => (
-                      <article className="tenant-card" key={entry.tenant.id}>
-                        <div>
-                          <span className="tenant-slug">{entry.tenant.slug}</span>
-                          <h3>{entry.tenant.name}</h3>
-                        </div>
-
-                        {entry.commercial_subscription.status === 'configured' ? (
-                          <dl>
-                            <div>
-                              <dt>Plan</dt>
-                              <dd>
-                                {entry.commercial_subscription.subscription.plan.name}
-                                {' · v'}
-                                {entry.commercial_subscription.subscription.plan.version}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt>Suscripción</dt>
-                              <dd>
-                                {entry.commercial_subscription.subscription.state
-                                  .replaceAll('_', ' ')}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt>Usage</dt>
-                              <dd>
-                                {entry.usage.length === 0
-                                  ? 'Sin observaciones'
-                                  : `${entry.usage.length} métricas observadas`}
-                              </dd>
-                            </div>
-                          </dl>
-                        ) : (
-                          <dl>
-                            <div>
-                              <dt>Suscripción</dt>
-                              <dd>Sin suscripción configurada</dd>
-                            </div>
-                            <div>
-                              <dt>Usage</dt>
-                              <dd>
-                                {entry.usage.length === 0
-                                  ? 'Sin observaciones'
-                                  : `${entry.usage.length} métricas observadas`}
-                              </dd>
-                            </div>
-                          </dl>
-                        )}
-
-                        {entry.usage.length > 0 && (
-                          <div className="platform-catalog-variants">
-                            {entry.usage.map((usage) => (
-                              <span
-                                key={
-                                  usage.metric
-                                  + '|'
-                                  + usage.window_start
-                                  + '|'
-                                  + usage.window_end
-                                }
-                              >
-                                <code>{usage.metric}</code>
-                                {' · '}
-                                {usage.quantity}
-                                {' · '}
-                                {usage.aggregation}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              <section
-                className="platform-section"
-                aria-labelledby="commercial-catalog-title"
-              >
-                <div className="section-heading compact">
-                  <div>
-                    <span className="eyebrow">Oferta comercial</span>
-                    <h2 id="commercial-catalog-title">Catálogo vigente</h2>
-                  </div>
-                  <span className="status-pill">Solo lectura</span>
-                </div>
-
-                {state.data.commercial_catalog.length === 0 ? (
-                  <div className="platform-empty">
-                    No hay planes comerciales vigentes.
-                  </div>
-                ) : (
-                  <div className="tenant-grid">
-                    {state.data.commercial_catalog.map((plan) => (
-                      <article className="tenant-card" key={plan.key}>
-                        <div>
-                          <span className="tenant-slug">
-                            {plan.key} · v{plan.version}
-                          </span>
-                          <h3>{plan.name}</h3>
-                        </div>
-                        {plan.quote_required ? (
-                          <p><strong>Propuesta personalizada</strong></p>
-                        ) : (
-                          <dl>
-                            <div>
-                              <dt>Mensual</dt>
-                              <dd>{commercialMoney(plan.monthly_amount, plan.currency)}</dd>
-                            </div>
-                            <div>
-                              <dt>Anual</dt>
-                              <dd>{commercialMoney(plan.annual_amount, plan.currency)}</dd>
-                            </div>
-                          </dl>
-                        )}
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
-            </>
+            <section className="platform-section ui-page" aria-label="Catálogo comercial de plataforma">
+              <PageHeader title="Catálogo comercial"
+                description="Planes vigentes, cartera de empresas y uso observado. Datos canónicos solo de lectura."
+                actions={<a className="button button-secondary"
+                  href="/adminpl0n3r/planes">Editar planes y tarifas</a>} />
+              <MetricStrip label="Resumen del catálogo comercial" items={[
+                { label: 'Planes vigentes', value: state.data.commercial_catalog.length },
+                { label: 'Empresas en cartera', value: state.data.commercial_portfolio.length,
+                  hint: 'cartera de esta página' },
+                { label: 'Con suscripción', value: state.data.commercial_portfolio.filter((entry) =>
+                  entry.commercial_subscription.status === 'configured').length },
+              ]} />
+              <h2 id="commercial-portfolio-title" className="ui-sr-only">Cartera comercial</h2>
+              <Card title="Cartera comercial">
+                <Toolbar trailing={<span className="ui-count">Búsqueda en esta página · {state.data.commercial_portfolio.length} empresas</span>}>
+                  <label className="ui-search">
+                    <span className="ui-sr-only">Buscar en la cartera comercial</span>
+                    <input type="search" value={commercialSearch} placeholder="Buscar empresa o slug"
+                      onChange={(e) => setCommercialSearch(e.target.value)} />
+                  </label>
+                </Toolbar>
+                <DataTable caption="Cartera comercial de esta página"
+                  rows={state.data.commercial_portfolio.filter((entry) =>
+                    (entry.tenant.name + ' ' + entry.tenant.slug).toLocaleLowerCase('es-CO')
+                      .includes(commercialSearch.toLocaleLowerCase('es-CO').trim()))}
+                  rowKey={(entry) => entry.tenant.id}
+                  onOpen={(entry) => setCommercialPreview(entry)}
+                  empty={<><strong>No hay empresas en la cartera mostrada.</strong>
+                    <span>Comprueba los filtros o cambia de página en Empresas.</span></>}
+                  columns={[
+                    { key: 'empresa', header: 'Empresa', render: (entry) => <strong>{entry.tenant.name}</strong> },
+                    { key: 'plan', header: 'Plan', render: (entry) =>
+                      entry.commercial_subscription.status === 'configured'
+                        ? entry.commercial_subscription.subscription.plan.name
+                        : 'Sin plan' },
+                    { key: 'estado', header: 'Suscripción', render: (entry) =>
+                      <StatusPill tone={entry.commercial_subscription.status === 'configured' ? 'ok' : 'warn'}>
+                        {entry.commercial_subscription.status === 'configured'
+                          ? entry.commercial_subscription.subscription.state.replaceAll('_', ' ')
+                          : 'Sin configurar'}
+                      </StatusPill> },
+                    { key: 'uso', header: 'Uso observado', render: (entry) =>
+                      entry.usage.length === 0 ? 'Sin observaciones'
+                        : entry.usage.length + ' métricas' },
+                  ]} />
+              </Card>
+              <SidePanel open={commercialPreview !== null}
+                title={commercialPreview?.tenant.name ?? 'Empresa'}
+                onClose={() => setCommercialPreview(null)}>
+                {commercialPreview && <>
+                  <p>Empresa: <strong>{commercialPreview.tenant.name}</strong> · {commercialPreview.tenant.slug}</p>
+                  <p>Suscripción: {commercialPreview.commercial_subscription.status === 'configured'
+                    ? commercialPreview.commercial_subscription.subscription.plan.name
+                      + ' · ' + commercialPreview.commercial_subscription.subscription.state
+                    : 'Sin configurar'}</p>
+                  <h4>Uso observado</h4>
+                  {commercialPreview.usage.length === 0
+                    ? <p>No hay métricas observadas.</p>
+                    : <ul>{commercialPreview.usage.map((usage) =>
+                      <li key={usage.metric + usage.window_start + usage.window_end}>
+                        <code>{usage.metric}</code> · {usage.quantity} · {usage.aggregation}
+                      </li>)}</ul>}
+                </>}
+              </SidePanel>
+              <Card title="Catálogo vigente">
+                <DataTable caption="Catálogo de planes vigentes"
+                  rows={state.data.commercial_catalog} rowKey={(plan) => plan.plan_version_id}
+                  onOpen={(plan) => setCatalogPreview(plan)}
+                  empty={<><strong>No hay planes comerciales vigentes.</strong>
+                    <span>El catálogo se consulta desde la API real.</span></>}
+                  columns={[
+                    { key: 'name', header: 'Plan', render: (plan) => <strong>{plan.name}</strong> },
+                    { key: 'version', header: 'Versión', render: (plan) => 'v' + plan.version },
+                    { key: 'monthly', header: 'Mensual', render: (plan) =>
+                      plan.quote_required ? 'Cotizar' : commercialMoney(plan.monthly_amount, plan.currency) },
+                    { key: 'annual', header: 'Anual', render: (plan) =>
+                      plan.quote_required ? 'Cotizar' : commercialMoney(plan.annual_amount, plan.currency) },
+                    { key: 'status', header: 'Tarifa', render: (plan) =>
+                      <StatusPill tone={plan.quote_required ? 'info' : 'ok'}>
+                        {plan.quote_required ? 'Cotizar' : 'Configurada'}
+                      </StatusPill> },
+                  ]} />
+              </Card>
+              <SidePanel open={catalogPreview !== null}
+                title={catalogPreview?.name ?? 'Plan comercial'}
+                onClose={() => setCatalogPreview(null)}>
+                {catalogPreview && <>
+                  <p>Versión v{catalogPreview.version} · {catalogPreview.key}</p>
+                  <p>Mensual: {catalogPreview.quote_required ? 'Cotizar'
+                    : commercialMoney(catalogPreview.monthly_amount, catalogPreview.currency)}</p>
+                  <p>Anual: {catalogPreview.quote_required ? 'Cotizar'
+                    : commercialMoney(catalogPreview.annual_amount, catalogPreview.currency)}</p>
+                  <a className="button button-secondary" href="/adminpl0n3r/planes">
+                    Abrir editor de planes
+                  </a>
+                </>}
+              </SidePanel>
+            </section>
           )}
 
           {!selected && currentSection === 'empresas' && (
@@ -1128,65 +1091,135 @@ export function PlatformOwnerApp({
           )}
 
           {!selected && currentSection === 'suscripciones' && (
-            <section className="platform-section" aria-labelledby="platform-subscriptions-title">
-              <div className="section-heading compact">
-                <div>
-                  <span className="eyebrow">Suscripciones</span>
-                  <h2 id="platform-subscriptions-title">Selecciona una empresa</h2>
-                </div>
-              </div>
-              {state.data.tenants.length === 0 ? (
-                <div className="platform-empty">No hay empresas en esta página.</div>
-              ) : (
-                <div className="tenant-grid">
-                  {state.data.tenants.map((tenant) => (
-                    <article className="tenant-card" key={tenant.id}>
-                      <span className="tenant-slug">{tenant.slug}</span>
-                      <h3>{tenant.name}</h3>
-                      <button
-                        className="button button-secondary tenant-open"
-                        type="button"
-                        onClick={() => void loadContext(
-                          tenant.id,
-                          state.data.tenant_pagination.page,
-                        )}
-                      >
-                        Ver suscripción
-                      </button>
-                    </article>
-                  ))}
-                </div>
-              )}
+            <section className="platform-section ui-page" aria-label="Plan y suscripciones">
+              <PageHeader title="Plan y suscripciones"
+                description="Consulta el estado, plan y vigencia de cada empresa. Los cambios se validan en el servidor."
+                actions={<button className="button button-secondary" type="button"
+                  onClick={() => void loadContext(undefined, state.data.tenant_pagination.page)}>
+                  Actualizar suscripciones
+                </button>}
+              />
+              <MetricStrip label="Resumen de suscripciones de esta página" items={[
+                { label: 'Empresas visibles', value: state.data.tenants.length },
+                { label: 'Con suscripción', value: state.data.tenants.filter((tenant) =>
+                  state.data.commercial_portfolio.some((entry) =>
+                    entry.tenant.id === tenant.id && entry.commercial_subscription.status === 'configured')).length },
+                { label: 'Sin configurar', value: state.data.tenants.filter((tenant) =>
+                  !state.data.commercial_portfolio.some((entry) =>
+                    entry.tenant.id === tenant.id && entry.commercial_subscription.status === 'configured')).length },
+              ]} />
+              <Card title="Suscripciones por empresa">
+                <Toolbar trailing={<span className="ui-count">Página {state.data.tenant_pagination.page} · filtros en esta página</span>}>
+                  <label className="ui-search">
+                    <span className="ui-sr-only">Buscar empresa en suscripciones</span>
+                    <input type="search" value={subscriptionSearch}
+                      placeholder="Buscar empresa" onChange={(e) => setSubscriptionSearch(e.target.value)} />
+                  </label>
+                  <label>Estado
+                    <select value={subscriptionStatusFilter}
+                      onChange={(e) => setSubscriptionStatusFilter(e.target.value as typeof subscriptionStatusFilter)}>
+                      <option value="all">Todos</option>
+                      <option value="configured">Configuradas</option>
+                      <option value="missing">Sin configurar</option>
+                    </select>
+                  </label>
+                </Toolbar>
+                <DataTable caption="Suscripciones de esta página"
+                  rows={state.data.tenants.filter((tenant) => {
+                    const configured = state.data.commercial_portfolio.some((entry) =>
+                      entry.tenant.id === tenant.id && entry.commercial_subscription.status === 'configured');
+                    return (tenant.name + ' ' + tenant.slug).toLocaleLowerCase('es-CO')
+                      .includes(subscriptionSearch.toLocaleLowerCase('es-CO').trim())
+                      && (subscriptionStatusFilter === 'all'
+                        || (subscriptionStatusFilter === 'configured' ? configured : !configured));
+                  })}
+                  rowKey={(tenant) => tenant.id}
+                  onOpen={(tenant) => setSubscriptionPreview(tenant)}
+                  empty={<><strong>No hay empresas para mostrar.</strong>
+                    <span>Comprueba los filtros o cambia de página.</span></>}
+                  columns={[
+                    { key: 'empresa', header: 'Empresa', render: (tenant) => <strong>{tenant.name}</strong> },
+                    { key: 'plan', header: 'Plan', render: (tenant) => {
+                      const entry = state.data.commercial_portfolio.find((item) => item.tenant.id === tenant.id);
+                      return entry?.commercial_subscription.status === 'configured'
+                        ? entry.commercial_subscription.subscription.plan.name
+                          + ' · v' + entry.commercial_subscription.subscription.plan.version
+                        : 'Sin plan';
+                    } },
+                    { key: 'estado', header: 'Estado', render: (tenant) => {
+                      const entry = state.data.commercial_portfolio.find((item) => item.tenant.id === tenant.id);
+                      return entry?.commercial_subscription.status === 'configured'
+                        ? <StatusPill tone="ok">{entry.commercial_subscription.subscription.state.replaceAll('_', ' ')}</StatusPill>
+                        : <StatusPill tone="warn">Sin configurar</StatusPill>;
+                    } },
+                    { key: 'vigencia', header: 'Vigencia / último cambio', render: (tenant) => {
+                      const entry = state.data.commercial_portfolio.find((item) => item.tenant.id === tenant.id);
+                      if (entry?.commercial_subscription.status !== 'configured') return 'Pendiente';
+                      return entry.commercial_subscription.subscription.trial_ends_at
+                        ?? entry.commercial_subscription.subscription.last_changed_at;
+                    } },
+                    { key: 'accion', header: 'Gestión', render: (tenant) =>
+                      <button type="button" className="button button-secondary"
+                        onClick={() => { setSubscriptionPreview(null); void loadContext(
+                          tenant.id, state.data.tenant_pagination.page); }}>Ver suscripción</button> },
+                  ]} />
+              </Card>
+              <SidePanel open={subscriptionPreview !== null}
+                title={subscriptionPreview?.name ?? 'Detalle de suscripción'}
+                onClose={() => setSubscriptionPreview(null)}>
+                {subscriptionPreview && (() => {
+                  const entry = state.data.commercial_portfolio.find((item) =>
+                    item.tenant.id === subscriptionPreview.id);
+                  return <>
+                    <p>Resumen canónico de la empresa <strong>{subscriptionPreview.name}</strong>.</p>
+                    <p>Plan: {entry?.commercial_subscription.status === 'configured'
+                      ? entry.commercial_subscription.subscription.plan.name : 'Sin configurar'}</p>
+                    <p>Estado: {entry?.commercial_subscription.status === 'configured'
+                      ? entry.commercial_subscription.subscription.state.replaceAll('_', ' ')
+                      : 'Sin suscripción'}</p>
+                    <p>Vigencia: {entry?.commercial_subscription.status === 'configured'
+                      ? entry.commercial_subscription.subscription.trial_ends_at
+                        ?? entry.commercial_subscription.subscription.last_changed_at
+                      : 'Pendiente'}</p>
+                    <button className="button" type="button"
+                      onClick={() => { setSubscriptionPreview(null); void loadContext(
+                        subscriptionPreview.id, state.data.tenant_pagination.page); }}>
+                      Abrir gestión de suscripción
+                    </button>
+                  </>;
+                })()}
+              </SidePanel>
               <nav className="tenant-pagination" aria-label="Paginación de suscripciones">
-                <button
-                  className="button button-secondary"
-                  type="button"
+                <button className="button button-secondary" type="button"
                   disabled={!state.data.tenant_pagination.has_previous}
-                  onClick={() => void loadContext(
-                    undefined, state.data.tenant_pagination.page - 1,
-                  )}
-                >
-                  Anterior
-                </button>
-                <span className="muted">
-                  Página {state.data.tenant_pagination.page}
-                </span>
-                <button
-                  className="button button-secondary"
-                  type="button"
+                  onClick={() => { setSubscriptionPreview(null); void loadContext(
+                    undefined, state.data.tenant_pagination.page - 1); }}>Anterior</button>
+                <span className="muted">Página {state.data.tenant_pagination.page}</span>
+                <button className="button button-secondary" type="button"
                   disabled={!state.data.tenant_pagination.has_next}
-                  onClick={() => void loadContext(
-                    undefined, state.data.tenant_pagination.page + 1,
-                  )}
-                >
-                  Siguiente
-                </button>
+                  onClick={() => { setSubscriptionPreview(null); void loadContext(
+                    undefined, state.data.tenant_pagination.page + 1); }}>Siguiente</button>
               </nav>
             </section>
           )}
 
           {selected && (
             <>
+              {currentSection === 'suscripciones' && isSyntheticTenant(selected.id) && (
+                <PlatformSubscriptionsPanel
+                  tenantId={selected.id}
+                  owner={state.data.actor.role === 'platform_owner'}
+                  syntheticOnly={true}
+                  csrfToken={subscriptionToken}
+                  planVersions={state.data.commercial_catalog.map((plan) => ({
+                    id: plan.plan_version_id,
+                    name: plan.name,
+                    synthetic: plan.plan_version_id.startsWith('synthetic-plan-version-')
+                      && plan.name.startsWith('Synthetic '),
+                  }))}
+                  onChanged={() => loadContext(selected.id, state.data.tenant_pagination.page, false)}
+                />
+              )}
               {currentSection === 'suscripciones' && (
               <SaasControlCenterReadPanel
                 key={`${selected.id}:${saasPanelRevision}`}

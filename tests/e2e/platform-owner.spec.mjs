@@ -89,6 +89,13 @@ test.describe('Super Admin — clientes y staff de plataforma', () => {
     }
     await expect(tenantRow).toBeVisible();
 
+    await platformNav.getByRole('button', { name: 'Comercial', exact: true }).click();
+    await platformNav.getByRole('link', { name: 'Plan y suscripciones' }).click();
+    await expect(page.getByRole('heading', { name: 'Plan y suscripciones' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Suscripciones de esta página' })).toBeVisible();
+    await platformNav.getByRole('link', { name: 'Catálogo comercial' }).click();
+    await expect(page.getByRole('heading', { name: 'Catálogo comercial' })).toBeVisible();
+
     await platformNav.getByRole('button', { name: 'Plataforma', exact: true }).click();
     await platformNav.getByRole('link', { name: 'Staff y permisos', exact: true }).click();
     await expect(page).toHaveURL(/\/adminpl0n3r\/staff$/);
