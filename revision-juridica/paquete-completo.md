@@ -31,6 +31,7 @@ Estado: documented_not_legally_approved. Documentos fuente íntegros a continuac
 | audit_events | usage | actor_user_id, action, entity_type, entity_id, context, created_at | security_audit | review_required | review_required | ninguno_declarado | review_required |
 | condor_password_reset | authentication | user_id, token_hash, expires_at, consumed_at, revoked_at | account_recovery | review_required | review_required | resend | password_reset_lifecycle |
 | contract_synthetic_records | usage | tenant_ref, company_ref, contract_ref, worker_ref, template_ref, actor_ref, state, version, audit_action, fingerprint, created_at | review_required | review_required | review_required | ninguno_declarado | review_required |
+| contracts_real_records | usage | id, tenant_id, company_id, record_ref, worker_ref, template_ref, kind, state, version, previous_id, actor_id, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | controlbot_staff_operations | usage | action, actor_key_id, target_staff_user_id, result, request_id, request_nonce_hash, request_ip, created_at, context | staff_administration_audit | review_required | review_required | ninguno_declarado | review_required |
 | customer_contact | contact | name, email, phone, document_number, notes, commercial_category_id | customer_management | review_required | review_required | ninguno_declarado | review_required |
 | diagnostic_shares | authentication | token_hash, expires_at, revoked_at, created_at | support_diagnostics | review_required | review_required | ninguno_declarado | diagnostic_share_lifecycle |
@@ -106,6 +107,7 @@ El canal debe contemplar solicitudes de acceso, rectificación/corrección, actu
 | audit_events | usage | actor_user_id, action, entity_type, entity_id, context, created_at | security_audit | review_required | review_required | ninguno_declarado | review_required |
 | condor_password_reset | authentication | user_id, token_hash, expires_at, consumed_at, revoked_at | account_recovery | review_required | review_required | resend | password_reset_lifecycle |
 | contract_synthetic_records | usage | tenant_ref, company_ref, contract_ref, worker_ref, template_ref, actor_ref, state, version, audit_action, fingerprint, created_at | review_required | review_required | review_required | ninguno_declarado | review_required |
+| contracts_real_records | usage | id, tenant_id, company_id, record_ref, worker_ref, template_ref, kind, state, version, previous_id, actor_id, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | controlbot_staff_operations | usage | action, actor_key_id, target_staff_user_id, result, request_id, request_nonce_hash, request_ip, created_at, context | staff_administration_audit | review_required | review_required | ninguno_declarado | review_required |
 | customer_contact | contact | name, email, phone, document_number, notes, commercial_category_id | customer_management | review_required | review_required | ninguno_declarado | review_required |
 | diagnostic_shares | authentication | token_hash, expires_at, revoked_at, created_at | support_diagnostics | review_required | review_required | ninguno_declarado | diagnostic_share_lifecycle |
@@ -189,6 +191,16 @@ Producto: `pl0n3r/Condor`
 
 - Categoría: `usage`
 - Campos de software: `tenant_ref`, `company_ref`, `contract_ref`, `worker_ref`, `template_ref`, `actor_ref`, `state`, `version`, `audit_action`, `fingerprint`, `created_at`
+- Finalidad: `review_required`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
+## contracts_real_records
+
+- Categoría: `usage`
+- Campos de software: `id`, `tenant_id`, `company_id`, `record_ref`, `worker_ref`, `template_ref`, `kind`, `state`, `version`, `previous_id`, `actor_id`, `occurred_at`
 - Finalidad: `review_required`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
@@ -353,6 +365,7 @@ Producto: `pl0n3r/Condor`
 | audit_events | usage | review_required | review_required |
 | condor_password_reset | authentication | password_reset_lifecycle | review_required |
 | contract_synthetic_records | usage | review_required | review_required |
+| contracts_real_records | usage | review_required | review_required |
 | controlbot_staff_operations | usage | review_required | review_required |
 | customer_contact | contact | review_required | review_required |
 | diagnostic_shares | authentication | diagnostic_share_lifecycle | review_required |
