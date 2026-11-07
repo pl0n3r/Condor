@@ -13,8 +13,9 @@ export type PlatformPlan = {
   monthly_amount: number | null;
   annual_amount: number | null;
   quote_required: boolean;
-  limits: Record<string, unknown>;
-  capabilities: string[];
+  // El resumen owner /api/context no promete límites; se leen al abrir el SSR.
+  limits?: Record<string, unknown>;
+  capabilities?: string[];
 };
 
 type PriceDraft = {
@@ -352,7 +353,7 @@ export function PlatformPlansPanel({ plans, onChanged }: Readonly<{
                 {tariffStatus(plan)}
               </StatusPill> },
             { key: 'limits', header: 'Límites', render: (plan) =>
-              Object.keys(plan.limits).length + ' configurados' },
+              plan.limits ? Object.keys(plan.limits).length + ' configurados' : 'Ver límites' },
           ]} />
       </Card>
       <SidePanel open={!!selected} title={selected ? selected.name + ' · v' + selected.version : 'Plan'}

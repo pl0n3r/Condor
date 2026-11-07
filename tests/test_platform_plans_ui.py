@@ -31,5 +31,20 @@ class PlatformPlansUiContractTests(unittest.TestCase):
         self.assertTrue(re.search(r"addons: \[\], verticals: \[\]", text))
 
 
+    def test_mounted_in_owner_catalog_without_hijacking_ssr_csrf(self):
+        owner = (ROOT / "frontend/admin/PlatformOwnerApp.tsx").read_text(encoding="utf-8")
+        panel = (ROOT / "frontend/admin/PlatformPlansPanel.tsx").read_text(encoding="utf-8")
+        self.assertIn("import { PlatformPlansPanel } from './PlatformPlansPanel';", owner)
+        self.assertIn("'/adminpl0n3r/catalogo?vista=planes'", owner)
+        self.assertIn("get('vista') === 'planes'", owner)
+        self.assertIn("current: plansView", owner)
+        self.assertIn("<PlatformPlansPanel", owner)
+        self.assertIn("plans={state.data.commercial_catalog}", owner)
+        self.assertIn("currentSection === 'catalogo' && !plansView", owner)
+        # La ruta SSR /planes sigue obteniendo CSRF/expected_version de la API existente.
+        self.assertIn("platformPlanCatalogPath()", panel)
+        self.assertIn("plan.limits ? Object.keys(plan.limits)", panel)
+
+
 if __name__ == "__main__":
     unittest.main()
