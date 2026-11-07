@@ -23,6 +23,7 @@ class Selection:
     categoria_seguridad: bool
     categoria_release: bool
     documentacion: bool
+    paquete_juridico: bool
     pruebas_base: bool
     frontend: bool
     backend: bool
@@ -45,6 +46,7 @@ CANONICAL_DOCS = {
 GITHUB_PREFIX = ".github/"
 WORKFLOW_PREFIX = ".github/workflows/"
 DOCS_PREFIX = "docs/"
+LEGAL_PACKAGE_PREFIX = "revision-juridica/"
 TESTS_PREFIX = "tests/"
 SRC_PREFIX = "src/"
 CONFIG_PREFIX = "config/"
@@ -164,6 +166,11 @@ def normalized(paths: Iterable[str]) -> list[str]:
 
 def starts(path: str, prefixes: tuple[str, ...]) -> bool:
     return path.startswith(prefixes)
+
+
+def is_legal_package_document(path: str) -> bool:
+    """Distingue copias jurídicas derivadas de documentación genérica."""
+    return path.startswith(LEGAL_PACKAGE_PREFIX) and path.endswith(".md")
 
 
 def source_requires_release_transition(path: str) -> bool:
@@ -315,11 +322,13 @@ def full_selection(
     values: dict[str, bool],
     *,
     transicion_release: bool,
+    paquete_juridico: bool,
     motivo: str,
 ) -> Selection:
     return Selection(
         **values,
         documentacion=values["categoria_documentacion"],
+        paquete_juridico=paquete_juridico,
         pruebas_base=True,
         frontend=True,
         backend=True,
@@ -361,11 +370,13 @@ def selective_selection(
     files: list[str],
     values: dict[str, bool],
     transition: bool,
+    paquete_juridico: bool,
 ) -> Selection:
     """Selecciona gates dirigidos para tests/herramientas sin runtime."""
     pruebas_base = any(
         path.startswith((SCRIPTS_PREFIX, TESTS_PREFIX))
         or path == "pyproject.toml"
+        or is_legal_package_document(path)
         for path in files
     )
     backend = any(path.startswith("tests/php/") for path in files)
@@ -375,6 +386,7 @@ def selective_selection(
     return Selection(
         **values,
         documentacion=values["categoria_documentacion"],
+        paquete_juridico=paquete_juridico,
         pruebas_base=pruebas_base,
         frontend=frontend,
         backend=backend,
@@ -396,23 +408,27 @@ def classify(paths: Iterable[str], event: str) -> Selection:
     files = normalized(paths)
     values = categories(files)
     transition = any(requires_release_transition(path) for path in files)
+    paquete_juridico = any(is_legal_package_document(path) for path in files)
 
     if event != "pull_request":
         return full_selection(
             values,
             transicion_release=transition,
+            paquete_juridico=paquete_juridico,
             motivo="main-o-dispatch-validan-stack-completo",
         )
     if not files:
         return full_selection(
             values,
             transicion_release=transition,
+            paquete_juridico=paquete_juridico,
             motivo="diff-vacio-fail-safe",
         )
     if any(not is_known(path) for path in files):
         return full_selection(
             values,
             transicion_release=transition,
+            paquete_juridico=paquete_juridico,
             motivo="ruta-desconocida-fail-safe",
         )
 
@@ -421,10 +437,11 @@ def classify(paths: Iterable[str], event: str) -> Selection:
         return full_selection(
             values,
             transicion_release=transition,
+            paquete_juridico=paquete_juridico,
             motivo="stack-completo:" + ",".join(reasons),
         )
 
-    return selective_selection(files, values, transition)
+    return selective_selection(files, values, transition, paquete_juridico)
 
 def bool_text(value: bool) -> str:
     return "true" if value else "false"
