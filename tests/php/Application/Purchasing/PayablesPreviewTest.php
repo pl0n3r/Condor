@@ -5,13 +5,8 @@ declare(strict_types=1);
 namespace App\Tests\Application\Purchasing;
 
 use App\Application\Purchasing\PayablesPreview;
-use App\Domain\Identity\Entity\BranchRoleAssignment;
-use App\Domain\Identity\Entity\Membership;
-use App\Domain\Identity\Entity\Role;
-use App\Domain\Identity\Entity\User;
-use App\Domain\Organization\Entity\Branch;
-use App\Domain\Organization\Entity\LegalEntity;
-use App\Domain\Organization\Entity\Tenant;
+use App\Domain\Identity\Entity\{BranchRoleAssignment, Membership, Role, User};
+use App\Domain\Organization\Entity\{Branch, LegalEntity, Tenant};
 use App\Tests\Support\BrowserCsrfToken;
 use Doctrine\ORM\EntityManagerInterface;
 use InvalidArgumentException;
