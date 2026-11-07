@@ -108,6 +108,10 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
     await expect(table.getByRole('row').filter({ hasText: 'Empresa sintética' }))
       .toContainText('Inicial');
     await view.getByPlaceholder('Buscar empresa').fill('sintética');
+    await view.locator('select').first().selectOption('missing');
+    await expect(view.getByText('No hay empresas para mostrar.')).toBeVisible();
+    await view.locator('select').first().selectOption('configured');
+    await expect(table.getByRole('row').filter({ hasText: 'Empresa sintética' })).toBeVisible();
     await table.getByRole('button', { name: 'Empresa sintética' }).click();
     const detail = page.getByRole('dialog', { name: 'Empresa sintética' });
     await expect(detail).toContainText('Plan: Inicial');

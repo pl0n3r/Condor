@@ -202,7 +202,7 @@ export function PlatformTenantCreationPanel({
       </form>
 
       {message && (
-        <output className="access-message" aria-live="polite">
+        <output className="access-message" role={activationPath ? "status" : "alert"} aria-live="polite">
           {message}
         </output>
       )}
