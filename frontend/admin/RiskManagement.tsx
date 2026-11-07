@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { useLayoutEffect, useState, type FormEvent } from 'react';
+import { PageHeader, MetricStrip, Toolbar, DataTable, SidePanel, StatusPill } from './ui/Kit';
 
 /**
  * M12 · Riesgos empresariales. Simulador local de construcción, no una evaluación
@@ -61,6 +62,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [probability, setProbability] = useState('1');
   const [impact, setImpact] = useState('1');
   const [selected, setSelected] = useState('');
+  const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'TODAS' | RiskCategory>('TODAS');
   const [stateFilter, setStateFilter] = useState<'TODOS' | RiskState>('TODOS');
@@ -96,6 +98,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     setRecords(previous => [...previous, record]);
     audit(riskRef, 'created', actorRef, 'PENDIENTE');
     setSelected(riskRef);
+    setCreating(false);
     setRiskRef('');
     setActorRef('');
     setNotice('Riesgo ficticio creado solo en memoria. Requiere revisión profesional.');
@@ -136,17 +139,16 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   }
 
   return (
-    <section id="risk-management" className="catalog-panel" aria-labelledby="risk-title">
-      <div className="section-heading"><div>
-        <span className="eyebrow">M12 · Exclusivo construcción</span>
-        <h2 id="risk-title">Riesgos empresariales</h2>
-        <p role="alert">SOLO DATOS FICTICIOS. No usar datos personales, empresas reales ni evaluar cumplimiento legal.</p>
-        <p className="muted">Simulación efímera: sin API, sin persistencia y sin auditoría de servidor.</p>
-      </div></div>
+    <section id="risk-management" className="ui-page catalog-panel" aria-label="Riesgos empresariales">
+      <PageHeader title="Riesgos empresariales" description="Escenarios ficticios sin evaluaciones legales ni datos reales." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setCreating(true); }}>Crear riesgo de prueba</button> : undefined} />
+      <MetricStrip label="Indicadores de Riesgos empresariales" items={[{ label: 'Registros', value: scoped.length }, { label: 'Resultados', value: visible.length }, { label: 'Eventos de esta sesión', value: history.filter(item => item.scope === scope).length }]} />
+      <p role="alert">SOLO DATOS FICTICIOS. No usar datos personales, empresas reales ni evaluar cumplimiento legal.</p>
+      <p className="muted">Simulación efímera: sin API, sin persistencia y sin auditoría de servidor.</p>
       {notice && <output role="status" aria-live="polite">{notice}</output>}
-      <div className="catalog-grid">
-        <section className="catalog-card" aria-labelledby="risk-list-title">
+      <div className="ui-grid-2 catalog-grid">
+        <section className="ui-card catalog-card" aria-labelledby="risk-list-title">
           <h3 id="risk-list-title">Riesgos de demostración</h3>
+          <Toolbar trailing={<span className="ui-count">{visible.length} de {scoped.length}</span>}>
           <label>Buscar referencia ficticia
             <input type="search" value={search} onChange={event => {
               const value = event.target.value.toLowerCase();
@@ -169,18 +171,12 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               {categories.map(item => <option key={item} value={item}>{item}</option>)}
             </select>
           </label>
-          {visible.length === 0 ? <p role="status">Sin riesgos ficticios para estos filtros.</p> : (
-            <ul>{visible.map(row => <li key={row.ref}>
-              <button type="button" aria-pressed={selected === row.ref}
-                onClick={() => view(row.ref)}>{row.ref}</button>
-              {' · '}{row.category} · {row.state}
-            </li>)}</ul>
-          )}
+          </Toolbar>
+          <DataTable caption="Listado de Riesgos empresariales" rows={visible} rowKey={row => row.ref} onOpen={row => view(row.ref)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.ref}</strong></span> }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.state}</StatusPill> }]} />
         </section>
         {canCreate && (
-          <section className="catalog-card" aria-labelledby="risk-create-title">
-            <h3 id="risk-create-title">Crear riesgo de prueba</h3>
-            <form className="catalog-editor" onSubmit={create}>
+          <SidePanel open={creating && canCreate} title="Crear riesgo de prueba" onClose={() => setCreating(false)}>
+          <form className="catalog-editor" onSubmit={create}>
               <label>Referencia de riesgo ficticio
                 <input required maxLength={70} pattern="fixture:risk/[a-z][a-z0-9_\-]{0,47}"
                   value={riskRef} placeholder="fixture:risk/demo"
@@ -207,10 +203,10 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               </label>
               <button type="submit">Crear riesgo ficticio</button>
             </form>
-          </section>
+
+        </SidePanel>
         )}
-        <section className="catalog-card" aria-labelledby="risk-detail-title">
-          <h3 id="risk-detail-title">Detalle y revisión</h3>
+        <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión" onClose={() => setSelected('')}>
           {detail ? <>
             <dl>
               <dt>Referencia</dt><dd>{detail.ref}</dd>
@@ -230,8 +226,9 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             </form>}
             <p className="muted">Ningún riesgo se aprueba ni se cierra automáticamente.</p>
           </> : <p role="status">Selecciona un riesgo para consultar su detalle.</p>}
-        </section>
-        <section className="catalog-card" aria-labelledby="risk-audit-title">
+
+        </SidePanel>
+        <section className="ui-card catalog-card" aria-labelledby="risk-audit-title">
           <h3 id="risk-audit-title">Bitácora de demostración (no oficial)</h3>
           <p className="muted">La bitácora local no sustituye la auditoría de servidor.</p>
           {history.filter(item => item.scope === scope).length === 0
@@ -332,6 +329,7 @@ function RiskHttpWorkspace({
   const [selected, setSelected] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [httpCreating, setHttpCreating] = useState(false);
 
   useLayoutEffect(() => {
     if (!canView) {
@@ -377,6 +375,7 @@ function RiskHttpWorkspace({
         && response.body && typeof response.body === 'object'
         && 'risk' in response.body && isHttpRisk(response.body.risk)) {
         setRevision(value => value + 1);
+        setHttpCreating(false);
         setNotice('Cambio ficticio confirmado por el servidor; no es aprobación.');
       } else {
         setNotice('El servidor rechazó la operación o devolvió datos inválidos.');
@@ -391,8 +390,9 @@ function RiskHttpWorkspace({
   const risks = load.kind === 'ready' ? load.risks : [];
   const chosen = risks.find(row => row.risk_ref === selected);
   return (
-    <section className="catalog-panel" aria-labelledby="risk-http-title">
-      <h2 id="risk-http-title">M12 S04 · riesgos ficticios desde API</h2>
+    <section className="ui-page catalog-panel" aria-label="Riesgos ficticios desde API">
+       <PageHeader title="M12 S04 · riesgos ficticios desde API" description="Consulta autorizada por sede, sin datos personales." actions={load.kind === 'ready' && canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setHttpCreating(true); }}>Crear riesgo de prueba</button> : undefined} />
+       <MetricStrip label="Resumen de riesgos de prueba" items={[{ label: 'Registros por sede', value: risks.length }, { label: 'Revisiones abiertas', value: risks.filter(row => row.state !== 'PENDIENTE').length }, { label: 'Entorno', value: 'Construcción', tone: 'info' }]} />
       <p className="muted">Solo construcción. Los permisos y la sede se validan en el servidor.
         Sin certificación jurídica, aprobación ni cierre automático.</p>
       {load.kind === 'loading' && <output role="status" aria-live="polite">Cargando riesgos ficticios…</output>}
@@ -401,12 +401,8 @@ function RiskHttpWorkspace({
         <button type="button" onClick={() => setRevision(value => value + 1)}>Reintentar</button>
       </div>}
       {load.kind === 'ready' && risks.length === 0 && <p role="status">No hay riesgos ficticios en esta sede.</p>}
-      {load.kind === 'ready' && risks.length > 0 && <ul>{risks.map(row => <li key={row.risk_ref}>
-        <button type="button" onClick={() => setSelected(row.risk_ref)}>{row.risk_ref}</button>
-        {' · '}{row.category} · {row.state}
-        {row.scenario_ref && <> · escenario: {row.scenario_ref}</>}
-      </li>)}</ul>}
-      {load.kind === 'ready' && chosen && <section aria-label="Estado del riesgo seleccionado">
+      {load.kind === 'ready' && <DataTable caption="Riesgos ficticios por sede" rows={risks} rowKey={row => row.risk_ref} onOpen={row => setSelected(row.risk_ref)} empty="No hay riesgos ficticios." columns={[{ key: 'reference', header: 'Referencia', render: row => <strong>{row.risk_ref}</strong> }, { key: 'category', header: 'Categoría', render: row => row.category }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'PENDIENTE' ? 'neutral' : 'warn'}>{row.state}</StatusPill> }, { key: 'scenario', header: 'Escenario', render: row => row.scenario_ref ?? 'Sin escenario' }]} />}
+      {load.kind === 'ready' && chosen && <SidePanel open={!httpCreating} title={chosen.risk_ref} onClose={() => setSelected('')}><section aria-label="Estado del riesgo seleccionado">
         <p>{chosen.risk_ref}: {chosen.state} · probabilidad {chosen.probability}
           {' · '}impacto {chosen.impact}</p>
         {canUpdate && <button type="button" disabled={busy}
@@ -415,8 +411,8 @@ function RiskHttpWorkspace({
             { state: chosen.state === 'PENDIENTE' ? 'EN_REVISION' : 'REQUIERE_REVISION' })}>
           Registrar revisión ficticia en servidor
         </button>}
-      </section>}
-      {load.kind === 'ready' && canCreate && <form className="catalog-editor" onSubmit={event => {
+      </section></SidePanel>}
+       {load.kind === 'ready' && canCreate && <SidePanel open={httpCreating} title="Crear riesgo de prueba" onClose={() => setHttpCreating(false)}><form className="catalog-editor" onSubmit={event => {
         event.preventDefault();
         if (!validFixture(ref, riskRefPattern)
           || (category === 'reputacional' && !validFixture(scenario, scenarioRefPattern))
@@ -455,8 +451,8 @@ function RiskHttpWorkspace({
             onChange={event => setImpact(event.target.value)} />
         </label>
         <button type="submit" disabled={busy}>Crear escenario ficticio</button>
-      </form>}
-      {notice && <output role="status" aria-live="polite">{notice}</output>}
+      </form></SidePanel>}
+       {notice && <output role="status" aria-live="polite">{notice}</output>}
     </section>
   );
 }
