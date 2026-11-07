@@ -32,33 +32,62 @@ test.describe('Super Admin — clientes y staff de plataforma', () => {
     await platformNav.getByRole('link', { name: 'Empresas', exact: true }).click();
     await expect(page).toHaveURL(/\/adminpl0n3r\/empresas$/);
 
-    await page.getByLabel('Nombre comercial').fill(tenantName);
-    await page.getByLabel('Slug').fill(tenantSlug);
-    await page.getByLabel('Razón social').fill(tenantName + ' SAS');
-    await page.getByLabel('Nombre del administrador')
+    // El alta no queda expuesta en la página: abrir su panel lateral.
+    await expect(page.getByRole('button', { name: 'Crear empresa e invitar admin' })).toBeHidden();
+    await page.getByRole('button', { name: 'Crear cliente', exact: true }).click();
+    const creation = page.getByRole('dialog', { name: 'Crear cliente' });
+    await expect(creation).toBeVisible();
+    await creation.getByLabel('Nombre comercial').fill(tenantName);
+    await creation.getByLabel('Slug').fill(tenantSlug);
+    await creation.getByLabel('Razón social').fill(tenantName + ' SAS');
+    await creation.getByLabel('Nombre del administrador')
       .fill('Administradora E2E');
-    await page.getByLabel('Correo del administrador')
+    await creation.getByLabel('Correo del administrador')
       .fill(tenantOwnerEmail);
 
-    await page.getByRole('button', {
+    const creationResponse = page.waitForResponse((response) =>
+      response.url().includes('/adminpl0n3r/api/tenants')
+      && response.request().method() === 'POST');
+    await creation.getByRole('button', {
       name: 'Crear empresa e invitar admin',
     }).click();
+    const activationPayload = await (await creationResponse).json();
+    const activationPath = activationPayload.invitation.activation_path_once;
+    expect(activationPath).toMatch(/^\/activar-cuenta\/[a-f0-9]{64}$/);
 
+    // La invitación de una sola visualización debe sobrevivir al refresco
+    // de la lista; el propietario decide cuándo cerrar el panel.
     await expect(
-      page.getByText(
+      creation.getByText(
         tenantName +
           ' fue creada. El administrador quedó pendiente de activación.',
       ),
     ).toBeVisible();
     await expect(
-      page.locator('.activation-once').filter({
+      creation.locator('.activation-once').filter({
         hasText: 'Enlace de activación',
-      }).first(),
+      }),
     ).toBeVisible();
+    await expect(creation.locator('.activation-once code')).toHaveText(activationPath);
 
-    await expect(
-      page.locator('.tenant-card').filter({ hasText: tenantName }),
-    ).toBeVisible();
+    await creation.getByRole('button', { name: 'Cerrar' }).click();
+    // Un enlace de uso único debe desaparecer antes de volver a crear otra empresa.
+    await page.getByRole('button', { name: 'Crear cliente', exact: true }).click();
+    await expect(creation.locator('.activation-once')).toHaveCount(0);
+    await creation.getByRole('button', { name: 'Cerrar' }).click();
+
+    const tenantsTable = page.getByRole('table', { name: 'Empresas de esta página' });
+    const tenantRow = tenantsTable.getByRole('row').filter({ hasText: tenantName });
+    const pagination = page.getByRole('navigation', { name: 'Paginación de empresas' });
+    // El backend pagina empresas; la nueva no siempre se muestra en la primera página.
+    for (let scanned = 0; scanned < 100 && !(await tenantRow.isVisible()); scanned++) {
+      const next = pagination.getByRole('button', { name: 'Siguiente' });
+      if (await next.isDisabled()) break;
+      const pageBefore = await pagination.locator('span').textContent();
+      await next.click();
+      await expect(pagination.locator('span')).not.toHaveText(pageBefore);
+    }
+    await expect(tenantRow).toBeVisible();
 
     await platformNav.getByRole('button', { name: 'Plataforma', exact: true }).click();
     await platformNav.getByRole('link', { name: 'Staff y permisos', exact: true }).click();

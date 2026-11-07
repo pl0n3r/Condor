@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 import { SystemHealthPanel } from './SystemHealthPanel';
 import { SaasControlCenterReadPanel } from './SaasControlCenterReadPanel';
 import {
@@ -413,6 +414,10 @@ export function PlatformOwnerApp({
 }: PlatformOwnerAppProps) {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [platformRevision, setPlatformRevision] = useState(0);
+  const [tenantSearch, setTenantSearch] = useState('');
+  const [tenantScopeFilter, setTenantScopeFilter] = useState<'all' | 'with-branches' | 'without-branches'>('all');
+  const [tenantPreview, setTenantPreview] = useState<TenantSummary | null>(null);
+  const [creatingTenant, setCreatingTenant] = useState(false);
   // Any successful tenant refresh invalidates cached read-only SaaS entitlements.
   const [saasPanelRevision, setSaasPanelRevision] = useState(0);
   const [selectedPlanVersionId, setSelectedPlanVersionId] = useState('');
@@ -516,6 +521,14 @@ export function PlatformOwnerApp({
         ? 'catalogo'
         : section;
   const selected = selectedTenantFromState(state);
+  const filteredTenants = state.status === 'ready'
+    ? state.data.tenants.filter((tenant) => (
+      (tenantScopeFilter === 'all'
+        || (tenantScopeFilter === 'with-branches' ? tenant.branch_count > 0 : tenant.branch_count === 0))
+      && (tenant.name + ' ' + tenant.slug).toLocaleLowerCase('es-CO')
+        .includes(tenantSearch.trim().toLocaleLowerCase('es-CO'))
+    ))
+    : [];
 
   useEffect(() => {
     setSelectedPlanVersionId('');
@@ -829,30 +842,32 @@ export function PlatformOwnerApp({
           </div>
 
           {!selected && currentSection === 'control' && (
-            <>
-              <OverviewGrid
-                ariaLabel="Métricas globales de Condor"
-                variant="control"
+            <section className="ui-page" aria-label="Centro de control de plataforma">
+              <PageHeader title="Centro de control"
+                description="Visibilidad global de empresas, accesos y funcionamiento de Condor."
+                actions={<a className="button button-secondary" href="/adminpl0n3r/diagnosticos">Abrir diagnósticos</a>}
+              />
+              <MetricStrip label="Métricas globales de Condor"
                 items={[
                   {
                     label: 'Empresas',
                     value: state.data.metrics.tenant_count,
-                    detail: 'tenants registrados',
+                    hint: 'empresas registradas',
                   },
                   {
                     label: 'Usuarios',
                     value: state.data.metrics.user_count,
-                    detail: 'identidades de Condor',
+                    hint: 'identidades de Condor',
                   },
                   {
                     label: 'Sedes',
                     value: state.data.metrics.branch_count,
-                    detail: 'puntos operativos',
+                    hint: 'puntos operativos',
                   },
                   {
                     label: 'Membresías activas',
                     value: state.data.metrics.active_membership_count,
-                    detail: 'accesos vigentes',
+                    hint: 'accesos vigentes',
                   },
                 ]}
               />
@@ -862,7 +877,7 @@ export function PlatformOwnerApp({
               <FunctionalSignalsPanel
                 signals={state.data.signals_last_30_days}
               />
-            </>
+            </section>
           )}
 
           {!selected && currentSection === 'catalogo' && (
@@ -1011,106 +1026,98 @@ export function PlatformOwnerApp({
           )}
 
           {!selected && currentSection === 'empresas' && (
-            <>
-              <PlatformTenantCreationPanel
-                csrfToken={tenantToken}
-                onCreated={() => {
-                  setPlatformRevision((current) => current + 1);
-                  void loadContext(undefined, 1, false);
-                }}
+            <section className="ui-page" aria-label="Gestión de empresas">
+              <PageHeader
+                title="Empresas"
+                description="Consulta las empresas registradas y elige el contexto que necesitas revisar."
+                actions={<button className="button" type="button" onClick={() => setCreatingTenant(true)}>Crear cliente</button>}
               />
-
-              <section className="platform-section" aria-labelledby="tenant-list-title">
-                <div className="section-heading compact">
-                  <div>
-                    <span className="eyebrow">Empresas</span>
-                    <h2 id="tenant-list-title">Clientes de la plataforma</h2>
-                  </div>
-                  <span className="muted">
-                    {state.data.tenants.length} de{' '}
-                    {state.data.tenant_pagination.total} registradas
-                  </span>
-                </div>
-
-                {state.data.tenants.length === 0 ? (
-                  <div className="platform-empty">
-                    Aún no hay empresas registradas.
-                  </div>
-                ) : (
-                  <div className="tenant-grid">
-                    {state.data.tenants.map((tenant) => (
-                      <article className="tenant-card" key={tenant.id}>
-                        <div>
-                          <span className="tenant-slug">{tenant.slug}</span>
-                          <h3>{tenant.name}</h3>
-                        </div>
-                        <dl>
-                          <div>
-                            <dt>Sedes</dt>
-                            <dd>{tenant.branch_count}</dd>
-                          </div>
-                          <div>
-                            <dt>Membresías activas</dt>
-                            <dd>{tenant.active_membership_count}</dd>
-                          </div>
-                        </dl>
-                        <button
-                          className="button button-secondary tenant-open"
-                          type="button"
-                          onClick={() => (
-                            void loadContext(
-                              tenant.id,
-                              state.data.tenant_pagination.page,
-                            )
-                          )}
-                        >
-                          Ver como propietario
-                        </button>
-                      </article>
-                    ))}
-                  </div>
-                )}
-
-                {state.data.tenant_pagination.total > 0 && (
-                  <nav
-                    className="tenant-pagination"
-                    aria-label="Paginación de empresas"
-                  >
-                    <button
-                      className="button button-secondary"
-                      type="button"
-                      disabled={
-                        !state.data.tenant_pagination.has_previous
-                      }
-                      onClick={() => (
-                        void loadContext(
-                          undefined,
-                          state.data.tenant_pagination.page - 1,
-                        )
-                      )}
-                    >
-                      Anterior
-                    </button>
-                    <span className="muted">
-                      Página {state.data.tenant_pagination.page}
-                    </span>
-                    <button
-                      className="button button-secondary"
-                      type="button"
-                      disabled={!state.data.tenant_pagination.has_next}
-                      onClick={() => (
-                        void loadContext(
-                          undefined,
-                          state.data.tenant_pagination.page + 1,
-                        )
-                      )}
-                    >
-                      Siguiente
-                    </button>
-                  </nav>
-                )}
-              </section>
-            </>
+              <MetricStrip label="Resumen de empresas" items={[
+                { label: 'Empresas registradas', value: state.data.tenant_pagination.total },
+                { label: 'En esta página', value: state.data.tenants.length },
+                { label: 'Con sedes', value: state.data.tenants.filter((tenant) => tenant.branch_count > 0).length },
+              ]} />
+              <Card title="Clientes de la plataforma">
+                <Toolbar trailing={<span className="ui-count">{filteredTenants.length} de {state.data.tenants.length} en esta página</span>}>
+                  <span className="muted">Filtros solo sobre esta página.</span>
+                  <label className="ui-search">
+                    <span className="ui-sr-only">Buscar empresas</span>
+                    <input type="search" placeholder="Buscar por empresa o identificador"
+                      value={tenantSearch} onChange={(event) => setTenantSearch(event.target.value)} />
+                  </label>
+                  <label>
+                    <span className="ui-sr-only">Sedes registradas</span>
+                    <select value={tenantScopeFilter}
+                      onChange={(event) => setTenantScopeFilter(event.target.value as typeof tenantScopeFilter)}>
+                      <option value="all">Todas las empresas</option>
+                      <option value="with-branches">Con sedes</option>
+                      <option value="without-branches">Sin sedes</option>
+                    </select>
+                  </label>
+                </Toolbar>
+                <DataTable
+                  caption="Empresas de esta página"
+                  rows={filteredTenants}
+                  rowKey={(tenant) => tenant.id}
+                  onOpen={setTenantPreview}
+                  empty={<><strong>Sin empresas para mostrar en esta página.</strong><span>Comprueba los filtros o cambia de página.</span></>}
+                  columns={[
+                    { key: 'company', header: 'Empresa', render: (tenant) => <span className="ui-cell-main"><strong>{tenant.name}</strong><small>{tenant.slug}</small></span> },
+                    { key: 'branches', header: 'Sedes', render: (tenant) => tenant.branch_count },
+                    { key: 'access', header: 'Membresías activas', render: (tenant) => tenant.active_membership_count },
+                    { key: 'state', header: 'Accesos', render: (tenant) =>
+                      <StatusPill tone={tenant.active_membership_count > 0 ? 'ok' : 'neutral'}>
+                        {tenant.active_membership_count > 0 ? 'Con accesos' : 'Sin accesos activos'}
+                      </StatusPill> },
+                  ]}
+                />
+              </Card>
+              {state.data.tenant_pagination.total > 0 && (
+                <nav className="tenant-pagination" aria-label="Paginación de empresas">
+                  <button className="button button-secondary" type="button"
+                    disabled={!state.data.tenant_pagination.has_previous}
+                    onClick={() => { setTenantPreview(null); void loadContext(undefined, state.data.tenant_pagination.page - 1); }}>
+                    Anterior
+                  </button>
+                  <span className="muted">Página {state.data.tenant_pagination.page}</span>
+                  <button className="button button-secondary" type="button"
+                    disabled={!state.data.tenant_pagination.has_next}
+                    onClick={() => { setTenantPreview(null); void loadContext(undefined, state.data.tenant_pagination.page + 1); }}>
+                    Siguiente
+                  </button>
+                </nav>
+              )}
+              <SidePanel open={tenantPreview !== null} title={tenantPreview?.name ?? 'Empresa'}
+                onClose={() => setTenantPreview(null)}
+                footer={<>
+                  <button className="button button-secondary" type="button" onClick={() => setTenantPreview(null)}>Cerrar</button>
+                  <button className="button" type="button" disabled={!tenantPreview}
+                    onClick={() => {
+                      if (!tenantPreview) return;
+                      const id = tenantPreview.id;
+                      setTenantPreview(null);
+                      void loadContext(id, state.data.tenant_pagination.page);
+                    }}>Ver como propietario</button>
+                </>}>
+                {tenantPreview && <dl className="ui-details">
+                  <div><dt>Empresa</dt><dd>{tenantPreview.name}</dd></div>
+                  <div><dt>Identificador</dt><dd>{tenantPreview.slug}</dd></div>
+                  <div><dt>Sedes</dt><dd>{tenantPreview.branch_count}</dd></div>
+                  <div><dt>Membresías activas</dt><dd>{tenantPreview.active_membership_count}</dd></div>
+                </dl>}
+              </SidePanel>
+              <SidePanel open={creatingTenant} title="Crear cliente" onClose={() => setCreatingTenant(false)}>
+                {creatingTenant && <PlatformTenantCreationPanel
+                  csrfToken={tenantToken}
+                  onCreated={() => {
+                    // El enlace de invitación es de un solo uso: mantener el
+                    // panel abierto hasta que el propietario pueda copiarlo.
+                    setPlatformRevision((current) => current + 1);
+                    void loadContext(undefined, 1, false);
+                  }}
+                />}
+              </SidePanel>
+            </section>
           )}
 
           {!selected && currentSection === 'staff' && (

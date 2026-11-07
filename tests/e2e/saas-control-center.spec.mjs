@@ -150,7 +150,7 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
   test('ready representa plan, add-on sin precio, uso y derechos', async ({ page }) => {
     const panel = await renderOwner(page, () => ({ status: 200, body: ready() }));
     await expect(panel).toContainText('Plan vigente');
-    await expect(panel).toContainText('Add-ons canónicos');
+    await expect(panel).toContainText('Complementos contratados');
     await expect(panel).toContainText('extra: UNKNOWN');
     await expect(panel).toContainText('storage_mb');
     await expect(panel).toContainText('2 / 100');
