@@ -26,7 +26,9 @@ function ref(value: unknown): boolean {
   return typeof value === 'string' && refPattern.test(value) && !/[0-9]{7,}/.test(value);
 }
 function rows(value: unknown, keys: readonly string[], checks: (row: Record<string, unknown>) => boolean): boolean {
-  return Array.isArray(value) && value.length <= 100 && value.every(row => exact(row, keys) && checks(row));
+  return Array.isArray(value) && value.length <= 100
+    && value.every(row => exact(row, keys) && checks(row))
+    && new Set(value.map(row => row.ref)).size === value.length;
 }
 async function sha256(value: string): Promise<string> {
   const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
