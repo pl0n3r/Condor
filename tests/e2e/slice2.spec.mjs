@@ -23,22 +23,27 @@ test.describe('Slice 2 — roles y permisos por sede', () => {
       page.getByRole('heading', { name: 'Roles y permisos' })
     ).toBeVisible();
 
-    await page.getByLabel('Nombre del rol').fill(roleName);
+    await page.getByRole('button', { name: 'Nuevo rol' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Nuevo rol' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel('Nombre del rol').fill(roleName);
 
-    const catalog = page.getByRole('group', { name: 'Catálogo' });
+    const catalog = dialog.getByRole('group', { name: 'Catálogo' });
     await catalog.getByRole('checkbox', { name: 'Ver' }).check();
     await catalog.getByRole('checkbox', { name: 'Editar' }).check();
 
-    await page.getByRole('button', { name: 'Crear rol' }).click();
+    await dialog.getByRole('button', { name: 'Crear rol' }).click();
 
     await expect(page.getByText('Rol creado.')).toBeVisible();
     await expect(
-      page.locator('.role-card').filter({ hasText: roleName })
+      page.getByRole('table', { name: 'Roles y permisos de la sede' })
+      .getByRole('row').filter({ hasText: roleName })
     ).toBeVisible();
 
     await page.reload();
     await expect(
-      page.locator('.role-card').filter({ hasText: roleName })
+      page.getByRole('table', { name: 'Roles y permisos de la sede' })
+      .getByRole('row').filter({ hasText: roleName })
     ).toBeVisible();
 
     const context = await page.request.get('/api/v1/context');

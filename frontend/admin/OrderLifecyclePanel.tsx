@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { ordersPath } from './api';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
 type OrderSummary = Readonly<{
   id: string;
@@ -95,6 +96,7 @@ export function OrderLifecyclePanel({
   const [remote, setRemote] = useState<Remote>({ status: 'loading' });
   const [notice, setNotice] = useState<{ error: boolean; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editor, setEditor] = useState<'payment' | 'refund' | 'delivery' | null>(null);
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('cash');
   const [paymentKey, setPaymentKey] = useState('');
@@ -245,22 +247,40 @@ export function OrderLifecyclePanel({
   const canPay = canUpdate && order.order_status === 'open'
     && ready !== null && ready.payment.pending_minor > 0;
 
+  const states = [
+    { id: 'order', label: 'Pedido', value: name(order.order_status) },
+    { id: 'payment', label: 'Pago', value: name(ready?.payment.payment_status ?? order.payment_status) },
+    { id: 'fulfillment', label: 'Inventario', value: name(order.fulfillment_status) },
+  ];
   return (
-    <section id={'order-lifecycle-' + order.id} className="catalog-card" aria-label={'Ciclo del pedido ' + order.id}>
-      <div>
-        <span className="eyebrow">Detalle del pedido</span>
-        <h4>Ciclo del pedido</h4>
-        <p className="muted">Estados independientes de pedido, pago e inventario.</p>
-      </div>
-      <dl className="catalog-form-grid">
-        <div><dt>Estado del pedido</dt><dd>{name(order.order_status)}</dd></div>
-        <div><dt>Estado del pago</dt>
-          <dd>{name(ready?.payment.payment_status ?? order.payment_status)}</dd></div>
-        <div><dt>Estado del inventario</dt><dd>{name(order.fulfillment_status)}</dd></div>
-      </dl>
-
-      {canUpdate && orderCanCancel && (
-        <div className="catalog-actions" aria-label="Transiciones permitidas del pedido">
+    <section id={'order-lifecycle-' + order.id} className="ui-page" aria-label={'Ciclo del pedido ' + order.id}>
+      <PageHeader title="Ciclo del pedido" description="Estado, cobro y entrega independientes para el pedido seleccionado."
+        actions={ready && canUpdate ? <>
+          {canPay && <button type="button" className="button" disabled={busy}
+            onClick={() => setEditor('payment')}>Registrar pago</button>}
+          {ready.payment.paid_minor > 0 && <button type="button" className="button button-secondary" disabled={busy}
+            onClick={() => setEditor('refund')}>Registrar reembolso</button>}
+          {deliveryEditable && !delivery?.method && <button type="button" className="button button-secondary" disabled={busy}
+            onClick={() => setEditor('delivery')}>Configurar entrega</button>}
+        </> : undefined} />
+      <MetricStrip label="Situación del pedido" items={[
+        { label: 'Pedido', value: name(order.order_status) },
+        { label: 'Pago', value: name(ready?.payment.payment_status ?? order.payment_status) },
+        { label: 'Inventario', value: name(order.fulfillment_status) },
+      ]} />
+      <Card title="Estados del ciclo">
+        <Toolbar trailing={<span className="ui-count">Pedido {order.id}</span>}>
+          <span className="muted">Seguimiento de orden, cobro e inventario.</span>
+        </Toolbar>
+        <DataTable caption="Estados independientes del pedido" rows={states}
+          rowKey={(item) => item.id}
+          empty={<span>No se registran estados del pedido.</span>}
+          columns={[
+            { key: 'step', header: 'Ámbito', render: (item) => item.label },
+            { key: 'status', header: 'Estado actual', render: (item) =>
+              <StatusPill tone={item.value === 'Cancelado' ? 'danger' : 'info'}>{item.value}</StatusPill> },
+          ]} />
+        {canUpdate && orderCanCancel && <div className="catalog-actions" aria-label="Transiciones permitidas del pedido">
           <button type="button" className="button button-secondary" disabled={busy || !ready}
             onClick={() => void submit(cancelPath, 'Pedido cancelado; reserva liberada.', undefined, true)}>
             Cancelar pedido
@@ -269,35 +289,46 @@ export function OrderLifecyclePanel({
             onClick={() => void submit(consumePath, 'Inventario consumido.', undefined, true)}>
             Consumir inventario
           </button>
-        </div>
-      )}
-
-      {remote.status === 'loading' && (
-        <output role="status" aria-live="polite">Cargando pagos y entrega…</output>
-      )}
-      {remote.status === 'error' && (
-        <div className="catalog-state catalog-error" role="alert">
-          <p>{remote.message}</p>
-          <button type="button" className="button button-secondary"
-            onClick={() => void load()}>Reintentar carga</button>
-        </div>
-      )}
-      {notice && (
-        <output className={notice.error ? 'catalog-notice catalog-notice-error' : 'catalog-notice'}
-          role={notice.error ? 'alert' : 'status'} aria-live="polite">
-          {notice.message}
-        </output>
-      )}
-
-      {ready && (
-        <>
-          <div>
-            <h5>Pagos manuales</h5>
-            <p>Registrado: {money(ready.payment.paid_minor, order.currency)}
-              {' · '}Saldo pendiente: {money(ready.payment.pending_minor, order.currency)}</p>
-            <p className="muted">Saldo calculado por el servidor. Los pagos parciales dependen de la configuración de la empresa.</p>
-          </div>
-          {canPay && (
+        </div>}
+      </Card>
+      {remote.status === 'loading' && <output role="status" aria-live="polite">Cargando pagos y entrega…</output>}
+      {remote.status === 'error' && <div className="catalog-state catalog-error" role="alert">
+        <p>{remote.message}</p>
+        <button type="button" className="button button-secondary" onClick={() => void load()}>Reintentar carga</button>
+      </div>}
+      {notice && <output className={notice.error ? 'catalog-notice catalog-notice-error' : 'catalog-notice'}
+        role={notice.error ? 'alert' : 'status'} aria-live="polite">{notice.message}</output>}
+      {ready && <>
+        <Card title="Pagos manuales">
+          <dl className="ui-details">
+            <div><dt>Registrado</dt><dd>{money(ready.payment.paid_minor, order.currency)}</dd></div>
+            <div><dt>Saldo pendiente</dt><dd>{money(ready.payment.pending_minor, order.currency)}</dd></div>
+            <div><dt>Estado</dt><dd><StatusPill tone="info">{name(ready.payment.payment_status)}</StatusPill></dd></div>
+          </dl>
+          <p className="muted">Saldo calculado por el servidor. Los pagos parciales dependen de la configuración de la empresa.</p>
+          {paymentKey && <p className="muted">Referencia del último pago: <code>{paymentKey}</code></p>}
+          {ready.payment.paid_minor === 0 && <p role="status" className="muted">
+            Este pedido todavía no tiene pagos registrados.
+          </p>}
+        </Card>
+        <Card title="Cumplimiento de entrega">
+          <dl className="ui-details">
+            <div><dt>Modalidad</dt><dd>{delivery?.method ? METHOD_NAMES[delivery.method] : 'Sin configurar'}</dd></div>
+            <div><dt>Estado</dt><dd><StatusPill tone="info">{name(delivery?.status ?? null)}</StatusPill></dd></div>
+            {delivery?.tracking_number && <div><dt>Guía</dt><dd>{delivery.tracking_number}</dd></div>}
+          </dl>
+          {canUpdate && deliveryEditable && delivery?.method && deliverySteps.length > 0 &&
+            <div className="catalog-actions" aria-label="Transiciones permitidas de entrega">
+              {deliverySteps.map((next) => <button type="button" className="button button-secondary"
+                key={next} disabled={busy}
+                onClick={() => void submit(deliveryPath + '/transition',
+                  'Entrega actualizada.', { status: next })}>Marcar: {name(next)}</button>)}
+            </div>}
+        </Card>
+      </>}
+      <SidePanel open={editor === 'payment' && canPay} title="Registrar pago"
+        onClose={() => setEditor(null)}>
+        <p className="muted">El monto se validará en el servidor antes de registrarse.</p>
             <form onSubmit={(event) => void registerPayment(event)} className="catalog-form-grid">
               <label className="field"><span>Monto del pago ({order.currency})</span>
                 <input type="text" inputMode="decimal" required value={amount}
@@ -312,12 +343,9 @@ export function OrderLifecyclePanel({
               </label>
               <button type="submit" className="button" disabled={busy}>Registrar pago</button>
             </form>
-          )}
-          {paymentKey && <p className="muted">Referencia del último pago: <code>{paymentKey}</code></p>}
-          {ready.payment.paid_minor === 0 && (
-            <p role="status" className="muted">Este pedido todavía no tiene pagos registrados.</p>
-          )}
-          {ready.payment.paid_minor > 0 && canUpdate && (
+      </SidePanel>
+      <SidePanel open={editor === 'refund' && ready !== null && ready.payment.paid_minor > 0 && canUpdate}
+        title="Registrar reembolso" onClose={() => setEditor(null)}>
             <form onSubmit={(event) => void registerRefund(event)} className="catalog-form-grid">
               <div><h5>Registrar reembolso</h5>
                 <p className="muted">Total o parcial, sujeto al monto reembolsable validado por el servidor.</p></div>
@@ -337,15 +365,9 @@ export function OrderLifecyclePanel({
               </label>
               <button type="submit" className="button" disabled={busy}>Registrar reembolso</button>
             </form>
-          )}
-
-          <div>
-            <h5>Cumplimiento de entrega</h5>
-            <p>Modalidad: {delivery?.method ? METHOD_NAMES[delivery.method] : 'Sin configurar'}
-              {' · '}Estado: {name(delivery?.status ?? null)}</p>
-            {delivery?.tracking_number && <p>Guía: {delivery.tracking_number}</p>}
-          </div>
-          {canUpdate && deliveryEditable && !delivery?.method && (
+      </SidePanel>
+      <SidePanel open={editor === 'delivery' && ready !== null && canUpdate && deliveryEditable && !delivery?.method}
+        title="Configurar cumplimiento" onClose={() => setEditor(null)}>
             <form onSubmit={(event) => void configureDelivery(event)} className="catalog-form-grid">
               <label className="field"><span>Modalidad</span>
                 <select value={deliveryMethod}
@@ -363,21 +385,7 @@ export function OrderLifecyclePanel({
               )}
               <button type="submit" className="button" disabled={busy}>Definir cumplimiento</button>
             </form>
-          )}
-          {canUpdate && deliveryEditable && delivery?.method && deliverySteps.length > 0 && (
-            <div className="catalog-actions" aria-label="Transiciones permitidas de entrega">
-              {deliverySteps.map((next) => (
-                <button type="button" className="button button-secondary" key={next}
-                  disabled={busy}
-                  onClick={() => void submit(deliveryPath + '/transition',
-                    'Entrega actualizada.', { status: next })}>
-                  Marcar: {name(next)}
-                </button>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+      </SidePanel>
     </section>
   );
 }
