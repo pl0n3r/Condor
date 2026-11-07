@@ -291,9 +291,13 @@ function QualityHttpWorkspace({ tenantId, companyId, branchId, permissions }: Pr
         setLoad({ kind: 'error', message: 'Respuesta HTTP de Calidad inválida.' });
       }
     }).catch(() => {
-      if (alive) setLoad({ kind: 'error', message: 'No se pudo consultar Calidad.' });
+      if (!alive) return;
+      setLoad({ kind: 'error', message: 'No se pudo consultar Calidad.' });
     });
-    return () => { alive = false; request.abort(); };
+    return () => {
+      alive = false;
+      request.abort();
+    };
   }, [tenantId, companyId, branchId, endpoint, canView, revision]);
 
   async function mutate(method: 'POST' | 'PATCH', url: string, payload: object) {
