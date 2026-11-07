@@ -43,7 +43,9 @@ class SentryConfigContractTests(unittest.TestCase):
         self.assertIn("catch (Throwable)", loader)
         self.assertIn("container.env_var_loader", services)
         self.assertIn("container.env_var_processor", services)
-        self.assertIn("!service_closure '@doctrine.dbal.default_connection'", services)
+        self.assertIn("AutowireServiceClosure", loader)
+        self.assertIn("'doctrine.dbal.default_connection'", loader)
+        self.assertNotIn("!service_closure", services)
         self.assertIn("almacén cifrado tiene prioridad", docs)
         self.assertIn("revisión humana", docs)
 

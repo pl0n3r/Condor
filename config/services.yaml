@@ -22,7 +22,6 @@ services:
   App\Infrastructure\Observability\StoredSentryDsnEnvLoader:
     arguments:
       $container: '@service_container'
-      $connectionFactory: !service_closure '@doctrine.dbal.default_connection'
     tags:
       - { name: container.env_var_loader }
       - { name: container.env_var_processor }

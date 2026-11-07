@@ -7,6 +7,7 @@ namespace App\Infrastructure\Observability;
 use Closure;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\DependencyInjection\EnvVarLoaderInterface;
 use Symfony\Component\DependencyInjection\EnvVarProcessor;
 use Symfony\Component\DependencyInjection\EnvVarProcessorInterface;
@@ -34,6 +35,7 @@ final class StoredSentryDsnEnvLoader implements EnvVarLoaderInterface, EnvVarPro
     /** @param Closure():Connection $connectionFactory */
     public function __construct(
         private readonly ContainerInterface $container,
+        #[AutowireServiceClosure('doctrine.dbal.default_connection')]
         private readonly Closure $connectionFactory,
     ) {
     }
