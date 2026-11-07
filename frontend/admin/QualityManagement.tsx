@@ -37,6 +37,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'TODOS' | Status>('TODOS');
   const [notice, setNotice] = useState('');
+  const [panelError, setPanelError] = useState('');
 
   const scoped = records.filter(row => row.tenantId === tenantId
     && row.companyId === companyId && row.branchId === branchId);
@@ -58,6 +59,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       || !findingPattern.test(findingRef) || !actorPattern.test(actorRef)
       || scoped.length >= 100 || scoped.some(row => row.ref === ref)) {
       setNotice('No se guardó: permiso insuficiente, duplicado o referencia ficticia inválida.');
+      setPanelError('No se guardó: permiso insuficiente, duplicado o referencia ficticia inválida.');
       return;
     }
     setRecords(previous => [...previous, {
@@ -66,6 +68,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     audit(ref, 'created', actorRef);
     setSelected(ref);
     setCreating(false);
+    setPanelError('');
     setRef(''); setFindingRef(''); setActorRef('');
     setNotice('Registro ficticio creado únicamente en memoria.');
   }
@@ -73,6 +76,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   function view(item: string) {
     if (!canView || !recordPattern.test(item) || !scoped.some(row => row.ref === item)) return;
     setSelected(item);
+    setPanelError('');
     audit(item, 'viewed');
   }
 
@@ -82,6 +86,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       || !actorPattern.test(reviewActorRef)
       || !scoped.some(row => row.ref === detail.ref)) {
       setNotice('Transición rechazada: permiso, actor o estado inválido.');
+      setPanelError('Transición rechazada: permiso, actor o estado inválido.');
       return;
     }
     const item = detail.ref;
@@ -90,6 +95,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       && row.ref === item ? { ...row, status: nextStatus } : row));
     audit(item, 'state_changed', reviewActorRef);
     setReviewActorRef('');
+    setPanelError('');
     setNotice('Transición ficticia explícita registrada; sin aprobación o cierre automático.');
   }
 
@@ -101,7 +107,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
 
   return (
     <section id="quality-management" className="ui-page catalog-panel" aria-label="Calidad de la empresa · pruebas">
-      <PageHeader title="Calidad de la empresa · pruebas" description="No conformidades de ensayo sin aprobación o cierre automático." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setCreating(true); }}>Nuevo registro ficticio</button> : undefined} />
+      <PageHeader title="Calidad de la empresa · pruebas" description="No conformidades de ensayo sin aprobación o cierre automático." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setPanelError(''); setCreating(true); }}>Nuevo registro ficticio</button> : undefined} />
       <MetricStrip label="Indicadores de Calidad de la empresa · pruebas" items={[{ label: 'Registros', value: scoped.length }, { label: 'Resultados', value: visible.length }, { label: 'Eventos de esta sesión', value: history.filter(item => item.scope === scope).length }]} />
       <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal ni auditoría de servidor.</p>
       <p className="muted">Sesión local, efímera: no se envía ni almacena nada en un servidor.</p>
@@ -124,7 +130,8 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
           <DataTable caption="Listado de Calidad de la empresa · pruebas" rows={visible} rowKey={row => row.ref} onOpen={row => view(row.ref)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.ref}</strong></span> }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.status === 'EN_REVISION' ? 'info' : row.status === 'CIERRE_REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.status}</StatusPill> }]} />
         </section>
         {canCreate && (
-          <SidePanel open={creating && canCreate} title="Nuevo registro ficticio" onClose={() => setCreating(false)}>
+          <SidePanel open={creating && canCreate} title="Nuevo registro ficticio" onClose={() => { setCreating(false); setPanelError(''); }}>
+            {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
           <form className="catalog-editor" onSubmit={create}>
               <label>Referencia ficticia
                 <input required maxLength={70} pattern="fixture:quality/[a-z][a-z0-9_-]{0,47}"
@@ -146,7 +153,8 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
 
         </SidePanel>
         )}
-        <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión explícita" onClose={() => setSelected('')}>
+        <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión explícita" onClose={() => { setPanelError(''); setSelected(''); }}>
+            {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
           {detail ? <>
             <dl>
               <dt>Referencia</dt><dd>{detail.ref}</dd>
@@ -257,6 +265,7 @@ function QualityHttpWorkspace({ tenantId, companyId, branchId, permissions }: Pr
   const [recordRef, setRecordRef] = useState('fixture:quality-record/demo');
   const [originRef, setOriginRef] = useState('fixture:quality-source/demo');
   const [notice, setNotice] = useState('');
+  const [panelError, setPanelError] = useState('');
   const [busy, setBusy] = useState(false);
   const [httpCreating, setHttpCreating] = useState(false);
 
@@ -267,7 +276,8 @@ function QualityHttpWorkspace({ tenantId, companyId, branchId, permissions }: Pr
     }
     let alive = true;
     const request = qualityHttp(endpoint);
-    setLoad({ kind: 'loading' });
+    setLoad(previous => previous.kind === 'ready' && revision > 0
+      ? previous : { kind: 'loading' });
     void request.promise.then(({ status, body }) => {
       if (!alive) return;
       if ([401, 403, 404].includes(status)) {
@@ -281,16 +291,24 @@ function QualityHttpWorkspace({ tenantId, companyId, branchId, permissions }: Pr
         setLoad({ kind: 'error', message: 'Respuesta HTTP de Calidad inválida.' });
       }
     }).catch(() => {
-      if (alive) setLoad({ kind: 'error', message: 'No se pudo consultar Calidad.' });
+      if (!alive) return;
+      setLoad({ kind: 'error', message: 'No se pudo consultar Calidad.' });
     });
-    return () => { alive = false; request.abort(); };
+    return () => {
+      alive = false;
+      request.abort();
+    };
   }, [tenantId, companyId, branchId, endpoint, canView, revision]);
 
   async function mutate(method: 'POST' | 'PATCH', url: string, payload: object) {
     if (busy || !canView || (method === 'POST' ? !canCreate : !canUpdate)) return;
     const token = document.getElementById('condor-admin-root')?.getAttribute('data-access-token');
-    if (!token) { setNotice('Sin CSRF autenticado: operación denegada.'); return; }
-    setBusy(true); setNotice('');
+    if (!token) {
+      setNotice('Sin CSRF autenticado: operación denegada.');
+      setPanelError('Sin CSRF autenticado: operación denegada.');
+      return;
+    }
+    setBusy(true); setNotice(''); setPanelError('');
     try {
       const response = await qualityHttp(url, method, payload, token).promise;
       if ([401, 403, 404].includes(response.status)) {
@@ -304,9 +322,11 @@ function QualityHttpWorkspace({ tenantId, companyId, branchId, permissions }: Pr
         setNotice('Cambio ficticio confirmado en la sesión HTTP; no es aprobación.');
       } else {
         setNotice('Solicitud rechazada o respuesta no verificable.');
+        setPanelError('Solicitud rechazada o respuesta no verificable.');
       }
     } catch {
       setNotice('Error de red. No se confirma ninguna operación.');
+      setPanelError('Error de red. No se confirma ninguna operación.');
     } finally {
       setBusy(false);
     }
@@ -317,7 +337,7 @@ function QualityHttpWorkspace({ tenantId, companyId, branchId, permissions }: Pr
   const nextState = detail?.state === 'PENDIENTE' ? 'EN_REVISION'
     : detail?.state === 'EN_REVISION' ? 'REQUIERE_REVISION' : null;
   return <section className="ui-page catalog-panel" aria-label="Quejas internas ficticias">
-     <PageHeader title="M13 S03 · quejas internas ficticias por API" description="Hallazgos controlados por sede y permiso." actions={load.kind === 'ready' && canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setHttpCreating(true); }}>Crear queja de prueba</button> : undefined} />
+     <PageHeader title="M13 S03 · quejas internas ficticias por API" description="Hallazgos controlados por sede y permiso." actions={load.kind === 'ready' && canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setPanelError(''); setHttpCreating(true); }}>Crear queja de prueba</button> : undefined} />
      <MetricStrip label="Resumen de calidad sintética" items={[{ label: 'Quejas de prueba', value: records.length }, { label: 'En revisión', value: records.filter(row => row.state === 'EN_REVISION').length }, { label: 'Sin cierre automático', value: 'Sí', tone: 'info' }]} />
     <p role="alert">SOLO DATOS FICTICIOS. Sin PII, aprobación, cierre ni valor legal.</p>
     {load.kind === 'loading' && <output role="status" aria-live="polite">Cargando quejas ficticias…</output>}
@@ -326,19 +346,23 @@ function QualityHttpWorkspace({ tenantId, companyId, branchId, permissions }: Pr
       <button type="button" onClick={() => setRevision(value => value + 1)}>Reintentar</button>
     </div>}
     {load.kind === 'ready' && records.length === 0 && <p role="status">No hay quejas internas ficticias.</p>}
-    {load.kind === 'ready' && <DataTable caption="Quejas ficticias por sede" rows={records} rowKey={row => row.record_ref} onOpen={row => setSelected(row.record_ref)} empty="No hay quejas internas ficticias." columns={[{ key: 'ref', header: 'Referencia', render: row => <strong>{row.record_ref}</strong> }, { key: 'source', header: 'Origen', render: row => row.source_ref }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'PENDIENTE' ? 'neutral' : 'warn'}>{row.state}</StatusPill> }]} />}
-    {load.kind === 'ready' && detail && <SidePanel open={!httpCreating} title={detail.record_ref} onClose={() => setSelected('')}><section aria-label="Queja ficticia seleccionada">
+    {load.kind === 'ready' && <DataTable caption="Quejas ficticias por sede" rows={records} rowKey={row => row.record_ref} onOpen={row => { setPanelError(''); setSelected(row.record_ref); }} empty="No hay quejas internas ficticias." columns={[{ key: 'ref', header: 'Referencia', render: row => <strong>{row.record_ref}</strong> }, { key: 'source', header: 'Origen', render: row => row.source_ref }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'PENDIENTE' ? 'neutral' : 'warn'}>{row.state}</StatusPill> }]} />}
+    {load.kind === 'ready' && detail && <SidePanel open={!httpCreating} title={detail.record_ref} onClose={() => { setSelected(''); setPanelError(''); }}><section aria-label="Queja ficticia seleccionada">
+      {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
       <p>{detail.record_ref} · {detail.source_ref} · {detail.state}</p>
       {canUpdate && nextState && <button type="button" disabled={busy}
         onClick={() => void mutate('PATCH',
           endpoint + '/' + encodeURIComponent(detail.record_ref.slice('fixture:quality-record/'.length)) + '/state',
           { state: nextState })}>Registrar revisión explícita</button>}
     </section></SidePanel>}
-     {load.kind === 'ready' && canCreate && <SidePanel open={httpCreating} title="Crear queja de prueba" onClose={() => setHttpCreating(false)}><form className="catalog-editor"
+     {load.kind === 'ready' && canCreate && <SidePanel open={httpCreating} title="Crear queja de prueba" onClose={() => { setHttpCreating(false); setPanelError(''); }}>
+      {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
+      <form className="catalog-editor"
       onSubmit={event => {
         event.preventDefault();
         if (!syntheticReference(recordRef, remoteRef) || !syntheticReference(originRef, sourceRef)) {
           setNotice('Solo referencias fixture tipadas, sin datos reales.');
+          setPanelError('Solo referencias fixture tipadas, sin datos reales.');
           return;
         }
         void mutate('POST', endpoint, {
