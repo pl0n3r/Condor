@@ -82,7 +82,10 @@ echo json_encode($out);
         self.assertIn("Membership::ROLE_OWNER", src)
         self.assertGreaterEqual(src.count("$this->requireCsrf($request)"), 3)
         self.assertIn("$entity->tenant()->id() !== $tenant->id()", src)
-        self.assertIn("tenant_id = ? AND company_id = ?", SERVICE.read_text(encoding="utf-8"))
+        query = SERVICE.read_text(encoding="utf-8")
+        for clause in ("r.tenant_id = :tenant", "r.company_id = :company",
+                       "record.tenant_id = :tenant", "record.company_id = :company"):
+            self.assertIn(clause, query)
 
     def test_migration_and_legal_inventory(self):
         migration = MIGRATION.read_text(encoding="utf-8")
