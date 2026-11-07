@@ -109,6 +109,12 @@ export function AdminApp({
   // The server alone sets this signal; absent/any other value means OFF.
   const hrRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.hrRealDataEnabled === 'true';
+  const payrollRealDataEnabled = typeof document !== 'undefined'
+    && document.getElementById('condor-admin-root')?.dataset.payrollRealDataEnabled === 'true';
+  // Synthetic catalogs are available only in dev with an explicit root opt-in.
+  // This flag never enables the HR real-data API or overrides server permissions.
+  const hrSyntheticPreviewEnabled = import.meta.env.DEV && typeof document !== 'undefined'
+    && document.getElementById('condor-admin-root')?.dataset.hrSyntheticPreviewEnabled === 'true';
   const [context, setContext] = useState<ContextState>({
     status: 'loading',
   });
@@ -220,7 +226,9 @@ export function AdminApp({
           items: [
             { href: '/admin#employees-management', label: 'Empleados y asistencia' },
             ...(hrRealDataEnabled ? [{ href: '/admin#human-resources-management', label: 'Talento humano' }] : []),
-            ...(import.meta.env.DEV ? [{ href: '/admin#payroll-management', label: 'Nómina (pruebas)' }] : []),
+            ...(hrSyntheticPreviewEnabled && !hrRealDataEnabled ? [{ href: '/admin#human-resources-management', label: 'Catálogos RR. HH. (pruebas)' }] : []),
+            ...(payrollRealDataEnabled ? [{ href: '/admin#payroll-management', label: 'Nómina' }]
+              : import.meta.env.DEV ? [{ href: '/admin#payroll-management', label: 'Nómina (pruebas)' }] : []),
             ...(import.meta.env.DEV ? [{ href: '/admin#contracts-management', label: 'Contratación (pruebas)' }] : []),
             ...(import.meta.env.DEV ? [{ href: '/admin#social-security-management', label: 'Seguridad social (pruebas)' }] : []),
           ],
@@ -489,13 +497,15 @@ export function AdminApp({
             />
           )}
 
-          {import.meta.env.DEV && (
+          {(payrollRealDataEnabled || import.meta.env.DEV) && (
             <PayrollManagement
               key={'payroll-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
               tenantId={context.data.tenant.id}
               companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
               branchId={context.data.active_branch.id}
               permissions={context.data.permissions}
+              csrfToken={accessToken}
+              enabled={payrollRealDataEnabled}
             />
           )}
 
@@ -515,6 +525,17 @@ export function AdminApp({
                 <Suspense fallback={<p role="status">Cargando contratación ficticia…</p>}>
                   <DevContractsManagement
                     key={'contracts-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                    tenantId={context.data.tenant.id}
+                    companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
+                    branchId={context.data.active_branch.id}
+                    permissions={context.data.permissions}
+                  />
+                </Suspense>
+              )}
+              {hrSyntheticPreviewEnabled && !hrRealDataEnabled && (
+                <Suspense fallback={<p role="status">Cargando catálogos sintéticos…</p>}>
+                  <HumanResourcesManagement
+                    key={'m01-synthetic-' + context.data.tenant.id + '-' + context.data.active_branch.id}
                     tenantId={context.data.tenant.id}
                     companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
                     branchId={context.data.active_branch.id}

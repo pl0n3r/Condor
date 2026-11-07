@@ -32,6 +32,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'audit_events',
                 'condor_password_reset',
                 'contract_synthetic_records',
+                'contracts_real_records',
                 'controlbot_staff_operations',
                 'customer_contact',
                 'diagnostic_shares',
@@ -40,6 +41,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'human_resources_synthetic_records',
                 'notification_delivery',
                 'notification_preferences',
+                'payroll_real_records',
                 'payroll_synthetic_records',
                 'self_service_trial_application',
                 'social_security_synthetic_records',
@@ -80,6 +82,23 @@ final class PrivacyAsCodeTest extends TestCase
         self::assertSame('review_required', $payroll['basis']);
         self::assertSame('review_required', $payroll['retention']);
         self::assertSame([], $payroll['providers']);
+        $realContracts = $this->treatment($data, 'contracts_real_records');
+        self::assertSame('usage', $realContracts['category']);
+        foreach (['purpose', 'basis', 'retention', 'consent'] as $field) {
+            self::assertSame('review_required', $realContracts[$field]);
+        }
+        self::assertContains('company_id', $realContracts['fields']);
+        self::assertContains('worker_ref', $realContracts['fields']);
+        self::assertSame([], $realContracts['providers']);
+        $realPayroll = $this->treatment($data, 'payroll_real_records');
+        self::assertSame('usage', $realPayroll['category']);
+        self::assertSame('payroll_record_management', $realPayroll['purpose']);
+        foreach (['basis', 'retention', 'consent'] as $field) {
+            self::assertSame('review_required', $realPayroll[$field]);
+        }
+        self::assertContains('company_id', $realPayroll['fields']);
+        self::assertContains('employee_ref', $realPayroll['fields']);
+        self::assertSame([], $realPayroll['providers']);
     }
 
     /** Verifica derivación byte-a-byte desde datos.yml según el contrato Factory fijado. */

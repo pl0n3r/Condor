@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { SaasControlCenterReadPanel } from './SaasControlCenterReadPanel';
+import { PageHeader, StatusPill } from './ui/Kit';
 
 type CatalogPlan = Readonly<{ id: string; name: string; synthetic: boolean }>;
 type Operation = 'create' | 'trial';
@@ -157,14 +158,10 @@ export function PlatformSubscriptionsPanel({
   }
 
   return (
-    <section className="platform-section" aria-labelledby="synthetic-subscriptions-title">
-      <div className="section-heading compact">
-        <div>
-          <span className="eyebrow">SaaS Control Center · datos sintéticos</span>
-          <h2 id="synthetic-subscriptions-title">Suscripción de empresa</h2>
-        </div>
-        <span className="status-pill">Gestión manual</span>
-      </div>
+    <section className="platform-section ui-page" aria-label="Suscripciones SaaS sintéticas">
+      <PageHeader title="Suscripción de empresa"
+        description="Control manual para empresas sintéticas verificadas. El servidor confirma cada transición."
+        actions={<StatusPill tone="info">Gestión manual</StatusPill>} />
       <p>Tenant de prueba: <code>{tenantId}</code>. Los precios y límites proceden solo de la API.</p>
       <SaasControlCenterReadPanel key={tenantId + ':' + revision} tenantId={tenantId} />
       <div className="platform-form">

@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
+import { HrM01SyntheticCatalogPanel } from './HrM01SyntheticCatalogPanel';
 
 type Props = Readonly<{
   tenantId: string;
@@ -364,6 +365,14 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
 /** No HTTP, person data or artificial test rows while the server gate is absent/off. */
 export function HumanResourcesManagement(props: Props) {
   const root = typeof document === 'undefined' ? null : document.getElementById('condor-admin-root');
+  // No real-data gate is opened by this dev-only preview. The server independently
+  // restricts synthetic endpoints to dev/test and validates tenant/company/branch.
+  if (import.meta.env.DEV && root?.dataset.hrSyntheticPreviewEnabled === 'true'
+    && !isHrRealDataEnabled(root)) {
+    return <section id="human-resources-management" aria-label="Talento humano sintético">
+      <HrM01SyntheticCatalogPanel {...props} />
+    </section>;
+  }
   if (!isHrRealDataEnabled(root)) return <section id="human-resources-management"
     className="catalog-panel ui-page" aria-label="Talento humano">
     <PageHeader title="Talento humano" description="Gestión de cargos y novedades por empresa y sede." />

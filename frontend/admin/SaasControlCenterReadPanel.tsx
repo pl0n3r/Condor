@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Card, MetricStrip, PageHeader, StatusPill } from './ui/Kit';
 
 type Projection = {
   state: 'ready';
@@ -139,14 +140,11 @@ export function SaasControlCenterReadPanel({ tenantId }: Readonly<{ tenantId: st
   }, [tenantId, attempt]);
 
   return (
-    <section className="platform-section" aria-labelledby="saas-control-center-title">
-      <div className="section-heading compact">
-        <div>
-          <span className="eyebrow">Visibilidad comercial</span>
-          <h2 id="saas-control-center-title">Control SaaS por empresa</h2>
-        </div>
-        <span className="status-pill">Solo lectura</span>
-      </div>
+    <section className="platform-section ui-page" aria-label="Control SaaS por empresa">
+      <PageHeader title="Control SaaS por empresa"
+        description="Plan, complementos, uso y permisos confirmados para la empresa seleccionada."
+        actions={<StatusPill tone="info">Solo lectura</StatusPill>}
+      />
       {state.status === 'loading' && <output>Cargando información comercial…</output>}
       {state.status === 'permission-denied' && (
         <p role="alert">Tu sesión no tiene permiso para consultar esta empresa.</p>
@@ -168,9 +166,16 @@ export function SaasControlCenterReadPanel({ tenantId }: Readonly<{ tenantId: st
         </div>
       )}
       {state.status === 'ready' && (
-        <div className="tenant-grid">
-          <article className="tenant-card">
-            <h3>Plan vigente</h3>
+        <div className="ui-page">
+          <MetricStrip label="Resumen comercial verificado" items={[
+            { label: 'Precio mensual', value: money(state.data.plan.price_minor, state.data.plan.currency) },
+            { label: 'Complementos', value: state.data.add_ons.length },
+            { label: 'Métricas de uso', value: state.data.usage.length },
+            { label: 'Permisos observados', value: state.data.entitlements.length },
+          ]} />
+          <div className="ui-grid-2">
+          <Card title="Plan vigente">
+            <div className="ui-sidepanel-body">
             <dl>
               <div><dt>Clave</dt><dd>{state.data.plan.key}</dd></div>
               <div><dt>Versión</dt><dd>{state.data.plan.version}</dd></div>
@@ -179,9 +184,10 @@ export function SaasControlCenterReadPanel({ tenantId }: Readonly<{ tenantId: st
                 <dd>{money(state.data.plan.price_minor, state.data.plan.currency)}</dd>
               </div>
             </dl>
-          </article>
-          <article className="tenant-card">
-            <h3>Add-ons canónicos</h3>
+            </div>
+          </Card>
+          <Card title="Complementos contratados">
+            <div className="ui-sidepanel-body">
             {state.data.add_ons.length === 0 ? (
               <p>Sin add-ons registrados; selección externa: UNKNOWN.</p>
             ) : (
@@ -194,9 +200,10 @@ export function SaasControlCenterReadPanel({ tenantId }: Readonly<{ tenantId: st
                 ))}
               </ul>
             )}
-          </article>
-          <article className="tenant-card">
-            <h3>Uso y límites</h3>
+            </div>
+          </Card>
+          <Card title="Uso y límites">
+            <div className="ui-sidepanel-body">
             {state.data.usage.length === 0 ? (
               <p>Uso o límite no observado: UNKNOWN.</p>
             ) : (
@@ -209,9 +216,10 @@ export function SaasControlCenterReadPanel({ tenantId }: Readonly<{ tenantId: st
                 ))}
               </dl>
             )}
-          </article>
-          <article className="tenant-card">
-            <h3>Entitlements efectivos</h3>
+            </div>
+          </Card>
+          <Card title="Permisos efectivos">
+            <div className="ui-sidepanel-body">
             {state.data.entitlements.length === 0 ? (
               <p>Derechos no observados: UNKNOWN.</p>
             ) : (
@@ -224,7 +232,9 @@ export function SaasControlCenterReadPanel({ tenantId }: Readonly<{ tenantId: st
                 ))}
               </dl>
             )}
-          </article>
+            </div>
+          </Card>
+          </div>
         </div>
       )}
     </section>
