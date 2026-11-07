@@ -1,5 +1,10 @@
 /// <reference types="vite/client" />
 import { useEffect, useState, type FormEvent, type ChangeEvent } from 'react';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
+
+function documentLabel(reference: string): string {
+  return reference.replace(/^fixture:doc\//, 'Expediente ');
+}
 
 /** M08: Prototipo de datos ficticios. Sin API, persistencia ni auditoría de servidor. */
 export type Classification = 'PUBLICA' | 'INTERNA' | 'RESERVADA';
@@ -123,6 +128,8 @@ function HttpDocumentsPanel({ branchId, permissions, csrfToken }: Props) {
   const [state, setState] = useState<RemoteState>({ kind: 'loading' });
   const [reload, setReload] = useState(0);
   const [selected, setSelected] = useState('');
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [httpSearch, setHttpSearch] = useState('');
   const [trace, setTrace] = useState<string[]>([]);
   const [evidence, setEvidence] = useState('fixture:evidence/demo');
   const [busy, setBusy] = useState(false);
@@ -221,38 +228,59 @@ function HttpDocumentsPanel({ branchId, permissions, csrfToken }: Props) {
     }
   }
 
-  return <section className="catalog-panel" aria-label="Gestión documental HTTP de prueba">
-    <h3>M08 · HTTP de desarrollo/pruebas</h3>
-    <p>Solo fixtures en sesión. Sin firma válida, cierre ni auditoría jurídica persistente.</p>
-    {state.kind === 'loading' && <output aria-live="polite">Cargando documentos…</output>}
+  const filtered = state.kind === 'ready'
+    ? state.documents.filter((doc) =>
+      (documentLabel(doc.reference) + ' ' + doc.classification + ' ' + doc.status)
+        .toLocaleLowerCase('es-CO').includes(httpSearch.toLocaleLowerCase('es-CO'))) : [];
+  return <section className="ui-page" aria-label="Gestión documental HTTP de prueba">
+    <PageHeader title="Expedientes de desarrollo" description="Datos ficticios de sesión, sin firma válida, cierre ni auditoría jurídica persistente."
+      actions={state.kind === 'ready' ?
+        <a className="button button-secondary" href={base + '/export'}>Exportar metadatos de prueba</a> : undefined} />
+    {state.kind === 'loading' && <output role="status" aria-live="polite">Cargando documentos…</output>}
     {state.kind === 'denied' && <p role="alert">Permiso denegado para documentos.</p>}
-    {state.kind === 'error' && <div role="alert">{state.message}
-      <button type="button" onClick={() => setReload((n) => n + 1)}>Reintentar</button>
+    {state.kind === 'error' && <div className="alert alert-error" role="alert">{state.message}
+      <button type="button" className="button button-secondary" onClick={() => setReload((n) => n + 1)}>Reintentar</button>
     </div>}
     {state.kind === 'ready' && <>
-      {state.documents.length === 0
-        ? <p role="status">Sin expedientes en la sesión de prueba.</p>
-        : <ul>{state.documents.map((doc) => <li key={doc.reference}>
-            <button type="button" onClick={() => void showTrace(doc.reference)}>
-              {doc.reference}
-            </button>{' · '}{doc.status}
-          </li>)}</ul>}
-      <a href={base + '/export'}>Exportar metadatos ficticios JSON</a>
-      {selected && <>
-        <p>Seleccionado: {selected}</p>
-        {trace.length === 0 ? <p role="status">Sin traza cargada.</p>
-          : <ol>{trace.map((entry) => <li key={entry}>{entry}</li>)}</ol>}
-        {canWrite && <>
-          <label>Referencia de evidencia ficticia
-            <input value={evidence} onChange={(e) => setEvidence(e.target.value)} />
+      <MetricStrip label="Expedientes HTTP ficticios" items={[
+        { label: 'Expedientes', value: state.documents.length },
+        { label: 'Borradores', value: state.documents.filter((doc) => doc.status === 'BORRADOR').length },
+        { label: 'En revisión', value: state.documents.filter((doc) => doc.status === 'PENDIENTE_REVISION').length },
+      ]} />
+      <Card title="Expedientes de prueba">
+        <Toolbar trailing={<span className="ui-count">{filtered.length} de {state.documents.length}</span>}>
+          <label className="ui-search"><span className="ui-sr-only">Buscar expediente de prueba</span>
+            <input type="search" placeholder="Buscar expediente, clasificación o estado"
+              value={httpSearch} onChange={(event) => setHttpSearch(event.target.value)} />
           </label>
-          <button type="button" disabled={busy} onClick={() => void attachEvidence()}>
-            Adjuntar evidencia ficticia
-          </button>
-        </>}
-      </>}
+        </Toolbar>
+        <DataTable caption="Expedientes de la sesión de prueba" rows={filtered}
+          rowKey={(doc) => doc.reference}
+          onOpen={(doc) => { setDetailOpen(true); void showTrace(doc.reference); }}
+          empty={<><strong>Sin expedientes en la sesión</strong><span>Prueba otra búsqueda o utiliza el simulador documental.</span></>}
+          columns={[
+            { key: 'reference', header: 'Expediente', render: (doc) => documentLabel(doc.reference) },
+            { key: 'classification', header: 'Clasificación', render: (doc) => doc.classification },
+            { key: 'status', header: 'Estado', render: (doc) =>
+              <StatusPill tone={doc.status === 'BORRADOR' ? 'neutral' : 'warn'}>
+                {doc.status === 'BORRADOR' ? 'Borrador' : 'Pendiente de revisión'}</StatusPill> },
+          ]} />
+      </Card>
     </>}
     {message && <output aria-live="polite">{message}</output>}
+    <SidePanel open={detailOpen && selected !== ''} title={'Detalle de ' + documentLabel(selected)}
+      onClose={() => { setDetailOpen(false); setSelected(''); }}>
+      <p>Referencia: <strong>{documentLabel(selected)}</strong></p>
+      {trace.length === 0 ? <p role="status">Sin traza cargada.</p>
+        : <ol>{trace.map((entry) => <li key={entry}>{entry}</li>)}</ol>}
+      {canWrite && <>
+        <label className="field">Referencia de evidencia ficticia
+          <input value={evidence} onChange={(event) => setEvidence(event.target.value)} />
+        </label>
+        <button type="button" className="button" disabled={busy}
+          onClick={() => void attachEvidence()}>Adjuntar evidencia ficticia</button>
+      </>}
+    </SidePanel>
   </section>;
 }
 
@@ -277,6 +305,9 @@ function LocalDocumentsPreview({ tenantId, branchId, legalEntityId, permissions 
   const [classification, setClassification] = useState<Classification>('INTERNA');
   const [filter, setFilter] = useState<'TODOS' | DocumentStatus>('TODOS');
   const [notice, setNotice] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [localDetailOpen, setLocalDetailOpen] = useState(false);
+  const [localSearch, setLocalSearch] = useState('');
   if (!import.meta.env.DEV) return null;
   if (!canView) return <section id="documents" aria-label="Gestión documental · simulación">
     <p role="alert">Sin permiso documental. Simulador deshabilitado.</p>
@@ -303,71 +334,91 @@ function LocalDocumentsPreview({ tenantId, branchId, legalEntityId, permissions 
     send({ type: 'CREATE', reference, classification });
     setReference('');
     setNotice('Borrador ficticio registrado. No se ha guardado en el servidor.');
+    setCreating(false);
   }
-  return <section id="documents" className="catalog-panel" aria-labelledby="documents-title">
-    <div className="section-heading"><div>
-      <span className="eyebrow">M08 · Solo desarrollo</span>
-      <h2 id="documents-title">Gestión documental · simulador</h2>
-      <p className="muted">Exclusivamente referencias ficticias. Sin API, archivos, auditoría oficial ni aprobación automática.</p>
-    </div></div>
+  const visible = rows.filter((doc) =>
+    (documentLabel(doc.reference) + ' ' + doc.classification + ' ' + doc.status)
+      .toLocaleLowerCase('es-CO').includes(localSearch.toLocaleLowerCase('es-CO')));
+  return <section id="documents" className="ui-page" aria-label="Gestión documental · simulador">
+    <PageHeader title="Gestión documental · simulador"
+      description="Expedientes ficticios de desarrollo. Sin API, archivos reales ni auditoría oficial."
+      actions={canCreate ? <button type="button" className="button"
+        onClick={() => setCreating(true)}>Nuevo expediente ficticio</button> : undefined} />
     {notice && <output aria-live="polite">{notice}</output>}
-    <div className="production-layout">
-      <section className="catalog-card" aria-labelledby="doc-list-title">
-        <h3 id="doc-list-title">Expedientes ficticios</h3>
-        <label className="field"><span>Filtrar por estado</span>
-          <select value={filter} onChange={(event: ChangeEvent<HTMLSelectElement>) => setFilter(event.target.value as typeof filter)}>
+    <MetricStrip label="Resumen documental sintético" items={[
+      { label: 'Expedientes', value: snapshot.documents.length },
+      { label: 'Borradores', value: snapshot.documents.filter((doc) => doc.status === 'BORRADOR').length },
+      { label: 'Pendientes de revisión', value: snapshot.documents.filter((doc) => doc.status === 'PENDIENTE_REVISION').length },
+    ]} />
+    <Card title="Expedientes ficticios">
+      <Toolbar trailing={<span className="ui-count">{visible.length} de {rows.length}</span>}>
+        <label className="ui-search"><span className="ui-sr-only">Buscar expediente</span>
+          <input type="search" placeholder="Buscar expediente o clasificación"
+            value={localSearch} onChange={(event) => setLocalSearch(event.target.value)} />
+        </label>
+        <label className="field"><span>Estado</span>
+          <select value={filter} onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+            setFilter(event.target.value as typeof filter)}>
             <option value="TODOS">Todos</option>
             <option value="BORRADOR">Borrador</option>
             <option value="PENDIENTE_REVISION">Pendiente de revisión manual</option>
           </select>
         </label>
-        {rows.length === 0 ? <p role="status">Sin expedientes ficticios para este filtro.</p>
-          : <ul>{rows.map(doc => <li key={doc.reference}>
-              <button type="button" onClick={() => send({ type: 'VIEW', reference: doc.reference })}>
-                {doc.reference}
-              </button>
-              {' · '}{doc.classification}{' · '}{doc.status}
-            </li>)}</ul>}
-      </section>
-      {canCreate && <section className="catalog-card" aria-labelledby="doc-new-title">
-        <h3 id="doc-new-title">Nuevo expediente ficticio</h3>
-        <form className="catalog-editor" onSubmit={create}>
-          <label className="field"><span>Referencia de prueba</span>
-            <input required maxLength={44} pattern="fixture:doc/[a-z][a-z0-9_-]{0,31}"
-              placeholder="fixture:doc/demo" value={reference}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => setReference(event.target.value)} />
-          </label>
-          <label className="field"><span>Clasificación</span>
-            <select value={classification} onChange={(event: ChangeEvent<HTMLSelectElement>) => setClassification(event.target.value as Classification)}>
-              <option value="PUBLICA">Pública</option><option value="INTERNA">Interna</option>
-              <option value="RESERVADA">Reservada</option>
-            </select>
-          </label>
-          <button type="submit">Crear borrador ficticio</button>
-        </form>
-      </section>}
-      <section className="catalog-card" aria-labelledby="doc-detail-title">
-        <h3 id="doc-detail-title">Detalle</h3>
-        {selected ? <>
-          <p><strong>Referencia:</strong> {selected.reference}</p>
-          <p><strong>Clasificación:</strong> {selected.classification}</p>
-          <p><strong>Versión sintética:</strong> {selected.version}</p>
-          <p><strong>Estado:</strong> {selected.status}</p>
-          {canUpdate && selected.status === 'BORRADOR' &&
-            <button type="button" onClick={() => send({ type: 'REQUEST_REVIEW', reference: selected.reference })}>
-              Solicitar revisión manual
-            </button>}
-          <p>No hay aprobación, cierre ni borrado automático.</p>
-        </> : <p role="status">Selecciona un expediente ficticio para consultar su detalle.</p>}
-      </section>
-      <section className="catalog-card" aria-labelledby="doc-audit-title">
-        <h3 id="doc-audit-title">Bitácora de demostración (no oficial)</h3>
-        <p>Los eventos son locales y efímeros; no sustituyen una auditoría de servidor.</p>
-        {snapshot.events.length === 0 ? <p role="status">Aún no hay actividad ficticia.</p>
-          : <ol>{snapshot.events.map((entry, index) => <li key={`${entry.reference}-${index}`}>
-            {entry.action} · {entry.reference}
-          </li>)}</ol>}
-      </section>
-    </div>
+      </Toolbar>
+      <DataTable caption="Expedientes ficticios de la empresa" rows={visible}
+        rowKey={(doc) => doc.reference}
+        onOpen={(doc) => { send({ type: 'VIEW', reference: doc.reference }); setLocalDetailOpen(true); }}
+        empty={<><strong>Sin expedientes para mostrar</strong><span>Quita los filtros o crea un borrador ficticio.</span></>}
+        columns={[
+          { key: 'reference', header: 'Expediente', render: (doc) => documentLabel(doc.reference) },
+          { key: 'class', header: 'Clasificación', render: (doc) => doc.classification },
+          { key: 'state', header: 'Estado', render: (doc) =>
+            <StatusPill tone={doc.status === 'BORRADOR' ? 'neutral' : 'warn'}>
+              {doc.status === 'BORRADOR' ? 'Borrador' : 'Pendiente de revisión'}</StatusPill> },
+          { key: 'version', header: 'Versión', render: (doc) => doc.version, align: 'right' },
+        ]} />
+    </Card>
+    <Card title="Bitácora de demostración">
+      <p>Los eventos son locales y efímeros; no sustituyen una auditoría del servidor.</p>
+      {snapshot.events.length === 0 ? <p role="status">Aún no hay actividad ficticia.</p>
+        : <ol>{snapshot.events.map((entry, index) => <li key={entry.reference + index}>
+          {entry.action} · {documentLabel(entry.reference)}
+        </li>)}</ol>}
+    </Card>
+    <SidePanel open={creating && canCreate} title="Nuevo expediente ficticio"
+      onClose={() => setCreating(false)}>
+      <form className="ui-form" onSubmit={create}>
+        <label className="field">Referencia de prueba
+          <input required maxLength={44} pattern="fixture:doc/[a-z][a-z0-9_-]{0,31}"
+            placeholder="fixture:doc/demo" value={reference}
+            onChange={(event: ChangeEvent<HTMLInputElement>) => setReference(event.target.value)} />
+        </label>
+        <label className="field">Clasificación
+          <select value={classification} onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+            setClassification(event.target.value as Classification)}>
+            <option value="PUBLICA">Pública</option>
+            <option value="INTERNA">Interna</option>
+            <option value="RESERVADA">Reservada</option>
+          </select>
+        </label>
+        <p className="muted">El expediente se creará solo en la memoria de esta página de pruebas.</p>
+        <button type="submit" className="button">Crear borrador ficticio</button>
+      </form>
+    </SidePanel>
+    <SidePanel open={localDetailOpen && selected !== undefined}
+      title={'Detalle de ' + (selected ? documentLabel(selected.reference) : 'expediente')}
+      onClose={() => setLocalDetailOpen(false)}>
+      {selected && <dl className="ui-details">
+        <div><dt>Referencia</dt><dd>{documentLabel(selected.reference)}</dd></div>
+        <div><dt>Clasificación</dt><dd>{selected.classification}</dd></div>
+        <div><dt>Versión sintética</dt><dd>{selected.version}</dd></div>
+        <div><dt>Estado</dt><dd><StatusPill tone={selected.status === 'BORRADOR' ? 'neutral' : 'warn'}>
+          {selected.status === 'BORRADOR' ? 'Borrador' : 'Pendiente de revisión'}</StatusPill></dd></div>
+      </dl>}
+      {selected && canUpdate && selected.status === 'BORRADOR' &&
+        <button type="button" className="button" onClick={() =>
+          send({ type: 'REQUEST_REVIEW', reference: selected.reference })}>Solicitar revisión manual</button>}
+      <p className="muted">No hay aprobación, cierre ni borrado automático.</p>
+    </SidePanel>
   </section>;
 }
