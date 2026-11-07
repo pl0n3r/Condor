@@ -241,6 +241,8 @@ function HttpDocumentsPanel({ branchId, permissions, csrfToken }: Props) {
     {state.kind === 'error' && <div className="alert alert-error" role="alert">{state.message}
       <button type="button" className="button button-secondary" onClick={() => setReload((n) => n + 1)}>Reintentar</button>
     </div>}
+    {state.kind === 'ready' && state.documents.length === 0 &&
+      <p role="status">Sin expedientes en la sesión de prueba.</p>}
     {state.kind === 'ready' && <>
       <MetricStrip label="Expedientes HTTP ficticios" items={[
         { label: 'Expedientes', value: state.documents.length },
