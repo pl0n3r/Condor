@@ -204,6 +204,23 @@ final class GestNormPhasesSyntheticHttpTest extends WebTestCase
                 self::assertResponseStatusCodeSame(404);
                 self::assertStringNotContainsString('emisor-ficticio',
                     (string) $browser->getResponse()->getContent());
+                // F3/F4 denial: even owner cannot use demo HR when real-data mode is on.
+                // This never activates HR or writes personnel records.
+                $previousHrMode = getenv('HR_REAL_DATA_ENABLED');
+                putenv('HR_REAL_DATA_ENABLED=1');
+                try {
+                    foreach (['hr/permits', 'hr/evaluations'] as $hrPath) {
+                        $browser->request('GET',
+                            '/api/v1/branches/'.$branch->id().'/'.$hrPath);
+                        self::assertResponseStatusCodeSame(404);
+                    }
+                } finally {
+                    if ($previousHrMode === false) {
+                        putenv('HR_REAL_DATA_ENABLED');
+                    } else {
+                        putenv('HR_REAL_DATA_ENABLED='.$previousHrMode);
+                    }
+                }
                 $browser->jsonRequest('PATCH', $url.'fixtures', ['scenario' => 'vacio']);
                 self::assertResponseStatusCodeSame(403);
                 $browser->jsonRequest('PATCH', $url.'fixtures', ['scenario' => 'vacio'], $headers);
