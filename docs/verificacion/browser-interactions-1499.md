@@ -20,11 +20,13 @@ python3 -m unittest tests.test_qa1499_interactions_lab -v
 export QA1499_BASE_URL=http://127.0.0.1:18777
 export QA1499_ACK_SYNTHETIC_TEST_ONLY=1
 export QA1499_HEAD_SHA="$(git rev-parse HEAD)"
-export QA1499_OUTPUT=/tmp/qa1499-interactions-local.json
-node scripts/qa1499-interactions-lab.cjs
+umask 077
+mkdir -p "$HOME/.qa1499-reports"
+chmod 700 "$HOME/.qa1499-reports"
+node scripts/qa1499-interactions-lab.cjs > "$HOME/.qa1499-reports/qa1499-interactions-$(git rev-parse --short HEAD).json"
 ```
 
-Las peticiones a otro origen se abortan, URLs HTTPS, externas, con usuario/contraseña, query o fragmento son rechazadas **antes** de cargar el navegador. Los errores del producto no se imprimen en detalle para evitar posibles secretos o PII. La salida solo puede crearse en directorio temporal y nunca sobreescribe otro recibo. El SHA en JSON es **declarado**: quien sirve el árbol debe demostrar externamente su correspondencia.
+Las peticiones a otro origen se abortan, URLs HTTPS, externas, con usuario/contraseña, query o fragmento son rechazadas **antes** de cargar el navegador. Los errores del producto no se imprimen en detalle para evitar posibles secretos o PII. El CLI **no escribe archivos**: emite un único JSON sanitizado por stdout. El operador elige una carpeta privada con permisos 0700 y redirige la salida; no se versiona el recibo. El SHA en JSON es **declarado**: quien sirve el árbol debe demostrar externamente su correspondencia.
 
 ## Alcance que sigue NO VERIFICADO
 
@@ -41,7 +43,7 @@ Instrumento CLI manual, sin importación al runtime productivo ni CI automático
 
 ## Ejecución local observada (no aprobación de release)
 
-**Fecha UTC:** 2026-11-07 10:37:54. **Árbol limpio:** `Condor/main@b92dc9e5070017713c36a015fc802852c82ce083` (confirmado por `git rev-parse HEAD` en clon temporal). **Navegador:** Chrome 156.0.8078.80 con Playwright; servidor Symfony `APP_ENV=test`, `APP_DEBUG=0`, SQLite sintético; localhost `127.0.0.1:18777`; recursos externos bloqueados en el contexto. **Recibo privado local:** `/tmp/qa1499-interactions-local1830.json`, JSON sin textos DOM, correos, tokens ni datos de clientes; el archivo temporal no se versiona.
+**Fecha UTC:** 2026-11-07 10:37:54. **Árbol limpio:** `Condor/main@b92dc9e5070017713c36a015fc802852c82ce083` (confirmado por `git rev-parse HEAD` en clon temporal). **Navegador:** Chrome 156.0.8078.80 con Playwright; servidor Symfony `APP_ENV=test`, `APP_DEBUG=0`, SQLite sintético; localhost `127.0.0.1:18777`; recursos externos bloqueados en el contexto. **Recibo efímero de la primera corrida:** `/tmp/qa1499-interactions-local1830.json`, sin textos DOM, correos, tokens ni datos de clientes. El CLI corregido emite el mismo formato sanitizado **solo por stdout**; los nuevos recibos deben guardarse bajo una carpeta privada 0700 y no se versionan.
 
 | Perfil | Ruta | HTTP | LCP aislado (ms) | CLS observado | Event Timing | Muestras de eventos | `Tab` con foco |
 | --- | --- | ---: | ---: | ---: | --- | ---: | --- |

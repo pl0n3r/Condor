@@ -80,13 +80,14 @@ class InteractionsLabContractTests(unittest.TestCase):
             "page.keyboard.press('Tab')", "serviceWorkers: 'block'",
             "request.abort('blockedbyclient')", "release_approved: false",
             "field p75 for LCP, INP, CLS", "event_timing_supported",
-            "fs.writeFileSync(output",
+            "console.log(JSON.stringify({ summary, ...results }",
         ):
             self.assertIn(required, script)
         self.assertNotIn("https://www.condorapp.com.co", script)
         self.assertNotIn("page.fill(", script)
         self.assertNotIn("page.type(", script)
         self.assertNotIn("localStorage", script)
+        self.assertNotIn("fs.writeFileSync", script)
 
 
 if __name__ == "__main__":

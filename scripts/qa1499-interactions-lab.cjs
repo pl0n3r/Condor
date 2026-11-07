@@ -2,9 +2,6 @@
 // Condor #1830: isolated, read-only browser diagnostics for release parent #1499.
 // NO live, external hosts, accounts, secrets, provider calls, or field-p75 claims.
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
 
 const ROUTES = Object.freeze(['/', '/producto', '/admin/login']);
 const PROFILES = Object.freeze([
@@ -30,17 +27,10 @@ function preflight(env) {
   if (!HEAD_RE.test(env.QA1499_HEAD_SHA || '')) {
     throw new Error('QA1499_HEAD_SHA exacto obligatorio');
   }
-  const output = env.QA1499_OUTPUT || '';
-  if (output) {
-    const absolute = path.resolve(output);
-    const permitted = [fs.realpathSync(os.tmpdir()), fs.realpathSync('/tmp')];
-    const actual = fs.realpathSync(path.dirname(absolute));
-    if (!permitted.includes(actual) || !/^qa1499-interactions-[a-z0-9_-]+\.json$/.test(path.basename(absolute))) {
-      throw new Error('Recibo solo en carpeta temporal con nombre qa1499-interactions-*.json');
-    }
-    if (fs.existsSync(absolute)) throw new Error('No sobreescribir recibos de laboratorio');
+  if (env.QA1499_OUTPUT) {
+    throw new Error('Redirigir stdout a un archivo privado; no escribir en rutas arbitrarias');
   }
-  return { base, sha: env.QA1499_HEAD_SHA, output };
+  return { base, sha: env.QA1499_HEAD_SHA };
 }
 function selfTest() {
   for (const good of ['http://localhost:18777', 'http://127.0.0.1:18777/']) {
@@ -58,7 +48,7 @@ function selfTest() {
   assert.equal(preflight(env).sha.length, 40);
   assert.throws(() => preflight({ ...env, QA1499_ACK_SYNTHETIC_TEST_ONLY: '' }), /confirmación/);
   assert.throws(() => preflight({ ...env, QA1499_HEAD_SHA: 'HEAD' }), /SHA/);
-  assert.throws(() => preflight({ ...env, QA1499_OUTPUT: '/tmp/other.json' }), /Recibo/);
+  assert.throws(() => preflight({ ...env, QA1499_OUTPUT: '/tmp/other.json' }), /stdout/);
   console.log('QA1499_INTERACTIONS_SELF_TEST_PASS');
 }
 
@@ -119,12 +109,12 @@ async function auditPage(page, route) {
       max_observed_event_duration_ms: m?.eventSamples?.length ? Math.max(...m.eventSamples) : null
     };
   });
-  return { ...info, keyboard_focus_tag_types: [...uniqueTags].sort(),
+  return { ...info, keyboard_focus_tag_types: [...uniqueTags].sort((left, right) => left.localeCompare(right)),
     keyboard_steps: 10, keyboard_has_focus: uniqueTags.size > 0,
     interaction_p75_verified: false, route };
 }
 async function run() {
-  const { base, sha, output } = preflight(process.env); // before browser load
+  const { base, sha } = preflight(process.env); // before browser load
   const { chromium } = require('@playwright/test');
   const browser = await chromium.launch({ channel: 'chrome', headless: true,
     args: ['--disable-background-networking', '--disable-component-update', '--no-first-run'] });
@@ -179,13 +169,16 @@ async function run() {
       'WCAG 2.2 AA certification', 'owner budget and target-matrix approval', 'go-live'
     ], results: matrix
   };
-  if (output) fs.writeFileSync(output, JSON.stringify(results, null, 2), { flag: 'wx', mode: 0o600 });
   const failed = matrix.filter(x => x.error);
-  console.log(JSON.stringify({ sha, cases: matrix.length, failed: failed.length,
+  const summary = {
+    sha, cases: matrix.length, failed: failed.length,
     keyboard_cases_with_focus: matrix.filter(x => x.keyboard_has_focus).length,
     lcp_samples: matrix.filter(x => x.lcp_ms !== null && x.lcp_ms !== undefined).length,
     event_timing_supported_cases: matrix.filter(x => x.event_timing_supported).length,
-    inp_p75_verified: false, field_vitals_verified: false, release_approved: false }));
+    inp_p75_verified: false, field_vitals_verified: false, release_approved: false
+  };
+  // Single sanitised JSON document; caller chooses an owner-only destination.
+  console.log(JSON.stringify({ summary, ...results }, null, 2));
   if (matrix.length !== ROUTES.length * PROFILES.length || failed.length) process.exitCode = 2;
 }
 if (process.argv.length === 3 && process.argv[2] === '--self-test') {
