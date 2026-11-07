@@ -28,7 +28,7 @@ class FinanceFlagBootstrapTests(unittest.TestCase):
         self.assertIn("csrfToken={accessToken}", self.app)
         self.assertIn("key={'finance-real-'", self.app)
         self.assertIn("financeRealDataEnabled ? [{ href: '/admin#finance-management', label: 'Finanzas' }]", self.app)
-        self.assertIn("!financeRealDataEnabled && DevFinanceManagement", self.app)
+        self.assertIn("DevFinanceManagement && !financeRealDataEnabled", self.app)
 
     def test_criterio_seguridad_y_bordes(self):
         self.assertIn("if (!options.enabled) return { status: 'disabled' };", self.view)

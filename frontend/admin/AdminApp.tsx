@@ -650,7 +650,7 @@ export function AdminApp({
             />
           )}
 
-          {import.meta.env.DEV && !financeRealDataEnabled && DevFinanceManagement && (
+          {import.meta.env.DEV && DevFinanceManagement && !financeRealDataEnabled && (
             <Suspense fallback={<p role="status">Cargando finanzas ficticias…</p>}>
               <DevFinanceManagement
                 key={'finance-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}

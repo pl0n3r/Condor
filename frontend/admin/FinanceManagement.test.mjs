@@ -123,6 +123,6 @@ test('el bootstrap publica solo flag servidor exacto y separa demo DEV de UI rea
   const html = readFileSync(join(root, 'templates/admin/index.html.twig'), 'utf8');
   assert.match(app, /dataset\.financeRealDataEnabled === 'true'/);
   assert.match(app, /<FinanceRealManagement/);
-  assert.match(app, /!financeRealDataEnabled && DevFinanceManagement/);
+  assert.match(app, /DevFinanceManagement && !financeRealDataEnabled/);
   assert.match(html, /data-finance-real-data-enabled/);
 });
