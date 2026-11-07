@@ -19,6 +19,7 @@ import { CustomerServiceManagement } from './CustomerServiceManagement';
 import { AssetsManagement } from './AssetsManagement';
 import { PayrollManagement } from './PayrollManagement';
 import { ContractsRealManagement } from './ContractsManagement';
+import { SocialSecurityRealManagement } from './SocialSecurityManagement';
 import { ComplianceManagement } from './ComplianceManagement';
 import { AdminShell, type AdminNavEntry } from './AdminShell';
 import { ModuleDirectory } from './ModuleDirectory';
@@ -81,10 +82,6 @@ const DevContractsLifecyclePreview = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./ContractsLifecyclePreview')).ContractsLifecyclePreview }))
   : null;
 
-const DevSocialSecurityManagement = import.meta.env.DEV
-  ? lazy(async () => ({ default: (await import('./SocialSecurityManagement')).SocialSecurityManagement }))
-  : null;
-
 const DevOperationsProcessesPanel = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./OperationsProcessesPanel')).OperationsProcessesPanel }))
   : null;
@@ -118,6 +115,8 @@ export function AdminApp({
     && document.getElementById('condor-admin-root')?.dataset.payrollRealDataEnabled === 'true';
   const contractsRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.contractsRealDataEnabled === 'true';
+  const socialSecurityRealDataEnabled = typeof document !== 'undefined'
+    && document.getElementById('condor-admin-root')?.dataset.socialSecurityRealDataEnabled === 'true';
   // Synthetic catalogs are available only in dev with an explicit root opt-in.
   // This flag never enables the HR real-data API or overrides server permissions.
   const hrSyntheticPreviewEnabled = import.meta.env.DEV && typeof document !== 'undefined'
@@ -242,7 +241,8 @@ export function AdminApp({
               : import.meta.env.DEV ? [{ href: '/admin#payroll-management', label: 'Nómina (pruebas)' }] : []),
             ...(contractsRealDataEnabled ? [{ href: '/admin#contracts-management', label: 'Contratación' }]
               : import.meta.env.DEV ? [{ href: '/admin#contracts-management', label: 'Contratación (pruebas)' }] : []),
-            ...(import.meta.env.DEV ? [{ href: '/admin#social-security-management', label: 'Seguridad social (pruebas)' }] : []),
+            ...(socialSecurityRealDataEnabled ? [{ href: '/admin#social-security-management', label: 'Seguridad social' }]
+              : import.meta.env.DEV ? [{ href: '/admin#social-security-management', label: 'Seguridad social (pruebas)' }] : []),
           ],
         },
         {
@@ -521,6 +521,18 @@ export function AdminApp({
             />
           )}
 
+          {(socialSecurityRealDataEnabled || import.meta.env.DEV) && (
+            <SocialSecurityRealManagement
+              key={'social-real-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+              tenantId={context.data.tenant.id}
+              companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
+              branchId={context.data.active_branch.id}
+              permissions={context.data.permissions}
+              csrfToken={accessToken}
+              enabled={socialSecurityRealDataEnabled}
+            />
+          )}
+
           {contractsRealDataEnabled && (
             <ContractsRealManagement
               key={'contracts-real-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
@@ -590,17 +602,6 @@ export function AdminApp({
                   permissions={context.data.permissions}
                 />
               </Suspense>
-              )}
-              {import.meta.env.DEV && DevSocialSecurityManagement && (
-                <Suspense fallback={<p role="status">Cargando seguridad social ficticia…</p>}>
-                  <DevSocialSecurityManagement
-                    key={'social-security-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
-                    tenantId={context.data.tenant.id}
-                    companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
-                    branchId={context.data.active_branch.id}
-                    permissions={context.data.permissions}
-                  />
-                </Suspense>
               )}
               <Suspense fallback={<p role="status">Cargando gobierno ficticio…</p>}>
                             <DevGovernanceManagement
