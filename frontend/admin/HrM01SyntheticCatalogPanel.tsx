@@ -70,13 +70,16 @@ export async function readM01SyntheticCatalog(
     if (!response.ok) return { status: 'error', rows: [] };
     const payload: unknown = await response.json();
     if (!isRecord(payload) || payload.synthetic !== true || payload.persisted !== false
-      || payload.juridically_binding !== false || !Array.isArray(payload[catalog.field])
-      || payload[catalog.field].length > 100) {
+      || payload.juridically_binding !== false) {
+      return { status: 'error', rows: [] };
+    }
+    const entries = payload[catalog.field];
+    if (!Array.isArray(entries) || entries.length > 100) {
       return { status: 'error', rows: [] };
     }
     const seen = new Set<string>();
     const rows: M01Row[] = [];
-    for (const value of payload[catalog.field] as unknown[]) {
+    for (const value of entries as unknown[]) {
       if (!isRecord(value) || value.synthetic !== true || typeof value.ref !== 'string'
         || value.ref.length < 8 || value.ref.length > 128
         || !/^[a-z0-9_:-]+$/i.test(value.ref)
