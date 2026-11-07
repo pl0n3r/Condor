@@ -237,53 +237,75 @@ final class ComplianceController extends AbstractController
     }
 
     /**
-     * Persisted SG-SST records are separate from the synthetic session preview.
-     * The server-only feature flag is OFF unless exactly "true".
+     * Owner-only persisted SG-SST bridge: both read routes use one guarded
+     * handler; both writes share flag, CSRF, and scope validation.
      */
     #[Route('/api/v1/branches/{branchId}/sgsst/real-records', name: 'api_sgsst_real_list', methods: ['GET'])]
     public function occupationalRealList(string $branchId): JsonResponse
     {
-        if (($off = $this->occupationalRealDisabled()) !== null) { return $off; }
-        [, $tenant, $company] = $this->occupationalRealScope($branchId, 'settings.view');
-        $rows = $this->domain(fn (): array => $this->occupationalRecords->all($tenant, $company));
-        return $this->occupationalRealJson(['records' => $rows]);
+        return $this->occupationalRealRead($branchId, null);
     }
 
     #[Route('/api/v1/branches/{branchId}/sgsst/real-records/{ref}', name: 'api_sgsst_real_detail', methods: ['GET'])]
     public function occupationalRealView(string $branchId, string $ref): JsonResponse
     {
-        if (($off = $this->occupationalRealDisabled()) !== null) { return $off; }
-        [, $tenant, $company] = $this->occupationalRealScope($branchId, 'settings.view');
-        $row = $this->domain(fn (): ?array => $this->occupationalRecords->one($tenant, $company, $ref));
-        if ($row === null) { throw new NotFoundHttpException('Registro SG-SST no encontrado.'); }
-        return $this->occupationalRealJson(['record' => $row]);
+        return $this->occupationalRealRead($branchId, $ref);
     }
 
     #[Route('/api/v1/branches/{branchId}/sgsst/real-records', name: 'api_sgsst_real_create', methods: ['POST'])]
     public function occupationalRealCreate(string $branchId, Request $request): JsonResponse
     {
-        if (($off = $this->occupationalRealDisabled()) !== null) { return $off; }
-        $this->requireCsrf($request);
-        [$actor, $tenant, $company] = $this->occupationalRealScope($branchId, 'settings.create');
-        $input = $this->payload($request, ['record_ref', 'kind']);
-        $row = $this->domain(fn (): array => $this->occupationalRecords->add($tenant, $company, $actor, $input));
-        return $this->occupationalRealJson(['record' => $row], Response::HTTP_CREATED);
+        return $this->occupationalRealWrite($branchId, $request, null);
     }
 
     #[Route('/api/v1/branches/{branchId}/sgsst/real-records/{ref}/state', name: 'api_sgsst_real_state', methods: ['PATCH'])]
     public function occupationalRealState(string $branchId, string $ref, Request $request): JsonResponse
     {
-        if (($off = $this->occupationalRealDisabled()) !== null) { return $off; }
+        return $this->occupationalRealWrite($branchId, $request, $ref);
+    }
+
+    private function occupationalRealRead(string $branchId, ?string $ref): JsonResponse
+    {
+        if (($off = $this->occupationalRealDisabled()) !== null) {
+            return $off;
+        }
+        [, $tenant, $company] = $this->occupationalRealScope($branchId, 'settings.view');
+        if ($ref === null) {
+            $rows = $this->domain(fn (): array => $this->occupationalRecords->all($tenant, $company));
+            return $this->occupationalRealJson(['records' => $rows]);
+        }
+        $row = $this->domain(fn (): ?array => $this->occupationalRecords->one($tenant, $company, $ref));
+        if ($row === null) {
+            throw new NotFoundHttpException('Registro SG-SST no encontrado.');
+        }
+        return $this->occupationalRealJson(['record' => $row]);
+    }
+
+    private function occupationalRealWrite(string $branchId, Request $request, ?string $ref): JsonResponse
+    {
+        if (($off = $this->occupationalRealDisabled()) !== null) {
+            return $off;
+        }
         $this->requireCsrf($request);
-        $input = $this->payload($request, ['state', 'expected_version']);
-        if (!is_string($input['state'] ?? null) || !is_int($input['expected_version'] ?? null)) {
+        $permission = $ref === null ? 'settings.create' : 'settings.update';
+        [$actor, $tenant, $company] = $this->occupationalRealScope($branchId, $permission);
+
+        if ($ref === null) {
+            $input = $this->payload($request, ['record_ref', 'kind']);
+            $created = $this->domain(fn (): array => $this->occupationalRecords->add(
+                $tenant, $company, $actor, $input,
+            ));
+            return $this->occupationalRealJson(['record' => $created], Response::HTTP_CREATED);
+        }
+
+        $change = $this->payload($request, ['state', 'expected_version']);
+        if (!is_string($change['state'] ?? null) || !is_int($change['expected_version'] ?? null)) {
             throw new BadRequestHttpException('Estado y versión válidos son obligatorios.');
         }
-        [$actor, $tenant, $company] = $this->occupationalRealScope($branchId, 'settings.update');
-        $row = $this->domain(fn (): array => $this->occupationalRecords->transition(
-            $tenant, $company, $actor, $ref, $input['state'], $input['expected_version'],
+        $updated = $this->domain(fn (): array => $this->occupationalRecords->transition(
+            $tenant, $company, $actor, $ref, $change['state'], $change['expected_version'],
         ));
-        return $this->occupationalRealJson(['record' => $row]);
+        return $this->occupationalRealJson(['record' => $updated]);
     }
 
     /** @return array{string,string,string} */
@@ -303,7 +325,9 @@ final class ComplianceController extends AbstractController
 
     private function occupationalRealDisabled(): ?JsonResponse
     {
-        if (getenv('OHS_REAL_DATA_ENABLED') === 'true') { return null; }
+        if (getenv('OHS_REAL_DATA_ENABLED') === 'true') {
+            return null;
+        }
         return $this->occupationalRealJson(['error' => 'feature_unavailable'], Response::HTTP_NOT_FOUND);
     }
 

@@ -72,11 +72,13 @@ echo json_encode($out);
 
     def test_controller_off_scope_permissions_and_csrf(self):
         src = CTRL.read_text(encoding="utf-8")
-        self.assertEqual(4, src.count("($off = $this->occupationalRealDisabled())"))
+        self.assertEqual(2, src.count("($off = $this->occupationalRealDisabled())"))
+        self.assertIn("occupationalRealRead($branchId", src)
+        self.assertIn("occupationalRealWrite($branchId", src)
         self.assertIn("getenv('OHS_REAL_DATA_ENABLED') === 'true'", src)
         self.assertIn("'feature_unavailable'", src)
         for permission in ("settings.view", "settings.create", "settings.update"):
-            self.assertIn(f"occupationalRealScope($branchId, '{permission}')", src)
+            self.assertIn(f"'{permission}'", src)
         self.assertIn("Membership::ROLE_OWNER", src)
         self.assertGreaterEqual(src.count("$this->requireCsrf($request)"), 3)
         self.assertIn("$entity->tenant()->id() !== $tenant->id()", src)
