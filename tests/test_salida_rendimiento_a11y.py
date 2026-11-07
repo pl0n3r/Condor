@@ -129,6 +129,11 @@ class SalidaTests(unittest.TestCase):
         self.assertIn(":scope .catalog-panel", visual)
         self.assertIn(":scope .catalog-card", visual)
         self.assertIn(":scope .foundation-grid article", visual)
+        # :scope preserva la especificidad frente a public/app.css:
+        # sin él cambian tipografía y bordes de tarjetas en Chromium.
+        for preserved in (":scope .workspace h1", ":scope .tenant-card",
+                          ":scope .overview-value", ":scope .overview-detail"):
+            self.assertIn(preserved, visual)
         self.assertIn(".admin-shell-tenant", visual)
         for selected in ("commerce", "orders", "catalog", "inventory",
                          "finance-management", "workflows"):
