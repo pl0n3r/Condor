@@ -7,7 +7,11 @@ namespace App\Http\Controller;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Application\SocialSecurity\SocialSecurityApiService;
+use App\Application\SocialSecurity\SocialSecurityRecordService;
 use App\Domain\Identity\Entity\Membership;
+use App\Domain\Organization\Entity\Branch;
+use App\Domain\Organization\Entity\Tenant;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -27,6 +31,7 @@ final class SocialSecurityController extends AbstractController
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
         private readonly SocialSecurityApiService $socialSecurity,
+        private readonly SocialSecurityRecordService $records,
     ) {
     }
 
@@ -74,6 +79,84 @@ final class SocialSecurityController extends AbstractController
                 $tenant, $branch, $actor, true, 'fixture:affiliation/'.$slug, $input,
             ),
         )]);
+    }
+
+
+    /** Read the latest company-owned record versions only. */
+    #[Route('/api/v1/branches/{branchId}/social-security/records', name: 'api_social_real_list', methods: ['GET'])]
+    public function recordsList(string $branchId): JsonResponse
+    {
+        if (($off = $this->realDisabled()) !== null) { return $off; }
+        [, $tenantId, $companyId] = $this->recordScope($branchId, 'users.view');
+        $records = $this->domain(fn (): array => $this->records->listRecords($tenantId, $companyId));
+        return $this->locked(['records' => $records]);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/social-security/records/{ref}', name: 'api_social_real_detail', methods: ['GET'])]
+    public function recordsDetail(string $branchId, string $ref): JsonResponse
+    {
+        if (($off = $this->realDisabled()) !== null) { return $off; }
+        [, $tenantId, $companyId] = $this->recordScope($branchId, 'users.view');
+        $record = $this->domain(fn (): ?array => $this->records->detail($tenantId, $companyId, $ref));
+        if ($record === null) {
+            throw new NotFoundHttpException('Registro de seguridad social no encontrado.');
+        }
+        return $this->locked(['record' => $record]);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/social-security/records', name: 'api_social_real_create', methods: ['POST'])]
+    public function recordsCreate(string $branchId, Request $request): JsonResponse
+    {
+        if (($off = $this->realDisabled()) !== null) { return $off; }
+        $this->requireCsrf($request);
+        [$actorId, $tenantId, $companyId] = $this->recordScope($branchId, 'users.create');
+        $input = $this->payload($request, ['record_ref', 'category']);
+        $created = $this->domain(
+            fn (): array => $this->records->create($tenantId, $companyId, $actorId, $input),
+        );
+        return $this->locked(['record' => $created], Response::HTTP_CREATED);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/social-security/records/{ref}/state', name: 'api_social_real_state', methods: ['PATCH'])]
+    public function recordsState(string $branchId, string $ref, Request $request): JsonResponse
+    {
+        if (($off = $this->realDisabled()) !== null) { return $off; }
+        $this->requireCsrf($request);
+        $input = $this->payload($request, ['state', 'expected_version']);
+        if (!is_string($input['state'] ?? null) || !is_int($input['expected_version'] ?? null)) {
+            throw new BadRequestHttpException('Estado y versión obligatorios.');
+        }
+        [$actorId, $tenantId, $companyId] = $this->recordScope($branchId, 'users.update');
+        $updated = $this->domain(fn (): array => $this->records->changeState(
+            $tenantId, $companyId, $actorId, $ref, $input['state'], $input['expected_version'],
+        ));
+        return $this->locked(['record' => $updated]);
+    }
+
+    /** @return array{string,string,string} */
+    private function recordScope(string $branchId, string $permission): array
+    {
+        [$actor, $tenant, $branch, $membership] = $this->authorizedBranchScope($branchId, $permission);
+        if (!$actor->isActive() || !$membership->isActive()
+            || $membership->roleKey() !== Membership::ROLE_OWNER) {
+            throw new AccessDeniedHttpException('Solo el propietario puede gestionar seguridad social.');
+        }
+        return [$actor->id(), $tenant->id(), $this->realCompany($tenant, $branch)];
+    }
+
+    private function realDisabled(): ?JsonResponse
+    {
+        if (getenv('SOCIAL_SECURITY_REAL_DATA_ENABLED') === 'true') { return null; }
+        return $this->locked(['error' => 'feature_unavailable'], Response::HTTP_NOT_FOUND);
+    }
+
+    private function realCompany(Tenant $tenant, Branch $branch): string
+    {
+        $company = $branch->legalEntity();
+        if ($company === null || $company->tenant()->id() !== $tenant->id()) {
+            throw new NotFoundHttpException('Razón social no disponible.');
+        }
+        return $company->id();
     }
 
     /** @return array{0: \App\Domain\Identity\Entity\User, 1: \App\Domain\Organization\Entity\Tenant, 2: \App\Domain\Organization\Entity\Branch} */
