@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { productionMaterialsPath } from './api';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
 type Supplier = {
   id: string;
@@ -86,6 +87,11 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
   const canReceive = permissions.includes('inventory.update');
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [busy, setBusy] = useState(false);
+  const [activePanel, setActivePanel] = useState<'supplier' | 'order' | null>(null);
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [orderSearch, setOrderSearch] = useState('');
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [supplierCode, setSupplierCode] = useState('');
   const [supplierName, setSupplierName] = useState('');
@@ -325,6 +331,7 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
       setSupplierCode('');
       setSupplierName('');
       setSupplierTerms('0');
+      setActivePanel(null);
     }
   }
 
@@ -352,6 +359,7 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
     }
     if (await mutate(ordersPath, { supplier_id: supplierId, lines }, 'Orden creada.')) {
       setLines([emptyLine()]);
+      setActivePanel(null);
     }
   }
 
@@ -380,16 +388,24 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
   const data = state.status === 'ready' ? state.data : null;
   const activeSuppliers = data?.suppliers.filter((supplier) => supplier.active) ?? [];
   const activeMaterials = data?.materials.filter((material) => material.active) ?? [];
+  const suppliersShown = data?.suppliers.filter((supplier) =>
+    (supplier.code + ' ' + supplier.name).toLocaleLowerCase('es-CO').includes(supplierSearch.toLocaleLowerCase('es-CO'))) ?? [];
+  const ordersShown = data?.orders.filter((order) => order.id.toLocaleLowerCase('es-CO').includes(orderSearch.toLocaleLowerCase('es-CO'))) ?? [];
+  const selectedSupplier = data?.suppliers.find((supplier) => supplier.id === selectedSupplierId);
+  const selectedOrder = data?.orders.find((order) => order.id === selectedOrderId);
 
   return (
-    <section id="purchasing" className="catalog-panel" aria-labelledby="purchasing-title">
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">Operación</span>
-          <h2 id="purchasing-title">Compras</h2>
-          <p className="muted">Proveedores, órdenes y recepción de materiales de tu empresa.</p>
-        </div>
-      </div>
+    <section id="purchasing" className="catalog-panel ui-page" aria-label="Compras">
+      <PageHeader title="Compras" description="Proveedores, órdenes y recepción de materiales de tu empresa."
+        actions={canCreate && <>
+          <button className="button button-secondary" type="button" onClick={() => setActivePanel('supplier')}>Nuevo proveedor</button>
+          <button className="button" type="button" onClick={() => setActivePanel('order')}>Nueva orden</button>
+        </>} />
+      {data && <MetricStrip label="Resumen de compras" items={[
+        { label: 'Proveedores', value: data.suppliers.length },
+        { label: 'Órdenes', value: data.orders.length },
+        { label: 'Pendientes de recepción', value: data.orders.filter(order => order.status !== 'received').length, tone: 'warn' },
+      ]} />}
       {notice?.kind === 'error' && <div className="alert alert-error" role="alert">{notice.text}</div>}
       {notice?.kind === 'success' && <output aria-live="polite" className="alert alert-success">{notice.text}</output>}
       {state.status === 'loading' && <output aria-live="polite">Cargando compras…</output>}
@@ -402,20 +418,22 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
       )}
       {data && (
         <div className="production-layout">
-          <section className="catalog-card" aria-labelledby="supplier-title">
-            <h3 id="supplier-title">Proveedores</h3>
-            {data.suppliers.length === 0 ? (
-              <p role="status">Aún no hay proveedores registrados.</p>
-            ) : (
-              <ul>
-                {data.suppliers.map((supplier) => (
-                  <li key={supplier.id}>{supplier.code} · {supplier.name}{supplier.active ? '' : ' · Inactivo'}</li>
-                ))}
-              </ul>
-            )}
-            {canCreate && (
+          <Card title="Proveedores">
+            <Toolbar trailing={<span className="ui-count">{suppliersShown.length} de {data.suppliers.length}</span>}>
+              <label className="ui-search"><span className="ui-sr-only">Buscar proveedores</span>
+                <input type="search" placeholder="Buscar proveedor" value={supplierSearch} onChange={event => setSupplierSearch(event.target.value)} />
+              </label>
+            </Toolbar>
+            <DataTable caption="Proveedores" rows={suppliersShown} rowKey={row => row.id}
+              onOpen={row => setSelectedSupplierId(row.id)}
+              empty={<><strong>Sin proveedores</strong><span>{supplierSearch ? 'Sin coincidencias.' : 'Aún no hay proveedores registrados.'}</span></>}
+              columns={[
+                { key: 'code', header: 'Código', render: row => row.code },
+                { key: 'name', header: 'Proveedor', render: row => row.name },
+                { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.active ? 'ok' : 'neutral'}>{row.active ? 'Activo' : 'Inactivo'}</StatusPill> },
+              ]} />
+            {canCreate && <SidePanel open={activePanel === 'supplier'} title="Nuevo proveedor" onClose={() => setActivePanel(null)}>
               <form className="catalog-editor" onSubmit={(event) => void createSupplier(event)}>
-                <h3>Nuevo proveedor</h3>
                 <label className="field"><span>Código</span>
                   <input required maxLength={64} value={supplierCode} onChange={(event) => setSupplierCode(event.target.value)} />
                 </label>
@@ -427,37 +445,25 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
                 </label>
                 <button className="button" disabled={busy} type="submit">Guardar proveedor</button>
               </form>
-            )}
-          </section>
-          <section className="catalog-card" aria-labelledby="purchase-order-title">
-            <h3 id="purchase-order-title">Órdenes de compra</h3>
-            {data.orders.length === 0 ? (
-              <p role="status">Aún no hay órdenes de compra.</p>
-            ) : (
-              <ul>
-                {data.orders.map((order) => (
-                  <li key={order.id}>
-                    <strong>Orden {order.id}</strong> · {order.status}
-                    <ul>
-                      {order.lines.map((line) => (
-                        <li key={line.id}>
-                          {activeMaterials.find((m) => m.id === line.material_id)?.name ?? line.material_id}
-                          {' · '}{line.quantity} · costo unitario {line.unit_cost}
-                        </li>
-                      ))}
-                    </ul>
-                    {order.status !== 'received' && canReceive && (
-                      <button className="button button-secondary" disabled={busy} type="button" onClick={() => void receiveOrder(order)}>
-                        Registrar recepción
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {canCreate && (
+            </SidePanel>}
+          </Card>
+          <Card title="Órdenes de compra">
+            <Toolbar trailing={<span className="ui-count">{ordersShown.length} de {data.orders.length}</span>}>
+              <label className="ui-search"><span className="ui-sr-only">Buscar órdenes</span>
+                <input type="search" placeholder="Buscar número de orden" value={orderSearch} onChange={event => setOrderSearch(event.target.value)} />
+              </label>
+            </Toolbar>
+            <DataTable caption="Órdenes de compra" rows={ordersShown} rowKey={row => row.id}
+              onOpen={row => setSelectedOrderId(row.id)}
+              empty={<><strong>Sin órdenes de compra</strong><span>{orderSearch ? 'Sin coincidencias.' : 'Aún no hay órdenes de compra.'}</span></>}
+              columns={[
+                { key: 'number', header: 'Orden', render: row => row.id },
+                { key: 'supplier', header: 'Proveedor', render: row => data.suppliers.find(supplier => supplier.id === row.supplier_id)?.name ?? row.supplier_id },
+                { key: 'lines', header: 'Materiales', render: row => row.lines.length, align: 'right' },
+                { key: 'status', header: 'Estado', render: row => <StatusPill tone={row.status === 'received' ? 'ok' : 'warn'}>{row.status}</StatusPill> },
+              ]} />
+            {canCreate && <SidePanel open={activePanel === 'order'} title="Nueva orden" onClose={() => setActivePanel(null)}>
               <form className="catalog-editor" onSubmit={(event) => void createOrder(event)}>
-                <h3>Nueva orden</h3>
                 <label className="field"><span>Proveedor</span>
                   <select required value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
                     <option value="">Selecciona un proveedor</option>
@@ -489,7 +495,7 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
                 <button type="button" className="button button-secondary" disabled={lines.length >= 100 || busy} onClick={() => setLines((current) => [...current, emptyLine()])}>Agregar material</button>
                 <button className="button" disabled={busy || !activeSuppliers.length || !activeMaterials.length} type="submit">Crear orden</button>
               </form>
-            )}
+            </SidePanel>}
             <section aria-labelledby="weighted-cost-title">
               <h3 id="weighted-cost-title">Costo promedio ponderado de materiales</h3>
               {data.historyStatus === 'unavailable' && (
@@ -520,9 +526,26 @@ export function PurchasingManagement({ branchId, permissions, csrfToken }: Props
                 Los materiales sin historial se muestran como desconocidos, nunca como costo cero.
               </p>
             </section>
-          </section>
+          </Card>
         </div>
       )}
+      <SidePanel open={Boolean(selectedSupplier)} title={selectedSupplier?.name ?? 'Proveedor'} onClose={() => setSelectedSupplierId(null)}>
+        {selectedSupplier && <dl className="ui-details">
+          <div><dt>Código</dt><dd>{selectedSupplier.code}</dd></div>
+          <div><dt>Nombre</dt><dd>{selectedSupplier.name}</dd></div>
+          <div><dt>Estado</dt><dd><StatusPill tone={selectedSupplier.active ? 'ok' : 'neutral'}>{selectedSupplier.active ? 'Activo' : 'Inactivo'}</StatusPill></dd></div>
+        </dl>}
+      </SidePanel>
+      <SidePanel open={Boolean(selectedOrder)} title={selectedOrder ? 'Orden ' + selectedOrder.id : 'Detalle de orden'} onClose={() => setSelectedOrderId(null)}>
+        {selectedOrder && <>
+          <p>Estado: <StatusPill tone={selectedOrder.status === 'received' ? 'ok' : 'warn'}>{selectedOrder.status}</StatusPill></p>
+          <ul>{selectedOrder.lines.map(line => <li key={line.id}>
+            {activeMaterials.find(material => material.id === line.material_id)?.name ?? line.material_id}
+            {' · '}{line.quantity} · costo unitario {line.unit_cost}
+          </li>)}</ul>
+          {selectedOrder.status !== 'received' && canReceive && <button className="button" type="button" disabled={busy} onClick={() => void receiveOrder(selectedOrder)}>Registrar recepción</button>}
+        </>}
+      </SidePanel>
       <section className="catalog-card" aria-labelledby="synthetic-purchasing-title">
         <h3 id="synthetic-purchasing-title">Previews ficticios de compras</h3>
         <p className="muted">

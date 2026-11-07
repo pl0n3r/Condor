@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { inventoryPath } from './api';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
 type Source = {
   id: string;
@@ -173,6 +174,8 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
   const [result, setResult] = useState<Result | null>(null);
   const [proposalState, setProposalState] = useState<ProposalState>({ status: 'loading' });
   const [pendingProposal, setPendingProposal] = useState<Proposal | null>(null);
+  const [search, setSearch] = useState('');
+  const [creating, setCreating] = useState(false);
   const latest = useRef(0);
   const idempotency = useRef<Idempotency>({ signature: '', key: '' });
 
@@ -317,6 +320,7 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
       );
       if (request !== latest.current) return;
       setPendingProposal(null);
+      setCreating(false);
       setResult({ receipt, movements: [] });
       idempotency.current = { signature: '', key: '' };
       try {
@@ -390,17 +394,16 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
   }
 
   return (
-    <section id="stock-transfers" className="catalog-panel"
-      aria-labelledby="stock-transfers-title">
-      <div className="catalog-heading">
-        <div>
-          <span className="eyebrow">Inventario · movimiento entre sedes</span>
-          <h2 id="stock-transfers-title">Transferencias entre sedes</h2>
-          <p className="muted">
-            La transferencia solo se confirma con el servidor de inventario.
-          </p>
-        </div>
-      </div>
+    <section id="stock-transfers" className="catalog-panel ui-page" aria-label="Transferencias entre sedes">
+      <PageHeader title="Transferencias entre sedes"
+        description="La transferencia solo se confirma con el servidor de inventario."
+        actions={canUpdate && ready && origins.length > 0 && destinations.length > 0 && variants.length > 0
+          && <button type="button" className="button" onClick={() => setCreating(true)}>Nueva transferencia</button>} />
+      {ready && <MetricStrip label="Resumen de transferencias" items={[
+        { label: 'Sedes de destino', value: destinations.length },
+        { label: 'Variantes disponibles', value: variants.length },
+        { label: 'Propuestas pendientes', value: proposalState.status === 'ready' ? proposalState.proposals.length : 'Consultando…' },
+      ]} />}
       {!canView && (
         <div className="alert alert-error" role="alert">
           No tienes permiso para consultar inventario.
@@ -436,8 +439,7 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
             </p>
           )}
           {canUpdate && (
-            <section className="catalog-list" aria-labelledby="transfer-proposals-title">
-              <h3 id="transfer-proposals-title">Propuestas de reposición entre sedes</h3>
+            <Card title="Propuestas de reposición entre sedes">
               <p className="muted">
                 Basadas en el consumo de 30 días y el excedente disponible de otra sede autorizada.
                 No se mueve inventario hasta que confirmes la transferencia.
@@ -459,24 +461,29 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
                   No hay propuestas con excedente suficiente en sedes autorizadas.
                 </p>
               )}
-              {proposalState.status === 'ready' && proposalState.proposals.map((proposal) => (
-                <article className="catalog-card" key={proposal.variant_id}>
-                  <div>
-                    <strong>{proposal.sku}</strong>
-                    <p>Desde {proposal.source_from_name} hacia esta sede</p>
-                    <p>{proposal.quantity} unidades sugeridas;
-                      {' '}excedente de origen: {proposal.origin_excess}.
-                    </p>
-                  </div>
-                  <button type="button" className="button"
-                    disabled={busy || result !== null}
-                    onClick={() => { setPendingProposal(proposal); setNotice(null); }}>
-                    Revisar propuesta
-                  </button>
-                </article>
-              ))}
-              {pendingProposal && (
-                <div className="catalog-editor" role="group"
+              {proposalState.status === 'ready' && <>
+                <Toolbar trailing={<span className="ui-count">{proposalState.proposals.length} propuestas</span>}>
+                  <label className="ui-search"><span className="ui-sr-only">Buscar SKU</span>
+                    <input type="search" placeholder="Buscar SKU" value={search} onChange={event => setSearch(event.target.value)} />
+                  </label>
+                </Toolbar>
+                <DataTable caption="Propuestas de reposición entre sedes"
+                  rows={proposalState.proposals.filter(proposal => proposal.sku.toLocaleLowerCase('es-CO')
+                    .includes(search.toLocaleLowerCase('es-CO')))}
+                  rowKey={proposal => proposal.variant_id}
+                  onOpen={proposal => { setPendingProposal(proposal); setNotice(null); }}
+                  empty={<><strong>Sin propuestas</strong><span>Sin excedente suficiente o sin coincidencias.</span></>}
+                  columns={[
+                    { key: 'sku', header: 'SKU', render: proposal => proposal.sku },
+                    { key: 'source', header: 'Origen', render: proposal => proposal.source_from_name },
+                    { key: 'quantity', header: 'Cantidad sugerida', render: proposal => proposal.quantity, align: 'right' },
+                    { key: 'excess', header: 'Excedente de origen', render: proposal => proposal.origin_excess, align: 'right' },
+                    { key: 'state', header: 'Estado', render: () => <StatusPill tone="info">Revisar propuesta</StatusPill> },
+                  ]} />
+              </>}
+              <SidePanel open={Boolean(pendingProposal)} title="Confirmación de transferencia propuesta"
+                onClose={() => setPendingProposal(null)}>
+                {pendingProposal && <div className="catalog-editor" role="group"
                   aria-label="Confirmación de transferencia propuesta">
                   <p>
                     Confirmar {pendingProposal.quantity} unidades de {pendingProposal.sku}
@@ -489,13 +496,14 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
                   </button>
                   <button type="button" className="button" disabled={busy}
                     onClick={() => setPendingProposal(null)}>Cancelar</button>
-                </div>
-              )}
-            </section>
+                </div>}
+              </SidePanel>
+            </Card>
           )}
           {canUpdate && origins.length > 0 && destinations.length > 0
             && variants.length > 0 && (
-              <form className="catalog-editor" onSubmit={(event) => void submit(event)}>
+              <SidePanel open={creating} title="Nueva transferencia" onClose={() => setCreating(false)}>
+                <form className="catalog-editor" onSubmit={(event) => void submit(event)}>
                 <div className="catalog-form-grid">
                   <label className="field">
                     <span>Sede de origen</span>
@@ -548,7 +556,8 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
                 <button type="submit" className="button" disabled={!canTransfer}>
                   {busy ? 'Transfiriendo…' : 'Transferir entre sedes'}
                 </button>
-              </form>
+                </form>
+              </SidePanel>
             )}
         </>
       )}
@@ -557,8 +566,7 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
           aria-live="polite">{notice}</output>
       )}
       {result && (
-        <section aria-labelledby="transfer-result-title" className="catalog-list">
-          <h3 id="transfer-result-title">Resultado de la transferencia</h3>
+        <Card title="Resultado de la transferencia">
           <p>Comprobante: <strong>{result.receipt.id}</strong></p>
           <button type="button" className="button" onClick={() => {
             setResult(null);
@@ -585,7 +593,7 @@ export function StockTransferPanel({ branchId, permissions, csrfToken }: Props) 
               Consulta el inventario actualizado antes de operar de nuevo.
             </p>
           )}
-        </section>
+        </Card>
       )}
     </section>
   );

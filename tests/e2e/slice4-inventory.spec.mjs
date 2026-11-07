@@ -66,7 +66,7 @@ test.describe('Slice 4 — inventario', () => {
     await createLogicalSource(sourceA, sourceSlugA);
     await createLogicalSource(sourceB, sourceSlugB);
 
-    await inventory.getByLabel('Fuente').selectOption({ label: sourceA });
+    await inventory.locator('#inventory-adjust-source').selectOption({ label: sourceA });
     await inventory.getByLabel('Variante').first().selectOption({ label: productName + ' · ' + sku });
     await inventory.getByLabel('Cantidad (+ entrada / - salida)').fill('10');
     await inventory.getByLabel('Motivo').fill('Carga E2E');
