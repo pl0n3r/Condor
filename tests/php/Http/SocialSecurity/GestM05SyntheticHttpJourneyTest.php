@@ -157,6 +157,9 @@ final class GestM05SyntheticHttpJourneyTest extends WebTestCase
         $this->get($http, $root.'/affiliations', 200); // kernel test permite fixtures aun con flag DEV apagado
         foreach (['novelties', 'contributions', 'supports', 'alerts', 'pila'] as $route) {
             $this->get($http, $root.'/'.$route, 404);
+            // Ni siquiera los verbos de escritura deben aparecer en S02–S06.
+            $http->jsonRequest('POST', $root.'/'.$route, ['fixture' => 'solo_test']);
+            self::assertResponseStatusCodeSame(404, $route);
         }
         $this->get($http, $root.'/records', 404);
         self::assertSame('feature_unavailable', $this->json($http)['error']);
