@@ -107,14 +107,17 @@ final class SupplierContractPreviewTest extends WebTestCase
         $v = $base; $v['reviews'][1]['stage'] = 'finance'; $cases[] = $v;
         $v = $base; $v['reviews'][1]['state'] = 'approved'; $cases[] = $v;
         $v = $base; $v['reviews'][1]['reviewer_name'] = 'Real Name'; $cases[] = $v;
+        $rejected = 0;
         foreach ($cases as $index => $case) {
             try {
                 SupplierContractPreview::preview($case);
             } catch (InvalidArgumentException) {
+                ++$rejected;
                 continue;
             }
             self::fail('Fixture inválido '.$index.' debió rechazarse.');
         }
+        self::assertSame(count($cases), $rejected, 'Todos los fixtures inválidos deben rechazarse.');
     }
 
     public function testHttpRequiresAuthenticationCsrfTenantAndPermission(): void
