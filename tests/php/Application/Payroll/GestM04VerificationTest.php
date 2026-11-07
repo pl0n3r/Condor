@@ -214,23 +214,41 @@ final class GestM04VerificationTest extends TestCase
         self::assertSame('fixture:company/demo', $result['company_ref']);
     }
 
-    public function testUiSinteticaConEstadosSeguros(): void
+    public function testUiPersistenteConGateOffYEstadosSeguros(): void
     {
-        // La UI local no consulta red: no hay estado de carga remoto que simular.
         $source = file_get_contents(__DIR__.'/../../../../frontend/admin/PayrollManagement.tsx');
+        $app = file_get_contents(__DIR__.'/../../../../frontend/admin/AdminApp.tsx');
+        $controller = file_get_contents(__DIR__.'/../../../../src/Http/Controller/AdminController.php');
+        $backend = file_get_contents(__DIR__.'/../../../../src/Http/Controller/PayrollController.php');
+        $twig = file_get_contents(__DIR__.'/../../../../templates/admin/index.html.twig');
         self::assertIsString($source);
+        self::assertIsString($app);
+        self::assertIsString($controller);
+        self::assertIsString($backend);
+        self::assertIsString($twig);
+
+        // El servidor controla la activación. Sin flag/permiso, 0 HTTP.
         foreach ([
-            'if (!canView)', 'if (!canCreate', 'if (!canReview',
-            'row.tenantId === tenantId', 'row.companyId === companyId',
-            'row.branchId === branchId',
-            'Sin nóminas ficticias para este filtro.',
-            'No se guardó: permiso insuficiente',
+            "if (!options.enabled) return { status: 'disabled' };",
+            "if (!options.allowed) return { status: 'denied' };",
+            "options.companyId === '__unassigned__'",
+            'row.tenant_id !== tenant', 'row.company_id !== company',
+            'encodeURIComponent(options.branchId)',
+            "credentials: 'same-origin'", "'X-CSRF-Token'",
+            'expected_version: options.expectedVersion',
+            'No hay registros para este filtro.',
             'role="alert"', 'role="status"', 'aria-live="polite"',
-            'if (!import.meta.env.DEV) return null;',
         ] as $guard) {
             self::assertStringContainsString($guard, $source);
         }
-        foreach (['fetch(', 'localStorage', 'sessionStorage', 'indexedDB'] as $api) {
+        self::assertStringContainsString("getenv('PAYROLL_REAL_DATA_ENABLED') === 'true'", $controller);
+        self::assertStringContainsString("getenv('PAYROLL_REAL_DATA_ENABLED') === 'true'", $backend);
+        self::assertStringContainsString('data-payroll-real-data-enabled', $twig);
+        self::assertStringContainsString("dataset.payrollRealDataEnabled === 'true'", $app);
+        self::assertStringContainsString('enabled={payrollRealDataEnabled}', $app);
+        self::assertStringContainsString('requireCsrf($request)', $backend);
+        self::assertStringContainsString('Membership::ROLE_OWNER', $backend);
+        foreach (['localStorage', 'sessionStorage', 'indexedDB', 'bankAccount'] as $api) {
             self::assertStringNotContainsString($api, $source);
         }
     }
