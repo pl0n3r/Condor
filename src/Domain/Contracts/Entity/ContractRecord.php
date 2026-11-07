@@ -4,10 +4,20 @@ declare(strict_types=1);
 
 namespace App\Domain\Contracts\Entity;
 
+use App\Shared\Id\UlidFactory;
+use DateTimeImmutable;
+use DateTimeZone;
+use Doctrine\ORM\Mapping as ORM;
+use DomainException;
+
 /**
  * Immutable synthetic contract record. No real identity, approval or signature.
  * Actors and tenant/company scopes must be authorized by the trusted caller.
  */
+#[ORM\Entity]
+#[ORM\Table(name: 'condor_contract_real_record')]
+#[ORM\UniqueConstraint(name: 'uniq_contract_scope_version', columns: ['tenant_id', 'company_id', 'record_ref', 'version'])]
+#[ORM\Index(name: 'idx_contract_company_state', columns: ['tenant_id', 'company_id', 'state'])]
 final class ContractRecord
 {
     public const STATE = 'REQUIERE_REVISION';
@@ -76,6 +86,126 @@ final class ContractRecord
             'id' => substr($fingerprint, 0, 32),
             ...$this->values,
             'fingerprint' => $fingerprint,
+        ];
+    }
+
+    // Separate persisted representation. The legacy synthetic fromInput()/toRow()
+    // contract is deliberately preserved; real records never enter that store.
+    public const REAL_DRAFT = 'REQUIERE_REVISION';
+    public const REAL_REVIEW = 'EN_REVISION';
+
+    #[ORM\Id, ORM\Column(type: 'string', length: 26)]
+    private string $id;
+    #[ORM\Column(name: 'tenant_id', length: 26)]
+    private string $tenantId;
+    #[ORM\Column(name: 'company_id', length: 26)]
+    private string $companyId;
+    #[ORM\Column(name: 'record_ref', length: 64)]
+    private string $recordRef;
+    #[ORM\Column(name: 'worker_ref', length: 64)]
+    private string $workerRef;
+    #[ORM\Column(name: 'template_ref', length: 64)]
+    private string $templateRef;
+    #[ORM\Column(length: 16)]
+    private string $kind;
+    #[ORM\Column(length: 24)]
+    private string $state;
+    #[ORM\Column(type: 'integer')]
+    private int $version;
+    #[ORM\Column(name: 'previous_id', length: 26, nullable: true)]
+    private ?string $previousId;
+    #[ORM\Column(name: 'actor_id', length: 26)]
+    private string $actorId;
+    #[ORM\Column(name: 'occurred_at', type: 'datetime_immutable')]
+    private DateTimeImmutable $occurredAt;
+
+    private static function persisted(
+        string $tenant, string $company, string $ref, string $worker,
+        string $template, string $kind, string $state, int $version,
+        ?string $previous, string $actor, string $id, DateTimeImmutable $time,
+    ): self {
+        foreach ([$tenant, $company, $actor, $id] as $ulid) {
+            if (preg_match('/\A[0-9A-HJKMNP-TV-Z]{26}\z/D', $ulid) !== 1) {
+                throw new DomainException('Identificador de contratación inválido.');
+            }
+        }
+        if ($previous !== null && preg_match('/\A[0-9A-HJKMNP-TV-Z]{26}\z/D', $previous) !== 1) {
+            throw new DomainException('Identificador de historial inválido.');
+        }
+        foreach ([$ref, $worker, $template] as $alias) {
+            if (preg_match('/\A[a-z][a-z0-9_-]{0,63}\z/D', $alias) !== 1) {
+                throw new DomainException('Solo se admiten referencias opacas de contratación.');
+            }
+        }
+        if (!in_array($kind, ['template', 'contract', 'addendum'], true)
+            || !in_array($state, [self::REAL_DRAFT, self::REAL_REVIEW], true)
+            || $version < 1 || $version > 1000000
+            || ($version === 1 && ($previous !== null || $state !== self::REAL_DRAFT))
+            || ($version > 1 && $previous === null)) {
+            throw new DomainException('Estado o historial de contratación inválido.');
+        }
+        $record = new self([]);
+        [$record->tenantId, $record->companyId, $record->recordRef] = [$tenant, $company, $ref];
+        [$record->workerRef, $record->templateRef, $record->kind] = [$worker, $template, $kind];
+        [$record->state, $record->version, $record->previousId] = [$state, $version, $previous];
+        [$record->actorId, $record->id, $record->occurredAt] = [$actor, $id, $time];
+        return $record;
+    }
+
+    public static function openReal(
+        string $tenant, string $company, string $ref, string $worker,
+        string $template, string $kind, string $actor,
+    ): self {
+        return self::persisted($tenant, $company, $ref, $worker, $template, $kind,
+            self::REAL_DRAFT, 1, null, $actor, UlidFactory::new(),
+            new DateTimeImmutable('now', new DateTimeZone('UTC')));
+    }
+
+    /** @param array<string,mixed> $row */
+    public static function fromRealRow(array $row, string $tenant, string $company): self
+    {
+        if (($row['tenant_id'] ?? null) !== $tenant || ($row['company_id'] ?? null) !== $company) {
+            throw new DomainException('Lectura de contratación fuera de empresa.');
+        }
+        return self::persisted($tenant, $company,
+            (string) $row['record_ref'], (string) $row['worker_ref'],
+            (string) $row['template_ref'], (string) $row['kind'],
+            (string) $row['state'], (int) $row['version'],
+            ($row['previous_id'] ?? null) === null ? null : (string) $row['previous_id'],
+            (string) $row['actor_id'], (string) $row['id'],
+            new DateTimeImmutable((string) $row['occurred_at'], new DateTimeZone('UTC')));
+    }
+
+    public function transitionReal(string $next, string $actor, int $expectedVersion): self
+    {
+        if ($this->version !== $expectedVersion
+            || $this->state !== self::REAL_DRAFT
+            || $next !== self::REAL_REVIEW) {
+            throw new DomainException('Transición o versión de contratación inválida.');
+        }
+        return self::persisted(
+            $this->tenantId, $this->companyId, $this->recordRef,
+            $this->workerRef, $this->templateRef, $this->kind, $next,
+            $this->version + 1, $this->id, $actor, UlidFactory::new(),
+            new DateTimeImmutable('now', new DateTimeZone('UTC')));
+    }
+
+    /** @return array<string,mixed> */
+    public function realSnapshot(): array
+    {
+        return [
+            'id' => $this->id,
+            'tenant_id' => $this->tenantId,
+            'company_id' => $this->companyId,
+            'record_ref' => $this->recordRef,
+            'worker_ref' => $this->workerRef,
+            'template_ref' => $this->templateRef,
+            'kind' => $this->kind,
+            'state' => $this->state,
+            'version' => $this->version,
+            'previous_id' => $this->previousId,
+            'actor_id' => $this->actorId,
+            'occurred_at' => $this->occurredAt->format('Y-m-d H:i:s'),
         ];
     }
 }

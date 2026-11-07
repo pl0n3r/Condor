@@ -64,6 +64,16 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `review_required`
 
+## contracts_real_records
+
+- Categoría: `usage`
+- Campos de software: `id`, `tenant_id`, `company_id`, `record_ref`, `worker_ref`, `template_ref`, `kind`, `state`, `version`, `previous_id`, `actor_id`, `occurred_at`
+- Finalidad: `review_required`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## controlbot_staff_operations
 
 - Categoría: `usage`

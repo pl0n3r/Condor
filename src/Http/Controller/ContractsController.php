@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Contracts\ContractApiService;
+use App\Application\Contracts\ContractRecordService;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\User;
+use App\Domain\Identity\Entity\Membership;
 use App\Domain\Organization\Entity\Branch;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
@@ -16,6 +18,8 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
 /** HTTP facade for synthetic-only labour contract previews. Never active in production. */
@@ -29,6 +33,7 @@ final class ContractsController extends AbstractController
         private readonly CurrentTenantForUser $currentTenantForUser,
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
+        private readonly ContractRecordService $records,
     ) {
     }
 
@@ -54,6 +59,104 @@ final class ContractsController extends AbstractController
     public function state(string $branchId, string $kind, string $slug, Request $request): JsonResponse
     {
         return $this->execute($branchId, $request, 'state', 'fixture:'.$kind.'/'.$slug);
+    }
+
+    /** Persisted contracts uses separate routes; synthetic records remain untouched. */
+    #[Route('/api/v1/branches/{branchId}/contracts/real-records', name: 'api_contracts_real_list', methods: ['GET'], priority: 20)]
+    public function realList(string $branchId): JsonResponse
+    {
+        if (($off = $this->realDisabled()) !== null) { return $off; }
+        [, $tenant, $branch] = $this->realScope($branchId, 'inventory.view');
+        return $this->privateJson(['records' => $this->domain(
+            fn (): array => $this->records->listRecords(
+                $tenant->id(), $this->realCompany($tenant, $branch),
+            ),
+        )]);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/contracts/real-records/{ref}', name: 'api_contracts_real_detail', methods: ['GET'], priority: 20)]
+    public function realDetail(string $branchId, string $ref): JsonResponse
+    {
+        if (($off = $this->realDisabled()) !== null) { return $off; }
+        [, $tenant, $branch] = $this->realScope($branchId, 'inventory.view');
+        $record = $this->domain(fn (): ?array => $this->records->detail(
+            $tenant->id(), $this->realCompany($tenant, $branch), $ref,
+        ));
+        if ($record === null) {
+            throw new NotFoundHttpException('Registro de contratación no encontrado.');
+        }
+        return $this->privateJson(['record' => $record]);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/contracts/real-records', name: 'api_contracts_real_create', methods: ['POST'], priority: 20)]
+    public function realCreate(string $branchId, Request $request): JsonResponse
+    {
+        if (($off = $this->realDisabled()) !== null) { return $off; }
+        $this->requireCsrf($request);
+        [$actor, $tenant, $branch] = $this->realScope($branchId, 'inventory.create');
+        $input = $this->payload($request, ['record_ref', 'worker_ref', 'template_ref', 'kind']);
+        return $this->privateJson(['record' => $this->domain(
+            fn (): array => $this->records->create(
+                $tenant->id(), $this->realCompany($tenant, $branch), $actor->id(), $input,
+            ),
+        )], Response::HTTP_CREATED);
+    }
+
+    #[Route('/api/v1/branches/{branchId}/contracts/real-records/{ref}/state', name: 'api_contracts_real_state', methods: ['PATCH'], priority: 20)]
+    public function realState(string $branchId, string $ref, Request $request): JsonResponse
+    {
+        if (($off = $this->realDisabled()) !== null) { return $off; }
+        $this->requireCsrf($request);
+        [$actor, $tenant, $branch] = $this->realScope($branchId, 'inventory.update');
+        $update = $this->payload($request, ['state', 'expected_version']);
+        $nextState = $update['state'] ?? null;
+        $revision = $update['expected_version'] ?? null;
+        if (!is_string($nextState) || !is_int($revision)) {
+            throw new BadRequestHttpException('Estado y versión obligatorios.');
+        }
+        $companyId = $this->realCompany($tenant, $branch);
+        $record = $this->domain(
+            fn (): array => $this->records->changeState(
+                $tenant->id(), $companyId, $actor->id(), $ref, $nextState, $revision,
+            ),
+        );
+        return $this->privateJson(['record' => $record]);
+    }
+
+    /** Server flag must be checked before authorization, CSRF or any persistence read. */
+    private function realDisabled(): ?JsonResponse
+    {
+        if (getenv('CONTRACTS_REAL_DATA_ENABLED') === 'true') { return null; }
+        return $this->privateJson(['error' => 'feature_unavailable'], Response::HTTP_NOT_FOUND);
+    }
+
+    /** @return array{\App\Domain\Identity\Entity\User, Tenant, Branch} */
+    private function realScope(string $branchId, string $permission): array
+    {
+        [$actor, $tenant, $branch, $membership] = $this->authorizedBranchScope($branchId, $permission);
+        if (!$actor->isActive() || !$membership->isActive()
+            || $membership->roleKey() !== Membership::ROLE_OWNER) {
+            throw new AccessDeniedHttpException('Contratación reservada al propietario autorizado.');
+        }
+        return [$actor, $tenant, $branch];
+    }
+
+    private function realCompany(Tenant $tenant, Branch $branch): string
+    {
+        $company = $branch->legalEntity();
+        if ($company === null || $company->tenant()->id() !== $tenant->id()) {
+            throw new NotFoundHttpException('Razón social no disponible.');
+        }
+        return $company->id();
+    }
+
+    /** @param array<string,mixed> $data */
+    private function privateJson(array $data, int $status = Response::HTTP_OK): JsonResponse
+    {
+        $response = $this->json($data, $status);
+        $response->headers->set('Cache-Control', 'private, no-store');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        return $response;
     }
 
     private function execute(string $branchId, Request $request, string $action, ?string $ref = null): JsonResponse
