@@ -110,7 +110,7 @@ export function PlatformStaffPanel({ csrfToken, refreshKey }: Props) {
   function toggleAction(action: string) {
     setActions(current => current.includes(action)
       ? current.filter(candidate => candidate !== action)
-      : [...current, action].sort());
+      : [...current, action].sort((left, right) => left.localeCompare(right)));
   }
 
   function addGrant() {
@@ -118,7 +118,7 @@ export function PlatformStaffPanel({ csrfToken, refreshKey }: Props) {
       setMessage('Selecciona un módulo y al menos una acción CRUD.');
       return;
     }
-    const next: GrantDefinition = { tenant_id: scope === '*' ? null : scope, module: moduleKey, actions: [...actions].sort() };
+    const next: GrantDefinition = { tenant_id: scope === '*' ? null : scope, module: moduleKey, actions: [...actions].sort((left, right) => left.localeCompare(right)) };
     setDraftGrants(current => [...current.filter(g => g.tenant_id !== next.tenant_id || g.module !== next.module), next]);
     setActions([]);
     setMessage('');
@@ -144,10 +144,12 @@ export function PlatformStaffPanel({ csrfToken, refreshKey }: Props) {
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
         body: JSON.stringify(editing ? { grants: draftGrants } : { email, display_name: displayName, grants: draftGrants }),
       });
-      if (!response.ok) throw new Error(response.status === 422
-        ? 'Revisa el correo, el alcance y los permisos seleccionados.'
-        : response.status === 403 ? 'No tienes permiso para guardar estos cambios.'
-          : 'No fue posible guardar el staff de plataforma.');
+      if (!response.ok) {
+        let errorMessage = 'No fue posible guardar el staff de plataforma.';
+        if (response.status === 422) errorMessage = 'Revisa el correo, el alcance y los permisos seleccionados.';
+        if (response.status === 403) errorMessage = 'No tienes permiso para guardar estos cambios.';
+        throw new Error(errorMessage);
+      }
       const payload = await response.json() as { invitation?: { activation_path_once?: string } };
       setActivationPath(payload.invitation?.activation_path_once ?? '');
       setMessage(editing ? 'Permisos actualizados.' : 'Staff creado y pendiente de activación.');
@@ -196,6 +198,10 @@ export function PlatformStaffPanel({ csrfToken, refreshKey }: Props) {
     }
   }
 
+  let submitLabel = 'Crear staff e invitar';
+  if (saving) submitLabel = 'Guardando…';
+  else if (editingStaffId) submitLabel = 'Guardar permisos';
+
   return (
     <section className="platform-section" aria-label="Staff de plataforma">
       <PageHeader title="Staff de plataforma" description="Gestiona el equipo, las invitaciones y los permisos por cliente y módulo."
@@ -213,10 +219,10 @@ export function PlatformStaffPanel({ csrfToken, refreshKey }: Props) {
             { label: 'Invitaciones pendientes', value: data.staff.filter(s => !s.active).length, tone: 'warn' },
           ]} />
           <Toolbar trailing={<span className="muted">{filteredStaff.length} resultados</span>}>
-            <label className="field">Buscar
+            <label className="field">Buscar{' '}
               <input type="search" value={search} placeholder="Nombre, correo o cliente" onChange={e => setSearch(e.target.value)} />
             </label>
-            <label className="field">Estado
+            <label className="field">Estado{' '}
               <select value={filter} onChange={e => setFilter(e.target.value)}>
                 <option value="all">Todos</option><option value="active">Activos</option><option value="pending">Pendientes</option>
               </select>
@@ -235,7 +241,7 @@ export function PlatformStaffPanel({ csrfToken, refreshKey }: Props) {
                 </>}
               </div> },
             ]} />
-          ) : <div className="platform-empty" role="status">{data.staff.length === 0 ? 'Aún no hay staff de plataforma.' : 'No hay resultados para estos filtros.'}</div>}
+          ) : <output className="platform-empty">{data.staff.length === 0 ? 'Aún no hay staff de plataforma.' : 'No hay resultados para estos filtros.'}</output>}
         </>
       )}
 
@@ -281,7 +287,7 @@ export function PlatformStaffPanel({ csrfToken, refreshKey }: Props) {
           {editorOpen && message && <output className="access-message" aria-live="polite">{message}</output>}
           {editorOpen && activationPath && <div className="activation-once" role="note"><strong>Enlace de activación · mostrar una sola vez</strong><code>{activationPath}</code><span>Este enlace no vuelve a aparecer después de cerrar el panel.</span></div>}
           <div className="platform-form-actions">
-            <button type="submit" className="button" disabled={saving}>{saving ? 'Guardando…' : editingStaffId ? 'Guardar permisos' : 'Crear staff e invitar'}</button>
+            <button type="submit" className="button" disabled={saving}>{submitLabel}</button>
             <button type="button" className="button button-secondary" onClick={closeEditor}>Cancelar</button>
           </div>
         </form>
