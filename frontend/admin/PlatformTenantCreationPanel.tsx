@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { platformTenantsPath } from './api';
+import { PageHeader } from './ui/Kit';
 
 type PlatformTenantCreationPanelProps = Readonly<{
   csrfToken: string;
@@ -110,17 +111,10 @@ export function PlatformTenantCreationPanel({
   return (
     <section
       className="platform-section"
-      aria-labelledby="new-tenant-title"
+      aria-label="Alta de empresa"
     >
-      <div className="section-heading compact">
-        <div>
-          <span className="eyebrow">Empresas</span>
-          <h2 id="new-tenant-title">Crear cliente</h2>
-        </div>
-        <span className="muted">
-          Empresa + sede principal + invitación del administrador
-        </span>
-      </div>
+      <PageHeader title="Crear cliente"
+        description="Empresa, sede principal e invitación del administrador. Revisa los datos antes de enviar." />
 
       <form className="platform-form" onSubmit={(event) => void submit(event)}>
         <div className="platform-form-grid">
@@ -208,7 +202,7 @@ export function PlatformTenantCreationPanel({
       </form>
 
       {message && (
-        <output className="access-message" aria-live="polite">
+        <output className="access-message" role={activationPath ? "status" : "alert"} aria-live="polite">
           {message}
         </output>
       )}
