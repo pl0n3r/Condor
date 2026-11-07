@@ -127,26 +127,36 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
     await expect(opener).toBeFocused();
   }
 
+  // Las dos simulaciones de duplicado comparten la misma secuencia:
+  // guardar, reabrir, corregir y comprobar mensaje accesible/foco.
+  async function exerciseDuplicateCreation(page, opener, dialog, fields, submitName, detailName) {
+    await expect(dialog.getByRole('button', { name: 'Cerrar' })).toBeFocused();
+    const fill = async () => {
+      for (const [label, value] of fields) {
+        await dialog.getByLabel(label, { exact: true }).fill(value);
+      }
+    };
+    await fill();
+    await dialog.getByRole('button', { name: submitName }).click();
+    const detail = page.getByRole('dialog', { name: detailName });
+    await expect(detail).toBeVisible();
+    await detail.getByRole('button', { name: 'Cerrar' }).click();
+    await opener.click();
+    await fill();
+    await dialog.getByRole('button', { name: submitName }).click();
+  }
+
   test('AC-01 Finanzas: duplicado accesible dentro del modal; Escape devuelve foco', async ({ page }, testInfo) => {
     await mockHttp(page, emptyHttp);
     await open(page, 'finance');
     const opener = page.getByRole('button', { name: 'Nuevo asiento ilustrativo' });
     await opener.click();
     const dialog = page.getByRole('dialog', { name: 'Nuevo asiento ilustrativo' });
-    await expect(dialog.getByRole('button', { name: 'Cerrar' })).toBeFocused();
-    const fill = async () => {
-      await dialog.getByLabel('Identificador de laboratorio').fill('fixture:finance/demo');
-      await dialog.getByLabel('Período simulado').fill('fixture:period/demo');
-      await dialog.getByLabel('Concepto simulado').fill('fixture:concept/demo');
-    };
-    await fill();
-    await dialog.getByRole('button', { name: 'Crear borrador ficticio' }).click();
-    const detail = page.getByRole('dialog', { name: 'Inspección y control manual' });
-    await expect(detail).toBeVisible();
-    await detail.getByRole('button', { name: 'Cerrar' }).click();
-    await opener.click();
-    await fill();
-    await dialog.getByRole('button', { name: 'Crear borrador ficticio' }).click();
+    await exerciseDuplicateCreation(page, opener, dialog, [
+      ['Identificador de laboratorio', 'fixture:finance/demo'],
+      ['Período simulado', 'fixture:period/demo'],
+      ['Concepto simulado', 'fixture:concept/demo'],
+    ], 'Crear borrador ficticio', 'Inspección y control manual');
     await verifyErrorAndEscape(page, dialog, opener, 'No se guardó', testInfo);
   });
 
@@ -156,19 +166,11 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
     const opener = page.getByRole('button', { name: 'Nuevo registro ficticio' });
     await opener.click();
     const dialog = page.getByRole('dialog', { name: 'Nuevo registro ficticio' });
-    const fill = async () => {
-      await dialog.getByLabel('Referencia ficticia', { exact: true }).fill('fixture:occupational/demo');
-      await dialog.getByLabel('Evidencia ficticia').fill('fixture:evidence/demo');
-      await dialog.getByLabel('Actor ficticio, sin identificación').fill('fixture:actor/demo');
-    };
-    await fill();
-    await dialog.getByRole('button', { name: 'Crear registro de prueba' }).click();
-    const detail = page.getByRole('dialog', { name: 'Detalle y revisión' });
-    await expect(detail).toBeVisible();
-    await detail.getByRole('button', { name: 'Cerrar' }).click();
-    await opener.click();
-    await fill();
-    await dialog.getByRole('button', { name: 'Crear registro de prueba' }).click();
+    await exerciseDuplicateCreation(page, opener, dialog, [
+      ['Referencia ficticia', 'fixture:occupational/demo'],
+      ['Evidencia ficticia', 'fixture:evidence/demo'],
+      ['Actor ficticio, sin identificación', 'fixture:actor/demo'],
+    ], 'Crear registro de prueba', 'Detalle y revisión');
     await verifyErrorAndEscape(page, dialog, opener, 'No se guardó', testInfo);
     await expect(page.getByRole('button', { name: /fixture:occupational\/demo/ })).toBeVisible();
   });
