@@ -102,6 +102,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   const [kindFilter, setKindFilter] = useState<'TODOS' | GovernanceKind>('TODOS');
   const [stateFilter, setStateFilter] = useState<'TODOS' | GovernanceState>('TODOS');
   const [notice, setNotice] = useState('');
+  const [panelError, setPanelError] = useState('');
   const [remoteState, setRemoteState] = useState<'loading' | 'ready' | 'error' | 'denied'>('loading');
   const [busy, setBusy] = useState(false);
 
@@ -144,6 +145,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       || records.some(row => row.reference === ref && row.tenantId === tenantId
         && row.companyId === companyId && row.branchId === branchId)) {
       setNotice('Rechazado: revisa permisos, referencias ficticias y duplicados.');
+      setPanelError('Rechazado: revisa permisos, referencias ficticias y duplicados.');
       return;
     }
     setBusy(true);
@@ -153,12 +155,15 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       setRecords(previous => [...previous, created]);
       audit(reference, 'created');
       setSelected(created.reference);
-    setCreating(false);
+      setCreating(false);
+      setPanelError('');
       setReference(''); setBodyRef(''); setRepresentativeRef('');
       setNotice('Registro ficticio confirmado por el servidor. Sin valor jurídico.');
     } catch (error) {
-      setNotice(error instanceof GovernanceHttpError && [401, 403].includes(error.status)
-        ? 'Acceso denegado para crear registros.' : 'Error de servidor: no se creó el registro.');
+      const message = error instanceof GovernanceHttpError && [401, 403].includes(error.status)
+        ? 'Acceso denegado para crear registros.' : 'Error de servidor: no se creó el registro.';
+      setNotice(message);
+      setPanelError(message);
     } finally { setBusy(false); }
   }
 
@@ -174,6 +179,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
       const validated = serverRecord(response.record, tenantId, companyId, branchId);
       setRecords(previous => previous.map(row => row.reference === ref ? validated : row));
       setSelected(ref);
+      setPanelError('');
       audit(ref, 'viewed');
     } catch (error) {
       setNotice(error instanceof GovernanceHttpError && [401, 403].includes(error.status)
@@ -188,6 +194,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     if (!canReview || busy || !current || !serverRefPattern.test(selected)
       || current.state === 'EN_REVISION') {
       setNotice('No se cambió el estado: falta permiso o la transición no aplica.');
+      setPanelError('No se cambió el estado: falta permiso o la transición no aplica.');
       return;
     }
     const next: GovernanceState = current.state === 'BORRADOR' ? 'REQUIERE_REVISION' : 'EN_REVISION';
@@ -202,10 +209,13 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
         row.reference === selected && row.tenantId === tenantId
           && row.companyId === companyId && row.branchId === branchId ? updated : row));
       audit(selected, current.state === 'BORRADOR' ? 'review_requested' : 'review_started');
+      setPanelError('');
       setNotice('Cambio de estado confirmado por Symfony; nunca es aprobación legal.');
     } catch (error) {
-      setNotice(error instanceof GovernanceHttpError && [401, 403].includes(error.status)
-        ? 'Acceso denegado para cambiar el estado.' : 'No se pudo cambiar el estado.');
+      const message = error instanceof GovernanceHttpError && [401, 403].includes(error.status)
+        ? 'Acceso denegado para cambiar el estado.' : 'No se pudo cambiar el estado.';
+      setNotice(message);
+      setPanelError(message);
     } finally { setBusy(false); }
   }
 
@@ -229,7 +239,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
 
   return (
     <section id="governance-management" className="ui-page catalog-panel" aria-label="Gobierno corporativo · simulación M15">
-      <PageHeader title="Gobierno corporativo · simulación M15" description="Actuaciones ficticias, revisión explícita y permisos vigentes." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setCreating(true); }}>Crear actuación de prueba</button> : undefined} />
+      <PageHeader title="Gobierno corporativo · simulación M15" description="Actuaciones ficticias, revisión explícita y permisos vigentes." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setPanelError(''); setCreating(true); }}>Crear actuación de prueba</button> : undefined} />
       <MetricStrip label="Indicadores de Gobierno corporativo · simulación M15" items={[{ label: 'Registros', value: scoped.length }, { label: 'Resultados', value: visible.length }, { label: 'Eventos de esta sesión', value: events.filter(item => item.scope === scope).length }]} />
       <p role="alert">SOLO DATOS FICTICIOS. Sin valor jurídico ni facultades reales.</p>
       <p className="muted">Servidor Symfony autenticado; sesión ficticia sin efecto jurídico ni guardado en este navegador.</p>
@@ -260,7 +270,8 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
           <DataTable caption="Listado de Gobierno corporativo · simulación M15" rows={visible} rowKey={row => row.reference} onOpen={row => view(row.reference)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.reference}</strong></span> }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'EN_REVISION' ? 'info' : row.state === 'REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.state}</StatusPill> }]} />
         </section>
         {canCreate && (
-          <SidePanel open={creating && canCreate} title="Crear actuación de prueba" onClose={() => setCreating(false)}>
+          <SidePanel open={creating && canCreate} title="Crear actuación de prueba" onClose={() => { setCreating(false); setPanelError(''); }}>
+          {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
           <form className="catalog-editor" onSubmit={create}>
               <label>Referencia ficticia
                 <input required maxLength={64} pattern="fixture:governance/[a-z][a-z0-9_-]{0,47}"
@@ -288,7 +299,8 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
 
         </SidePanel>
         )}
-        <SidePanel open={Boolean(current) && !creating} title="Detalle y revisión manual" onClose={() => setSelected('')}>
+        <SidePanel open={Boolean(current) && !creating} title="Detalle y revisión manual" onClose={() => { setSelected(''); setPanelError(''); }}>
+          {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
           {current ? <>
             <dl>
               <dt>Referencia</dt><dd>{current.reference}</dd>
