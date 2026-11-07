@@ -21,6 +21,12 @@ FIELDS = frozenset({
     "decision_id", "sha", "source_ref", "observed_at", "operator_ref",
     "permission_ref", "result",
 })
+EXPECTED_IDS = frozenset({
+    "D-049-S05", "D-049-S06", "D-049-S07", "D-049-S08",
+    "D-050", "D-050-S01", "D-050-S02", "D-050-S03", "D-050-S04",
+    "D-050-S05", "D-050-S06", "D-051", "D-052", "D-053", "D-054",
+    "SPEC-5-5", "SPEC-BASE-3", "SPEC-BASE-4",
+})
 
 
 def parent_contract() -> dict[str, object]:
@@ -44,7 +50,8 @@ def external_evidence_state(envelope: object, expected_sha: object) -> str:
     if any(type(k) is not str or type(v) is not str
            for k, v in envelope.items()):
         return "REJECTED"
-    if (TABLE_ID.fullmatch("| " + envelope["decision_id"] + " |") is None
+    if (envelope["decision_id"] not in EXPECTED_IDS
+            or TABLE_ID.fullmatch("| " + envelope["decision_id"] + " |") is None
             or envelope["sha"] != expected_sha
             or not envelope["source_ref"].startswith("observed:")
             or not envelope["operator_ref"].startswith("owner-approved:")
@@ -75,6 +82,7 @@ class VerificacionDecisiones06IntegralTests(unittest.TestCase):
         original = parent["ROWS"]
         self.assertEqual(18, len(original))
         self.assertEqual(18, len({row[0] for row in original}))
+        self.assertEqual(EXPECTED_IDS, {row[0] for row in original})
         report = REPORT.read_text(encoding="utf-8")
         lines = [line for line in report.splitlines() if TABLE_ID.match(line)]
         self.assertEqual([row[0] for row in original],
