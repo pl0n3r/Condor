@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PHP_EVALUATOR = r"""
 require 'src/Application/Compliance/NormativeApplicability.php';
 $input = json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);
-$result = \\App\\Application\\Compliance\\NormativeApplicability::evaluate(
+$result = \App\Application\Compliance\NormativeApplicability::evaluate(
     $input['rule'], $input['context'], $input['reference_date']
 );
 echo json_encode($result, JSON_THROW_ON_ERROR);
