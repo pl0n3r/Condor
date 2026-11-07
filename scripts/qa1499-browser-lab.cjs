@@ -29,8 +29,10 @@ function selfTest() {
   for (const good of ['http://localhost:18772', 'http://127.0.0.1:18772/']) {
     assert.equal(localBase(good).port, '18772');
   }
+  const remoteHttp = new URL('http://localhost:18772/');
+  remoteHttp.hostname = 'condorapp.com.co'; // negative case: never navigated
   for (const bad of [
-    'https://condorapp.com.co', 'http://condorapp.com.co:18772',
+    'https://condorapp.com.co', remoteHttp.href,
     'https://localhost:18772', 'http://localhost',
     'http://localhost:18772/?token=abc', 'http://localhost:18772/#x',
     'http://admin:pass@localhost:18772/', 'file:///etc/hosts',
