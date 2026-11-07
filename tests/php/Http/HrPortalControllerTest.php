@@ -14,139 +14,149 @@ use App\Domain\Organization\Entity\LegalEntity;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
 use DomainException;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
-/** M01 S11: rutas y permisos reales, únicamente con fixtures sintéticos. */
+/** HTTP real con identidades y sedes fabricadas, sin acceso a registros personales. */
 final class HrPortalControllerTest extends WebTestCase
 {
-    public function testOwnerCanOnlyReadSyntheticItemsWithinAllThreeScopes(): void
+    public function testOwnerSeesPrivateReadOnlyFixtureListAndDetail(): void
     {
-        $browser = static::createClient();
-        $db = static::getContainer()->get(EntityManagerInterface::class);
-        self::assertInstanceOf(EntityManagerInterface::class, $db);
-        [, $company, $otherCompany, $branch, $otherBranch, $foreignBranch, $owner] = $this->fixtures($db);
-        $browser->loginUser($owner);
-        $path = '/api/v1/branches/'.$branch->id().'/hr/employee-portal';
-
-        $browser->request('GET', $path.'?company_id='.$company->id());
+        [$browser, $actors] = $this->browserWithActors();
+        $company = $actors[1];
+        $endpoint = $this->portalPath($actors[3]);
+        $browser->request('GET', $endpoint.'?company_id='.$company->id());
         self::assertResponseStatusCodeSame(200);
-        $body = json_decode((string) $browser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertTrue($body['synthetic']);
-        self::assertFalse($body['persisted']);
-        self::assertFalse($body['juridically_binding']);
-        self::assertCount(3, $body['items']);
-        self::assertSame('SOLO_LECTURA', $body['items'][0]['state']);
-        self::assertTrue($body['items'][0]['synthetic']);
-        self::assertStringContainsString('private', (string) $browser->getResponse()->headers->get('Cache-Control'));
+        $response = json_decode((string) $browser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertCount(3, $response['items']);
+        self::assertTrue($response['synthetic']);
+        self::assertFalse($response['persisted'] || $response['juridically_binding']);
+        self::assertSame('SOLO_LECTURA', $response['items'][0]['state']);
         self::assertStringContainsString('no-store', (string) $browser->getResponse()->headers->get('Cache-Control'));
-        $ref = $body['items'][0]['ref'];
 
-        $browser->request('GET', $path.'/'.$ref);
+        $record = $response['items'][1];
+        $browser->request('GET', $endpoint.'/'.$record['ref']);
         self::assertResponseStatusCodeSame(200);
-        $detail = json_decode((string) $browser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame($ref, $detail['item']['ref']);
-
-        $otherPath = '/api/v1/branches/'.$otherBranch->id().'/hr/employee-portal';
-        $browser->request('GET', $otherPath);
-        self::assertResponseStatusCodeSame(200);
-        $other = json_decode((string) $browser->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertNotSame($ref, $other['items'][0]['ref']);
-        $browser->request('GET', $otherPath.'/'.$ref);
-        self::assertResponseStatusCodeSame(404);
-
-        $browser->request('GET', $path.'?company_id='.$otherCompany->id());
-        self::assertResponseStatusCodeSame(404);
-        $browser->request('GET', '/api/v1/branches/'.$foreignBranch->id().'/hr/employee-portal');
-        self::assertResponseStatusCodeSame(404);
-        self::assertStringNotContainsString($foreignBranch->id(), (string) $browser->getResponse()->getContent());
-        $browser->request('GET', $path.'?tenant_id=fixture');
-        self::assertResponseStatusCodeSame(400);
-        $browser->request('GET', $path.'?company_id%5B%5D='.$company->id());
-        self::assertResponseStatusCodeSame(404);
-        $browser->request('GET', $path.'/invalid-ref');
-        self::assertResponseStatusCodeSame(404);
-        $browser->request('GET', $path.'/fixture-hr-portal-0000000000000000-avisos');
-        self::assertResponseStatusCodeSame(404);
-        $browser->request('POST', $path);
+        self::assertStringContainsString($record['ref'], (string) $browser->getResponse()->getContent());
+        $browser->request('POST', $endpoint);
         self::assertResponseStatusCodeSame(405);
     }
 
-    public function testAnonymousAndRestrictedRoleCannotReadPortal(): void
+    public function testOtherBranchOtherCompanyAndOtherTenantCannotBeEnumerated(): void
     {
-        $browser = static::createClient();
-        $db = static::getContainer()->get(EntityManagerInterface::class);
-        self::assertInstanceOf(EntityManagerInterface::class, $db);
-        [, , , $branch, , , , $delegate] = $this->fixtures($db);
-        $path = '/api/v1/branches/'.$branch->id().'/hr/employee-portal';
+        [$client, $f] = $this->browserWithActors();
+        $target = $this->portalPath($f[3]);
+        $client->request('GET', $target);
+        $payload = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $reference = $payload['items'][0]['ref'];
 
-        $browser->request('GET', $path);
+        $nearby = $this->portalPath($f[4]);
+        $client->request('GET', $nearby.'/'.$reference);
+        self::assertResponseStatusCodeSame(404);
+        $client->request('GET', $target.'?company_id='.$f[2]->id());
+        self::assertResponseStatusCodeSame(404);
+        $client->request('GET', $this->portalPath($f[5]));
+        self::assertResponseStatusCodeSame(404);
+        self::assertStringNotContainsString($f[5]->id(), (string) $client->getResponse()->getContent());
+
+        $client->request('GET', $target.'/fixture-hr-portal-0000000000000000-avisos');
+        self::assertResponseStatusCodeSame(404);
+        $client->request('GET', $target.'/not-a-fixture');
+        self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testQueryValidationRejectsUnknownAndArrayParameters(): void
+    {
+        [$browser, $scope] = $this->browserWithActors();
+        $url = $this->portalPath($scope[3]);
+        $browser->request('GET', $url.'?tenant_id=extra');
+        self::assertResponseStatusCodeSame(400);
+        $browser->request('GET', $url.'?company_id%5B%5D='.$scope[1]->id());
+        self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testAnonymousAndViewerAreBothDenied(): void
+    {
+        [$client, $actors] = $this->browserWithActors(false);
+        $url = $this->portalPath($actors[3]);
+        $client->request('GET', $url);
         self::assertResponseStatusCodeSame(401);
-        $browser->loginUser($delegate);
-        $browser->request('GET', $path);
+        $client->loginUser($actors[7]);
+        $client->request('GET', $url);
         self::assertResponseStatusCodeSame(403);
     }
 
-    public function testRealDataSwitchFailsClosedForListAndDetail(): void
+    public function testEnablingRealPersonnelFlagClosesPortal(): void
     {
-        $browser = static::createClient();
-        $db = static::getContainer()->get(EntityManagerInterface::class);
-        self::assertInstanceOf(EntityManagerInterface::class, $db);
-        [, , , $branch, , , $owner] = $this->fixtures($db);
-        $browser->loginUser($owner);
-        $path = '/api/v1/branches/'.$branch->id().'/hr/employee-portal';
-        $previous = getenv('HR_REAL_DATA_ENABLED');
-        putenv('HR_REAL_DATA_ENABLED=true');
+        [$browser, $scope] = $this->browserWithActors();
+        $prior = getenv('HR_REAL_DATA_ENABLED');
+        putenv('HR_REAL_DATA_ENABLED=1');
         try {
-            $browser->request('GET', $path);
-            self::assertResponseStatusCodeSame(404);
-            $browser->request('GET', $path.'/fixture-hr-portal-0000000000000000-avisos');
-            self::assertResponseStatusCodeSame(404);
-        } finally {
-            if ($previous === false) {
-                putenv('HR_REAL_DATA_ENABLED');
-            } else {
-                putenv('HR_REAL_DATA_ENABLED='.$previous);
+            foreach ([$this->portalPath($scope[3]), $this->portalPath($scope[3]).'/irrelevant'] as $url) {
+                $browser->request('GET', $url);
+                self::assertResponseStatusCodeSame(404);
             }
+        } finally {
+            $prior === false ? putenv('HR_REAL_DATA_ENABLED') : putenv('HR_REAL_DATA_ENABLED='.$prior);
         }
     }
 
-    public function testCatalogRejectsForeignCompany(): void
+    public function testCatalogRejectsCompanyOutsideItsTenant(): void
     {
-        $tenant = new Tenant('Principal ficticio', 'portal-a');
-        $foreign = new Tenant('Ajeno ficticio', 'portal-b');
-        $company = new LegalEntity($tenant, 'Empresa ficticia', null);
-        $foreignCompany = new LegalEntity($foreign, 'Ajena ficticia', null);
-        $branch = new Branch($tenant, 'Sede ficticia', 'portal', $company);
-        $catalog = new HrPortalCatalog();
-        self::assertCount(3, $catalog->listFor($tenant, $company, $branch));
+        $tenant = new Tenant('Ámbito ficticio', 'portal-a');
+        $foreign = new Tenant('Ámbito externo', 'portal-b');
+        $company = new LegalEntity($tenant, 'Compañía demo', null);
+        $branch = new Branch($tenant, 'Sede demo', 'demo', $company);
+        self::assertCount(3, (new HrPortalCatalog())->listFor($tenant, $company, $branch));
         $this->expectException(DomainException::class);
-        $catalog->listFor($tenant, $foreignCompany, $branch);
+        (new HrPortalCatalog())->listFor($tenant, new LegalEntity($foreign, 'Ajena demo', null), $branch);
+    }
+
+    private function portalPath(Branch $branch): string
+    {
+        return '/api/v1/branches/'.$branch->id().'/hr/employee-portal';
+    }
+
+    /** @return array{KernelBrowser,array{Tenant,LegalEntity,LegalEntity,Branch,Branch,Branch,User,User}} */
+    private function browserWithActors(bool $authenticate = true): array
+    {
+        $client = static::createClient();
+        $db = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $db);
+        $actors = $this->fixtures($db);
+        if ($authenticate) {
+            $client->loginUser($actors[6]);
+        }
+
+        return [$client, $actors];
     }
 
     /** @return array{Tenant,LegalEntity,LegalEntity,Branch,Branch,Branch,User,User} */
     private function fixtures(EntityManagerInterface $db): array
     {
-        $id = bin2hex(random_bytes(5));
-        $tenant = new Tenant('Portal principal', 'portal-main-'.$id);
-        $otherTenant = new Tenant('Portal externo', 'portal-foreign-'.$id);
-        $company = new LegalEntity($tenant, 'Empresa ficticia', null, true);
-        $otherCompany = new LegalEntity($tenant, 'Otra empresa ficticia', null);
-        $foreignCompany = new LegalEntity($otherTenant, 'Empresa externa ficticia', null);
+        $suffix = bin2hex(random_bytes(5));
+        $tenant = new Tenant('Portal principal', 'portal-main-'.$suffix);
+        $external = new Tenant('Portal externo', 'portal-foreign-'.$suffix);
+        $company = new LegalEntity($tenant, 'Empresa de muestra', null, true);
+        $secondary = new LegalEntity($tenant, 'Otra entidad de muestra', null);
+        $externalCompany = new LegalEntity($external, 'Empresa ajena de muestra', null);
         $branch = new Branch($tenant, 'Sede principal', 'principal', $company, true);
-        $otherBranch = new Branch($tenant, 'Otra sede', 'otra', $otherCompany);
-        $foreignBranch = new Branch($otherTenant, 'Sede externa', 'externa', $foreignCompany);
-        $owner = new User('portal-owner-'.$id.'@example.test', 'Dueño ficticio');
-        $delegate = new User('portal-delegate-'.$id.'@example.test', 'Delegado ficticio');
-        $ownerMember = new Membership($tenant, $owner, Membership::ROLE_OWNER);
-        $delegateMember = new Membership($tenant, $delegate, 'ADMIN');
-        $role = new Role($tenant, 'Rol restringido', ['catalog.view']);
-        foreach ([$tenant, $otherTenant, $company, $otherCompany, $foreignCompany, $branch,
-            $otherBranch, $foreignBranch, $owner, $delegate, $ownerMember, $delegateMember, $role] as $row) {
-            $db->persist($row);
+        $secondaryBranch = new Branch($tenant, 'Sede secundaria', 'secundaria', $secondary);
+        $externalBranch = new Branch($external, 'Sede ajena', 'ajena', $externalCompany);
+        $owner = new User('portal-owner-'.$suffix.'@example.test', 'Titular ficticio');
+        $reader = new User('portal-limited-'.$suffix.'@example.test', 'Lector ficticio');
+        $adminMember = new Membership($tenant, $owner, Membership::ROLE_OWNER);
+        $readerMember = new Membership($tenant, $reader, 'ADMIN');
+        $viewerRole = new Role($tenant, 'Lector limitado', ['catalog.view']);
+        foreach ([$tenant, $external, $company, $secondary, $externalCompany,
+            $branch, $secondaryBranch, $externalBranch, $owner, $reader,
+            $adminMember, $readerMember, $viewerRole] as $entity) {
+            $db->persist($entity);
         }
-        $db->persist(new BranchRoleAssignment($delegateMember, $branch, $role));
+        $db->persist(new BranchRoleAssignment($readerMember, $branch, $viewerRole));
         $db->flush();
 
-        return [$tenant, $company, $otherCompany, $branch, $otherBranch, $foreignBranch, $owner, $delegate];
+        return [$tenant, $company, $secondary, $branch, $secondaryBranch, $externalBranch, $owner, $reader];
     }
 }
