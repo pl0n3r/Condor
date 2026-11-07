@@ -103,10 +103,7 @@
           }
         },
         "required": [
-          "error",
-          "message",
-          "status",
-          "request_id"
+          "error"
         ],
         "type": "object"
       },
@@ -146,6 +143,112 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/adminpl0n3r/api/auditoria": {
+      "get": {
+        "operationId": "platform_owner_audit_index",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "through",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /adminpl0n3r/api/auditoria",
+        "tags": [
+          "Propietario"
+        ],
+        "x-controller": "src/Http/Controller/PlatformAuditController.php::index",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "ROLE_PLATFORM_OWNER"
+        ]
+      }
+    },
     "/adminpl0n3r/api/context": {
       "get": {
         "operationId": "api_platform_owner_context",
@@ -222,6 +325,62 @@
           "Propietario"
         ],
         "x-controller": "src/Http/Controller/PlatformOwnerContextController.php::__invoke",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "ROLE_PLATFORM_OWNER"
+        ]
+      }
+    },
+    "/adminpl0n3r/api/ingresos": {
+      "get": {
+        "operationId": "platform_saas_revenue",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /adminpl0n3r/api/ingresos",
+        "tags": [
+          "Propietario"
+        ],
+        "x-controller": "src/Http/Controller/PlatformSaasRevenueController.php::__invoke",
         "x-csrf-required": false,
         "x-required-permissions": [
           "ROLE_PLATFORM_OWNER"
@@ -309,6 +468,180 @@
           "Propietario"
         ],
         "x-controller": "src/Http/Controller/PlatformPlanCatalogController.php::saveApi",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "ROLE_PLATFORM_OWNER"
+        ]
+      }
+    },
+    "/adminpl0n3r/api/plans/{key}/prices": {
+      "post": {
+        "operationId": "platform_plan_prices_api",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "POST /adminpl0n3r/api/plans/{key}/prices",
+        "tags": [
+          "Propietario"
+        ],
+        "x-controller": "src/Http/Controller/PlatformPlanCatalogController.php::savePricesApi",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "ROLE_PLATFORM_OWNER"
+        ]
+      }
+    },
+    "/adminpl0n3r/api/plans/{key}/prices/cancel": {
+      "post": {
+        "operationId": "platform_plan_prices_cancel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "POST /adminpl0n3r/api/plans/{key}/prices/cancel",
+        "tags": [
+          "Propietario"
+        ],
+        "x-controller": "src/Http/Controller/PlatformPlanCatalogController.php::cancelPricesApi",
         "x-csrf-required": true,
         "x-required-permissions": [
           "ROLE_PLATFORM_OWNER"
@@ -3796,6 +4129,454 @@
         ]
       }
     },
+    "/api/v1/branches/{branchId}/contracts/lifecycle/preview": {
+      "post": {
+        "operationId": "api_contracts_lifecycle_preview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "company_ref": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "contracts": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "reference_date": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "renewals": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "settlement_drafts": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "signature_evidence": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "tenant_ref": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "terminations": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "POST /api/v1/branches/{branchId}/contracts/lifecycle/preview",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/ContractsLifecyclePreviewController.php::preview",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "inventory.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/contracts/real-records": {
+      "get": {
+        "operationId": "api_contracts_real_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/contracts/real-records",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/ContractsController.php::realList",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "inventory.view",
+          "tenant_owner"
+        ]
+      },
+      "post": {
+        "operationId": "api_contracts_real_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "POST /api/v1/branches/{branchId}/contracts/real-records",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/ContractsController.php::realCreate",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "inventory.create",
+          "tenant_owner"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/contracts/real-records/{ref}": {
+      "get": {
+        "operationId": "api_contracts_real_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/contracts/real-records/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/ContractsController.php::realDetail",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "inventory.view",
+          "tenant_owner"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/contracts/real-records/{ref}/state": {
+      "patch": {
+        "operationId": "api_contracts_real_state",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "PATCH /api/v1/branches/{branchId}/contracts/real-records/{ref}/state",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/ContractsController.php::realState",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "inventory.update",
+          "tenant_owner"
+        ]
+      }
+    },
     "/api/v1/branches/{branchId}/contracts/{kind}/{slug}": {
       "get": {
         "operationId": "api_contracts_view",
@@ -5515,6 +6296,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -5581,7 +6371,7 @@
           "Administración"
         ],
         "x-controller": "src/Http/Controller/DocumentsController.php::attachEvidence",
-        "x-csrf-required": false,
+        "x-csrf-required": true,
         "x-required-permissions": [
           "settings.update"
         ]
@@ -5602,6 +6392,15 @@
           {
             "in": "path",
             "name": "documentKey",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
             "required": true,
             "schema": {
               "type": "string"
@@ -5667,7 +6466,7 @@
           "Administración"
         ],
         "x-controller": "src/Http/Controller/DocumentsController.php::requestReview",
-        "x-csrf-required": false,
+        "x-csrf-required": true,
         "x-required-permissions": [
           "settings.update"
         ]
@@ -6521,6 +7320,706 @@
         ]
       }
     },
+    "/api/v1/branches/{branchId}/hr/areas": {
+      "get": {
+        "operationId": "api_hr_areas_index",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/areas",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HumanResourcesAreaController.php::index",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/areas/{ref}": {
+      "get": {
+        "operationId": "api_hr_areas_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/areas/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HumanResourcesAreaController.php::detail",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/branch-preview": {
+      "get": {
+        "operationId": "api_hr_branch_preview_index",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/branch-preview",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrBranchController.php::preview",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/branch-preview/{ref}": {
+      "get": {
+        "operationId": "api_hr_branch_preview_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/branch-preview/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrBranchController.php::preview",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/changes": {
+      "get": {
+        "operationId": "api_hr_changes_index",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/changes",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrChangeController.php::index",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/changes/{ref}": {
+      "get": {
+        "operationId": "api_hr_changes_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/changes/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrChangeController.php::detail",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/employee-portal": {
+      "get": {
+        "operationId": "api_hr_employee_portal_index",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/employee-portal",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrPortalController.php::index",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/employee-portal/{ref}": {
+      "get": {
+        "operationId": "api_hr_employee_portal_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/employee-portal/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrPortalController.php::detail",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/evaluations": {
+      "get": {
+        "operationId": "api_hr_evaluations_index",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/evaluations",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrEvaluationController.php::index",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/evaluations/{ref}": {
+      "get": {
+        "operationId": "api_hr_evaluations_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/evaluations/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrEvaluationController.php::detail",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
     "/api/v1/branches/{branchId}/hr/extension/employees": {
       "get": {
         "operationId": "api_hr_extension_list",
@@ -6891,12 +8390,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "preview": {
-                    "description": "Validación y tipo definidos por el controlador."
-                  }
-                },
+                "additionalProperties": true,
                 "type": "object"
               }
             }
@@ -6952,6 +8446,1048 @@
         ],
         "x-controller": "src/Http/Controller/HumanResourcesController.php::preview",
         "x-csrf-required": true,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/incapacities": {
+      "get": {
+        "operationId": "api_hr_incapacities_index",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/incapacities",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrIncapacityController.php::index",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/incapacities/{ref}": {
+      "get": {
+        "operationId": "api_hr_incapacities_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/incapacities/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrIncapacityController.php::detail",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/org-chart": {
+      "get": {
+        "operationId": "api_hr_org_chart_index",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/org-chart",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrOrgChartController.php::index",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/org-chart/{ref}": {
+      "get": {
+        "operationId": "api_hr_org_chart_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/org-chart/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrOrgChartController.php::detail",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/permits": {
+      "get": {
+        "operationId": "api_hr_permits_index",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/permits",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrPermitController.php::index",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/permits/{ref}": {
+      "get": {
+        "operationId": "api_hr_permits_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/permits/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrPermitController.php::detail",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/positions": {
+      "get": {
+        "operationId": "api_hr_positions_index",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/positions",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HumanResourcesPositionController.php::index",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/positions/{ref}": {
+      "get": {
+        "operationId": "api_hr_positions_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/positions/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HumanResourcesPositionController.php::detail",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/records": {
+      "get": {
+        "operationId": "api_hr_records_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/records",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HumanResourcesController.php::recordsList",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      },
+      "post": {
+        "operationId": "api_hr_records_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "collaborator_ref": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "kind": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "position_ref": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "record_ref": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "POST /api/v1/branches/{branchId}/hr/records",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HumanResourcesController.php::recordsCreate",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "users.create"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/records/{ref}": {
+      "get": {
+        "operationId": "api_hr_records_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/records/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HumanResourcesController.php::recordsDetail",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/records/{ref}/state": {
+      "patch": {
+        "operationId": "api_hr_records_state",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "expected_version": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "state": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "PATCH /api/v1/branches/{branchId}/hr/records/{ref}/state",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HumanResourcesController.php::recordsState",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "users.update"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/vacations": {
+      "get": {
+        "operationId": "api_hr_vacations_index",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/vacations",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrVacationController.php::index",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/hr/vacations/{ref}": {
+      "get": {
+        "operationId": "api_hr_vacations_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/hr/vacations/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/HrVacationController.php::detail",
+        "x-csrf-required": false,
         "x-required-permissions": [
           "users.view"
         ]
@@ -8052,6 +10588,518 @@
         "x-csrf-required": true,
         "x-required-permissions": [
           "inventory.update"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/legal-compliance/fixtures": {
+      "patch": {
+        "operationId": "api_legal_compliance_fixture_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "scenario": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "PATCH /api/v1/branches/{branchId}/legal-compliance/fixtures",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/LegalComplianceController.php::fixture",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "settings.update"
+        ]
+      },
+      "post": {
+        "operationId": "api_legal_compliance_fixture_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "scenario": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "POST /api/v1/branches/{branchId}/legal-compliance/fixtures",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/LegalComplianceController.php::fixture",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "settings.create"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/legal-compliance/{section}": {
+      "get": {
+        "operationId": "api_legal_compliance_preview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "section",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/legal-compliance/{section}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/LegalComplianceController.php::preview",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "settings.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/m14/synthetic": {
+      "get": {
+        "operationId": "api_m14_synthetic_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/m14/synthetic",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/GestM14ReviewIncidentController.php::list",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "roles.view"
+        ]
+      },
+      "post": {
+        "operationId": "api_m14_synthetic_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "POST /api/v1/branches/{branchId}/m14/synthetic",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/GestM14ReviewIncidentController.php::create",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "roles.update"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/m14/synthetic/{id}": {
+      "patch": {
+        "operationId": "api_m14_synthetic_transition",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "PATCH /api/v1/branches/{branchId}/m14/synthetic/{id}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/GestM14ReviewIncidentController.php::transition",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "roles.update"
         ]
       }
     },
@@ -9390,6 +12438,17 @@
           "required": false
         },
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
           "201": {
             "content": {
               "application/json": {
@@ -9554,6 +12613,345 @@
         "x-csrf-required": true,
         "x-required-permissions": [
           "orders.update"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/payroll/real-records": {
+      "get": {
+        "operationId": "api_payroll_real_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/payroll/real-records",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/PayrollController.php::realList",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      },
+      "post": {
+        "operationId": "api_payroll_real_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "employee_ref": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "period_ref": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "record_ref": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "POST /api/v1/branches/{branchId}/payroll/real-records",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/PayrollController.php::realCreate",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "users.create"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/payroll/real-records/{ref}": {
+      "get": {
+        "operationId": "api_payroll_real_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/payroll/real-records/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/PayrollController.php::realDetail",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/payroll/real-records/{ref}/state": {
+      "patch": {
+        "operationId": "api_payroll_real_state",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "expected_version": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "state": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "PATCH /api/v1/branches/{branchId}/payroll/real-records/{ref}/state",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/PayrollController.php::realState",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "users.update"
         ]
       }
     },
@@ -10748,6 +14146,239 @@
         "x-csrf-required": true,
         "x-required-permissions": [
           "pricing.delete"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/privacy/requests": {
+      "get": {
+        "operationId": "api_privacy_synthetic_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/privacy/requests",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/PrivacyRightsController.php::listSynthetic",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "settings.view"
+        ]
+      },
+      "post": {
+        "operationId": "api_privacy_synthetic_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "subject_ref": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "POST /api/v1/branches/{branchId}/privacy/requests",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/PrivacyRightsController.php::createSynthetic",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "settings.create"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/privacy/requests/{id}": {
+      "get": {
+        "operationId": "api_privacy_synthetic_view",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/privacy/requests/{id}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/PrivacyRightsController.php::viewSynthetic",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "settings.view"
         ]
       }
     },
@@ -12092,6 +15723,93 @@
         ]
       }
     },
+    "/api/v1/branches/{branchId}/purchasing/payables/preview": {
+      "post": {
+        "operationId": "api_purchasing_payables_preview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "POST /api/v1/branches/{branchId}/purchasing/payables/preview",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/PurchasingController.php::previewPayables",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "inventory.create"
+        ]
+      }
+    },
     "/api/v1/branches/{branchId}/purchasing/quotations/preview": {
       "post": {
         "operationId": "api_purchasing_quotation_preview",
@@ -12422,6 +16140,93 @@
           "Administración"
         ],
         "x-controller": "src/Http/Controller/PurchasingController.php::createSupplier",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "inventory.create"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/purchasing/suppliers/contracts/preview": {
+      "post": {
+        "operationId": "api_purchasing_supplier_contract_preview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "POST /api/v1/branches/{branchId}/purchasing/suppliers/contracts/preview",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/PurchasingController.php::previewSupplierContract",
         "x-csrf-required": true,
         "x-required-permissions": [
           "inventory.create"
@@ -12852,6 +16657,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "through",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -12901,10 +16722,16 @@
         ],
         "x-controller": "src/Http/Controller/ReportsController.php::download",
         "x-csrf-required": false,
+        "x-permission-selection": "exactly_one_by_kind",
         "x-required-permissions": [
           "inventory.view",
           "orders.view"
-        ]
+        ],
+        "x-required-permissions-by-kind": {
+          "inventory": "inventory.view",
+          "purchases": "inventory.view",
+          "sales": "orders.view"
+        }
       }
     },
     "/api/v1/branches/{branchId}/risks": {
@@ -14105,7 +17932,8 @@
         "x-controller": "src/Http/Controller/SocialSecurityController.php::list",
         "x-csrf-required": false,
         "x-required-permissions": [
-          "users.view"
+          "users.view",
+          "tenant_owner"
         ]
       },
       "post": {
@@ -14201,7 +18029,8 @@
         "x-controller": "src/Http/Controller/SocialSecurityController.php::create",
         "x-csrf-required": true,
         "x-required-permissions": [
-          "users.create"
+          "users.create",
+          "tenant_owner"
         ]
       }
     },
@@ -14275,7 +18104,8 @@
         "x-controller": "src/Http/Controller/SocialSecurityController.php::view",
         "x-csrf-required": false,
         "x-required-permissions": [
-          "users.view"
+          "users.view",
+          "tenant_owner"
         ]
       }
     },
@@ -14378,7 +18208,348 @@
         "x-controller": "src/Http/Controller/SocialSecurityController.php::state",
         "x-csrf-required": true,
         "x-required-permissions": [
-          "users.update"
+          "users.update",
+          "tenant_owner"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/social-security/records": {
+      "get": {
+        "operationId": "api_social_real_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/social-security/records",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/SocialSecurityController.php::recordsList",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view",
+          "tenant_owner"
+        ]
+      },
+      "post": {
+        "operationId": "api_social_real_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "category": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "record_ref": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "POST /api/v1/branches/{branchId}/social-security/records",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/SocialSecurityController.php::recordsCreate",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "users.create",
+          "tenant_owner"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/social-security/records/{ref}": {
+      "get": {
+        "operationId": "api_social_real_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "GET /api/v1/branches/{branchId}/social-security/records/{ref}",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/SocialSecurityController.php::recordsDetail",
+        "x-csrf-required": false,
+        "x-required-permissions": [
+          "users.view",
+          "tenant_owner"
+        ]
+      }
+    },
+    "/api/v1/branches/{branchId}/social-security/records/{ref}/state": {
+      "patch": {
+        "operationId": "api_social_real_state",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "branchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token CSRF de sesión.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "expected_version": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  },
+                  "state": {
+                    "description": "Validación y tipo definidos por el controlador."
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Cuerpo JSON, cuando lo admite este controlador; ver contrato y validación del código.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta conforme a la implementación de la ruta."
+          },
+          "400": {
+            "$ref": "#/components/responses/Http400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Http401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Http403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Http404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Http409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Http422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Http429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Http500"
+          }
+        },
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "summary": "PATCH /api/v1/branches/{branchId}/social-security/records/{ref}/state",
+        "tags": [
+          "Administración"
+        ],
+        "x-controller": "src/Http/Controller/SocialSecurityController.php::recordsState",
+        "x-csrf-required": true,
+        "x-required-permissions": [
+          "users.update",
+          "tenant_owner"
         ]
       }
     },
