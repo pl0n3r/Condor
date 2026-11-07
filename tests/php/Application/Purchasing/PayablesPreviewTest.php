@@ -120,13 +120,7 @@ final class PayablesPreviewTest extends WebTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $em);
         [$tenant, $branch, $owner] = $this->fixtureUser($em);
         [, $foreign] = $this->fixtureUser($em);
-        $viewer = new User('m09-pay-view-'.bin2hex(random_bytes(5)).'@example.test', 'Lector sintético');
-        $membership = new Membership($tenant, $viewer, 'ADMIN');
-        $role = new Role($tenant, 'Lectura sintética', ['inventory.view']);
-        foreach ([$viewer, $membership, $role, new BranchRoleAssignment($membership, $branch, $role)] as $entity) {
-            $em->persist($entity);
-        }
-        $em->flush();
+        $viewer = $this->fixtureReadOnlyUser($em, $tenant, $branch);
         $url = '/api/v1/branches/'.$branch->id().'/purchasing/payables/preview';
         $payload = self::fixturePayload();
         $submit = static function (array $body, array $headers = []) use ($client, $url): void {
@@ -170,6 +164,20 @@ final class PayablesPreviewTest extends WebTestCase
         $client->request('GET', '/admin');
         $viewerCsrf = ['HTTP_X_CSRF_TOKEN' => $this->csrfToken($client, 'branch_access')];
         $expect(403, $payload, $viewerCsrf);
+    }
+
+    /** A non-privileged synthetic member verifies the branch permission boundary. */
+    private function fixtureReadOnlyUser(EntityManagerInterface $em, Tenant $tenant, Branch $branch): User
+    {
+        $viewer = new User('m09-pay-view-'.bin2hex(random_bytes(5)).'@example.test', 'Lector sintético');
+        $membership = new Membership($tenant, $viewer, 'ADMIN');
+        $role = new Role($tenant, 'Lectura sintética', ['inventory.view']);
+        $em->persist($viewer);
+        $em->persist($membership);
+        $em->persist($role);
+        $em->persist(new BranchRoleAssignment($membership, $branch, $role));
+        $em->flush();
+        return $viewer;
     }
 
     /** @return array{Tenant,Branch,User} */
