@@ -45,7 +45,7 @@ final class NormativeApplicability
             return self::review('La regla no está autorizada para este tenant.');
         }
         if ($rule['approved'] !== true
-            || !self::identifier($rule['reviewer_ref'])
+            || !self::knownDimension($rule['reviewer_ref'])
             || !in_array($rule['kind'], self::KINDS, true)
         ) {
             return self::review('Clasificación o revisión profesional no acreditadas.');
@@ -56,7 +56,9 @@ final class NormativeApplicability
             return self::review('Procedencia oficial incompleta.');
         }
         foreach (['article', 'issuer', 'version'] as $field) {
-            if (!self::identifier($source[$field])) {
+            if (!self::identifier($source[$field])
+                || ($field === 'version' && !self::knownDimension($source[$field]))
+            ) {
                 return self::review('Procedencia oficial incompleta.');
             }
         }
