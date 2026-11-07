@@ -1,6 +1,6 @@
 # Guía del propietario de la plataforma Condor
 
-Esta guía describe **las opciones que aparecen en el administrador del propietario**. Solo corresponde a la interfaz incluida en el código de Condor al 7 de noviembre de 2026. No certifica que una función esté habilitada en producción, ni autoriza a introducir datos reales o activar funciones de prueba. El acceso está reservado a quien tenga permisos de propietario de plataforma.
+Esta guía describe **las opciones que aparecen en el administrador del propietario**. Solo corresponde a la interfaz incluida en el código de Condor al 7 de noviembre de 2026. No certifica que una función esté habilitada en producción, ni autoriza a introducir datos reales o activar funciones de prueba. El acceso está reservado a quien tenga permisos de propietario de plataforma. Si una opción no aparece en tu sesión, no intentes acceder mediante enlaces ajenos: solicita la revisión de permisos por el canal autorizado.
 
 ## 1. Centro de control
 
