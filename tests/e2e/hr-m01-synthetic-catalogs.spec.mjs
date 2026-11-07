@@ -161,4 +161,50 @@ test.describe('M01 S02–S11: visualización de catálogos estrictamente sintét
       .toBeVisible();
     expect(calls).toBe(countDenied);
   });
+  test('dos empresas y sedes ficticias: cambio de contexto no conserva ni consulta datos ajenos', async ({ page }) => {
+    const alternate = {
+      ...PROPS,
+      tenantId: '01ARZ3NDEKTSV4RRFFQ69G5FBV',
+      companyId: '01ARZ3NDEKTSV4RRFFQ69G5FBX',
+      branchId: '01ARZ3NDEKTSV4RRFFQ69G5FBY',
+    };
+    const scopeRequests = [];
+    await page.route('**/api/v1/branches/**', async route => {
+      const url = new URL(route.request().url());
+      scopeRequests.push(url);
+      const isFirst = url.pathname.includes('/' + BRANCH + '/');
+      const belongsToScope = isFirst
+        ? url.searchParams.get('company_id') === COMPANY
+        : url.pathname.includes('/' + alternate.branchId + '/')
+          && url.searchParams.get('company_id') === alternate.companyId;
+      const label = isFirst ? 'Ámbito A ficticio' : 'Ámbito B ficticio';
+      const body = {
+        synthetic: true, persisted: false, juridically_binding: false,
+        positions: [{ ref: 'fixture-position-scope_' + (isFirst ? 'aaaa' : 'bbbb') + '123456789',
+          label, synthetic: true }],
+      };
+      await route.fulfill({
+        status: belongsToScope ? 200 : 404,
+        contentType: 'application/json', body: JSON.stringify(body),
+      });
+    });
+    await open(page);
+    const rows = page.getByRole('table', { name: 'Catálogo sintético de Cargos' });
+    await expect(rows).toContainText('Ámbito A ficticio');
+
+    await page.evaluate(props => window.renderM01(props), alternate);
+    await expect(rows).toContainText('Ámbito B ficticio');
+    await expect(rows).not.toContainText('Ámbito A ficticio');
+    expect(scopeRequests.some(q => q.pathname.includes('/' + BRANCH + '/')
+      && q.searchParams.get('company_id') === COMPANY)).toBe(true);
+    expect(scopeRequests.some(q => q.pathname.includes('/' + alternate.branchId + '/')
+      && q.searchParams.get('company_id') === alternate.companyId)).toBe(true);
+    expect(scopeRequests.every(q => (
+      q.pathname.includes('/' + BRANCH + '/')
+        ? q.searchParams.get('company_id') === COMPANY
+        : q.pathname.includes('/' + alternate.branchId + '/')
+          && q.searchParams.get('company_id') === alternate.companyId
+    ))).toBe(true);
+  });
+
 });
