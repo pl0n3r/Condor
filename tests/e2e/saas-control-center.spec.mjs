@@ -159,7 +159,7 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
     await renderOwner(page, () => ({ status: 200, body: ready() }), globalContext, 'catalogo');
     await expect(page).toHaveURL(/adminpl0n3r[/]catalogo$/);
     await expect(page.getByRole('link', { name: 'Catálogo comercial' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Cartera comercial' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Cartera comercial' }).last()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Catálogo vigente' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Control SaaS por empresa' })).toHaveCount(0);
   });
