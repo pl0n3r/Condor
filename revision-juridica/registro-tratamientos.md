@@ -64,6 +64,16 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `review_required`
 
+## contracts_real_records
+
+- Categoría: `usage`
+- Campos de software: `id`, `tenant_id`, `company_id`, `record_ref`, `worker_ref`, `template_ref`, `kind`, `state`, `version`, `previous_id`, `actor_id`, `occurred_at`
+- Finalidad: `review_required`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## controlbot_staff_operations
 
 - Categoría: `usage`
@@ -169,6 +179,16 @@ Producto: `pl0n3r/Condor`
 - Categoría: `contact`
 - Campos de software: `email`, `trial_quote_id`, `trial_consent_recorded_at`
 - Finalidad: `self_service_trial_application`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
+## social_security_real_records
+
+- Categoría: `usage`
+- Campos de software: `id`, `tenant_id`, `company_id`, `record_ref`, `category`, `state`, `version`, `previous_id`, `actor_id`, `occurred_at`
+- Finalidad: `social_security_record_management`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
 - Proveedores: ninguno_declarado
