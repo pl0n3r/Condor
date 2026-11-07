@@ -16,7 +16,7 @@ const GROUPS = [
   {
     name: 'Comercial',
     links: [
-      '/adminpl0n3r/planes',
+      '/adminpl0n3r/catalogo?vista=planes',
       '/adminpl0n3r/suscripciones',
       '/adminpl0n3r/catalogo',
     ],
@@ -90,7 +90,8 @@ test.describe('Propietario — navegación agrupada sin enlaces inexistentes', (
     for (const href of EXPECTED_LINKS) {
       const response = await page.request.get(href, { maxRedirects: 0 });
       expect(response.status(), href).toBe(200);
-      expect(new URL(response.url()).pathname, href).toBe(href);
+      const finalURL = new URL(response.url());
+      expect(finalURL.pathname + finalURL.search, href).toBe(href);
     }
 
     await nav.locator('a.nav-sub[href="/adminpl0n3r/suscripciones"]').click();
