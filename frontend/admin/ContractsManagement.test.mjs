@@ -17,7 +17,8 @@ await build({ entryPoints: [join(root, 'frontend/admin/ContractsManagement.tsx')
   outfile: output, format: 'cjs', platform: 'node', bundle: true, jsx: 'automatic',
   external: ['react', 'react/jsx-runtime'],
   define: { 'import.meta.env.DEV': 'true' }, logLevel: 'silent' });
-const { ContractsManagement, contractsSyntheticEnabled, syntheticContractRequest } =
+const { ContractsManagement, contractsSyntheticEnabled, syntheticContractRequest,
+  ContractsRealManagement, contractRealRequest } =
   createRequire(import.meta.url)(output);
 const branchId = 'sede-ficticia';
 const scope = 'empresa-ficticia|razon-social-a|sede-ficticia';
@@ -146,4 +147,138 @@ test('bootstrap de dev: solo servidor autorizado, no en producción', () => {
   assert.match(controller, /getenv\('CONDOR_CONTRACTS_SYNTHETIC_API'\) === '1'/);
   assert.match(twig, /data-contracts-synthetic-api-enabled=/);
   assert.match(twig, /contracts_synthetic_api_enabled \? 'true' : 'false'/);
+});
+
+
+const realRow = {
+  tenant_id: 'tenant_demo', company_id: 'company_demo',
+  record_ref: 'contract_demo', worker_ref: 'worker_demo', template_ref: 'template_demo',
+  kind: 'contract', state: 'REQUIERE_REVISION', version: 1,
+};
+const realOpts = {
+  enabled: true, allowed: true, tenantId: 'tenant_demo',
+  companyId: 'company_demo', branchId: 'branch_demo',
+};
+const realUrl = '/api/v1/branches/branch_demo/contracts/real-records';
+const realDeny = () => { throw Error('No debe hacerse HTTP'); };
+
+test('Contratación persistida: OFF, RBAC, sin razón social y referencias inválidas nunca emiten HTTP', async () => {
+  for (const x of [
+    { ...realOpts, enabled: false },
+    { ...realOpts, allowed: false },
+    { ...realOpts, companyId: '__unassigned__' },
+    { ...realOpts, tenantId: '' },
+    { ...realOpts, method: 'POST', ref: 'contract_demo', workerRef: 'worker_demo',
+      templateRef: 'template_demo', kind: 'contract' },
+    { ...realOpts, method: 'POST', ref: 'contract_demo', workerRef: 'worker_demo',
+      templateRef: 'template_demo', kind: 'contract', csrf: '' },
+    { ...realOpts, method: 'POST', ref: 'contract_demo', workerRef: 'email@bad.test',
+      templateRef: 'template_demo', kind: 'contract', csrf: 'csrf' },
+    { ...realOpts, method: 'PATCH', ref: 'contract_demo',
+      state: 'REQUIERE_REVISION', expectedVersion: 1, csrf: 'csrf' },
+    { ...realOpts, method: 'PATCH', ref: 'contract_demo',
+      state: 'EN_REVISION', expectedVersion: 0, csrf: 'csrf' },
+    { ...realOpts, ref: '../other-company' },
+  ]) {
+    const out = await contractRealRequest(x, realDeny);
+    assert.notEqual(out.status, 'ready');
+  }
+});
+
+test('Contratación persistida: lista estricta por empresa y sin filtraciones cross-tenant', async () => {
+  const successful = await contractRealRequest(realOpts, async (url, options) => {
+    assert.equal(url, realUrl);
+    assert.equal(options.method, 'GET');
+    assert.equal(options.credentials, 'same-origin');
+    assert.equal(options.cache, 'no-store');
+    assert.equal(options.headers.Accept, 'application/json');
+    assert.equal(options.headers['X-CSRF-Token'], undefined);
+    return json({ records: [realRow] });
+  });
+  assert.equal(successful.status, 'ready');
+  assert.equal(successful.records?.[0]?.ref, 'contract_demo');
+  for (const rows of [
+    [{ ...realRow, tenant_id: 'tenant_other' }],
+    [{ ...realRow, company_id: 'company_other' }],
+    [{ ...realRow, state: 'FIRMADO' }],
+    [{ ...realRow, worker_ref: 'name@private.test' }],
+    [{ ...realRow, version: 0 }],
+    [realRow, realRow],
+    Array.from({ length: 101 }, (_, i) => ({ ...realRow, record_ref: 'contract_' + i })),
+  ]) {
+    const out = await contractRealRequest(realOpts, () => json({ records: rows }));
+    assert.equal(out.status, 'error');
+  }
+});
+
+test('Contratación persistida: POST con CSRF, PATCH versionado y GET de detalle', async () => {
+  const ref = 'contract_demo';
+  const csrf = 'csrf_ficticio';
+  const post = await contractRealRequest({ ...realOpts,
+    method: 'POST', ref, workerRef: 'worker_demo', templateRef: 'template_demo',
+    kind: 'contract', csrf }, async (url, options) => {
+    assert.equal(url, realUrl);
+    assert.equal(options.method, 'POST');
+    assert.equal(options.headers['X-CSRF-Token'], csrf);
+    assert.equal(options.credentials, 'same-origin');
+    assert.deepEqual(JSON.parse(options.body), {
+      record_ref: ref, worker_ref: 'worker_demo',
+      template_ref: 'template_demo', kind: 'contract',
+    });
+    return json({ record: realRow }, 201);
+  });
+  assert.equal(post.status, 'ready');
+  const detail = await contractRealRequest({ ...realOpts, ref }, async (url, options) => {
+    assert.equal(url, realUrl + '/' + ref);
+    assert.equal(options.method, 'GET');
+    return json({ record: realRow });
+  });
+  assert.equal(detail.record?.state, 'REQUIERE_REVISION');
+  const transition = await contractRealRequest({ ...realOpts, method: 'PATCH',
+    ref, state: 'EN_REVISION', expectedVersion: 1, csrf },
+    async (url, options) => {
+      assert.equal(url, realUrl + '/' + ref + '/state');
+      assert.equal(options.headers['X-CSRF-Token'], csrf);
+      assert.deepEqual(JSON.parse(options.body), {
+        state: 'EN_REVISION', expected_version: 1,
+      });
+      return json({ record: { ...realRow, state: 'EN_REVISION', version: 2 } });
+    });
+  assert.equal(transition.record?.version, 2);
+});
+
+test('Contratación persistida: errores HTTP fail-closed, formato y scope nunca suplantados', async () => {
+  for (const status of [401, 403]) {
+    assert.equal((await contractRealRequest(realOpts,
+      () => json({ error: 'unauthorized' }, status))).status, 'denied');
+  }
+  assert.equal((await contractRealRequest(realOpts,
+    () => json({ error: 'feature_unavailable' }, 404))).status, 'disabled');
+  assert.equal((await contractRealRequest(realOpts, () => { throw Error('network'); })).status, 'error');
+  assert.equal((await contractRealRequest(realOpts, () => new Response('{', { status: 200 }))).status, 'error');
+  for (const payload of [
+    { record: { ...realRow, company_id: 'company_other' } },
+    { record: { ...realRow, record_ref: 'other' } },
+  ]) {
+    assert.equal((await contractRealRequest({ ...realOpts, ref: 'contract_demo' },
+      () => json(payload))).status, 'error');
+  }
+});
+
+test('Contratación persistida: UI desactivada, denegación RBAC y loading sin inventar datos', () => {
+  const baseProps = {
+    enabled: false, tenantId: 'tenant_demo', companyId: 'company_demo',
+    branchId: 'branch_demo', permissions: ['inventory.view'], csrfToken: 'csrf',
+  };
+  const off = renderToStaticMarkup(React.createElement(ContractsRealManagement, baseProps));
+  assert.match(off, /permanece desactivada por el servidor/);
+  assert.doesNotMatch(off, /contract_demo|fixture:contract/);
+  const denied = renderToStaticMarkup(React.createElement(ContractsRealManagement, {
+    ...baseProps, enabled: true, permissions: [],
+  }));
+  assert.match(denied, /Acceso denegado/);
+  const readyForLoad = renderToStaticMarkup(React.createElement(ContractsRealManagement, {
+    ...baseProps, enabled: true,
+  }));
+  assert.match(readyForLoad, /Cargando registros de contratación/);
 });
