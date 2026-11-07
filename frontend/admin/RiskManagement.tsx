@@ -115,6 +115,11 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
     audit(ref, 'viewed', 'fixture:actor/consulta', row.state);
   }
 
+  function closeRiskDetail(): void {
+    setSelected('');
+    setPanelError('');
+  }
+
   function changeState(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canUpdate || !detail || !validFixture(reviewerRef, actorRefPattern)
@@ -213,7 +218,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
 
         </SidePanel>
         )}
-        <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión" onClose={() => { setSelected(''); setPanelError(''); }}>
+        <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión" onClose={closeRiskDetail}>
           {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
           {detail ? <>
             <dl>
