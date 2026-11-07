@@ -153,53 +153,51 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
     await expect(page.getByRole('button', { name: /fixture:occupational\/demo/ })).toBeVisible();
   });
 
-  test('AC-01 Gobierno: POST rechazado se anuncia en el diálogo activo', async ({ page }, testInfo) => {
-    await mockHttp(page, emptyHttp);
-    await open(page, 'governance');
-    const opener = page.getByRole('button', { name: 'Crear actuación de prueba' });
-    await expect(opener).toBeVisible();
-    await opener.click();
-    const dialog = page.getByRole('dialog', { name: 'Crear actuación de prueba' });
-    await dialog.getByLabel('Referencia ficticia').fill('fixture:governance/demo');
-    await dialog.getByLabel('Órgano ficticio').fill('fixture:body/demo');
-    await dialog.getByLabel('Representante ficticio').fill('fixture:representative/demo');
-    await dialog.getByRole('button', { name: 'Registrar solicitud ficticia' }).click();
-    await verifyErrorAndEscape(page, dialog, opener, 'Error de servidor', testInfo);
-  });
+  // Las cuatro rutas de creación HTTP comparten el mismo contrato accesible.
+  // Cada caso sigue siendo una prueba independiente con captura en claro/oscuro.
+  const rejectedCreations = [
+    {
+      module: 'governance', name: 'Gobierno', opener: 'Crear actuación de prueba',
+      modal: 'Crear actuación de prueba', submit: 'Registrar solicitud ficticia',
+      error: 'Error de servidor',
+      fill: async dialog => {
+        await dialog.getByLabel('Referencia ficticia').fill('fixture:governance/demo');
+        await dialog.getByLabel('Órgano ficticio').fill('fixture:body/demo');
+        await dialog.getByLabel('Representante ficticio').fill('fixture:representative/demo');
+      },
+    },
+    {
+      module: 'quality', name: 'Calidad', opener: 'Crear queja de prueba',
+      modal: 'Crear queja de prueba', submit: 'Crear queja de prueba',
+      error: 'Solicitud rechazada',
+    },
+    {
+      module: 'risk', name: 'Riesgos', opener: 'Crear riesgo de prueba',
+      modal: 'Crear riesgo de prueba', submit: 'Crear escenario ficticio',
+      error: 'servidor rechazó',
+    },
+    {
+      module: 'compliance', name: 'SG-SST HTTP', opener: 'Crear registro ficticio',
+      modal: 'Crear registro ficticio', submit: 'Crear registro ficticio',
+      error: 'No se pudo crear', scope: '#sgsst-http-management',
+    },
+  ];
 
-  test('AC-01 Calidad: rechazo HTTP se anuncia en el panel, no detrás del diálogo', async ({ page }, testInfo) => {
-    await mockHttp(page, emptyHttp);
-    await open(page, 'quality');
-    const opener = page.getByRole('button', { name: 'Crear queja de prueba' });
-    await expect(opener).toBeVisible();
-    await opener.click();
-    const dialog = page.getByRole('dialog', { name: 'Crear queja de prueba' });
-    await dialog.getByRole('button', { name: 'Crear queja de prueba' }).click();
-    await verifyErrorAndEscape(page, dialog, opener, 'Solicitud rechazada', testInfo);
-  });
-
-  test('AC-01 Riesgos: rechazo HTTP se anuncia dentro del panel de creación', async ({ page }, testInfo) => {
-    await mockHttp(page, emptyHttp);
-    await open(page, 'risk');
-    const opener = page.getByRole('button', { name: 'Crear riesgo de prueba' }).first();
-    await expect(opener).toBeVisible();
-    await opener.click();
-    const dialog = page.getByRole('dialog', { name: 'Crear riesgo de prueba' });
-    await dialog.getByRole('button', { name: 'Crear escenario ficticio' }).click();
-    await verifyErrorAndEscape(page, dialog, opener, 'servidor rechazó', testInfo);
-  });
-
-  test('AC-01 SG-SST HTTP: error del POST anunciado dentro de su SidePanel', async ({ page }, testInfo) => {
-    await mockHttp(page, emptyHttp);
-    await open(page, 'compliance');
-    const section = page.locator('#sgsst-http-management');
-    const opener = section.getByRole('button', { name: 'Crear registro ficticio' });
-    await expect(opener).toBeVisible();
-    await opener.click();
-    const dialog = section.getByRole('dialog', { name: 'Crear registro ficticio' });
-    await dialog.getByRole('button', { name: 'Crear registro ficticio' }).click();
-    await verifyErrorAndEscape(page, dialog, opener, 'No se pudo crear', testInfo);
-  });
+  for (const scenario of rejectedCreations) {
+    test('AC-01 ' + scenario.name + ': rechazo HTTP accesible en el panel', async ({ page }, testInfo) => {
+      await mockHttp(page, emptyHttp);
+      await open(page, scenario.module);
+      const section = scenario.scope ? page.locator(scenario.scope) : page;
+      const opener = section.getByRole('button', { name: scenario.opener }).first();
+      await expect(opener).toBeVisible();
+      await opener.click();
+      const dialog = section.getByRole('dialog', { name: scenario.modal });
+      await expect(dialog.getByRole('button', { name: 'Cerrar' })).toBeFocused();
+      if (scenario.fill) await scenario.fill(dialog);
+      await dialog.getByRole('button', { name: scenario.submit }).click();
+      await verifyErrorAndEscape(page, dialog, opener, scenario.error, testInfo);
+    });
+  }
 
   test('AC-02 Calidad: PATCH y recarga mantienen abierto el diálogo de revisión', async ({ page }) => {
     let state = 'PENDIENTE';
