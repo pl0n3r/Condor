@@ -151,5 +151,12 @@ test('código y contrato: ninguna fuente de prueba fabricada ni activación de p
   assert.match(component, /writeHrRecord\(/);
   assert.doesNotMatch(component, /fixture:|localStorage|sessionStorage|Math\.random\(/);
   // The independent admin-shell activation and the legal/owner go-live gates remain unchanged.
-  assert.match(app, /import\.meta\.env\.DEV && DevHumanResourcesManagement/);
+  // The shell is updated in its own V3 claim (#1778); accept both states in serial delivery.
+  if (app.includes('hrRealDataEnabled')) {
+    assert.match(app, /dataset\.hrRealDataEnabled === 'true'/);
+    assert.match(app, /\{hrRealDataEnabled && \(/);
+    assert.doesNotMatch(app, /Talento Humano \(pruebas\)/);
+  } else {
+    assert.match(app, /import\.meta\.env\.DEV && DevHumanResourcesManagement/);
+  }
 });
