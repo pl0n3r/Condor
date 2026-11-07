@@ -2,48 +2,61 @@
 
 declare(strict_types=1);
 
-namespace App\Application\Finance;
+namespace App\Application\Compliance;
 
 use App\Domain\Compliance\Entity\OccupationalSafetyRecord;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use DomainException;
 
-/** Immutable occupational-safety review ledger scoped to real tenant and legal-entity IDs. */
+/**
+ * Tenant-scoped, append-only SG-SST ledger. Only opaque review references.
+ */
 final readonly class OccupationalSafetyRecordService
 {
     private const TABLE = 'condor_ohs_real_record';
 
-    public function __construct(private Connection $connection) {}
+    public function __construct(private Connection $connection)
+    {
+    }
 
     /** @return list<array<string,mixed>> */
     public function all(string $tenant, string $company): array
     {
-        $result = $this->connection->fetchAllAssociative(
-            'SELECT r.* FROM '.self::TABLE.' r'
-            .' WHERE r.tenant_id = ? AND r.company_id = ?'
-            .' AND r.version = (SELECT MAX(h.version) FROM '.self::TABLE.' h'
-            .' WHERE h.tenant_id = r.tenant_id AND h.company_id = r.company_id'
-            .' AND h.record_ref = r.record_ref) ORDER BY r.record_ref LIMIT 100',
-            [$tenant, $company],
+        $latest = $this->connection->fetchAllAssociative(
+            'SELECT r.* FROM '.self::TABLE.' r WHERE r.tenant_id = :tenant'
+            .' AND r.company_id = :company AND NOT EXISTS (SELECT 1 FROM '.self::TABLE
+            .' newer WHERE newer.tenant_id = r.tenant_id AND newer.company_id = r.company_id'
+            .' AND newer.record_ref = r.record_ref AND newer.version > r.version)'
+            .' ORDER BY r.record_ref LIMIT 100',
+            ['tenant' => $tenant, 'company' => $company],
         );
-        return array_map(
-            static fn (array $row): array => OccupationalSafetyRecord::inspect($row, $tenant, $company),
-            $result,
-        );
+
+        $verified = [];
+        foreach ($latest as $row) {
+            $verified[] = OccupationalSafetyRecord::inspect($row, $tenant, $company);
+        }
+        return $verified;
     }
 
     /** @return array<string,mixed>|null */
     public function one(string $tenant, string $company, string $ref): ?array
     {
         OccupationalSafetyRecord::assertReference($ref);
-        $row = $this->connection->fetchAssociative(
-            'SELECT * FROM '.self::TABLE
-            .' WHERE tenant_id = ? AND company_id = ? AND record_ref = ?'
-            .' ORDER BY version DESC LIMIT 1',
-            [$tenant, $company, $ref],
-        );
-        return $row === false ? null : OccupationalSafetyRecord::inspect($row, $tenant, $company);
+        $query = $this->connection->createQueryBuilder();
+        $query->select('record.*')
+            ->from(self::TABLE, 'record')
+            ->where('record.tenant_id = :tenant')
+            ->andWhere('record.company_id = :company')
+            ->andWhere('record.record_ref = :ref')
+            ->setParameters(['tenant' => $tenant, 'company' => $company, 'ref' => $ref])
+            ->orderBy('record.version', 'DESC')
+            ->setMaxResults(1);
+        $row = $query->fetchAssociative();
+        if ($row === false) {
+            return null;
+        }
+        return OccupationalSafetyRecord::inspect($row, $tenant, $company);
     }
 
     /** @param array<string,mixed> $input
@@ -51,19 +64,21 @@ final readonly class OccupationalSafetyRecordService
      */
     public function add(string $tenant, string $company, string $actor, array $input): array
     {
-        $keys = array_keys($input);
-        sort($keys);
-        if ($keys !== ['kind', 'record_ref']
-            || !is_string($input['record_ref']) || !is_string($input['kind'])) {
-            throw new DomainException('Campos SG-SSTs inválidos.');
+        $fields = array_keys($input);
+        sort($fields);
+        if ($fields !== ['kind', 'record_ref']
+            || !is_string($input['kind']) || !is_string($input['record_ref'])) {
+            throw new DomainException('Solo se admiten categoría y referencia opaca.');
         }
-        $entry = OccupationalSafetyRecord::begin($tenant, $company, $actor, $input['record_ref'], $input['kind']);
-        return $this->atomic(function () use ($tenant, $company, $entry): array {
-            if ($this->one($tenant, $company, $entry['record_ref']) !== null) {
-                throw new DomainException('Referencia SG-SST duplicada.');
+        $created = OccupationalSafetyRecord::begin(
+            $tenant, $company, $actor, $input['record_ref'], $input['kind'],
+        );
+        return $this->write(function () use ($tenant, $company, $created): array {
+            if ($this->one($tenant, $company, $created['record_ref']) !== null) {
+                throw new DomainException('La referencia SG-SST ya existe.');
             }
-            $this->connection->insert(self::TABLE, $entry);
-            return $entry;
+            $this->connection->insert(self::TABLE, $created);
+            return $created;
         });
     }
 
@@ -72,26 +87,28 @@ final readonly class OccupationalSafetyRecordService
         string $tenant, string $company, string $actor, string $ref, string $next, int $version,
     ): array {
         OccupationalSafetyRecord::assertReference($ref);
-        return $this->atomic(function () use ($tenant, $company, $actor, $ref, $next, $version): array {
-            $stored = $this->one($tenant, $company, $ref);
-            if ($stored === null) {
-                throw new DomainException('Registro SG-SST no encontrado.');
+        return $this->write(function () use ($tenant, $company, $actor, $ref, $next, $version): array {
+            $current = $this->one($tenant, $company, $ref);
+            if ($current === null) {
+                throw new DomainException('Referencia SG-SST no encontrada.');
             }
-            $updated = OccupationalSafetyRecord::revise($stored, $tenant, $company, $actor, $next, $version);
+            $updated = OccupationalSafetyRecord::revise(
+                $current, $tenant, $company, $actor, $next, $version,
+            );
             $this->connection->insert(self::TABLE, $updated);
             return $updated;
         });
     }
 
-    /** @param \Closure():array<string,mixed> $work
+    /** @param \Closure():array<string,mixed> $action
      * @return array<string,mixed>
      */
-    private function atomic(\Closure $work): array
+    private function write(\Closure $action): array
     {
         try {
-            return $this->connection->transactional($work);
-        } catch (UniqueConstraintViolationException $e) {
-            throw new DomainException('Cambio SG-SST concurrente rechazado.', 0, $e);
+            return $this->connection->transactional($action);
+        } catch (UniqueConstraintViolationException $previous) {
+            throw new DomainException('Otra revisión SG-SST ganó la carrera.', 0, $previous);
         }
     }
 }
