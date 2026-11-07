@@ -393,6 +393,291 @@ export function ComplianceManagement(props: Props) {
   </>;
 }
 
+
+/** #1661: API real SG-SST. Servidor y permisos son autoridad; sin datos clínicos. */
+export type OccupationalRealRecord = Readonly<{
+  ref: string; tenantId: string; companyId: string;
+  kind: 'INSPECCION' | 'CONTROL' | 'CAPACITACION' | 'EMERGENCIA';
+  state: 'PENDIENTE' | 'EN_REVISION' | 'REQUIERE_REVISION';
+  version: number;
+}>;
+export type OccupationalRealOptions = Readonly<{
+  enabled: boolean; allowed: boolean;
+  tenantId: string; companyId: string; branchId: string;
+  method?: 'GET' | 'POST' | 'PATCH'; ref?: string;
+  kind?: OccupationalRealRecord['kind'];
+  state?: OccupationalRealRecord['state'];
+  expectedVersion?: number; csrf?: string;
+}>;
+export type OccupationalRealResult =
+  | { status: 'disabled' | 'denied' | 'error' }
+  | { status: 'ready'; records: OccupationalRealRecord[] }
+  | { status: 'ready'; record: OccupationalRealRecord };
+
+const ohsKinds: OccupationalRealRecord['kind'][] =
+  ['INSPECCION', 'CONTROL', 'CAPACITACION', 'EMERGENCIA'];
+const ohsLabels: Record<OccupationalRealRecord['kind'], string> = {
+  INSPECCION: 'Inspección', CONTROL: 'Control',
+  CAPACITACION: 'Capacitación', EMERGENCIA: 'Emergencia',
+};
+const ohsStates: OccupationalRealRecord['state'][] =
+  ['PENDIENTE', 'EN_REVISION', 'REQUIERE_REVISION'];
+const ohsOpaquePattern = /^[a-z][a-z0-9_-]{0,63}$/;
+function ohsOpaque(ref: string): boolean {
+  return ohsOpaquePattern.test(ref) && !/[0-9]{7,}/.test(ref);
+}
+function ohsVerifiedRecord(input: unknown, tenantId: string, companyId: string): OccupationalRealRecord | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const row = input as Record<string, unknown>;
+  if (row.tenant_id !== tenantId || row.company_id !== companyId
+    || typeof row.record_ref !== 'string' || !ohsOpaque(row.record_ref)
+    || !ohsKinds.includes(row.kind as OccupationalRealRecord['kind'])
+    || !ohsStates.includes(row.state as OccupationalRealRecord['state'])
+    || !Number.isInteger(row.version) || (row.version as number) < 1
+    || (row.version as number) > 1_000_000) return null;
+  return {
+    ref: row.record_ref, tenantId, companyId,
+    kind: row.kind as OccupationalRealRecord['kind'],
+    state: row.state as OccupationalRealRecord['state'],
+    version: row.version as number,
+  };
+}
+
+/** El flag OFF, RBAC y ámbitos inválidos bloquean HTTP antes de usar transporte. */
+export async function occupationalRealRequest(
+  options: OccupationalRealOptions, transport: typeof fetch = fetch,
+): Promise<OccupationalRealResult> {
+  if (!options.enabled) return { status: 'disabled' };
+  if (!options.allowed || !options.tenantId || !options.branchId
+    || !options.companyId || options.companyId === '__unassigned__') return { status: 'denied' };
+  const method = options.method ?? 'GET';
+  if (!['GET', 'POST', 'PATCH'].includes(method)
+    || (options.ref !== undefined && !ohsOpaque(options.ref))) return { status: 'error' };
+  if (method === 'POST' && (!options.csrf || !options.ref || !options.kind
+    || !ohsKinds.includes(options.kind))) return { status: 'error' };
+  if (method === 'PATCH' && (!options.csrf || !options.ref
+    || !options.state || !ohsStates.includes(options.state)
+    || !Number.isInteger(options.expectedVersion) || (options.expectedVersion ?? 0) < 1
+    || (options.expectedVersion ?? 0) >= 1_000_000)) return { status: 'error' };
+
+  const base = '/api/v1/branches/' + encodeURIComponent(options.branchId) + '/sgsst/real-records';
+  const url = options.ref && method !== 'POST'
+    ? base + '/' + encodeURIComponent(options.ref) + (method === 'PATCH' ? '/state' : '') : base;
+  const fields = method === 'POST'
+    ? { record_ref: options.ref, kind: options.kind }
+    : { state: options.state, expected_version: options.expectedVersion };
+  try {
+    const reply = await transport(url, {
+      method, credentials: 'same-origin', cache: 'no-store',
+      headers: { Accept: 'application/json', ...(method === 'GET' ? {}
+        : { 'Content-Type': 'application/json', 'X-CSRF-Token': options.csrf ?? '' }) },
+      ...(method === 'GET' ? {} : { body: JSON.stringify(fields) }),
+    });
+    if (reply.status === 401 || reply.status === 403) return { status: 'denied' };
+    if (reply.status === 404) {
+      const body: unknown = await reply.json().catch(() => null);
+      if (body && typeof body === 'object' && 'error' in body
+        && body.error === 'feature_unavailable') return { status: 'disabled' };
+      return { status: 'error' };
+    }
+    if (!reply.ok) return { status: 'error' };
+    const body: unknown = await reply.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return { status: 'error' };
+    const data = body as Record<string, unknown>;
+    if (method === 'GET' && options.ref === undefined) {
+      if (!Array.isArray(data.records) || data.records.length > 100) return { status: 'error' };
+      const records = data.records.map(v => ohsVerifiedRecord(v, options.tenantId, options.companyId));
+      if (records.some(v => v === null)) return { status: 'error' };
+      const typed = records as OccupationalRealRecord[];
+      if (new Set(typed.map(v => v.ref)).size !== typed.length) return { status: 'error' };
+      return { status: 'ready', records: typed };
+    }
+    const record = ohsVerifiedRecord(data.record, options.tenantId, options.companyId);
+    if (!record || (options.ref && record.ref !== options.ref)) return { status: 'error' };
+    if (method === 'POST' && (record.version !== 1 || record.state !== 'PENDIENTE'
+      || record.kind !== options.kind)) return { status: 'error' };
+    if (method === 'PATCH' && (record.state !== options.state
+      || record.version !== (options.expectedVersion ?? 0) + 1)) return { status: 'error' };
+    return { status: 'ready', record };
+  } catch { return { status: 'error' }; }
+}
+
+type OccupationalRealProps = Props & Readonly<{ enabled: boolean; csrfToken : string }>;
+export function OccupationalRealManagement({
+  enabled, tenantId, companyId, branchId, permissions, csrfToken,
+}: OccupationalRealProps) {
+  const canRead = permissions.includes('settings.view') && companyId !== '__unassigned__';
+  const canCreate = canRead && permissions.includes('settings.create');
+  const canUpdate = canRead && permissions.includes('settings.update');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'denied' | 'disabled' | 'error'>('loading');
+  const [records, setRecords] = useState<OccupationalRealRecord[]>([]);
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [panel, setPanel] = useState<'create' | 'detail' | null>(null);
+  const [chosen, setChosen] = useState('');
+  const [newRef, setNewRef] = useState('');
+  const [newKind, setNewKind] = useState<OccupationalRealRecord['kind']>('INSPECCION');
+  const [search, setSearch] = useState('');
+  const [stateFilter, setStateFilter] = useState<'TODOS' | OccupationalRealRecord['state']>('TODOS');
+
+  useEffect(() => {
+    if (!enabled || !canRead) return;
+    let active = true;
+    setRecords([]);
+    setStatus('loading');
+    setPanel(null);
+    void occupationalRealRequest({ enabled, allowed: canRead, tenantId, companyId, branchId })
+      .then(result => {
+        if (!active) return;
+        if (result.status === 'ready' && 'records' in result) {
+          setRecords(result.records);
+          setStatus('ready');
+        } else setStatus(result.status === 'ready' ? 'error' : result.status);
+      });
+    return () => { active = false; };
+  }, [enabled, canRead, tenantId, companyId, branchId]);
+
+  async function create(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || status !== 'ready') return;
+    setBusy(true);
+    const result = await occupationalRealRequest({ enabled, allowed: canCreate,
+      tenantId, companyId, branchId, method: 'POST', ref: newRef,
+      kind: newKind, csrf: csrfToken });
+    setBusy(false);
+    if (result.status === 'ready' && 'record' in result) {
+      const record = result.record;
+      setRecords(previous => [...previous.filter(row => row.ref !== record.ref), record]);
+      setChosen(record.ref);
+      setPanel('detail');
+      setNewRef('');
+      setNotice('Registro creado para revisión profesional. Sin aprobación automática.');
+    } else {
+      if (result.status === 'denied' || result.status === 'disabled') setStatus(result.status);
+      setNotice('No se pudo crear. Revisa permisos, referencia o conexión.');
+    }
+  }
+  async function openDetail(ref: string) {
+    if (busy || status !== 'ready') return;
+    setBusy(true);
+    const result = await occupationalRealRequest({ enabled, allowed: canRead,
+      tenantId, companyId, branchId, ref });
+    setBusy(false);
+    if (result.status === 'ready' && 'record' in result) {
+      const record = result.record;
+      setRecords(previous => previous.map(row => row.ref === record.ref ? record : row));
+      setChosen(record.ref);
+      setPanel('detail');
+      setNotice('');
+    } else {
+      if (result.status === 'denied' || result.status === 'disabled') setStatus(result.status);
+      setNotice('No se pudo consultar el detalle; actualiza el listado.');
+    }
+  }
+  async function advance(next: OccupationalRealRecord['state']) {
+    const current = records.find(row => row.ref === chosen);
+    if (!current || busy || status !== 'ready') return;
+    const allowed = current.state === 'PENDIENTE'
+      ? ['EN_REVISION', 'REQUIERE_REVISION']
+      : current.state === 'EN_REVISION' ? ['REQUIERE_REVISION'] : ['EN_REVISION'];
+    if (!allowed.includes(next)) return;
+    setBusy(true);
+    const result = await occupationalRealRequest({ enabled, allowed: canUpdate,
+      tenantId, companyId, branchId, method: 'PATCH', ref: current.ref,
+      state: next, expectedVersion: current.version, csrf: csrfToken });
+    setBusy(false);
+    if (result.status === 'ready' && 'record' in result) {
+      const record = result.record;
+      setRecords(previous => previous.map(row => row.ref === record.ref ? record : row));
+      setNotice('Transición versionada y auditada. Revisión profesional pendiente.');
+    } else {
+      if (result.status === 'denied' || result.status === 'disabled') setStatus(result.status);
+      setNotice('No se pudo actualizar. La versión puede haber cambiado; recarga el detalle.');
+    }
+  }
+
+  const shell = (message: string, role: 'status' | 'alert') =>
+    <section id="compliance-management" className="ui-page catalog-panel" aria-label="SG-SST">
+      <PageHeader title="Seguridad y salud en el trabajo" />
+      <p role={role}>{message}</p>
+    </section>;
+  if (!enabled) return shell('SG-SST aún no está habilitado; no se consultaron datos.', 'status');
+  if (!canRead || status === 'denied') return shell('Acceso denegado: razón social o permisos insuficientes.', 'alert');
+  if (status === 'disabled') return shell('El servidor no habilitó el módulo SG-SST.', 'alert');
+
+  const filtered = records.filter(row =>
+    (stateFilter === 'TODOS' || row.state === stateFilter)
+    && (row.ref.toLowerCase().includes(search.trim().toLowerCase())
+      || ohsLabels[row.kind].toLowerCase().includes(search.trim().toLowerCase())));
+  const selected = records.find(row => row.ref === chosen);
+  return <section id="compliance-management" className="ui-page catalog-panel"
+    aria-label="Seguridad y salud en el trabajo">
+    <PageHeader title="Seguridad y salud en el trabajo"
+      description="Registros de gestión por empresa, razón social y sede."
+      actions={canCreate ? <button type="button" onClick={() => { setPanel('create'); setNotice(''); }}>Nuevo registro</button> : undefined} />
+    <p className="muted">Solo referencias opacas. No registrar datos médicos, diagnósticos ni identificaciones personales.</p>
+    {notice && <output role="status" aria-live="polite">{notice}</output>}
+    {status === 'loading' && <p role="status">Cargando registros SG-SST…</p>}
+    {status === 'error' && <p role="alert">No se pudieron cargar los registros. Comprueba la conexión.</p>}
+    {status === 'ready' && <>
+      <MetricStrip label="Resumen SG-SST" items={[
+        { label: 'Registros', value: records.length },
+        { label: 'Pendientes', value: records.filter(row => row.state === 'PENDIENTE').length },
+        { label: 'En revisión', value: records.filter(row => row.state === 'EN_REVISION').length },
+      ]} />
+      <section className="ui-card catalog-card" aria-label="Listado de registros SG-SST">
+        <Toolbar trailing={<output aria-live="polite">{filtered.length} resultados</output>}>
+          <label>Buscar referencia <input type="search" value={search}
+            onChange={event => setSearch(event.target.value)} /></label>
+          <label>Estado <select value={stateFilter}
+            onChange={event => setStateFilter(event.target.value as typeof stateFilter)}>
+            <option value="TODOS">Todos</option>
+            {ohsStates.map(state => <option key={state} value={state}>{state.replaceAll('_', ' ')}</option>)}
+          </select></label>
+        </Toolbar>
+        <DataTable<OccupationalRealRecord> caption="Registros SG-SST por razón social"
+          rows={filtered} rowKey={row => row.ref} empty="No hay registros en este ámbito."
+          onOpen={row => { void openDetail(row.ref); }}
+          columns={[
+            { key: 'ref', header: 'Referencia', render: row => row.ref },
+            { key: 'kind', header: 'Tipo', render: row => ohsLabels[row.kind] },
+            { key: 'state', header: 'Estado', render: row =>
+              <StatusPill tone={row.state === 'PENDIENTE' ? 'neutral' : row.state === 'EN_REVISION' ? 'info' : 'warn'}>{row.state.replaceAll('_', ' ')}</StatusPill> },
+          ]} />
+      </section>
+    </>}
+    <SidePanel open={panel === 'create' && canCreate && status === 'ready'}
+      title="Nuevo registro SG-SST" onClose={() => setPanel(null)}>
+      <form onSubmit={event => void create(event)}>
+        <p>Identificador opaco, sin nombres, correos, diagnósticos ni historia médica.</p>
+        <label>Referencia <input required maxLength={64} pattern="[a-z][a-z0-9_\-]{0,63}"
+          value={newRef} onChange={event => setNewRef(event.target.value)} /></label>
+        <label>Tipo <select value={newKind}
+          onChange={event => setNewKind(event.target.value as OccupationalRealRecord['kind'])}>
+          {ohsKinds.map(kind => <option key={kind} value={kind}>{ohsLabels[kind]}</option>)}
+        </select></label>
+        <button disabled={busy} type="submit">{busy ? 'Guardando…' : 'Guardar para revisión'}</button>
+      </form>
+    </SidePanel>
+    <SidePanel open={panel === 'detail' && !!selected && status === 'ready'}
+      title="Detalle y revisión" onClose={() => setPanel(null)}>
+      {selected && <>
+        <dl><dt>Referencia</dt><dd>{selected.ref}</dd>
+          <dt>Tipo</dt><dd>{ohsLabels[selected.kind]}</dd>
+          <dt>Estado</dt><dd>{selected.state.replaceAll('_', ' ')}</dd>
+          <dt>Versión auditada</dt><dd>{selected.version}</dd></dl>
+        {canUpdate && <>
+          {(selected.state === 'PENDIENTE' || selected.state === 'REQUIERE_REVISION')
+            && <button type="button" disabled={busy} onClick={() => { void advance('EN_REVISION'); }}>Iniciar revisión</button>}
+          {(selected.state === 'PENDIENTE' || selected.state === 'EN_REVISION')
+            && <button type="button" disabled={busy} onClick={() => { void advance('REQUIERE_REVISION'); }}>Solicitar revisión</button>}
+        </>}
+        <p>Ningún estado constituye aprobación ni cierre automático.</p>
+      </>}
+    </SidePanel>
+  </section>;
+}
+
 /** M06: independent synthetic compliance-evidence facade, distinct from SG-SST. */
 export function ComplianceEvidenceManagement({ branchId, permissions, csrfToken }: Readonly<{
   branchId: string; permissions: string[]; csrfToken : string;
