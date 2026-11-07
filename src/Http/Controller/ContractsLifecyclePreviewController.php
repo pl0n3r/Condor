@@ -40,6 +40,17 @@ final class ContractsLifecyclePreviewController extends AbstractController
             'tenant_ref', 'company_ref', 'reference_date', 'contracts',
             'signature_evidence', 'renewals', 'terminations', 'settlement_drafts',
         ]);
+        // BranchApiSupport decodes top-level JSON to an array, but child
+        // rows remain stdClass. Convert only the five expected sections;
+        // ContractLifecycleProjection still validates each exact schema.
+        foreach (['contracts', 'signature_evidence', 'renewals', 'terminations', 'settlement_drafts'] as $section) {
+            if (is_array($data[$section] ?? null)) {
+                $data[$section] = array_map(
+                    static fn (mixed $row): mixed => $row instanceof \stdClass ? (array) $row : $row,
+                    $data[$section],
+                );
+            }
+        }
         $company = $branch->legalEntity();
         if ($company === null || $company->tenant()->id() !== $tenant->id()) {
             throw new NotFoundHttpException('Empresa no disponible para la sede.');
