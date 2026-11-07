@@ -44,32 +44,49 @@ final class ContractsLifecyclePreviewControllerTest extends WebTestCase
             'company_ref' => 'fixture:company/c'.substr(hash('sha256',
                 $tenant->id().'|'.$branch->legalEntity()->id().'|'.$branch->id()), 0, 15),
         ];
-        return [
-            ...$scope, 'reference_date' => '2026-11-05',
-            'contracts' => [$scope + [
-                'ref' => 'fixture:contract/basic', 'worker_ref' => 'fixture:worker/demo',
-                'start_on' => '2026-01-01', 'end_on' => '2026-11-20',
+        // Keep the fake records separate from the server-bound scope. Each
+        // category gets the exact same scoped namespace before projection.
+        $records = [
+            'contracts' => [[
+                'ref' => 'fixture:contract/basic',
+                'worker_ref' => 'fixture:worker/demo',
+                'start_on' => '2026-01-01',
+                'end_on' => '2026-11-20',
             ]],
-            'signature_evidence' => [$scope + [
+            'signature_evidence' => [[
                 'ref' => 'fixture:signature-evidence/draft',
                 'contract_ref' => 'fixture:contract/basic',
-                'reviewer_ref' => 'fixture:reviewer/demo', 'captured_on' => '2026-01-02',
+                'reviewer_ref' => 'fixture:reviewer/demo',
+                'captured_on' => '2026-01-02',
             ]],
-            'renewals' => [$scope + [
-                'ref' => 'fixture:renewal/proposal', 'contract_ref' => 'fixture:contract/basic',
-                'reviewer_ref' => 'fixture:reviewer/demo', 'proposed_end_on' => '2027-01-31',
+            'renewals' => [[
+                'ref' => 'fixture:renewal/proposal',
+                'contract_ref' => 'fixture:contract/basic',
+                'reviewer_ref' => 'fixture:reviewer/demo',
+                'proposed_end_on' => '2027-01-31',
             ]],
-            'terminations' => [$scope + [
-                'ref' => 'fixture:termination/draft', 'contract_ref' => 'fixture:contract/basic',
-                'reviewer_ref' => 'fixture:reviewer/demo', 'effective_on' => '2026-11-20',
+            'terminations' => [[
+                'ref' => 'fixture:termination/draft',
+                'contract_ref' => 'fixture:contract/basic',
+                'reviewer_ref' => 'fixture:reviewer/demo',
+                'effective_on' => '2026-11-20',
                 'reason_key' => 'TERM_REVIEW',
             ]],
-            'settlement_drafts' => [$scope + [
+            'settlement_drafts' => [[
                 'ref' => 'fixture:settlement-draft/estimate',
                 'termination_ref' => 'fixture:termination/draft',
                 'reviewer_ref' => 'fixture:reviewer/demo',
             ]],
         ];
+        foreach ($records as &$entries) {
+            foreach ($entries as &$entry) {
+                $entry = $scope + $entry;
+            }
+            unset($entry);
+        }
+        unset($entries);
+
+        return [...$scope, 'reference_date' => '2026-11-05', ...$records];
     }
 
     public function testFiveLifecycleSlicesAreReadOnlyAndNeverLegallyApproved(): void
