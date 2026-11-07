@@ -285,7 +285,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               </label>
               <button type="submit" disabled={busy}>Registrar solicitud ficticia</button>
             </form>
-          
+
         </SidePanel>
         )}
         <SidePanel open={Boolean(current) && !creating} title="Detalle y revisión manual" onClose={() => setSelected('')}>
@@ -304,7 +304,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             )}
             <p className="muted">Ningún acta, poder o decisión se aprueba ni cierra automáticamente.</p>
           </> : <p role="status">Selecciona una actuación ficticia para el detalle.</p>}
-        
+
         </SidePanel>
         <section className="ui-card catalog-card" aria-labelledby="governance-audit-title">
           <h3 id="governance-audit-title">Bitácora de demostración (no oficial)</h3>

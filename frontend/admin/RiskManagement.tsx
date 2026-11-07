@@ -203,7 +203,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               </label>
               <button type="submit">Crear riesgo ficticio</button>
             </form>
-          
+
         </SidePanel>
         )}
         <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión" onClose={() => setSelected('')}>
@@ -226,7 +226,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             </form>}
             <p className="muted">Ningún riesgo se aprueba ni se cierra automáticamente.</p>
           </> : <p role="status">Selecciona un riesgo para consultar su detalle.</p>}
-        
+
         </SidePanel>
         <section className="ui-card catalog-card" aria-labelledby="risk-audit-title">
           <h3 id="risk-audit-title">Bitácora de demostración (no oficial)</h3>

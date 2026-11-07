@@ -143,7 +143,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
               </label>
               <button type="submit">Crear registro ficticio</button>
             </form>
-          
+
         </SidePanel>
         )}
         <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión explícita" onClose={() => setSelected('')}>
@@ -167,7 +167,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             )}
             <p className="muted">No hay transición automática a APROBADO ni CERRADO.</p>
           </> : <p role="status">Selecciona un registro para ver su detalle.</p>}
-        
+
         </SidePanel>
         <section className="ui-card catalog-card" aria-labelledby="quality-audit-title">
           <h3 id="quality-audit-title">Bitácora ficticia de esta sesión</h3>
