@@ -220,3 +220,127 @@ test.describe('Super Admin — clientes y staff de plataforma', () => {
   });
 
 });
+
+
+// #1693: navegación y pantalla completas con datos inventados; no login ni red de producción.
+const syntheticRevenueContext = {
+  mode: 'global',
+  actor: { id: 'owner-fixture', name: 'Propietario de prueba', role: 'platform_owner' },
+  metrics: { tenant_count: 1, user_count: 1, branch_count: 0, active_membership_count: 1 },
+  signals_last_30_days: {},
+  commercial_catalog: [],
+  commercial_portfolio: [],
+  tenants: [],
+  tenant_pagination: { page: 1, per_page: 20, total: 0, has_previous: false, has_next: false },
+  selected_tenant: null,
+  version: '0.1.198',
+};
+
+function syntheticRevenueResponse(url) {
+  const from = url.searchParams.get('from');
+  const to = url.searchParams.get('to');
+  const plan = url.searchParams.get('plan') || '';
+  const amounts = { new: 120000, expansion: 0, contraction: 0, churn: 0, mrr_delta: 120000 };
+  const zero = { new: 0, expansion: 0, contraction: 0, churn: 0, mrr_delta: 0 };
+  const allMovements = [
+    { tenant_id: 'tenant-ficticio', company: 'Empresa ficticia', plan_key: 'starter',
+      plan_name: 'Inicial', type: 'new', recognition: 'effective',
+      occurred_at: new Date().toISOString().slice(0, 10) + 'T12:00:00.000000Z',
+      amount: 120000, mrr_delta: 120000 },
+  ];
+  const filtered = allMovements.filter(m => (!plan || m.plan_key === plan)
+    && m.occurred_at.slice(0, 10) >= from && m.occurred_at.slice(0, 10) <= to);
+  return {
+    status: 'ready', currency: 'COP', period: { from, to },
+    totals: filtered.length ? amounts : zero,
+    plans: filtered.length ? [{ key: 'starter', name: 'Inicial', ...amounts }] : [],
+    companies: filtered.length ? [{ tenant_id: 'tenant-ficticio', company: 'Empresa ficticia', ...amounts }] : [],
+    movements: filtered,
+  };
+}
+
+async function openRevenueFixture(page, revenueHandler) {
+  await page.route('**/adminpl0n3r/api/context*', route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify(syntheticRevenueContext),
+  }));
+  await page.route('**/adminpl0n3r/api/ingresos*', async route => {
+    await revenueHandler(route);
+  });
+  await page.goto('/');
+  await page.evaluate(() => history.replaceState(null, '', '/adminpl0n3r/catalogo?vista=ingresos'));
+  await page.setContent(
+    '<link rel="stylesheet" href="/build/admin.css">' +
+    '<div id="condor-platform-root" data-version="0.1.198" data-section="catalogo"' +
+    ' data-logout-token="synthetic-logout" data-subscription-token="synthetic-subscription"></div>' +
+    '<script type="module" src="/build/admin.js"></script>',
+  );
+  return page.getByRole('region', { name: 'Ingresos SaaS del propietario' });
+}
+
+test.describe('Ingresos SaaS de propietario · sintético (#1693)', () => {
+  test.skip(!process.env.PLAYWRIGHT_BASE_URL, 'Requiere servidor de fixtures y bundle compilado.');
+
+  test('abre la pantalla desde Comercial, detalla ingresos y no confunde cifras verificadas', async ({ page }) => {
+    const requests = [];
+    page.on('request', request => {
+      if (request.url().includes('/api/ingresos')) requests.push(request.method());
+    });
+    const panel = await openRevenueFixture(page, route => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify(syntheticRevenueResponse(new URL(route.request().url()))),
+    }));
+    await expect(panel.getByRole('heading', { name: 'Ingresos SaaS' })).toBeVisible();
+    const navigation = page.getByRole('navigation', { name: 'Navegación de plataforma' });
+    await navigation.getByRole('button', { name: 'Comercial' }).click();
+    await expect(navigation.getByRole('link', { name: 'Ingresos', exact: true }))
+      .toHaveAttribute('href', '/adminpl0n3r/catalogo?vista=ingresos');
+    await expect(panel.getByRole('table', { name: 'Movimientos de ingresos SaaS' }))
+      .toContainText('Empresa ficticia');
+    await expect(panel.getByText('120.000', { exact: false }).first()).toBeVisible();
+    await expect(panel.getByRole('table', { name: 'Totales de MRR por plan' })).toContainText('Inicial');
+    await expect(panel.getByRole('table', { name: 'Totales de MRR por empresa' }))
+      .toContainText('Empresa ficticia');
+    if (process.env.CAPTURE_PLATFORM_1693_SCREENSHOT === 'true') {
+      await page.screenshot({ path: 'docs/evidencia/plataforma-1693-ingresos.png', fullPage: true });
+    }
+    const movementRow = panel.getByRole('table', { name: 'Movimientos de ingresos SaaS' })
+      .getByRole('row').filter({ hasText: 'Empresa ficticia' });
+    await movementRow.getByRole('button').click();
+    await expect(page.getByRole('dialog', { name: 'Detalle del movimiento' })).toContainText('Inicial');
+    expect(requests.length).toBeGreaterThan(0);
+    expect(requests.every(method => method === 'GET')).toBe(true);
+    await expect(page.locator('body')).not.toContainText('@example.test');
+  });
+
+  test('filtra por plan y muestra vacío verificable sin inventar movimientos', async ({ page }) => {
+    const panel = await openRevenueFixture(page, route => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify(syntheticRevenueResponse(new URL(route.request().url()))),
+    }));
+    await expect(panel.getByRole('table', { name: 'Movimientos de ingresos SaaS' }))
+      .toContainText('Empresa ficticia');
+    await panel.getByLabel('Plan').selectOption('starter');
+    await expect(panel.getByRole('table', { name: 'Movimientos de ingresos SaaS' }))
+      .toContainText('Empresa ficticia');
+    await panel.getByLabel('Plan').selectOption('');
+    await panel.getByLabel('Desde').fill('2026-01-01');
+    await panel.getByLabel('Hasta').fill('2026-01-31');
+    await expect(panel.getByText('Sin movimientos para este periodo.')).toBeVisible();
+    await expect(panel.getByRole('table', { name: 'Movimientos de ingresos SaaS' })).toHaveCount(0);
+    await expect(panel.getByText('$ 0', { exact: true }).first()).toBeVisible();
+  });
+
+  test('denegación 403 y evidencia incompleta nunca se presentan como ingresos cero', async ({ page }) => {
+    let status = 403;
+    const panel = await openRevenueFixture(page, route => route.fulfill({
+      status, contentType: 'application/json',
+      body: status === 403 ? '{}' : '{"status":"unavailable","reason":"incomplete_commercial_evidence"}',
+    }));
+    await expect(panel.getByRole('alert')).toContainText('No tienes permiso');
+    await expect(panel.getByRole('table', { name: 'Movimientos de ingresos SaaS' })).toHaveCount(0);
+    status = 200;
+    await panel.getByLabel('Desde').fill('2026-01-01');
+    await expect(panel.getByRole('alert')).toContainText('evidencia comercial incompleta');
+    await expect(panel.getByRole('table', { name: 'Movimientos de ingresos SaaS' })).toHaveCount(0);
+  });
+});
