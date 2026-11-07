@@ -62,6 +62,7 @@ export async function provisionCommerceFixture(page, {
 
   await page.goto('/admin#commerce');
   const commerce = page.locator('#commerce');
+  await commerce.getByRole('button', { name: 'Nueva lista' }).click();
   await commerce.getByLabel('Nombre de lista').fill(listName);
   await commerce.getByLabel('Slug de lista').fill(listSlug);
   await commerce.getByRole('button', { name: 'Crear lista' }).click();
