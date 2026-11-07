@@ -42,6 +42,12 @@ final class PlatformOwnerController extends AbstractController
         defaults: ['section' => 'staff'],
         methods: ['GET'],
     )]
+    #[Route(
+        '/adminpl0n3r/integraciones',
+        name: 'app_platform_owner_integrations',
+        defaults: ['section' => 'integraciones'],
+        methods: ['GET'],
+    )]
     public function __invoke(AppVersion $version, string $section): Response
     {
         $this->denyAccessUnlessGranted(User::ROLE_PLATFORM_OWNER);

@@ -1,5 +1,17 @@
 framework:
   rate_limiter:
+    # Ajustes solo del propietario: límite por identidad y por clave.
+    platform_integrations_write:
+      policy: sliding_window
+      limit: 20
+      interval: '1 minute'
+
+    # Una prueba por minuto, incluso si alguien evita el botón de la UI.
+    platform_integrations_test_email:
+      policy: sliding_window
+      limit: 1
+      interval: '1 minute'
+
     platform_staff_invite_resend:
       policy: fixed_window
       limit: 5
