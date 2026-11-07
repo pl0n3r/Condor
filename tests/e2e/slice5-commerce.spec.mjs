@@ -57,6 +57,7 @@ test.describe('Slice 5 — clientes y precios', () => {
       commerce.getByRole('heading', { name: 'Comercial', exact: true })
     ).toBeVisible();
 
+    await commerce.getByRole('button', { name: 'Nueva categoría' }).click();
     await commerce.getByLabel('Nombre de categoría').fill(categoryName);
     await commerce.getByLabel('Slug de categoría').fill(categorySlug);
     await commerce.getByRole('button', { name: 'Crear categoría' }).click();
@@ -65,6 +66,7 @@ test.describe('Slice 5 — clientes y precios', () => {
       commerce.locator('strong').filter({ hasText: categoryName })
     ).toBeVisible();
 
+    await commerce.getByRole('button', { name: 'Nuevo cliente' }).click();
     const customerForm = commerce.locator('form.catalog-editor').filter({
       hasText: 'Nombre del cliente',
     });
@@ -98,6 +100,7 @@ test.describe('Slice 5 — clientes y precios', () => {
     await expect(customerRow.getByText(updatedPhone)).toBeVisible();
     await expect(customerRow.getByText(updatedNotes)).toBeVisible();
 
+    await commerce.getByRole('button', { name: 'Nueva lista' }).click();
     await commerce.getByLabel('Nombre de lista').fill(listName);
     await commerce.getByLabel('Slug de lista').fill(listSlug);
     await commerce.getByRole('button', { name: 'Crear lista' }).click();
