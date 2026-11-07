@@ -44,6 +44,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'payroll_real_records',
                 'payroll_synthetic_records',
                 'self_service_trial_application',
+                'social_security_real_records',
                 'social_security_synthetic_records',
                 'workflow_definitions',
                 'workflow_executions',
