@@ -51,7 +51,7 @@ export async function provisionCommerceFixture(page, {
   await inventory.getByRole('button', { name: 'Crear fuente' }).click();
   await expect(inventory.getByText('Fuente creada.')).toBeVisible();
 
-  await inventory.locator('#inventory-adjust-source').selectOption({ label: sourceName });
+  await inventory.locator('label.field:has(> span:text-is("Fuente")) > select').selectOption({ label: sourceName });
   await inventory.getByLabel('Variante').first().selectOption({
     label: productName + ' · ' + sku,
   });
