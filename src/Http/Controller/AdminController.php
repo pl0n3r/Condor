@@ -54,6 +54,7 @@ final class AdminController extends AbstractController
             'payroll_real_data_enabled' => getenv('PAYROLL_REAL_DATA_ENABLED') === 'true',
             'contracts_real_data_enabled' => getenv('CONTRACTS_REAL_DATA_ENABLED') === 'true',
             'social_security_real_data_enabled' => getenv('SOCIAL_SECURITY_REAL_DATA_ENABLED') === 'true',
+            'finance_real_data_enabled' => getenv('FINANCE_REAL_DATA_ENABLED') === 'true',
             'contracts_synthetic_api_enabled' => $this->getParameter('kernel.environment') === 'dev'
                 && getenv('CONDOR_CONTRACTS_SYNTHETIC_API') === '1',
         ]);

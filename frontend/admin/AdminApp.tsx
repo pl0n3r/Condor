@@ -20,6 +20,7 @@ import { AssetsManagement } from './AssetsManagement';
 import { PayrollManagement } from './PayrollManagement';
 import { ContractsRealManagement } from './ContractsManagement';
 import { SocialSecurityRealManagement } from './SocialSecurityManagement';
+import { FinanceRealManagement } from './FinanceManagement';
 import { ComplianceManagement } from './ComplianceManagement';
 import { AdminShell, type AdminNavEntry } from './AdminShell';
 import { ModuleDirectory } from './ModuleDirectory';
@@ -117,6 +118,8 @@ export function AdminApp({
     && document.getElementById('condor-admin-root')?.dataset.contractsRealDataEnabled === 'true';
   const socialSecurityRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.socialSecurityRealDataEnabled === 'true';
+  const financeRealDataEnabled = typeof document !== 'undefined'
+    && document.getElementById('condor-admin-root')?.dataset.financeRealDataEnabled === 'true';
   // Synthetic catalogs are available only in dev with an explicit root opt-in.
   // This flag never enables the HR real-data API or overrides server permissions.
   const hrSyntheticPreviewEnabled = import.meta.env.DEV && typeof document !== 'undefined'
@@ -249,7 +252,8 @@ export function AdminApp({
           group: 'Finanzas y cumplimiento',
           icon: 'finance',
           items: [
-            ...(import.meta.env.DEV ? [{ href: '/admin#finance-management', label: 'Finanzas (pruebas)' }] : []),
+            ...(financeRealDataEnabled ? [{ href: '/admin#finance-management', label: 'Finanzas' }]
+              : import.meta.env.DEV ? [{ href: '/admin#finance-management', label: 'Finanzas (pruebas)' }] : []),
             ...(import.meta.env.DEV ? [{ href: '/admin#compliance-management', label: 'SG-SST (pruebas)' }] : []),
             ...(import.meta.env.DEV ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal (pruebas)' }] : []),
             ...(import.meta.env.DEV ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo (pruebas)' }] : []),
@@ -634,7 +638,19 @@ export function AdminApp({
             </Suspense>
           )}
 
-          {import.meta.env.DEV && DevFinanceManagement && (
+          {financeRealDataEnabled && (
+            <FinanceRealManagement
+              key={'finance-real-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+              enabled={financeRealDataEnabled}
+              tenantId={context.data.tenant.id}
+              companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
+              branchId={context.data.active_branch.id}
+              permissions={context.data.permissions}
+              csrfToken={accessToken}
+            />
+          )}
+
+          {import.meta.env.DEV && !financeRealDataEnabled && DevFinanceManagement && (
             <Suspense fallback={<p role="status">Cargando finanzas ficticias…</p>}>
               <DevFinanceManagement
                 key={'finance-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}

@@ -318,3 +318,254 @@ export function FinanceManagement(props: Props) {
   return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId}
     {...props} />;
 }
+
+
+/** #1659: persistencia financiera por empresa, independiente del laboratorio en memoria. */
+export type FinanceRealRecord = Readonly<{
+  ref: string; tenantId: string; companyId: string;
+  kind: 'ingreso' | 'egreso' | 'ajuste' | 'presupuesto';
+  state: 'PENDIENTE' | 'REQUIERE_REVISION'; version: number;
+}>;
+export type FinanceRealOptions = Readonly<{
+  enabled: boolean; allowed: boolean; tenantId: string; companyId: string; branchId: string;
+  method?: 'GET' | 'POST' | 'PATCH';
+  ref?: string; kind?: FinanceRealRecord['kind'];
+  state?: FinanceRealRecord['state']; expectedVersion?: number; csrf?: string;
+}>;
+export type FinanceRealResult =
+  | { status: 'disabled' | 'denied' | 'error' }
+  | { status: 'ready'; records: FinanceRealRecord[] }
+  | { status: 'ready'; record: FinanceRealRecord };
+
+const realFinanceRef = /^[a-z][a-z0-9_-]{0,63}$/;
+const realFinanceKinds: FinanceRealRecord['kind'][] = ['ingreso', 'egreso', 'ajuste', 'presupuesto'];
+const realFinanceNames: Record<FinanceRealRecord['kind'], string> = {
+  ingreso: 'Ingreso', egreso: 'Egreso', ajuste: 'Ajuste', presupuesto: 'Presupuesto',
+};
+function financeOpaque(ref: string): boolean {
+  return realFinanceRef.test(ref) && !/[0-9]{7,}/.test(ref);
+}
+function financeRecord(value: unknown, tenant: string, company: string): FinanceRealRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (row.tenant_id !== tenant || row.company_id !== company
+    || typeof row.entry_ref !== 'string' || !financeOpaque(row.entry_ref)
+    || typeof row.kind !== 'string'
+    || !realFinanceKinds.includes(row.kind as FinanceRealRecord['kind'])
+    || (row.state !== 'PENDIENTE' && row.state !== 'REQUIERE_REVISION')
+    || !Number.isInteger(row.version) || (row.version as number) < 1
+    || (row.version as number) > 1_000_000) return null;
+  return { ref: row.entry_ref, tenantId: tenant, companyId: company,
+    kind: row.kind as FinanceRealRecord['kind'], state: row.state, version: row.version as number };
+}
+
+/** OFF y permisos insuficientes impiden transporte, incluso con fetch sustituido. */
+export async function financeRealRequest(
+  options: FinanceRealOptions, transport: typeof fetch = fetch,
+): Promise<FinanceRealResult> {
+  if (!options.enabled) return { status: 'disabled' };
+  if (!options.allowed || !options.tenantId || !options.branchId
+    || !options.companyId || options.companyId === '__unassigned__') return { status: 'denied' };
+  const method = options.method ?? 'GET';
+  if (!['GET', 'POST', 'PATCH'].includes(method)
+    || (options.ref !== undefined && !financeOpaque(options.ref))) return { status: 'error' };
+  if (method === 'POST' && (!options.csrf || !options.ref || !options.kind
+    || !realFinanceKinds.includes(options.kind))) return { status: 'error' };
+  if (method === 'PATCH' && (!options.csrf || !options.ref
+    || (options.state !== 'PENDIENTE' && options.state !== 'REQUIERE_REVISION')
+    || !Number.isInteger(options.expectedVersion) || (options.expectedVersion ?? 0) < 1)) {
+    return { status: 'error' };
+  }
+  const root = '/api/v1/branches/' + encodeURIComponent(options.branchId) + '/finance/real-records';
+  const url = options.ref && method !== 'POST' ? root + '/' + encodeURIComponent(options.ref)
+    + (method === 'PATCH' ? '/state' : '') : root;
+  const payload = method === 'POST'
+    ? { entry_ref: options.ref, kind: options.kind }
+    : { state: options.state, expected_version: options.expectedVersion };
+  try {
+    const reply = await transport(url, {
+      method, credentials: 'same-origin', cache: 'no-store',
+      headers: { Accept: 'application/json', ...(method === 'GET' ? {}
+        : { 'Content-Type': 'application/json', 'X-CSRF-Token': options.csrf ?? '' }) },
+      ...(method === 'GET' ? {} : { body: JSON.stringify(payload) }),
+    });
+    if (reply.status === 401 || reply.status === 403) return { status: 'denied' };
+    if (reply.status === 404 && method === 'GET' && options.ref === undefined) return { status: 'disabled' };
+    if (!reply.ok) return { status: 'error' };
+    const body: unknown = await reply.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return { status: 'error' };
+    const data = body as Record<string, unknown>;
+    if (method === 'GET' && options.ref === undefined) {
+      if (!Array.isArray(data.records) || data.records.length > 100) return { status: 'error' };
+      const mapped = data.records.map(row => financeRecord(row, options.tenantId, options.companyId));
+      if (mapped.some(row => row === null)) return { status: 'error' };
+      const records = mapped as FinanceRealRecord[];
+      if (new Set(records.map(row => row.ref)).size !== records.length) return { status: 'error' };
+      return { status: 'ready', records };
+    }
+    const record = financeRecord(data.record, options.tenantId, options.companyId);
+    if (!record || (options.ref && record.ref !== options.ref)) return { status: 'error' };
+    return { status: 'ready', record };
+  } catch { return { status: 'error' }; }
+}
+
+type FinanceRealProps = Props & Readonly<{ enabled: boolean; csrfToken: string }>;
+export function FinanceRealManagement({
+  enabled, tenantId, companyId, branchId, permissions, csrfToken,
+}: FinanceRealProps) {
+  const canRead = permissions.includes('settings.view') && companyId !== '__unassigned__';
+  const canCreate = canRead && permissions.includes('settings.create');
+  const canUpdate = canRead && permissions.includes('settings.update');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'denied' | 'disabled' | 'error'>('loading');
+  const [rows, setRows] = useState<FinanceRealRecord[]>([]);
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [panel, setPanel] = useState<'create' | 'detail' | null>(null);
+  const [selected, setSelected] = useState('');
+  const [searchReal, setSearchReal] = useState('');
+  const [stateFilterReal, setStateFilterReal] = useState<'TODOS' | FinanceRealRecord['state']>('TODOS');
+  const [newRef, setNewRef] = useState('');
+  const [newKind, setNewKind] = useState<FinanceRealRecord['kind']>('ingreso');
+
+  useEffect(() => {
+    if (!enabled || !canRead) return;
+    let active = true;
+    setStatus('loading');
+    setRows([]);
+    setPanel(null);
+    void financeRealRequest({ enabled, allowed: canRead, tenantId, companyId, branchId })
+      .then(result => {
+        if (!active) return;
+        if (result.status === 'ready' && 'records' in result) {
+          setRows(result.records);
+          setStatus('ready');
+        } else setStatus(result.status === 'ready' ? 'error' : result.status);
+      });
+    return () => { active = false; };
+  }, [enabled, canRead, tenantId, companyId, branchId]);
+
+  async function addRecord(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || status !== 'ready') return;
+    setBusy(true);
+    const result = await financeRealRequest({
+      enabled, allowed: canCreate, tenantId, companyId, branchId,
+      method: 'POST', ref: newRef, kind: newKind, csrf: csrfToken,
+    });
+    setBusy(false);
+    if (result.status === 'ready' && 'record' in result) {
+      setRows(previous => [...previous, result.record]);
+      setSelected(result.record.ref);
+      setPanel('detail');
+      setNewRef('');
+      setNotice('Registro guardado para revisión. Sin contabilización, cierre ni pago.');
+    } else {
+      if (result.status === 'denied') setStatus('denied');
+      if (result.status === 'disabled') setStatus('disabled');
+      setNotice('No se pudo crear. Verifica ámbito, permisos y referencia.');
+    }
+  }
+
+  async function changeRealState(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const current = rows.find(row => row.ref === selected);
+    if (!current || busy || status !== 'ready') return;
+    const next = current.state === 'PENDIENTE' ? 'REQUIERE_REVISION' : 'PENDIENTE';
+    setBusy(true);
+    const result = await financeRealRequest({
+      enabled, allowed: canUpdate, tenantId, companyId, branchId,
+      method: 'PATCH', ref: current.ref, state: next,
+      expectedVersion: current.version, csrf: csrfToken,
+    });
+    setBusy(false);
+    if (result.status === 'ready' && 'record' in result) {
+      setRows(previous => previous.map(row => row.ref === result.record.ref ? result.record : row));
+      setNotice('Cambio versionado y auditado por el servidor.');
+    } else {
+      if (result.status === 'denied') setStatus('denied');
+      if (result.status === 'disabled') setStatus('disabled');
+      setNotice('No se pudo actualizar. Recarga los registros antes de repetir.');
+    }
+  }
+
+  const shell = (message: string, role: 'status' | 'alert') => (
+    <section id="finance-management" className="catalog-panel ui-page" aria-label="Finanzas">
+      <PageHeader title="Finanzas" />
+      <p role={role}>{message}</p>
+    </section>
+  );
+  if (!enabled) return shell('Finanzas aún no está habilitado. No se consultaron datos.', 'status');
+  if (!canRead || status === 'denied') return shell('Acceso denegado: falta empresa, razón social o permiso.', 'alert');
+  if (status === 'disabled') return shell('El servidor no tiene habilitada Finanzas.', 'alert');
+
+  const visible = rows.filter(row => (stateFilterReal === 'TODOS' || row.state === stateFilterReal)
+    && (row.ref.toLowerCase().includes(searchReal.trim().toLowerCase())
+      || realFinanceNames[row.kind].toLowerCase().includes(searchReal.trim().toLowerCase())));
+  const picked = rows.find(row => row.ref === selected);
+  return <section id="finance-management" className="catalog-panel ui-page" aria-label="Finanzas">
+    <PageHeader title="Finanzas" description="Registros internos de revisión por empresa y razón social."
+      actions={canCreate ? <button type="button" onClick={() => setPanel('create')}>Nuevo registro</button>
+        : undefined} />
+    <p className="muted">Solo referencias opacas. Sin movimientos bancarios, pagos ni cierre contable automático.</p>
+    {notice && <output role="status" aria-live="polite">{notice}</output>}
+    {status === 'loading' && <p role="status">Cargando registros financieros…</p>}
+    {status === 'error' && <p role="alert">No se pudieron cargar los registros. Comprueba la conexión.</p>}
+    {status === 'ready' && <>
+      <MetricStrip label="Resumen financiero" items={[
+        { label: 'Registros', value: rows.length },
+        { label: 'Pendientes', value: rows.filter(row => row.state === 'PENDIENTE').length },
+        { label: 'En revisión', value: rows.filter(row => row.state === 'REQUIERE_REVISION').length },
+      ]} />
+      <section className="ui-card catalog-card" aria-label="Listado de registros financieros">
+        <Toolbar trailing={<output aria-live="polite">{visible.length} resultados</output>}>
+          <label>Buscar referencia <input type="search" value={searchReal}
+            onChange={event => setSearchReal(event.target.value)} /></label>
+          <label>Estado <select value={stateFilterReal}
+            onChange={event => setStateFilterReal(event.target.value as typeof stateFilterReal)}>
+            <option value="TODOS">Todos</option>
+            <option value="PENDIENTE">Pendiente</option>
+            <option value="REQUIERE_REVISION">Requiere revisión</option>
+          </select></label>
+        </Toolbar>
+        <DataTable<FinanceRealRecord> caption="Registros financieros por empresa"
+          rows={visible} rowKey={row => row.ref}
+          onOpen={row => { setSelected(row.ref); setPanel('detail'); }}
+          columns={[
+            { key: 'ref', header: 'Referencia', render: row => row.ref },
+            { key: 'kind', header: 'Clase', render: row => realFinanceNames[row.kind] },
+            { key: 'state', header: 'Estado', render: row =>
+              <StatusPill tone={row.state === 'PENDIENTE' ? 'neutral' : 'warn'}>
+                {row.state === 'PENDIENTE' ? 'Pendiente' : 'Requiere revisión'}
+              </StatusPill> },
+          ]} empty={<p role="status">No hay registros para este ámbito y filtro.</p>} />
+      </section>
+    </>}
+    <SidePanel open={panel === 'create' && canCreate && status === 'ready'}
+      title="Crear registro financiero" onClose={() => setPanel(null)}>
+      <form onSubmit={event => void addRecord(event)}>
+        <p>Referencia opaca, sin nombres, montos, cuentas ni datos personales.</p>
+        <label>Referencia <input required maxLength={64} pattern="[a-z][a-z0-9_\-]{0,63}"
+          value={newRef} onChange={event => setNewRef(event.target.value)} /></label>
+        <label>Clase <select value={newKind}
+          onChange={event => setNewKind(event.target.value as FinanceRealRecord['kind'])}>
+          {realFinanceKinds.map(kind => <option key={kind} value={kind}>{realFinanceNames[kind]}</option>)}
+        </select></label>
+        <button type="submit" disabled={busy}>{busy ? 'Guardando…' : 'Guardar para revisión'}</button>
+      </form>
+    </SidePanel>
+    <SidePanel open={panel === 'detail' && !!picked && status === 'ready'}
+      title="Detalle y revisión" onClose={() => setPanel(null)}>
+      {picked && <><dl>
+        <dt>Referencia</dt><dd>{picked.ref}</dd>
+        <dt>Clase</dt><dd>{realFinanceNames[picked.kind]}</dd>
+        <dt>Estado</dt><dd>{picked.state === 'PENDIENTE' ? 'Pendiente' : 'Requiere revisión'}</dd>
+        <dt>Versión auditada</dt><dd>{picked.version}</dd>
+      </dl>
+      {canUpdate && <form onSubmit={event => void changeRealState(event)}>
+        <button type="submit" disabled={busy}>{busy ? 'Guardando…'
+          : picked.state === 'PENDIENTE' ? 'Enviar a revisión' : 'Devolver a pendiente'}</button>
+      </form>}
+      <p>Los estados no autorizan pagos ni asientos contables efectivos.</p></>}
+    </SidePanel>
+  </section>;
+}
