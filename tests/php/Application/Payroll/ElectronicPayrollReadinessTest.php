@@ -45,37 +45,60 @@ final class ElectronicPayrollReadinessTest extends TestCase
 
     public function testOnlySyntheticOfflinePreviewIsAllowedAndNeverClaimsIssuance(): void
     {
-        $plan = ElectronicPayrollReadiness::plan(self::syntheticInput(), self::TENANT);
+        $plan = ElectronicPayrollReadiness::plan(self::syntheticInput(), self::TENANT, self::COMPANY, true);
         self::assertAlwaysDisabled($plan);
         self::assertSame([], $plan['errors']);
 
         $explicitNoSend = self::syntheticInput();
         $explicitNoSend['request_send'] = false;
-        self::assertSame([], ElectronicPayrollReadiness::plan($explicitNoSend, self::TENANT)['errors']);
+        self::assertSame([], ElectronicPayrollReadiness::plan($explicitNoSend, self::TENANT, self::COMPANY, true)['errors']);
     }
 
     public function testRejectsTenantCrossingWithoutLeakingIdentifiers(): void
     {
         $plan = ElectronicPayrollReadiness::plan(self::syntheticInput(), 'fixture:tenant/foreign');
         self::assertAlwaysDisabled($plan);
-        self::assertNotEmpty($plan['errors']);
+        self::assertContains('TENANT_MISMATCH', $plan['errors']);
         $response = json_encode($plan, JSON_THROW_ON_ERROR);
         self::assertStringNotContainsString(self::DOCUMENT, $response);
         self::assertStringNotContainsString(self::TENANT, $response);
+    }
+
+    public function testRejectsCrossCompanyScopeAndUnauthorizedActor(): void
+    {
+        $payload = self::syntheticInput();
+        $otherCompany = ElectronicPayrollReadiness::plan(
+            $payload, self::TENANT, 'fixture:company/foreign', true,
+        );
+        self::assertAlwaysDisabled($otherCompany);
+        self::assertContains('COMPANY_MISMATCH', $otherCompany['errors']);
+        self::assertStringNotContainsString(
+            self::COMPANY, json_encode($otherCompany, JSON_THROW_ON_ERROR),
+        );
+
+        $unauthorized = ElectronicPayrollReadiness::plan($payload, self::TENANT, self::COMPANY);
+        self::assertAlwaysDisabled($unauthorized);
+        self::assertContains('PERMISSION_DENIED', $unauthorized['errors']);
+
+        $invalidActorCompany = ElectronicPayrollReadiness::plan(
+            $payload, self::TENANT, '900123456', true,
+        );
+        self::assertAlwaysDisabled($invalidActorCompany);
+        self::assertContains('COMPANY_MISMATCH', $invalidActorCompany['errors']);
     }
 
     public function testRejectsPersonalDataFieldsAndNonSyntheticPayloads(): void
     {
         $personal = self::syntheticInput();
         $personal['employee_name'] = 'PERSONA_DE_PRUEBA';
-        $plan = ElectronicPayrollReadiness::plan($personal, self::TENANT);
+        $plan = ElectronicPayrollReadiness::plan($personal, self::TENANT, self::COMPANY, true);
         self::assertAlwaysDisabled($plan);
         self::assertNotEmpty($plan['errors']);
         self::assertStringNotContainsString('PERSONA_DE_PRUEBA', json_encode($plan, JSON_THROW_ON_ERROR));
 
         $real = self::syntheticInput();
         $real['synthetic'] = false;
-        self::assertNotEmpty(ElectronicPayrollReadiness::plan($real, self::TENANT)['errors']);
+        self::assertNotEmpty(ElectronicPayrollReadiness::plan($real, self::TENANT, self::COMPANY, true)['errors']);
     }
 
     public function testRejectsLiveModeOrAttemptedTransmission(): void
@@ -86,7 +109,7 @@ final class ElectronicPayrollReadinessTest extends TestCase
         $attempt['request_send'] = true;
 
         foreach ([$live, $attempt] as $input) {
-            $plan = ElectronicPayrollReadiness::plan($input, self::TENANT);
+            $plan = ElectronicPayrollReadiness::plan($input, self::TENANT, self::COMPANY, true);
             self::assertAlwaysDisabled($plan);
             self::assertNotEmpty($plan['errors']);
         }
@@ -104,7 +127,7 @@ final class ElectronicPayrollReadinessTest extends TestCase
         $empty['tenant_ref'] = '';
 
         foreach ([$missing, $foreign, $wrongType, $empty] as $input) {
-            $plan = ElectronicPayrollReadiness::plan($input, self::TENANT);
+            $plan = ElectronicPayrollReadiness::plan($input, self::TENANT, self::COMPANY, true);
             self::assertAlwaysDisabled($plan);
             self::assertNotEmpty($plan['errors']);
         }
@@ -114,7 +137,7 @@ final class ElectronicPayrollReadinessTest extends TestCase
     {
         $payload = self::syntheticInput();
         $payload['provider_token'] = 'FAKE_SECRET_FOR_TEST';
-        $plan = ElectronicPayrollReadiness::plan($payload, self::TENANT);
+        $plan = ElectronicPayrollReadiness::plan($payload, self::TENANT, self::COMPANY, true);
         self::assertAlwaysDisabled($plan);
         self::assertNotEmpty($plan['errors']);
         self::assertStringNotContainsString('FAKE_SECRET_FOR_TEST', json_encode($plan, JSON_THROW_ON_ERROR));

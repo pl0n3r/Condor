@@ -21,9 +21,9 @@ final class ElectronicPayrollReadiness
     ];
 
     /**
-     * This method does not attest company ownership: callers must enforce
-     * server-side tenant/company authorization independently before use.
-     * It never enables transmission, even when the fixture is valid.
+     * All actor scope and permission arguments MUST come from trusted server
+     * authentication/authorization, never from the submitted fixture. This pure
+     * offline method has no HTTP adapter and can never enable transmission.
      *
      * @param array<string, mixed> $input Fictitious references only, no records or PII.
      * @return array{
@@ -32,9 +32,17 @@ final class ElectronicPayrollReadiness
      *   errors:list<string>
      * }
      */
-    public static function plan(array $input, string $actorTenantRef): array
+    public static function plan(
+        array $input,
+        string $actorTenantRef,
+        string $actorCompanyRef,
+        bool $mayPrepare = false,
+    ): array
     {
         $errors = [];
+        if (!$mayPrepare) {
+            $errors[] = 'PERMISSION_DENIED';
+        }
 
         foreach (array_keys($input) as $field) {
             if (!is_string($field) || !in_array($field, self::ALLOWED_FIELDS, true)) {
@@ -59,6 +67,11 @@ final class ElectronicPayrollReadiness
         if (!self::syntheticRef($actorTenantRef, 'tenant')
             || $actorTenantRef !== ($input['tenant_ref'] ?? null)) {
             $errors[] = 'TENANT_MISMATCH';
+        }
+
+        if (!self::syntheticRef($actorCompanyRef, 'company')
+            || $actorCompanyRef !== ($input['company_ref'] ?? null)) {
+            $errors[] = 'COMPANY_MISMATCH';
         }
 
         if (($input['synthetic'] ?? null) !== true) {
