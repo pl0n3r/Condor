@@ -30,6 +30,7 @@ TREATMENTS = frozenset({
     "notification_preferences", "self_service_trial_application",
     "workflow_definitions", "workflow_executions",
     "payroll_real_records", "payroll_synthetic_records",
+    "social_security_real_records",
     "social_security_synthetic_records",
     "human_resources_synthetic_records",
     "human_resources_real_records",
