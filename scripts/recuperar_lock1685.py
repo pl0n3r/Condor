@@ -1,192 +1,196 @@
-"""Recuperación CAS del nonce huérfano de Condor #1685; nunca concede V3."""
+"""Reparación puntual del lock firmado de #1685; no concede ninguna V3.
+
+Únicamente el propietario puede invocarla desde el workflow protegido; el
+repo, el nonce, la rama y su árbol deben coincidir con evidencias históricas.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
+from urllib.error import HTTPError
 import json
 import os
-from pathlib import Path
 import sys
-from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import recuperar_lock724 as shared
 
-Denied = shared.Denied
-demand = shared.demand
 REPO = "pl0n3r/Condor"
 ISSUE = 1685
-WORK_BRANCH = "trabajo/issue-1685"
-REF = "refs/heads/coordinacion/lock-issue-1685"
 NONCE = "d24837972852295b8f221110491d72f01ffad88a"
 PARENT = "ee3b97f9df33688d52af737c47080b72abc66a5f"
+TREE = "908c791e40054fc86cc5f9076e86f3050ee1f48a"
 MESSAGE = "lock coordinacion Issue #1685 30d5bf5e-7a44-4842-92fa-fc39e5b30bdc"
+LOCK_REF = "refs/heads/coordinacion/lock-issue-1685"
 LOCK_API = f"/repos/{REPO}/git/ref/heads/coordinacion/lock-issue-1685"
-BRANCH_API = f"/repos/{REPO}/git/ref/heads/{WORK_BRANCH}"
+BRANCH = "trabajo/issue-1685"
+BRANCH_API = f"/repos/{REPO}/git/ref/heads/{BRANCH}"
+WORKFLOW = f"{REPO}/.github/workflows/recuperar-lock1685.yml@refs/heads/main"
+Denied = shared.Denied
+ensure = shared.demand
 
 
-def _must_be_exact_parent(api, path: str) -> None:
-    """Rama huérfana únicamente si sigue en el parent original, sin trabajo."""
-    try:
-        ref = api.get(path)
-    except HTTPError as exc:
-        raise Denied("rama huérfana desaparecida o ilegible") from exc
-    demand(type(ref) is dict and type(ref.get("object")) is dict
-           and ref["object"].get("sha") == PARENT,
-           "rama de trabajo movida: no limpiar lock")
-
-
-
-def _latest_bot_lease(api) -> dict:
-    last = None
-    for page in range(1, 11):
-        items = api.get(f"/repos/{REPO}/issues/{ISSUE}/comments?per_page=100&page={page}")
-        demand(type(items) is list, "historial V3 no verificable")
-        for item in items:
-            demand(type(item) is dict, "comentario ilegible")
-            receipt = shared._lease_from_bot_comment(item)
-            if receipt is not None:
-                last = receipt
-        if len(items) < 100:
-            return last or {}
-    raise Denied("historial V3 truncado")
-
-
-def check_quiescence(api, run_id: str) -> None:
-    receipt = _latest_bot_lease(api)
-    demand(not receipt or (receipt.get("version") == 3 and receipt.get("active") is False),
-           "reserva V3 activa o ilegible")
-    _must_be_exact_parent(api, BRANCH_API)
-    pulls = api.get(f"/repos/{REPO}/pulls?state=open&per_page=100")
-    demand(type(pulls) is list and len(pulls) < 100, "PRs incompletos")
-    for pr in pulls:
-        demand(type(pr) is dict, "PR ilegible")
-        head = pr.get("head") or {}
-        demand(type(head) is dict and head.get("ref") != WORK_BRANCH,
-               "PR activo sobre la rama bloqueada")
-    shared.no_live_coordination(api, run_id)
-
-
-def check_nonce(api, now: datetime) -> None:
-    """Identidad firmada, parent, árbol y edad: sin alias ni inferencias."""
-    demand(now.tzinfo is not None, "reloj UTC no verificable")
-    lock = api.get(LOCK_API)
-    demand(type(lock) is dict and type(lock.get("object")) is dict
-           and lock["object"].get("sha") == NONCE,
-           "nonce de lock no coincide")
-    commit = api.get(f"/repos/{REPO}/git/commits/{NONCE}")
-    demand(type(commit) is dict and commit.get("sha") == NONCE
-           and commit.get("message") == MESSAGE,
-           "mensaje o SHA del lock distinto")
-    parents = commit.get("parents")
-    demand(type(parents) is list and len(parents) == 1
-           and type(parents[0]) is dict and parents[0].get("sha") == PARENT,
-           "parent del lock distinto")
-    tree = commit.get("tree")
-    demand(type(tree) is dict and tree.get("sha") == "908c791e40054fc86cc5f9076e86f3050ee1f48a",
-           "árbol de lock alterado")
-    parent_commit = api.get(f"/repos/{REPO}/git/commits/{PARENT}")
-    parent_tree = parent_commit.get("tree") if type(parent_commit) is dict else None
-    demand(type(parent_tree) is dict
-           and parent_tree.get("sha") == tree.get("sha"),
-           "lock no es un commit inerte sobre el parent")
-    author, committer, verification = (
-        commit.get("author"), commit.get("committer"), commit.get("verification"))
-    demand(type(author) is dict and author.get("name") == "github-actions[bot]"
-           and author.get("email") ==
-               "41898282+github-actions[bot]@users.noreply.github.com",
-           "autor del lock no autenticado")
-    demand(type(committer) is dict and committer.get("name") == "GitHub"
-           and committer.get("email") == "noreply@github.com",
-           "committer del lock no autenticado")
-    demand(type(verification) is dict
-           and verification.get("verified") is True
-           and verification.get("reason") == "valid",
-           "firma GitHub del lock no verificada")
-    for identity in (author, committer):
-        timestamp = identity.get("date")
-        demand(type(timestamp) is str, "fecha de lock ausente")
-        try:
-            date = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-        except ValueError as exc:
-            raise Denied("fecha del nonce malformada") from exc
-        demand(date.tzinfo is not None
-               and (now - date).total_seconds() >= 3600,
-               "lock reciente, futuro o no verificable")
-
-
-
-def prepare(api, now: datetime, run_id: str) -> str:
+def snapshot(api, now: datetime, run_id: str) -> str:
+    """Un conjunto completo de guardas; se exige de nuevo antes del CAS."""
     shared.valid_global(api)
     freeze = api.get("/repos/pl0n3r/Factory/issues/921")
-    demand(type(freeze) is dict and freeze.get("state") == "closed", "freeze activo")
-    issue = api.get(f"/repos/{REPO}/issues/{ISSUE}")
-    demand(type(issue) is dict and issue.get("state") == "open"
-           and any(type(row) is dict and row.get("name") == "estado: bloqueado"
-                   for row in issue.get("labels", [])),
-           "issue #1685 no está abierto/bloqueado")
-    check_quiescence(api, run_id)
-    check_nonce(api, now)
+    ensure(type(freeze) is dict and freeze.get("state") == "closed",
+           "release congelado")
+    item = api.get(f"/repos/{REPO}/issues/{ISSUE}")
+    labels = item.get("labels") if type(item) is dict else None
+    visible = ([x.get("name") for x in labels if type(x) is dict]
+               if type(labels) is list else [])
+    ensure(type(item) is dict and item.get("state") == "open"
+           and visible.count("estado: bloqueado") == 1
+           and len([x for x in visible if x.startswith("estado:")]) == 1,
+           "issue no bloqueado o estado ambiguo")
+
+    # El registro V3 se toma solo del bot oficial y se lee hasta la última
+    # página; un comentario humano no acredita ni revoca una reserva.
+    last_receipt = None
+    for page in range(1, 11):
+        batch = api.get(f"/repos/{REPO}/issues/{ISSUE}/comments?per_page=100&page={page}")
+        ensure(type(batch) is list, "historial de reservas ilegible")
+        for entry in batch:
+            ensure(type(entry) is dict, "comentario de reserva ilegible")
+            receipt = shared._lease_from_bot_comment(entry)
+            if receipt is not None:
+                last_receipt = receipt
+        if len(batch) < 100:
+            break
+    else:
+        raise Denied("historial V3 truncado")
+    ensure(last_receipt is None or (
+           type(last_receipt) is dict and last_receipt.get("version") == 3
+           and last_receipt.get("active") is False),
+           "reserva V3 activa o imposible de autenticar")
+
+    try:
+        work = api.get(BRANCH_API)
+    except HTTPError as exc:
+        raise Denied("rama huérfana desaparecida") from exc
+    ensure(type(work) is dict and type(work.get("object")) is dict
+           and work["object"].get("sha") == PARENT,
+           "rama del issue contiene commits o cambió de parent")
+    prs = api.get(f"/repos/{REPO}/pulls?state=open&per_page=100")
+    ensure(type(prs) is list and len(prs) < 100,
+           "inventario PR incompleto")
+    ensure(all(type(pr) is dict and type(pr.get("head")) is dict
+               and pr["head"].get("ref") != BRANCH for pr in prs),
+           "PR vivo asociado a la rama huérfana")
+    shared.no_live_coordination(api, run_id)
+
+    ref = api.get(LOCK_API)
+    ensure(type(ref) is dict and type(ref.get("object")) is dict
+           and ref["object"].get("sha") == NONCE,
+           "lock reemplazado o ausente")
+    signed = api.get(f"/repos/{REPO}/git/commits/{NONCE}")
+    ensure(type(signed) is dict and signed.get("sha") == NONCE
+           and signed.get("message") == MESSAGE,
+           "identidad SHA/mensaje incorrecta")
+    parents = signed.get("parents")
+    ensure(type(parents) is list and len(parents) == 1
+           and type(parents[0]) is dict and parents[0].get("sha") == PARENT,
+           "parent inesperado")
+    parent = api.get(f"/repos/{REPO}/git/commits/{PARENT}")
+    tree = signed.get("tree")
+    ensure(type(tree) is dict and tree.get("sha") == TREE
+           and type(parent) is dict and type(parent.get("tree")) is dict
+           and parent["tree"].get("sha") == TREE,
+           "el commit no era un lock inerte")
+    author = signed.get("author")
+    committer = signed.get("committer")
+    verify = signed.get("verification")
+    ensure(type(author) is dict
+           and author.get("name") == "github-actions[bot]"
+           and author.get("email") == "41898282+github-actions[bot]@users.noreply.github.com",
+           "autor no confiable")
+    ensure(type(committer) is dict and committer.get("name") == "GitHub"
+           and committer.get("email") == "noreply@github.com",
+           "firmante no confiable")
+    ensure(type(verify) is dict and verify.get("verified") is True
+           and verify.get("reason") == "valid",
+           "firma no validada")
+    ensure(isinstance(now, datetime) and now.tzinfo is not None,
+           "reloj inválido")
+    for identity in (author, committer):
+        stamp = identity.get("date")
+        ensure(type(stamp) is str, "fecha ausente")
+        try:
+            created = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise Denied("fecha malformada") from exc
+        ensure(created.tzinfo is not None
+               and (now - created).total_seconds() >= 3600,
+               "lock reciente, futuro o indatable")
     identity = api.get(f"/repos/{REPO}")
-    node_id = identity.get("node_id") if type(identity) is dict else None
-    demand(type(identity) is dict and identity.get("name") == "Condor"
-           and (identity.get("owner") or {}).get("login") == "pl0n3r"
-           and type(node_id) is str and bool(node_id),
-           "identidad repo ilegible")
-    return node_id
+    ensure(type(identity) is dict and identity.get("name") == "Condor"
+           and type(identity.get("owner")) is dict
+           and identity["owner"].get("login") == "pl0n3r"
+           and type(identity.get("node_id")) is str
+           and bool(identity["node_id"]),
+           "identidad del repositorio ilegible")
+    return identity["node_id"]
 
 
 def recover(api, now: datetime, run_id: str) -> None:
-    repo_id = prepare(api, now, run_id)
-    # Segunda lectura completa para evitar actuar sobre una reserva o rama nueva.
-    demand(prepare(api, now, run_id) == repo_id, "identidad cambió")
-    result = api.post("/graphql", {
+    first = snapshot(api, now, run_id)
+    ensure(first == snapshot(api, now, run_id),
+           "identidad cambió durante la revisión")
+    # Una única mutación CAS: si otro proceso cambió el lock, falla sin tocarlo.
+    answer = api.post("/graphql", {
         "query": "mutation($input:UpdateRefsInput!){updateRefs(input:$input){clientMutationId}}",
-        "variables": {"input": {"repositoryId": repo_id, "refUpdates": [{
-            "name": REF, "beforeOid": NONCE, "afterOid": "0" * 40, "force": True,
+        "variables": {"input": {"repositoryId": first, "refUpdates": [{
+            "name": LOCK_REF, "beforeOid": NONCE, "afterOid": "0" * 40,
+            "force": True,
         }]}}
     })
-    demand(type(result) is dict and not result.get("errors")
-           and type(result.get("data")) is dict
-           and type(result["data"].get("updateRefs")) is dict,
-           "CAS GraphQL denegado o de estado incierto")
+    ensure(type(answer) is dict and not answer.get("errors")
+           and type(answer.get("data")) is dict
+           and type(answer["data"].get("updateRefs")) is dict,
+           "CAS denegado o respuesta incierta")
     try:
         api.get(LOCK_API)
     except HTTPError as exc:
-        demand(exc.code == 404, "borrado del lock no acreditado")
+        ensure(exc.code == 404, "confirmación de borrado no válida")
     else:
-        raise Denied("lock aún existe")
-    api.post(f"/repos/{REPO}/issues/{ISSUE}/comments", {"body": (
-        f"CAS autorizado: {REF}@{NONCE} eliminado, GET=404 autenticado. "
-        "Se verificó ausencia de V3 activa, rama y PR; ninguna otra ref se modificó. "
-        "ESTE RECIBO NO CONCEDE V3: restaurar disponibilidad legítimamente, "
-        "enviar /tomar y esperar reserva nueva del bot antes de editar."
-    )})
+        raise Denied("el lock sigue ocupado")
+    api.post(f"/repos/{REPO}/issues/{ISSUE}/comments", {
+        "body": f"CAS verificado: solo {LOCK_REF}@{NONCE} eliminado y GET=404. "
+                "Sin V3 activa ni PR; la rama huérfana sigue en el parent original. "
+                "NO SE CONCEDE RESERVA. Ejecutar adopción canónica y esperar recibo BOT V3."
+    })
 
 
 def main() -> int:
     try:
-        demand(os.getenv("GITHUB_REPOSITORY") == REPO
+        ensure(os.getenv("GITHUB_REPOSITORY") == REPO
                and os.getenv("GITHUB_ACTOR") == "pl0n3r"
                and os.getenv("GITHUB_EVENT_NAME") == "issue_comment"
                and os.getenv("GITHUB_REF") == "refs/heads/main"
-               and os.getenv("GITHUB_WORKFLOW_REF") ==
-               f"{REPO}/.github/workflows/recuperar-lock1685.yml@refs/heads/main",
-               "evento o actor no autorizado")
-        event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
-        issue, comment = event.get("issue") or {}, event.get("comment") or {}
-        demand(event.get("action") == "created"
-               and issue.get("number") == ISSUE and issue.get("pull_request") is None
+               and os.getenv("GITHUB_WORKFLOW_REF") == WORKFLOW,
+               "workflow/actor no autorizado")
+        data = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text("utf-8"))
+        ensure(type(data) is dict and data.get("action") == "created",
+               "evento incorrecto")
+        issue, comment, sender = (
+            data.get("issue"), data.get("comment"), data.get("sender"))
+        ensure(type(issue) is dict and issue.get("number") == ISSUE
+               and issue.get("pull_request") is None
+               and type(comment) is dict
                and comment.get("body") == "/limpiar-lock-1685"
-               and (comment.get("user") or {}).get("login") == "pl0n3r"
-               and (event.get("sender") or {}).get("login") == "pl0n3r"
-               and comment.get("author_association") == "OWNER",
-               "comando OWNER no coincide")
-        token, run_id = os.getenv("GITHUB_TOKEN"), os.getenv("GITHUB_RUN_ID")
-        demand(bool(token) and type(run_id) is str and run_id.isdigit(),
-               "token o ID de workflow no acreditado")
+               and type(comment.get("user")) is dict
+               and comment["user"].get("login") == "pl0n3r"
+               and comment.get("author_association") == "OWNER"
+               and type(sender) is dict and sender.get("login") == "pl0n3r",
+               "comando propietario no autorizado")
+        token = os.getenv("GITHUB_TOKEN")
+        run_id = os.getenv("GITHUB_RUN_ID")
+        ensure(bool(token) and type(run_id) is str and run_id.isdigit(),
+               "runner o token no verificable")
         recover(shared.GitHubApi(token), datetime.now(timezone.utc), run_id)
         return 0
-    except (Denied, KeyError, OSError, ValueError, TypeError):
+    except (Denied, KeyError, OSError, ValueError, TypeError, AttributeError):
         print("RECOVERY DENIED: autoridad o evidencia insuficiente", file=sys.stderr)
         return 1
 

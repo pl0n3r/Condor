@@ -29,6 +29,26 @@ class SentryConfigContractTests(unittest.TestCase):
         )
         self.assertNotIn("ingest.us.sentry.io", config)
 
+    def test_owner_sentry_dsn_runtime_contract(self) -> None:
+        loader = (ROOT / "src/Infrastructure/Observability/StoredSentryDsnEnvLoader.php").read_text(encoding="utf-8")
+        services = (ROOT / "config/services.yaml").read_text(encoding="utf-8")
+        docs = (ROOT / "docs/sentry-datos-minimos.md").read_text(encoding="utf-8")
+        self.assertIn("EnvVarLoaderInterface", loader)
+        self.assertIn("EnvVarProcessorInterface", loader)
+        self.assertIn("['string' => 'string']", loader)
+        self.assertIn("'SENTRY_DSN' === $name", loader)
+        self.assertIn("'sentry.dsn'", loader)
+        self.assertIn("sodium_crypto_secretbox_open", loader)
+        self.assertIn("hash_hkdf", loader)
+        self.assertIn("catch (Throwable)", loader)
+        self.assertIn("container.env_var_loader", services)
+        self.assertIn("container.env_var_processor", services)
+        self.assertIn("AutowireServiceClosure", loader)
+        self.assertIn("'doctrine.dbal.default_connection'", loader)
+        self.assertNotIn("!service_closure", services)
+        self.assertIn("almacén cifrado tiene prioridad", docs)
+        self.assertIn("revisión humana", docs)
+
     def test_sentry_is_documented_as_error_incident_provider(self) -> None:
         data = json.loads((ROOT / "datos.yml").read_text(encoding="utf-8"))
         incident = next(
