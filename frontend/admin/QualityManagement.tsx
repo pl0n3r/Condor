@@ -153,7 +153,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
 
         </SidePanel>
         )}
-        <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión explícita" onClose={() => { setSelected(''); setPanelError(''); }}>
+        <SidePanel open={Boolean(detail) && !creating} title="Detalle y revisión explícita" onClose={() => { setPanelError(''); setSelected(''); }}>
             {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
           {detail ? <>
             <dl>
