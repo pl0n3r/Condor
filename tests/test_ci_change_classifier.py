@@ -21,6 +21,30 @@ class ChangeClassifierTests(unittest.TestCase):
         self.assertFalse(result.e2e)
         self.assertEqual(result.motivo, "documentacion-gobierno-sin-runtime")
 
+    def test_legal_package_docs_require_base_tests(self) -> None:
+        result = classify(["revision-juridica/registro-tratamientos.md"], "pull_request")
+        self.assertTrue(result.categoria_documentacion)
+        self.assertTrue(result.paquete_juridico)
+        self.assertTrue(result.pruebas_base)
+        self.assertEqual(result.modo, "selectivo")
+        self.assertFalse(result.validacion_completa)
+        self.assertFalse(result.frontend)
+        self.assertFalse(result.backend)
+        self.assertFalse(result.e2e)
+        self.assertFalse(result.transicion_release)
+
+    def test_regular_docs_preserve_quick_mode(self) -> None:
+        for path in ("README.md", "docs/manual/propietario/guia.md", "docs/privacidad/aviso-privacidad.md"):
+            with self.subTest(path=path):
+                result = classify([path], "pull_request")
+                self.assertFalse(result.paquete_juridico)
+                self.assertFalse(result.pruebas_base)
+                self.assertEqual(result.modo, "rapido")
+                self.assertFalse(result.validacion_completa)
+                self.assertFalse(result.frontend)
+                self.assertFalse(result.backend)
+                self.assertFalse(result.e2e)
+
     def test_governance_only_change_stays_quick(self) -> None:
         result = classify([".github/labels.json"], "pull_request")
         self.assertTrue(result.categoria_gobierno)

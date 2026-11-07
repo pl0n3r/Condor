@@ -43,6 +43,7 @@ jobs:
       categoria_seguridad: ${{ steps.cambios.outputs.categoria_seguridad }}
       categoria_release: ${{ steps.cambios.outputs.categoria_release }}
       documentacion: ${{ steps.cambios.outputs.documentacion }}
+      paquete_juridico: ${{ steps.cambios.outputs.paquete_juridico }}
       pruebas_base: ${{ steps.cambios.outputs.pruebas_base }}
       frontend: ${{ steps.cambios.outputs.frontend }}
       backend: ${{ steps.cambios.outputs.backend }}
@@ -327,6 +328,10 @@ jobs:
       # ejecutarla antes de instalar vendor evita enlaces rotos de terceros.
       - name: Ejecutar integraciones
         run: python3 -m unittest discover -s tests/integration -p 'test_*.py'
+
+      - name: Verificar paquete jurídico derivado (solo cambios legales)
+        if: needs.preflight.outputs.paquete_juridico == 'true'
+        run: python3 -m unittest discover -s tests -p 'test_revision_juridica.py' -v
 
       - name: Preparar autoload Composer para cobertura Condor 28
         run: |
