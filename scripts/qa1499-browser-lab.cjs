@@ -27,7 +27,7 @@ function localBase(raw) {
 
 function selfTest() {
   for (const good of ['http://localhost:18772', 'http://127.0.0.1:18772/']) {
-    assert.ok(localBase(good).origin.startsWith('http://'));
+    assert.equal(localBase(good).protocol, 'http:');
   }
   for (const bad of [
     'https://condorapp.com.co', 'http://condorapp.com.co:18772',
