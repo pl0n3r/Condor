@@ -389,12 +389,14 @@ export function SocialSecurityRealManagement({
       <PageHeader title="Seguridad social" />
       <p role={role}>{message}</p>
     </section>;
-  if (!enabled) return <section id="social-security-management" className="catalog-panel ui-page"
-    aria-label="Seguridad social">
-    <PageHeader title="Seguridad social" />
-    <p role="status">El módulo de Seguridad social aún no está habilitado. No se consultaron registros.</p>
-    {import.meta.env.DEV && <SyntheticCoveragePanel denied={!canRead} />}
-  </section>;
+  if (!enabled) return import.meta.env.DEV
+    ? <section id="social-security-management" className="catalog-panel ui-page"
+        aria-label="Seguridad social">
+        <PageHeader title="Seguridad social" />
+        <p role="status">El módulo de Seguridad social aún no está habilitado. No se consultaron registros.</p>
+        <SyntheticCoveragePanel denied={!canRead} />
+      </section>
+    : shell('El módulo de Seguridad social aún no está habilitado. No se consultaron registros.', 'status');
   if (!canRead || status === 'denied') return shell('Acceso denegado: empresa, razón social o permiso insuficientes.', 'alert');
   if (status === 'disabled') return shell('El servidor no tiene habilitada esta función.', 'alert');
 
