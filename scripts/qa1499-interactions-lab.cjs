@@ -2,6 +2,7 @@
 // Condor #1830: isolated, read-only browser diagnostics for release parent #1499.
 // NO live, external hosts, accounts, secrets, provider calls, or field-p75 claims.
 const assert = require('node:assert/strict');
+const net = require('node:net');
 
 const ROUTES = Object.freeze(['/', '/producto', '/admin/login']);
 const PROFILES = Object.freeze([
@@ -55,7 +56,7 @@ function selfTest() {
 }
 
 function installObservers() {
-  const state = { lcp: null, cls: 0, eventSamples: [], eventTimingSupported: false };
+  const state = { lcp: null, cls: null, eventSamples: [], eventTimingSupported: false };
   Object.defineProperty(window, '__qa1499Metrics', { value: state, configurable: false });
   try {
     new PerformanceObserver(list => {
@@ -70,7 +71,8 @@ function installObservers() {
         if (!entry.hadRecentInput && Number.isFinite(entry.value)) state.cls += entry.value;
       }
     }).observe({ type: 'layout-shift', buffered: true });
-  } catch { /* CLS unknown if unsupported */ }
+    state.cls = 0; // Observed zero is valid only if the observer installed successfully.
+  } catch { /* CLS remains null when observer cannot be installed. */ }
   try {
     state.eventTimingSupported = PerformanceObserver.supportedEntryTypes.includes('event');
     if (state.eventTimingSupported) {
@@ -118,8 +120,23 @@ async function auditPage(page, route) {
 async function run() {
   const { base, sha } = preflight(process.env); // before browser load
   const { chromium } = require('@playwright/test');
-  const browser = await chromium.launch({ channel: 'chrome', headless: true,
-    args: ['--disable-background-networking', '--disable-component-update', '--no-first-run'] });
+  // A loopback-only rejecting proxy is an independent egress boundary for
+  // HTTP redirects, IP literals and WebSocket handshakes not caught by route().
+  const denyProxy = net.createServer(socket => socket.destroy());
+  await new Promise((resolve, reject) => {
+    denyProxy.once('error', reject);
+    denyProxy.listen(0, '127.0.0.1', resolve);
+  });
+  let browser;
+  try {
+    browser = await chromium.launch({ channel: 'chrome', headless: true,
+      proxy: { server: 'http://127.0.0.1:' + denyProxy.address().port,
+        bypass: base.hostname },
+      args: ['--disable-background-networking', '--disable-component-update', '--no-first-run'] });
+  } catch {
+    await new Promise(resolve => denyProxy.close(resolve));
+    throw new Error('Chrome no disponible en modo aislado');
+  }
   const matrix = [];
   try {
     for (const profile of PROFILES) {
@@ -127,13 +144,30 @@ async function run() {
         viewport: profile.viewport, isMobile: profile.isMobile, hasTouch: profile.hasTouch,
         deviceScaleFactor: 1, serviceWorkers: 'block'
       });
-      await context.route('**/*', request => {
+      // Browser sockets can bypass HTTP route(); block all in this read-only lab.
+      if (typeof context.routeWebSocket !== 'function') {
+        throw new Error('No existe interceptación WebSocket: laboratorio fail-closed');
+      }
+      await context.routeWebSocket('**/*', socket => socket.close());
+      // Never hand a 3xx to Chrome before inspecting Location: route.continue()
+      // follows redirects internally and can bypass a later route interception.
+      await context.route('**/*', async request => {
         try {
-          if (new URL(request.request().url()).origin === base.origin) {
-            return request.continue();
+          const source = new URL(request.request().url());
+          if (source.origin !== base.origin) return request.abort('blockedbyclient');
+          const upstream = await request.fetch({ maxRedirects: 0, timeout: 15000 });
+          if (upstream.status() >= 300 && upstream.status() < 400) {
+            const location = upstream.headers()['location'];
+            if (!location) return request.abort('blockedbyclient');
+            const target = new URL(location, source);
+            if (target.origin !== base.origin || target.username || target.password) {
+              return request.abort('blockedbyclient');
+            }
           }
-        } catch { /* Invalid URLs abort. */ }
-        return request.abort('blockedbyclient');
+          return request.fulfill({ response: upstream });
+        } catch {
+          return request.abort('blockedbyclient');
+        }
       });
       try {
         for (const route of ROUTES) {
@@ -143,8 +177,10 @@ async function run() {
             const response = await page.goto(base.origin + route, {
               waitUntil: 'networkidle', timeout: 25000
             });
+            const finalUrl = new URL(page.url());
             if (!response || response.status() !== 200
-                || new URL(page.url()).origin !== base.origin) {
+                || finalUrl.origin !== base.origin || finalUrl.pathname !== route
+                || finalUrl.search || finalUrl.hash) {
               throw new Error('Navegación/HTTP no autorizados');
             }
             const metrics = await auditPage(page, route);
@@ -159,7 +195,10 @@ async function run() {
         }
       } finally { await context.close(); }
     }
-  } finally { await browser.close(); }
+  } finally {
+    try { await browser.close(); }
+    finally { await new Promise(resolve => denyProxy.close(resolve)); }
+  }
   const results = {
     schema: 1, parent: 1499, release_approved: false,
     source_sha_declared: sha, time_utc: new Date().toISOString(),
@@ -191,3 +230,5 @@ if (process.argv.length === 3 && process.argv[2] === '--self-test') {
 } else {
   run().catch(() => { console.error('Preflight o navegador local no disponibles'); process.exitCode = 2; });
 }
+
+[executed on device: 192.168.40.25 (ef502d75-f294-409c-8a9f-ab01b9e4ce65)]

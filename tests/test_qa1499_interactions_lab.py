@@ -1,9 +1,12 @@
 """Checks fail-closed for the synthetic Chrome keyboard/vitals laboratory (#1830)."""
 from __future__ import annotations
 
+import json
 import os
 import subprocess
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,8 +47,9 @@ class InteractionsLabContractTests(unittest.TestCase):
                     QA1499_ACK_SYNTHETIC_TEST_ONLY="1",
                 )
                 self.assertNotEqual(bad.returncode, 0)
-                self.assertNotIn("secret", bad.stderr)
-                self.assertNotIn("condorapp.com.co", bad.stderr)
+                for output in (bad.stderr, bad.stdout):
+                    self.assertNotIn("secret", output)
+                    self.assertNotIn("condorapp.com.co", output)
 
     def test_missing_ack_and_sha_fail_closed(self) -> None:
         local = "http://127.0.0.1:18777"
@@ -64,6 +68,91 @@ class InteractionsLabContractTests(unittest.TestCase):
         self.assertNotEqual(invalid_arg.returncode, 0)
         self.assertIn("--self-test", invalid_arg.stderr)
 
+    @unittest.skipUnless(
+        os.environ.get("QA1499_RUN_NETWORK_TEST") == "1",
+        "Browser/Chrome is optional; run this explicit synthetic localhost QA on an isolated host",
+    )
+    def test_network_boundary_blocks_cross_origin_resources_redirects_and_ws(self) -> None:
+        """Two localhost servers simulate a foreign origin without any public network."""
+        foreign_hits: list[str] = []
+
+        class ForeignHandler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                foreign_hits.append(self.path)
+                self.send_response(200)
+                self.end_headers()
+
+            def log_message(self, *_args: object) -> None:
+                pass
+
+        foreign = ThreadingHTTPServer(("127.0.0.1", 0), ForeignHandler)
+        foreign_port = foreign.server_address[1]
+
+        class AppHandler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                if self.path == "/producto":
+                    self.send_response(302)
+                    self.send_header(
+                        "Location", f"http://127.0.0.1:{foreign_port}/redirect",
+                    )
+                    self.end_headers()
+                    return
+                if self.path not in ("/", "/admin/login"):
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                body = (
+                    '<!doctype html><html><body><h1>Laboratorio sintético</h1>'
+                    '<a href="#local">Enlace de prueba</a>'
+                    f'<img src="http://127.0.0.1:{foreign_port}/image">'
+                    f'<script>fetch("http://127.0.0.1:{foreign_port}/fetch").catch(()=>{{}});'
+                    f'new WebSocket("ws://127.0.0.1:{foreign_port}/ws");</script>'
+                    "</body></html>"
+                ).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_args: object) -> None:
+                pass
+
+        app = ThreadingHTTPServer(("127.0.0.1", 0), AppHandler)
+        threads = [
+            threading.Thread(target=server.serve_forever, daemon=True)
+            for server in (foreign, app)
+        ]
+        try:
+            for thread in threads:
+                thread.start()
+            env = dict(os.environ)
+            env.update(
+                QA1499_BASE_URL=f"http://127.0.0.1:{app.server_address[1]}",
+                QA1499_HEAD_SHA="a" * 40,
+                QA1499_ACK_SYNTHETIC_TEST_ONLY="1",
+            )
+            env.pop("QA1499_OUTPUT", None)
+            result = subprocess.run(
+                ["node", str(LAB)], env=env, text=True,
+                capture_output=True, timeout=65, check=False,
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["summary"]["cases"], 6)
+            self.assertEqual(payload["summary"]["failed"], 2)
+            self.assertEqual(
+                sorted(row["route"] for row in payload["results"] if row.get("error")),
+                ["/producto", "/producto"],
+            )
+            self.assertEqual(foreign_hits, [], "A cross-origin request reached the server")
+        finally:
+            for server in (app, foreign):
+                server.shutdown()
+                server.server_close()
+            for thread in threads:
+                thread.join(timeout=2)
+
     def test_document_rejects_live_claims(self) -> None:
         self.assertTrue(DOC.is_file())
         doc = DOC.read_text(encoding="utf-8")
@@ -81,6 +170,9 @@ class InteractionsLabContractTests(unittest.TestCase):
             "request.abort('blockedbyclient')", "release_approved: false",
             "field p75 for LCP, INP, CLS", "event_timing_supported",
             "console.log(JSON.stringify({ summary, ...results }",
+            "routeWebSocket('**/*'", "proxy: { server:",
+            "finalUrl.pathname !== route", "cls: null",
+            "net.createServer(socket => socket.destroy())",
         ):
             self.assertIn(required, script)
         self.assertNotIn("https://www.condorapp.com.co", script)
@@ -92,3 +184,5 @@ class InteractionsLabContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+[executed on device: 192.168.40.25 (ef502d75-f294-409c-8a9f-ab01b9e4ce65)]

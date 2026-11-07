@@ -57,3 +57,30 @@ Instrumento CLI manual, sin importación al runtime productivo ni CI automático
 Resultado del CLI: `cases=6`, `failed=0`, `keyboard_cases_with_focus=6`, `lcp_samples=6`, `event_timing_supported_cases=6`, `inp_p75_verified=false`, `field_vitals_verified=false`, `release_approved=false`.
 
 **Límite metodológico:** prueba sobre localhost sin simulación estadísticamente representativa de red/CPU ni usuarios reales, solo 10 pulsaciones `Tab` por vista. Las muestras de Event Timing no son INP canónico, la lectura LCP no sustituye p75 y la presencia de foco no certifica un recorrido completo. Nada de ello completa los cuatro AC de #1499 ni permite activar live.
+
+## Regresión adicional: aislamiento de red probado con comportamiento (7-nov-2026)
+
+En la hija #1830, la primera ejecución del test opt-in
+\`QA1499_RUN_NETWORK_TEST=1 python3 -m unittest -v tests.test_qa1499_interactions_lab\`
+detectó realmente dos solicitudes \`/redirect\` recibidas por un origen
+loopback distinto después de un HTTP 302 local: \`context.route().continue()\`
+no protegía el salto antes de que Chrome siguiera la redirección.
+
+La reparación instala un proxy local rechazador independiente en Chrome,
+intercepta cualquier WebSocket antes de crear páginas y sustituye
+\`route.continue()\` por \`route.fetch({maxRedirects:0})\` con comprobación de
+\`Location\` antes de servir la respuesta al navegador. También rechaza una
+ruta final distinta de la solicitada y conserva CLS como \`null\` si no pudo
+instalarse el observador. **Retest auténtico en Chrome local:** 4 tests PASS,
+incluido el caso de dos servidores localhost con imágenes, fetch, WS y 302:
+**0 solicitudes recibidas por el otro origen**; las dos navegaciones
+\`/producto\` redirigidas fallan cerrado como se esperaba. El test opt-in
+requiere Chrome instalado y \`@playwright/test\`; CI normal conserva las
+pruebas contractuales sin simular disponibilidad de navegador.
+
+Esto no acredita aislamiento por firewall a nivel de SO, Web Vitals de campo,
+INP/p75, paneles autenticados, Safari nativo, WCAG completa o autorización
+de release. El recibo SHA declarado exige verificación independiente del
+checkout y la evidencia del laboratorio nunca reemplaza #1499.
+
+[executed on device: 192.168.40.25 (ef502d75-f294-409c-8a9f-ab01b9e4ce65)]
