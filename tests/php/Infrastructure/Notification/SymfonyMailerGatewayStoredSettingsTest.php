@@ -40,7 +40,7 @@ final class SymfonyMailerGatewayStoredSettingsTest extends TestCase
 
     public function testStoredConfigurationWorksWithoutEnvironmentAndEncodesTheKey(): void
     {
-        $secret = 'synthetic:+/@?=key-1234';
+        $secret = self::syntheticKey().':+/@?';
         $rows = $this->settings('resend', 'owner@condor.example.test', $secret);
         $factory = new StoredMailCapturingFactory();
         $gateway = $this->gateway($rows, $factory, ['resend']);
@@ -57,54 +57,58 @@ final class SymfonyMailerGatewayStoredSettingsTest extends TestCase
 
     public function testStoredConfigurationWinsOverEnvironment(): void
     {
-        putenv('CONDOR_MAILER_DSN=smtp://env:environment-password@smtp.example.test');
+        $environmentKey = self::syntheticKey();
+        putenv('CONDOR_MAILER_DSN=smtp://env:'.$environmentKey.'@smtp.example.test');
         putenv('CONDOR_MAIL_PROVIDER=fixture-smtp');
         putenv('CONDOR_MAIL_FROM=environment@example.test');
+        $storedKey = self::syntheticKey();
         $factory = new StoredMailCapturingFactory();
         $gateway = $this->gateway(
-            $this->settings('resend', 'owner@example.test', 'stored-synthetic-key-1234'),
+            $this->settings('resend', 'owner@example.test', $storedKey),
             $factory,
             ['resend', 'fixture-smtp'],
         );
         $gateway->deliver(self::message());
 
-        self::assertSame(['smtps://resend:stored-synthetic-key-1234@smtp.resend.com:465'], $factory->dsns);
+        self::assertSame(['smtps://resend:'.rawurlencode($storedKey).'@smtp.resend.com:465'], $factory->dsns);
         self::assertSame('owner@example.test', $factory->emails[0]->getFrom()[0]->getAddress());
     }
 
     public function testMissingConfigurationAndUnlistedProviderFailClosed(): void
     {
+        $secret = self::syntheticKey();
         $factory = new StoredMailCapturingFactory();
         $missing = $this->gateway([], $factory, ['resend']);
         self::assertFalse($missing->isAvailable());
-        $this->assertUnavailable($missing, 'synthetic-secret');
+        $this->assertUnavailable($missing, $secret);
 
         $unlisted = $this->gateway(
-            $this->settings('resend', 'owner@example.test', 'synthetic-secret-1234'),
+            $this->settings('resend', 'owner@example.test', $secret),
             $factory,
             [],
         );
         self::assertFalse($unlisted->isAvailable());
-        $this->assertUnavailable($unlisted, 'synthetic-secret-1234');
+        $this->assertUnavailable($unlisted, $secret);
         self::assertSame([], $factory->dsns);
     }
 
     public function testMalformedStoredSecretFailsClosedWithoutFallingBackToEnvironment(): void
     {
-        $rows = $this->settings('resend', 'owner@example.test', 'synthetic-secret-1234');
+        $secret = self::syntheticKey();
+        $rows = $this->settings('resend', 'owner@example.test', $secret);
         $rows['mail.api_key']['nonce'] = base64_encode('wrong-nonce');
         $this->environmentFallback();
 
         $factory = new StoredMailCapturingFactory();
         $gateway = $this->gateway($rows, $factory, ['resend']);
         self::assertFalse($gateway->isAvailable());
-        $this->assertUnavailable($gateway, 'synthetic-secret-1234');
+        $this->assertUnavailable($gateway, $secret);
         self::assertSame([], $factory->dsns);
     }
 
     public function testUnavailableStorageUsesEnvironmentFallback(): void
     {
-        $this->environmentFallback();
+        $fallbackDsn = $this->environmentFallback();
         $connection = $this->createMock(Connection::class);
         $connection->method('fetchAssociative')->willThrowException(
             new RuntimeException('synthetic-storage-error-with-no-sensitive-values'),
@@ -114,12 +118,12 @@ final class SymfonyMailerGatewayStoredSettingsTest extends TestCase
             $factory, $this->projectDir(['resend']), new MailProviderConfiguration($connection, $this->master),
         );
         $gateway->deliver(self::message());
-        self::assertSame(['smtp://fixture:synthetic@smtp.example.test'], $factory->dsns);
+        self::assertSame([$fallbackDsn], $factory->dsns);
     }
 
     public function testTransportExceptionDoesNotContainTheDecryptedKeyOrChain(): void
     {
-        $secret = 'confidential-synthetic-key-1234';
+        $secret = self::syntheticKey();
         $factory = new StoredMailCapturingFactory(true);
         $gateway = $this->gateway($this->settings('resend', 'owner@example.test', $secret), $factory, ['resend']);
 
@@ -206,11 +210,18 @@ final class SymfonyMailerGatewayStoredSettingsTest extends TestCase
         }
     }
 
-    private function environmentFallback(): void
+    private function environmentFallback(): string
     {
-        putenv('CONDOR_MAILER_DSN=smtp://fixture:synthetic@smtp.example.test');
+        $dsn = 'smtp://fixture:'.self::syntheticKey().'@smtp.example.test';
+        putenv('CONDOR_MAILER_DSN='.$dsn);
         putenv('CONDOR_MAIL_FROM=environment@example.test');
         putenv('CONDOR_MAIL_PROVIDER=resend');
+        return $dsn;
+    }
+
+    private static function syntheticKey(): string
+    {
+        return 'fixture-'.bin2hex(random_bytes(12));
     }
 
     private function clearEnvironment(): void
