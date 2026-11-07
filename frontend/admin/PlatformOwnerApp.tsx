@@ -11,6 +11,7 @@ import {
 import { PlatformStaffPanel } from './PlatformStaffPanel';
 import { PlatformTenantCreationPanel } from './PlatformTenantCreationPanel';
 import { PlatformSubscriptionsPanel, isSyntheticTenant } from './PlatformSubscriptionsPanel';
+import { PlatformPlansPanel } from './PlatformPlansPanel';
 import { platformOwnerContextPath } from './api';
 
 type CommercialPlan = {
@@ -521,6 +522,8 @@ export function PlatformOwnerApp({
 
   // main.tsx still passes "control" for unrecognized sections; derive the two
   // owner-only navigation destinations here without widening another claim.
+  const plansView = window.location.pathname === '/adminpl0n3r/catalogo'
+    && new URLSearchParams(window.location.search).get('vista') === 'planes';
   const currentSection: PlatformOwnerSection =
     window.location.pathname === '/adminpl0n3r/suscripciones'
       ? 'suscripciones'
@@ -694,8 +697,9 @@ export function PlatformOwnerApp({
           icon: 'sales',
           items: [
             {
-              href: '/adminpl0n3r/planes',
+              href: '/adminpl0n3r/catalogo?vista=planes',
               label: 'Planes y precios',
+              current: plansView,
             },
             {
               href: '/adminpl0n3r/suscripciones',
@@ -705,7 +709,7 @@ export function PlatformOwnerApp({
             {
               href: '/adminpl0n3r/catalogo',
               label: 'Catálogo comercial',
-              current: currentSection === 'catalogo',
+              current: currentSection === 'catalogo' && !plansView,
             },
           ],
         },
@@ -887,7 +891,14 @@ export function PlatformOwnerApp({
             </section>
           )}
 
-          {!selected && currentSection === 'catalogo' && (
+          {!selected && currentSection === 'catalogo' && plansView && (
+            <PlatformPlansPanel
+              plans={state.data.commercial_catalog}
+              onChanged={() => { void loadContext(undefined, globalPage.current, false); }}
+            />
+          )}
+
+          {!selected && currentSection === 'catalogo' && !plansView && (
             <section className="platform-section ui-page" aria-label="Catálogo comercial de plataforma">
               <PageHeader title="Catálogo comercial"
                 description="Planes vigentes, cartera de empresas y uso observado. Datos canónicos solo de lectura."

@@ -421,3 +421,27 @@ export async function previewSyntheticFinanceClosure(
   }
   return envelope.closure_preview;
 }
+
+/** API owner-only existente: esta pantalla no crea endpoints de facturación. */
+export function platformPlanCatalogPath(): string {
+  return '/adminpl0n3r/planes';
+}
+
+function safePlanKey(key: string): string {
+  if (!/^[a-z][a-z0-9_-]{0,63}$/.test(key)) {
+    throw new Error('Clave de plan inválida.');
+  }
+  return encodeURIComponent(key);
+}
+
+export function platformPlanLimitsPath(key: string): string {
+  return '/adminpl0n3r/api/plans/' + safePlanKey(key);
+}
+
+export function platformPlanPricesPath(key: string): string {
+  return platformPlanLimitsPath(key) + '/prices';
+}
+
+export function platformPlanAuditPath(page = 1): string {
+  return '/adminpl0n3r/api/auditoria?type=commercial_plan&page=' + Math.max(1, Math.trunc(page));
+}
