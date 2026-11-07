@@ -20,10 +20,11 @@ function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 function exact(value: unknown, names: readonly string[]): value is Record<string, unknown> {
-  return record(value) && Object.keys(value).sort().join('|') === [...names].sort().join('|');
+  return record(value) && Object.keys(value).sort((a, b) => a.localeCompare(b)).join('|')
+    === [...names].sort((a, b) => a.localeCompare(b)).join('|');
 }
 function ref(value: unknown): boolean {
-  return typeof value === 'string' && refPattern.test(value) && !/[0-9]{7,}/.test(value);
+  return typeof value === 'string' && refPattern.test(value) && !/\d{7,}/.test(value);
 }
 function rows(value: unknown, keys: readonly string[], checks: (row: Record<string, unknown>) => boolean): boolean {
   return Array.isArray(value) && value.length <= 100
@@ -130,16 +131,16 @@ export function ContractsLifecyclePreview({ tenantId, companyId, branchId, permi
       .then(value => { if (active) setResult(value); });
     return () => { active = false; };
   }, [tenantId, companyId, branchId, csrf, enabled, allowed]);
-  if (!enabled) return <section aria-label="Ciclo de contratación"><p role="status">Previsualización deshabilitada por el servidor.</p></section>;
+  if (!enabled) return <section aria-label="Ciclo de contratación"><output>Previsualización deshabilitada por el servidor.</output></section>;
   if (!allowed) return <section aria-label="Ciclo de contratación"><p role="alert">Sin permiso para consultar esta empresa.</p></section>;
   return <section aria-label="Ciclo de contratación" className="catalog-panel ui-page">
     <h3>Ciclo contractual · revisión manual</h3>
     <p>Solo referencias ficticias. No firma, modifica, notifica, termina ni liquida contratos reales.</p>
-    {result.status === 'loading' && <p role="status">Cargando previsualización sintética…</p>}
+    {result.status === 'loading' && <output>Cargando previsualización sintética…</output>}
     {result.status === 'error' && <p role="alert">No fue posible cargar una previsualización segura.</p>}
     {result.status === 'denied' && <p role="alert">Acceso denegado por el servidor.</p>}
-    {result.status === 'disabled' && <p role="status">La función está deshabilitada.</p>}
-    {result.status === 'empty' && <p role="status">No hay propuestas para revisar.</p>}
+    {result.status === 'disabled' && <output>La función está deshabilitada.</output>}
+    {result.status === 'empty' && <output>No hay propuestas para revisar.</output>}
     {result.status === 'ready' && result.preview && <>
       <MetricStrip label="Elementos para revisión humana" items={sections.map((section, i) =>
         ({ label: titles[i], value: result.preview![section].length }))} />
