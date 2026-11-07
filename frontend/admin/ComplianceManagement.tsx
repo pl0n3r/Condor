@@ -261,9 +261,10 @@ function OccupationalHttpPanel({ branchId, permissions }: Pick<Props, 'branchId'
         || !('synthetic_only' in payload) || payload.synthetic_only !== true
         || !Array.isArray(payload.records) || payload.records.length > 100
         || !payload.records.every(m03ValidRecord)) throw new Error('UNAVAILABLE');
-      setLoad({ status: 'ready', rows: payload.records });
+      const rows = payload.records as M03Record[];
+      setLoad({ status: 'ready', rows });
       setSelected(previous => previous
-        ? payload.records.find((row: M03Record) => row.record_ref === previous.record_ref) ?? previous
+        ? rows.find(row => row.record_ref === previous.record_ref) ?? previous
         : null);
     } catch (error) {
       if (id !== currentRequest.current) return;
