@@ -20,6 +20,7 @@ Producto: `pl0n3r/Condor`
 | human_resources_synthetic_records | usage | review_required | review_required |
 | notification_delivery | usage | review_required | review_required |
 | notification_preferences | usage | account_lifecycle | review_required |
+| payroll_real_records | usage | review_required | review_required |
 | payroll_synthetic_records | usage | review_required | review_required |
 | self_service_trial_application | contact | review_required | review_required |
 | social_security_synthetic_records | usage | review_required | review_required |
