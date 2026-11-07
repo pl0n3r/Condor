@@ -68,14 +68,9 @@ final readonly class PayrollRunService
         $record = PayrollRun::open($tenant, $company, $payload['record_ref'],
             $payload['employee_ref'], $payload['period_ref'], $actor);
         try {
-            return $this->db->transactional(function () use ($tenant, $company, $record): array {
-                $row = $record->snapshot();
-                if ($this->detail($tenant, $company, $row['record_ref']) !== null) {
-                    throw new DomainException('Referencia de nómina duplicada.');
-                }
-                $this->db->insert(self::TABLE, $row);
-                return $row;
-            });
+            return $this->db->transactional(
+                fn (): array => $this->insertFirstVersion($tenant, $company, $record),
+            );
         } catch (UniqueConstraintViolationException $exception) {
             throw new DomainException('Escritura de nómina concurrente rechazada.', 0, $exception);
         }
@@ -103,6 +98,17 @@ final readonly class PayrollRunService
         } catch (UniqueConstraintViolationException $exception) {
             throw new DomainException('Cambio de nómina concurrente rechazado.', 0, $exception);
         }
+    }
+
+    /** @return array<string,mixed> */
+    private function insertFirstVersion(string $tenant, string $company, PayrollRun $record): array
+    {
+        $row = $record->snapshot();
+        if ($this->detail($tenant, $company, $row['record_ref']) !== null) {
+            throw new DomainException('Referencia de nómina duplicada.');
+        }
+        $this->db->insert(self::TABLE, $row);
+        return $row;
     }
 
     private static function ref(string $ref): void

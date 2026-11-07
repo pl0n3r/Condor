@@ -106,16 +106,19 @@ final class PayrollController extends AbstractController
         if (($off = $this->realDisabled()) !== null) { return $off; }
         $this->requireCsrf($request);
         [$actor, $tenant, $branch] = $this->realScope($branchId, 'users.update');
-        $input = $this->payload($request, ['state', 'expected_version']);
-        if (!is_string($input['state'] ?? null) || !is_int($input['expected_version'] ?? null)) {
+        $update = $this->payload($request, ['state', 'expected_version']);
+        $nextState = $update['state'] ?? null;
+        $revision = $update['expected_version'] ?? null;
+        if (!is_string($nextState) || !is_int($revision)) {
             throw new BadRequestHttpException('Estado y versión obligatorios.');
         }
-        return $this->privateJson(['record' => $this->domain(
+        $companyId = $this->realCompany($tenant, $branch);
+        $record = $this->domain(
             fn (): array => $this->records->changeState(
-                $tenant->id(), $this->realCompany($tenant, $branch), $actor->id(),
-                $ref, $input['state'], $input['expected_version'],
+                $tenant->id(), $companyId, $actor->id(), $ref, $nextState, $revision,
             ),
-        )]);
+        );
+        return $this->privateJson(['record' => $record]);
     }
 
     /** Server flag must be checked before authorization, CSRF or any persistence read. */
