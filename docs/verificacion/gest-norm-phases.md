@@ -17,9 +17,9 @@ Alcance: fase construccion, datos estrictamente ficticios, sin credenciales, con
 | ID | Estado integral | Testigo parcial en este PR o antecedente | Brecha para acreditación completa |
 | --- | --- | --- | --- |
 | GEST-NORM-01 | NO_VERIFICABLE | NormativeApplicability rechaza fuente y emisor incompletos; HTTP perfil expone procedencia de fixture | No hay inventario jurídico oficial contrastado ni revisión profesional |
-| GEST-NORM-02 | NO_VERIFICABLE | Version v1, fechas y rechazo de regla caducada o verificada en el futuro | Falta versionado operativo persistido y actualización de normas oficiales |
+| GEST-NORM-02 | NO_VERIFICABLE | Versión v1 sintética, fechas y rechazo de regla caducada o verificada en el futuro | Falta versionado operativo persistido; NormativeApplicability aún acepta la cadena UNKNOWN como versión y su validación estricta requiere una hoja distinta con claim del servicio |
 | GEST-NORM-03 | NO_VERIFICABLE | Contexto municipio/sector altera APLICA frente a NO_APLICA y UNKNOWN fuerza REQUIERE_REVISION | Faltan otros perfiles y condiciones oficiales por entidad |
-| GEST-NORM-07 | NO_VERIFICABLE | NormativeReviewProjection exige reviewer, fecha, evidencia y EN_REVISION; rechaza CUMPLE arbitrario | No hay firma/revisor profesional autenticado ni aprobación legal real |
+| GEST-NORM-07 | NO_VERIFICABLE | NormativeReviewProjection exige reviewer no vacío, fecha, evidencia y EN_REVISION; rechaza CUMPLE arbitrario | No hay firma/revisor profesional autenticado; el valor literal UNKNOWN de reviewer_ref todavía es aceptado por NormativeApplicability y requiere una corrección en su propio claim |
 | GEST-F0 | NO_VERIFICABLE | Proyección F0 real y perfil/catálogo HTTP de fixture con source/version/reviewer | No existe catálogo normativo versionado administrado desde fuente oficial |
 | GEST-F1 | NO_VERIFICABLE | Matriz GET con reglas OBLIGATORIO y PROHIBIDO, aislamiento tenant, PENDIENTE/EN_REVISION sin cierre | La matriz real de obligaciones/autoridades no está enlazada a documentos de empresa |
 | GEST-F2 | NO_VERIFICABLE | GET calendario/evaluaciones/auditorias HTTP dentro de sesión owner; automáticamente aprobado/cerrado falso | Persistencia transversal, alertas, auditoría y controles reales no acreditados |
