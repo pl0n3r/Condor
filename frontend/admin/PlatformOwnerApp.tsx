@@ -900,6 +900,7 @@ export function PlatformOwnerApp({
                 { label: 'Con suscripción', value: state.data.commercial_portfolio.filter((entry) =>
                   entry.commercial_subscription.status === 'configured').length },
               ]} />
+              <h2 id="commercial-portfolio-title" className="ui-sr-only">Cartera comercial</h2>
               <Card title="Cartera comercial">
                 <Toolbar trailing={<span className="ui-count">Búsqueda en esta página · {state.data.commercial_portfolio.length} empresas</span>}>
                   <label className="ui-search">
