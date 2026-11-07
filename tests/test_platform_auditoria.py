@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTROLLER = ROOT / "src/Http/Controller/PlatformAuditController.php"
 PANEL = ROOT / "frontend/admin/PlatformAuditPanel.tsx"
 BASE = ROOT / "src/Http/Controller/PlatformOwnerApiController.php"
+SHELL = ROOT / "frontend/admin/AdminShell.tsx"
 
 PHP_SCENARIO = r"""<?php
 declare(strict_types=1);
@@ -102,6 +103,17 @@ class PlatformAuditoriaTests(unittest.TestCase):
         self.assertIn("No tienes permiso", panel)
         self.assertIn("No hay cambios", panel)
         self.assertIn("Cargando auditoría", panel)
+
+    def test_owner_navigation_mount_and_bundle(self) -> None:
+        shell = SHELL.read_text(encoding="utf-8")
+        bundle = (ROOT / "public/build/admin.js").read_text(encoding="utf-8")
+        self.assertIn("auditView = variant === 'platform'", shell)
+        self.assertIn("window.location.pathname === '/adminpl0n3r'", shell)
+        self.assertIn("get('view') === 'auditoria'", shell)
+        self.assertIn("href: '/adminpl0n3r?view=auditoria'", shell)
+        self.assertIn("auditView ? <PlatformAuditPanel /> : children", shell)
+        self.assertIn("/adminpl0n3r/api/auditoria?", bundle)
+        self.assertIn("Auditoría", bundle)
 
     def test_real_http_permissions_and_privacy(self) -> None:
         php = shutil.which("php")
