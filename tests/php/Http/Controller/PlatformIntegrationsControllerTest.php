@@ -91,7 +91,8 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
             self::assertSame('••••9876', $safe['setting']['last4']);
             self::assertArrayNotHasKey('value', $safe['setting']);
             self::assertNotEmpty($safe['setting']['updated_at']);
-            self::assertSame('private, no-store', $client->getResponse()->headers->get('Cache-Control'));
+            self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('private'));
+            self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
 
             $client->request('GET', self::PATH);
             self::assertResponseStatusCodeSame(200);
