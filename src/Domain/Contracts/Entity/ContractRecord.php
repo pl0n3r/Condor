@@ -94,48 +94,46 @@ final class ContractRecord
     public const REAL_DRAFT = 'REQUIERE_REVISION';
     public const REAL_REVIEW = 'EN_REVISION';
 
-    #[ORM\Id, ORM\Column(type: 'string', length: 26)]
-    private string $id;
-    #[ORM\Column(name: 'tenant_id', length: 26)]
-    private string $tenantId;
-    #[ORM\Column(name: 'company_id', length: 26)]
-    private string $companyId;
-    #[ORM\Column(name: 'record_ref', length: 64)]
-    private string $recordRef;
-    #[ORM\Column(name: 'worker_ref', length: 64)]
-    private string $workerRef;
-    #[ORM\Column(name: 'template_ref', length: 64)]
-    private string $templateRef;
-    #[ORM\Column(length: 16)]
-    private string $kind;
-    #[ORM\Column(length: 24)]
-    private string $state;
-    #[ORM\Column(type: 'integer')]
-    private int $version;
-    #[ORM\Column(name: 'previous_id', length: 26, nullable: true)]
-    private ?string $previousId;
-    #[ORM\Column(name: 'actor_id', length: 26)]
-    private string $actorId;
-    #[ORM\Column(name: 'occurred_at', type: 'datetime_immutable')]
-    private DateTimeImmutable $occurredAt;
+    // Explicit columns: ORM hydration remains independent of the synthetic array.
+    #[ORM\Id, ORM\Column(type: 'string', length: 26)] private string $id;
+    #[ORM\Column(name: 'actor_id', length: 26)] private string $actorId;
+    #[ORM\Column(name: 'occurred_at', type: 'datetime_immutable')] private DateTimeImmutable $occurredAt;
+    #[ORM\Column(name: 'tenant_id', length: 26)] private string $tenantId;
+    #[ORM\Column(name: 'company_id', length: 26)] private string $companyId;
+    #[ORM\Column(name: 'record_ref', length: 64)] private string $recordRef;
+    #[ORM\Column(name: 'kind', length: 16)] private string $kind;
+    #[ORM\Column(name: 'template_ref', length: 64)] private string $templateRef;
+    #[ORM\Column(name: 'worker_ref', length: 64)] private string $workerRef;
+    #[ORM\Column(name: 'previous_id', length: 26, nullable: true)] private ?string $previousId;
+    #[ORM\Column(type: 'integer')] private int $version;
+    #[ORM\Column(length: 24)] private string $state;
+
+    private static function validUlid(string $value): bool
+    {
+        return preg_match('/\A[0-9A-HJKMNP-TV-Z]{26}\z/D', $value) === 1;
+    }
+
+    private static function validOpaqueRef(string $value): bool
+    {
+        return preg_match('/\A[a-z][a-z0-9_-]{0,63}\z/D', $value) === 1;
+    }
 
     private static function persisted(
         string $tenant, string $company, string $ref, string $worker,
         string $template, string $kind, string $state, int $version,
         ?string $previous, string $actor, string $id, DateTimeImmutable $time,
     ): self {
-        foreach ([$tenant, $company, $actor, $id] as $ulid) {
-            if (preg_match('/\A[0-9A-HJKMNP-TV-Z]{26}\z/D', $ulid) !== 1) {
-                throw new DomainException('Identificador de contratación inválido.');
-            }
+        // Validate all identity inputs in one pass; no free-form PII may enter an event.
+        $identifiers = [$tenant, $company, $actor, $id];
+        if ($previous !== null) {
+            $identifiers[] = $previous;
         }
-        if ($previous !== null && preg_match('/\A[0-9A-HJKMNP-TV-Z]{26}\z/D', $previous) !== 1) {
-            throw new DomainException('Identificador de historial inválido.');
+        if (count(array_filter($identifiers, self::validUlid(...))) !== count($identifiers)) {
+            throw new DomainException('Identificador ULID de contratación inválido.');
         }
-        foreach ([$ref, $worker, $template] as $alias) {
-            if (preg_match('/\A[a-z][a-z0-9_-]{0,63}\z/D', $alias) !== 1) {
-                throw new DomainException('Solo se admiten referencias opacas de contratación.');
-            }
+        if (!self::validOpaqueRef($ref) || !self::validOpaqueRef($worker)
+            || !self::validOpaqueRef($template)) {
+            throw new DomainException('Solo se admiten referencias opacas de contratación.');
         }
         if (!in_array($kind, ['template', 'contract', 'addendum'], true)
             || !in_array($state, [self::REAL_DRAFT, self::REAL_REVIEW], true)
@@ -193,19 +191,20 @@ final class ContractRecord
     /** @return array<string,mixed> */
     public function realSnapshot(): array
     {
+        // Database column order does not determine the chronology of events.
         return [
             'id' => $this->id,
-            'tenant_id' => $this->tenantId,
-            'company_id' => $this->companyId,
-            'record_ref' => $this->recordRef,
-            'worker_ref' => $this->workerRef,
-            'template_ref' => $this->templateRef,
-            'kind' => $this->kind,
-            'state' => $this->state,
-            'version' => $this->version,
-            'previous_id' => $this->previousId,
             'actor_id' => $this->actorId,
             'occurred_at' => $this->occurredAt->format('Y-m-d H:i:s'),
+            'tenant_id' => $this->tenantId,
+            'company_id' => $this->companyId,
+            'kind' => $this->kind,
+            'record_ref' => $this->recordRef,
+            'template_ref' => $this->templateRef,
+            'worker_ref' => $this->workerRef,
+            'previous_id' => $this->previousId,
+            'version' => $this->version,
+            'state' => $this->state,
         ];
     }
 }
