@@ -58,9 +58,10 @@ class ApprovedMatrixContractTests(unittest.TestCase):
     def test_matrix_20_cases(self) -> None:
         text = DOC.read_text(encoding="utf-8")
         self.assertEqual(assert_matrix(text), 20)
+        approved = text.split("## Matriz técnica pre-live aprobada — OWNER #1868/A", 1)[1]
         for token in ("1440×900", "390×844", "**12**", "**8**"):
             with self.subTest(token=token):
-                self.assertIn(token, text)
+                self.assertIn(token, approved)
 
     def test_thresholds_and_authority(self) -> None:
         text = DOC.read_text(encoding="utf-8")
@@ -75,6 +76,8 @@ class ApprovedMatrixContractTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, section)
         self.assertRegex(section, r"main@[0-9a-f]{40}")
+        self.assertIn("no aprueba proveedores, presupuesto comercial, sesiones reales ni go-live", section)
+        self.assertIn("NO VERIFICADO / NO AUTORIZADO", section)
         self.assertIn("SIN DECIDIR", text)
         self.assertIn("NO AUTORIZADAS", text)
 
