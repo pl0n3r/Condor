@@ -20,7 +20,7 @@ export function contractsSyntheticEnabled(root: { dataset?: { contractsSynthetic
 function verifiedRecord(value: unknown, scope: string): Draft {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('invalid record');
   const row = value as Record<string, unknown>;
-  if (Object.keys(row).sort().join(',') !== 'kind,ref,state,synthetic_only'
+  if (Object.keys(row).sort((a, b) => a.localeCompare(b)).join(',') !== 'kind,ref,state,synthetic_only'
     || typeof row.ref !== 'string' || typeof row.kind !== 'string'
     || !refPattern.test(row.ref) || row.ref.startsWith('fixture:' + row.kind + '/') === false
     || !allowedType.includes(row.kind as ContractType)
