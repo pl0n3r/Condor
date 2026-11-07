@@ -123,12 +123,11 @@ final class ContractsController extends AbstractController
                 'detail' => $this->records->detail($tenantId, $companyId, $ref ?? ''),
                 'create' => $this->records->create(
                     $tenantId, $companyId, $actor->id(),
-                    $this->payload($request ?? throw new BadRequestHttpException(), [
+                    $this->payload($request, [
                         'record_ref', 'worker_ref', 'template_ref', 'kind',
                     ]),
                 ),
                 'state' => $this->changeRealContract($request, $tenantId, $companyId, $actor->id(), $ref),
-                default => throw new NotFoundHttpException(),
             };
         });
         if ($action === 'detail' && $record === null) {

@@ -71,7 +71,7 @@ final readonly class ContractRecordService
             }
         }
 
-        return $this->atomic(function () use ($tenant, $company, $actor, $payload): array {
+        return $this->atomic(function (Connection $_db) use ($tenant, $company, $actor, $payload): array {
             if ($this->detail($tenant, $company, $payload['record_ref']) !== null) {
                 throw new DomainException('Referencia de contratación duplicada.');
             }
@@ -87,7 +87,7 @@ final readonly class ContractRecordService
         string $tenant, string $company, string $actor,
         string $ref, string $next, int $expectedVersion,
     ): array {
-        return $this->atomic(function () use (
+        return $this->atomic(function (Connection $_db) use (
             $tenant, $company, $actor, $ref, $next, $expectedVersion,
         ): array {
             $previous = $this->detail($tenant, $company, $ref);
@@ -99,10 +99,10 @@ final readonly class ContractRecordService
         });
     }
 
-    /** @param callable():array<string,mixed> $operation
+    /** @param \Closure(Connection): array<string,mixed> $operation
      * @return array<string,mixed>
      */
-    private function atomic(callable $operation): array
+    private function atomic(\Closure $operation): array
     {
         try {
             return $this->db->transactional($operation);
