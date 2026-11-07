@@ -23,8 +23,8 @@ Alcance: fase construccion, datos estrictamente ficticios, sin credenciales, con
 | GEST-F0 | NO_VERIFICABLE | Proyección F0 real y perfil/catálogo HTTP de fixture con source/version/reviewer | No existe catálogo normativo versionado administrado desde fuente oficial |
 | GEST-F1 | NO_VERIFICABLE | Matriz GET con reglas OBLIGATORIO y PROHIBIDO, aislamiento tenant, PENDIENTE/EN_REVISION sin cierre | La matriz real de obligaciones/autoridades no está enlazada a documentos de empresa |
 | GEST-F2 | NO_VERIFICABLE | GET calendario/evaluaciones/auditorias HTTP dentro de sesión owner; automáticamente aprobado/cerrado falso | Persistencia transversal, alertas, auditoría y controles reales no acreditados |
-| GEST-F3 | NO_VERIFICABLE | M06 sintético desactivado responde 404; ningún test activa SG-SST sensible | Bajo #742/B, D-059 y D-063 no hay permiso para expedientes médicos; falta recorrido negativo especializado |
-| GEST-F4 | NO_VERIFICABLE | Ningún fixture ni ruta laboral activada; pruebas solo usan tenants/branches ficticios | RR. HH., nómina y firma continúan bloqueados por #742/B y D-059/D-063 |
+| GEST-F3 | NO_VERIFICABLE | GET HR /hr/permits con HR_REAL_DATA_ENABLED=1 en test devuelve 404 antes de leer, además del cierre de M06 | Bajo #742/B, D-059 y D-063 no hay permiso para expedientes médicos ni revisión SST profesional; la denegación no equivale a cubrir el flujo |
+| GEST-F4 | NO_VERIFICABLE | GET HR /hr/evaluations con HR_REAL_DATA_ENABLED=1 en test devuelve 404; ninguna entidad laboral ni persistencia activa | RR. HH., nómina y firma continúan bloqueados por #742/B y D-059/D-063 |
 | GEST-F5 | NO_VERIFICABLE | Antecedente #1620/PR #1795 prueba riesgo y calidad con endpoints separados y rollback | Gobierno, activos, finanzas, proveedores y operación no están conectados integralmente |
 | GEST-F6 | NO_VERIFICABLE | /admin auténtico en Symfony ofrece sesión y token CSRF; HTTP owner/denegaciones verificables | Falta auditoría accesibilidad/es-CO integral, aprobación experta y piloto autorizado |
 | GEST-AC-01 | NO_VERIFICABLE | Dos perfiles sintéticos de municipio diferente producen resultados de aplicabilidad distintos | Reglas para perfiles reales revisadas y criterios completos faltan |
@@ -39,7 +39,7 @@ Alcance: fase construccion, datos estrictamente ficticios, sin credenciales, con
 
 REQUIERE_REVISION es la salida conservadora de reglas no revisadas, fuera de vigencia, fuente/version incompletas, perfil desconocido, revisión inválida, revisión duplicada o fecha de evidencia imposible. Las filas de otros tenants no se revelan. Un resultado APLICA no constituye CUMPLE ni prueba que el texto ficticio corresponde a una norma real.
 
-Fases F3 y F4: ningún resultado positivo ni dato laboral/médico se genera. La decisión B de #742, D-059 y D-063 impiden activar tratamiento y publicación. La prueba de cierre de M06 con flag apagado NO sustituye una futura prueba especializada de esos módulos; no se inventa ese recibo.
+Fases F3 y F4: ningún resultado positivo ni dato laboral/médico se genera. La decisión B de #742, D-059 y D-063 impiden activar tratamiento y publicación. Dos GET reales de los controladores HR en entorno test y con HR_REAL_DATA_ENABLED=1 deben devolver 404; es una prueba de denegación, NO una autorización de datos reales ni un recibo integral de SG-SST/nómina.
 
 F5 y F6: el testigo parcial de #1620 y el HTML /admin no equivalen a un flujo conectado completo ni auditoría accesible es-CO. Las pruebas nuevas no duplican código ni claims de #1620, #1637 o #1553. Las 41 filas originales del reporte #1543 no cambian de estado.
 
