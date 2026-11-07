@@ -80,7 +80,7 @@ echo json_encode($result);
         self.assertIn("getenv('SOCIAL_SECURITY_REAL_DATA_ENABLED') === 'true'", src)
         self.assertIn("'feature_unavailable'", src)
         for permission in ("users.view", "users.create", "users.update"):
-            self.assertIn(f"authorizedBranchScope($branchId, '{permission}')", src)
+            self.assertIn(f"recordScope($branchId, '{permission}')", src)
         self.assertGreaterEqual(src.count("$this->requireCsrf($request)"), 3)
         self.assertIn("$company->tenant()->id() !== $tenant->id()", src)
         self.assertIn("tenant_id = ? AND company_id = ?", SERVICE.read_text())
