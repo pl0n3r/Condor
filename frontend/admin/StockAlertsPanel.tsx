@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
 type StockAlert = {
   id: string;
@@ -129,6 +130,8 @@ export function StockAlertsPanel({ branchId, permissions, csrfToken }: Props) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<Message | null>(null);
   const [savingVariant, setSavingVariant] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
   const requestSequence = useRef(0);
   const branchPath = '/api/v1/branches/' + encodeURIComponent(branchId)
     + '/inventory/stock-alerts';
@@ -271,34 +274,32 @@ export function StockAlertsPanel({ branchId, permissions, csrfToken }: Props) {
     }
   }
 
+  const variantIds = displayed.map((item) => item.variantId);
+  const rows = displayed.filter((item) => item.variantId.toLocaleLowerCase('es-CO')
+    .includes(search.toLocaleLowerCase('es-CO')));
+  const selected = ready && displayed.find((item) => item.variantId === selectedVariant);
   return (
-    <section id="stock-alerts" className="catalog-panel" aria-labelledby="stock-alerts-title">
-      <div className="catalog-heading">
-        <div>
-          <span className="eyebrow">Inventario · sede activa</span>
-          <h2 id="stock-alerts-title">Alertas de stock bajo</h2>
-          <p className="muted">Alertas del inventario autorizado, sin notificaciones externas.</p>
-        </div>
-      </div>
-      {!canView && (
-        <div role="alert" className="alert alert-error">
-          No tienes permiso para consultar alertas de inventario.
-        </div>
-      )}
+    <section id="stock-alerts" className="catalog-panel ui-page" aria-label="Alertas de stock bajo">
+      <PageHeader title="Alertas de stock bajo"
+        description="Alertas del inventario autorizado, sin notificaciones externas." />
+      {ready && <MetricStrip label="Resumen de stock" items={[
+        { label: 'Variantes supervisadas', value: variantIds.length },
+        { label: 'Alertas activas', value: ready.alerts.length, tone: 'warn' },
+        { label: 'Mínimos configurados', value: ready.minimums.length },
+      ]} />}
+      {!canView && <div role="alert" className="alert alert-error">
+        No tienes permiso para consultar alertas de inventario.
+      </div>}
       {canView && state.status === 'loading' && (
         <output aria-live="polite" className="muted">Cargando alertas de stock…</output>
       )}
       {canView && state.status === 'denied' && (
-        <div role="alert" className="alert alert-error">
-          Acceso denegado a las alertas de esta sede.
-        </div>
+        <div role="alert" className="alert alert-error">Acceso denegado a las alertas de esta sede.</div>
       )}
       {canView && state.status === 'error' && (
         <div role="alert" className="alert alert-error">
           <p>{state.message}</p>
-          <button className="button" type="button" onClick={() => void load()}>
-            Reintentar
-          </button>
+          <button className="button" type="button" onClick={() => void load()}>Reintentar</button>
         </div>
       )}
       {notice?.kind === 'error' && (
@@ -307,65 +308,61 @@ export function StockAlertsPanel({ branchId, permissions, csrfToken }: Props) {
       {notice?.kind === 'success' && (
         <output aria-live="polite" className="alert alert-success">{notice.text}</output>
       )}
-      {canView && ready !== null && (
-        <>
-          {ready.alerts.length === 0 && (
-            <p className="muted">No hay alertas activas de stock bajo para esta sede.</p>
-          )}
-          {displayed.length === 0 ? (
-            <p className="muted">Aún no hay mínimos configurados para esta sede.</p>
-          ) : (
-            <div className="catalog-list">
-              {displayed.map(({ variantId, minimum, alert }) => (
-                <article className="catalog-card" key={variantId}>
-                  <div>
-                    <span className="eyebrow">
-                      {alert ? 'Alerta de stock' : 'Mínimo configurado'}
-                    </span>
-                    <h3>Variante {variantId}</h3>
-                    <p className="muted">Sede activa · fuente {ready.sourceId}</p>
-                    {alert && (
-                      <p>
-                        Existencia: <strong>{alert.quantity}</strong> ·
-                        Mínimo al alertar: <strong>{alert.minimum}</strong> ·
-                        Estado: {alert.status === 'pending' ? 'Pendiente' : 'Entregada'}
-                      </p>
-                    )}
-                    <p>Mínimo actual: <strong>{minimum}</strong></p>
-                  </div>
-                  {canUpdate && (
-                    <form
-                      className="catalog-editor"
-                      onSubmit={(event) => void saveMinimum(event, variantId)}
-                    >
-                      <label className="field">
-                        <span>Mínimo de stock de la variante</span>
-                        <input
-                          aria-label={'Mínimo de stock ' + variantId}
-                          type="number"
-                          required
-                          min="0"
-                          max="2147483647"
-                          step="1"
-                          inputMode="numeric"
-                          value={drafts[variantId] ?? String(minimum)}
-                          onChange={(event) => setDrafts((current) => ({
-                            ...current, [variantId]: event.target.value,
-                          }))}
-                          disabled={savingVariant !== null}
-                        />
-                      </label>
-                      <button className="button" type="submit" disabled={savingVariant !== null}>
-                        {savingVariant === variantId ? 'Guardando…' : 'Guardar mínimo'}
-                      </button>
-                    </form>
-                  )}
-                </article>
-              ))}
-            </div>
-          )}
-        </>
+      {ready && (
+        <Card title="Mínimos por variante">
+          {ready.alerts.length === 0 && <p className="muted">No hay alertas activas de stock bajo para esta sede.</p>}
+          {displayed.length === 0 && <p className="muted">Aún no hay mínimos configurados para esta sede.</p>}
+          <Toolbar trailing={<span className="ui-count">{rows.length} de {displayed.length}</span>}>
+            <label className="ui-search"><span className="ui-sr-only">Buscar variante</span>
+              <input type="search" value={search} placeholder="Buscar variante"
+                onChange={(event) => setSearch(event.target.value)} />
+            </label>
+          </Toolbar>
+          <DataTable caption="Alertas y mínimos de stock bajo" rows={rows}
+            rowKey={(row) => row.variantId}
+            onOpen={(row) => setSelectedVariant(row.variantId)}
+            empty={<><strong>Sin variantes</strong><span>Prueba otra búsqueda o consulta la configuración de stock.</span></>}
+            columns={[
+              { key: 'variant', header: 'Variante', render: (row) => row.variantId },
+              { key: 'minimum', header: 'Mínimo actual', render: (row) => row.minimum, align: 'right' },
+              { key: 'quantity', header: 'Existencia', render: (row) => row.alert?.quantity ?? 'Sin alerta', align: 'right' },
+              { key: 'status', header: 'Estado', render: (row) => <StatusPill tone={row.alert?.status === 'pending' ? 'warn' : 'neutral'}>
+                {row.alert ? row.alert.status === 'pending' ? 'Pendiente' : 'Entregada' : 'Mínimo configurado'}
+              </StatusPill> },
+            ]} />
+        </Card>
       )}
+      <SidePanel open={Boolean(selected)} title={selected ? 'Variante ' + selected.variantId : 'Detalle de stock'}
+        onClose={() => setSelectedVariant(null)}>
+        {selected && ready && <>
+          <dl className="ui-details">
+            <div><dt>Variante</dt><dd>{selected.variantId}</dd></div>
+            <div><dt>Fuente</dt><dd>{ready.sourceId}</dd></div>
+            <div><dt>Mínimo actual:</dt><dd>{selected.minimum}</dd></div>
+            {selected.alert && <>
+              <div><dt>Existencia</dt><dd>{selected.alert.quantity}</dd></div>
+              <div><dt>Mínimo al alertar</dt><dd>{selected.alert.minimum}</dd></div>
+              <div><dt>Estado</dt><dd>{selected.alert.status === 'pending' ? 'Pendiente' : 'Entregada'}</dd></div>
+            </>}
+          </dl>
+          {canUpdate && (
+            <form className="catalog-editor" onSubmit={(event) => void saveMinimum(event, selected.variantId)}>
+              <label className="field"><span>Mínimo de stock de la variante</span>
+                <input aria-label={'Mínimo de stock ' + selected.variantId} type="number"
+                  required min="0" max="2147483647" step="1" inputMode="numeric"
+                  value={drafts[selected.variantId] ?? String(selected.minimum)}
+                  onChange={(event) => setDrafts((current) => ({
+                    ...current, [selected.variantId]: event.target.value,
+                  }))}
+                  disabled={savingVariant !== null} />
+              </label>
+              <button className="button" type="submit" disabled={savingVariant !== null}>
+                {savingVariant === selected.variantId ? 'Guardando…' : 'Guardar mínimo'}
+              </button>
+            </form>
+          )}
+        </>}
+      </SidePanel>
     </section>
   );
 }
