@@ -1109,7 +1109,8 @@ export function PlatformOwnerApp({
                 <PlatformTenantCreationPanel
                   csrfToken={tenantToken}
                   onCreated={() => {
-                    setCreatingTenant(false);
+                    // El enlace de invitación es de un solo uso: mantener el
+                    // panel abierto hasta que el propietario pueda copiarlo.
                     setPlatformRevision((current) => current + 1);
                     void loadContext(undefined, 1, false);
                   }}
