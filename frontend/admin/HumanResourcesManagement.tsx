@@ -23,6 +23,9 @@ type HrRecord = Readonly<{
   state: HrState;
   version: number;
 }>;
+type DetailView = { status: 'idle' | 'loading' | 'ready' | 'error' | 'denied' | 'disabled'; record?: HrRecord };
+type RequestScope = Readonly<{ enabled: boolean; allowed: boolean; tenantId: string; companyId: string; branchId: string; signal?: AbortSignal }>;
+
 type View =
   | { status: 'loading'; records: HrRecord[] }
   | { status: 'ready'; records: HrRecord[] }
@@ -71,6 +74,79 @@ async function failure(response: Response): Promise<'denied' | 'disabled' | 'err
   return 'error';
 }
 
+/** Only a server-rendered, explicit true enables client-side HR requests. Missing means OFF. */
+export function isHrRealDataEnabled(root: HTMLElement | null): boolean {
+  return root?.dataset.hrRealDataEnabled === 'true';
+}
+
+/** Reads the real server API only if the explicit server feature gate is open. */
+export async function readHrRecords(
+  scope: RequestScope, transport: typeof fetch = fetch,
+): Promise<View> {
+  if (!scope.enabled) return { status: 'disabled', records: [] };
+  if (!scope.allowed) return { status: 'denied', records: [] };
+  try {
+    const response = await transport('/api/v1/branches/' + encodeURIComponent(scope.branchId) + '/hr/records', {
+      credentials: 'same-origin', cache: 'no-store',
+      headers: { Accept: 'application/json' }, signal: scope.signal,
+    });
+    if (!response.ok) return { status: await failure(response), records: [] };
+    const payload: unknown = await response.json();
+    return { status: 'ready', records: parseRecords(payload, scope.tenantId, scope.companyId) };
+  } catch {
+    return { status: 'error', records: [] };
+  }
+}
+
+/** Fetches the canonical detail, never reuses a potentially stale list snapshot. */
+export async function readHrDetail(
+  scope: RequestScope, ref: string, transport: typeof fetch = fetch,
+): Promise<DetailView> {
+  if (!scope.enabled) return { status: 'disabled' };
+  if (!scope.allowed) return { status: 'denied' };
+  if (!alias.test(ref)) return { status: 'error' };
+  try {
+    const response = await transport('/api/v1/branches/' + encodeURIComponent(scope.branchId)
+      + '/hr/records/' + encodeURIComponent(ref), {
+      credentials: 'same-origin', cache: 'no-store',
+      headers: { Accept: 'application/json' }, signal: scope.signal,
+    });
+    if (!response.ok) return { status: await failure(response) };
+    const payload: unknown = await response.json();
+    if (!isObject(payload)) throw new Error('Detalle de RR. HH. no verificable');
+    const rows = parseRecords({ records: [payload.record] }, scope.tenantId, scope.companyId);
+    if (rows[0]?.record_ref !== ref) throw new Error('Detalle fuera de alcance');
+    return { status: 'ready', record: rows[0] };
+  } catch {
+    return { status: 'error' };
+  }
+}
+
+/** Writes only with server-gated scope, authorization and a session CSRF token. */
+export async function writeHrRecord(
+  scope: RequestScope, method: 'POST' | 'PATCH', url: string, body: object,
+  csrfToken: string, transport: typeof fetch = fetch,
+): Promise<'saved' | 'denied' | 'disabled' | 'error'> {
+  if (!scope.enabled) return 'disabled';
+  if (!scope.allowed) return 'denied';
+  if (!csrfToken) return 'error';
+  try {
+    const response = await transport(url, {
+      method, credentials: 'same-origin', cache: 'no-store',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken },
+      body: JSON.stringify(body), signal: scope.signal,
+    });
+    if (!response.ok) return failure(response);
+    const payload: unknown = await response.json();
+    if (!isObject(payload)) return 'error';
+    const rows = parseRecords({ records: [payload.record] }, scope.tenantId, scope.companyId);
+    return rows.length === 1 ? 'saved' : 'error';
+  } catch {
+    return 'error';
+  }
+}
+
 function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Props) {
   // The admin entrypoint already receives this server-generated session CSRF
   // token as data-access-token on the same-origin root. Never persist or log it.
@@ -82,6 +158,9 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
   const [view, setView] = useState<View>({ status: 'loading', records: [] });
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState('');
+  const [detail, setDetail] = useState<DetailView>({ status: 'idle' });
+  const [filterKind, setFilterKind] = useState<'all' | HrKind>('all');
+  const [filterState, setFilterState] = useState<'all' | HrState>('all');
   const [panel, setPanel] = useState<'create' | 'detail' | null>(null);
   const [recordRef, setRecordRef] = useState('');
   const [collaboratorRef, setCollaboratorRef] = useState('');
@@ -90,67 +169,71 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const reader = useRef<AbortController | null>(null);
+  const detailReader = useRef<AbortController | null>(null);
   const writer = useRef<AbortController | null>(null);
   const mounted = useRef(true);
   const path = '/api/v1/branches/' + encodeURIComponent(branchId) + '/hr/records';
 
   async function load() {
-    if (!canView) { setView({ status: 'denied', records: [] }); return; }
     reader.current?.abort();
     const request = new AbortController();
     reader.current = request;
     setView({ status: 'loading', records: [] });
-    try {
-      const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store',
-        headers: { Accept: 'application/json' }, signal: request.signal });
-      if (request.signal.aborted || !mounted.current) return;
-      if (!response.ok) {
-        const status = await failure(response);
-        if (!request.signal.aborted && mounted.current) setView({ status, records: [] });
-        return;
-      }
-      const payload: unknown = await response.json();
-      if (!request.signal.aborted && mounted.current) {
-        setView({ status: 'ready', records: parseRecords(payload, tenantId, companyId) });
-      }
-    } catch {
-      if (!request.signal.aborted && mounted.current) setView({ status: 'error', records: [] });
+    const result = await readHrRecords({ enabled: true, allowed: canView,
+      tenantId, companyId, branchId, signal: request.signal });
+    if (!request.signal.aborted && mounted.current) setView(result);
+  }
+
+  async function openDetail(ref: string) {
+    detailReader.current?.abort();
+    const request = new AbortController();
+    detailReader.current = request;
+    setSelected(ref); setDetail({ status: 'loading' }); setPanel('detail');
+    const result = await readHrDetail({ enabled: true, allowed: canView,
+      tenantId, companyId, branchId, signal: request.signal }, ref);
+    if (request.signal.aborted || !mounted.current) return;
+    setDetail(result);
+    if (result.status === 'denied' || result.status === 'disabled') {
+      setView({ status: result.status, records: [] });
+      setPanel(null);
     }
   }
 
   useEffect(() => {
     mounted.current = true;
     void load();
-    return () => { mounted.current = false; reader.current?.abort(); writer.current?.abort(); };
+    return () => { mounted.current = false; reader.current?.abort(); detailReader.current?.abort(); writer.current?.abort(); };
     // The component is remounted on every scope change by the key below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function submit(url: string, method: 'POST' | 'PATCH', body: object) {
-    if (!sessionCsrf || view.status !== 'ready' || saving || writer.current) return;
+    const allowed = method === 'POST' ? canCreate : canUpdate;
+    if (!allowed || !sessionCsrf || view.status !== 'ready' || saving || writer.current) return;
     const request = new AbortController();
     writer.current = request;
     setSaving(true); setNotice('');
     try {
-      const response = await fetch(url, { method, credentials: 'same-origin',
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json',
-          'X-CSRF-Token': sessionCsrf }, body: JSON.stringify(body), signal: request.signal });
+      const status = await writeHrRecord({ enabled: true, allowed,
+        tenantId, companyId, branchId, signal: request.signal },
+      method, url, body, sessionCsrf);
       if (!mounted.current || request.signal.aborted) return;
-      if (!response.ok) {
-        const denied = await failure(response);
-        if (!mounted.current || request.signal.aborted) return;
-        if (denied === 'denied' || denied === 'disabled') setView({ status: denied, records: [] });
-        else setNotice('No se aplicó el cambio. Revisa permisos, versión y referencias.');
+      if (status !== 'saved') {
+        if (status === 'denied' || status === 'disabled') {
+          setView({ status, records: [] }); setPanel(null);
+        } else {
+          setNotice('No se pudo confirmar el cambio. Revisa permisos, versión y referencias antes de reintentar.');
+        }
         return;
       }
-      // A successful write must be reloaded from server authority; never retry it automatically.
+      // Read the server authority after every write; never fabricate a successful row.
       setNotice('Cambio confirmado por el servidor. Actualizando registros…');
       setRecordRef(''); setCollaboratorRef(''); setPositionRef('');
       await load();
-      if (mounted.current && !request.signal.aborted) setPanel(null);
-    } catch {
-      if (mounted.current && !request.signal.aborted)
-        setNotice('No se pudo confirmar el resultado. Recarga antes de intentar otra operación.');
+      if (mounted.current && !request.signal.aborted) {
+        detailReader.current?.abort();
+        setDetail({ status: 'idle' }); setPanel(null);
+      }
     } finally {
       if (writer.current === request) writer.current = null;
       if (mounted.current) setSaving(false);
@@ -168,9 +251,12 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
   }
 
   const records = view.status === 'ready' ? view.records : [];
-  const visible = records.filter(row => row.record_ref.includes(search.trim().toLowerCase())
-    || row.position_ref.includes(search.trim().toLowerCase()));
-  const current = records.find(row => row.record_ref === selected);
+  const visible = records.filter(row => (row.record_ref.includes(search.trim().toLowerCase())
+    || row.position_ref.includes(search.trim().toLowerCase()))
+    && (filterKind === 'all' || row.kind === filterKind)
+    && (filterState === 'all' || row.state === filterState));
+  const current = detail.status === 'ready' && detail.record?.record_ref === selected
+    ? detail.record : undefined;
 
   if (!canView) return <section id="human-resources-management" className="catalog-panel ui-page">
     <PageHeader title="Talento humano" description="Gestión de cargos y novedades por empresa y sede." />
@@ -183,7 +269,6 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
       actions={canCreate && view.status === 'ready'
         ? <button type="button" className="button" onClick={() => setPanel('create')}>Nuevo registro</button>
         : undefined} />
-    <p role="note">Entorno de construcción: usar únicamente referencias inventadas. No ingresar información personal real.</p>
     {view.status === 'loading' && <output>Cargando registros de talento humano…</output>}
     {view.status === 'denied' && <p role="alert">Acceso denegado: no tienes autorización para estos registros.</p>}
     {view.status === 'disabled' && <p role="alert">Talento humano todavía no está habilitado en el servidor.</p>}
@@ -203,10 +288,25 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
             <input type="search" value={search} maxLength={64}
               onChange={event => setSearch(event.target.value)} />
           </label>
+          <label>Tipo de registro
+            <select aria-label="Filtrar por tipo" value={filterKind}
+              onChange={event => setFilterKind(event.target.value as 'all' | HrKind)}>
+              <option value="all">Todos</option>
+              {kinds.map(value => <option value={value} key={value}>{labels[value]}</option>)}
+            </select>
+          </label>
+          <label>Estado
+            <select aria-label="Filtrar por estado" value={filterState}
+              onChange={event => setFilterState(event.target.value as 'all' | HrState)}>
+              <option value="all">Todos</option>
+              <option value="BORRADOR">Borrador</option>
+              <option value="EN_REVISION">En revisión</option>
+            </select>
+          </label>
         </Toolbar>
         <DataTable<HrRecord> caption="Registros laborales de la empresa"
           rows={visible} rowKey={row => row.id}
-          onOpen={row => { setSelected(row.record_ref); setPanel('detail'); }}
+          onOpen={row => { void openDetail(row.record_ref); }}
           columns={[
             { key: 'reference', header: 'Referencia', render: row => row.record_ref },
             { key: 'position', header: 'Cargo', render: row => row.position_ref },
@@ -220,9 +320,11 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
       </Card>
       {!sessionCsrf && (permissions.includes('users.create') || permissions.includes('users.update')) &&
         <output>Edición deshabilitada hasta recibir el token de sesión del panel administrativo.</output>}
-      <SidePanel open={panel === 'detail' && !!current}
-        title="Detalle del registro" onClose={() => setPanel(null)}>
-        {current ? <>
+      <SidePanel open={panel === 'detail'}
+        title="Detalle del registro" onClose={() => { detailReader.current?.abort(); setPanel(null); }}>
+        {detail.status === 'loading' && <output aria-live="polite">Cargando detalle del registro…</output>}
+        {detail.status === 'error' && <p role="alert">No se pudo consultar el detalle. Cierra y vuelve a abrir el registro.</p>}
+        {current && <>
           <dl><dt>Referencia</dt><dd>{current.record_ref}</dd>
             <dt>Colaborador</dt><dd>{current.collaborator_ref}</dd>
             <dt>Cargo</dt><dd>{current.position_ref}</dd>
@@ -235,7 +337,8 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
             Enviar a revisión
           </button>}
           <p className="muted">La revisión no implica aprobación contractual ni cierre automático.</p>
-        </> : <p>Selecciona un registro para consultar su detalle.</p>}
+        </>}
+        {notice && <output role="status" aria-live="polite">{notice}</output>}
       </SidePanel>
       <SidePanel open={panel === 'create' && canCreate} title="Nuevo registro" onClose={() => setPanel(null)}>
         <form className="catalog-editor" onSubmit={create}>
@@ -250,6 +353,7 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
             {kinds.map(value => <option value={value} key={value}>{labels[value]}</option>)}
           </select></label>
           <button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar registro'}</button>
+          {notice && <output role="status" aria-live="polite">{notice}</output>}
         </form>
       </SidePanel>
     </>}
@@ -257,8 +361,13 @@ function Workspace({ tenantId, companyId, branchId, permissions, csrfToken }: Pr
   </section>;
 }
 
-/** The production surface stays closed until owner/go-live gates authorize it. */
+/** No HTTP, person data or artificial test rows while the server gate is absent/off. */
 export function HumanResourcesManagement(props: Props) {
-  if (!import.meta.env.DEV) return null;
+  const root = typeof document === 'undefined' ? null : document.getElementById('condor-admin-root');
+  if (!isHrRealDataEnabled(root)) return <section id="human-resources-management"
+    className="catalog-panel ui-page" aria-label="Talento humano">
+    <PageHeader title="Talento humano" description="Gestión de cargos y novedades por empresa y sede." />
+    <p role="status">Talento humano todavía no está habilitado en el servidor.</p>
+  </section>;
   return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId + '|' + props.permissions.slice().sort((a, b) => a.localeCompare(b)).join(',')} {...props} />;
 }
