@@ -113,6 +113,31 @@ class SalidaTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             verify_static_budget(ROOT / "public/marketing.css", 1)
 
+    def test_css_admin_conserva_modulos_foco_y_espaciado(self) -> None:
+        """Asegura el contrato CSS de #1851 sin simular aprobación de campo."""
+        base = (ROOT / "public/app.css").read_text(encoding="utf-8")
+        legacy = (ROOT / "frontend/admin/admin.css").read_text(encoding="utf-8")
+        visual = (ROOT / "frontend/admin/admin-ui.css").read_text(encoding="utf-8")
+        bundle = (ROOT / "public/build/admin.css").read_text(encoding="utf-8")
+
+        # El inlining seguro solo corresponde a tokens globales fijos.
+        for token, pixels in {2: 8, 3: 12, 4: 16, 6: 24, 8: 32}.items():
+            self.assertRegex(base, rf"--space-{token}:\s*{pixels}px;")
+            self.assertNotIn(f"var(--space-{token})", legacy)
+
+        self.assertIn("@scope (.admin-shell)", visual)
+        self.assertIn(":scope .catalog-panel", visual)
+        self.assertIn(":scope .catalog-card", visual)
+        self.assertIn(":scope .foundation-grid article", visual)
+        self.assertIn(".admin-shell-tenant", visual)
+        for selected in ("commerce", "orders", "catalog", "inventory",
+                         "finance-management", "workflows"):
+            self.assertIn(f'section#{selected}', visual)
+        for marker in (":focus-visible", "prefers-reduced-motion", "@media"):
+            self.assertIn(marker, legacy + visual)
+        self.assertIn("@scope", bundle)
+        self.assertLessEqual(len(bundle.encode("utf-8")), 32768)
+
     def test_sin_secretos_ni_datos_reales(self) -> None:
         content = document()
         self.assertIsNone(LEAK.search(content))
