@@ -40,7 +40,7 @@ Cada fila procede de `docs/verificacion/decisiones-06.md` y su contrato ejecutab
 
 ## Evidencia externa requerida antes de declarar las AC y fusionar
 
-El OWNER/operador autorizado debe identificar por separado el sistema, alcance read-only, permisos, tratamiento/consentimiento y límites de los tests. Los recibos de DNS/TLS, Hostinger, correo, navegador, backup realmente restaurado, rollback y HEALTH deben tener origen autenticado, tiempo UTC, versión y SHA exactos, fallos negativos y decisión correspondiente. Ninguna etiqueta, captura sintética, PR fusionado o check verde sustituyen esos recibos. Hasta esa validación independiente, la puerta de fusión/operación de #1599 sigue cerrada conforme Factory#912, D-043 y D-059.
+El OWNER/operador autorizado debe identificar por separado el sistema, alcance read-only, permisos, privacidad, tratamiento/consentimiento y límites de los tests. Los recibos de DNS/TLS, Hostinger, correo, navegador, backup realmente restaurado, rollback y HEALTH deben tener origen autenticado, tiempo UTC, versión y SHA exactos, fallos negativos y decisión correspondiente. Ninguna etiqueta, captura sintética, PR fusionado o check verde sustituyen esos recibos. Hasta esa validación independiente, la puerta de fusión/operación de #1599 sigue cerrada conforme Factory#912, D-043 y D-059.
 
 ## Reproducción offline y reversión
 
