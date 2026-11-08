@@ -52,18 +52,21 @@ final class ComplianceEvidenceRecord
             throw new DomainException('Categoría de revisión Cumplimiento legal no admitida.');
         }
 
-        return [
-            'id' => UlidFactory::new(),
+        // Los identificadores se componen de atributos ya validados; no se
+        // persiste contenido de la evidencia ni se presume su aprobación legal.
+        $identity = [
             'tenant_id' => $tenant,
             'company_id' => $company,
+            'actor_id' => $actor,
+        ];
+        $revision = [
             'record_ref' => $ref,
             'kind' => $kind,
             'state' => 'PENDIENTE',
             'version' => 1,
-            'previous_id' => null,
-            'actor_id' => $actor,
-            'occurred_at' => gmdate('Y-m-d H:i:s'),
         ];
+        return ['id' => UlidFactory::new(), ...$identity, ...$revision,
+            'previous_id' => null, 'occurred_at' => gmdate('Y-m-d H:i:s')];
     }
 
     /** @param array<string,mixed> $record
