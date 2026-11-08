@@ -16,7 +16,6 @@ import { EmployeesManagement } from './EmployeesManagement';
 import { HumanResourcesManagement } from './HumanResourcesManagement';
 import { ProductionManagement } from './ProductionManagement';
 import { PurchasingManagement } from './PurchasingManagement';
-import { CustomerServiceManagement } from './CustomerServiceManagement';
 import { AssetsManagement } from './AssetsManagement';
 import { PayrollManagement } from './PayrollManagement';
 import { ContractsRealManagement } from './ContractsManagement';
@@ -84,6 +83,10 @@ const AsyncOperationsProcessesPanel = lazy(async () => ({
   default: (await import('./OperationsProcessesPanel')).OperationsProcessesPanel,
 }));
 
+const AsyncCustomerServiceManagement = lazy(async () => ({
+  default: (await import('./CustomerServiceManagement')).CustomerServiceManagement,
+}));
+
 const DevDocumentsManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./DocumentsManagement')).DocumentsManagement }))
   : null;
@@ -115,6 +118,8 @@ export function AdminApp({
     && document.getElementById('condor-admin-root')?.dataset.legalComplianceRealDataEnabled === 'true';
   const governanceRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.governanceRealDataEnabled === 'true';
+  const customerServiceRealDataEnabled = typeof document !== 'undefined'
+    && document.getElementById('condor-admin-root')?.dataset.customerServiceRealDataEnabled === 'true';
   const processesRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.operationsProcessesRealDataEnabled === 'true';
   // Synthetic catalogs are available only in dev with an explicit root opt-in.
@@ -206,7 +211,8 @@ export function AdminApp({
             { href: '/admin#orders', label: 'Pedidos' },
             { href: '/admin#sales-reports', label: 'Reportes de ventas' },
             { href: '/admin#reports-downloads', label: 'Descargas CSV' },
-            ...(import.meta.env.DEV ? [{ href: '/admin#customer-service', label: 'Servicio al cliente (pruebas)' }] : []),
+            ...(customerServiceRealDataEnabled ? [{ href: '/admin#customer-service', label: 'Servicio al cliente' }]
+              : import.meta.env.DEV ? [{ href: '/admin#customer-service', label: 'Servicio al cliente (no habilitado)' }] : []),
           ],
         },
         {
@@ -502,13 +508,21 @@ export function AdminApp({
             csrfToken={accessToken}
           />
 
-          {import.meta.env.DEV && (
-            <CustomerServiceManagement
-              key={'customer-service-' + context.data.tenant.id + '-' + context.data.active_branch.id}
+          {(customerServiceRealDataEnabled || import.meta.env.DEV) && (
+            <Suspense fallback={<p role="status">Cargando servicio al cliente…</p>}>
+            <AsyncCustomerServiceManagement
+              key={'customer-service-' + context.data.tenant.id + '-'
+                + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+              enabled={customerServiceRealDataEnabled}
               tenantId={context.data.tenant.id}
+              companyId={context.data.active_legal_entity?.id !== undefined
+                && context.data.active_branch.legal_entity?.id === context.data.active_legal_entity.id
+                ? context.data.active_legal_entity.id : '__unassigned__'}
               branchId={context.data.active_branch.id}
               permissions={context.data.permissions}
+              csrfToken={accessToken}
             />
+            </Suspense>
           )}
 
           {import.meta.env.DEV && (
