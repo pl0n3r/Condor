@@ -21,7 +21,7 @@ import { PayrollManagement } from './PayrollManagement';
 import { ContractsRealManagement } from './ContractsManagement';
 import { SocialSecurityRealManagement } from './SocialSecurityManagement';
 import { FinanceRealManagement } from './FinanceManagement';
-import { OccupationalRealManagement as ComplianceManagement } from './ComplianceManagement';
+import { OccupationalRealManagement as ComplianceManagement, LegalComplianceRealManagement } from './ComplianceManagement';
 import { AdminShell, type AdminNavEntry } from './AdminShell';
 import { ModuleDirectory } from './ModuleDirectory';
 import { OverviewGrid } from './OverviewGrid';
@@ -95,14 +95,6 @@ const DevFinanceManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./FinanceManagement')).FinanceManagement }))
   : null;
 
-const DevComplianceEvidenceManagement = import.meta.env.DEV
-  ? lazy(async () => ({ default: (await import('./ComplianceManagement')).ComplianceEvidenceManagement }))
-  : null;
-
-const DevLegalComplianceManagement = import.meta.env.DEV
-  ? lazy(async () => ({ default: (await import('./ComplianceManagement')).LegalComplianceManagement }))
-  : null;
-
 export function AdminApp({
   version,
   logoutToken,
@@ -122,6 +114,8 @@ export function AdminApp({
     && document.getElementById('condor-admin-root')?.dataset.financeRealDataEnabled === 'true';
   const ohsRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.ohsRealDataEnabled === 'true';
+  const legalComplianceRealDataEnabled = typeof document !== 'undefined'
+    && document.getElementById('condor-admin-root')?.dataset.legalComplianceRealDataEnabled === 'true';
   // Synthetic catalogs are available only in dev with an explicit root opt-in.
   // This flag never enables the HR real-data API or overrides server permissions.
   const hrSyntheticPreviewEnabled = import.meta.env.DEV && typeof document !== 'undefined'
@@ -258,7 +252,8 @@ export function AdminApp({
               : import.meta.env.DEV ? [{ href: '/admin#finance-management', label: 'Finanzas (pruebas)' }] : []),
             ...(ohsRealDataEnabled ? [{ href: '/admin#compliance-management', label: 'SG-SST' }]
               : import.meta.env.DEV ? [{ href: '/admin#compliance-management', label: 'SG-SST (no habilitado)' }] : []),
-            ...(import.meta.env.DEV ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal (pruebas)' }] : []),
+            ...(legalComplianceRealDataEnabled ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal' }]
+              : import.meta.env.DEV ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal (no habilitado)' }] : []),
             ...(import.meta.env.DEV ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo (pruebas)' }] : []),
           ],
         },
@@ -563,7 +558,7 @@ export function AdminApp({
             />
           )}
 
-          {import.meta.env.DEV && DevGovernanceManagement && DevComplianceEvidenceManagement && (
+          {import.meta.env.DEV && DevGovernanceManagement && (
             <>
               {import.meta.env.DEV && !contractsRealDataEnabled && DevContractsManagement && (
                 <Suspense fallback={<p role="status">Cargando contratación ficticia…</p>}>
@@ -621,27 +616,25 @@ export function AdminApp({
                               permissions={context.data.permissions}
                             />
                           </Suspense>
-              <Suspense fallback={<p role="status">Cargando cumplimiento ficticio…</p>}>
-                            <DevComplianceEvidenceManagement
-                              key={'compliance-evidence-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
-                              branchId={context.data.active_branch.id}
-                              permissions={context.data.permissions}
-                              csrfToken={accessToken}
-                            />
-                          </Suspense>
             </>
           )}
 
-          {import.meta.env.DEV && DevLegalComplianceManagement && (
-            <Suspense fallback={<p role="status">Cargando M06 ficticio…</p>}>
-              <DevLegalComplianceManagement
-                key={'legal-m06-' + context.data.tenant.id + '-' + context.data.active_branch.id}
-                branchId={context.data.active_branch.id}
-                permissions={context.data.permissions}
-                csrfToken={accessToken}
-              />
-            </Suspense>
-          )}
+          {legalComplianceRealDataEnabled ? (
+            <LegalComplianceRealManagement
+              key={'legal-real-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+              enabled={legalComplianceRealDataEnabled}
+              tenantId={context.data.tenant.id}
+              companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
+              branchId={context.data.active_branch.id}
+              permissions={context.data.permissions}
+              csrfToken={accessToken}
+            />
+          ) : import.meta.env.DEV ? (
+            <section id="compliance-evidence-management" className="ui-page catalog-panel" aria-label="Cumplimiento legal no habilitado">
+              <h2>Cumplimiento legal</h2>
+              <p role="status">Este módulo aún no está habilitado. No se han consultado ni mostrado registros.</p>
+            </section>
+          ) : null}
 
           {financeRealDataEnabled && (
             <FinanceRealManagement
