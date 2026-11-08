@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Governance\GovernanceApiService;
+use App\Application\Governance\GovernanceRecordService;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\User;
+use App\Domain\Identity\Entity\Membership;
 use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -15,17 +17,23 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
 /** Synthetic governance trial, disabled outside explicitly allowed development/test contexts. */
 final class GovernanceController extends AbstractController
 {
-    use BranchApiSupport;
+    use BranchApiSupport {
+        requireCsrf as private governanceValidateCsrf;
+        authorizedBranchScope as private governanceAuthorizeBranchScope;
+    }
 
     public function __construct(
         private readonly CurrentTenantForUser $currentTenantForUser,
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
+        private readonly GovernanceRecordService $governanceRecords,
     ) {
     }
 
@@ -133,4 +141,133 @@ final class GovernanceController extends AbstractController
         ]);
         $this->entityManager->flush();
     }
+    // Gobierno corporativo real-record bridge: owner-only, opaque refs, flag OFF by default.
+    /**
+     * Owner-only persisted Gobierno corporativo bridge: both read routes use one guarded
+     * handler; both writes share flag, CSRF, and scope validation.
+     */
+    #[Route(
+        '/api/v1/branches/{branchId}/governance-real/records',
+        name: 'api_governance_real_list',
+        methods: ['GET'],
+    )]
+    public function governanceRealList(string $branchId, Request $request): JsonResponse
+    {
+        $after = $request->query->get('after');
+        if ($after === '') {
+            throw new BadRequestHttpException('Cursor de paginación inválido.');
+        }
+        return $this->governanceRealRead($branchId, null, $after);
+    }
+
+    #[Route(
+        '/api/v1/branches/{branchId}/governance-real/records/{ref}',
+        name: 'api_governance_real_detail',
+        methods: ['GET'],
+    )]
+    public function governanceRealView(string $branchId, string $ref): JsonResponse
+    {
+        return $this->governanceRealRead($branchId, $ref);
+    }
+
+    #[Route(
+        '/api/v1/branches/{branchId}/governance-real/records',
+        name: 'api_governance_real_create',
+        methods: ['POST'],
+    )]
+    public function governanceRealCreate(string $branchId, Request $request): JsonResponse
+    {
+        return $this->governanceRealWrite($branchId, $request, null);
+    }
+
+    #[Route(
+        '/api/v1/branches/{branchId}/governance-real/records/{ref}/state',
+        name: 'api_governance_real_state',
+        methods: ['PATCH'],
+    )]
+    public function governanceRealState(string $branchId, string $ref, Request $request): JsonResponse
+    {
+        return $this->governanceRealWrite($branchId, $request, $ref);
+    }
+
+    private function governanceRealRead(string $branchId, ?string $ref, ?string $after = null): JsonResponse
+    {
+        if (($off = $this->governanceRealDisabled()) !== null) {
+            return $off;
+        }
+        [, $tenant, $company] = $this->governanceRealScope($branchId, 'inventory.view');
+        $record = $this->domain(fn (): ?array => $ref === null
+            ? $this->governanceRecords->page($tenant, $company, $after)
+            : $this->governanceRecords->one($tenant, $company, $ref));
+
+        if ($record === null) {
+            throw new NotFoundHttpException('Instrumento de Gobierno no encontrado.');
+        }
+        return $this->governanceRealJson(
+            $ref === null ? $record : ['record' => $record],
+        );
+    }
+
+    private function governanceRealWrite(string $branchId, Request $request, ?string $ref): JsonResponse
+    {
+        if (($off = $this->governanceRealDisabled()) !== null) {
+            return $off;
+        }
+        $this->governanceValidateCsrf($request);
+        $operation = $ref === null ? 'inventory.create' : 'inventory.update';
+        [$actor, $tenant, $company] = $this->governanceRealScope($branchId, $operation);
+
+        $input = $this->payload(
+            $request,
+            $ref === null ? ['record_ref', 'kind'] : ['state', 'expected_version'],
+        );
+        if ($ref !== null
+            && (!is_string($input['state'] ?? null) || !is_int($input['expected_version'] ?? null))) {
+            throw new BadRequestHttpException('Estado y versión obligatorios.');
+        }
+
+        $result = $this->domain(fn (): array => $ref === null
+            ? $this->governanceRecords->add($tenant, $company, $actor, $input)
+            : $this->governanceRecords->transition(
+                $tenant, $company, $actor, $ref, $input['state'], $input['expected_version'],
+            ));
+        return $this->governanceRealJson(
+            ['record' => $result],
+            $ref === null ? Response::HTTP_CREATED : Response::HTTP_OK,
+        );
+    }
+
+    /** @return array{string,string,string} */
+    private function governanceRealScope(string $branchId, string $permission): array
+    {
+        [$actor, $tenant, $branch, $membership] = $this->governanceAuthorizeBranchScope($branchId, $permission);
+        $roleIsOwner = $membership->roleKey() === Membership::ROLE_OWNER;
+        if (!$roleIsOwner || !$actor->isActive() || !$membership->isActive()) {
+            throw new AccessDeniedHttpException('Gobierno corporativo requiere rol propietario activo.');
+        }
+        $legalEntity = $branch->legalEntity();
+        if ($legalEntity?->tenant()->id() !== $tenant->id()) {
+            throw new NotFoundHttpException('La razón social no pertenece al tenant solicitado.');
+        }
+        return [$actor->id(), $tenant->id(), $legalEntity->id()];
+    }
+
+    private function governanceRealDisabled(): ?JsonResponse
+    {
+        if (getenv('GOVERNANCE_REAL_DATA_ENABLED') === 'true') {
+            return null;
+        }
+        return $this->governanceRealJson(['error' => 'feature_unavailable'], Response::HTTP_NOT_FOUND);
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function governanceRealJson(array $payload, int $status = Response::HTTP_OK): JsonResponse
+    {
+        $response = $this->json($payload, $status);
+        $response->headers->set('Cache-Control', 'private, no-store');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        return $response;
+    }
+
+
 }
