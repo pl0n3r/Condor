@@ -139,7 +139,20 @@ $kernel->boot();
 $container = $kernel->getContainer()->get('test.service_container');
 $em = $container->get(\Doctrine\ORM\EntityManagerInterface::class);
 $tool = new \Doctrine\ORM\Tools\SchemaTool($em);
-$tool->createSchema($em->getMetadataFactory()->getAllMetadata());
+$fixtureEntities = [
+    \App\Domain\Organization\Entity\Tenant::class,
+    \App\Domain\Organization\Entity\LegalEntity::class,
+    \App\Domain\Organization\Entity\Branch::class,
+    \App\Domain\Identity\Entity\User::class,
+    \App\Domain\Identity\Entity\Membership::class,
+    \App\Domain\Identity\Entity\Role::class,
+    \App\Domain\Identity\Entity\BranchRoleAssignment::class,
+];
+$fixtureMetadata = array_map(
+    fn (string $className) => $em->getClassMetadata($className),
+    $fixtureEntities,
+);
+$tool->createSchema($fixtureMetadata);
 $db = $em->getConnection();
 $db->executeStatement(
     'CREATE TABLE condor_governance_real_record (id VARCHAR(26) PRIMARY KEY, '
@@ -167,6 +180,7 @@ foreach ([$tenant, $foreign, $company, $foreignCompany, $branch, $foreignBranch,
 }
 $em->flush();
 $client = new \Symfony\Bundle\FrameworkBundle\KernelBrowser($kernel);
+$client->disableReboot();
 $client->loginUser($owner);
 $crawler = $client->request('GET', '/admin');
 $csrf = $crawler->filter('#condor-admin-root')->attr('data-access-token');
@@ -190,6 +204,7 @@ $results[] = $client->getResponse()->getStatusCode();
 $client->jsonRequest('POST', $base, ['record_ref'=>'rechazo','kind'=>'ACTA'],
     ['HTTP_X_CSRF_TOKEN'=>'invalid']);
 $results[] = $client->getResponse()->getStatusCode();
+$container->get(\App\Infrastructure\Tenancy\TenantContext::class)->reset();
 $client->loginUser($staff);
 $client->request('GET', $base);
 $results[] = $client->getResponse()->getStatusCode();
@@ -227,6 +242,7 @@ echo json_encode($results, JSON_THROW_ON_ERROR);
         self.assertEqual(
             [200, 201, 200, 200, 404, 404, 403, 403, 403, 403, 403, 2, 404, 404, 2],
             json.loads(result.stdout),
+            result.stderr,
         )
 
     def test_http_routes_are_owner_only_off_by_default(self):
