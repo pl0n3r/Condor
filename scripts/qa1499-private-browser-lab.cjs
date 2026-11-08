@@ -172,7 +172,7 @@ async function inspectScenario(browser, role, viewport, fixture, base, browserKe
       waitUntil: 'domcontentloaded', timeout: 15000
     });
     const landed = new URL(page.url());
-    if (!response || response.status() !== 200 || landed.origin !== base.origin
+    if (response?.status() !== 200 || landed.origin !== base.origin
         || landed.pathname !== role.route || landed.search || landed.hash) {
       throw new Error('private_route_not_reached');
     }
