@@ -36,9 +36,10 @@ function gitDirectory(root) {
   const stat = fs.lstatSync(dotGit);
   if (stat.isDirectory() && !stat.isSymbolicLink()) return fs.realpathSync(dotGit);
   if (!stat.isFile()) throw new Error('QA1499_GIT_METADATA_INVALID');
-  const match = fs.readFileSync(dotGit, 'utf8').trim().match(/^gitdir:\s*(.+)$/);
-  if (!match) throw new Error('QA1499_GIT_METADATA_INVALID');
-  return path.resolve(root, match[1]);
+  const markerText = fs.readFileSync(dotGit, 'utf8').trim();
+  const markerPrefix = 'gitdir: ';
+  if (!markerText.startsWith(markerPrefix)) throw new Error('QA1499_GIT_METADATA_INVALID');
+  return path.resolve(root, markerText.slice(markerPrefix.length));
 }
 function packedRef(commonDir, ref) {
   const packedFile = path.join(commonDir, 'packed-refs');
