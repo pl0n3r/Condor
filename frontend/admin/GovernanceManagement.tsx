@@ -1,340 +1,347 @@
 /// <reference types="vite/client" />
 import { useEffect, useState, type FormEvent } from 'react';
-import { PageHeader, MetricStrip, Toolbar, DataTable, SidePanel, StatusPill } from './ui/Kit';
+import { DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 
-/** M15: simulación local de gobierno corporativo; nunca es un libro de actas real. */
-type GovernanceState = 'BORRADOR' | 'REQUIERE_REVISION' | 'EN_REVISION';
-type GovernanceKind = 'shareholder' | 'faculty' | 'authorization' | 'decision';
-type GovernanceRow = Readonly<{
-  reference: string;
-  bodyRef: string;
-  representativeRef: string;
-  kind: GovernanceKind;
-  tenantId: string;
-  companyId: string;
-  branchId: string;
-  state: GovernanceState;
+/** Interfaz de Gobierno corporativo pre-live: no habilita tratamientos ni aprueba actos. */
+type State = 'PENDIENTE' | 'EN_REVISION' | 'REQUIERE_REVISION';
+type Kind = 'ACTA' | 'ACUERDO' | 'POLITICA' | 'REVISION';
+export type GovernanceRecord = Readonly<{
+  ref: string; kind: Kind; state: State; version: number;
+  tenantId: string; companyId: string; occurredAt: string;
 }>;
-type AuditEvent = Readonly<{ scope: string; reference: string; action: 'created' | 'viewed' | 'review_requested' | 'review_started' }>;
-type Props = Readonly<{ tenantId: string; companyId: string; branchId: string; permissions: string[] }>;
+type Result = { status: 'disabled' | 'denied' | 'error' }
+  | { status: 'ready'; records: GovernanceRecord[]; nextCursor: string | null }
+  | { status: 'ready'; record: GovernanceRecord };
+type Method = 'GET' | 'POST' | 'PATCH';
+export type GovernanceRequest = Readonly<{
+  enabled: boolean; allowed: boolean; tenantId: string; companyId: string; branchId: string;
+  method?: Method; ref?: string; after?: string; kind?: Kind; state?: State;
+  expectedVersion?: number; csrf?: string;
+}>;
+type Props = Readonly<{
+  enabled: boolean; tenantId: string; companyId: string; branchId: string;
+  permissions: string[]; csrfToken: string;
+}>;
+const opaque = /^[a-z][a-z0-9_-]{0,63}$/;
+const kinds: readonly Kind[] = ['ACTA', 'ACUERDO', 'POLITICA', 'REVISION'];
+const states: readonly State[] = ['PENDIENTE', 'EN_REVISION', 'REQUIERE_REVISION'];
+const kindNames: Record<Kind, string> = {
+  ACTA: 'Acta', ACUERDO: 'Acuerdo', POLITICA: 'Política', REVISION: 'Revisión',
+};
+const stateNames: Record<State, string> = {
+  PENDIENTE: 'Pendiente', EN_REVISION: 'En revisión',
+  REQUIERE_REVISION: 'Requiere revisión',
+};
+const validRef = (value: string): boolean => opaque.test(value) && !/[0-9]{7,}/.test(value);
+const transitions: Record<State, readonly State[]> = {
+  PENDIENTE: ['EN_REVISION', 'REQUIERE_REVISION'],
+  EN_REVISION: ['REQUIERE_REVISION'],
+  REQUIERE_REVISION: ['EN_REVISION'],
+};
 
-const governanceRefPattern = /^fixture:governance\/[a-z][a-z0-9_-]{0,47}$/;
-const bodyRefPattern = /^fixture:body\/[a-z][a-z0-9_-]{0,47}$/;
-const representativeRefPattern = /^fixture:representative\/[a-z][a-z0-9_-]{0,47}$/;
-const kinds: GovernanceKind[] = ['shareholder', 'faculty', 'authorization', 'decision'];
-const states: GovernanceState[] = ['BORRADOR', 'REQUIERE_REVISION', 'EN_REVISION'];
-const serverRefPattern = /^fixture:(shareholder|faculty|authorization|decision)\/[a-z][a-z0-9_-]{0,47}$/;
-
-class GovernanceHttpError extends Error {
-  constructor(readonly status: number) {
-    super(status === 401 || status === 403 ? 'Acceso denegado a gobierno ficticio.'
-      : 'No fue posible completar la operación ficticia.');
-  }
+function normalizeRecord(value: unknown, tenantId: string, companyId: string): GovernanceRecord | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (row.tenant_id !== tenantId || row.company_id !== companyId
+    || typeof row.record_ref !== 'string' || !validRef(row.record_ref)
+    || !kinds.includes(row.kind as Kind) || !states.includes(row.state as State)
+    || typeof row.occurred_at !== 'string'
+    || !/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(row.occurred_at)) return null;
+  const version = Number(row.version);
+  if (!Number.isInteger(version) || version < 1 || version > 1_000_000) return null;
+  return { ref: row.record_ref, kind: row.kind as Kind, state: row.state as State,
+    version, tenantId, companyId, occurredAt: row.occurred_at };
 }
 
-/** Únicamente mismo origen y cookie de sesión; no persiste nada en el navegador. */
-function governanceRequest(method: 'GET' | 'POST' | 'PATCH', url: string,
-  body?: Readonly<Record<string, string>>): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open(method, url);
-    request.withCredentials = true;
-    request.setRequestHeader('Accept', 'application/json');
-    if (body) {
-      request.setRequestHeader('Content-Type', 'application/json');
-      const token = document.getElementById('condor-admin-root')?.dataset.accessToken ?? '';
-      request.setRequestHeader('X-CSRF-Token', token);
+/** La autoridad de flag, permiso y ámbito es del servidor. OFF nunca llega al transporte. */
+export async function governanceRequest(
+  options: GovernanceRequest, transport: typeof fetch = fetch,
+): Promise<Result> {
+  if (!options.enabled) return { status: 'disabled' };
+  if (!options.allowed || !options.tenantId || !options.companyId
+    || !options.branchId || options.companyId === '__unassigned__') return { status: 'denied' };
+  const method = options.method ?? 'GET';
+  if (options.ref !== undefined && !validRef(options.ref)) return { status: 'error' };
+  if (options.after !== undefined && !validRef(options.after)) return { status: 'error' };
+  if (method === 'POST' && (!options.csrf || !options.ref
+    || !kinds.includes(options.kind as Kind))) return { status: 'error' };
+  if (method === 'PATCH' && (!options.csrf || !options.ref
+    || !states.includes(options.state as State)
+    || !Number.isInteger(options.expectedVersion)
+    || (options.expectedVersion ?? 0) < 1
+    || (options.expectedVersion ?? 0) >= 1_000_000)) return { status: 'error' };
+  if (method !== 'GET' && method !== 'POST' && method !== 'PATCH') return { status: 'error' };
+  const endpoint = '/api/v1/branches/' + encodeURIComponent(options.branchId)
+    + '/governance-real/records';
+  const suffix = method === 'GET' && !options.ref && options.after
+    ? '?after=' + encodeURIComponent(options.after) : '';
+  const url = options.ref && method !== 'POST'
+    ? endpoint + '/' + encodeURIComponent(options.ref) + (method === 'PATCH' ? '/state' : '')
+    : endpoint + suffix;
+  const body = method === 'POST' ? { record_ref: options.ref, kind: options.kind }
+    : { state: options.state, expected_version: options.expectedVersion };
+  try {
+    const response = await transport(url, {
+      method, credentials: 'same-origin', cache: 'no-store',
+      headers: { Accept: 'application/json', ...(method === 'GET' ? {}
+        : { 'Content-Type': 'application/json', 'X-CSRF-Token': options.csrf ?? '' }) },
+      ...(method === 'GET' ? {} : { body: JSON.stringify(body) }),
+    });
+    if ([401, 403].includes(response.status)) return { status: 'denied' };
+    if (response.status === 404) {
+      const problem: unknown = await response.json().catch(() => null);
+      const unavailable = problem !== null && typeof problem === 'object'
+        && !Array.isArray(problem)
+        && (problem as Record<string, unknown>).error === 'feature_unavailable';
+      return { status: unavailable ? 'disabled' : 'error' };
     }
-    request.onerror = () => reject(new GovernanceHttpError(0));
-    request.onload = () => {
-      if (request.status < 200 || request.status >= 300) {
-        reject(new GovernanceHttpError(request.status));
-        return;
+    if (!response.ok) return { status: 'error' };
+    const payload: unknown = await response.json();
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return { status: 'error' };
+    const data = payload as Record<string, unknown>;
+    if (method === 'GET' && !options.ref) {
+      if (!Array.isArray(data.records) || data.records.length > 100
+        || !(data.next_cursor === null || (typeof data.next_cursor === 'string' && validRef(data.next_cursor)))) {
+        return { status: 'error' };
       }
-      try { resolve(JSON.parse(request.responseText) as unknown); }
-      catch { reject(new GovernanceHttpError(0)); }
-    };
-    request.send(body ? JSON.stringify(body) : null);
-  });
-}
-
-function serverRecord(value: unknown, tenantId: string, companyId: string,
-  branchId: string): GovernanceRow {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new GovernanceHttpError(0);
+      const parsed = data.records.map(x => normalizeRecord(x, options.tenantId, options.companyId));
+      if (parsed.some(x => x === null)) return { status: 'error' };
+      const records = parsed as GovernanceRecord[];
+      if (new Set(records.map(x => x.ref)).size !== records.length
+        || (options.after && records.some(x => x.ref.localeCompare(options.after ?? '') <= 0))
+        || (data.next_cursor && data.next_cursor !== records.at(-1)?.ref)
+        || (records.length === 0 && data.next_cursor)) return { status: 'error' };
+      return { status: 'ready', records, nextCursor: data.next_cursor as string | null };
+    }
+    const record = normalizeRecord(data.record, options.tenantId, options.companyId);
+    if (!record || (options.ref && record.ref !== options.ref)) return { status: 'error' };
+    return { status: 'ready', record };
+  } catch {
+    return { status: 'error' };
   }
-  const item = value as Record<string, unknown>;
-  if (Object.keys(item).sort((left, right) => left.localeCompare(right)).join(',') !== 'kind,ref,state'
-    || typeof item.ref !== 'string' || !serverRefPattern.test(item.ref)
-    || typeof item.kind !== 'string' || !kinds.includes(item.kind as GovernanceKind)
-    || !item.ref.startsWith('fixture:' + item.kind + '/')
-    || (item.state !== 'REQUIERE_REVISION' && item.state !== 'EN_REVISION')) {
-    throw new GovernanceHttpError(0);
-  }
-  return {
-    reference: item.ref, kind: item.kind as GovernanceKind, state: item.state,
-    tenantId, companyId, branchId, bodyRef: '', representativeRef: '',
-  };
 }
 
-function governancePath(branchId: string): string {
-  return '/api/v1/branches/' + encodeURIComponent(branchId) + '/governance';
-}
-
-function isFixture(value: string, pattern: RegExp): boolean {
-  return pattern.test(value) && !/[0-9]{7,}/.test(value);
-}
-
-function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
-  const scope = tenantId + '|' + companyId + '|' + branchId;
-  const canView = companyId !== '__unassigned__' && (permissions.includes('inventory.view') || permissions.includes('settings.view'));
-  const canCreate = canView && (permissions.includes('inventory.create') || permissions.includes('settings.create'));
-  const canReview = canView && (permissions.includes('inventory.update') || permissions.includes('settings.update'));
-  const [records, setRecords] = useState<GovernanceRow[]>([]);
-  const [events, setEvents] = useState<AuditEvent[]>([]);
-  const [reference, setReference] = useState('');
-  const [bodyRef, setBodyRef] = useState('');
-  const [representativeRef, setRepresentativeRef] = useState('');
-  const [kind, setKind] = useState<GovernanceKind>('shareholder');
+export function GovernanceManagement({
+  enabled, tenantId, companyId, branchId, permissions, csrfToken,
+}: Props) {
+  const canView = permissions.includes('inventory.view') && companyId !== '__unassigned__';
+  const canCreate = canView && permissions.includes('inventory.create');
+  const canUpdate = canView && permissions.includes('inventory.update');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'disabled' | 'denied' | 'error'>('loading');
+  const [records, setRecords] = useState<GovernanceRecord[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [panel, setPanel] = useState<'create' | 'detail' | null>(null);
   const [selected, setSelected] = useState('');
-  const [creating, setCreating] = useState(false);
+  const [reference, setReference] = useState('');
+  const [kind, setKind] = useState<Kind>('ACTA');
+  const [nextState, setNextState] = useState<State>('EN_REVISION');
   const [search, setSearch] = useState('');
-  const [kindFilter, setKindFilter] = useState<'TODOS' | GovernanceKind>('TODOS');
-  const [stateFilter, setStateFilter] = useState<'TODOS' | GovernanceState>('TODOS');
+  const [filter, setFilter] = useState<'TODOS' | State>('TODOS');
   const [notice, setNotice] = useState('');
-  const [panelError, setPanelError] = useState('');
-  const [remoteState, setRemoteState] = useState<'loading' | 'ready' | 'error' | 'denied'>('loading');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (!enabled || !canView) return;
     let active = true;
+    setStatus('loading');
     setRecords([]);
-    setSelected('');
-    setNotice('');
-    if (!canView) { setRemoteState('denied'); return; }
-    setRemoteState('loading');
-    void governanceRequest('GET', governancePath(branchId))
+    setNextCursor(null);
+    setPanel(null);
+    void governanceRequest({ enabled, allowed: canView, tenantId, companyId, branchId })
       .then(result => {
         if (!active) return;
-        const response = result as { records?: unknown };
-        if (!Array.isArray(response?.records) || response.records.length > 100) {
-          throw new GovernanceHttpError(0);
-        }
-        setRecords(response.records.map(row => serverRecord(row, tenantId, companyId, branchId)));
-        setRemoteState('ready');
-      })
-      .catch((error: unknown) => {
-        if (active) setRemoteState(error instanceof GovernanceHttpError
-          && (error.status === 401 || error.status === 403) ? 'denied' : 'error');
+        if (result.status === 'ready' && 'records' in result) {
+          setRecords(result.records);
+          setNextCursor(result.nextCursor);
+          setStatus('ready');
+        } else setStatus(result.status === 'ready' ? 'error' : result.status);
       });
     return () => { active = false; };
-  }, [tenantId, companyId, branchId, canView]);
+  }, [enabled, canView, tenantId, companyId, branchId]);
 
-  function audit(item: string, action: AuditEvent['action']) {
-    setEvents(previous => [...previous, { scope, reference: item, action }].slice(-100));
+  async function loadMore() {
+    if (!enabled || busy || !nextCursor || status !== 'ready') return;
+    setBusy(true);
+    const result = await governanceRequest({
+      enabled, allowed: canView, tenantId, companyId, branchId, after: nextCursor,
+    });
+    setBusy(false);
+    if (result.status === 'ready' && 'records' in result) {
+      setRecords(previous => {
+        const seen = new Set(previous.map(row => row.ref));
+        return [...previous, ...result.records.filter(row => !seen.has(row.ref))];
+      });
+      setNextCursor(result.nextCursor);
+    } else {
+      setNotice('No se pudo cargar la siguiente página. Intenta nuevamente.');
+      if (result.status === 'denied' || result.status === 'disabled') setStatus(result.status);
+    }
   }
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const draft = { reference, bodyRef, representativeRef, kind, state: 'BORRADOR' as const };
-    const ref = 'fixture:' + draft.kind + '/' + draft.reference.slice('fixture:governance/'.length);
-    if (!canCreate || busy || !isFixture(draft.reference, governanceRefPattern)
-      || !isFixture(draft.bodyRef, bodyRefPattern)
-      || !isFixture(draft.representativeRef, representativeRefPattern)
-      || !kinds.includes(kind) || records.length >= 100
-      || records.some(row => row.reference === ref && row.tenantId === tenantId
-        && row.companyId === companyId && row.branchId === branchId)) {
-      setNotice('Rechazado: revisa permisos, referencias ficticias y duplicados.');
-      setPanelError('Rechazado: revisa permisos, referencias ficticias y duplicados.');
-      return;
-    }
+    if (busy) return;
     setBusy(true);
-    try {
-      const response = await governanceRequest('POST', governancePath(branchId), { kind, ref }) as { record: unknown };
-      const created = serverRecord(response.record, tenantId, companyId, branchId);
-      setRecords(previous => [...previous, created]);
-      audit(reference, 'created');
-      setSelected(created.reference);
-      setCreating(false);
-      setPanelError('');
-      setReference(''); setBodyRef(''); setRepresentativeRef('');
-      setNotice('Registro ficticio confirmado por el servidor. Sin valor jurídico.');
-    } catch (error) {
-      const message = error instanceof GovernanceHttpError && [401, 403].includes(error.status)
-        ? 'Acceso denegado para crear registros.' : 'Error de servidor: no se creó el registro.';
-      setNotice(message);
-      setPanelError(message);
-    } finally { setBusy(false); }
+    const result = await governanceRequest({
+      enabled, allowed: canCreate, tenantId, companyId, branchId,
+      method: 'POST', ref: reference, kind, csrf: csrfToken,
+    });
+    setBusy(false);
+    if (result.status === 'ready' && 'record' in result) {
+      setRecords(previous => [...previous.filter(row => row.ref !== result.record.ref), result.record]);
+      setReference('');
+      setSelected(result.record.ref);
+      setNextState('EN_REVISION');
+      setPanel('detail');
+      setNotice('Instrumento registrado. La revisión jurídica sigue pendiente.');
+    } else {
+      if (result.status === 'denied' || result.status === 'disabled') setStatus(result.status);
+      setNotice('No se pudo crear el instrumento. Revisa permisos y referencia.');
+    }
   }
 
   async function view(ref: string) {
-    if (!canView || busy || !serverRefPattern.test(ref) || !records.some(row =>
-      row.reference === ref && row.tenantId === tenantId
-      && row.companyId === companyId && row.branchId === branchId)) return;
-    const [recordKind, slug] = ref.slice('fixture:'.length).split('/');
+    if (busy || !canView) return;
     setBusy(true);
-    try {
-      const response = await governanceRequest('GET', governancePath(branchId)
-        + '/' + encodeURIComponent(recordKind) + '/' + encodeURIComponent(slug)) as { record: unknown };
-      const validated = serverRecord(response.record, tenantId, companyId, branchId);
-      setRecords(previous => previous.map(row => row.reference === ref ? validated : row));
+    const result = await governanceRequest({
+      enabled, allowed: canView, tenantId, companyId, branchId, ref,
+    });
+    setBusy(false);
+    if (result.status === 'ready' && 'record' in result) {
+      setRecords(previous => previous.map(row => row.ref === ref ? result.record : row));
       setSelected(ref);
-      setPanelError('');
-      audit(ref, 'viewed');
-    } catch (error) {
-      setNotice(error instanceof GovernanceHttpError && [401, 403].includes(error.status)
-        ? 'Acceso denegado para consultar la actuación.' : 'No se pudo consultar la actuación.');
-    } finally { setBusy(false); }
-  }
-
-  async function changeState(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const current = records.find(row => row.reference === selected
-      && row.tenantId === tenantId && row.companyId === companyId && row.branchId === branchId);
-    if (!canReview || busy || !current || !serverRefPattern.test(selected)
-      || current.state === 'EN_REVISION') {
-      setNotice('No se cambió el estado: falta permiso o la transición no aplica.');
-      setPanelError('No se cambió el estado: falta permiso o la transición no aplica.');
-      return;
+      setNextState(transitions[result.record.state][0] ?? result.record.state);
+      setPanel('detail');
+      setNotice('');
+    } else {
+      if (result.status === 'denied' || result.status === 'disabled') setStatus(result.status);
+      setNotice('No se pudo abrir el instrumento. Recarga la lista.');
     }
-    const next: GovernanceState = current.state === 'BORRADOR' ? 'REQUIERE_REVISION' : 'EN_REVISION';
-    const [recordKind, slug] = selected.slice('fixture:'.length).split('/');
-    setBusy(true);
-    try {
-      const response = await governanceRequest('PATCH', governancePath(branchId)
-        + '/' + encodeURIComponent(recordKind) + '/' + encodeURIComponent(slug) + '/state',
-      { state: next }) as { record: unknown };
-      const updated = serverRecord(response.record, tenantId, companyId, branchId);
-      setRecords(previous => previous.map(row =>
-        row.reference === selected && row.tenantId === tenantId
-          && row.companyId === companyId && row.branchId === branchId ? updated : row));
-      audit(selected, current.state === 'BORRADOR' ? 'review_requested' : 'review_started');
-      setPanelError('');
-      setNotice('Cambio de estado confirmado por Symfony; nunca es aprobación legal.');
-    } catch (error) {
-      const message = error instanceof GovernanceHttpError && [401, 403].includes(error.status)
-        ? 'Acceso denegado para cambiar el estado.' : 'No se pudo cambiar el estado.';
-      setNotice(message);
-      setPanelError(message);
-    } finally { setBusy(false); }
   }
 
-  if (!canView) return (
-    <section id="governance-management" aria-label="Gobierno corporativo sintético">
-      <p role="alert">No tienes acceso a esta simulación o no hay razón social activa.</p>
-    </section>
-  );
+  async function transition(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const current = records.find(row => row.ref === selected);
+    if (!current || busy || !canUpdate || !transitions[current.state].includes(nextState)) return;
+    setBusy(true);
+    const result = await governanceRequest({
+      enabled, allowed: canUpdate, tenantId, companyId, branchId,
+      method: 'PATCH', ref: current.ref, state: nextState,
+      expectedVersion: current.version, csrf: csrfToken,
+    });
+    setBusy(false);
+    if (result.status === 'ready' && 'record' in result) {
+      setRecords(previous => previous.map(row => row.ref === current.ref ? result.record : row));
+      setNextState(transitions[result.record.state][0] ?? result.record.state);
+      setNotice('Estado registrado con nueva versión de auditoría. No constituye aprobación legal.');
+    } else {
+      if (result.status === 'denied' || result.status === 'disabled') setStatus(result.status);
+      setNotice('No se guardó el cambio. Actualiza el registro y comprueba sus permisos.');
+    }
+  }
 
-  if (remoteState === 'loading') return <p role="status" aria-live="polite">Cargando actuaciones ficticias del servidor…</p>;
-  if (remoteState === 'denied') return <p role="alert">Acceso denegado por el servidor para esta sede.</p>;
-  if (remoteState === 'error') return <p role="alert">Error al consultar gobierno ficticio. Comprueba la bandera de construcción.</p>;
+  if (!enabled) return <section className="catalog-panel ui-page" id="governance-management" aria-label="Gobierno corporativo">
+    <PageHeader title="Gobierno corporativo" description="El módulo aún no está habilitado." />
+    <p role="status">La gestión persistente permanece desactivada por el servidor. No se han consultado ni mostrado registros.</p>
+  </section>;
+  if (!canView || status === 'denied') return <section className="catalog-panel ui-page" id="governance-management">
+    <PageHeader title="Gobierno corporativo" />
+    <p role="alert">Acceso denegado: selecciona una razón social y solicita permiso de consulta.</p>
+  </section>;
+  if (status === 'disabled') return <section className="catalog-panel ui-page" id="governance-management">
+    <PageHeader title="Gobierno corporativo" />
+    <p role="alert">El servidor no tiene habilitada esta función. No se consultaron registros.</p>
+  </section>;
 
-  const scoped = records.filter(row => row.tenantId === tenantId
-    && row.companyId === companyId && row.branchId === branchId);
-  const visible = scoped.filter(row =>
-    (kindFilter === 'TODOS' || row.kind === kindFilter)
-    && (stateFilter === 'TODOS' || row.state === stateFilter)
-    && (search.trim() === '' || row.reference.includes(search.toLowerCase().trim())));
-  const current = scoped.find(row => row.reference === selected);
-
-  return (
-    <section id="governance-management" className="ui-page catalog-panel" aria-label="Gobierno corporativo · simulación M15">
-      <PageHeader title="Gobierno corporativo · simulación M15" description="Actuaciones ficticias, revisión explícita y permisos vigentes." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setPanelError(''); setCreating(true); }}>Crear actuación de prueba</button> : undefined} />
-      <MetricStrip label="Indicadores de Gobierno corporativo · simulación M15" items={[{ label: 'Registros', value: scoped.length }, { label: 'Resultados', value: visible.length }, { label: 'Eventos de esta sesión', value: events.filter(item => item.scope === scope).length }]} />
-      <p role="alert">SOLO DATOS FICTICIOS. Sin valor jurídico ni facultades reales.</p>
-      <p className="muted">Servidor Symfony autenticado; sesión ficticia sin efecto jurídico ni guardado en este navegador.</p>
-      {notice && <output role="status" aria-live="polite">{notice}</output>}
-      <div className="ui-grid-2 catalog-grid">
-        <section className="ui-card catalog-card" aria-labelledby="governance-list-title">
-          <h3 id="governance-list-title">Actuaciones ficticias</h3>
-          <Toolbar trailing={<span className="ui-count">{visible.length} de {scoped.length}</span>}>
-          <label>Buscar referencia
-            <input aria-label="Buscar actuación ficticia" value={search} maxLength={80}
-              onChange={event => setSearch(event.target.value)} />
-          </label>
-          <label>Tipo de órgano
-            <select aria-label="Filtrar por órgano" value={kindFilter}
-              onChange={event => setKindFilter(event.target.value as typeof kindFilter)}>
-              <option value="TODOS">Todos</option>
-              {kinds.map(item => <option key={item} value={item}>{item}</option>)}
+  const visible = records.filter(row => (filter === 'TODOS' || row.state === filter)
+    && (row.ref.includes(search.trim().toLowerCase())
+      || kindNames[row.kind].toLowerCase().includes(search.trim().toLowerCase())));
+  const current = records.find(row => row.ref === selected);
+  return <section className="catalog-panel ui-page" id="governance-management" aria-label="Gobierno corporativo">
+    <PageHeader title="Gobierno corporativo"
+      description="Instrumentos y revisiones por razón social. Solo registros auditables."
+      actions={canCreate && status === 'ready'
+        ? <button type="button" className="button" onClick={() => { setPanel('create'); setNotice(''); }}>Nuevo instrumento</button>
+        : undefined} />
+    <p className="muted">La captura de actas, acuerdos y políticas exige referencias opacas. No concede aprobación jurídica.</p>
+    {notice && <output role="status" aria-live="polite">{notice}</output>}
+    {status === 'loading' && <p role="status">Cargando instrumentos de gobierno corporativo…</p>}
+    {status === 'error' && <p role="alert">No fue posible cargar los instrumentos. Comprueba tu conexión.</p>}
+    {status === 'ready' && <>
+      <MetricStrip label="Indicadores de gobierno corporativo" items={[
+        { label: 'Instrumentos cargados', value: records.length },
+        { label: 'En revisión', value: records.filter(row => row.state === 'EN_REVISION').length },
+        { label: 'Requieren revisión', value: records.filter(row => row.state === 'REQUIERE_REVISION').length },
+      ]} />
+      <Toolbar trailing={<output aria-live="polite">{visible.length} resultados cargados</output>}>
+        <label>Buscar referencia o categoría
+          <input type="search" value={search} onChange={event => setSearch(event.target.value)}
+            placeholder="Buscar instrumento" />
+        </label>
+        <label>Estado
+          <select value={filter} onChange={event => setFilter(event.target.value as typeof filter)}>
+            <option value="TODOS">Todos los estados</option>
+            {states.map(state => <option key={state} value={state}>{stateNames[state]}</option>)}
+          </select>
+        </label>
+      </Toolbar>
+      <DataTable<GovernanceRecord> caption="Instrumentos de la razón social activa"
+        rows={visible} rowKey={row => row.ref}
+        onOpen={row => { void view(row.ref); }}
+        empty={<p role="status">No hay instrumentos para estos filtros. Utiliza “Nuevo instrumento” si tienes permiso.</p>}
+        columns={[
+          { key: 'reference', header: 'Referencia', render: row => <strong>{row.ref}</strong> },
+          { key: 'kind', header: 'Tipo', render: row => kindNames[row.kind] },
+          { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'EN_REVISION' ? 'info'
+            : row.state === 'REQUIERE_REVISION' ? 'warn' : 'neutral'}>{stateNames[row.state]}</StatusPill> },
+          { key: 'version', header: 'Versión', render: row => row.version },
+        ]} />
+      {nextCursor && <div className="ui-page-actions">
+        <button type="button" className="button button-secondary" disabled={busy}
+          onClick={() => { void loadMore(); }}>{busy ? 'Cargando…' : 'Cargar más instrumentos'}</button>
+      </div>}
+    </>}
+    <SidePanel open={panel === 'create' && canCreate && status === 'ready'}
+      title="Nuevo instrumento" onClose={() => setPanel(null)}>
+      <form className="catalog-editor" onSubmit={event => { void create(event); }}>
+        <p className="muted">Utiliza un código interno, no nombres, correos ni documentos de identidad.</p>
+        <label>Referencia interna
+          <input required maxLength={64} pattern="[a-z][a-z0-9_-]{0,63}" placeholder="acta_asamblea"
+            value={reference} onChange={event => setReference(event.target.value)} />
+        </label>
+        <label>Categoría
+          <select value={kind} onChange={event => setKind(event.target.value as Kind)}>
+            {kinds.map(value => <option key={value} value={value}>{kindNames[value]}</option>)}
+          </select>
+        </label>
+        <button type="submit" className="button" disabled={busy || !validRef(reference)}>
+          {busy ? 'Guardando…' : 'Guardar instrumento'}
+        </button>
+      </form>
+    </SidePanel>
+    <SidePanel open={panel === 'detail' && current !== undefined && status === 'ready'}
+      title="Detalle del instrumento" onClose={() => setPanel(null)}>
+      {current ? <>
+        <dl>
+          <dt>Referencia</dt><dd>{current.ref}</dd>
+          <dt>Categoría</dt><dd>{kindNames[current.kind]}</dd>
+          <dt>Estado</dt><dd><StatusPill tone={current.state === 'EN_REVISION' ? 'info' : 'warn'}>
+            {stateNames[current.state]}</StatusPill></dd>
+          <dt>Versión auditada</dt><dd>{current.version}</dd>
+          <dt>Fecha de registro</dt><dd>{current.occurredAt}</dd>
+        </dl>
+        {canUpdate && <form className="catalog-editor" onSubmit={event => { void transition(event); }}>
+          <label>Siguiente estado
+            <select value={nextState} onChange={event => setNextState(event.target.value as State)}>
+              {transitions[current.state].map(state => <option key={state} value={state}>
+                {stateNames[state]}</option>)}
             </select>
           </label>
-          <label>Estado
-            <select aria-label="Filtrar por estado" value={stateFilter}
-              onChange={event => setStateFilter(event.target.value as typeof stateFilter)}>
-              <option value="TODOS">Todos</option>
-              {states.map(item => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
-          </Toolbar>
-          <DataTable caption="Listado de Gobierno corporativo · simulación M15" rows={visible} rowKey={row => row.reference} onOpen={row => view(row.reference)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.reference}</strong></span> }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'EN_REVISION' ? 'info' : row.state === 'REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.state}</StatusPill> }]} />
-        </section>
-        {canCreate && (
-          <SidePanel open={creating && canCreate} title="Crear actuación de prueba" onClose={() => { setCreating(false); setPanelError(''); }}>
-          {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
-          <form className="catalog-editor" onSubmit={create}>
-              <label>Referencia ficticia
-                <input required maxLength={64} pattern="fixture:governance/[a-z][a-z0-9_-]{0,47}"
-                  placeholder="fixture:governance/demo" value={reference}
-                  onChange={event => setReference(event.target.value)} />
-              </label>
-              <p className="muted">Las referencias auxiliares siguientes solo validan el formulario; el servidor guarda únicamente tipo y referencia ficticia.</p>
-              <label>Órgano ficticio
-                <input required maxLength={64} pattern="fixture:body/[a-z][a-z0-9_-]{0,47}"
-                  placeholder="fixture:body/demo" value={bodyRef}
-                  onChange={event => setBodyRef(event.target.value)} />
-              </label>
-              <label>Representante ficticio
-                <input required maxLength={64} pattern="fixture:representative/[a-z][a-z0-9_-]{0,47}"
-                  placeholder="fixture:representative/demo" value={representativeRef}
-                  onChange={event => setRepresentativeRef(event.target.value)} />
-              </label>
-              <label>Clase
-                <select value={kind} onChange={event => setKind(event.target.value as GovernanceKind)}>
-                  {kinds.map(item => <option key={item} value={item}>{item}</option>)}
-                </select>
-              </label>
-              <button type="submit" disabled={busy}>Registrar solicitud ficticia</button>
-            </form>
-
-        </SidePanel>
-        )}
-        <SidePanel open={Boolean(current) && !creating} title="Detalle y revisión manual" onClose={() => { setSelected(''); setPanelError(''); }}>
-          {panelError && <output role="alert" aria-live="assertive" className="alert alert-error">{panelError}</output>}
-          {current ? <>
-            <dl>
-              <dt>Referencia</dt><dd>{current.reference}</dd>
-              <dt>Origen</dt><dd>Sesión sintética del servidor (sin nombres ni representantes)</dd>
-              <dt>Clase</dt><dd>{current.kind}</dd>
-              <dt>Estado</dt><dd>{current.state}</dd>
-            </dl>
-            {canReview && current.state !== 'EN_REVISION' && (
-              <form className="catalog-editor" onSubmit={changeState}>
-                <button type="submit" disabled={busy}>{current.state === 'BORRADOR'
-                  ? 'Solicitar revisión ficticia' : 'Iniciar revisión ficticia'}</button>
-              </form>
-            )}
-            <p className="muted">Ningún acta, poder o decisión se aprueba ni cierra automáticamente.</p>
-          </> : <p role="status">Selecciona una actuación ficticia para el detalle.</p>}
-
-        </SidePanel>
-        <section className="ui-card catalog-card" aria-labelledby="governance-audit-title">
-          <h3 id="governance-audit-title">Bitácora de demostración (no oficial)</h3>
-          <p className="muted">Las operaciones reales exigen permisos y auditoría de servidor.</p>
-          {events.filter(row => row.scope === scope).length === 0
-            ? <p role="status">Sin operaciones de prueba.</p>
-            : <ul>{events.filter(row => row.scope === scope).map((row, index) => (
-              <li key={index}>{row.action} · {row.reference}</li>
-            ))}</ul>}
-        </section>
-      </div>
-    </section>
-  );
-}
-
-/** Nunca habilitar este simulador para clientes reales. */
-export function GovernanceManagement(props: Props) {
-  if (!import.meta.env.DEV) return null;
-  return <Workspace key={props.tenantId + '|' + props.companyId + '|' + props.branchId}
-    {...props} />;
+          <button type="submit" className="button" disabled={busy || !transitions[current.state].includes(nextState)}>
+            {busy ? 'Guardando…' : 'Registrar cambio de estado'}
+          </button>
+        </form>}
+      </> : <p role="status">Selecciona un instrumento para consultar su detalle.</p>}
+    </SidePanel>
+  </section>;
 }

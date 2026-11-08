@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { AccessManagement } from './AccessManagement';
+import { GovernanceManagement } from './GovernanceManagement';
 import { CatalogManagement } from './CatalogManagement';
 import { InventoryManagement } from './InventoryManagement';
 import { StockAlertsPanel } from './StockAlertsPanel';
@@ -71,10 +72,6 @@ type ContextState =
     }
   | { status: 'error' };
 
-const DevGovernanceManagement = import.meta.env.DEV
-  ? lazy(async () => ({ default: (await import('./GovernanceManagement')).GovernanceManagement }))
-  : null;
-
 const DevContractsManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./ContractsManagement')).ContractsManagement }))
   : null;
@@ -116,6 +113,8 @@ export function AdminApp({
     && document.getElementById('condor-admin-root')?.dataset.ohsRealDataEnabled === 'true';
   const legalComplianceRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.legalComplianceRealDataEnabled === 'true';
+  const governanceRealDataEnabled = typeof document !== 'undefined'
+    && document.getElementById('condor-admin-root')?.dataset.governanceRealDataEnabled === 'true';
   // Synthetic catalogs are available only in dev with an explicit root opt-in.
   // This flag never enables the HR real-data API or overrides server permissions.
   const hrSyntheticPreviewEnabled = import.meta.env.DEV && typeof document !== 'undefined'
@@ -254,7 +253,8 @@ export function AdminApp({
               : import.meta.env.DEV ? [{ href: '/admin#compliance-management', label: 'SG-SST (no habilitado)' }] : []),
             ...(legalComplianceRealDataEnabled ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal' }]
               : import.meta.env.DEV ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal (no habilitado)' }] : []),
-            ...(import.meta.env.DEV ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo (pruebas)' }] : []),
+            ...(governanceRealDataEnabled ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo' }]
+              : import.meta.env.DEV ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo (no habilitado)' }] : []),
           ],
         },
         {
@@ -558,7 +558,7 @@ export function AdminApp({
             />
           )}
 
-          {import.meta.env.DEV && DevGovernanceManagement && (
+          {import.meta.env.DEV && (
             <>
               {import.meta.env.DEV && !contractsRealDataEnabled && DevContractsManagement && (
                 <Suspense fallback={<p role="status">Cargando contratación ficticia…</p>}>
@@ -607,16 +607,23 @@ export function AdminApp({
                 />
               </Suspense>
               )}
-              <Suspense fallback={<p role="status">Cargando gobierno ficticio…</p>}>
-                            <DevGovernanceManagement
-                              key={'governance-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
-                              tenantId={context.data.tenant.id}
-                              companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
-                              branchId={context.data.active_branch.id}
-                              permissions={context.data.permissions}
-                            />
-                          </Suspense>
             </>
+          )}
+
+          {(governanceRealDataEnabled || import.meta.env.DEV) && (
+            <GovernanceManagement
+              key={'governance-real-' + context.data.tenant.id + '-'
+                + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-'
+                + context.data.active_branch.id}
+              enabled={governanceRealDataEnabled}
+              tenantId={context.data.tenant.id}
+              companyId={context.data.active_legal_entity?.id !== undefined
+                && context.data.active_branch.legal_entity?.id === context.data.active_legal_entity.id
+                ? context.data.active_legal_entity.id : '__unassigned__'}
+              branchId={context.data.active_branch.id}
+              permissions={context.data.permissions}
+              csrfToken={accessToken}
+            />
           )}
 
           {legalComplianceRealDataEnabled ? (
