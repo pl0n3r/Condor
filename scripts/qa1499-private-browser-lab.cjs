@@ -2,6 +2,7 @@
 // Condor #1891 / parent #1499. Synthetic, read-only private UI browser lab.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const net = require('node:net');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
@@ -189,28 +190,43 @@ async function run() {
   const playwright = require('@playwright/test');
   const engines = { chromium: playwright.chromium, webkit: playwright.webkit };
   const results = [];
-  for (const browserKey of BROWSERS) {
-    let browser;
-    try {
-      browser = await engines[browserKey].launch({
-        headless: true,
-        ...(browserKey === 'chromium' ? { channel: 'chrome' } : {}),
-        args: ['--disable-background-networking', '--disable-component-update', '--no-first-run']
-      });
-    } catch {
-      for (const role of ROLES) for (const viewport of VIEWPORTS) {
-        results.push({ role: role.key, browser: browserKey, viewport: viewport.key,
-          state: 'NO_VERIFICADO', reason: 'browser_engine_unavailable' });
+  // A local rejecting proxy denies browser-level HTTP egress as a second boundary;
+  // only the exact lab origin bypasses it. Page routes still reject non-GET/redirects.
+  const denyProxy = net.createServer(socket => socket.destroy());
+  await new Promise((resolve, reject) => {
+    denyProxy.once('error', reject);
+    denyProxy.listen(0, '127.0.0.1', resolve);
+  });
+  try {
+    for (const browserKey of BROWSERS) {
+      let browser;
+      try {
+        browser = await engines[browserKey].launch({
+          headless: true,
+          proxy: {
+            server: 'http://127.0.0.1:' + denyProxy.address().port,
+            bypass: base.hostname
+          },
+          ...(browserKey === 'chromium' ? { channel: 'chrome' } : {}),
+          args: ['--disable-background-networking', '--disable-component-update', '--no-first-run']
+        });
+      } catch {
+        for (const role of ROLES) for (const viewport of VIEWPORTS) {
+          results.push({ role: role.key, browser: browserKey, viewport: viewport.key,
+            state: 'NO_VERIFICADO', reason: 'browser_engine_unavailable' });
+        }
+        continue;
       }
-      continue;
+      try {
+        for (const role of ROLES) for (const viewport of VIEWPORTS) {
+          results.push(await inspectScenario(
+            browser, role, viewport, fixtures[role.key], base, browserKey
+          ));
+        }
+      } finally { await browser.close(); }
     }
-    try {
-      for (const role of ROLES) for (const viewport of VIEWPORTS) {
-        results.push(await inspectScenario(
-          browser, role, viewport, fixtures[role.key], base, browserKey
-        ));
-      }
-    } finally { await browser.close(); }
+  } finally {
+    await new Promise(resolve => denyProxy.close(resolve));
   }
   const failed = results.filter(item => item.state !== 'PARCIAL');
   const receipt = {
