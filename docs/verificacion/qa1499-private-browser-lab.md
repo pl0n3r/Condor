@@ -87,7 +87,6 @@ de navegador disponibles. Si no hay motor, fixture, sesión, identidad de SHA,
 respuesta de health o UI privada, devuelve NO_VERIFICADO y exit no cero.
 
 Este laboratorio no usa Safari nativo, no certifica WCAG 2.2 AA, no demuestra
-aislamiento multi-tenant con usuarios reales, no mide Web Vitals de campo ni
-p75 representativo, no acredita backup/rollback, no valida release readiness y
+aislamiento multi-tenant con usuarios reales, no acredita métricas de campo ni Web Vitals p75 representativos, no acredita backup/rollback, no valida release readiness y
 no autoriza go-live. Las decisiones de salida y los ensayos con datos reales
 permanecen en sus puertas humanas específicas.
