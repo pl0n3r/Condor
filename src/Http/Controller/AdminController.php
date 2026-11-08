@@ -58,6 +58,7 @@ final class AdminController extends AbstractController
             'ohs_real_data_enabled' => getenv('OHS_REAL_DATA_ENABLED') === 'true',
             'legal_compliance_real_data_enabled' => getenv('LEGAL_COMPLIANCE_REAL_DATA_ENABLED') === 'true',
             'governance_real_data_enabled' => getenv('GOVERNANCE_REAL_DATA_ENABLED') === 'true',
+            'operations_processes_real_data_enabled' => getenv('OPERATIONS_PROCESSES_REAL_DATA_ENABLED') === 'true',
             'contracts_synthetic_api_enabled' => $this->getParameter('kernel.environment') === 'dev'
                 && getenv('CONDOR_CONTRACTS_SYNTHETIC_API') === '1',
         ]);
