@@ -56,7 +56,7 @@ final readonly class OperationalProcessService
         return [
             'records' => $visible,
             'next_cursor' => count($fetched) === 101
-                ? (string) end($visible)['record_ref'] : null,
+                ? (string) $visible[99]['record_ref'] : null,
         ];
     }
 
