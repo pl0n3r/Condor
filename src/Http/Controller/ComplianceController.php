@@ -97,25 +97,41 @@ final class ComplianceController extends AbstractController
      * Owner-only persisted Cumplimiento legal bridge: both read routes use one guarded
      * handler; both writes share flag, CSRF, and scope validation.
      */
-    #[Route('/api/v1/branches/{branchId}/compliance/real-records', name: 'api_compliance_real_list', methods: ['GET'])]
+    #[Route(
+        '/api/v1/branches/{branchId}/compliance/real-records',
+        name: 'api_compliance_real_list',
+        methods: ['GET'],
+    )]
     public function complianceRealList(string $branchId): JsonResponse
     {
         return $this->complianceRealRead($branchId, null);
     }
 
-    #[Route('/api/v1/branches/{branchId}/compliance/real-records/{ref}', name: 'api_compliance_real_detail', methods: ['GET'])]
+    #[Route(
+        '/api/v1/branches/{branchId}/compliance/real-records/{ref}',
+        name: 'api_compliance_real_detail',
+        methods: ['GET'],
+    )]
     public function complianceRealView(string $branchId, string $ref): JsonResponse
     {
         return $this->complianceRealRead($branchId, $ref);
     }
 
-    #[Route('/api/v1/branches/{branchId}/compliance/real-records', name: 'api_compliance_real_create', methods: ['POST'])]
+    #[Route(
+        '/api/v1/branches/{branchId}/compliance/real-records',
+        name: 'api_compliance_real_create',
+        methods: ['POST'],
+    )]
     public function complianceRealCreate(string $branchId, Request $request): JsonResponse
     {
         return $this->complianceRealWrite($branchId, $request, null);
     }
 
-    #[Route('/api/v1/branches/{branchId}/compliance/real-records/{ref}/state', name: 'api_compliance_real_state', methods: ['PATCH'])]
+    #[Route(
+        '/api/v1/branches/{branchId}/compliance/real-records/{ref}/state',
+        name: 'api_compliance_real_state',
+        methods: ['PATCH'],
+    )]
     public function complianceRealState(string $branchId, string $ref, Request $request): JsonResponse
     {
         return $this->complianceRealWrite($branchId, $request, $ref);
@@ -150,7 +166,10 @@ final class ComplianceController extends AbstractController
         if ($ref === null) {
             $input = $this->payload($request, ['record_ref', 'kind']);
             $created = $this->domain(fn (): array => $this->complianceEvidenceRecords->add(
-                $tenant, $company, $actor, $input,
+                $tenant,
+                $company,
+                $actor,
+                $input,
             ));
             return $this->complianceRealJson(['record' => $created], Response::HTTP_CREATED);
         }
@@ -160,7 +179,12 @@ final class ComplianceController extends AbstractController
             throw new BadRequestHttpException('Estado y versión válidos son obligatorios.');
         }
         $updated = $this->domain(fn (): array => $this->complianceEvidenceRecords->transition(
-            $tenant, $company, $actor, $ref, $change['state'], $change['expected_version'],
+            $tenant,
+            $company,
+            $actor,
+            $ref,
+            $change['state'],
+            $change['expected_version'],
         ));
         return $this->complianceRealJson(['record' => $updated]);
     }
@@ -168,16 +192,19 @@ final class ComplianceController extends AbstractController
     /** @return array{string,string,string} */
     private function complianceRealScope(string $branchId, string $permission): array
     {
-        [$actor, $tenant, $branch, $membership] = $this->authorizedBranchScope($branchId, $permission);
-        if (!$actor->isActive() || !$membership->isActive()
-            || $membership->roleKey() !== Membership::ROLE_OWNER) {
+        $scope = $this->authorizedBranchScope($branchId, $permission);
+        [$actor, $tenant, $branch, $membership] = $scope;
+        $allowed = $actor->isActive() && $membership->isActive()
+            && $membership->roleKey() === Membership::ROLE_OWNER;
+        if (!$allowed) {
             throw new AccessDeniedHttpException('Solo el propietario puede gestionar Cumplimiento legal.');
         }
-        $entity = $branch->legalEntity();
-        if ($entity === null || $entity->tenant()->id() !== $tenant->id()) {
+
+        $legalEntity = $branch->legalEntity();
+        if ($legalEntity?->tenant()->id() !== $tenant->id()) {
             throw new NotFoundHttpException('Razón social no disponible.');
         }
-        return [$actor->id(), $tenant->id(), $entity->id()];
+        return [$actor->id(), $tenant->id(), $legalEntity->id()];
     }
 
     private function complianceRealDisabled(): ?JsonResponse

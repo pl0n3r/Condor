@@ -37,15 +37,19 @@ $records = new \App\Application\Compliance\ComplianceEvidenceRecordService($db);
 class ComplianceEvidencePersistenceTests(unittest.TestCase):
     def php_case(self, script: str):
         """Execute the real PHP implementation against a disposable SQLite DB."""
-        self.assertIsNotNone(shutil.which("php"), "PHP CLI required")
+        php = shutil.which("php")
+        self.assertIsNotNone(php, "PHP CLI required")
         vendor = ROOT / "vendor/autoload.php"
-        self.assertTrue(vendor.is_file(), "Composer dependencies required")
-        execution = subprocess.run(
-            ["php", "-r", "require $argv[1]; " + DB_SETUP + script, str(vendor)],
-            cwd=ROOT, check=False, capture_output=True, text=True, timeout=35,
-        )
-        self.assertEqual(execution.returncode, 0, execution.stderr)
-        return json.loads(execution.stdout)
+        if not vendor.is_file():
+            self.fail("Composer dependencies required")
+        try:
+            output = subprocess.check_output(
+                [php, "-r", "require $argv[1]; " + DB_SETUP + script, str(vendor)],
+                cwd=ROOT, stderr=subprocess.PIPE, text=True, timeout=35,
+            )
+        except subprocess.CalledProcessError as exc:
+            self.fail(f"PHP/SQLite acceptance failed: {exc.stderr}")
+        return json.loads(output)
 
     def test_tenant_and_company_scope_with_append_only_audit(self):
         result = self.php_case(f"""
@@ -68,7 +72,7 @@ echo json_encode([
         .'WHERE tenant_id=? AND company_id=?', [$t, $c]),
 ]);
 """)
-        self.assertEqual(result, [1, 1, 1, 0, 2, True, True, 2])
+        self.assertEqual([1, 1, 1, 0, 2, True, True, 2], result)
 
     def test_never_accept_clinical_data_duplicate_or_auto_approval(self):
         self.assertEqual(self.php_case(f"""
@@ -94,9 +98,6 @@ echo json_encode($rejections);
 
     def test_http_routes_are_owner_only_off_by_default(self):
         source = API.read_text(encoding="utf-8")
-        fragment = source.split(
-            "// Legal compliance real-record bridge", 1
-        )
         self.assertEqual(4, source.count("name: 'api_compliance_real_"))
         for name in (
             "complianceRealList", "complianceRealView",
@@ -108,7 +109,7 @@ echo json_encode($rejections);
         self.assertIn("'feature_unavailable'", source)
         self.assertIn("Membership::ROLE_OWNER", source)
         self.assertIn("requireCsrf($request)", source)
-        self.assertIn("$entity->tenant()->id() !== $tenant->id()", source)
+        self.assertIn("$legalEntity?->tenant()->id() !== $tenant->id()", source)
         self.assertIn("'settings.view'", source)
         self.assertIn("'settings.create'", source)
         self.assertIn("'settings.update'", source)
@@ -132,13 +133,13 @@ echo json_encode($rejections);
             item for item in document["treatments"]
             if item["id"] == "legal_compliance_real_records"
         ]
-        self.assertEqual(len(treatment), 1)
-        self.assertEqual(treatment[0]["basis"], "review_required")
-        self.assertEqual(treatment[0]["providers"], [])
-        self.assertEqual(document["phase"], "construccion")
+        self.assertEqual(1, len(treatment))
+        self.assertEqual("review_required", treatment[0]["basis"])
+        self.assertEqual([], treatment[0]["providers"])
+        self.assertEqual("construccion", document["phase"])
         self.assertEqual(
-            document["d063_attestation"],
             {"nothing_live": True, "no_real_customer_data": True},
+            document["d063_attestation"],
         )
 
 

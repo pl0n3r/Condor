@@ -64,14 +64,16 @@ final readonly class ComplianceEvidenceRecordService
      */
     public function add(string $tenant, string $company, string $actor, array $input): array
     {
-        $fields = array_keys($input);
-        sort($fields);
-        if ($fields !== ['kind', 'record_ref']
+        if (count($input) !== 2 || !isset($input['kind'], $input['record_ref'])
             || !is_string($input['kind']) || !is_string($input['record_ref'])) {
             throw new DomainException('Solo se admiten categoría y referencia opaca.');
         }
         $created = ComplianceEvidenceRecord::begin(
-            $tenant, $company, $actor, $input['record_ref'], $input['kind'],
+            $tenant,
+            $company,
+            $actor,
+            $input['record_ref'],
+            $input['kind'],
         );
         return $this->write(function () use ($tenant, $company, $created): array {
             if ($this->one($tenant, $company, $created['record_ref']) !== null) {
@@ -93,7 +95,12 @@ final readonly class ComplianceEvidenceRecordService
                 throw new DomainException('Referencia Cumplimiento legal no encontrada.');
             }
             $updated = ComplianceEvidenceRecord::revise(
-                $current, $tenant, $company, $actor, $next, $version,
+                $current,
+                $tenant,
+                $company,
+                $actor,
+                $next,
+                $version,
             );
             $this->connection->insert(self::TABLE, $updated);
             return $updated;
