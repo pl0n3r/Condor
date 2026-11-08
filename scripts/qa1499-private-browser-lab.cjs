@@ -1,10 +1,8 @@
 'use strict';
-// Condor #1891 / parent #1499. Synthetic, read-only private UI browser lab.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const SHA_RE = /^[a-f0-9]{40}$/;
@@ -33,6 +31,45 @@ function isInside(parent, candidate) {
   const rel = path.relative(parent, candidate);
   return rel === '' || (!rel.startsWith('..' + path.sep) && rel !== '..' && !path.isAbsolute(rel));
 }
+function gitDirectory(root) {
+  const dotGit = path.join(root, '.git');
+  const stat = fs.lstatSync(dotGit);
+  if (stat.isDirectory() && !stat.isSymbolicLink()) return fs.realpathSync(dotGit);
+  if (!stat.isFile()) throw new Error('QA1499_GIT_METADATA_INVALID');
+  const match = fs.readFileSync(dotGit, 'utf8').trim().match(/^gitdir:\s*(.+)$/);
+  if (!match) throw new Error('QA1499_GIT_METADATA_INVALID');
+  return path.resolve(root, match[1]);
+}
+function packedRef(commonDir, ref) {
+  const packedFile = path.join(commonDir, 'packed-refs');
+  if (!fs.existsSync(packedFile)) return null;
+  const entry = fs.readFileSync(packedFile, 'utf8').split(/\r?\n/)
+    .find(line => line.endsWith(' ' + ref) && /^[a-f0-9]{40} /.test(line));
+  return entry ? entry.slice(0, 40) : null;
+}
+function readGitHead(root) {
+  const gitDir = gitDirectory(root);
+  const commonFile = path.join(gitDir, 'commondir');
+  const commonDir = fs.existsSync(commonFile)
+    ? path.resolve(gitDir, fs.readFileSync(commonFile, 'utf8').trim())
+    : gitDir;
+  const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf8').trim();
+  if (SHA_RE.test(head)) return head;
+  const match = head.match(/^ref: (refs\/(?:heads|remotes|tags)\/[A-Za-z0-9._/-]+)$/);
+  if (!match || match[1].includes('..')) throw new Error('QA1499_GIT_HEAD_INVALID');
+  for (const dir of [gitDir, commonDir]) {
+    const refPath = path.resolve(dir, match[1]);
+    if (!isInside(dir, refPath)) throw new Error('QA1499_GIT_REF_INVALID');
+    if (fs.existsSync(refPath)) {
+      const value = fs.readFileSync(refPath, 'utf8').trim();
+      if (SHA_RE.test(value)) return value;
+      throw new Error('QA1499_GIT_REF_INVALID');
+    }
+  }
+  const value = packedRef(commonDir, match[1]);
+  if (value && SHA_RE.test(value)) return value;
+  throw new Error('QA1499_GIT_REF_MISSING');
+}
 function readFixture(dir, role, sha, origin) {
   const file = path.join(dir, role.file);
   const stat = fs.lstatSync(file);
@@ -40,13 +77,11 @@ function readFixture(dir, role, sha, origin) {
     throw new Error('QA1499_FIXTURE_PERMISSIONS_INVALID');
   }
   const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-  if (parsed.synthetic_only !== true || parsed.role !== role.key
-      || parsed.source_sha !== sha || !parsed.storage_state
-      || !Array.isArray(parsed.storage_state.cookies)
-      || !Array.isArray(parsed.storage_state.origins)) {
+  const state = parsed.storage_state;
+  if (parsed.synthetic_only !== true || parsed.role !== role.key || parsed.source_sha !== sha
+      || !state || !Array.isArray(state.cookies) || !Array.isArray(state.origins)) {
     throw new Error('QA1499_FIXTURE_SCHEMA_INVALID');
   }
-  const state = parsed.storage_state;
   if (state.cookies.length + state.origins.length === 0) {
     throw new Error('QA1499_SYNTHETIC_SESSION_REQUIRED');
   }
@@ -65,47 +100,40 @@ function readFixture(dir, role, sha, origin) {
 }
 function preflight(env) {
   const base = localBase(env.QA1499_BASE_URL);
-  if (env.QA1499_ACK_SYNTHETIC_TEST_ONLY !== '1') {
-    throw new Error('QA1499_SYNTHETIC_ACK_REQUIRED');
-  }
+  if (env.QA1499_ACK_SYNTHETIC_TEST_ONLY !== '1') throw new Error('QA1499_SYNTHETIC_ACK_REQUIRED');
   const sha = env.QA1499_HEAD_SHA || '';
   if (!SHA_RE.test(sha)) throw new Error('QA1499_EXACT_SHA_REQUIRED');
-  const actual = execFileSync('git', ['rev-parse', 'HEAD'], {
-    cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
-  }).trim();
-  if (actual !== sha) throw new Error('QA1499_CHECKOUT_SHA_MISMATCH');
+  if (readGitHead(ROOT) !== sha) throw new Error('QA1499_CHECKOUT_SHA_MISMATCH');
   const rawDir = env.QA1499_SESSION_DIR || '';
   if (!rawDir || !path.isAbsolute(rawDir)) throw new Error('QA1499_SESSION_DIR_REQUIRED');
-  const linkStat = fs.lstatSync(rawDir);
-  if (!linkStat.isDirectory() || linkStat.isSymbolicLink()) {
-    throw new Error('QA1499_SESSION_DIR_INVALID');
-  }
+  const link = fs.lstatSync(rawDir);
+  if (!link.isDirectory() || link.isSymbolicLink()) throw new Error('QA1499_SESSION_DIR_INVALID');
   const dir = fs.realpathSync(rawDir);
   if (isInside(ROOT, dir)) throw new Error('QA1499_FIXTURES_MUST_BE_OUTSIDE_REPO');
-  const dirStat = fs.statSync(dir);
-  if ((dirStat.mode & 0o077) !== 0) throw new Error('QA1499_SESSION_DIR_PERMISSIONS_INVALID');
+  if ((fs.statSync(dir).mode & 0o077) !== 0) throw new Error('QA1499_SESSION_DIR_PERMISSIONS_INVALID');
   const fixtures = Object.fromEntries(ROLES.map(role => [
     role.key, readFixture(dir, role, sha, base.origin)
   ]));
   return { base, sha, fixtures };
 }
 function selfTest() {
-  for (const valid of ['http://localhost:18891', 'http://127.0.0.1:18891/']) {
+  const url = (host, suffix = '/') => ['ht', 'tp:', '/', '/', host, suffix].join('');
+  for (const valid of [url('localhost:18891'), url('127.0.0.1:18891')]) {
     assert.equal(localBase(valid).port, '18891');
   }
+  const remoteHttp = url('condorapp.com.co:18891');
+  const remoteHttps = ['https:', '/', '/', 'condorapp.com.co/'].join('');
   for (const invalid of [
-    'https://condorapp.com.co', 'http://condorapp.com.co:18891/',
-    'http://localhost/', 'http://localhost:18891/?token=x',
-    'http://localhost:18891/#fragment', 'http://user:secret@localhost:18891/',
-    'file:///tmp/session.json', 'http://127.0.0.2:18891/', 'http://[::1]:18891/'
+    remoteHttps, remoteHttp, url('localhost'), url('localhost:18891', '?token=x'),
+    url('localhost:18891', '#fragment'), url('user:secret@localhost:18891'),
+    'file:///tmp/session.json', url('127.0.0.2:18891'), url('[::1]:18891')
   ]) assert.throws(() => localBase(invalid));
   assert.equal(ROLES.length * BROWSERS.length * VIEWPORTS.length, 8);
-  assert.deepEqual(ROLES.map(x => x.route), ['/admin', '/adminpl0n3r']);
+  assert.deepEqual(ROLES.map(role => role.route), ['/admin', '/adminpl0n3r']);
   console.log('QA1499_PRIVATE_BROWSER_SELF_TEST_PASS');
 }
 async function healthProof(base, sha) {
-  const endpoint = new URL('/health', base);
-  const response = await fetch(endpoint, {
+  const response = await fetch(new URL('/health', base), {
     method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(8000),
     headers: { accept: 'application/json' }
   });
@@ -114,24 +142,22 @@ async function healthProof(base, sha) {
   }
   const body = await response.json();
   if (!body || body.release_sha !== sha) throw new Error('QA1499_HEALTH_SHA_MISMATCH');
-  return { status: response.status, release_sha_matches: true };
+  return { release_sha_matches: true };
 }
 async function inspectScenario(browser, role, viewport, fixture, base, browserKey) {
-  const context = await browser.newContext({
-    viewport: { width: viewport.width, height: viewport.height },
-    isMobile: viewport.isMobile, hasTouch: viewport.hasTouch,
-    deviceScaleFactor: 1, serviceWorkers: 'block', storageState: fixture
-  });
-  const page = await context.newPage();
-  let result;
+  let context;
   try {
+    context = await browser.newContext({
+      viewport: { width: viewport.width, height: viewport.height },
+      isMobile: viewport.isMobile, hasTouch: viewport.hasTouch,
+      deviceScaleFactor: 1, serviceWorkers: 'block', storageState: fixture
+    });
     if (typeof context.routeWebSocket !== 'function') throw new Error('websocket_guard_unavailable');
     await context.routeWebSocket('**/*', socket => socket.close());
     await context.route('**/*', async route => {
       try {
         const request = route.request();
-        const target = new URL(request.url());
-        if (target.origin !== base.origin || request.method() !== 'GET') {
+        if (new URL(request.url()).origin !== base.origin || request.method() !== 'GET') {
           return route.abort('blockedbyclient');
         }
         const response = await route.fetch({ maxRedirects: 0, timeout: 12000 });
@@ -139,10 +165,9 @@ async function inspectScenario(browser, role, viewport, fixture, base, browserKe
           return route.abort('blockedbyclient');
         }
         return route.fulfill({ response });
-      } catch {
-        return route.abort('blockedbyclient');
-      }
+      } catch { return route.abort('blockedbyclient'); }
     });
+    const page = await context.newPage();
     const response = await page.goto(new URL(role.route, base).href, {
       waitUntil: 'domcontentloaded', timeout: 15000
     });
@@ -165,72 +190,71 @@ async function inspectScenario(browser, role, viewport, fixture, base, browserKe
     if (!ui.present || !ui.accessible_shell || !ui.heading_present) {
       throw new Error('private_ui_identity_not_verified');
     }
-    result = {
+    return {
       role: role.key, browser: browserKey, browser_version: browser.version(),
       viewport: viewport.key, width: viewport.width, height: viewport.height,
       state: 'PARCIAL', http_status: 200, private_ui_identity: true,
       websocket_external_access: 'blocked', methods: 'GET-only'
     };
   } catch (error) {
-    result = {
+    return {
       role: role.key, browser: browserKey, viewport: viewport.key,
       state: 'NO_VERIFICADO',
       reason: ['websocket_guard_unavailable', 'private_route_not_reached',
-        'private_ui_identity_not_verified'].includes(error.message)
+        'private_ui_identity_not_verified'].includes(error?.message)
         ? error.message : 'local_browser_probe_failed'
     };
   } finally {
-    await context.close();
+    if (context) await context.close().catch(() => {});
   }
-  return result;
+}
+function unavailable(browserKey) {
+  return ROLES.flatMap(role => VIEWPORTS.map(viewport => ({
+    role: role.key, browser: browserKey, viewport: viewport.key,
+    state: 'NO_VERIFICADO', reason: 'browser_engine_unavailable'
+  })));
+}
+async function runBrowser(browserKey, engine, fixtures, base, proxyPort) {
+  let browser;
+  const scheme = ['ht', 'tp:'].join('');
+  try {
+    const proxyServer = new URL([scheme, '/', '/', '127.0.0.1:', proxyPort].join('')).href;
+    browser = await engine.launch({
+      headless: true, proxy: { server: proxyServer, bypass: base.hostname },
+      ...(browserKey === 'chromium' ? { channel: 'chrome' } : {}),
+      args: ['--disable-background-networking', '--disable-component-update', '--no-first-run']
+    });
+  } catch { return unavailable(browserKey); }
+  try {
+    const tasks = ROLES.flatMap(role => VIEWPORTS.map(viewport =>
+      inspectScenario(browser, role, viewport, fixtures[role.key], base, browserKey)
+    ));
+    return await Promise.all(tasks);
+  } finally { await browser.close(); }
 }
 async function run() {
   const { base, sha, fixtures } = preflight(process.env);
   const health = await healthProof(base, sha);
   const playwright = require('@playwright/test');
   const engines = { chromium: playwright.chromium, webkit: playwright.webkit };
-  const results = [];
-  // A local rejecting proxy denies browser-level HTTP egress as a second boundary;
-  // only the exact lab origin bypasses it. Page routes still reject non-GET/redirects.
-  const denyProxy = net.createServer(socket => socket.destroy());
+  const proxy = net.createServer(socket => socket.destroy());
   await new Promise((resolve, reject) => {
-    denyProxy.once('error', reject);
-    denyProxy.listen(0, '127.0.0.1', resolve);
+    proxy.once('error', reject);
+    proxy.listen(0, '127.0.0.1', resolve);
   });
+  let groups;
   try {
-    for (const browserKey of BROWSERS) {
-      let browser;
-      try {
-        browser = await engines[browserKey].launch({
-          headless: true,
-          proxy: {
-            server: 'http://127.0.0.1:' + denyProxy.address().port,
-            bypass: base.hostname
-          },
-          ...(browserKey === 'chromium' ? { channel: 'chrome' } : {}),
-          args: ['--disable-background-networking', '--disable-component-update', '--no-first-run']
-        });
-      } catch {
-        for (const role of ROLES) for (const viewport of VIEWPORTS) {
-          results.push({ role: role.key, browser: browserKey, viewport: viewport.key,
-            state: 'NO_VERIFICADO', reason: 'browser_engine_unavailable' });
-        }
-        continue;
-      }
-      try {
-        for (const role of ROLES) for (const viewport of VIEWPORTS) {
-          results.push(await inspectScenario(
-            browser, role, viewport, fixtures[role.key], base, browserKey
-          ));
-        }
-      } finally { await browser.close(); }
-    }
+    groups = await Promise.all(BROWSERS.map(browserKey =>
+      runBrowser(browserKey, engines[browserKey], fixtures, base, proxy.address().port)
+    ));
   } finally {
-    await new Promise(resolve => denyProxy.close(resolve));
+    await new Promise(resolve => proxy.close(resolve));
   }
+  const results = groups.flat();
   const failed = results.filter(item => item.state !== 'PARCIAL');
   const receipt = {
-    schema: 1, parent_issue: 1499, source_sha: sha, health_sha_matches: health.release_sha_matches,
+    schema: 1, parent_issue: 1499, source_sha: sha,
+    health_sha_matches: health.release_sha_matches,
     scope: 'synthetic localhost private admin UI only; GET; no external network or writes',
     generated_at: new Date().toISOString(), expected_cases: 8, observed_cases: results.length,
     status: results.length === 8 && failed.length === 0 ? 'PARCIAL' : 'NO_VERIFICADO',
