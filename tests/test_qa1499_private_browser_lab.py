@@ -49,9 +49,11 @@ class PrivateBrowserLabTests(unittest.TestCase):
     def test_fixtures_ausentes_fallan_cerrado(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qa1499-session-") as tmp:
             os.chmod(tmp, 0o700)
+            head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
+                                   text=True, capture_output=True, check=True).stdout.strip()
             result = run_node(QA1499_BASE_URL="http://127.0.0.1:18891",
                               QA1499_ACK_SYNTHETIC_TEST_ONLY="1",
-                              QA1499_HEAD_SHA="a" * 40, QA1499_SESSION_DIR=tmp)
+                              QA1499_HEAD_SHA=head, QA1499_SESSION_DIR=tmp)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("QA1499_PRIVATE_BROWSER_BLOCKED", result.stderr)
         self.assertNotIn("FileNotFoundError", result.stderr)
