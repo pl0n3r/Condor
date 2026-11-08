@@ -616,7 +616,9 @@ export function OccupationalRealManagement({
       <PageHeader title={moduleTitle} />
       <p role={role}>{message}</p>
     </section>;
-  if (!enabled) return shell(moduleShort + ' aún no está habilitado; no se consultaron datos.', 'status');
+  if (!enabled) return shell(legal
+    ? 'Cumplimiento legal aún no está habilitado; no se consultaron datos.'
+    : 'SG-SST aún no está habilitado; no se consultaron datos.', 'status');
   if (!canRead || status === 'denied') return shell('Acceso denegado: razón social o permisos insuficientes.', 'alert');
   if (status === 'disabled') return shell('El servidor no habilitó el módulo ' + moduleShort + '.', 'alert');
 
