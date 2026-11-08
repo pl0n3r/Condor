@@ -59,18 +59,12 @@ SQL);
 
     public function down(Schema $schema): void
     {
-        $table = self::TABLE;
-        $this->connection->executeStatement("LOCK TABLES {$table} WRITE");
-        try {
-            $auditRows = (int) $this->connection->fetchOne("SELECT COUNT(1) FROM {$table}");
-            if ($auditRows !== 0) {
-                throw new IrreversibleMigration(
-                    'Rollback denegado: existen instrumentos auditados de Gobierno corporativo.',
-                );
-            }
-            $this->connection->executeStatement("DROP TABLE {$table}");
-        } finally {
-            $this->connection->executeStatement('UNLOCK TABLES');
-        }
+        // Doctrine ejecuta down() incluso con --dry-run; SQL directo destruiría datos.
+        // Sin API de dry-run en AbstractMigration, la reversión automatizada se deniega.
+        // Una eliminación controlada de una tabla demostrablemente vacía requiere
+        // aprobación explícita, backup y operación manual separada.
+        throw new IrreversibleMigration(
+            'Rollback automático de '.self::TABLE.' denegado: requiere validación y aprobación manual.',
+        );
     }
 }
