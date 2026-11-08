@@ -151,9 +151,13 @@ final class GovernanceController extends AbstractController
         name: 'api_governance_real_list',
         methods: ['GET'],
     )]
-    public function governanceRealList(string $branchId): JsonResponse
+    public function governanceRealList(string $branchId, Request $request): JsonResponse
     {
-        return $this->governanceRealRead($branchId, null);
+        $after = $request->query->get('after');
+        if ($after !== null && (!is_string($after) || $after === '')) {
+            throw new BadRequestHttpException('Cursor de paginación inválido.');
+        }
+        return $this->governanceRealRead($branchId, null, $after);
     }
 
     #[Route(
@@ -186,21 +190,21 @@ final class GovernanceController extends AbstractController
         return $this->governanceRealWrite($branchId, $request, $ref);
     }
 
-    private function governanceRealRead(string $branchId, ?string $ref): JsonResponse
+    private function governanceRealRead(string $branchId, ?string $ref, ?string $after = null): JsonResponse
     {
         if (($off = $this->governanceRealDisabled()) !== null) {
             return $off;
         }
         [, $tenant, $company] = $this->governanceRealScope($branchId, 'inventory.view');
         $record = $this->domain(fn (): ?array => $ref === null
-            ? $this->governanceRecords->all($tenant, $company)
+            ? $this->governanceRecords->page($tenant, $company, $after)
             : $this->governanceRecords->one($tenant, $company, $ref));
 
         if ($record === null) {
             throw new NotFoundHttpException('Instrumento de Gobierno no encontrado.');
         }
         return $this->governanceRealJson(
-            $ref === null ? ['records' => $record] : ['record' => $record],
+            $ref === null ? $record : ['record' => $record],
         );
     }
 
