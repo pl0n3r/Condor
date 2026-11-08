@@ -36,16 +36,18 @@ $records = new \App\Application\CustomerService\SupportCaseService($db);
 
 class CustomerServicePersistenceTests(unittest.TestCase):
     def php_case(self, script: str):
-        loader = ROOT / "vendor/autoload.php"
-        self.assertTrue(loader.exists(), "Composer autoload required")
-        command = [shutil.which("php") or "php", "-r",
-                   "require $argv[1]; " + DB_SETUP + script, str(loader)]
-        proc = subprocess.run(command, cwd=str(ROOT), text=True,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              timeout=40)
-        if proc.returncode:
-            self.fail(f"PHP failed ({proc.returncode}): {proc.stderr}")
-        return json.loads(proc.stdout)
+        php = shutil.which("php")
+        self.assertIsNotNone(php, "PHP CLI is needed for isolation tests")
+        autoload = ROOT / "vendor" / "autoload.php"
+        self.assertTrue(autoload.is_file(), "Composer dependencies are required")
+        program = "require $argv[1]; " + DB_SETUP + script
+        result = subprocess.run(
+            [php, "-r", program, str(autoload)],
+            cwd=ROOT, text=True, capture_output=True, timeout=40,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
 
     def test_tenant_and_company_scope_with_append_only_audit(self):
         result = self.php_case(f"""
@@ -265,12 +267,17 @@ echo json_encode($results, JSON_THROW_ON_ERROR);
         )
         self.assertEqual(0, run.returncode, run.stderr)
         observations = json.loads(run.stdout)
-        self.assertEqual([201, 200, 201, 200, 200], observations[:5], "owner")
-        self.assertEqual([404] * 4, observations[5:9], "foreign tenant")
-        self.assertEqual([403] * 5, observations[9:14], "staff and rejected CSRF")
-        self.assertEqual([3, 2, "EN_REVISION", 1, 1, "PENDIENTE", 0],
-                         observations[14:21], "append-only audit")
-        self.assertEqual([404, 404, 3], observations[21:], "server flag OFF")
+        expected_groups = (
+            ("propietarios habilitados", 0, 5, [201, 200, 201, 200, 200]),
+            ("ámbito ajeno", 5, 9, [404, 404, 404, 404]),
+            ("colaborador o CSRF rechazado", 9, 14, [403, 403, 403, 403, 403]),
+            ("historial inmutable", 14, 21, [3, 2, "EN_REVISION", 1, 1, "PENDIENTE", 0]),
+            ("servidor apagado", 21, None, [404, 404, 3]),
+        )
+        for reason, first, last, expected in expected_groups:
+            with self.subTest(contract=reason):
+                self.assertListEqual(observations[first:last], expected)
+
 
 
     def test_controller_guards_and_pagination_are_declared(self):

@@ -7,41 +7,33 @@ namespace App\Domain\CustomerService\Entity;
 use App\Shared\Id\UlidFactory;
 use DomainException;
 
-/**
- * Registro de ejecución de un caso empresarial. La transición se agrega
- * como revisión nueva; los eventos previos nunca se reescriben.
- */
+/** Inmutable: cada respuesta o revisión crea una nueva versión auditada del caso. */
 final class SupportCase
 {
-    private const KINDS = [
-        'PQRS' => true, 'GARANTIA' => true, 'SOLICITUD' => true,
+    private const ALLOWED = [
+        'PENDIENTE' => ['EN_REVISION', 'REQUIERE_REVISION'],
+        'EN_REVISION' => ['REQUIERE_REVISION'],
+        'REQUIERE_REVISION' => ['EN_REVISION'],
     ];
 
-    private const NEXT_STATE = [
-        'PENDIENTE' => ['EN_REVISION' => true, 'REQUIERE_REVISION' => true],
-        'EN_REVISION' => ['REQUIERE_REVISION' => true],
-        'REQUIERE_REVISION' => ['EN_REVISION' => true],
-    ];
-
-    private static function requireUlid(mixed $identity): void
+    private static function validUlid(mixed $candidate): bool
     {
-        if (!is_string($identity) || preg_match('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $identity) !== 1) {
-            throw new DomainException('Identificador de caso o actor inválido.');
-        }
+        return is_string($candidate)
+            && preg_match('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $candidate) === 1;
     }
 
     public static function assertIdentity(string $tenant, string $company, string $actor): void
     {
-        foreach ([$tenant, $company, $actor] as $identity) {
-            self::requireUlid($identity);
+        if (!self::validUlid($tenant) || !self::validUlid($company) || !self::validUlid($actor)) {
+            throw new DomainException('Ámbito o responsable de atención inválido.');
         }
     }
 
     public static function assertReference(string $ref): void
     {
-        if (preg_match('/^[a-z][a-z0-9_-]{0,63}$/D', $ref) !== 1
-            || preg_match('/[0-9]{7,}/', $ref) === 1) {
-            throw new DomainException('Identificador de caso debe ser opaco, no personal.');
+        $opaque = preg_match('/^[a-z][a-z0-9_-]{0,63}$/D', $ref) === 1;
+        if (!$opaque || preg_match('/[0-9]{7,}/', $ref) === 1) {
+            throw new DomainException('El caso requiere una referencia interna sin datos personales.');
         }
     }
 
@@ -50,8 +42,8 @@ final class SupportCase
     {
         self::assertIdentity($tenant, $company, $actor);
         self::assertReference($ref);
-        if (!isset(self::KINDS[$kind])) {
-            throw new DomainException('Categoría de caso no autorizada.');
+        if (!in_array($kind, ['PQRS', 'GARANTIA', 'SOLICITUD'], true)) {
+            throw new DomainException('Tipo de atención no reconocido.');
         }
 
         return [
@@ -68,36 +60,35 @@ final class SupportCase
         ];
     }
 
-    /** @param array<string,mixed> $record
+    /** @param array<string,mixed> $row
      * @return array<string,mixed>
      */
-    public static function inspect(array $record, string $tenant, string $company): array
+    public static function inspect(array $row, string $tenant, string $company): array
     {
-        if ($record['tenant_id'] !== $tenant || $record['company_id'] !== $company) {
-            throw new DomainException('El caso pertenece a otra razón social.');
+        $scopeMatches = ($row['tenant_id'] ?? null) === $tenant
+            && ($row['company_id'] ?? null) === $company;
+        $validChain = self::validUlid($row['id'] ?? null)
+            && self::validUlid($row['actor_id'] ?? null)
+            && (($row['previous_id'] ?? null) === null || self::validUlid($row['previous_id']));
+        if (!$scopeMatches || !$validChain) {
+            throw new DomainException('Caso de atención ajeno o auditoría inconsistente.');
         }
-        self::requireUlid($record['id'] ?? null);
-        self::requireUlid($record['actor_id'] ?? null);
-        if (($record['previous_id'] ?? null) !== null) {
-            self::requireUlid($record['previous_id']);
+
+        self::assertReference((string) ($row['record_ref'] ?? ''));
+        if (!in_array($row['kind'] ?? null, ['PQRS', 'GARANTIA', 'SOLICITUD'], true)
+            || !array_key_exists((string) ($row['state'] ?? ''), self::ALLOWED)) {
+            throw new DomainException('Estado o clasificación de servicio no válida.');
         }
-        self::assertReference((string) ($record['record_ref'] ?? ''));
-        $kind = $record['kind'] ?? null;
-        $state = $record['state'] ?? null;
-        if (!is_string($kind) || !isset(self::KINDS[$kind])
-            || !is_string($state) || !array_key_exists($state, self::NEXT_STATE)) {
-            throw new DomainException('Categoría o estado de caso inválido.');
-        }
-        $raw = $record['version'] ?? null;
-        $revision = filter_var($raw, FILTER_VALIDATE_INT, [
+
+        $raw = $row['version'] ?? null;
+        $number = filter_var($raw, FILTER_VALIDATE_INT, [
             'options' => ['min_range' => 1, 'max_range' => 1000000],
         ]);
-        if (!is_int($revision) || (string) $revision !== (string) $raw) {
-            throw new DomainException('Versión de caso inconsistente.');
+        if (!is_int($number) || (string) $number !== (string) $raw) {
+            throw new DomainException('La secuencia de versiones del caso es inválida.');
         }
-        $record['version'] = $revision;
-
-        return $record;
+        $row['version'] = $number;
+        return $row;
     }
 
     /** @param array<string,mixed> $old
@@ -107,19 +98,20 @@ final class SupportCase
         array $old, string $tenant, string $company, string $actor, string $next, int $version,
     ): array {
         self::assertIdentity($tenant, $company, $actor);
-        $current = self::inspect($old, $tenant, $company);
-        $possible = self::NEXT_STATE[$current['state']];
-        if ($version !== $current['version'] || $version >= 1000000 || !isset($possible[$next])) {
-            throw new DomainException('La transición de caso no es válida o su versión caducó.');
+        $case = self::inspect($old, $tenant, $company);
+        $choices = self::ALLOWED[$case['state']];
+        if ($case['version'] !== $version || $version >= 1000000
+            || !in_array($next, $choices, true)) {
+            throw new DomainException('La revisión solicitada está obsoleta o no está permitida.');
         }
 
-        return array_replace($current, [
-            'id' => UlidFactory::new(),
-            'previous_id' => $current['id'],
-            'version' => $version + 1,
-            'state' => $next,
-            'actor_id' => $actor,
-            'occurred_at' => gmdate('Y-m-d H:i:s'),
-        ]);
+        $case['previous_id'] = $case['id'];
+        $case['id'] = UlidFactory::new();
+        $case['version']++;
+        $case['actor_id'] = $actor;
+        $case['state'] = $next;
+        $case['occurred_at'] = gmdate('Y-m-d H:i:s');
+
+        return $case;
     }
 }

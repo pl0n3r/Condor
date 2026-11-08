@@ -33,31 +33,35 @@ final readonly class SupportCaseService
         if ($after !== null) {
             SupportCase::assertReference($after);
         }
-        $predicates = [
-            'p.tenant_id = :tenant',
-            'p.company_id = :company',
-            'NOT EXISTS (SELECT 1 FROM '.self::TABLE.' newer'
-                .' WHERE newer.tenant_id = p.tenant_id AND newer.company_id = p.company_id'
-                .' AND newer.record_ref = p.record_ref AND newer.version > p.version)',
-        ];
-        $bindings = ['tenant' => $tenant, 'company' => $company];
+        $arguments = ['tenant' => $tenant, 'company' => $company];
+        $filter = '';
         if ($after !== null) {
-            $predicates[] = 'p.record_ref > :cursor';
-            $bindings['cursor'] = $after;
-        }
-        $query = 'SELECT p.* FROM '.self::TABLE.' p WHERE '
-            .implode(' AND ', $predicates).' ORDER BY p.record_ref LIMIT 101';
-        $fetched = $this->connection->fetchAllAssociative($query, $bindings);
-        $visible = [];
-        foreach (array_slice($fetched, 0, 100) as $row) {
-            $visible[] = SupportCase::inspect($row, $tenant, $company);
+            $arguments['cursor'] = $after;
+            $filter = 'AND p.record_ref > :cursor';
         }
 
-        return [
-            'records' => $visible,
-            'next_cursor' => count($fetched) === 101
-                ? (string) $visible[99]['record_ref'] : null,
-        ];
+        $table = self::TABLE;
+        $sql = <<<SQL
+SELECT p.*
+FROM {$table} p
+WHERE p.tenant_id = :tenant
+  AND p.company_id = :company
+  AND NOT EXISTS (SELECT 1 FROM {$table} newer
+      WHERE newer.tenant_id = p.tenant_id
+        AND newer.company_id = p.company_id
+        AND newer.record_ref = p.record_ref
+        AND newer.version > p.version)
+{$filter}
+ORDER BY p.record_ref
+LIMIT 101
+SQL;
+        $rows = $this->connection->fetchAllAssociative($sql, $arguments);
+        $cases = array_map(
+            static fn (array $data): array => SupportCase::inspect($data, $tenant, $company),
+            array_slice($rows, 0, 100),
+        );
+        $next = count($rows) > count($cases) ? end($cases)['record_ref'] : null;
+        return ['records' => $cases, 'next_cursor' => $next];
     }
 
     /** @return array<string,mixed>|null */
@@ -89,13 +93,19 @@ final readonly class SupportCaseService
             $tenant, $company, $actor, $input['record_ref'], $input['kind'],
         );
 
-        return $this->persist(function () use ($tenant, $company, $initial): array {
-            if ($this->one($tenant, $company, $initial['record_ref']) !== null) {
-                throw new DomainException('El caso ya existe en esta razón social.');
-            }
-            $this->connection->insert(self::TABLE, $initial);
-            return $initial;
-        });
+        return $this->persist(fn (): array => $this->insertNewCase($tenant, $company, $initial));
+    }
+
+    /** @param array<string,mixed> $record
+     * @return array<string,mixed>
+     */
+    private function insertNewCase(string $tenant, string $company, array $record): array
+    {
+        if ($this->one($tenant, $company, $record['record_ref']) !== null) {
+            throw new DomainException('Ya existe un caso con esta referencia interna.');
+        }
+        $this->connection->insert(self::TABLE, $record);
+        return $record;
     }
 
     /** @return array<string,mixed> */
