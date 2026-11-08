@@ -57,7 +57,7 @@ final readonly class GovernanceRecordService
 
         return [
             'records' => $records,
-            'next_cursor' => $hasMore ? $records[count($records) - 1]['record_ref'] : null,
+            'next_cursor' => $hasMore ? (string) $records[count($records) - 1]['record_ref'] : null,
         ];
     }
 
