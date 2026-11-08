@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 import subprocess
 import unittest
@@ -54,6 +55,42 @@ class KeyboardLabContractTests(unittest.TestCase):
                 self.assertIn(guard, source)
         self.assertEqual(subprocess.run(["node", "--check", str(SCRIPT)],
                                         check=False, capture_output=True).returncode, 0)
+
+    def test_missing_engines_fail_closed_with_sanitized_receipt(self) -> None:
+        # Simulate unavailable browsers without opening sockets or a real browser.
+        bootstrap = """
+const Module = require('node:module');
+const original = Module._load;
+Module._load = function(name, parent, isMain) {
+  if (name === '@playwright/test') {
+    const absent = { launch: async () => { throw new Error('synthetic-missing-browser'); } };
+    return { chromium: absent, webkit: absent };
+  }
+  return original.apply(this, arguments);
+};
+process.argv = [process.execPath, process.env.QA1499_SCRIPT_PATH];
+require(process.env.QA1499_SCRIPT_PATH);
+"""
+        env = dict(os.environ)
+        env.update({
+            "QA1499_BASE_URL": "http://127.0.0.1:18771",
+            "QA1499_ACK_SYNTHETIC_TEST_ONLY": "1",
+            "QA1499_HEAD_SHA": "a" * 40,
+            "QA1499_SCRIPT_PATH": str(SCRIPT),
+        })
+        env.pop("QA1499_OUTPUT", None)
+        result = subprocess.run(["node", "-e", bootstrap], env=env,
+                                capture_output=True, text=True, timeout=15, check=False)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["sampleCount"], 12)
+        self.assertEqual(payload["sourceShaDeclared"], "a" * 40)
+        self.assertIs(payload["wcagCertified"], False)
+        self.assertIs(payload["fieldVitalsCertified"], False)
+        self.assertEqual(len(payload["results"]), 12)
+        self.assertTrue(all(row["state"] == "NO_VERIFICADO"
+                            and row["reason"] == "engine_unavailable"
+                            for row in payload["results"]))
 
     def test_document_caveats(self) -> None:
         doc = DOC.read_text(encoding="utf-8")
