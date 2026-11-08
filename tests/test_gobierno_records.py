@@ -126,6 +126,109 @@ foreach($attempts as $attempt) {{
 echo json_encode($rejections);
 """), [True] * 7)
 
+    def test_authenticated_http_enforces_owner_tenant_and_csrf(self):
+        """Ejecuta HTTP real con KernelBrowser y una base SQLite efímera."""
+        script = r'''
+putenv('APP_ENV=test');
+putenv('APP_DEBUG=0');
+putenv('CONDOR_EPHEMERAL_CACHE=1');
+putenv('DATABASE_URL=sqlite:///:memory:');
+putenv('GOVERNANCE_REAL_DATA_ENABLED=true');
+$kernel = new \\App\\Kernel('test', true);
+$kernel->boot();
+$container = $kernel->getContainer()->get('test.service_container');
+$em = $container->get(\\Doctrine\\ORM\\EntityManagerInterface::class);
+$tool = new \\Doctrine\\ORM\\Tools\\SchemaTool($em);
+$tool->createSchema($em->getMetadataFactory()->getAllMetadata());
+$db = $em->getConnection();
+$db->executeStatement(
+    'CREATE TABLE condor_governance_real_record (id VARCHAR(26) PRIMARY KEY, '
+    .'tenant_id VARCHAR(26), company_id VARCHAR(26), record_ref VARCHAR(64), '
+    .'kind VARCHAR(20), state VARCHAR(20), version INT, '
+    .'previous_id VARCHAR(26), actor_id VARCHAR(26), occurred_at DATETIME, '
+    .'UNIQUE(tenant_id, company_id, record_ref, version))'
+);
+$suffix = bin2hex(random_bytes(6));
+$tenant = new \\App\\Domain\\Organization\\Entity\\Tenant('A '.$suffix, 'a-'.$suffix);
+$foreign = new \\App\\Domain\\Organization\\Entity\\Tenant('B '.$suffix, 'b-'.$suffix);
+$company = new \\App\\Domain\\Organization\\Entity\\LegalEntity($tenant, 'Empresa A', null, true);
+$foreignCompany = new \\App\\Domain\\Organization\\Entity\\LegalEntity($foreign, 'Empresa B', null, true);
+$branch = new \\App\\Domain\\Organization\\Entity\\Branch($tenant, 'Principal', 'principal', $company, true);
+$foreignBranch = new \\App\\Domain\\Organization\\Entity\\Branch($foreign, 'Ajena', 'ajena', $foreignCompany, true);
+$owner = new \\App\\Domain\\Identity\\Entity\\User('owner-'.$suffix.'@example.test', 'Owner');
+$staff = new \\App\\Domain\\Identity\\Entity\\User('staff-'.$suffix.'@example.test', 'Staff');
+$ownerMembership = new \\App\\Domain\\Identity\\Entity\\Membership(
+    $tenant, $owner, \\App\\Domain\\Identity\\Entity\\Membership::ROLE_OWNER
+);
+$staffMembership = new \\App\\Domain\\Identity\\Entity\\Membership($tenant, $staff, 'STAFF');
+foreach ([$tenant, $foreign, $company, $foreignCompany, $branch, $foreignBranch,
+    $owner, $staff, $ownerMembership, $staffMembership] as $entity) {
+    $em->persist($entity);
+}
+$em->flush();
+$client = new \\Symfony\\Bundle\\FrameworkBundle\\KernelBrowser($kernel);
+$client->loginUser($owner);
+$crawler = $client->request('GET', '/admin');
+$csrf = $crawler->filter('#condor-admin-root')->attr('data-access-token');
+$base = '/api/v1/branches/'.$branch->id().'/governance-real/records';
+$foreignBase = '/api/v1/branches/'.$foreignBranch->id().'/governance-real/records';
+$results = [];
+$client->request('GET', $base);
+$results[] = $client->getResponse()->getStatusCode();
+$client->jsonRequest('POST', $base, ['record_ref'=>'acta','kind'=>'ACTA'], ['HTTP_X_CSRF_TOKEN'=>$csrf]);
+$results[] = $client->getResponse()->getStatusCode();
+$client->request('GET', $base.'/acta');
+$results[] = $client->getResponse()->getStatusCode();
+$client->jsonRequest('PATCH', $base.'/acta/state',
+    ['state'=>'EN_REVISION','expected_version'=>1], ['HTTP_X_CSRF_TOKEN'=>$csrf]);
+$results[] = $client->getResponse()->getStatusCode();
+$client->request('GET', $foreignBase);
+$results[] = $client->getResponse()->getStatusCode();
+$client->jsonRequest('PATCH', $foreignBase.'/acta/state',
+    ['state'=>'REQUIERE_REVISION','expected_version'=>2], ['HTTP_X_CSRF_TOKEN'=>$csrf]);
+$results[] = $client->getResponse()->getStatusCode();
+$client->jsonRequest('POST', $base, ['record_ref'=>'rechazo','kind'=>'ACTA'],
+    ['HTTP_X_CSRF_TOKEN'=>'invalid']);
+$results[] = $client->getResponse()->getStatusCode();
+$client->loginUser($staff);
+$client->request('GET', $base);
+$results[] = $client->getResponse()->getStatusCode();
+$client->request('GET', $base.'/acta');
+$results[] = $client->getResponse()->getStatusCode();
+$client->jsonRequest('POST', $base, ['record_ref'=>'otro','kind'=>'ACTA'],
+    ['HTTP_X_CSRF_TOKEN'=>$csrf]);
+$results[] = $client->getResponse()->getStatusCode();
+$client->jsonRequest('PATCH', $base.'/acta/state',
+    ['state'=>'REQUIERE_REVISION','expected_version'=>2], ['HTTP_X_CSRF_TOKEN'=>$csrf]);
+$results[] = $client->getResponse()->getStatusCode();
+$results[] = (int) $db->fetchOne('SELECT COUNT(*) FROM condor_governance_real_record');
+$client->loginUser($owner);
+putenv('GOVERNANCE_REAL_DATA_ENABLED=false');
+$client->request('GET', $base);
+$results[] = $client->getResponse()->getStatusCode();
+$client->jsonRequest('POST', $base, ['record_ref'=>'off','kind'=>'ACTA'],
+    ['HTTP_X_CSRF_TOKEN'=>$csrf]);
+$results[] = $client->getResponse()->getStatusCode();
+$results[] = (int) $db->fetchOne('SELECT COUNT(*) FROM condor_governance_real_record');
+echo json_encode($results, JSON_THROW_ON_ERROR);
+'''
+        import os
+        php_bin = shutil.which("php")
+        self.assertIsNotNone(php_bin, "PHP required")
+        env = dict(os.environ)
+        env.update(APP_ENV="test", APP_DEBUG="0", CONDOR_EPHEMERAL_CACHE="1")
+        result = subprocess.run(
+            [php_bin, "-r", "require $argv[1]; " + script,
+             str(ROOT / "vendor/autoload.php")],
+            cwd=ROOT, capture_output=True, text=True, timeout=90,
+            check=False, env=env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            [200, 201, 200, 200, 404, 404, 403, 403, 403, 403, 403, 2, 404, 404, 2],
+            json.loads(result.stdout),
+        )
+
     def test_http_routes_are_owner_only_off_by_default(self):
         source = API.read_text(encoding="utf-8")
         self.assertEqual(4, source.count("name: 'api_governance_real_"))
