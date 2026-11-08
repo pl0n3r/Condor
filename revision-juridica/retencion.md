@@ -20,6 +20,7 @@ Producto: `pl0n3r/Condor`
 | finance_real_records | usage | review_required | review_required |
 | human_resources_real_records | usage | review_required | review_required |
 | human_resources_synthetic_records | usage | review_required | review_required |
+| legal_compliance_real_records | usage | review_required | review_required |
 | notification_delivery | usage | review_required | review_required |
 | notification_preferences | usage | account_lifecycle | review_required |
 | occupational_safety_real_records | usage | review_required | review_required |
