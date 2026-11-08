@@ -33,31 +33,30 @@ final readonly class OperationalProcessService
         if ($after !== null) {
             OperationalProcess::assertReference($after);
         }
-        $table = self::TABLE;
-        $params = ['tenant' => $tenant, 'company' => $company];
-        $cursorFilter = '';
+        $predicates = [
+            'p.tenant_id = :tenant',
+            'p.company_id = :company',
+            'NOT EXISTS (SELECT 1 FROM '.self::TABLE.' newer'
+                .' WHERE newer.tenant_id = p.tenant_id AND newer.company_id = p.company_id'
+                .' AND newer.record_ref = p.record_ref AND newer.version > p.version)',
+        ];
+        $bindings = ['tenant' => $tenant, 'company' => $company];
         if ($after !== null) {
-            $params['after'] = $after;
-            $cursorFilter = ' AND entry.record_ref > :after';
+            $predicates[] = 'p.record_ref > :cursor';
+            $bindings['cursor'] = $after;
         }
-        $sql = "SELECT entry.* FROM {$table} entry"
-            ." WHERE entry.tenant_id = :tenant AND entry.company_id = :company"
-            ." AND entry.version = (SELECT MAX(rev.version) FROM {$table} rev"
-            ." WHERE rev.tenant_id = entry.tenant_id AND rev.company_id = entry.company_id"
-            ." AND rev.record_ref = entry.record_ref)"
-            .$cursorFilter
-            .' ORDER BY entry.record_ref ASC LIMIT 101';
-        $rows = $this->connection->fetchAllAssociative($sql, $params);
-        $hasMore = count($rows) > 100;
-        $pageRows = array_slice($rows, 0, 100);
-        $records = array_map(
-            static fn (array $row): array => OperationalProcess::inspect($row, $tenant, $company),
-            $pageRows,
-        );
+        $query = 'SELECT p.* FROM '.self::TABLE.' p WHERE '
+            .implode(' AND ', $predicates).' ORDER BY p.record_ref LIMIT 101';
+        $fetched = $this->connection->fetchAllAssociative($query, $bindings);
+        $visible = [];
+        foreach (array_slice($fetched, 0, 100) as $row) {
+            $visible[] = OperationalProcess::inspect($row, $tenant, $company);
+        }
 
         return [
-            'records' => $records,
-            'next_cursor' => $hasMore ? (string) $records[count($records) - 1]['record_ref'] : null,
+            'records' => $visible,
+            'next_cursor' => count($fetched) === 101
+                ? (string) end($visible)['record_ref'] : null,
         ];
     }
 
@@ -80,23 +79,22 @@ final readonly class OperationalProcessService
      */
     public function add(string $tenant, string $company, string $actor, array $input): array
     {
-        if (array_keys($input) !== ['record_ref', 'kind']
-            && array_keys($input) !== ['kind', 'record_ref']) {
-            throw new DomainException('Solo se admiten la referencia y la categoría controlada.');
+        $fields = array_keys($input);
+        sort($fields);
+        if ($fields !== ['kind', 'record_ref']
+            || !is_string($input['kind'] ?? null) || !is_string($input['record_ref'] ?? null)) {
+            throw new DomainException('Se exige una referencia opaca y una categoría de proceso.');
         }
-        if (!is_string($input['record_ref']) || !is_string($input['kind'])) {
-            throw new DomainException('Los identificadores de Procesos deben ser texto controlado.');
-        }
-        $created = OperationalProcess::begin(
+        $initial = OperationalProcess::begin(
             $tenant, $company, $actor, $input['record_ref'], $input['kind'],
         );
 
-        return $this->persist(function () use ($tenant, $company, $created): array {
-            if ($this->one($tenant, $company, $created['record_ref']) !== null) {
-                throw new DomainException('El proceso ya tiene una primera versión.');
+        return $this->persist(function () use ($tenant, $company, $initial): array {
+            if ($this->one($tenant, $company, $initial['record_ref']) !== null) {
+                throw new DomainException('El proceso ya existe en esta razón social.');
             }
-            $this->connection->insert(self::TABLE, $created);
-            return $created;
+            $this->connection->insert(self::TABLE, $initial);
+            return $initial;
         });
     }
 

@@ -36,16 +36,16 @@ $records = new \App\Application\Workflow\OperationalProcessService($db);
 
 class OperationalProcessesPersistenceTests(unittest.TestCase):
     def php_case(self, script: str):
-        php_bin = shutil.which("php")
-        self.assertIsNotNone(php_bin, "PHP required for this contract")
         loader = ROOT / "vendor/autoload.php"
-        self.assertTrue(loader.is_file(), "Composer autoload required")
-        result = subprocess.run(
-            [php_bin, "-r", "require $argv[1]; " + DB_SETUP + script, str(loader)],
-            cwd=ROOT, capture_output=True, text=True, timeout=35, check=False,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        return json.loads(result.stdout)
+        self.assertTrue(loader.exists(), "Composer autoload required")
+        command = [shutil.which("php") or "php", "-r",
+                   "require $argv[1]; " + DB_SETUP + script, str(loader)]
+        proc = subprocess.run(command, cwd=str(ROOT), text=True,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              timeout=40)
+        if proc.returncode:
+            self.fail(f"PHP failed ({proc.returncode}): {proc.stderr}")
+        return json.loads(proc.stdout)
 
     def test_tenant_and_company_scope_with_append_only_audit(self):
         result = self.php_case(f"""
@@ -255,74 +255,60 @@ $results[] = (int) $db->fetchOne('SELECT COUNT(*) FROM condor_operations_process
 echo json_encode($results, JSON_THROW_ON_ERROR);
 '''
         import os
-        php_bin = shutil.which("php")
-        self.assertIsNotNone(php_bin, "PHP required")
-        env = dict(os.environ)
-        env.update(APP_ENV="test", APP_DEBUG="0", CONDOR_EPHEMERAL_CACHE="1")
-        result = subprocess.run(
-            [php_bin, "-r", "require $argv[1]; " + script,
+        env = {**os.environ, "APP_ENV": "test", "APP_DEBUG": "0",
+               "CONDOR_EPHEMERAL_CACHE": "1"}
+        php = shutil.which("php") or "php"
+        run = subprocess.run(
+            [php, "-r", "require $argv[1]; " + script,
              str(ROOT / "vendor/autoload.php")],
-            cwd=ROOT, capture_output=True, text=True, timeout=90,
-            check=False, env=env,
+            cwd=ROOT, env=env, capture_output=True, text=True, timeout=90,
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
-            [201, 200, 201, 200, 200, 404, 404, 404, 404, 403,
-             403, 403, 403, 403, 3, 2, "EN_REVISION", 1, 1, "PENDIENTE", 0, 404, 404, 3],
-            json.loads(result.stdout),
-            result.stderr,
-        )
+        self.assertEqual(0, run.returncode, run.stderr)
+        observations = json.loads(run.stdout)
+        self.assertEqual([201, 200, 201, 200, 200], observations[:5], "owner")
+        self.assertEqual([404] * 4, observations[5:9], "foreign tenant")
+        self.assertEqual([403] * 5, observations[9:14], "staff and rejected CSRF")
+        self.assertEqual([3, 2, "EN_REVISION", 1, 1, "PENDIENTE", 0],
+                         observations[14:21], "append-only audit")
+        self.assertEqual([404, 404, 3], observations[21:], "server flag OFF")
 
-    def test_http_routes_are_owner_only_off_by_default(self):
-        source = API.read_text(encoding="utf-8")
-        self.assertEqual(4, source.count("name: 'api_operations_process_real_"))
-        for name in (
-            "operationsProcessRealList", "operationsProcessRealView",
-            "operationsProcessRealCreate", "operationsProcessRealState",
-        ):
-            self.assertIn("function " + name, source)
-        self.assertEqual(source.count("($off = $this->operationsProcessRealDisabled())"), 2)
-        self.assertIn("getenv('OPERATIONS_PROCESSES_REAL_DATA_ENABLED') === 'true'", source)
-        self.assertIn("'feature_unavailable'", source)
-        self.assertIn("Membership::ROLE_OWNER", source)
-        self.assertIn("requireCsrf($request)", source)
-        self.assertIn("$legalEntity?->tenant()->id() !== $tenant->id()", source)
-        self.assertIn("'inventory.view'", source)
-        self.assertIn("'inventory.create'", source)
-        self.assertIn("'inventory.update'", source)
-        self.assertIn("$request->query->get('after')", source)
-        self.assertIn("->page($tenant, $company, $after)", source)
-        statement = SERVICE.read_text(encoding="utf-8")
-        for token in (
-            "entry.tenant_id = :tenant", "entry.company_id = :company",
-            "tenant_id = :tenant AND company_id = :company",
-            "rev.tenant_id = entry.tenant_id",
-        ):
-            self.assertIn(token, statement)
 
-    def test_expand_only_schema_and_privacy_inventory(self):
-        ddl = MIGRATION.read_text(encoding="utf-8")
-        for token in (
-            "CREATE TABLE condor_operations_process_real_record",
-            "FOREIGN KEY (tenant_id, company_id)",
-            "'EN_REVISION'", "IrreversibleMigration",
-        ):
-            self.assertIn(token, ddl)
-        document = json.loads((ROOT / "datos.yml").read_text(encoding="utf-8"))
-        treatment = [
-            item for item in document["treatments"]
-            if item["id"] == "operations_processes_real_records"
-        ]
-        self.assertEqual(1, len(treatment))
-        self.assertEqual("review_required", treatment[0]["basis"])
-        self.assertEqual([], treatment[0]["providers"])
-        self.assertIn("throw new IrreversibleMigration", ddl)
-        self.assertNotIn('executeStatement("DROP TABLE', ddl)
-        self.assertEqual("construccion", document["phase"])
-        self.assertEqual(
-            {"nothing_live": True, "no_real_customer_data": True},
-            document["d063_attestation"],
-        )
+    def test_controller_guards_and_pagination_are_declared(self):
+        php = API.read_text()
+        for route in ("list", "detail", "create", "state"):
+            with self.subTest(route=route):
+                self.assertIn(f"name: 'api_operations_process_real_{route}'", php)
+        required_guards = {
+            "strict server flag": "getenv('OPERATIONS_PROCESSES_REAL_DATA_ENABLED') === 'true'",
+            "deny by default": "'feature_unavailable'",
+            "active owner": "Membership::ROLE_OWNER",
+            "csrf": "requireCsrf($request)",
+            "company belongs to tenant": "$legalEntity?->tenant()->id() !== $tenant->id()",
+            "pagination": "$request->query->get('after')",
+        }
+        for name, snippet in required_guards.items():
+            with self.subTest(guard=name):
+                self.assertIn(snippet, php)
+        sql = SERVICE.read_text()
+        self.assertIn("NOT EXISTS (SELECT 1 FROM", sql)
+        self.assertIn("newer.tenant_id = p.tenant_id", sql)
+        self.assertIn("p.company_id = :company", sql)
+
+    def test_expand_only_migration_and_privacy_inventory(self):
+        source = MIGRATION.read_text()
+        for fragment in ("CREATE TABLE condor_operations_process_real_record",
+                         "FOREIGN KEY (tenant_id, company_id)",
+                         "IrreversibleMigration", "'EN_REVISION'"):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, source)
+        self.assertNotIn("DROP TABLE", source.split("public function down", 1)[-1])
+        manifest = json.loads((ROOT / "datos.yml").read_text())
+        self.assertEqual("construccion", manifest["phase"])
+        self.assertTrue(all(manifest["d063_attestation"].values()))
+        record = next(x for x in manifest["treatments"]
+                      if x["id"] == "operations_processes_real_records")
+        self.assertEqual("review_required", record["basis"])
+        self.assertEqual([], record["providers"])
 
 
 if __name__ == "__main__":

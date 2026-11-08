@@ -7,38 +7,41 @@ namespace App\Domain\Workflow\Entity;
 use App\Shared\Id\UlidFactory;
 use DomainException;
 
-/** Ledger inmutable de procesos internos por tenant y razón social. */
+/**
+ * Registro de ejecución de un proceso empresarial. La transición se agrega
+ * como revisión nueva; los eventos previos nunca se reescriben.
+ */
 final class OperationalProcess
 {
-    private const KINDS = ['PROCESO', 'PROCEDIMIENTO', 'FLUJO', 'CONTROL'];
-    private const STATES = ['PENDIENTE', 'EN_REVISION', 'REQUIERE_REVISION'];
-    private const TRANSITIONS = [
-        'PENDIENTE' => ['EN_REVISION', 'REQUIERE_REVISION'],
-        'EN_REVISION' => ['REQUIERE_REVISION'],
-        'REQUIERE_REVISION' => ['EN_REVISION'],
+    private const KINDS = [
+        'PROCESO' => true, 'PROCEDIMIENTO' => true, 'FLUJO' => true, 'CONTROL' => true,
     ];
 
-    private static function isUlid(mixed $value): bool
+    private const NEXT_STATE = [
+        'PENDIENTE' => ['EN_REVISION' => true, 'REQUIERE_REVISION' => true],
+        'EN_REVISION' => ['REQUIERE_REVISION' => true],
+        'REQUIERE_REVISION' => ['EN_REVISION' => true],
+    ];
+
+    private static function requireUlid(mixed $identity): void
     {
-        if (!is_string($value) || strlen($value) !== 26) {
-            return false;
+        if (!is_string($identity) || preg_match('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $identity) !== 1) {
+            throw new DomainException('Identificador de proceso o actor inválido.');
         }
-        return preg_match('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $value) === 1;
     }
 
     public static function assertIdentity(string $tenant, string $company, string $actor): void
     {
-        if (!self::isUlid($tenant) || !self::isUlid($company) || !self::isUlid($actor)) {
-            throw new DomainException('La identidad empresarial o el actor no son válidos.');
+        foreach ([$tenant, $company, $actor] as $identity) {
+            self::requireUlid($identity);
         }
     }
 
     public static function assertReference(string $ref): void
     {
-        $opaque = preg_match('/^[a-z][a-z0-9_-]{0,63}$/D', $ref) === 1;
-        $looksPersonal = preg_match('/[0-9]{7,}/', $ref) === 1;
-        if (!$opaque || $looksPersonal) {
-            throw new DomainException('Solo se admiten referencias de Procesos opacas.');
+        if (preg_match('/^[a-z][a-z0-9_-]{0,63}$/D', $ref) !== 1
+            || preg_match('/[0-9]{7,}/', $ref) === 1) {
+            throw new DomainException('Identificador de proceso debe ser opaco, no personal.');
         }
     }
 
@@ -47,16 +50,21 @@ final class OperationalProcess
     {
         self::assertIdentity($tenant, $company, $actor);
         self::assertReference($ref);
-        if (!in_array($kind, self::KINDS, true)) {
-            throw new DomainException('Proceso de Procesos no admitido.');
+        if (!isset(self::KINDS[$kind])) {
+            throw new DomainException('Categoría de proceso no autorizada.');
         }
 
         return [
             'id' => UlidFactory::new(),
-            'tenant_id' => $tenant, 'company_id' => $company,
-            'record_ref' => $ref, 'kind' => $kind,
-            'state' => 'PENDIENTE', 'version' => 1, 'previous_id' => null,
-            'actor_id' => $actor, 'occurred_at' => gmdate('Y-m-d H:i:s'),
+            'tenant_id' => $tenant,
+            'company_id' => $company,
+            'record_ref' => $ref,
+            'kind' => $kind,
+            'state' => 'PENDIENTE',
+            'version' => 1,
+            'previous_id' => null,
+            'actor_id' => $actor,
+            'occurred_at' => gmdate('Y-m-d H:i:s'),
         ];
     }
 
@@ -65,33 +73,30 @@ final class OperationalProcess
      */
     public static function inspect(array $record, string $tenant, string $company): array
     {
-        if (($record['tenant_id'] ?? null) !== $tenant
-            || ($record['company_id'] ?? null) !== $company) {
-            throw new DomainException('Proceso ajeno al ámbito empresarial solicitado.');
+        if ($record['tenant_id'] !== $tenant || $record['company_id'] !== $company) {
+            throw new DomainException('El proceso pertenece a otra razón social.');
         }
-        foreach (['id', 'actor_id'] as $field) {
-            if (!self::isUlid($record[$field] ?? null)) {
-                throw new DomainException('Identificador de auditoría inválido.');
-            }
+        self::requireUlid($record['id'] ?? null);
+        self::requireUlid($record['actor_id'] ?? null);
+        if (($record['previous_id'] ?? null) !== null) {
+            self::requireUlid($record['previous_id']);
         }
         self::assertReference((string) ($record['record_ref'] ?? ''));
         $kind = $record['kind'] ?? null;
         $state = $record['state'] ?? null;
-        if (!in_array($kind, self::KINDS, true) || !in_array($state, self::STATES, true)) {
-            throw new DomainException('Clasificación o estado de Procesos inválido.');
+        if (!is_string($kind) || !isset(self::KINDS[$kind])
+            || !is_string($state) || !array_key_exists($state, self::NEXT_STATE)) {
+            throw new DomainException('Categoría o estado de proceso inválido.');
         }
-        $rawVersion = $record['version'] ?? null;
-        $version = filter_var($rawVersion, FILTER_VALIDATE_INT, [
+        $raw = $record['version'] ?? null;
+        $revision = filter_var($raw, FILTER_VALIDATE_INT, [
             'options' => ['min_range' => 1, 'max_range' => 1000000],
         ]);
-        if ($version === false || (string) $version !== (string) $rawVersion) {
-            throw new DomainException('Secuencia de revisiones inválida.');
+        if (!is_int($revision) || (string) $revision !== (string) $raw) {
+            throw new DomainException('Versión de proceso inconsistente.');
         }
-        if (($record['previous_id'] ?? null) !== null && !self::isUlid($record['previous_id'])) {
-            throw new DomainException('Referencia a la revisión anterior inválida.');
-        }
+        $record['version'] = $revision;
 
-        $record['version'] = $version;
         return $record;
     }
 
@@ -101,19 +106,20 @@ final class OperationalProcess
     public static function revise(
         array $old, string $tenant, string $company, string $actor, string $next, int $version,
     ): array {
-        $current = self::inspect($old, $tenant, $company);
         self::assertIdentity($tenant, $company, $actor);
-        if ($current['version'] !== $version || $version >= 1000000
-            || !in_array($next, self::TRANSITIONS[$current['state']] ?? [], true)) {
-            throw new DomainException('Transición Procesos inválida o versión obsoleta.');
+        $current = self::inspect($old, $tenant, $company);
+        $possible = self::NEXT_STATE[$current['state']];
+        if ($version !== $current['version'] || $version >= 1000000 || !isset($possible[$next])) {
+            throw new DomainException('La transición de proceso no es válida o su versión caducó.');
         }
 
-        $current['previous_id'] = $current['id'];
-        $current['id'] = UlidFactory::new();
-        $current['version'] = $version + 1;
-        $current['state'] = $next;
-        $current['actor_id'] = $actor;
-        $current['occurred_at'] = gmdate('Y-m-d H:i:s');
-        return $current;
+        return array_replace($current, [
+            'id' => UlidFactory::new(),
+            'previous_id' => $current['id'],
+            'version' => $version + 1,
+            'state' => $next,
+            'actor_id' => $actor,
+            'occurred_at' => gmdate('Y-m-d H:i:s'),
+        ]);
     }
 }
