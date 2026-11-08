@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
-use App\Application\CustomerService\CustomerCaseApiService;
+use App\Application\CustomerService\{CustomerCaseApiService, SupportCaseService};
+use App\Domain\Identity\Entity\Membership;
 use App\Application\Identity\{BranchAuthorization, CurrentTenantForUser};
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Tenant;
@@ -12,6 +13,8 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\{JsonResponse, Request, Response};
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
 /** Development-only synthetic service case API; no real customer data or integrations. */
@@ -23,6 +26,7 @@ final class CustomerServiceController extends AbstractController
         private readonly CurrentTenantForUser $currentTenantForUser,
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
+        private readonly SupportCaseService $supportCaseRecords,
     ) {
     }
 
@@ -121,4 +125,132 @@ final class CustomerServiceController extends AbstractController
         ]);
         $this->entityManager->flush();
     }
+    /**
+     * Owner-only persisted Procesos bridge: both read routes use one guarded
+     * handler; both writes share flag, CSRF, and scope validation.
+     */
+    #[Route(
+        '/api/v1/branches/{branchId}/customer-service-real/records',
+        name: 'api_customer_service_real_list',
+        methods: ['GET'],
+    )]
+    public function customerServiceRealList(string $branchId, Request $request): JsonResponse
+    {
+        $after = $request->query->get('after');
+        if ($after === '') {
+            throw new BadRequestHttpException('Cursor de paginación inválido.');
+        }
+        return $this->customerServiceRealRead($branchId, null, $after);
+    }
+
+    #[Route(
+        '/api/v1/branches/{branchId}/customer-service-real/records/{ref}',
+        name: 'api_customer_service_real_detail',
+        methods: ['GET'],
+    )]
+    public function customerServiceRealView(string $branchId, string $ref): JsonResponse
+    {
+        return $this->customerServiceRealRead($branchId, $ref);
+    }
+
+    #[Route(
+        '/api/v1/branches/{branchId}/customer-service-real/records',
+        name: 'api_customer_service_real_create',
+        methods: ['POST'],
+    )]
+    public function customerServiceRealCreate(string $branchId, Request $request): JsonResponse
+    {
+        return $this->customerServiceRealWrite($branchId, $request, null);
+    }
+
+    #[Route(
+        '/api/v1/branches/{branchId}/customer-service-real/records/{ref}/state',
+        name: 'api_customer_service_real_state',
+        methods: ['PATCH'],
+    )]
+    public function customerServiceRealState(string $branchId, string $ref, Request $request): JsonResponse
+    {
+        return $this->customerServiceRealWrite($branchId, $request, $ref);
+    }
+
+    private function customerServiceRealRead(string $branchId, ?string $ref, ?string $after = null): JsonResponse
+    {
+        if (($off = $this->customerServiceRealDisabled()) !== null) {
+            return $off;
+        }
+        [, $tenant, $company] = $this->customerServiceRealScope($branchId, 'inventory.view');
+        $record = $this->domain(fn (): ?array => $ref === null
+            ? $this->supportCaseRecords->page($tenant, $company, $after)
+            : $this->supportCaseRecords->one($tenant, $company, $ref));
+
+        if ($record === null) {
+            throw new NotFoundHttpException('Caso de Servicio al cliente no encontrado.');
+        }
+        return $this->customerServiceRealJson(
+            $ref === null ? $record : ['record' => $record],
+        );
+    }
+
+    private function customerServiceRealWrite(string $branchId, Request $request, ?string $ref): JsonResponse
+    {
+        if (($off = $this->customerServiceRealDisabled()) !== null) {
+            return $off;
+        }
+        $this->requireCsrf($request);
+        $operation = $ref === null ? 'inventory.create' : 'inventory.update';
+        [$actor, $tenant, $company] = $this->customerServiceRealScope($branchId, $operation);
+
+        $input = $this->payload(
+            $request,
+            $ref === null ? ['record_ref', 'kind'] : ['state', 'expected_version'],
+        );
+        if ($ref !== null
+            && (!is_string($input['state'] ?? null) || !is_int($input['expected_version'] ?? null))) {
+            throw new BadRequestHttpException('Estado y versión obligatorios.');
+        }
+
+        $result = $this->domain(fn (): array => $ref === null
+            ? $this->supportCaseRecords->add($tenant, $company, $actor, $input)
+            : $this->supportCaseRecords->transition(
+                $tenant, $company, $actor, $ref, $input['state'], $input['expected_version'],
+            ));
+        return $this->customerServiceRealJson(
+            ['record' => $result],
+            $ref === null ? Response::HTTP_CREATED : Response::HTTP_OK,
+        );
+    }
+
+    /** @return array{string,string,string} */
+    private function customerServiceRealScope(string $branchId, string $permission): array
+    {
+        [$actor, $tenant, $branch, $membership] = $this->authorizedBranchScope($branchId, $permission);
+        $roleIsOwner = $membership->roleKey() === Membership::ROLE_OWNER;
+        if (!$roleIsOwner || !$actor->isActive() || !$membership->isActive()) {
+            throw new AccessDeniedHttpException('Servicio al cliente requiere rol propietario activo.');
+        }
+        $legalEntity = $branch->legalEntity();
+        if ($legalEntity?->tenant()->id() !== $tenant->id()) {
+            throw new NotFoundHttpException('La razón social no pertenece al tenant solicitado.');
+        }
+        return [$actor->id(), $tenant->id(), $legalEntity->id()];
+    }
+
+    private function customerServiceRealDisabled(): ?JsonResponse
+    {
+        if (getenv('CUSTOMER_SERVICE_REAL_DATA_ENABLED') === 'true') {
+            return null;
+        }
+        return $this->customerServiceRealJson(['error' => 'feature_unavailable'], Response::HTTP_NOT_FOUND);
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function customerServiceRealJson(array $payload, int $status = Response::HTTP_OK): JsonResponse
+    {
+        $response = $this->json($payload, $status);
+        $response->headers->set('Cache-Control', 'private, no-store');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        return $response;
+    }
+
+
 }

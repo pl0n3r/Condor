@@ -26,6 +26,7 @@
 | contracts_real_records | usage | id, tenant_id, company_id, record_ref, worker_ref, template_ref, kind, state, version, previous_id, actor_id, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | controlbot_staff_operations | usage | action, actor_key_id, target_staff_user_id, result, request_id, request_nonce_hash, request_ip, created_at, context | staff_administration_audit | review_required | review_required | ninguno_declarado | review_required |
 | customer_contact | contact | name, email, phone, document_number, notes, commercial_category_id | customer_management | review_required | review_required | ninguno_declarado | review_required |
+| customer_service_real_records | usage | id, tenant_id, company_id, record_ref, kind, state, version, previous_id, actor_id, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | diagnostic_shares | authentication | token_hash, expires_at, revoked_at, created_at | support_diagnostics | review_required | review_required | ninguno_declarado | diagnostic_share_lifecycle |
 | error_incidents | usage | request_id, status, method, route_name, exception_class, message, fingerprint, version, release_sha, trace, occurred_at | error_diagnostics | review_required | review_required | sentry | review_required |
 | finance_real_records | usage | id, tenant_id, company_id, entry_ref, kind, state, version, previous_id, actor_id, occurred_at | finance_record_management | review_required | review_required | ninguno_declarado | review_required |
@@ -47,4 +48,4 @@
 
 ## Derechos y revisión
 
-Las solicitudes de acceso, rectificación/corrección, actualización, portabilidad, supresión/eliminación o revocación del consentimiento, cuando corresponda, se canalizan mediante el canal de derechos indicado arriba, previa verificación de identidad y legitimación. La portabilidad no implica que exista un servicio automatizado de exportación. Las finalidades, bases, consentimientos, proveedores y retenciones aquí documentadas requieren la revisión jurídica aplicable antes de declararse aprobadas.
+Las solicitudes de acceso, corrección, actualización, supresión o revocación se canalizan mediante el canal de derechos indicado arriba. Las finalidades, bases, consentimientos, proveedores y retenciones aquí documentadas requieren la revisión jurídica aplicable antes de declararse aprobadas.
