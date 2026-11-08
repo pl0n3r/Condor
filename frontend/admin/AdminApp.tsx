@@ -80,9 +80,7 @@ const DevContractsLifecyclePreview = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./ContractsLifecyclePreview')).ContractsLifecyclePreview }))
   : null;
 
-const DevOperationsProcessesPanel = import.meta.env.DEV
-  ? lazy(async () => ({ default: (await import('./OperationsProcessesPanel')).OperationsProcessesPanel }))
-  : null;
+import { OperationsProcessesPanel } from './OperationsProcessesPanel';
 
 const DevDocumentsManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./DocumentsManagement')).DocumentsManagement }))
@@ -115,6 +113,8 @@ export function AdminApp({
     && document.getElementById('condor-admin-root')?.dataset.legalComplianceRealDataEnabled === 'true';
   const governanceRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.governanceRealDataEnabled === 'true';
+  const processesRealDataEnabled = typeof document !== 'undefined'
+    && document.getElementById('condor-admin-root')?.dataset.operationsProcessesRealDataEnabled === 'true';
   // Synthetic catalogs are available only in dev with an explicit root opt-in.
   // This flag never enables the HR real-data API or overrides server permissions.
   const hrSyntheticPreviewEnabled = import.meta.env.DEV && typeof document !== 'undefined'
@@ -262,7 +262,8 @@ export function AdminApp({
           icon: 'operations',
           items: [
             { href: '/admin#workflows', label: 'Workflows' },
-            ...(import.meta.env.DEV ? [{ href: '/admin#operations-processes', label: 'Procesos (pruebas)' }] : []),
+            ...(processesRealDataEnabled ? [{ href: '/admin#operations-processes', label: 'Procesos' }]
+              : import.meta.env.DEV ? [{ href: '/admin#operations-processes', label: 'Procesos (no habilitado)' }] : []),
           ],
         },
         {
@@ -458,15 +459,20 @@ export function AdminApp({
             csrfToken={accessToken}
           />
 
-          {DevOperationsProcessesPanel && (
-            <Suspense fallback={<p role="status">Cargando procesos ficticios…</p>}>
-              <DevOperationsProcessesPanel
-                key={'operations-processes-' + context.data.active_branch.id}
-                branchId={context.data.active_branch.id}
-                permissions={context.data.permissions}
-                csrfToken={accessToken}
-              />
-            </Suspense>
+          {(processesRealDataEnabled || import.meta.env.DEV) && (
+            <OperationsProcessesPanel
+              key={'operations-processes-' + context.data.tenant.id + '-'
+                + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-'
+                + context.data.active_branch.id}
+              enabled={processesRealDataEnabled}
+              tenantId={context.data.tenant.id}
+              companyId={context.data.active_legal_entity?.id !== undefined
+                && context.data.active_branch.legal_entity?.id === context.data.active_legal_entity.id
+                ? context.data.active_legal_entity.id : '__unassigned__'}
+              branchId={context.data.active_branch.id}
+              permissions={context.data.permissions}
+              csrfToken={accessToken}
+            />
           )}
 
           <SeoSettingsPanel
