@@ -217,7 +217,7 @@ class AssetRecordPersistenceTests(unittest.TestCase):
         self.assertEqual(results["routes"], 4)
         controller = CONTROLLER.read_text(encoding="utf-8")
         self.assertIn("getenv('ASSETS_REAL_DATA_ENABLED') === 'true'", controller)
-        self.assertIn("requireCsrf($request)", controller)
+        self.assertIn("requireCsrf(request: $request)", controller)
         self.assertIn("Membership::ROLE_OWNER", controller)
         self.assertIn("authorizedBranchScope($branchId, $permission)", controller)
         self.assertIn("legalEntity?->tenant()->id() !== $tenant->id()", controller)

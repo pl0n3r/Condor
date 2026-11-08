@@ -111,7 +111,7 @@ final class AssetsController extends AbstractController
             return $disabled;
         }
         $after = $request->query->get('after');
-        if ($after !== null && (!is_string($after) || $after === '')) {
+        if ($after === '') {
             throw new BadRequestHttpException('Cursor de activos inválido.');
         }
         [, $tenant, $company] = $this->assetsRealScope($branchId, 'inventory.view');
@@ -151,7 +151,7 @@ final class AssetsController extends AbstractController
         if (($disabled = $this->assetsRealDisabled()) !== null) {
             return $disabled;
         }
-        $this->requireCsrf($request);
+        $this->requireCsrf(request: $request);
         $permission = $ref === null ? 'inventory.create' : 'inventory.update';
         [$actor, $tenant, $company] = $this->assetsRealScope($branchId, $permission);
         $input = $this->payload(
