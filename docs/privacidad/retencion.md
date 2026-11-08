@@ -15,6 +15,7 @@ Producto: `pl0n3r/Condor`
 | contracts_real_records | usage | review_required | review_required |
 | controlbot_staff_operations | usage | review_required | review_required |
 | customer_contact | contact | review_required | review_required |
+| customer_service_real_records | usage | review_required | review_required |
 | diagnostic_shares | authentication | diagnostic_share_lifecycle | review_required |
 | error_incidents | usage | review_required | review_required |
 | finance_real_records | usage | review_required | review_required |
