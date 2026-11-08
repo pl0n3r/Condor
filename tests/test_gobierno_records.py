@@ -134,11 +134,11 @@ putenv('APP_DEBUG=0');
 putenv('CONDOR_EPHEMERAL_CACHE=1');
 putenv('DATABASE_URL=sqlite:///:memory:');
 putenv('GOVERNANCE_REAL_DATA_ENABLED=true');
-$kernel = new \\App\\Kernel('test', true);
+$kernel = new \App\Kernel('test', true);
 $kernel->boot();
 $container = $kernel->getContainer()->get('test.service_container');
-$em = $container->get(\\Doctrine\\ORM\\EntityManagerInterface::class);
-$tool = new \\Doctrine\\ORM\\Tools\\SchemaTool($em);
+$em = $container->get(\Doctrine\ORM\EntityManagerInterface::class);
+$tool = new \Doctrine\ORM\Tools\SchemaTool($em);
 $tool->createSchema($em->getMetadataFactory()->getAllMetadata());
 $db = $em->getConnection();
 $db->executeStatement(
@@ -149,24 +149,24 @@ $db->executeStatement(
     .'UNIQUE(tenant_id, company_id, record_ref, version))'
 );
 $suffix = bin2hex(random_bytes(6));
-$tenant = new \\App\\Domain\\Organization\\Entity\\Tenant('A '.$suffix, 'a-'.$suffix);
-$foreign = new \\App\\Domain\\Organization\\Entity\\Tenant('B '.$suffix, 'b-'.$suffix);
-$company = new \\App\\Domain\\Organization\\Entity\\LegalEntity($tenant, 'Empresa A', null, true);
-$foreignCompany = new \\App\\Domain\\Organization\\Entity\\LegalEntity($foreign, 'Empresa B', null, true);
-$branch = new \\App\\Domain\\Organization\\Entity\\Branch($tenant, 'Principal', 'principal', $company, true);
-$foreignBranch = new \\App\\Domain\\Organization\\Entity\\Branch($foreign, 'Ajena', 'ajena', $foreignCompany, true);
-$owner = new \\App\\Domain\\Identity\\Entity\\User('owner-'.$suffix.'@example.test', 'Owner');
-$staff = new \\App\\Domain\\Identity\\Entity\\User('staff-'.$suffix.'@example.test', 'Staff');
-$ownerMembership = new \\App\\Domain\\Identity\\Entity\\Membership(
-    $tenant, $owner, \\App\\Domain\\Identity\\Entity\\Membership::ROLE_OWNER
+$tenant = new \App\Domain\Organization\Entity\Tenant('A '.$suffix, 'a-'.$suffix);
+$foreign = new \App\Domain\Organization\Entity\Tenant('B '.$suffix, 'b-'.$suffix);
+$company = new \App\Domain\Organization\Entity\LegalEntity($tenant, 'Empresa A', null, true);
+$foreignCompany = new \App\Domain\Organization\Entity\LegalEntity($foreign, 'Empresa B', null, true);
+$branch = new \App\Domain\Organization\Entity\Branch($tenant, 'Principal', 'principal', $company, true);
+$foreignBranch = new \App\Domain\Organization\Entity\Branch($foreign, 'Ajena', 'ajena', $foreignCompany, true);
+$owner = new \App\Domain\Identity\Entity\User('owner-'.$suffix.'@example.test', 'Owner');
+$staff = new \App\Domain\Identity\Entity\User('staff-'.$suffix.'@example.test', 'Staff');
+$ownerMembership = new \App\Domain\Identity\Entity\Membership(
+    $tenant, $owner, \App\Domain\Identity\Entity\Membership::ROLE_OWNER
 );
-$staffMembership = new \\App\\Domain\\Identity\\Entity\\Membership($tenant, $staff, 'STAFF');
+$staffMembership = new \App\Domain\Identity\Entity\Membership($tenant, $staff, 'STAFF');
 foreach ([$tenant, $foreign, $company, $foreignCompany, $branch, $foreignBranch,
     $owner, $staff, $ownerMembership, $staffMembership] as $entity) {
     $em->persist($entity);
 }
 $em->flush();
-$client = new \\Symfony\\Bundle\\FrameworkBundle\\KernelBrowser($kernel);
+$client = new \Symfony\Bundle\FrameworkBundle\KernelBrowser($kernel);
 $client->loginUser($owner);
 $crawler = $client->request('GET', '/admin');
 $csrf = $crawler->filter('#condor-admin-root')->attr('data-access-token');
