@@ -141,7 +141,7 @@ final class GovernanceRecord
         if (!is_string($value) || strlen($value) !== 26) {
             return false;
         }
-        return preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/D', $value) === 1;
+        return preg_match('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $value) === 1;
     }
 
     public static function assertIdentity(string $tenant, string $company, string $actor): void
