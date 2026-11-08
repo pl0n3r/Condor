@@ -71,7 +71,7 @@ class PrivateBrowserLabTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase.casefold(), doc.casefold())
         for token in ("QA1499_ACK_SYNTHETIC_TEST_ONLY", "QA1499_HEAD_SHA",
-                      "QA1499_SESSION_DIR", "git", "rev-parse", "maxRedirects: 0",
+                      "QA1499_SESSION_DIR", "readGitHead", "packed-refs", "maxRedirects: 0",
                       "request.method() !== 'GET'", "routeWebSocket",
                       "release_sha !== sha", "serviceWorkers: 'block'",
                       "synthetic_only !== true", "state: 'NO_VERIFICADO'", "net.createServer(socket => socket.destroy())", "proxy: {", "bypass: base.hostname"):
