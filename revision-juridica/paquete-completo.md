@@ -37,6 +37,7 @@ Estado: documented_not_legally_approved. Documentos fuente íntegros a continuac
 | diagnostic_shares | authentication | token_hash, expires_at, revoked_at, created_at | support_diagnostics | review_required | review_required | ninguno_declarado | diagnostic_share_lifecycle |
 | error_incidents | usage | request_id, status, method, route_name, exception_class, message, fingerprint, version, release_sha, trace, occurred_at | error_diagnostics | review_required | review_required | sentry | review_required |
 | finance_real_records | usage | id, tenant_id, company_id, entry_ref, kind, state, version, previous_id, actor_id, occurred_at | finance_record_management | review_required | review_required | ninguno_declarado | review_required |
+| governance_real_records | usage | id, tenant_id, company_id, record_ref, kind, state, version, previous_id, actor_id, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | human_resources_real_records | usage | id, tenant_id, company_id, record_ref, kind, collaborator_ref, position_ref, state, version, previous_id, actor_id, occurred_at | workforce_record_management | review_required | review_required | ninguno_declarado | review_required |
 | human_resources_synthetic_records | usage | tenant_ref, company_ref, employee_ref, category, state, version, previous_id, previous_state, audit_action, actor_ref, occurred_at, fingerprint | review_required | review_required | review_required | ninguno_declarado | review_required |
 | legal_compliance_real_records | usage | id, tenant_id, company_id, record_ref, kind, state, version, previous_id, actor_id, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
@@ -117,6 +118,7 @@ El canal debe contemplar solicitudes de acceso, rectificación/corrección, actu
 | diagnostic_shares | authentication | token_hash, expires_at, revoked_at, created_at | support_diagnostics | review_required | review_required | ninguno_declarado | diagnostic_share_lifecycle |
 | error_incidents | usage | request_id, status, method, route_name, exception_class, message, fingerprint, version, release_sha, trace, occurred_at | error_diagnostics | review_required | review_required | sentry | review_required |
 | finance_real_records | usage | id, tenant_id, company_id, entry_ref, kind, state, version, previous_id, actor_id, occurred_at | finance_record_management | review_required | review_required | ninguno_declarado | review_required |
+| governance_real_records | usage | id, tenant_id, company_id, record_ref, kind, state, version, previous_id, actor_id, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
 | human_resources_real_records | usage | id, tenant_id, company_id, record_ref, kind, collaborator_ref, position_ref, state, version, previous_id, actor_id, occurred_at | workforce_record_management | review_required | review_required | ninguno_declarado | review_required |
 | human_resources_synthetic_records | usage | tenant_ref, company_ref, employee_ref, category, state, version, previous_id, previous_state, audit_action, actor_ref, occurred_at, fingerprint | review_required | review_required | review_required | ninguno_declarado | review_required |
 | legal_compliance_real_records | usage | id, tenant_id, company_id, record_ref, kind, state, version, previous_id, actor_id, occurred_at | review_required | review_required | review_required | ninguno_declarado | review_required |
@@ -260,6 +262,16 @@ Producto: `pl0n3r/Condor`
 - Categoría: `usage`
 - Campos de software: `id`, `tenant_id`, `company_id`, `entry_ref`, `kind`, `state`, `version`, `previous_id`, `actor_id`, `occurred_at`
 - Finalidad: `finance_record_management`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
+## governance_real_records
+
+- Categoría: `usage`
+- Campos de software: `id`, `tenant_id`, `company_id`, `record_ref`, `kind`, `state`, `version`, `previous_id`, `actor_id`, `occurred_at`
+- Finalidad: `review_required`
 - Base documentada: `review_required` (revisión jurídica requerida)
 - Consentimiento: `review_required`
 - Proveedores: ninguno_declarado
@@ -419,6 +431,7 @@ Producto: `pl0n3r/Condor`
 | diagnostic_shares | authentication | diagnostic_share_lifecycle | review_required |
 | error_incidents | usage | review_required | review_required |
 | finance_real_records | usage | review_required | review_required |
+| governance_real_records | usage | review_required | review_required |
 | human_resources_real_records | usage | review_required | review_required |
 | human_resources_synthetic_records | usage | review_required | review_required |
 | legal_compliance_real_records | usage | review_required | review_required |
