@@ -164,24 +164,16 @@ final class GovernanceRecord
         self::assertIdentity($tenant, $company, $actor);
         self::assertReference($ref);
         if (!in_array($kind, self::KINDS, true)) {
-            throw new DomainException('Categoría de revisión Gobierno corporativo no admitida.');
+            throw new DomainException('Instrumento de Gobierno no admitido.');
         }
 
-        // Los identificadores se componen de atributos ya validados; no se
-        // persiste contenido de la evidencia ni se presume su aprobación legal.
-        $identity = [
-            'tenant_id' => $tenant,
-            'company_id' => $company,
-            'actor_id' => $actor,
+        return [
+            'id' => UlidFactory::new(),
+            'tenant_id' => $tenant, 'company_id' => $company,
+            'record_ref' => $ref, 'kind' => $kind,
+            'state' => 'PENDIENTE', 'version' => 1, 'previous_id' => null,
+            'actor_id' => $actor, 'occurred_at' => gmdate('Y-m-d H:i:s'),
         ];
-        $revision = [
-            'record_ref' => $ref,
-            'kind' => $kind,
-            'state' => 'PENDIENTE',
-            'version' => 1,
-        ];
-        return ['id' => UlidFactory::new(), ...$identity, ...$revision,
-            'previous_id' => null, 'occurred_at' => gmdate('Y-m-d H:i:s')];
     }
 
     /** @param array<string,mixed> $record
@@ -189,32 +181,33 @@ final class GovernanceRecord
      */
     public static function inspect(array $record, string $tenant, string $company): array
     {
-        foreach (['tenant_id' => $tenant, 'company_id' => $company] as $field => $expected) {
-            if (($record[$field] ?? null) !== $expected) {
-                throw new DomainException('Registro Gobierno corporativo fuera de ámbito.');
+        if (($record['tenant_id'] ?? null) !== $tenant
+            || ($record['company_id'] ?? null) !== $company) {
+            throw new DomainException('Instrumento ajeno al ámbito empresarial solicitado.');
+        }
+        foreach (['id', 'actor_id'] as $field) {
+            if (!self::isUlid($record[$field] ?? null)) {
+                throw new DomainException('Identificador de auditoría inválido.');
             }
         }
-        if (!self::isUlid($record['id'] ?? null) || !self::isUlid($record['actor_id'] ?? null)) {
-            throw new DomainException('Identidad de auditoría Gobierno corporativo inválida.');
-        }
         self::assertReference((string) ($record['record_ref'] ?? ''));
-        if (!in_array($record['kind'] ?? null, self::KINDS, true)
-            || !in_array($record['state'] ?? null, self::STATES, true)) {
-            throw new DomainException('Categoría o estado Gobierno corporativo no permitido.');
+        $kind = $record['kind'] ?? null;
+        $state = $record['state'] ?? null;
+        if (!in_array($kind, self::KINDS, true) || !in_array($state, self::STATES, true)) {
+            throw new DomainException('Clasificación o estado de Gobierno inválido.');
         }
-        $raw = $record['version'] ?? null;
-        $number = filter_var($raw, FILTER_VALIDATE_INT, [
+        $rawVersion = $record['version'] ?? null;
+        $version = filter_var($rawVersion, FILTER_VALIDATE_INT, [
             'options' => ['min_range' => 1, 'max_range' => 1000000],
         ]);
-        if ($number === false || (string) $number !== (string) $raw) {
-            throw new DomainException('Versión Gobierno corporativo inválida.');
+        if ($version === false || (string) $version !== (string) $rawVersion) {
+            throw new DomainException('Secuencia de revisiones inválida.');
         }
-        $previous = $record['previous_id'] ?? null;
-        if ($previous !== null && !self::isUlid($previous)) {
-            throw new DomainException('Cadena de auditoría Gobierno corporativo inválida.');
+        if (($record['previous_id'] ?? null) !== null && !self::isUlid($record['previous_id'])) {
+            throw new DomainException('Referencia a la revisión anterior inválida.');
         }
 
-        $record['version'] = $number;
+        $record['version'] = $version;
         return $record;
     }
 
@@ -231,13 +224,12 @@ final class GovernanceRecord
             throw new DomainException('Transición Gobierno corporativo inválida o versión obsoleta.');
         }
 
-        return array_replace($current, [
-            'id' => UlidFactory::new(),
-            'state' => $next,
-            'version' => $version + 1,
-            'previous_id' => $current['id'],
-            'actor_id' => $actor,
-            'occurred_at' => gmdate('Y-m-d H:i:s'),
-        ]);
+        $current['previous_id'] = $current['id'];
+        $current['id'] = UlidFactory::new();
+        $current['version'] = $version + 1;
+        $current['state'] = $next;
+        $current['actor_id'] = $actor;
+        $current['occurred_at'] = gmdate('Y-m-d H:i:s');
+        return $current;
     }
 }

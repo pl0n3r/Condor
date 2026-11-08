@@ -191,15 +191,16 @@ final class GovernanceController extends AbstractController
             return $off;
         }
         [, $tenant, $company] = $this->governanceRealScope($branchId, 'inventory.view');
-        if ($ref === null) {
-            $rows = $this->domain(fn (): array => $this->governanceRecords->all($tenant, $company));
-            return $this->governanceRealJson(['records' => $rows]);
+        $record = $this->domain(fn (): ?array => $ref === null
+            ? $this->governanceRecords->all($tenant, $company)
+            : $this->governanceRecords->one($tenant, $company, $ref));
+
+        if ($record === null) {
+            throw new NotFoundHttpException('Instrumento de Gobierno no encontrado.');
         }
-        $row = $this->domain(fn (): ?array => $this->governanceRecords->one($tenant, $company, $ref));
-        if ($row === null) {
-            throw new NotFoundHttpException('Registro Gobierno corporativo no encontrado.');
-        }
-        return $this->governanceRealJson(['record' => $row]);
+        return $this->governanceRealJson(
+            $ref === null ? ['records' => $record] : ['record' => $record],
+        );
     }
 
     private function governanceRealWrite(string $branchId, Request $request, ?string $ref): JsonResponse
@@ -208,33 +209,27 @@ final class GovernanceController extends AbstractController
             return $off;
         }
         $this->governanceValidateCsrf($request);
-        $permission = $ref === null ? 'inventory.create' : 'inventory.update';
-        [$actor, $tenant, $company] = $this->governanceRealScope($branchId, $permission);
+        $operation = $ref === null ? 'inventory.create' : 'inventory.update';
+        [$actor, $tenant, $company] = $this->governanceRealScope($branchId, $operation);
 
-        if ($ref === null) {
-            $input = $this->payload($request, ['record_ref', 'kind']);
-            $created = $this->domain(fn (): array => $this->governanceRecords->add(
-                $tenant,
-                $company,
-                $actor,
-                $input,
+        $input = $this->payload(
+            $request,
+            $ref === null ? ['record_ref', 'kind'] : ['state', 'expected_version'],
+        );
+        if ($ref !== null
+            && (!is_string($input['state'] ?? null) || !is_int($input['expected_version'] ?? null))) {
+            throw new BadRequestHttpException('Estado y versión obligatorios.');
+        }
+
+        $result = $this->domain(fn (): array => $ref === null
+            ? $this->governanceRecords->add($tenant, $company, $actor, $input)
+            : $this->governanceRecords->transition(
+                $tenant, $company, $actor, $ref, $input['state'], $input['expected_version'],
             ));
-            return $this->governanceRealJson(['record' => $created], Response::HTTP_CREATED);
-        }
-
-        $change = $this->payload($request, ['state', 'expected_version']);
-        if (!is_string($change['state'] ?? null) || !is_int($change['expected_version'] ?? null)) {
-            throw new BadRequestHttpException('Estado y versión válidos son obligatorios.');
-        }
-        $updated = $this->domain(fn (): array => $this->governanceRecords->transition(
-            $tenant,
-            $company,
-            $actor,
-            $ref,
-            $change['state'],
-            $change['expected_version'],
-        ));
-        return $this->governanceRealJson(['record' => $updated]);
+        return $this->governanceRealJson(
+            ['record' => $result],
+            $ref === null ? Response::HTTP_CREATED : Response::HTTP_OK,
+        );
     }
 
     /** @return array{string,string,string} */

@@ -9,9 +9,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use DomainException;
 
-/**
- * Tenant-scoped, append-only Gobierno corporativo ledger. Only opaque review references.
- */
+/** Ledger append-only de Gobierno: no mezcla empresas ni interpreta aprobaciones legales. */
 final readonly class GovernanceRecordService
 {
     private const TABLE = 'condor_governance_real_record';
@@ -23,40 +21,35 @@ final readonly class GovernanceRecordService
     /** @return list<array<string,mixed>> */
     public function all(string $tenant, string $company): array
     {
-        $latest = $this->connection->fetchAllAssociative(
-            'SELECT r.* FROM '.self::TABLE.' r WHERE r.tenant_id = :tenant'
-            .' AND r.company_id = :company AND NOT EXISTS (SELECT 1 FROM '.self::TABLE
-            .' newer WHERE newer.tenant_id = r.tenant_id AND newer.company_id = r.company_id'
-            .' AND newer.record_ref = r.record_ref AND newer.version > r.version)'
-            .' ORDER BY r.record_ref LIMIT 100',
-            ['tenant' => $tenant, 'company' => $company],
-        );
+        $table = self::TABLE;
+        $sql = "SELECT entry.* FROM {$table} entry"
+            ." WHERE entry.tenant_id = :tenant AND entry.company_id = :company"
+            ." AND entry.version = (SELECT MAX(rev.version) FROM {$table} rev"
+            ." WHERE rev.tenant_id = entry.tenant_id AND rev.company_id = entry.company_id"
+            ." AND rev.record_ref = entry.record_ref)"
+            .' ORDER BY entry.record_ref ASC LIMIT 100';
+        $rows = $this->connection->fetchAllAssociative($sql, [
+            'tenant' => $tenant, 'company' => $company,
+        ]);
 
-        $verified = [];
-        foreach ($latest as $row) {
-            $verified[] = GovernanceRecord::inspect($row, $tenant, $company);
-        }
-        return $verified;
+        return array_map(
+            static fn (array $row): array => GovernanceRecord::inspect($row, $tenant, $company),
+            $rows,
+        );
     }
 
     /** @return array<string,mixed>|null */
     public function one(string $tenant, string $company, string $ref): ?array
     {
         GovernanceRecord::assertReference($ref);
-        $query = $this->connection->createQueryBuilder();
-        $query->select('record.*')
-            ->from(self::TABLE, 'record')
-            ->where('record.tenant_id = :tenant')
-            ->andWhere('record.company_id = :company')
-            ->andWhere('record.record_ref = :ref')
-            ->setParameters(['tenant' => $tenant, 'company' => $company, 'ref' => $ref])
-            ->orderBy('record.version', 'DESC')
-            ->setMaxResults(1);
-        $row = $query->fetchAssociative();
-        if ($row === false) {
-            return null;
-        }
-        return GovernanceRecord::inspect($row, $tenant, $company);
+        $row = $this->connection->fetchAssociative(
+            'SELECT * FROM '.self::TABLE
+            .' WHERE tenant_id = :tenant AND company_id = :company AND record_ref = :reference'
+            .' ORDER BY version DESC LIMIT 1',
+            ['tenant' => $tenant, 'company' => $company, 'reference' => $ref],
+        );
+
+        return $row === false ? null : GovernanceRecord::inspect($row, $tenant, $company);
     }
 
     /** @param array<string,mixed> $input
@@ -64,20 +57,20 @@ final readonly class GovernanceRecordService
      */
     public function add(string $tenant, string $company, string $actor, array $input): array
     {
-        if (count($input) !== 2 || !isset($input['kind'], $input['record_ref'])
-            || !is_string($input['kind']) || !is_string($input['record_ref'])) {
-            throw new DomainException('Solo se admiten categoría y referencia opaca.');
+        if (array_keys($input) !== ['record_ref', 'kind']
+            && array_keys($input) !== ['kind', 'record_ref']) {
+            throw new DomainException('Solo se admiten la referencia y la categoría controlada.');
+        }
+        if (!is_string($input['record_ref']) || !is_string($input['kind'])) {
+            throw new DomainException('Los identificadores de Gobierno deben ser texto controlado.');
         }
         $created = GovernanceRecord::begin(
-            $tenant,
-            $company,
-            $actor,
-            $input['record_ref'],
-            $input['kind'],
+            $tenant, $company, $actor, $input['record_ref'], $input['kind'],
         );
-        return $this->write(function () use ($tenant, $company, $created): array {
+
+        return $this->persist(function () use ($tenant, $company, $created): array {
             if ($this->one($tenant, $company, $created['record_ref']) !== null) {
-                throw new DomainException('La referencia Gobierno corporativo ya existe.');
+                throw new DomainException('El instrumento ya tiene una primera versión.');
             }
             $this->connection->insert(self::TABLE, $created);
             return $created;
@@ -89,33 +82,27 @@ final readonly class GovernanceRecordService
         string $tenant, string $company, string $actor, string $ref, string $next, int $version,
     ): array {
         GovernanceRecord::assertReference($ref);
-        return $this->write(function () use ($tenant, $company, $actor, $ref, $next, $version): array {
-            $current = $this->one($tenant, $company, $ref);
-            if ($current === null) {
-                throw new DomainException('Referencia Gobierno corporativo no encontrada.');
+
+        return $this->persist(function () use ($tenant, $company, $actor, $ref, $next, $version): array {
+            $record = $this->one($tenant, $company, $ref);
+            if ($record === null) {
+                throw new DomainException('Instrumento no encontrado en la razón social solicitada.');
             }
-            $updated = GovernanceRecord::revise(
-                $current,
-                $tenant,
-                $company,
-                $actor,
-                $next,
-                $version,
-            );
-            $this->connection->insert(self::TABLE, $updated);
-            return $updated;
+            $revision = GovernanceRecord::revise($record, $tenant, $company, $actor, $next, $version);
+            $this->connection->insert(self::TABLE, $revision);
+            return $revision;
         });
     }
 
-    /** @param \Closure():array<string,mixed> $action
+    /** @param \Closure():array<string,mixed> $operation
      * @return array<string,mixed>
      */
-    private function write(\Closure $action): array
+    private function persist(\Closure $operation): array
     {
         try {
-            return $this->connection->transactional($action);
-        } catch (UniqueConstraintViolationException $previous) {
-            throw new DomainException('Otra revisión Gobierno corporativo ganó la carrera.', 0, $previous);
+            return $this->connection->transactional($operation);
+        } catch (UniqueConstraintViolationException $error) {
+            throw new DomainException('Otra operación ya modificó este instrumento.', 0, $error);
         }
     }
 }

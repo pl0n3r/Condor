@@ -115,8 +115,9 @@ echo json_encode($rejections);
         self.assertIn("'inventory.update'", source)
         statement = SERVICE.read_text(encoding="utf-8")
         for token in (
-            "r.tenant_id = :tenant", "r.company_id = :company",
-            "record.tenant_id = :tenant", "record.company_id = :company",
+            "entry.tenant_id = :tenant", "entry.company_id = :company",
+            "tenant_id = :tenant AND company_id = :company",
+            "rev.tenant_id = entry.tenant_id",
         ):
             self.assertIn(token, statement)
 
