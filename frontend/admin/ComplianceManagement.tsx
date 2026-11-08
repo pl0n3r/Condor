@@ -397,12 +397,13 @@ export function ComplianceManagement(props: Props) {
 /** #1661: API real SG-SST. Servidor y permisos son autoridad; sin datos clínicos. */
 export type OccupationalRealRecord = Readonly<{
   ref: string; tenantId: string; companyId: string;
-  kind: 'INSPECCION' | 'CONTROL' | 'CAPACITACION' | 'EMERGENCIA';
+  kind: 'INSPECCION' | 'CONTROL' | 'CAPACITACION' | 'EMERGENCIA'
+    | 'OBLIGACION' | 'EVIDENCIA' | 'REVISION' | 'VENCIMIENTO';
   state: 'PENDIENTE' | 'EN_REVISION' | 'REQUIERE_REVISION';
   version: number;
 }>;
 export type OccupationalRealOptions = Readonly<{
-  enabled: boolean; allowed: boolean;
+  enabled: boolean; allowed: boolean; module?: 'ohs' | 'legal';
   tenantId: string; companyId: string; branchId: string;
   method?: 'GET' | 'POST' | 'PATCH'; ref?: string;
   kind?: OccupationalRealRecord['kind'];
@@ -416,9 +417,13 @@ export type OccupationalRealResult =
 
 const ohsKinds: OccupationalRealRecord['kind'][] =
   ['INSPECCION', 'CONTROL', 'CAPACITACION', 'EMERGENCIA'];
+const legalKinds: OccupationalRealRecord['kind'][] =
+  ['OBLIGACION', 'EVIDENCIA', 'REVISION', 'VENCIMIENTO'];
 const ohsLabels: Record<OccupationalRealRecord['kind'], string> = {
   INSPECCION: 'Inspección', CONTROL: 'Control',
   CAPACITACION: 'Capacitación', EMERGENCIA: 'Emergencia',
+  OBLIGACION: 'Obligación', EVIDENCIA: 'Evidencia',
+  REVISION: 'Revisión', VENCIMIENTO: 'Vencimiento',
 };
 const ohsStates: OccupationalRealRecord['state'][] =
   ['PENDIENTE', 'EN_REVISION', 'REQUIERE_REVISION'];
@@ -426,12 +431,12 @@ const ohsOpaquePattern = /^[a-z][a-z0-9_-]{0,63}$/;
 function ohsOpaque(ref: string): boolean {
   return ohsOpaquePattern.test(ref) && !/[0-9]{7,}/.test(ref);
 }
-function ohsVerifiedRecord(input: unknown, tenantId: string, companyId: string): OccupationalRealRecord | null {
+function ohsVerifiedRecord(input: unknown, tenantId: string, companyId: string, legal = false): OccupationalRealRecord | null {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
   const row = input as Record<string, unknown>;
   if (row.tenant_id !== tenantId || row.company_id !== companyId
     || typeof row.record_ref !== 'string' || !ohsOpaque(row.record_ref)
-    || !ohsKinds.includes(row.kind as OccupationalRealRecord['kind'])
+    || !(legal ? legalKinds : ohsKinds).includes(row.kind as OccupationalRealRecord['kind'])
     || !ohsStates.includes(row.state as OccupationalRealRecord['state'])
     || !Number.isInteger(row.version) || (row.version as number) < 1
     || (row.version as number) > 1_000_000) return null;
@@ -448,19 +453,22 @@ export async function occupationalRealRequest(
   options: OccupationalRealOptions, transport: typeof fetch = fetch,
 ): Promise<OccupationalRealResult> {
   if (!options.enabled) return { status: 'disabled' };
+  const legal = options.module === 'legal';
+  const acceptedKinds = legal ? legalKinds : ohsKinds;
   if (!options.allowed || !options.tenantId || !options.branchId
     || !options.companyId || options.companyId === '__unassigned__') return { status: 'denied' };
   const method = options.method ?? 'GET';
   if (!['GET', 'POST', 'PATCH'].includes(method)
     || (options.ref !== undefined && !ohsOpaque(options.ref))) return { status: 'error' };
   if (method === 'POST' && (!options.csrf || !options.ref || !options.kind
-    || !ohsKinds.includes(options.kind))) return { status: 'error' };
+    || !acceptedKinds.includes(options.kind))) return { status: 'error' };
   if (method === 'PATCH' && (!options.csrf || !options.ref
     || !options.state || !ohsStates.includes(options.state)
     || !Number.isInteger(options.expectedVersion) || (options.expectedVersion ?? 0) < 1
     || (options.expectedVersion ?? 0) >= 1_000_000)) return { status: 'error' };
 
-  const base = '/api/v1/branches/' + encodeURIComponent(options.branchId) + '/sgsst/real-records';
+  const base = '/api/v1/branches/' + encodeURIComponent(options.branchId)
+    + (legal ? '/compliance/real-records' : '/sgsst/real-records');
   const url = options.ref && method !== 'POST'
     ? base + '/' + encodeURIComponent(options.ref) + (method === 'PATCH' ? '/state' : '') : base;
   const fields = method === 'POST'
@@ -486,13 +494,13 @@ export async function occupationalRealRequest(
     const data = body as Record<string, unknown>;
     if (method === 'GET' && options.ref === undefined) {
       if (!Array.isArray(data.records) || data.records.length > 100) return { status: 'error' };
-      const records = data.records.map(v => ohsVerifiedRecord(v, options.tenantId, options.companyId));
+      const records = data.records.map(v => ohsVerifiedRecord(v, options.tenantId, options.companyId, legal));
       if (records.some(v => v === null)) return { status: 'error' };
       const typed = records as OccupationalRealRecord[];
       if (new Set(typed.map(v => v.ref)).size !== typed.length) return { status: 'error' };
       return { status: 'ready', records: typed };
     }
-    const record = ohsVerifiedRecord(data.record, options.tenantId, options.companyId);
+    const record = ohsVerifiedRecord(data.record, options.tenantId, options.companyId, legal);
     if (!record || (options.ref && record.ref !== options.ref)) return { status: 'error' };
     if (method === 'POST' && (record.version !== 1 || record.state !== 'PENDIENTE'
       || record.kind !== options.kind)) return { status: 'error' };
@@ -502,10 +510,17 @@ export async function occupationalRealRequest(
   } catch { return { status: 'error' }; }
 }
 
-type OccupationalRealProps = Props & Readonly<{ enabled: boolean; csrfToken : string }>;
+type OccupationalRealProps = Props & Readonly<{ enabled: boolean; csrfToken : string; module?: 'ohs' | 'legal' }>;
 export function OccupationalRealManagement({
-  enabled, tenantId, companyId, branchId, permissions, csrfToken,
+  enabled, tenantId, companyId, branchId, permissions, csrfToken, module = 'ohs',
 }: OccupationalRealProps) {
+  const legal = module === 'legal';
+  const moduleTitle = legal ? 'Cumplimiento legal' : 'Seguridad y salud en el trabajo';
+  const moduleShort = legal ? 'Cumplimiento legal' : 'SG-SST';
+  const moduleId = legal ? 'compliance-evidence-management' : 'compliance-management';
+  const moduleKinds = legal ? legalKinds : ohsKinds;
+  const requestReal = (options: OccupationalRealOptions) =>
+    occupationalRealRequest({ ...options, module });
   const canRead = permissions.includes('settings.view') && companyId !== '__unassigned__';
   const canCreate = canRead && permissions.includes('settings.create');
   const canUpdate = canRead && permissions.includes('settings.update');
@@ -516,7 +531,7 @@ export function OccupationalRealManagement({
   const [panel, setPanel] = useState<'create' | 'detail' | null>(null);
   const [chosen, setChosen] = useState('');
   const [newRef, setNewRef] = useState('');
-  const [newKind, setNewKind] = useState<OccupationalRealRecord['kind']>('INSPECCION');
+  const [newKind, setNewKind] = useState<OccupationalRealRecord['kind']>(legal ? 'OBLIGACION' : 'INSPECCION');
   const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState<'TODOS' | OccupationalRealRecord['state']>('TODOS');
 
@@ -526,7 +541,7 @@ export function OccupationalRealManagement({
     setRecords([]);
     setStatus('loading');
     setPanel(null);
-    void occupationalRealRequest({ enabled, allowed: canRead, tenantId, companyId, branchId })
+    void requestReal({ enabled, allowed: canRead, tenantId, companyId, branchId })
       .then(result => {
         if (!active) return;
         if (result.status === 'ready' && 'records' in result) {
@@ -541,7 +556,7 @@ export function OccupationalRealManagement({
     event.preventDefault();
     if (busy || status !== 'ready') return;
     setBusy(true);
-    const result = await occupationalRealRequest({ enabled, allowed: canCreate,
+    const result = await requestReal({ enabled, allowed: canCreate,
       tenantId, companyId, branchId, method: 'POST', ref: newRef,
       kind: newKind, csrf: csrfToken });
     setBusy(false);
@@ -560,7 +575,7 @@ export function OccupationalRealManagement({
   async function openDetail(ref: string) {
     if (busy || status !== 'ready') return;
     setBusy(true);
-    const result = await occupationalRealRequest({ enabled, allowed: canRead,
+    const result = await requestReal({ enabled, allowed: canRead,
       tenantId, companyId, branchId, ref });
     setBusy(false);
     if (result.status === 'ready' && 'record' in result) {
@@ -582,7 +597,7 @@ export function OccupationalRealManagement({
       : current.state === 'EN_REVISION' ? ['REQUIERE_REVISION'] : ['EN_REVISION'];
     if (!allowed.includes(next)) return;
     setBusy(true);
-    const result = await occupationalRealRequest({ enabled, allowed: canUpdate,
+    const result = await requestReal({ enabled, allowed: canUpdate,
       tenantId, companyId, branchId, method: 'PATCH', ref: current.ref,
       state: next, expectedVersion: current.version, csrf: csrfToken });
     setBusy(false);
@@ -597,35 +612,37 @@ export function OccupationalRealManagement({
   }
 
   const shell = (message: string, role: 'status' | 'alert') =>
-    <section id="compliance-management" className="ui-page catalog-panel" aria-label="SG-SST">
-      <PageHeader title="Seguridad y salud en el trabajo" />
+    <section id={moduleId} className="ui-page catalog-panel" aria-label={moduleShort}>
+      <PageHeader title={moduleTitle} />
       <p role={role}>{message}</p>
     </section>;
-  if (!enabled) return shell('SG-SST aún no está habilitado; no se consultaron datos.', 'status');
+  if (!enabled) return shell(legal
+    ? 'Cumplimiento legal aún no está habilitado; no se consultaron datos.'
+    : 'SG-SST aún no está habilitado; no se consultaron datos.', 'status');
   if (!canRead || status === 'denied') return shell('Acceso denegado: razón social o permisos insuficientes.', 'alert');
-  if (status === 'disabled') return shell('El servidor no habilitó el módulo SG-SST.', 'alert');
+  if (status === 'disabled') return shell('El servidor no habilitó el módulo ' + moduleShort + '.', 'alert');
 
   const filtered = records.filter(row =>
     (stateFilter === 'TODOS' || row.state === stateFilter)
     && (row.ref.toLowerCase().includes(search.trim().toLowerCase())
       || ohsLabels[row.kind].toLowerCase().includes(search.trim().toLowerCase())));
   const selected = records.find(row => row.ref === chosen);
-  return <section id="compliance-management" className="ui-page catalog-panel"
-    aria-label="Seguridad y salud en el trabajo">
-    <PageHeader title="Seguridad y salud en el trabajo"
+  return <section id={moduleId} className="ui-page catalog-panel"
+    aria-label={moduleTitle}>
+    <PageHeader title={moduleTitle}
       description="Registros de gestión por empresa, razón social y sede."
       actions={canCreate ? <button type="button" onClick={() => { setPanel('create'); setNotice(''); }}>Nuevo registro</button> : undefined} />
-    <p className="muted">Solo referencias opacas. No registrar datos médicos, diagnósticos ni identificaciones personales.</p>
+    <p className="muted">Solo referencias opacas. No registrar información personal ni evidencia sensible.</p>
     {notice && <output role="status" aria-live="polite">{notice}</output>}
-    {status === 'loading' && <p role="status">Cargando registros SG-SST…</p>}
+    {status === 'loading' && <p role="status">{'Cargando registros ' + moduleShort + '…'}</p>}
     {status === 'error' && <p role="alert">No se pudieron cargar los registros. Comprueba la conexión.</p>}
     {status === 'ready' && <>
-      <MetricStrip label="Resumen SG-SST" items={[
+      <MetricStrip label={'Resumen ' + moduleShort} items={[
         { label: 'Registros', value: records.length },
         { label: 'Pendientes', value: records.filter(row => row.state === 'PENDIENTE').length },
         { label: 'En revisión', value: records.filter(row => row.state === 'EN_REVISION').length },
       ]} />
-      <section className="ui-card catalog-card" aria-label="Listado de registros SG-SST">
+      <section className="ui-card catalog-card" aria-label={'Listado de registros ' + moduleShort}>
         <Toolbar trailing={<output aria-live="polite">{filtered.length} resultados</output>}>
           <label>Buscar referencia <input type="search" value={search}
             onChange={event => setSearch(event.target.value)} /></label>
@@ -635,7 +652,7 @@ export function OccupationalRealManagement({
             {ohsStates.map(state => <option key={state} value={state}>{state.replaceAll('_', ' ')}</option>)}
           </select></label>
         </Toolbar>
-        <DataTable<OccupationalRealRecord> caption="Registros SG-SST por razón social"
+        <DataTable<OccupationalRealRecord> caption={'Registros ' + moduleShort + ' por razón social'}
           rows={filtered} rowKey={row => row.ref} empty="No hay registros en este ámbito."
           onOpen={row => { void openDetail(row.ref); }}
           columns={[
@@ -647,14 +664,14 @@ export function OccupationalRealManagement({
       </section>
     </>}
     <SidePanel open={panel === 'create' && canCreate && status === 'ready'}
-      title="Nuevo registro SG-SST" onClose={() => setPanel(null)}>
+      title={'Nuevo registro ' + moduleShort} onClose={() => setPanel(null)}>
       <form onSubmit={event => void create(event)}>
-        <p>Identificador opaco, sin nombres, correos, diagnósticos ni historia médica.</p>
+        <p>Identificador opaco, sin nombres, correos ni identificaciones personales.</p>
         <label>Referencia <input required maxLength={64} pattern="[a-z][a-z0-9_\-]{0,63}"
           value={newRef} onChange={event => setNewRef(event.target.value)} /></label>
         <label>Tipo <select value={newKind}
           onChange={event => setNewKind(event.target.value as OccupationalRealRecord['kind'])}>
-          {ohsKinds.map(kind => <option key={kind} value={kind}>{ohsLabels[kind]}</option>)}
+          {moduleKinds.map(kind => <option key={kind} value={kind}>{ohsLabels[kind]}</option>)}
         </select></label>
         <button disabled={busy} type="submit">{busy ? 'Guardando…' : 'Guardar para revisión'}</button>
       </form>
@@ -677,6 +694,18 @@ export function OccupationalRealManagement({
     </SidePanel>
   </section>;
 }
+
+/** Cumplimiento legal comparte superficie y transporte sin mezclar contratos ni habilitar datos. */
+export function legalComplianceRealRequest(
+  options: OccupationalRealOptions, transport: typeof fetch = fetch,
+): Promise<OccupationalRealResult> {
+  return occupationalRealRequest({ ...options, module: 'legal' }, transport);
+}
+
+export function LegalComplianceRealManagement(props: OccupationalRealProps) {
+  return <OccupationalRealManagement {...props} module="legal" />;
+}
+
 
 /** M06: independent synthetic compliance-evidence facade, distinct from SG-SST. */
 export function ComplianceEvidenceManagement({ branchId, permissions, csrfToken }: Readonly<{

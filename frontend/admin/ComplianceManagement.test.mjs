@@ -17,7 +17,8 @@ await build({ entryPoints: [join(root, 'frontend/admin/ComplianceManagement.tsx'
   outfile: output, format: 'cjs', platform: 'node', bundle: true, jsx: 'automatic',
   external: ['react', 'react/jsx-runtime'],
   define: { 'import.meta.env.DEV': 'true' }, logLevel: 'silent' });
-const { OccupationalRealManagement, occupationalRealRequest } =
+const { OccupationalRealManagement, occupationalRealRequest,
+  LegalComplianceRealManagement, legalComplianceRealRequest } =
   createRequire(import.meta.url)(output);
 
 const options = { enabled: true, allowed: true,
@@ -164,4 +165,127 @@ test('contrato SSR/menú real: flag de servidor explícito y laboratorio no mont
   assert.match(app, /<ComplianceManagement/);
   assert.match(app, /ohsRealDataEnabled \? \[\{ href: '\/admin#compliance-management', label: 'SG-SST'/);
   assert.doesNotMatch(app, /<ComplianceSyntheticPreview/);
+});
+
+// #1663 — legal compliance uses the persisted server API, never synthetic preview.
+const legalOptions = { enabled: true, allowed: true,
+  tenantId: 'tenant_demo', companyId: 'company_demo', branchId: 'branch_demo' };
+const legalPath = '/api/v1/branches/branch_demo/compliance/real-records';
+const legalRecord = { tenant_id: legalOptions.tenantId, company_id: legalOptions.companyId,
+  record_ref: 'obligacion_demo', kind: 'OBLIGACION', state: 'PENDIENTE', version: 1 };
+
+test('#1663 OFF, acceso, scopes, métodos y CSRF fail-closed: cero llamadas', async () => {
+  let requests = 0;
+  const forbidden = () => { requests++; throw Error('No debería invocar HTTP'); };
+  const negative = [
+    { ...legalOptions, enabled: false },
+    { ...legalOptions, allowed: false },
+    { ...legalOptions, tenantId: '' },
+    { ...legalOptions, companyId: '__unassigned__' },
+    { ...legalOptions, branchId: '' },
+    { ...legalOptions, method: 'DELETE' },
+    { ...legalOptions, method: 'POST', kind: 'OBLIGACION', ref: 'obligacion_demo' },
+    { ...legalOptions, method: 'POST', kind: 'EVIDENCIA', ref: 'persona1234567', csrf: 'csrf' },
+    { ...legalOptions, method: 'POST', kind: 'DIAGNOSTICO', ref: 'opaca', csrf: 'csrf' },
+    { ...legalOptions, method: 'PATCH', ref: 'obligacion_demo', state: 'APROBADO', expectedVersion: 1, csrf: 'csrf' },
+    { ...legalOptions, method: 'PATCH', ref: 'obligacion_demo', state: 'EN_REVISION', expectedVersion: 0, csrf: 'csrf' },
+    { ...legalOptions, method: 'PATCH', ref: 'obligacion_demo', state: 'EN_REVISION', expectedVersion: 1 },
+    { ...legalOptions, method: 'GET', ref: '../another_company' },
+  ];
+  for (const options of negative) assert.notEqual((await legalComplianceRealRequest(options, forbidden)).status, 'ready');
+  assert.equal(requests, 0);
+});
+
+test('#1663 componente OFF no muestra datos, permisos insuficientes tampoco', () => {
+  const off = renderToStaticMarkup(React.createElement(LegalComplianceRealManagement, {
+    ...legalOptions, enabled: false, permissions: ['settings.view'], csrfToken: 'csrf',
+  }));
+  assert.match(off, /aún no está habilitado/i);
+  assert.doesNotMatch(off, /obligacion_demo|fixture:|Nuevo registro|Guardar para revisión/);
+  const denied = renderToStaticMarkup(React.createElement(LegalComplianceRealManagement, {
+    ...legalOptions, companyId: '__unassigned__', permissions: [], csrfToken: 'csrf',
+  }));
+  assert.match(denied, /Acceso denegado/);
+});
+
+test('#1663 GET scope y contrato vacío: nunca mezcla tenants', async () => {
+  const records = await legalComplianceRealRequest(legalOptions, async (url, init) => {
+    assert.equal(url, legalPath);
+    assert.equal(init.method, 'GET');
+    assert.equal(init.credentials, 'same-origin');
+    assert.equal(init.cache, 'no-store');
+    assert.equal(init.headers['X-CSRF-Token'], undefined);
+    return reply({ records: [legalRecord] });
+  });
+  assert.deepEqual(records, { status: 'ready', records: [{
+    ref: 'obligacion_demo', tenantId: 'tenant_demo', companyId: 'company_demo',
+    kind: 'OBLIGACION', state: 'PENDIENTE', version: 1,
+  }] });
+  assert.deepEqual(await legalComplianceRealRequest(legalOptions,
+    () => reply({ records: [] })), { status: 'ready', records: [] });
+  for (const rows of [
+    [{ ...legalRecord, tenant_id: 'tenant_other' }],
+    [{ ...legalRecord, company_id: 'company_other' }],
+    [{ ...legalRecord, kind: 'CERTIFICADO' }],
+    [{ ...legalRecord, state: 'APROBADO' }],
+    [{ ...legalRecord, record_ref: 'cliente@correo.test' }],
+    [legalRecord, legalRecord],
+    Array.from({ length: 101 }, (_, i) => ({ ...legalRecord, record_ref: 'registro_' + i })),
+  ]) {
+    assert.equal((await legalComplianceRealRequest(legalOptions, () => reply({ records: rows }))).status, 'error');
+  }
+});
+
+test('#1663 GET detalle, alta y transición: CSRF, versión optimista, ruta real', async () => {
+  const detail = await legalComplianceRealRequest({ ...legalOptions, ref: 'obligacion_demo' },
+    async (url, init) => {
+      assert.equal(url, legalPath + '/obligacion_demo');
+      assert.equal(init.method, 'GET');
+      return reply({ record: legalRecord });
+    });
+  assert.equal(detail.status, 'ready');
+  const created = await legalComplianceRealRequest({
+    ...legalOptions, method: 'POST', ref: 'obligacion_demo', kind: 'OBLIGACION', csrf: 'csrf_test',
+  }, async (url, init) => {
+    assert.equal(url, legalPath);
+    assert.equal(init.method, 'POST');
+    assert.equal(init.headers['X-CSRF-Token'], 'csrf_test');
+    assert.deepEqual(JSON.parse(init.body), { record_ref: 'obligacion_demo', kind: 'OBLIGACION' });
+    return reply({ record: legalRecord }, 201);
+  });
+  assert.equal(created.status, 'ready');
+  const modified = await legalComplianceRealRequest({
+    ...legalOptions, method: 'PATCH', ref: 'obligacion_demo',
+    state: 'EN_REVISION', expectedVersion: 1, csrf: 'csrf_test',
+  }, async (url, init) => {
+    assert.equal(url, legalPath + '/obligacion_demo/state');
+    assert.equal(init.method, 'PATCH');
+    assert.equal(init.headers['X-CSRF-Token'], 'csrf_test');
+    assert.deepEqual(JSON.parse(init.body), { state: 'EN_REVISION', expected_version: 1 });
+    return reply({ record: { ...legalRecord, state: 'EN_REVISION', version: 2 } });
+  });
+  assert.equal(modified.status, 'ready');
+  assert.equal(modified.record.version, 2);
+  const stale = await legalComplianceRealRequest({
+    ...legalOptions, method: 'PATCH', ref: 'obligacion_demo',
+    state: 'REQUIERE_REVISION', expectedVersion: 1, csrf: 'csrf_test',
+  }, () => reply({ record: { ...legalRecord, state: 'REQUIERE_REVISION', version: 6 } }));
+  assert.equal(stale.status, 'error');
+});
+
+test('#1663 403, 404 flag OFF, 5xx, red, JSON inválido son estados seguros', async () => {
+  for (const status of [401, 403]) {
+    assert.equal((await legalComplianceRealRequest(legalOptions,
+      () => reply({ error: 'forbidden' }, status))).status, 'denied');
+  }
+  assert.equal((await legalComplianceRealRequest(legalOptions,
+    () => reply({ error: 'feature_unavailable' }, 404))).status, 'disabled');
+  assert.equal((await legalComplianceRealRequest(legalOptions,
+    () => reply({ error: 'not_found' }, 404))).status, 'error');
+  assert.equal((await legalComplianceRealRequest(legalOptions,
+    () => reply({ error: 'server' }, 500))).status, 'error');
+  assert.equal((await legalComplianceRealRequest(legalOptions,
+    () => { throw Error('network'); })).status, 'error');
+  assert.equal((await legalComplianceRealRequest(legalOptions,
+    () => new Response('{', { status: 200 }))).status, 'error');
 });
