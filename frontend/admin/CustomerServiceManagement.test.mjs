@@ -2,7 +2,6 @@ import { test, after } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { createRequire } from 'node:module';
 import { build } from 'esbuild';
-import { tmpdir } from 'node:os';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
