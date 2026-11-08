@@ -80,7 +80,9 @@ const DevContractsLifecyclePreview = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./ContractsLifecyclePreview')).ContractsLifecyclePreview }))
   : null;
 
-import { OperationsProcessesPanel } from './OperationsProcessesPanel';
+const AsyncOperationsProcessesPanel = lazy(async () => ({
+  default: (await import('./OperationsProcessesPanel')).OperationsProcessesPanel,
+}));
 
 const DevDocumentsManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./DocumentsManagement')).DocumentsManagement }))
@@ -460,7 +462,8 @@ export function AdminApp({
           />
 
           {(processesRealDataEnabled || import.meta.env.DEV) && (
-            <OperationsProcessesPanel
+            <Suspense fallback={<p role="status">Cargando procesos…</p>}>
+              <AsyncOperationsProcessesPanel
               key={'operations-processes-' + context.data.tenant.id + '-'
                 + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-'
                 + context.data.active_branch.id}
@@ -473,6 +476,7 @@ export function AdminApp({
               permissions={context.data.permissions}
               csrfToken={accessToken}
             />
+            </Suspense>
           )}
 
           <SeoSettingsPanel
