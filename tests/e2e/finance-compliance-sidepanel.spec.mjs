@@ -1,10 +1,16 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // Solo datos sintéticos. Las respuestas se interceptan en el navegador:
 // no hay cuentas, peticiones a producción ni datos personales.
+// Conserva el contrato del simulador M15 hasta fusionar la UI real de #1665.
+const REAL_GOVERNANCE = readFileSync(
+  new URL('../../frontend/admin/GovernanceManagement.tsx', import.meta.url), 'utf8',
+).includes('export async function governanceRequest(');
 const PROPS = {
+  enabled: true, // Solo fixture local: nunca configura el flag del servidor.
   tenantId: 'fixture-tenant-a',
   companyId: 'fixture-company-a',
   branchId: 'fixture-branch-a',
@@ -184,7 +190,7 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
   // Las cuatro rutas de creación HTTP comparten el mismo contrato accesible.
   // Cada caso sigue siendo una prueba independiente con captura en claro/oscuro.
   const rejectedCreations = [
-    {
+    ...(!REAL_GOVERNANCE ? [{
       module: 'governance', name: 'Gobierno', opener: 'Crear actuación de prueba',
       modal: 'Crear actuación de prueba', submit: 'Registrar solicitud ficticia',
       error: 'Error de servidor',
@@ -193,7 +199,7 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
         await dialog.getByLabel('Órgano ficticio').fill('fixture:body/demo');
         await dialog.getByLabel('Representante ficticio').fill('fixture:representative/demo');
       },
-    },
+    }] : []),
     {
       module: 'quality', name: 'Calidad', opener: 'Crear queja de prueba',
       modal: 'Crear queja de prueba', submit: 'Crear queja de prueba',
@@ -224,6 +230,43 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
       if (scenario.fill) await scenario.fill(dialog);
       await dialog.getByRole('button', { name: scenario.submit }).click();
       await verifyErrorAndEscape(page, dialog, opener, scenario.error, testInfo);
+    });
+  }
+
+  if (REAL_GOVERNANCE) {
+    test('AC-01 Gobierno real: 409 accesible en SidePanel y Escape restaura foco', async ({ page }, testInfo) => {
+      let posts = 0;
+      await mockHttp(page, url => url.pathname.endsWith('/governance-real/records')
+        ? { status: 200, body: { records: [], next_cursor: null } }
+        : emptyHttp(url), (method, url) => {
+          if (method === 'POST' && url.pathname.endsWith('/governance-real/records')) {
+            posts += 1;
+            return { status: 409, body: { error: 'conflict' } };
+          }
+          return { status: 404, body: { error: 'not_found' } };
+        });
+      await open(page, 'governance');
+      const opener = page.getByRole('button', { name: 'Nuevo instrumento' });
+      await expect(opener).toBeVisible();
+      await opener.click();
+      const dialog = page.getByRole('dialog', { name: 'Nuevo instrumento' });
+      await expect(dialog.getByRole('button', { name: 'Cerrar' })).toBeFocused();
+      await dialog.getByLabel('Referencia interna').fill('acta_demo');
+      await dialog.getByRole('button', { name: 'Guardar instrumento' }).click();
+      await expect(page.getByRole('status').filter({
+        hasText: 'No se pudo crear el instrumento',
+      })).toBeVisible();
+      expect(posts).toBe(1);
+      for (const scheme of ['light', 'dark']) {
+        await page.emulateMedia({ colorScheme: scheme });
+        await testInfo.attach('governance-error-' + scheme + '.png', {
+          body: await dialog.screenshot(),
+          contentType: 'image/png',
+        });
+      }
+      await page.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);
+      await expect(opener).toBeFocused();
     });
   }
 

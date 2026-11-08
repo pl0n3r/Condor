@@ -18,6 +18,7 @@ Producto: `pl0n3r/Condor`
 | diagnostic_shares | authentication | diagnostic_share_lifecycle | review_required |
 | error_incidents | usage | review_required | review_required |
 | finance_real_records | usage | review_required | review_required |
+| governance_real_records | usage | review_required | review_required |
 | human_resources_real_records | usage | review_required | review_required |
 | human_resources_synthetic_records | usage | review_required | review_required |
 | legal_compliance_real_records | usage | review_required | review_required |
