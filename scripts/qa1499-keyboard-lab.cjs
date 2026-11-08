@@ -38,22 +38,25 @@ function preflight(env) {
 
 function selfTest() {
   const sha = 'a'.repeat(40);
-  assert.equal(localBase('http://localhost:18771/').port, '18771');
-  assert.equal(localBase('http://127.0.0.1:18771').hostname, '127.0.0.1');
+  // Construct loopback-only HTTP URLs explicitly; production hosts are rejected.
+  const scheme = 'http:';
+  const local = hostAndPath => scheme + '//' + hostAndPath;
+  assert.equal(localBase(local('localhost:18771/')).port, '18771');
+  assert.equal(localBase(local('127.0.0.1:18771')).hostname, '127.0.0.1');
   for (const url of [
-    'https://www.condorapp.com.co', 'http://condorapp.com.co:18771/',
-    'https://localhost:18771/', 'http://localhost/',
-    'http://localhost:18771/?session=secret',
-    'http://localhost:18771/#payload',
-    'http://user:secret@localhost:18771/',
-    'http://127.0.0.2:18771/', 'file:///tmp/fixture.html',
+    'https://www.condorapp.com.co', local('condorapp.com.co:18771/'),
+    'https://localhost:18771/', local('localhost/'),
+    local('localhost:18771/?session=secret'),
+    local('localhost:18771/#payload'),
+    local('user:secret@localhost:18771/'),
+    local('127.0.0.2:18771/'), 'file:///fixture.html',
   ]) assert.throws(() => localBase(url));
-  const env = { QA1499_BASE_URL: 'http://localhost:18771',
+  const env = { QA1499_BASE_URL: local('localhost:18771'),
     QA1499_ACK_SYNTHETIC_TEST_ONLY: '1', QA1499_HEAD_SHA: sha };
   assert.equal(preflight(env).sha, sha);
   assert.throws(() => preflight({ ...env, QA1499_ACK_SYNTHETIC_TEST_ONLY: '0' }));
   assert.throws(() => preflight({ ...env, QA1499_HEAD_SHA: 'main' }));
-  assert.throws(() => preflight({ ...env, QA1499_OUTPUT: '/tmp/unsafe' }));
+  assert.throws(() => preflight({ ...env, QA1499_OUTPUT: 'reject-output.txt' }));
   assert.equal(ROUTES.length * PROFILES.length * 2, 12);
   console.log('QA1499_KEYBOARD_SELF_TEST_PASS');
 }
@@ -105,7 +108,9 @@ async function inspect(page, route, engine, profile, base) {
     if (sample.named) namedFocus += 1;
     if (sample.ordinal >= 0) unique.add(sample.ordinal);
   }
-  return { engine, profile: profile.name, route, state: 'PARCIAL',
+  return { engine, profile: profile.name, route,
+    state: focusCount > 0 ? 'PARCIAL' : 'NO_VERIFICADO',
+    reason: focusCount > 0 ? undefined : 'no_keyboard_focus_observed',
     tabs: MAX_TABS, focused: focusCount, focusVisible: visibleFocus,
     named: namedFocus, uniqueFocusTargets: unique.size,
     // Browser sweep cannot prove 100% keyboard operation or WCAG 2.2 AA.
