@@ -60,7 +60,7 @@ SQL;
             static fn (array $data): array => SupportCase::inspect($data, $tenant, $company),
             array_slice($rows, 0, 100),
         );
-        $next = count($rows) > count($cases) ? end($cases)['record_ref'] : null;
+        $next = count($rows) > 100 ? $cases[99]['record_ref'] : null;
         return ['records' => $cases, 'next_cursor' => $next];
     }
 

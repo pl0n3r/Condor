@@ -260,13 +260,15 @@ echo json_encode($results, JSON_THROW_ON_ERROR);
         env = {**os.environ, "APP_ENV": "test", "APP_DEBUG": "0",
                "CONDOR_EPHEMERAL_CACHE": "1"}
         php = shutil.which("php") or "php"
-        run = subprocess.run(
-            [php, "-r", "require $argv[1]; " + script,
-             str(ROOT / "vendor/autoload.php")],
-            cwd=ROOT, env=env, capture_output=True, text=True, timeout=90,
-        )
-        self.assertEqual(0, run.returncode, run.stderr)
-        observations = json.loads(run.stdout)
+        try:
+            raw = subprocess.check_output(
+                [php, "-r", "require $argv[1]; " + script,
+                 str(ROOT / "vendor" / "autoload.php")],
+                cwd=ROOT, env=env, text=True, stderr=subprocess.PIPE, timeout=90,
+            )
+        except subprocess.CalledProcessError as failure:
+            self.fail(f"KernelBrowser failed: {failure.stderr}")
+        observations = json.loads(raw)
         expected_groups = (
             ("propietarios habilitados", 0, 5, [201, 200, 201, 200, 200]),
             ("ámbito ajeno", 5, 9, [404, 404, 404, 404]),

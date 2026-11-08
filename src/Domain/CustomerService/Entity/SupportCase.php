@@ -16,24 +16,25 @@ final class SupportCase
         'REQUIERE_REVISION' => ['EN_REVISION'],
     ];
 
-    private static function validUlid(mixed $candidate): bool
-    {
-        return is_string($candidate)
-            && preg_match('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $candidate) === 1;
-    }
-
     public static function assertIdentity(string $tenant, string $company, string $actor): void
     {
-        if (!self::validUlid($tenant) || !self::validUlid($company) || !self::validUlid($actor)) {
-            throw new DomainException('Ámbito o responsable de atención inválido.');
+        $identifiers = [$tenant, $company, $actor];
+        $invalid = array_filter($identifiers, static function (string $id): bool {
+            return strlen($id) !== 26
+                || preg_match('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $id) !== 1;
+        });
+        if ($invalid !== []) {
+            throw new DomainException('La atención requiere identidades de ámbito y actor válidas.');
         }
     }
 
     public static function assertReference(string $ref): void
     {
-        $opaque = preg_match('/^[a-z][a-z0-9_-]{0,63}$/D', $ref) === 1;
-        if (!$opaque || preg_match('/[0-9]{7,}/', $ref) === 1) {
-            throw new DomainException('El caso requiere una referencia interna sin datos personales.');
+        $size = strlen($ref);
+        $segments = preg_match('/[0-9]{7,}/', $ref);
+        $syntax = preg_match('/^[a-z][a-z0-9_-]*$/D', $ref);
+        if ($size < 1 || $size > 64 || $syntax !== 1 || $segments !== 0) {
+            throw new DomainException('La referencia de servicio debe ser opaca y no personal.');
         }
     }
 
@@ -67,9 +68,16 @@ final class SupportCase
     {
         $scopeMatches = ($row['tenant_id'] ?? null) === $tenant
             && ($row['company_id'] ?? null) === $company;
-        $validChain = self::validUlid($row['id'] ?? null)
-            && self::validUlid($row['actor_id'] ?? null)
-            && (($row['previous_id'] ?? null) === null || self::validUlid($row['previous_id']));
+        $id = $row['id'] ?? '';
+        $actor = $row['actor_id'] ?? '';
+        $previous = $row['previous_id'] ?? null;
+        $validChain = is_string($id) && is_string($actor)
+            && preg_match('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $id) === 1
+            && preg_match('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $actor) === 1
+            && ($previous === null || (
+                is_string($previous)
+                && preg_match('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $previous) === 1
+            ));
         if (!$scopeMatches || !$validChain) {
             throw new DomainException('Caso de atención ajeno o auditoría inconsistente.');
         }
