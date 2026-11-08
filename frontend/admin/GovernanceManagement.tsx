@@ -88,8 +88,13 @@ export async function governanceRequest(
       ...(method === 'GET' ? {} : { body: JSON.stringify(body) }),
     });
     if ([401, 403].includes(response.status)) return { status: 'denied' };
-    if (response.status === 404 && method !== 'GET') return { status: 'disabled' };
-    if (response.status === 404 && method === 'GET' && !options.ref) return { status: 'disabled' };
+    if (response.status === 404) {
+      const problem: unknown = await response.json().catch(() => null);
+      const unavailable = problem !== null && typeof problem === 'object'
+        && !Array.isArray(problem)
+        && (problem as Record<string, unknown>).error === 'feature_unavailable';
+      return { status: unavailable ? 'disabled' : 'error' };
+    }
     if (!response.ok) return { status: 'error' };
     const payload: unknown = await response.json();
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return { status: 'error' };

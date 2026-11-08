@@ -149,6 +149,20 @@ test('401/403/404, errores de servidor, rechazo y JSON corrupto se aíslan', asy
   }
   assert.deepEqual(await governanceRequest(options,
     () => json({ error: 'feature_unavailable' }, 404)), { status: 'disabled' });
+  assert.deepEqual(await governanceRequest({
+    ...options, method: 'POST', ref: 'acta_demo', kind: 'ACTA', csrf: 'csrf_test',
+  }, () => json({ error: 'feature_unavailable' }, 404)), { status: 'disabled' });
+  for (const request of [
+    options,
+    { ...options, method: 'POST', ref: 'acta_demo', kind: 'ACTA', csrf: 'csrf_test' },
+    { ...options, method: 'PATCH', ref: 'acta_demo', state: 'EN_REVISION',
+      expectedVersion: 1, csrf: 'csrf_test' },
+  ]) {
+    assert.equal((await governanceRequest(request,
+      () => json({ error: 'not_found' }, 404))).status, 'error');
+  }
+  assert.equal((await governanceRequest(options,
+    () => new Response('<html>Not Found</html>', { status: 404 }))).status, 'error');
   assert.equal((await governanceRequest({ ...options, ref: 'acta_demo' },
     () => json({ error: 'not_found' }, 404))).status, 'error');
   assert.equal((await governanceRequest(options, () => json({ error: 'server' }, 500))).status, 'error');
