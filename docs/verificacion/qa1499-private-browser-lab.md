@@ -25,7 +25,7 @@ Antes de cargar Playwright, el script requiere:
 - QA1499_BASE_URL: HTTP loopback, puerto explícito, sin credenciales, query ni fragmento.
 - QA1499_ACK_SYNTHETIC_TEST_ONLY=1: confirmación explícita de entorno sintético.
 - QA1499_HEAD_SHA: SHA exacto de 40 hex; git rev-parse HEAD debe coincidir.
-- QA1499_SESSION_DIR: directorio temporal absoluto, fuera del checkout y con permisos privados.
+- QA1499_SESSION_DIR: directorio temporal absoluto fuera del repositorio/checkout y con permisos privados.
 - Dos fixtures efímeros, tenant-admin.json y platform-owner.json, con permisos
   0600 (directorio 0700). No se versionan, no se adjuntan al PR y se eliminan al
   finalizar el operador.
