@@ -70,6 +70,40 @@ echo json_encode([
 """)
         self.assertEqual([1, 1, 1, 0, 2, True, True, 2], result)
 
+    def test_keyset_pagination_reaches_records_beyond_first_hundred(self):
+        self.assertEqual(self.php_case(f"""
+$t='{TENANT_A}'; $c='{COMPANY_A}'; $a='{ACTOR}';
+for ($i = 0; $i < 101; $i++) {{
+    $records->add($t, $c, $a, [
+        'record_ref' => sprintf('acta_%03d', $i), 'kind' => 'ACTA',
+    ]);
+}}
+$first = $records->page($t, $c);
+$second = $records->page($t, $c, $first['next_cursor']);
+$isolated = $records->page('{TENANT_B}', $c);
+$badCursor = false;
+try {{ $records->page($t, $c, 'persona@example.com'); }}
+catch (\\DomainException $error) {{ $badCursor = true; }}
+echo json_encode([
+    count($first['records']), $first['records'][0]['record_ref'],
+    $first['next_cursor'], count($second['records']),
+    $second['records'][0]['record_ref'], $second['next_cursor'],
+    count($isolated['records']), $badCursor,
+]);
+"""), [100, 'acta_000', 'acta_099', 1, 'acta_100', None, 0, True])
+
+    def test_noncanonical_ulid_is_rejected_before_persistence(self):
+        self.assertEqual(self.php_case(f"""
+$t='{TENANT_A}'; $c='{COMPANY_A}'; $a='{ACTOR}';
+$invalid = '8'.substr($t, 1);
+try {{
+    $records->add($invalid, $c, $a, ['record_ref'=>'acta','kind'=>'ACTA']);
+    echo json_encode(false);
+}} catch (\\DomainException $error) {{
+    echo json_encode(true);
+}}
+"""), True)
+
     def test_never_accept_clinical_data_duplicate_or_auto_approval(self):
         self.assertEqual(self.php_case(f"""
 $t='{TENANT_A}'; $c='{COMPANY_A}'; $a='{ACTOR}';
@@ -109,6 +143,8 @@ echo json_encode($rejections);
         self.assertIn("'inventory.view'", source)
         self.assertIn("'inventory.create'", source)
         self.assertIn("'inventory.update'", source)
+        self.assertIn("$request->query->get('after')", source)
+        self.assertIn("->page($tenant, $company, $after)", source)
         statement = SERVICE.read_text(encoding="utf-8")
         for token in (
             "entry.tenant_id = :tenant", "entry.company_id = :company",
@@ -133,6 +169,8 @@ echo json_encode($rejections);
         self.assertEqual(1, len(treatment))
         self.assertEqual("review_required", treatment[0]["basis"])
         self.assertEqual([], treatment[0]["providers"])
+        self.assertIn("throw new IrreversibleMigration", ddl)
+        self.assertNotIn('executeStatement("DROP TABLE', ddl)
         self.assertEqual("construccion", document["phase"])
         self.assertEqual(
             {"nothing_live": True, "no_real_customer_data": True},
