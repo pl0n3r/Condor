@@ -154,7 +154,7 @@ final class GovernanceController extends AbstractController
     public function governanceRealList(string $branchId, Request $request): JsonResponse
     {
         $after = $request->query->get('after');
-        if ($after !== null && (!is_string($after) || $after === '')) {
+        if ($after === '') {
             throw new BadRequestHttpException('Cursor de paginación inválido.');
         }
         return $this->governanceRealRead($branchId, null, $after);
