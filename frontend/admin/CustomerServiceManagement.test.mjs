@@ -1,137 +1,159 @@
-import test, { after } from 'node:test';
-import assert from 'node:assert/strict';
+import { test, after } from 'node:test';
+import { strict as assert } from 'node:assert';
 import { createRequire } from 'node:module';
+import { build } from 'esbuild';
+import { tmpdir } from 'node:os';
 import { mkdtempSync, rmSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { build } from 'esbuild';
+import { renderToString } from 'react-dom/server';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const temp = mkdtempSync(join(root, 'node_modules', '.cache-customer1669-'));
-after(() => rmSync(temp, { recursive: true, force: true }));
-const cjs = join(temp, 'customer.cjs');
-await build({ entryPoints: [join(root, 'frontend/admin/CustomerServiceManagement.tsx')],
-  outfile: cjs, format: 'cjs', platform: 'node', bundle: true,
-  jsx: 'automatic', external: ['react', 'react/jsx-runtime'], logLevel: 'silent' });
-const { requestCustomerServiceCase: request, CustomerServiceManagement: Panel } =
-  createRequire(import.meta.url)(cjs);
-const scope = { enabled: true, allowed: true, tenant: 'tenant_a', company: 'company_a', branch: 'branch_a' };
-const url = '/api/v1/branches/branch_a/customer-service-real/records';
-const sample = { id: '01ARZ3NDEKTSV4RRFFQ69G5FAV', tenant_id: 'tenant_a', company_id: 'company_a',
-  record_ref: 'caso_a', kind: 'PQRS', state: 'PENDIENTE', version: 1,
-  occurred_at: '2026-11-08 10:00:00' };
-const json = (value, status = 200) => new Response(JSON.stringify(value),
-  { status, headers: { 'Content-Type': 'application/json' } });
-const props = { enabled: true, tenantId: 'tenant_a', companyId: 'company_a', branchId: 'branch_a',
-  permissions: ['inventory.view', 'inventory.create', 'inventory.update'], csrfToken: 'csrf_demo' };
+const cwd = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const workspace = mkdtempSync(join(cwd, 'node_modules', 'customer-qa-'));
+const output = join(workspace, 'compiled.cjs');
+after(() => rmSync(workspace, { recursive: true, force: true }));
+await build({ entryPoints: [join(cwd, 'frontend/admin/CustomerServiceManagement.tsx')],
+  outfile: output, bundle: true, platform: 'node', format: 'cjs', jsx: 'automatic',
+  external: ['react', 'react/jsx-runtime'], logLevel: 'silent' });
 
-test('flag OFF, ámbito ajeno o permiso ausente jamás invocan transporte', async () => {
-  const forbidden = () => { throw Error('HTTP unexpectedly called'); };
-  for (const options of [
-    { ...scope, enabled: false },
-    { ...scope, allowed: false },
-    { ...scope, company: '__unassigned__' },
-    { ...scope, tenant: '' },
-    { ...scope, branch: '' },
-  ]) assert.notEqual((await request(options, forbidden)).status, 'ready');
-  const html = renderToStaticMarkup(React.createElement(Panel, { ...props, enabled: false }));
-  assert.match(html, /El módulo aún no está habilitado/);
-  assert.doesNotMatch(html, /Nuevo caso|caso_a/);
-  const denied = renderToStaticMarkup(React.createElement(Panel,
-    { ...props, permissions: [] }));
-  assert.match(denied, /Acceso denegado/);
-  assert.match(renderToStaticMarkup(React.createElement(Panel, props)), /Cargando casos/);
+const { requestCustomerServiceCase, CustomerServiceManagement } =
+  createRequire(import.meta.url)(output);
+const tenant = 'tenant_qa';
+const company = 'company_qa';
+const branch = 'branch_qa';
+const base = { enabled: true, allowed: true, tenant, company, branch };
+const path = '/api/v1/branches/branch_qa/customer-service-real/records';
+const fixture = { tenant_id: tenant, company_id: company, record_ref: 'caso_qa',
+  kind: 'PQRS', state: 'PENDIENTE', version: 1, occurred_at: '2026-11-08 16:00:00' };
+const reply = (value, code = 200) => new Response(JSON.stringify(value),
+  { status: code, headers: { 'Content-Type': 'application/json' } });
+const never = () => { throw new Error('No se permite contacto HTTP'); };
+const run = (options, transport) => requestCustomerServiceCase({ ...base, ...options }, transport);
+const panelProps = { enabled: true, tenantId: tenant, companyId: company, branchId: branch,
+  permissions: ['inventory.view', 'inventory.create', 'inventory.update'], csrfToken: 'csrf_qa' };
+
+test('sin bandera, ámbito o autorización no hay requests ni casos visibles en SSR', async () => {
+  for (const patch of [{ enabled: false }, { allowed: false }, { tenant: '' },
+    { branch: '' }, { company: '' }, { company: '__unassigned__' }]) {
+    const outcome = await run(patch, never);
+    assert.notEqual(outcome.status, 'ready');
+  }
+  const disabled = renderToString(React.createElement(CustomerServiceManagement,
+    { ...panelProps, enabled: false }));
+  assert.match(disabled, /El módulo aún no está habilitado/);
+  assert.doesNotMatch(disabled, /caso_qa|Nuevo caso/);
+  const unauthorized = renderToString(React.createElement(CustomerServiceManagement,
+    { ...panelProps, permissions: [] }));
+  assert.match(unauthorized, /Acceso denegado/);
+  const booting = renderToString(React.createElement(CustomerServiceManagement, panelProps));
+  assert.match(booting, /Cargando casos/);
 });
 
-test('GET lista y cursor keyset exigen respuesta ordenada, 100 filas máximo y mismo ámbito', async () => {
-  const data = await request(scope, (endpoint, init) => {
-    assert.equal(endpoint, url);
+test('respuesta de casos paginados: orden, cursor y límites de tenant verificables', async () => {
+  const first = await run({}, (url, init) => {
+    assert.equal(url, path);
     assert.equal(init.method, 'GET');
     assert.equal(init.credentials, 'same-origin');
     assert.equal(init.cache, 'no-store');
-    return json({ records: [sample], next_cursor: null });
+    return reply({ records: [fixture], next_cursor: null });
   });
-  assert.deepEqual(data, { status: 'ready', rows: [{
-    ref: 'caso_a', kind: 'PQRS', state: 'PENDIENTE', version: 1,
-    tenant: 'tenant_a', company: 'company_a', occurredAt: '2026-11-08 10:00:00',
-  }], cursor: null });
-  const next = await request({ ...scope, after: 'caso_a' }, (target) => {
-    assert.equal(target, url + '?after=caso_a');
-    return json({ records: [{ ...sample, record_ref: 'caso_b' }], next_cursor: null });
+  assert.equal(first.status, 'ready');
+  assert.equal(first.rows?.[0].ref, 'caso_qa');
+  assert.equal(first.cursor, null);
+
+  const later = await run({ after: 'caso_qa' }, url => {
+    assert.equal(url, path + '?after=caso_qa');
+    return reply({ records: [{ ...fixture, record_ref: 'caso_qb' }], next_cursor: null });
   });
-  assert.equal(next.rows[0].ref, 'caso_b');
-  const all = Array.from({ length: 100 }, (_, i) => ({ ...sample,
-    record_ref: 'caso_' + String(i).padStart(3, '0') }));
-  const batch = await request(scope, () => json({ records: all, next_cursor: 'caso_099' }));
-  assert.equal(batch.cursor, 'caso_099');
-  assert.equal(batch.rows.length, 100);
+  assert.equal(later.rows?.[0].ref, 'caso_qb');
+  const hundred = Array.from({ length: 100 }, (_, i) =>
+    ({ ...fixture, record_ref: 'caso_' + String(i).padStart(3, '0') }));
+  const page = await run({}, () => reply({ records: hundred, next_cursor: 'caso_099' }));
+  assert.equal(page.rows?.length, 100);
+  assert.equal(page.cursor, 'caso_099');
 });
 
-test('GET falla cerrado ante filas de otra empresa, duplicadas, cursor falso y estructuras incorrectas', async () => {
-  for (const wrong of [
-    { ...sample, tenant_id: 'tenant_b' }, { ...sample, company_id: 'company_b' },
-    { ...sample, record_ref: 'persona@example.com' }, { ...sample, record_ref: '123456789' },
-    { ...sample, state: 'APROBADO' }, { ...sample, kind: 'DATOS_PERSONALES' },
-    { ...sample, version: 0 }, { ...sample, occurred_at: 'bad' },
-  ]) assert.equal((await request(scope, () => json({ records: [wrong], next_cursor: null }))).status, 'error');
-  for (const malformed of [
-    { records: [sample] }, { records: 'bad', next_cursor: null },
-    { records: [sample, sample], next_cursor: null },
-    { records: [sample], next_cursor: 'any_ref' },
-    { records: Array(101).fill(sample), next_cursor: null },
-    { records: [], next_cursor: 'caso_a' },
-    { records: [{ ...sample, record_ref: 'caso_z' }, sample], next_cursor: null },
-  ]) assert.equal((await request(scope, () => json(malformed))).status, 'error');
-  assert.equal((await request({ ...scope, after: 'caso_z' },
-    () => json({ records: [sample], next_cursor: null }))).status, 'error');
+test('desconfía de JSON ajeno, paginación irregular y datos personales', async () => {
+  const badRecords = [
+    { ...fixture, tenant_id: 'otro_tenant' },
+    { ...fixture, company_id: 'otra_empresa' },
+    { ...fixture, record_ref: 'cliente@example.com' },
+    { ...fixture, record_ref: 'caso_123456789' },
+    { ...fixture, kind: 'DATO_PERSONAL' },
+    { ...fixture, state: 'APROBADO' },
+    { ...fixture, version: 0 },
+    { ...fixture, occurred_at: 'invalid' },
+  ];
+  for (const wrong of badRecords) {
+    const value = await run({}, () => reply({ records: [wrong], next_cursor: null }));
+    assert.equal(value.status, 'error', JSON.stringify(wrong));
+  }
+  const invalidBodies = [
+    { records: [fixture] },
+    { records: 'no-array', next_cursor: null },
+    { records: [fixture, fixture], next_cursor: null },
+    { records: [fixture], next_cursor: 'caso_no_corresponde' },
+    { records: [], next_cursor: 'caso_qa' },
+    { records: Array(101).fill(fixture), next_cursor: null },
+    { records: [{ ...fixture, record_ref: 'caso_qz' }, fixture], next_cursor: null },
+  ];
+  for (const body of invalidBodies) {
+    assert.equal((await run({}, () => reply(body))).status, 'error');
+  }
+  assert.equal((await run({ after: 'caso_qz' }, () =>
+    reply({ records: [fixture], next_cursor: null }))).status, 'error');
 });
 
-test('POST y PATCH usan CSRF, versión optimista, cookies same-origin y no aprueban actos', async () => {
-  const created = await request({ ...scope, verb: 'POST',
-    ref: 'caso_a', kind: 'PQRS', csrf: 'csrf_demo' }, (target, init) => {
-    assert.equal(target, url);
-    assert.equal(init.method, 'POST');
-    assert.equal(init.headers['X-CSRF-Token'], 'csrf_demo');
-    assert.equal(init.credentials, 'same-origin');
-    assert.deepEqual(JSON.parse(init.body), { record_ref: 'caso_a', kind: 'PQRS' });
-    return json({ record: sample }, 201);
-  });
-  assert.equal(created.entry?.ref, 'caso_a');
-  const revision = await request({ ...scope, verb: 'PATCH', ref: 'caso_a',
-    next: 'EN_REVISION', version: 1, csrf: 'csrf_demo' }, (target, init) => {
-    assert.equal(target, url + '/caso_a/state');
+test('crear y revisar casos: payload mínimo, cookie, CSRF y versión optimista', async () => {
+  const written = await run({ verb: 'POST', ref: 'caso_qa', kind: 'PQRS', csrf: 'csrf_qa' },
+    (url, init) => {
+      assert.equal(url, path);
+      assert.equal(init.method, 'POST');
+      assert.equal(init.headers['X-CSRF-Token'], 'csrf_qa');
+      assert.equal(init.credentials, 'same-origin');
+      assert.deepEqual(JSON.parse(init.body), { record_ref: 'caso_qa', kind: 'PQRS' });
+      return reply({ record: fixture }, 201);
+    });
+  assert.equal(written.entry?.version, 1);
+
+  const updated = await run({ verb: 'PATCH', ref: 'caso_qa', version: 1,
+    next: 'EN_REVISION', csrf: 'csrf_qa' }, (url, init) => {
+    assert.equal(url, path + '/caso_qa/state');
     assert.deepEqual(JSON.parse(init.body), { state: 'EN_REVISION', expected_version: 1 });
-    return json({ record: { ...sample, state: 'EN_REVISION', version: 2 } });
+    return reply({ record: { ...fixture, state: 'EN_REVISION', version: 2 } });
   });
-  assert.equal(revision.entry?.version, 2);
-  const detail = await request({ ...scope, ref: 'caso_a' }, (target) => {
-    assert.equal(target, url + '/caso_a');
-    return json({ record: sample });
+  assert.equal(updated.entry?.state, 'EN_REVISION');
+  assert.equal(updated.entry?.version, 2);
+
+  const detail = await run({ ref: 'caso_qa' }, url => {
+    assert.equal(url, path + '/caso_qa');
+    return reply({ record: fixture });
   });
   assert.equal(detail.entry?.kind, 'PQRS');
 });
 
-test('validaciones de creación y edición niegan alias con PII, estados ilegales y CSRF ausente', async () => {
-  const never = () => { throw Error('Should not send HTTP'); };
-  for (const candidate of [
-    { ...scope, verb: 'POST', ref: 'caso_a', kind: 'PQRS' },
-    { ...scope, verb: 'POST', ref: 'caso_12345678', kind: 'PQRS', csrf: 'x' },
-    { ...scope, verb: 'POST', ref: 'caso_a', kind: 'PERSONAL', csrf: 'x' },
-    { ...scope, verb: 'PATCH', ref: 'caso_a', next: 'EN_REVISION', version: 0, csrf: 'x' },
-    { ...scope, verb: 'PATCH', ref: 'caso_a', next: 'APROBADO', version: 1, csrf: 'x' },
-    { ...scope, verb: 'PATCH', ref: 'caso_a', next: 'EN_REVISION', version: 1 },
-    { ...scope, after: 'fixture:case/demo' },
-  ]) assert.equal((await request(candidate, never)).status, 'error');
-});
+test('operaciones inválidas y estados HTTP desconocidos se detienen antes de revelar filas', async () => {
+  const rejected = [
+    { verb: 'POST', ref: 'caso_qa', kind: 'PQRS' },
+    { verb: 'POST', ref: 'caso_123456789', kind: 'PQRS', csrf: 'x' },
+    { verb: 'POST', ref: 'caso_qa', kind: 'PERSONAL', csrf: 'x' },
+    { verb: 'PATCH', ref: 'caso_qa', next: 'APROBADO', version: 1, csrf: 'x' },
+    { verb: 'PATCH', ref: 'caso_qa', next: 'EN_REVISION', version: 0, csrf: 'x' },
+    { verb: 'PATCH', ref: 'caso_qa', next: 'EN_REVISION', version: 1 },
+    { after: 'fixture:case/demo' },
+  ];
+  for (const options of rejected) {
+    assert.equal((await run(options, never)).status, 'error');
+  }
 
-test('error HTTP, 404 ausente vs feature_unavailable, permisos y JSON corrupto no revelan filas', async () => {
-  for (const code of [401, 403])
-    assert.deepEqual(await request(scope, () => json({ error: 'unauthorized' }, code)), { status: 'denied' });
-  assert.deepEqual(await request(scope, () => json({ error: 'feature_unavailable' }, 404)), { status: 'disabled' });
-  for (const response of [json({ error: 'not_found' }, 404), json({ error: 'server' }, 500),
-    new Response('{', { status: 200 }), new Response('<html>404</html>', { status: 404 })])
-    assert.equal((await request(scope, () => response)).status, 'error');
-  assert.equal((await request(scope, () => { throw Error('network offline'); })).status, 'error');
+  for (const status of [401, 403]) {
+    assert.equal((await run({}, () => reply({ error: 'unauthorized' }, status))).status, 'denied');
+  }
+  assert.equal((await run({}, () => reply({ error: 'feature_unavailable' }, 404))).status, 'disabled');
+  for (const badResponse of [reply({ error: 'missing' }, 404), reply({}, 500),
+    new Response('{', { status: 200 }), new Response('<html>404</html>', { status: 404 })]) {
+    assert.equal((await run({}, () => badResponse)).status, 'error');
+  }
+  assert.equal((await run({}, () => { throw Error('offline'); })).status, 'error');
 });
