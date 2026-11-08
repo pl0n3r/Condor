@@ -21,21 +21,44 @@ final readonly class GovernanceRecordService
     /** @return list<array<string,mixed>> */
     public function all(string $tenant, string $company): array
     {
+        return $this->page($tenant, $company)['records'];
+    }
+
+    /**
+     * Paginación por referencia opaca para evitar truncar silenciosamente el listado.
+     * @return array{records:list<array<string,mixed>>,next_cursor:?string}
+     */
+    public function page(string $tenant, string $company, ?string $after = null): array
+    {
+        if ($after !== null) {
+            GovernanceRecord::assertReference($after);
+        }
         $table = self::TABLE;
+        $params = ['tenant' => $tenant, 'company' => $company];
+        $cursorFilter = '';
+        if ($after !== null) {
+            $params['after'] = $after;
+            $cursorFilter = ' AND entry.record_ref > :after';
+        }
         $sql = "SELECT entry.* FROM {$table} entry"
             ." WHERE entry.tenant_id = :tenant AND entry.company_id = :company"
             ." AND entry.version = (SELECT MAX(rev.version) FROM {$table} rev"
             ." WHERE rev.tenant_id = entry.tenant_id AND rev.company_id = entry.company_id"
             ." AND rev.record_ref = entry.record_ref)"
-            .' ORDER BY entry.record_ref ASC LIMIT 100';
-        $rows = $this->connection->fetchAllAssociative($sql, [
-            'tenant' => $tenant, 'company' => $company,
-        ]);
-
-        return array_map(
+            .$cursorFilter
+            .' ORDER BY entry.record_ref ASC LIMIT 101';
+        $rows = $this->connection->fetchAllAssociative($sql, $params);
+        $hasMore = count($rows) > 100;
+        $pageRows = array_slice($rows, 0, 100);
+        $records = array_map(
             static fn (array $row): array => GovernanceRecord::inspect($row, $tenant, $company),
-            $rows,
+            $pageRows,
         );
+
+        return [
+            'records' => $records,
+            'next_cursor' => $hasMore ? $records[count($records) - 1]['record_ref'] : null,
+        ];
     }
 
     /** @return array<string,mixed>|null */
