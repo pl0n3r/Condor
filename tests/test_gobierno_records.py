@@ -36,20 +36,16 @@ $records = new \App\Application\Governance\GovernanceRecordService($db);
 
 class GovernancePersistenceTests(unittest.TestCase):
     def php_case(self, script: str):
-        """Execute the real PHP implementation against a disposable SQLite DB."""
-        php = shutil.which("php")
-        self.assertIsNotNone(php, "PHP CLI required")
-        vendor = ROOT / "vendor/autoload.php"
-        if not vendor.is_file():
-            self.fail("Composer dependencies required")
-        try:
-            output = subprocess.check_output(
-                [php, "-r", "require $argv[1]; " + DB_SETUP + script, str(vendor)],
-                cwd=ROOT, stderr=subprocess.PIPE, text=True, timeout=35,
-            )
-        except subprocess.CalledProcessError as exc:
-            self.fail(f"PHP/SQLite acceptance failed: {exc.stderr}")
-        return json.loads(output)
+        php_bin = shutil.which("php")
+        self.assertIsNotNone(php_bin, "PHP required for this contract")
+        loader = ROOT / "vendor/autoload.php"
+        self.assertTrue(loader.is_file(), "Composer autoload required")
+        result = subprocess.run(
+            [php_bin, "-r", "require $argv[1]; " + DB_SETUP + script, str(loader)],
+            cwd=ROOT, capture_output=True, text=True, timeout=35, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
 
     def test_tenant_and_company_scope_with_append_only_audit(self):
         result = self.php_case(f"""

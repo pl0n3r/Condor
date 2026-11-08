@@ -235,17 +235,14 @@ final class GovernanceController extends AbstractController
     /** @return array{string,string,string} */
     private function governanceRealScope(string $branchId, string $permission): array
     {
-        $scope = $this->authorizedBranchScope($branchId, $permission);
-        [$actor, $tenant, $branch, $membership] = $scope;
-        $allowed = $actor->isActive() && $membership->isActive()
-            && $membership->roleKey() === Membership::ROLE_OWNER;
-        if (!$allowed) {
-            throw new AccessDeniedHttpException('Solo el propietario puede gestionar Gobierno corporativo.');
+        [$actor, $tenant, $branch, $membership] = $this->authorizedBranchScope($branchId, $permission);
+        $roleIsOwner = $membership->roleKey() === Membership::ROLE_OWNER;
+        if (!$roleIsOwner || !$actor->isActive() || !$membership->isActive()) {
+            throw new AccessDeniedHttpException('Gobierno corporativo requiere rol propietario activo.');
         }
-
         $legalEntity = $branch->legalEntity();
         if ($legalEntity?->tenant()->id() !== $tenant->id()) {
-            throw new NotFoundHttpException('Razón social no disponible.');
+            throw new NotFoundHttpException('La razón social no pertenece al tenant solicitado.');
         }
         return [$actor->id(), $tenant->id(), $legalEntity->id()];
     }

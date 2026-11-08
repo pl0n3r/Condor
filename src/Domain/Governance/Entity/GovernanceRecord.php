@@ -136,25 +136,27 @@ final class GovernanceRecord
         'REQUIERE_REVISION' => ['EN_REVISION'],
     ];
 
-    private static function isUlid(mixed $id): bool
+    private static function isUlid(mixed $value): bool
     {
-        return is_string($id) && preg_match('/\A[0-9A-HJKMNP-TV-Z]{26}\z/D', $id) === 1;
+        if (!is_string($value) || strlen($value) !== 26) {
+            return false;
+        }
+        return preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/D', $value) === 1;
     }
 
     public static function assertIdentity(string $tenant, string $company, string $actor): void
     {
-        foreach ([$tenant, $company, $actor] as $id) {
-            if (!self::isUlid($id)) {
-                throw new DomainException('Identidad Gobierno corporativo inválida.');
-            }
+        if (!self::isUlid($tenant) || !self::isUlid($company) || !self::isUlid($actor)) {
+            throw new DomainException('La identidad empresarial o el actor no son válidos.');
         }
     }
 
     public static function assertReference(string $ref): void
     {
-        if (preg_match('/\A[a-z][a-z0-9_-]{0,63}\z/D', $ref) !== 1
-            || preg_match('/\d{7,}/', $ref) === 1) {
-            throw new DomainException('Solo se aceptan referencias Gobierno corporativo opacas.');
+        $opaque = preg_match('/^[a-z][a-z0-9_-]{0,63}$/D', $ref) === 1;
+        $looksPersonal = preg_match('/[0-9]{7,}/', $ref) === 1;
+        if (!$opaque || $looksPersonal) {
+            throw new DomainException('Solo se admiten referencias de Gobierno opacas.');
         }
     }
 
