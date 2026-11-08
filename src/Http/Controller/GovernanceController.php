@@ -26,6 +26,7 @@ final class GovernanceController extends AbstractController
 {
     use BranchApiSupport {
         requireCsrf as private governanceValidateCsrf;
+        authorizedBranchScope as private governanceAuthorizeBranchScope;
     }
 
     public function __construct(
@@ -235,7 +236,7 @@ final class GovernanceController extends AbstractController
     /** @return array{string,string,string} */
     private function governanceRealScope(string $branchId, string $permission): array
     {
-        [$actor, $tenant, $branch, $membership] = $this->authorizedBranchScope($branchId, $permission);
+        [$actor, $tenant, $branch, $membership] = $this->governanceAuthorizeBranchScope($branchId, $permission);
         $roleIsOwner = $membership->roleKey() === Membership::ROLE_OWNER;
         if (!$roleIsOwner || !$actor->isActive() || !$membership->isActive()) {
             throw new AccessDeniedHttpException('Gobierno corporativo requiere rol propietario activo.');
