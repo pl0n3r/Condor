@@ -224,6 +224,9 @@ $container->get(\App\Infrastructure\Tenancy\TenantContext::class)->reset();
 $client->loginUser($staff);
 $crawler = $client->request('GET', '/admin');
 $staffCsrf = $crawler->filter('#condor-admin-root')->attr('data-access-token');
+if (!is_string($staffCsrf) || $staffCsrf === '') {
+    throw new \RuntimeException('CSRF de STAFF no disponible para probar autorización.');
+}
 $client->request('GET', $base);
 $results[] = $client->getResponse()->getStatusCode();
 $client->request('GET', $base.'/acta');
@@ -238,6 +241,8 @@ $results[] = (int) $db->fetchOne('SELECT COUNT(*) FROM condor_governance_real_re
 $results[] = (int) $db->fetchOne('SELECT MAX(version) FROM condor_governance_real_record WHERE tenant_id = ? AND company_id = ? AND record_ref = ?', [$tenant->id(), $company->id(), 'acta']);
 $results[] = (string) $db->fetchOne('SELECT state FROM condor_governance_real_record WHERE tenant_id = ? AND company_id = ? AND record_ref = ? ORDER BY version DESC LIMIT 1', [$tenant->id(), $company->id(), 'acta']);
 $results[] = (int) $db->fetchOne('SELECT COUNT(*) FROM condor_governance_real_record WHERE tenant_id = ?', [$foreign->id()]);
+$results[] = (int) $db->fetchOne('SELECT MAX(version) FROM condor_governance_real_record WHERE tenant_id = ? AND company_id = ? AND record_ref = ?', [$foreign->id(), $foreignCompany->id(), 'extranjero']);
+$results[] = (string) $db->fetchOne('SELECT state FROM condor_governance_real_record WHERE tenant_id = ? AND company_id = ? AND record_ref = ? ORDER BY version DESC LIMIT 1', [$foreign->id(), $foreignCompany->id(), 'extranjero']);
 $results[] = (int) $db->fetchOne('SELECT COUNT(*) FROM condor_governance_real_record WHERE record_ref IN (?, ?)', ['otro','intruso']);
 $client->loginUser($owner);
 putenv('GOVERNANCE_REAL_DATA_ENABLED=false');
@@ -263,7 +268,7 @@ echo json_encode($results, JSON_THROW_ON_ERROR);
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             [201, 200, 201, 200, 200, 404, 404, 404, 404, 403,
-             403, 403, 403, 403, 3, 2, "EN_REVISION", 1, 0, 404, 404, 3],
+             403, 403, 403, 403, 3, 2, "EN_REVISION", 1, 1, "PENDIENTE", 0, 404, 404, 3],
             json.loads(result.stdout),
             result.stderr,
         )
