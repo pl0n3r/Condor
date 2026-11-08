@@ -87,7 +87,7 @@ $attempts=[
 $rejections=[];
 foreach($attempts as $attempt) {{
     try {{ $attempt(); $rejections[]=false; }}
-    catch(\DomainException $e) {{ $rejections[]=true; }}
+    catch(\\DomainException $e) {{ $rejections[]=true; }}
 }}
 echo json_encode($rejections);
 """), [True] * 7)
@@ -97,7 +97,7 @@ echo json_encode($rejections);
         fragment = source.split(
             "// Legal compliance real-record bridge", 1
         )
-        self.assertEqual(4, fragment[1].split("// SG-SST intentionally", 1)[0].count("#[Route("))
+        self.assertEqual(4, source.count("name: 'api_compliance_real_"))
         for name in (
             "complianceRealList", "complianceRealView",
             "complianceRealCreate", "complianceRealState",
