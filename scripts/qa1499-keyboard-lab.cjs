@@ -125,7 +125,17 @@ async function run() {
     ['Playwright WebKit', webkit, { headless: true }]];
   const results = [];
   for (const [engineName, engine, launch] of entries) {
-    const browser = await engine.launch(launch);
+    let browser;
+    try { browser = await engine.launch(launch); }
+    catch {
+      for (const profile of PROFILES) {
+        for (const route of ROUTES) {
+          results.push({ engine: engineName, profile: profile.name, route,
+            state: 'NO_VERIFICADO', reason: 'engine_unavailable' });
+        }
+      }
+      continue;
+    }
     try {
       for (const profile of PROFILES) {
         const context = await browser.newContext({ viewport: profile.viewport,

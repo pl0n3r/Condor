@@ -26,3 +26,5 @@ El proceso **falla cerrado** si falta un navegador, hay redirección a login no 
 ## Pendientes del padre
 
 #1499 sigue OPEN: faltan los ocho escenarios tenant/plataforma auténticamente sintéticos, instrumentación real INP/p75 representativo, inspección integral de teclado/axe, Safari nativo/dispositivos físicos y presupuesto comercial. La decisión separada de go-live sigue en #1498. Un merge de esta herramienta no afirma los AC globales de release.
+
+**Motor no disponible:** si Chrome o Playwright WebKit no están instalados, la herramienta conserva las filas de ese motor como `NO_VERIFICADO` en el recibo pero termina con código distinto de cero; un recibo parcial **no** acredita los 12 escenarios.

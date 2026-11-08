@@ -48,7 +48,7 @@ class KeyboardLabContractTests(unittest.TestCase):
                       "QA1499_ACK_SYNTHETIC_TEST_ONLY", "SHA_PATTERN",
                       "const ROUTES = Object.freeze(['/', '/producto', '/admin/login'])",
                       "name: 'desktop'", "name: 'mobile'", "'Chrome'", "'Playwright WebKit'",
-                      "completeKeyboardAudit: false", "wcagCertified: false", "fieldVitalsCertified: false",
+                      "engine_unavailable", "completeKeyboardAudit: false", "wcagCertified: false", "fieldVitalsCertified: false",
                       "sourceShaDeclared", "process.stdout.write"):
             with self.subTest(guard=guard):
                 self.assertIn(guard, source)
