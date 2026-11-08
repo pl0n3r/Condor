@@ -34,6 +34,16 @@ Producto: `pl0n3r/Condor`
 - Proveedores: ninguno_declarado
 - Retención: `credential_lifecycle`
 
+## assets_real_records
+
+- Categoría: `usage`
+- Campos de software: `id`, `tenant_id`, `company_id`, `record_ref`, `category`, `state`, `responsible_ref`, `evidence_ref`, `warranty_until`, `version`, `previous_id`, `actor_id`, `occurred_at`
+- Finalidad: `asset_record_management`
+- Base documentada: `review_required` (revisión jurídica requerida)
+- Consentimiento: `review_required`
+- Proveedores: ninguno_declarado
+- Retención: `review_required`
+
 ## audit_events
 
 - Categoría: `usage`

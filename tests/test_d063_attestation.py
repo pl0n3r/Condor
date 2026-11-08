@@ -23,7 +23,7 @@ ROOT_KEYS = frozenset({
 })
 TREATMENTS = frozenset({
     "account_identity", "account_invitation", "account_password",
-    "audit_events", "condor_password_reset",
+    "assets_real_records", "audit_events", "condor_password_reset",
     "contract_synthetic_records", "contracts_real_records",
     "controlbot_staff_operations", "customer_contact",
     "diagnostic_shares", "error_incidents", "finance_real_records", "notification_delivery",

@@ -29,6 +29,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'account_identity',
                 'account_invitation',
                 'account_password',
+                'assets_real_records',
                 'audit_events',
                 'condor_password_reset',
                 'contract_synthetic_records',
@@ -83,6 +84,16 @@ final class PrivacyAsCodeTest extends TestCase
         self::assertContains('company_id', $hrReal['fields']);
         self::assertContains('collaborator_ref', $hrReal['fields']);
         self::assertSame([], $hrReal['providers']);
+        $assets = $this->treatment($data, 'assets_real_records');
+        self::assertSame('usage', $assets['category']);
+        self::assertSame('asset_record_management', $assets['purpose']);
+        foreach (['basis', 'retention', 'consent'] as $key) {
+            self::assertSame('review_required', $assets[$key]);
+        }
+        self::assertContains('company_id', $assets['fields']);
+        self::assertContains('actor_id', $assets['fields']);
+        self::assertSame([], $assets['providers']);
+
         $payroll = $this->treatment($data, 'payroll_synthetic_records');
         self::assertSame('usage', $payroll['category']);
         self::assertSame('review_required', $payroll['purpose']);
