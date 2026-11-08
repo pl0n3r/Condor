@@ -9,6 +9,7 @@ Producto: `pl0n3r/Condor`
 | account_identity | contact | review_required | review_required |
 | account_invitation | authentication | invitation_lifecycle | review_required |
 | account_password | authentication | credential_lifecycle | review_required |
+| assets_real_records | usage | review_required | review_required |
 | audit_events | usage | review_required | review_required |
 | condor_password_reset | authentication | password_reset_lifecycle | review_required |
 | contract_synthetic_records | usage | review_required | review_required |

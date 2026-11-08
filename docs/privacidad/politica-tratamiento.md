@@ -20,6 +20,7 @@
 | account_identity | contact | email, display_name, roles, active, created_at, last_access_at | account_access | review_required | review_required | ninguno_declarado | review_required |
 | account_invitation | authentication | user_id, tenant_id, token_hash, created_by_user_id, expires_at, consumed_at, revoked_at | account_invitation | review_required | review_required | resend | invitation_lifecycle |
 | account_password | authentication | password_hash | account_security | review_required | review_required | ninguno_declarado | credential_lifecycle |
+| assets_real_records | usage | id, tenant_id, company_id, record_ref, category, state, responsible_ref, evidence_ref, warranty_until, version, previous_id, actor_id, occurred_at | asset_record_management | review_required | review_required | ninguno_declarado | review_required |
 | audit_events | usage | actor_user_id, action, entity_type, entity_id, context, created_at | security_audit | review_required | review_required | ninguno_declarado | review_required |
 | condor_password_reset | authentication | user_id, token_hash, expires_at, consumed_at, revoked_at | account_recovery | review_required | review_required | resend | password_reset_lifecycle |
 | contract_synthetic_records | usage | tenant_ref, company_ref, contract_ref, worker_ref, template_ref, actor_ref, state, version, audit_action, fingerprint, created_at | review_required | review_required | review_required | ninguno_declarado | review_required |

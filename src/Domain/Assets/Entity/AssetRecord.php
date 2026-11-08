@@ -133,6 +133,132 @@ final class AssetRecord
         ];
     }
 
+
+    /** Real-table identifiers are validated independently from the legacy fixture-only ORM. */
+    public static function assertRealIdentity(string $tenant, string $company, string $actor): void
+    {
+        foreach ([$tenant, $company, $actor] as $id) {
+            if (preg_match('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $id) !== 1) {
+                throw new DomainException('Identidad de ámbito o actor inválida.');
+            }
+        }
+    }
+
+    public static function assertRealReference(string $ref): void
+    {
+        if (strlen($ref) < 1 || strlen($ref) > 64
+            || preg_match('/^[a-z][a-z0-9_-]*$/D', $ref) !== 1
+            || preg_match('/[0-9]{7,}/', $ref) === 1) {
+            throw new DomainException('Referencia de activo debe ser opaca, no personal.');
+        }
+    }
+
+    /** @return array<string,mixed> */
+    public static function beginReal(
+        string $tenant, string $company, string $actor, string $ref,
+        string $category, ?string $warrantyUntil = null,
+    ): array {
+        self::assertRealIdentity($tenant, $company, $actor);
+        self::assertRealReference($ref);
+        if (!in_array($category, ['EQUIPO', 'MUEBLE', 'VEHICULO'], true)
+            || ($warrantyUntil !== null && !self::date($warrantyUntil))) {
+            throw new DomainException('Categoría o fecha de garantía inválida.');
+        }
+        return [
+            'id' => \App\Shared\Id\UlidFactory::new(),
+            'tenant_id' => $tenant,
+            'company_id' => $company,
+            'record_ref' => $ref,
+            'category' => $category,
+            'state' => self::PENDING,
+            'responsible_ref' => null,
+            'evidence_ref' => null,
+            'warranty_until' => $warrantyUntil,
+            'version' => 1,
+            'previous_id' => null,
+            'actor_id' => $actor,
+            'occurred_at' => gmdate('Y-m-d H:i:s'),
+        ];
+    }
+
+    /** @param array<string,mixed> $row
+     *  @return array<string,mixed>
+     */
+    public static function inspectReal(array $row, string $tenant, string $company): array
+    {
+        if (($row['tenant_id'] ?? null) !== $tenant || ($row['company_id'] ?? null) !== $company) {
+            throw new DomainException('Activo pertenece a otra empresa o razón social.');
+        }
+        $actor = $row['actor_id'] ?? null;
+        if (!is_string($actor)) {
+            throw new DomainException('Auditoría de activo inválida.');
+        }
+        self::assertRealIdentity($tenant, $company, $actor);
+        self::assertRealReference((string) ($row['record_ref'] ?? ''));
+        foreach (['id', 'previous_id'] as $field) {
+            $id = $row[$field] ?? null;
+            if (($field === 'id' || $id !== null)
+                && (!is_string($id) || preg_match('/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D', $id) !== 1)) {
+                throw new DomainException('Identidad de revisión de activo inválida.');
+            }
+        }
+        $version = $row['version'] ?? null;
+        $number = filter_var($version, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1, 'max_range' => 1000000],
+        ]);
+        if (!is_int($number) || (string) $number !== (string) $version
+            || !in_array($row['category'] ?? null, ['EQUIPO', 'MUEBLE', 'VEHICULO'], true)
+            || !in_array($row['state'] ?? null, [
+                self::PENDING, 'ASIGNADO', self::REVIEW, self::DECOMMISSION_REVIEW,
+            ], true)) {
+            throw new DomainException('Versión, categoría o estado de activo inválido.');
+        }
+        $row['version'] = $number;
+        return $row;
+    }
+
+    /** @param array<string,mixed> $old
+     *  @return array<string,mixed>
+     */
+    public static function reviseReal(
+        array $old, string $tenant, string $company, string $actor, string $next,
+        int $expectedVersion, ?string $responsible = null, ?string $evidence = null,
+    ): array {
+        self::assertRealIdentity($tenant, $company, $actor);
+        $row = self::inspectReal($old, $tenant, $company);
+        $allowed = [
+            self::PENDING => ['ASIGNADO', self::REVIEW],
+            'ASIGNADO' => [self::REVIEW, self::DECOMMISSION_REVIEW],
+            self::REVIEW => ['ASIGNADO', self::DECOMMISSION_REVIEW],
+            self::DECOMMISSION_REVIEW => [self::REVIEW],
+        ];
+        if ($expectedVersion !== $row['version'] || $expectedVersion >= 1000000
+            || !in_array($next, $allowed[$row['state']], true)) {
+            throw new DomainException('Transición de activo no autorizada o versión obsoleta.');
+        }
+        if ($responsible !== null) {
+            self::assertRealReference($responsible);
+        }
+        if ($evidence !== null) {
+            self::assertRealReference($evidence);
+        }
+        if (($next === 'ASIGNADO' && $responsible === null)
+            || ($next === self::DECOMMISSION_REVIEW && $evidence === null)
+            || ($next !== 'ASIGNADO' && $responsible !== null)
+            || ($next !== self::DECOMMISSION_REVIEW && $evidence !== null)) {
+            throw new DomainException('Responsable o evidencia requerida para la transición.');
+        }
+        $row['previous_id'] = $row['id'];
+        $row['id'] = \App\Shared\Id\UlidFactory::new();
+        $row['version']++;
+        $row['state'] = $next;
+        $row['responsible_ref'] = $responsible ?? $row['responsible_ref'];
+        $row['evidence_ref'] = $evidence ?? $row['evidence_ref'];
+        $row['actor_id'] = $actor;
+        $row['occurred_at'] = gmdate('Y-m-d H:i:s');
+        return $row;
+    }
+
     private static function date(string $value): bool
     {
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) !== 1) {
