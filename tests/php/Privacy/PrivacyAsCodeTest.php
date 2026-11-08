@@ -38,6 +38,7 @@ final class PrivacyAsCodeTest extends TestCase
                 'diagnostic_shares',
                 'error_incidents',
                 'finance_real_records',
+                'governance_real_records',
                 'human_resources_real_records',
                 'human_resources_synthetic_records',
                 'legal_compliance_real_records',

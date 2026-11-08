@@ -34,6 +34,7 @@ TREATMENTS = frozenset({
     "social_security_synthetic_records",
     "human_resources_synthetic_records",
     "human_resources_real_records",
+    "governance_real_records",
 })
 
 
