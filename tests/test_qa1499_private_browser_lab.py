@@ -74,7 +74,7 @@ class PrivateBrowserLabTests(unittest.TestCase):
                       "QA1499_SESSION_DIR", "git", "rev-parse", "maxRedirects: 0",
                       "request.method() !== 'GET'", "routeWebSocket",
                       "release_sha !== sha", "serviceWorkers: 'block'",
-                      "synthetic_only !== true", "state: 'NO_VERIFICADO'"):
+                      "synthetic_only !== true", "state: 'NO_VERIFICADO'", "net.createServer(socket => socket.destroy())", "proxy: {", "bypass: base.hostname"):
             with self.subTest(token=token):
                 self.assertIn(token, source)
         self.assertNotIn("page.fill(", source)
