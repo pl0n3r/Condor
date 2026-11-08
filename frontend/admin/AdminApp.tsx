@@ -262,8 +262,9 @@ export function AdminApp({
           icon: 'operations',
           items: [
             { href: '/admin#workflows', label: 'Workflows' },
-            ...(processesRealDataEnabled ? [{ href: '/admin#operations-processes', label: 'Procesos' }]
-              : import.meta.env.DEV ? [{ href: '/admin#operations-processes', label: 'Procesos (no habilitado)' }] : []),
+            ...(context.status === 'ready' && context.data.permissions.includes('inventory.view')
+              ? [{ href: '/admin#operations-processes', label: processesRealDataEnabled ? 'Procesos' : 'Procesos (no habilitado)' }]
+              : []),
           ],
         },
         {
@@ -459,7 +460,7 @@ export function AdminApp({
             csrfToken={accessToken}
           />
 
-          {(processesRealDataEnabled || import.meta.env.DEV) && (
+          {context.data.permissions.includes('inventory.view') && (
             <OperationsProcessesPanel
               key={'operations-processes-' + context.data.tenant.id + '-'
                 + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-'

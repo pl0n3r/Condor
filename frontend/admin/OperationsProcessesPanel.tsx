@@ -9,7 +9,7 @@ export type ProcessEntry = Readonly<{
   tenant: string; company: string; occurredAt: string;
 }>;
 type ProcessResult =
-  | { status: 'disabled' | 'denied' | 'error' }
+  | { status: 'disabled' | 'denied' | 'error' | 'conflict' }
   | { status: 'ready'; rows: ProcessEntry[]; cursor: string | null }
   | { status: 'ready'; entry: ProcessEntry };
 type Verb = 'GET' | 'POST' | 'PATCH';
@@ -82,6 +82,7 @@ export async function requestOperationalProcess(
       ...(opt.signal ? { signal: opt.signal } : {}),
     });
     if (response.status === 401 || response.status === 403) return { status: 'denied' };
+    if (response.status === 409) return { status: 'conflict' };
     if (response.status === 404) {
       const problem: unknown = await response.json().catch(() => null);
       if (problem && typeof problem === 'object' && !Array.isArray(problem)
@@ -102,8 +103,9 @@ export async function requestOperationalProcess(
       if (rows.some(x => x === null)) return { status: 'error' };
       const found = rows as ProcessEntry[];
       const refs = found.map(x => x.ref);
-      if (new Set(refs).size !== refs.length || refs.some((x, i) => i > 0 && x <= refs[i - 1])
-        || (opt.after && refs.some(x => x <= opt.after!))
+      // The backend orders and paginates with the database collation. Do not
+      // re-sort or compare opaque references with JavaScript string ordering.
+      if (new Set(refs).size !== refs.length || (opt.after && refs.includes(opt.after))
         || (cursor !== null && (found.length !== 100 || cursor !== found[found.length - 1].ref))) {
         return { status: 'error' };
       }
@@ -135,6 +137,7 @@ export function OperationsProcessesPanel({ enabled, tenantId, companyId, branchI
   const [transition, setTransition] = useState<ProcessState>('EN_REVISION');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [formError, setFormError] = useState('');
   const opts = { enabled, allowed: permitted, tenant: tenantId, company: companyId, branch: branchId };
 
   useEffect(() => {
@@ -145,7 +148,7 @@ export function OperationsProcessesPanel({ enabled, tenantId, companyId, branchI
       if (controller.signal.aborted) return;
       if (result.status === 'ready' && 'rows' in result) {
         setView({ kind: 'ready', rows: result.rows, cursor: result.cursor });
-      } else setView({ kind: result.status === 'ready' ? 'error' : result.status });
+      } else setView({ kind: result.status === 'ready' || result.status === 'conflict' ? 'error' : result.status });
     });
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -175,15 +178,24 @@ export function OperationsProcessesPanel({ enabled, tenantId, companyId, branchI
       ...(creating ? { kind } : { next: transition, version: selected?.version }),
       csrf: csrfToken });
     if (result.status === 'ready' && 'entry' in result) {
+      setFormError('');
       setNotice('Proceso guardado para revisión. No constituye aprobación automática.');
       setMode(null);
       setSelected(null);
       setReload(x => x + 1);
-    } else setNotice(result.status === 'denied' ? 'No tienes permiso para esta operación.'
-      : 'No se pudo guardar el proceso. Revisa la información o la versión actual.');
+    } else if (result.status === 'conflict') {
+      setFormError('');
+      setMode(null);
+      setSelected(null);
+      setNotice('El proceso cambió desde que lo abriste. Actualizamos la lista; vuelve a abrirlo para revisar su versión actual.');
+      setReload(x => x + 1);
+    } else setFormError(result.status === 'denied' ? 'No tienes permiso para esta operación.'
+      : 'No se pudo guardar el proceso. Revisa la información e inténtalo de nuevo.');
     setBusy(false);
   }
   function show(row: ProcessEntry) {
+    if (busy) return;
+    setFormError('');
     setSelected(row);
     setTransition(routes[row.state][0] ?? 'EN_REVISION');
     setMode('inspect');
@@ -202,7 +214,7 @@ export function OperationsProcessesPanel({ enabled, tenantId, companyId, branchI
   return <section id="operations-processes" className="ui-page" aria-label="Gestión de procesos">
     <PageHeader title="Procesos" description="Controla los procesos internos por razón social, con historial y revisión manual."
       actions={canCreate ? <button type="button" className="button" disabled={busy}
-        onClick={() => { setRef(''); setKind('PROCESO'); setMode('create'); }}>
+        onClick={() => { setFormError(''); setRef(''); setKind('PROCESO'); setMode('create'); }}>
         Nuevo proceso
       </button> : undefined} />
     {view.kind === 'loading' && <output role="status" aria-live="polite">Cargando procesos…</output>}
@@ -237,7 +249,7 @@ export function OperationsProcessesPanel({ enabled, tenantId, companyId, branchI
     </>}
     {notice && <output role="status" aria-live="polite" className="alert">{notice}</output>}
     <SidePanel open={mode !== null} title={mode === 'create' ? 'Nuevo proceso' : 'Detalle del proceso'}
-      onClose={() => setMode(null)}>
+      onClose={() => { if (!busy) setMode(null); }}>
       <form onSubmit={event => { void save(event); }}>
         {mode === 'create' ? <>
           <label className="field">Referencia interna
@@ -262,6 +274,7 @@ export function OperationsProcessesPanel({ enabled, tenantId, companyId, branchI
             </select>
           </label>}
         </>}
+        {formError && <p role="alert" className="alert alert-error">{formError}</p>}
         <p className="muted">Los cambios requieren revisión; no constituyen aprobación jurídica.</p>
         {((mode === 'create' && canCreate) || (mode === 'inspect' && canModify)) &&
           <button type="submit" className="button" disabled={busy}>

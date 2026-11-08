@@ -28,14 +28,18 @@ const props = { enabled: true, tenantId: 'tenant_a', companyId: 'company_a', bra
   permissions: ['inventory.view', 'inventory.create', 'inventory.update'], csrfToken: 'csrf_demo' };
 
 test('flag OFF, ámbito ajeno o permiso ausente jamás invocan transporte', async () => {
-  const forbidden = () => { throw Error('HTTP unexpectedly called'); };
+  let forbiddenCalls = 0;
+  const forbidden = () => { forbiddenCalls += 1; throw Error('HTTP unexpectedly called'); };
   for (const options of [
     { ...scope, enabled: false },
     { ...scope, allowed: false },
     { ...scope, company: '__unassigned__' },
     { ...scope, tenant: '' },
     { ...scope, branch: '' },
-  ]) assert.notEqual((await request(options, forbidden)).status, 'ready');
+  ]) {
+    assert.notEqual((await request(options, forbidden)).status, 'ready');
+    assert.equal(forbiddenCalls, 0);
+  }
   const html = renderToStaticMarkup(React.createElement(Panel, { ...props, enabled: false }));
   assert.match(html, /El módulo aún no está habilitado/);
   assert.doesNotMatch(html, /Nuevo proceso|proceso_a/);
@@ -62,6 +66,19 @@ test('GET lista y cursor keyset exigen respuesta ordenada, 100 filas máximo y m
     return json({ records: [{ ...sample, record_ref: 'proceso_b' }], next_cursor: null });
   });
   assert.equal(next.rows[0].ref, 'proceso_b');
+  // MariaDB's configured collation can order punctuation differently from
+  // JavaScript string comparison; preserve the exact server order.
+  const collated = await request(scope, () => json({ records: [
+    { ...sample, record_ref: 'proceso_a' },
+    { ...sample, record_ref: 'proceso-a' },
+  ], next_cursor: null }));
+  assert.equal(collated.status, 'ready');
+  assert.deepEqual(collated.rows.map(row => row.ref), ['proceso_a', 'proceso-a']);
+  const collatedNext = await request({ ...scope, after: 'proceso_a' }, () => json({
+    records: [{ ...sample, record_ref: 'proceso-a' }], next_cursor: null,
+  }));
+  assert.equal(collatedNext.status, 'ready');
+  assert.equal(collatedNext.rows[0].ref, 'proceso-a');
   const all = Array.from({ length: 100 }, (_, i) => ({ ...sample,
     record_ref: 'proceso_' + String(i).padStart(3, '0') }));
   const batch = await request(scope, () => json({ records: all, next_cursor: 'proceso_099' }));
@@ -82,9 +99,8 @@ test('GET falla cerrado ante filas de otra empresa, duplicadas, cursor falso y e
     { records: [sample], next_cursor: 'any_ref' },
     { records: Array(101).fill(sample), next_cursor: null },
     { records: [], next_cursor: 'proceso_a' },
-    { records: [{ ...sample, record_ref: 'proceso_z' }, sample], next_cursor: null },
   ]) assert.equal((await request(scope, () => json(malformed))).status, 'error');
-  assert.equal((await request({ ...scope, after: 'proceso_z' },
+  assert.equal((await request({ ...scope, after: 'proceso_a' },
     () => json({ records: [sample], next_cursor: null }))).status, 'error');
 });
 
@@ -130,6 +146,9 @@ test('error HTTP, 404 ausente vs feature_unavailable, permisos y JSON corrupto n
   for (const code of [401, 403])
     assert.deepEqual(await request(scope, () => json({ error: 'unauthorized' }, code)), { status: 'denied' });
   assert.deepEqual(await request(scope, () => json({ error: 'feature_unavailable' }, 404)), { status: 'disabled' });
+  assert.deepEqual(await request({ ...scope, verb: 'PATCH', ref: 'proceso_a',
+    next: 'EN_REVISION', version: 1, csrf: 'csrf_demo' },
+    () => json({ error: 'version_conflict' }, 409)), { status: 'conflict' });
   for (const response of [json({ error: 'not_found' }, 404), json({ error: 'server' }, 500),
     new Response('{', { status: 200 }), new Response('<html>404</html>', { status: 404 })])
     assert.equal((await request(scope, () => response)).status, 'error');

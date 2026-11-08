@@ -27,8 +27,9 @@ class ProcessesRealFlagBootstrapTests(unittest.TestCase):
         self.assertIn("getenv('OPERATIONS_PROCESSES_REAL_DATA_ENABLED') === 'true'", self.api)
 
     def test_ui_does_not_leak_into_live_without_flag_and_valid_scope(self):
-        self.assertIn("processesRealDataEnabled ? [{ href: '/admin#operations-processes'", self.app)
-        self.assertIn("(processesRealDataEnabled || import.meta.env.DEV)", self.app)
+        self.assertIn("context.status === 'ready' && context.data.permissions.includes('inventory.view')", self.app)
+        self.assertIn("label: processesRealDataEnabled ? 'Procesos' : 'Procesos (no habilitado)'", self.app)
+        self.assertIn("context.data.permissions.includes('inventory.view') && (", self.app)
         self.assertIn("enabled={processesRealDataEnabled}", self.app)
         self.assertIn("context.data.active_branch.legal_entity?.id === context.data.active_legal_entity.id", self.app)
         self.assertIn("companyId={context.data.active_legal_entity?.id", self.app)
