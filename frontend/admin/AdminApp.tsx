@@ -16,7 +16,7 @@ import { EmployeesManagement } from './EmployeesManagement';
 import { HumanResourcesManagement } from './HumanResourcesManagement';
 import { ProductionManagement } from './ProductionManagement';
 import { PurchasingManagement } from './PurchasingManagement';
-import { AssetsManagement } from './AssetsManagement';
+
 import { PayrollManagement } from './PayrollManagement';
 import { ContractsRealManagement } from './ContractsManagement';
 import { SocialSecurityRealManagement } from './SocialSecurityManagement';
@@ -87,6 +87,10 @@ const AsyncCustomerServiceManagement = lazy(async () => ({
   default: (await import('./CustomerServiceManagement')).CustomerServiceManagement,
 }));
 
+const AsyncAssetsManagement = lazy(async () => ({
+  default: (await import('./AssetsManagement')).AssetsManagement,
+}));
+
 const DevDocumentsManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./DocumentsManagement')).DocumentsManagement }))
   : null;
@@ -120,6 +124,8 @@ export function AdminApp({
     && document.getElementById('condor-admin-root')?.dataset.governanceRealDataEnabled === 'true';
   const customerServiceRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.customerServiceRealDataEnabled === 'true';
+  const assetsRealDataEnabled = typeof document !== 'undefined'
+    && document.getElementById('condor-admin-root')?.dataset.assetsRealDataEnabled === 'true';
   const processesRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.operationsProcessesRealDataEnabled === 'true';
   // Synthetic catalogs are available only in dev with an explicit root opt-in.
@@ -133,6 +139,8 @@ export function AdminApp({
   const [context, setContext] = useState<ContextState>({
     status: 'loading',
   });
+  const activeCompanyId = context.status === 'ready'
+    ? (context.data.active_legal_entity?.id ?? '__unassigned__') : '__unassigned__';
   const [contextRequest] = useState(() => ({ latest: 0 }));
 
   async function loadContext(branchId?: string) {
@@ -225,7 +233,8 @@ export function AdminApp({
             { href: '/admin#stock-transfers', label: 'Transferencias' },
             { href: '/admin#production', label: 'Producción' },
             { href: '/admin#purchasing', label: 'Compras' },
-            ...(import.meta.env.DEV ? [{ href: '/admin#assets-management', label: 'Activos (pruebas)' }] : []),
+            ...(assetsRealDataEnabled ? [{ href: '/admin#assets-management', label: 'Activos' }]
+              : import.meta.env.DEV ? [{ href: '/admin#assets-management', label: 'Activos (no habilitado)' }] : []),
           ],
         },
         {
@@ -471,7 +480,7 @@ export function AdminApp({
             <Suspense fallback={<p role="status">Cargando procesos…</p>}>
               <AsyncOperationsProcessesPanel
               key={'operations-processes-' + context.data.tenant.id + '-'
-                + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-'
+                + activeCompanyId + '-'
                 + context.data.active_branch.id}
               enabled={processesRealDataEnabled}
               tenantId={context.data.tenant.id}
@@ -512,7 +521,7 @@ export function AdminApp({
             <Suspense fallback={<p role="status">Cargando servicio al cliente…</p>}>
             <AsyncCustomerServiceManagement
               key={'customer-service-' + context.data.tenant.id + '-'
-                + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                + activeCompanyId + '-' + context.data.active_branch.id}
               enabled={customerServiceRealDataEnabled}
               tenantId={context.data.tenant.id}
               companyId={context.data.active_legal_entity?.id !== undefined
@@ -525,19 +534,27 @@ export function AdminApp({
             </Suspense>
           )}
 
-          {import.meta.env.DEV && (
-            <AssetsManagement
-              key={'assets-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
-              tenantId={context.data.tenant.id}
-              companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
-              branchId={context.data.active_branch.id}
-              permissions={context.data.permissions}
-            />
+          {(assetsRealDataEnabled || import.meta.env.DEV) && (
+            <Suspense fallback={<p role="status">Cargando módulo de activos…</p>}>
+              <AsyncAssetsManagement
+                key={'assets-' + context.data.tenant.id + '-'
+                  + activeCompanyId + '-'
+                  + context.data.active_branch.id}
+                enabled={assetsRealDataEnabled}
+                tenantId={context.data.tenant.id}
+                companyId={context.data.active_legal_entity?.id !== undefined
+                  && context.data.active_branch.legal_entity?.id === context.data.active_legal_entity.id
+                  ? context.data.active_legal_entity.id : '__unassigned__'}
+                branchId={context.data.active_branch.id}
+                permissions={context.data.permissions}
+                csrfToken={accessToken}
+              />
+            </Suspense>
           )}
 
           {(payrollRealDataEnabled || import.meta.env.DEV) && (
             <PayrollManagement
-              key={'payroll-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+              key={'payroll-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
               tenantId={context.data.tenant.id}
               companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
               branchId={context.data.active_branch.id}
@@ -549,7 +566,7 @@ export function AdminApp({
 
           {(socialSecurityRealDataEnabled || import.meta.env.DEV) && (
             <SocialSecurityRealManagement
-              key={'social-real-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+              key={'social-real-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
               tenantId={context.data.tenant.id}
               companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
               branchId={context.data.active_branch.id}
@@ -561,7 +578,7 @@ export function AdminApp({
 
           {contractsRealDataEnabled && (
             <ContractsRealManagement
-              key={'contracts-real-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+              key={'contracts-real-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
               tenantId={context.data.tenant.id}
               companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
               branchId={context.data.active_branch.id}
@@ -572,7 +589,7 @@ export function AdminApp({
           )}
           {(ohsRealDataEnabled || import.meta.env.DEV) && (
             <ComplianceManagement
-              key={'compliance-real-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+              key={'compliance-real-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
               tenantId={context.data.tenant.id}
               companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
               branchId={context.data.active_branch.id}
@@ -587,7 +604,7 @@ export function AdminApp({
               {import.meta.env.DEV && !contractsRealDataEnabled && DevContractsManagement && (
                 <Suspense fallback={<p role="status">Cargando contratación ficticia…</p>}>
                   <DevContractsManagement
-                    key={'contracts-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                    key={'contracts-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
                     tenantId={context.data.tenant.id}
                     companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
                     branchId={context.data.active_branch.id}
@@ -601,7 +618,7 @@ export function AdminApp({
                 && context.data.active_branch.legal_entity?.id === context.data.active_legal_entity?.id && (
                 <Suspense fallback={<p role="status">Cargando ciclo contractual de prueba…</p>}>
                   <DevContractsLifecyclePreview
-                    key={'contracts-lifecycle-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                    key={'contracts-lifecycle-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
                     tenantId={context.data.tenant.id}
                     companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
                     branchId={context.data.active_branch.id}
@@ -623,7 +640,7 @@ export function AdminApp({
               {hrRealDataEnabled && (
                 <Suspense fallback={<p role="status">Cargando talento humano…</p>}>
                 <HumanResourcesManagement
-                  key={'human-resources-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                  key={'human-resources-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
                   tenantId={context.data.tenant.id}
                   companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
                   branchId={context.data.active_branch.id}
@@ -637,7 +654,7 @@ export function AdminApp({
           {(governanceRealDataEnabled || import.meta.env.DEV) && (
             <GovernanceManagement
               key={'governance-real-' + context.data.tenant.id + '-'
-                + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-'
+                + activeCompanyId + '-'
                 + context.data.active_branch.id}
               enabled={governanceRealDataEnabled}
               tenantId={context.data.tenant.id}
@@ -652,7 +669,7 @@ export function AdminApp({
 
           {legalComplianceRealDataEnabled ? (
             <LegalComplianceRealManagement
-              key={'legal-real-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+              key={'legal-real-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
               enabled={legalComplianceRealDataEnabled}
               tenantId={context.data.tenant.id}
               companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
@@ -669,7 +686,7 @@ export function AdminApp({
 
           {financeRealDataEnabled && (
             <FinanceRealManagement
-              key={'finance-real-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+              key={'finance-real-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
               enabled={financeRealDataEnabled}
               tenantId={context.data.tenant.id}
               companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
@@ -682,7 +699,7 @@ export function AdminApp({
           {import.meta.env.DEV && DevFinanceManagement && !financeRealDataEnabled && (
             <Suspense fallback={<p role="status">Cargando finanzas ficticias…</p>}>
               <DevFinanceManagement
-                key={'finance-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
+                key={'finance-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
                 tenantId={context.data.tenant.id}
                 companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
                 branchId={context.data.active_branch.id}
