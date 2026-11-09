@@ -16,7 +16,7 @@ import { EmployeesManagement } from './EmployeesManagement';
 import { HumanResourcesManagement } from './HumanResourcesManagement';
 import { ProductionManagement } from './ProductionManagement';
 import { PurchasingManagement } from './PurchasingManagement';
-import { AssetsManagement } from './AssetsManagement';
+
 import { PayrollManagement } from './PayrollManagement';
 import { ContractsRealManagement } from './ContractsManagement';
 import { SocialSecurityRealManagement } from './SocialSecurityManagement';
@@ -87,6 +87,10 @@ const AsyncCustomerServiceManagement = lazy(async () => ({
   default: (await import('./CustomerServiceManagement')).CustomerServiceManagement,
 }));
 
+const AsyncAssetsManagement = lazy(async () => ({
+  default: (await import('./AssetsManagement')).AssetsManagement,
+}));
+
 const DevDocumentsManagement = import.meta.env.DEV
   ? lazy(async () => ({ default: (await import('./DocumentsManagement')).DocumentsManagement }))
   : null;
@@ -120,6 +124,8 @@ export function AdminApp({
     && document.getElementById('condor-admin-root')?.dataset.governanceRealDataEnabled === 'true';
   const customerServiceRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.customerServiceRealDataEnabled === 'true';
+  const assetsRealDataEnabled = typeof document !== 'undefined'
+    && document.getElementById('condor-admin-root')?.dataset.assetsRealDataEnabled === 'true';
   const processesRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.operationsProcessesRealDataEnabled === 'true';
   // Synthetic catalogs are available only in dev with an explicit root opt-in.
@@ -225,7 +231,8 @@ export function AdminApp({
             { href: '/admin#stock-transfers', label: 'Transferencias' },
             { href: '/admin#production', label: 'Producción' },
             { href: '/admin#purchasing', label: 'Compras' },
-            ...(import.meta.env.DEV ? [{ href: '/admin#assets-management', label: 'Activos (pruebas)' }] : []),
+            ...(assetsRealDataEnabled ? [{ href: '/admin#assets-management', label: 'Activos' }]
+              : import.meta.env.DEV ? [{ href: '/admin#assets-management', label: 'Activos (no habilitado)' }] : []),
           ],
         },
         {
@@ -525,14 +532,22 @@ export function AdminApp({
             </Suspense>
           )}
 
-          {import.meta.env.DEV && (
-            <AssetsManagement
-              key={'assets-' + context.data.tenant.id + '-' + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-' + context.data.active_branch.id}
-              tenantId={context.data.tenant.id}
-              companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
-              branchId={context.data.active_branch.id}
-              permissions={context.data.permissions}
-            />
+          {(assetsRealDataEnabled || import.meta.env.DEV) && (
+            <Suspense fallback={<p role="status">Cargando módulo de activos…</p>}>
+              <AsyncAssetsManagement
+                key={'assets-' + context.data.tenant.id + '-'
+                  + (context.data.active_legal_entity?.id ?? '__unassigned__') + '-'
+                  + context.data.active_branch.id}
+                enabled={assetsRealDataEnabled}
+                tenantId={context.data.tenant.id}
+                companyId={context.data.active_legal_entity?.id !== undefined
+                  && context.data.active_branch.legal_entity?.id === context.data.active_legal_entity.id
+                  ? context.data.active_legal_entity.id : '__unassigned__'}
+                branchId={context.data.active_branch.id}
+                permissions={context.data.permissions}
+                csrfToken={accessToken}
+              />
+            </Suspense>
           )}
 
           {(payrollRealDataEnabled || import.meta.env.DEV) && (
