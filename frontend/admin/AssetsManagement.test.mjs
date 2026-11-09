@@ -50,6 +50,18 @@ test('flag OFF y ámbitos inválidos nunca hacen fetch ni revelan activos', asyn
   assert.match(loading, /Cargando activos/);
 });
 
+test('flag OFF veta acciones de escritura aunque haya permisos y CSRF, sin HTTP', async () => {
+  const writes = [
+    { verb: 'POST', ref: 'equipo_qa', category: 'EQUIPO', csrf: 'csrf_qa' },
+    { verb: 'PATCH', ref: 'equipo_qa', next: 'ASIGNADO',
+      version: 1, responsible: 'empleado_qa', csrf: 'csrf_qa' },
+  ];
+  for (const action of writes) {
+    assert.equal((await run({ ...action, enabled: false }, forbid)).status, 'disabled');
+    assert.equal((await run({ ...action, allowed: false }, forbid)).status, 'denied');
+  }
+});
+
 test('API real: consulta paginada, orden estable y ámbitos comprobados', async () => {
   const list = await run({}, (url, init) => {
     assert.equal(url, path);
