@@ -9,12 +9,14 @@ Producto: `pl0n3r/Condor`
 | account_identity | contact | review_required | review_required |
 | account_invitation | authentication | invitation_lifecycle | review_required |
 | account_password | authentication | credential_lifecycle | review_required |
+| assets_real_records | usage | review_required | review_required |
 | audit_events | usage | review_required | review_required |
 | condor_password_reset | authentication | password_reset_lifecycle | review_required |
 | contract_synthetic_records | usage | review_required | review_required |
 | contracts_real_records | usage | review_required | review_required |
 | controlbot_staff_operations | usage | review_required | review_required |
 | customer_contact | contact | review_required | review_required |
+| customer_service_real_records | usage | review_required | review_required |
 | diagnostic_shares | authentication | diagnostic_share_lifecycle | review_required |
 | error_incidents | usage | review_required | review_required |
 | finance_real_records | usage | review_required | review_required |
@@ -25,6 +27,7 @@ Producto: `pl0n3r/Condor`
 | notification_delivery | usage | review_required | review_required |
 | notification_preferences | usage | account_lifecycle | review_required |
 | occupational_safety_real_records | usage | review_required | review_required |
+| operations_processes_real_records | usage | review_required | review_required |
 | payroll_real_records | usage | review_required | review_required |
 | payroll_synthetic_records | usage | review_required | review_required |
 | self_service_trial_application | contact | review_required | review_required |
