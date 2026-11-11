@@ -105,6 +105,16 @@ export function AdminApp({
   accessToken,
   section,
 }: AdminAppProps) {
+  // A single hash selector controls which panel is mounted. AdminShell keeps
+  // the existing navigation, breadcrumbs and browser history semantics.
+  const [activeModule, setActiveModule] = useState(() =>
+    typeof window === 'undefined' ? '' : window.location.hash.slice(1));
+  useEffect(() => {
+    const syncModule = () => setActiveModule(window.location.hash.slice(1));
+    window.addEventListener('hashchange', syncModule);
+    return () => window.removeEventListener('hashchange', syncModule);
+  }, []);
+
   // The server alone sets this signal; absent/any other value means OFF.
   const hrRealDataEnabled = typeof document !== 'undefined'
     && document.getElementById('condor-admin-root')?.dataset.hrRealDataEnabled === 'true';
@@ -231,7 +241,8 @@ export function AdminApp({
             { href: '/admin#inventory', label: 'Inventario' },
             { href: '/admin#stock-alerts', label: 'Alertas de stock' },
             { href: '/admin#stock-transfers', label: 'Transferencias' },
-            { href: '/admin#production', label: 'Producción' },
+            ...(readyContext?.permissions.includes('inventory.view')
+              ? [{ href: '/admin#production', label: 'Producción' }] : []),
             { href: '/admin#purchasing', label: 'Compras' },
             ...(assetsRealDataEnabled ? [{ href: '/admin#assets-management', label: 'Activos' }]
               : import.meta.env.DEV ? [{ href: '/admin#assets-management', label: 'Activos (no habilitado)' }] : []),
@@ -404,7 +415,7 @@ export function AdminApp({
 
           {section === 'home' && (
             <>
-          <OverviewGrid
+          {activeModule === '' && (<OverviewGrid
             ariaLabel="Estado de la empresa"
             items={[
               {
@@ -422,11 +433,11 @@ export function AdminApp({
                 detail: 'capacidades en esta sede',
               },
             ]}
-          />
+          />)}
 
-          <ModuleDirectory entries={navEntries} />
+          {activeModule === '' && <ModuleDirectory entries={navEntries} />}
 
-          {DevDocumentsManagement && (
+          {activeModule === 'documents' && DevDocumentsManagement && (
             <section id="documents-module" aria-label="Gestión documental (pruebas)">
               <Suspense fallback={<p role="status">Cargando gestión documental ficticia…</p>}>
                 <DevDocumentsManagement
@@ -441,42 +452,42 @@ export function AdminApp({
             </section>
           )}
 
-          <CatalogManagement
+          {activeModule === 'catalog' && (<CatalogManagement
             key={'catalog-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}
-          />
+          />)}
 
-          <InventoryManagement
+          {activeModule === 'inventory' && (<InventoryManagement
             key={'inventory-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}
-          />
+          />)}
 
-          <StockAlertsPanel
+          {activeModule === 'stock-alerts' && (<StockAlertsPanel
             key={'stock-alerts-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}
-          />
+          />)}
 
-          <StockTransferPanel
+          {activeModule === 'stock-transfers' && (<StockTransferPanel
             key={'stock-transfers-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}
-          />
+          />)}
 
-          <WorkflowsPanel
+          {activeModule === 'workflows' && (<WorkflowsPanel
             key={'workflows-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}
-          />
+          />)}
 
-          {(processesRealDataEnabled || import.meta.env.DEV) && (
+          {activeModule === 'operations-processes' && (processesRealDataEnabled || import.meta.env.DEV) && (
             <Suspense fallback={<p role="status">Cargando procesos…</p>}>
               <AsyncOperationsProcessesPanel
               key={'operations-processes-' + context.data.tenant.id + '-'
@@ -494,14 +505,14 @@ export function AdminApp({
             </Suspense>
           )}
 
-          <SeoSettingsPanel
+          {activeModule === 'seo-settings' && (<SeoSettingsPanel
             key={'seo-settings-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}
-          />
+          />)}
 
-          {context.data.permissions.includes('inventory.view') && (
+          {activeModule === 'production' && context.data.permissions.includes('inventory.view') && (
             <ProductionManagement
               key={'production-' + context.data.active_branch.id}
               branchId={context.data.active_branch.id}
@@ -510,14 +521,14 @@ export function AdminApp({
             />
           )}
 
-          <PurchasingManagement
+          {activeModule === 'purchasing' && (<PurchasingManagement
             key={'purchasing-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}
-          />
+          />)}
 
-          {(customerServiceRealDataEnabled || import.meta.env.DEV) && (
+          {activeModule === 'customer-service' && (customerServiceRealDataEnabled || import.meta.env.DEV) && (
             <Suspense fallback={<p role="status">Cargando servicio al cliente…</p>}>
             <AsyncCustomerServiceManagement
               key={'customer-service-' + context.data.tenant.id + '-'
@@ -534,7 +545,7 @@ export function AdminApp({
             </Suspense>
           )}
 
-          {(assetsRealDataEnabled || import.meta.env.DEV) && (
+          {activeModule === 'assets-management' && (assetsRealDataEnabled || import.meta.env.DEV) && (
             <Suspense fallback={<p role="status">Cargando módulo de activos…</p>}>
               <AsyncAssetsManagement
                 key={'assets-' + context.data.tenant.id + '-'
@@ -552,7 +563,7 @@ export function AdminApp({
             </Suspense>
           )}
 
-          {(payrollRealDataEnabled || import.meta.env.DEV) && (
+          {activeModule === 'payroll-management' && (payrollRealDataEnabled || import.meta.env.DEV) && (
             <PayrollManagement
               key={'payroll-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
               tenantId={context.data.tenant.id}
@@ -564,7 +575,7 @@ export function AdminApp({
             />
           )}
 
-          {(socialSecurityRealDataEnabled || import.meta.env.DEV) && (
+          {activeModule === 'social-security-management' && (socialSecurityRealDataEnabled || import.meta.env.DEV) && (
             <SocialSecurityRealManagement
               key={'social-real-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
               tenantId={context.data.tenant.id}
@@ -576,7 +587,7 @@ export function AdminApp({
             />
           )}
 
-          {contractsRealDataEnabled && (
+          {activeModule === 'contracts-management' && contractsRealDataEnabled && (
             <ContractsRealManagement
               key={'contracts-real-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
               tenantId={context.data.tenant.id}
@@ -587,7 +598,7 @@ export function AdminApp({
               enabled={contractsRealDataEnabled}
             />
           )}
-          {(ohsRealDataEnabled || import.meta.env.DEV) && (
+          {activeModule === 'compliance-management' && (ohsRealDataEnabled || import.meta.env.DEV) && (
             <ComplianceManagement
               key={'compliance-real-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
               tenantId={context.data.tenant.id}
@@ -601,7 +612,7 @@ export function AdminApp({
 
           {import.meta.env.DEV && (
             <>
-              {import.meta.env.DEV && !contractsRealDataEnabled && DevContractsManagement && (
+              {activeModule === 'contracts-management' && import.meta.env.DEV && !contractsRealDataEnabled && DevContractsManagement && (
                 <Suspense fallback={<p role="status">Cargando contratación ficticia…</p>}>
                   <DevContractsManagement
                     key={'contracts-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
@@ -612,7 +623,7 @@ export function AdminApp({
                   />
                 </Suspense>
               )}
-              {contractsSyntheticPreviewEnabled && DevContractsLifecyclePreview
+              {activeModule === 'contracts-management' && contractsSyntheticPreviewEnabled && DevContractsLifecyclePreview
                 && context.data.permissions.includes('inventory.view')
                 && context.data.active_legal_entity?.id !== undefined
                 && context.data.active_branch.legal_entity?.id === context.data.active_legal_entity?.id && (
@@ -626,7 +637,7 @@ export function AdminApp({
                   />
                 </Suspense>
               )}
-              {hrSyntheticPreviewEnabled && !hrRealDataEnabled && (
+              {activeModule === 'human-resources-management' && hrSyntheticPreviewEnabled && !hrRealDataEnabled && (
                 <Suspense fallback={<p role="status">Cargando catálogos sintéticos…</p>}>
                   <HumanResourcesManagement
                     key={'m01-synthetic-' + context.data.tenant.id + '-' + context.data.active_branch.id}
@@ -637,21 +648,27 @@ export function AdminApp({
                   />
                 </Suspense>
               )}
-              {hrRealDataEnabled && (
-                <Suspense fallback={<p role="status">Cargando talento humano…</p>}>
-                <HumanResourcesManagement
-                  key={'human-resources-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
-                  tenantId={context.data.tenant.id}
-                  companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
-                  branchId={context.data.active_branch.id}
-                  permissions={context.data.permissions}
-                />
-              </Suspense>
-              )}
             </>
           )}
 
-          {(governanceRealDataEnabled || import.meta.env.DEV) && (
+
+              {activeModule === 'human-resources-management' && (
+                <>
+                  {hrRealDataEnabled && (
+                    <Suspense fallback={<p role="status">Cargando talento humano…</p>}>
+                      <HumanResourcesManagement
+                        key={'human-resources-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
+                        tenantId={context.data.tenant.id}
+                        companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
+                        branchId={context.data.active_branch.id}
+                        permissions={context.data.permissions}
+                      />
+                    </Suspense>
+                  )}
+                </>
+              )}
+
+          {activeModule === 'governance-management' && (governanceRealDataEnabled || import.meta.env.DEV) && (
             <GovernanceManagement
               key={'governance-real-' + context.data.tenant.id + '-'
                 + activeCompanyId + '-'
@@ -667,7 +684,7 @@ export function AdminApp({
             />
           )}
 
-          {legalComplianceRealDataEnabled ? (
+          {activeModule === 'compliance-evidence-management' && (legalComplianceRealDataEnabled ? (
             <LegalComplianceRealManagement
               key={'legal-real-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
               enabled={legalComplianceRealDataEnabled}
@@ -682,9 +699,9 @@ export function AdminApp({
               <h2>Cumplimiento legal</h2>
               <p role="status">Este módulo aún no está habilitado. No se han consultado ni mostrado registros.</p>
             </section>
-          ) : null}
+          ) : null)}
 
-          {financeRealDataEnabled && (
+          {activeModule === 'finance-management' && financeRealDataEnabled && (
             <FinanceRealManagement
               key={'finance-real-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
               enabled={financeRealDataEnabled}
@@ -696,7 +713,7 @@ export function AdminApp({
             />
           )}
 
-          {import.meta.env.DEV && DevFinanceManagement && !financeRealDataEnabled && (
+          {activeModule === 'finance-management' && import.meta.env.DEV && DevFinanceManagement && !financeRealDataEnabled && (
             <Suspense fallback={<p role="status">Cargando finanzas ficticias…</p>}>
               <DevFinanceManagement
                 key={'finance-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
@@ -708,43 +725,43 @@ export function AdminApp({
             </Suspense>
           )}
 
-          <CommerceManagement
+          {activeModule === 'commerce' && (<CommerceManagement
             key={'commerce-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}
-          />
+          />)}
 
-          <OrdersManagement
+          {activeModule === 'orders' && (<OrdersManagement
             key={'orders-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}
-          />
+          />)}
 
-          <SalesReportPanel
+          {activeModule === 'sales-reports' && (<SalesReportPanel
             key={'sales-reports-' + context.data.active_branch.id}
             permissions={context.data.permissions}
-          />
+          />)}
 
-          <ReportsDownloads
+          {activeModule === 'reports-downloads' && (<ReportsDownloads
             key={'reports-downloads-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
-          />
+          />)}
 
-          <AccessManagement
+          {activeModule === 'roles' && (<AccessManagement
             key={'access-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             permissions={context.data.permissions}
             csrfToken={accessToken}
-          />
+          />)}
 
-          <EmployeesManagement
+          {activeModule === 'employees-management' && (<EmployeesManagement
             key={'employees-' + context.data.active_branch.id}
             branchId={context.data.active_branch.id}
             csrfToken={accessToken}
-          />
+          />)}
             </>
           )}
 
