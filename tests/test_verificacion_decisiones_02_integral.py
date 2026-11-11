@@ -77,7 +77,11 @@ def run_offline_test(path: str, classname: str, method: str) -> None:
     namespace = runpy.run_path(str(ROOT / path))
     klass = namespace[classname]
     result = unittest.TestResult()
-    klass(method).run(result)
+    klass.setUpClass()
+    try:
+        klass(method).run(result)
+    finally:
+        klass.tearDownClass()
     if result.testsRun != 1 or result.failures or result.errors or result.skipped:
         raise AssertionError("UNKNOWN: regresión offline falló " + path)
 
