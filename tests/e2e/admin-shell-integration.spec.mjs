@@ -116,6 +116,8 @@ test.describe('AdminApp: shell real compilada en producción con datos ficticios
     await syntheticApi(page, calls);
     await page.goto(origin + '/admin');
     await expect(page.locator('.module-directory')).toBeVisible();
+    // The initial workspace must not mount any privileged module before selection.
+    await expect(page.locator('#human-resources-management')).toHaveCount(0);
     expect(calls.filter(path => path.startsWith('/api/v1/branches/'))).toEqual([]);
     await page.evaluate(() => { window.location.hash = '#catalog'; });
     await expect(page.locator('#catalog')).toBeVisible();
