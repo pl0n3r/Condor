@@ -246,7 +246,8 @@ export function AdminApp({
             { href: '/admin#inventory', label: 'Inventario' },
             { href: '/admin#stock-alerts', label: 'Alertas de stock' },
             { href: '/admin#stock-transfers', label: 'Transferencias' },
-            { href: '/admin#production', label: 'Producción' },
+            ...(readyContext?.permissions.includes('inventory.view')
+              ? [{ href: '/admin#production', label: 'Producción' }] : []),
             { href: '/admin#purchasing', label: 'Compras' },
             ...(assetsRealDataEnabled ? [{ href: '/admin#assets-management', label: 'Activos' }]
               : import.meta.env.DEV ? [{ href: '/admin#assets-management', label: 'Activos (no habilitado)' }] : []),
