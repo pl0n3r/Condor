@@ -218,11 +218,6 @@ export function AdminApp({
         === readyContext.active_legal_entity?.id
       ));
 
-  // Keep the menu and the production mount behind the same server flag
-  // and effective branch permission. The backend remains authoritative.
-  const hrRealModuleAvailable = hrRealDataEnabled
-    && readyContext?.permissions.includes('users.view') === true;
-
   const navEntries: AdminNavEntry[] = [
 
         { href: '/admin', label: 'Inicio', current: section === 'home', icon: 'home' },
@@ -266,7 +261,7 @@ export function AdminApp({
           icon: 'people',
           items: [
             { href: '/admin#employees-management', label: 'Empleados y asistencia' },
-            ...(hrRealModuleAvailable ? [{ href: '/admin#human-resources-management', label: 'Talento humano' }] : []),
+            ...(hrRealDataEnabled ? [{ href: '/admin#human-resources-management', label: 'Talento humano' }] : []),
             ...(hrSyntheticPreviewEnabled && !hrRealDataEnabled ? [{ href: '/admin#human-resources-management', label: 'Catálogos RR. HH. (pruebas)' }] : []),
             ...(payrollRealDataEnabled ? [{ href: '/admin#payroll-management', label: 'Nómina' }]
               : import.meta.env.DEV ? [{ href: '/admin#payroll-management', label: 'Nómina (pruebas)' }] : []),
@@ -657,16 +652,20 @@ export function AdminApp({
           )}
 
 
-              {activeModule === 'human-resources-management' && hrRealModuleAvailable && (
-                <Suspense fallback={<p role="status">Cargando talento humano…</p>}>
-                <HumanResourcesManagement
-                  key={'human-resources-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
-                  tenantId={context.data.tenant.id}
-                  companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
-                  branchId={context.data.active_branch.id}
-                  permissions={context.data.permissions}
-                />
-              </Suspense>
+              {activeModule === 'human-resources-management' && (
+                <>
+                  {hrRealDataEnabled && (
+                    <Suspense fallback={<p role="status">Cargando talento humano…</p>}>
+                      <HumanResourcesManagement
+                        key={'human-resources-' + context.data.tenant.id + '-' + activeCompanyId + '-' + context.data.active_branch.id}
+                        tenantId={context.data.tenant.id}
+                        companyId={context.data.active_legal_entity?.id ?? '__unassigned__'}
+                        branchId={context.data.active_branch.id}
+                        permissions={context.data.permissions}
+                      />
+                    </Suspense>
+                  )}
+                </>
               )}
 
           {activeModule === 'governance-management' && (governanceRealDataEnabled || import.meta.env.DEV) && (
