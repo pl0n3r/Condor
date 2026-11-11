@@ -23,7 +23,7 @@ const CONTEXT = {
     id: BRANCH, name: 'Sede ficticia', slug: 'synthetic',
     is_default: true, legal_entity: { id: COMPANY, name: 'Razón social ficticia' },
   },
-  permissions: ['inventory.view', 'users.view'],
+  permissions: ['inventory.view', 'catalog.view', 'users.view'],
   version: '0.1.199',
 };
 let output;
@@ -105,7 +105,7 @@ test.describe('AdminApp: shell real compilada en producción con datos ficticios
         ? CONTEXT
         : url.pathname.endsWith('/hr/records')
           ? { records: [] }
-          : { products: [], items: [], records: [], orders: [], inventory: [] };
+          : { products: [], services: [], items: [], records: [], orders: [], inventory: [] };
       await route.fulfill({ status: 200, contentType: 'application/json',
         body: JSON.stringify(payload) });
     });
@@ -123,10 +123,16 @@ test.describe('AdminApp: shell real compilada en producción con datos ficticios
     await expect(page.locator('#inventory')).toHaveCount(0);
     await page.waitForLoadState('networkidle');
     const catalogUrls = calls.filter(path => path.startsWith('/api/v1/branches/'));
+    expect(catalogUrls.some(path => path.endsWith('/catalog/products'))).toBe(true);
     expect(catalogUrls.some(path => /\/orders|\/inventory|\/hr\//.test(path))).toBe(false);
 
+    const beforeInventory = calls.length;
     await page.evaluate(() => { window.location.hash = '#inventory'; });
     await expect(page.locator('#inventory')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    const inventoryUrls = calls.slice(beforeInventory);
+    expect(inventoryUrls.some(path => path.endsWith('/inventory'))).toBe(true);
+    expect(inventoryUrls.some(path => path.endsWith('/catalog/products'))).toBe(false);
     await expect(page.locator('#catalog')).toHaveCount(0);
     await page.goBack();
     await expect(page.locator('#catalog')).toBeVisible();
