@@ -41,6 +41,8 @@ test.describe('Administrador — menú agrupado y módulos aislados', () => {
     for (const href of REQUIRED_LINKS) expect(hrefs).toContain(href);
     await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
     await expect(page.locator('.module-directory-group')).toHaveCount(GROUPS.length);
+    await expect(page.locator('.workspace > section#catalog')).toHaveCount(0);
+    await expect(page.locator('.workspace > section#orders')).toHaveCount(0);
 
     const catalog = nav.getByRole('button', { name: 'Catálogo e inventario' });
     const panel = catalog.locator('..').locator('.t-acc-panel');
@@ -60,7 +62,8 @@ test.describe('Administrador — menú agrupado y módulos aislados', () => {
     await expect(breadcrumb).toContainText('Catálogo e inventario');
     await expect(breadcrumb).toContainText('Catálogo');
     await expect(page.locator('.workspace > section#catalog')).toBeVisible();
-    await expect(page.locator('.workspace > section#orders')).toBeHidden();
+    await expect(page.locator('.workspace > section#orders')).toHaveCount(0);
+    await expect(page.locator('.workspace > section#inventory')).toHaveCount(0);
     await expect(page.locator('.workspace > section.module-directory')).toBeHidden();
     await expect(page.locator('.workspace > section[id]:visible')).toHaveCount(1);
 
@@ -68,5 +71,6 @@ test.describe('Administrador — menú agrupado y módulos aislados', () => {
     await expect(page).toHaveURL(/\/admin$/);
     await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
     await expect(page.locator('.workspace > section[id]:visible')).toHaveCount(0);
+    await expect(page.locator('.workspace > section#catalog')).toHaveCount(0);
   });
 });
