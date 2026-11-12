@@ -3,7 +3,7 @@
 ## Propósito y alcance
 
 Este laboratorio desarrolla el instrumento reversible para la hoja QA #1499. Ejecuta
-ocho recorridos privados locales, no una certificación del producto ni una prueba de
+ocho escenarios de recorridos privados locales, no una certificación del producto ni una prueba de
 producción:
 
 | Rol ficticio | Ruta privada | Motores | Viewports |
@@ -82,7 +82,7 @@ Pruebas de contrato:
 ## Interpretación
 
 Un recorrido completo devuelve PARCIAL: prueba solamente que la ruta privada y
-su identidad SSR respondieron en un checkout local con sesión ficticia y motores
+su identidad SSR respondieron en un checkout local con sesiones sintéticas ficticias y motores
 de navegador disponibles. Si no hay motor, fixture, sesión, identidad de SHA,
 respuesta de health o UI privada, devuelve NO_VERIFICADO y exit no cero.
 
