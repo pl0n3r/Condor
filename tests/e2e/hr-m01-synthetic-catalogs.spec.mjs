@@ -68,6 +68,10 @@ test.describe('M01 S02–S11: visualización de catálogos estrictamente sintét
   test.beforeAll(async () => {
     vite = await createServer({
       configFile: false, root: process.cwd(), appType: 'custom',
+      // La vista sintética existe únicamente en DEV. CI puede exportar
+      // NODE_ENV=production; forzamos DEV solo en este servidor de tests.
+      mode: 'development',
+      define: { 'import.meta.env.DEV': 'true' },
       plugins: [entry(), react()],
       // El entrypoint es virtual; el scanner HTML no ve estos imports
       // en CI frío. Optimizar React antes del primer render evita recargas.
@@ -89,6 +93,8 @@ test.describe('M01 S02–S11: visualización de catálogos estrictamente sintét
       'react', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime',
     ]));
     expect(vite.config.server.hmr).toBe(false);
+    expect(vite.config.mode).toBe('development');
+    expect(vite.config.define['import.meta.env.DEV']).toBe('true');
     origin = 'http://127.0.0.1:' + vite.httpServer.address().port;
   });
 
