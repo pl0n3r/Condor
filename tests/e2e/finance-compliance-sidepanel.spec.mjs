@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -20,7 +22,7 @@ const PROPS = {
     'settings.view', 'settings.create', 'settings.update',
   ],
 };
-let vite, origin;
+let vite, origin, cacheDir;
 
 function fixturePlugin() {
   return {
@@ -70,24 +72,34 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
   test.describe.configure({ mode: 'serial' });
 
   test.beforeAll(async () => {
+    // Cold CI workers must optimize the virtual entry's React dependencies
+    // before page navigation. On-demand optimization otherwise triggers a
+    // full reload between renderFinanceCompliance readiness and the first click.
+    cacheDir = mkdtempSync(join(tmpdir(), 'condor-sidepanel-vite-'));
     const options = {
       configFile: false,
       root: process.cwd(),
+      cacheDir,
       appType: 'custom',
       plugins: [fixturePlugin(), react()],
+      optimizeDeps: { include: ['react', 'react-dom/client', 'react/jsx-runtime'] },
       server: { host: '127.0.0.1', port: 0, strictPort: false },
     };
     vite = await createServer(options);
     await vite.listen();
+    await vite.waitForRequestsIdle();
     const boundPort = vite.httpServer.address().port;
     origin = new URL('/__sidepanel_fixture__', 'http://127.0.0.1:' + boundPort).origin;
   });
 
   test.afterAll(async () => {
-    if (!vite) return;
-    const disposableServer = vite;
-    vite = null;
-    await disposableServer.close();
+    try {
+      if (vite) await vite.close();
+    } finally {
+      vite = null;
+      if (cacheDir) rmSync(cacheDir, { recursive: true, force: true });
+      cacheDir = undefined;
+    }
   });
 
   async function open(page, name) {
