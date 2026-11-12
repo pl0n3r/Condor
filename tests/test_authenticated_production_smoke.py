@@ -82,6 +82,9 @@ class AuthenticatedProductionSmokeTests(unittest.TestCase):
         self.assertIn("      sonar_main_triage:", workflow)
         self.assertIn("  sonar_main_triage:", workflow)
         self.assertIn("inputs.sonar_main_triage == true && github.ref == 'refs/heads/main'", workflow)
+        self.assertIn("inputs.sonar_main_triage == true && github.ref != 'refs/heads/main'", workflow)
+        self.assertIn("sonar_main_triage_invalid_ref:", workflow)
+        self.assertIn("exit 1", workflow)
         self.assertEqual(workflow.count(
             "&& !(github.event_name == 'workflow_dispatch' && inputs.sonar_main_triage == true)"
         ), 2, "identity y smoke deben quedar aislados")
@@ -279,7 +282,8 @@ class SonarMainTriageExecutionTests(unittest.TestCase):
     """Execute the embedded manual job with mocked GitHub/Sonar responses only."""
 
     def run_triage(self, conclusion="failure", issues=None, total=None,
-                   branch_shas=None, check_sha=SHA, sonar_unavailable=False):
+                   branch_shas=None, check_sha=SHA, sonar_unavailable=False,
+                   analysis_revisions=None, run_attempt="1"):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         job = workflow.split("\n  sonar_main_triage:\n", 1)[1].split("\n  identity:\n", 1)[0]
         source = job.split("          python3 - <<'PY'\n", 1)[1].split("          PY\n", 1)[0]
@@ -293,6 +297,7 @@ class SonarMainTriageExecutionTests(unittest.TestCase):
         if total is None:
             total = len(issues)
         branches = iter(branch_shas if branch_shas is not None else [SHA, SHA])
+        analyses = iter(analysis_revisions if analysis_revisions is not None else [SHA, SHA])
         seen_urls = []
 
         def fake_urlopen(request, timeout):
@@ -304,6 +309,10 @@ class SonarMainTriageExecutionTests(unittest.TestCase):
                 payload = {"total_count": 1, "check_runs": [
                     {"name": "SonarCloud Code Analysis", "head_sha": check_sha,
                      "status": "completed", "conclusion": conclusion}]}
+            elif url.startswith("https://sonarcloud.io/api/project_analyses/search?"):
+                if sonar_unavailable:
+                    raise OSError("Sonar API unavailable (synthetic)")
+                payload = {"analyses": [{"revision": next(analyses)}]}
             elif url.startswith("https://sonarcloud.io/api/issues/search?"):
                 if sonar_unavailable:
                     raise OSError("Sonar API unavailable (synthetic)")
@@ -315,6 +324,7 @@ class SonarMainTriageExecutionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / "summary.md"
             with patch.dict(os.environ, {"MAIN_SHA": SHA, "GH_TOKEN": "fake-test-token",
+                                          "GITHUB_RUN_ATTEMPT": run_attempt,
                                           "GITHUB_STEP_SUMMARY": str(report)}):
                 with patch("urllib.request.urlopen", side_effect=fake_urlopen):
                     with contextlib.redirect_stdout(io.StringIO()):
@@ -323,7 +333,8 @@ class SonarMainTriageExecutionTests(unittest.TestCase):
             content = report.read_text(encoding="utf-8")
         self.assertTrue(seen_urls)
         self.assertTrue(all(url.startswith(("https://api.github.com/repos/pl0n3r/Condor/",
-                                             "https://sonarcloud.io/api/issues/search?"))
+                                             "https://sonarcloud.io/api/issues/search?",
+                                             "https://sonarcloud.io/api/project_analyses/search?"))
                             for url in seen_urls))
         self.assertNotIn("fake-test-token", content)
         return result.exception.code, content
@@ -354,13 +365,31 @@ class SonarMainTriageExecutionTests(unittest.TestCase):
     def test_unknown_for_wrong_check_sha_or_concurrent_main_drift(self):
         for options in ({"check_sha": "b" * 40},
                         {"branch_shas": [SHA, "b" * 40]},
-                        {"branch_shas": ["b" * 40]}):
+                        {"branch_shas": ["b" * 40]},
+                        {"analysis_revisions": ["b" * 40, "b" * 40]},
+                        {"analysis_revisions": [None, SHA]},
+                        {"analysis_revisions": [SHA, "b" * 40]},
+                        {"run_attempt": "2"}):
             with self.subTest(options=options):
                 status, summary = self.run_triage(**options)
                 self.assertEqual(status, 1)
                 self.assertIn("Estado: UNKNOWN", summary)
 
-
+    def test_severe_finding_at_position_51_is_visible(self):
+        issues = [
+            {"rule": "python:S1000",
+             "component": "pl0n3r_Condor:src/Low.php",
+             "severity": "LOW"} for _ in range(50)
+        ]
+        issues.append({
+            "rule": "python:S9999",
+            "component": "pl0n3r_Condor:src/HighRisk.php",
+            "severity": "CRITICAL",
+        })
+        status, summary = self.run_triage(issues=issues)
+        self.assertEqual(status, 1)
+        self.assertIn("Issues verificados: 51", summary)
+        self.assertIn("python:S9999 / pl0n3r_Condor:src/HighRisk.php", summary)
 
 if __name__ == "__main__":
     unittest.main()
