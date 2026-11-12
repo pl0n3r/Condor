@@ -114,25 +114,28 @@ final class PlanesV3PreciosTest extends WebTestCase
 
 class CatalogoPlanesV3PreciosTests(unittest.TestCase):
     def test_migration_is_additive_and_reversible_with_guards(self) -> None:
+        """D-054 must never see data changes in the historic v3 schema dry-run."""
         source = MIGRATION.read_text(encoding="utf-8")
         up = source.split("public function up", 1)[1].split("public function down", 1)[0]
         down = source.split("public function down", 1)[1]
-        for expression in (r"\bDROP\s+", r"\bDELETE\s+FROM\b", r"\bTRUNCATE\b"):
-            self.assertNotRegex(up, expression)
-        for phrase in (
-            "UlidFactory::new()", "new DateTimeImmutable('now'",
-            "version_number", "effective_until", "monthly_amount",
-            "annual_amount", "quote_required", "limits",
-            "condor_commercial_plan_version_vertical",
-            "condor_commercial_plan_version_capability",
-            "condor_commercial_plan_version_addon",
+        for operation in (
+            "addSql(", "executeStatement(", "executeQuery(",
+            "prepare(", "query(",
         ):
-            self.assertIn(phrase, source)
+            self.assertNotIn(operation, up)
+        self.assertNotRegex(
+            up, r"(?i)\b(?:UPDATE|INSERT|DELETE|DROP|TRUNCATE|ALTER|RENAME|MODIFY|CHANGE)\b",
+        )
         self.assertIn("IrreversibleMigration", down)
-        self.assertIn("condor_commercial_subscription", down)
-        self.assertIn("condor_commercial_quote", down)
-        self.assertIn("addSql(", up)
-        self.assertNotIn("executeStatement(", up)
+        self.assertIn("throw new IrreversibleMigration(", down)
+        self.assertIn("app:commercial:seed", up)
+        post_deploy = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
+        self.assertIn("run_construction_migrations", post_deploy)
+        self.assertIn('set_post_deploy_phase "catalog-seed"', post_deploy)
+        self.assertLess(
+            post_deploy.index("run_construction_migrations"),
+            post_deploy.index('set_post_deploy_phase "catalog-seed"'),
+        )
 
     def test_seeder_keeps_v1_v2_and_publishes_v3(self) -> None:
         text = SEEDER.read_text(encoding="utf-8")
