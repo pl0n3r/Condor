@@ -80,6 +80,9 @@ test.describe('M01 S02–S11: visualización de catálogos estrictamente sintét
     await vite.listen();
     // Una entrada virtual debe calentarse antes de que Chromium navegue.
     await vite.warmupRequest('/__m01_entry__.js');
+    // warmupRequest registra fallos internamente: exige transform real.
+    const entryModule = await vite.transformRequest('/__m01_entry__.js');
+    expect(entryModule?.code).toContain('window.renderM01');
     await vite.waitForRequestsIdle();
     // Regresión del contrato del fixture: revertir las guardas falla aquí.
     expect(vite.config.optimizeDeps.include).toEqual(expect.arrayContaining([
