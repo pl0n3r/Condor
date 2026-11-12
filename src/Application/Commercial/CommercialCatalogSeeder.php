@@ -310,6 +310,21 @@ final readonly class CommercialCatalogSeeder
             'version' => $number,
         ]);
         if ($version instanceof PlanVersion) {
+            // La v3 es contrato de tarifas: nunca aceptar silenciosamente
+            // precios preexistentes distintos a los aprobados por el dueño.
+            // seed() ejecuta este guard dentro de wrapInTransaction().
+            if (
+                $number === 3
+                && (
+                    $version->monthlyAmount() !== $monthly
+                    || $version->annualAmount() !== $annual
+                    || $version->quoteRequired() !== $quoteRequired
+                )
+            ) {
+                throw new RuntimeException(
+                    sprintf('Tarifa comercial v3 no canónica para %s.', $plan->key()),
+                );
+            }
             return $version;
         }
 

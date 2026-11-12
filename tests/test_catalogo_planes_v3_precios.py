@@ -108,31 +108,85 @@ final class PlanesV3PreciosTest extends WebTestCase
         self::assertStringContainsString('Solicitar propuesta', $enterprise->text());
         self::assertStringNotContainsString('0 COP', $enterprise->text());
     }
+
+    public function testSeederRejectsDivergentV3AndPreservesHistory(): void
+    {
+        static::createClient();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $em);
+        $seeder = new CommercialCatalogSeeder($em);
+        $seeder->seed();
+
+        // Solo fixtures de PHPUnit; jamás datos de producción.
+        $db = $em->getConnection();
+        $v3 = $db->fetchAssociative(
+            'SELECT v.id, v.monthly_amount FROM condor_commercial_plan_version v
+               JOIN condor_commercial_plan p ON p.id = v.plan_id
+              WHERE p.catalog_key = :key AND v.version_number = 3',
+            ['key' => 'basic'],
+        );
+        self::assertIsArray($v3);
+        self::assertSame(79900, (int) $v3['monthly_amount']);
+        $id = (string) $v3['id'];
+        $historySql = 'SELECT id, plan_id, version_number, monthly_amount,
+                              annual_amount, quote_required, effective_from, effective_until
+                         FROM condor_commercial_plan_version
+                     ORDER BY plan_id, version_number';
+        $db->executeStatement(
+            'UPDATE condor_commercial_plan_version SET monthly_amount = :amount WHERE id = :id',
+            ['amount' => 1, 'id' => $id],
+        );
+        try {
+            $before = $db->fetchAllAssociative($historySql);
+            $em->clear();
+            try {
+                $seeder->seed();
+                self::fail('El seeder debe rechazar una tarifa v3 discrepante.');
+            } catch (\RuntimeException $error) {
+                self::assertStringContainsString(
+                    'Tarifa comercial v3 no canónica', $error->getMessage(),
+                );
+            }
+            self::assertSame(
+                $before, $db->fetchAllAssociative($historySql),
+                'La transacción rechazada no debe modificar el historial.',
+            );
+        } finally {
+            $db->executeStatement(
+                'UPDATE condor_commercial_plan_version SET monthly_amount = :amount WHERE id = :id',
+                ['amount' => (int) $v3['monthly_amount'], 'id' => $id],
+            );
+        }
+    }
 }
 """
 
-
 class CatalogoPlanesV3PreciosTests(unittest.TestCase):
     def test_migration_is_additive_and_reversible_with_guards(self) -> None:
+        """D-054 must never see data changes in the historic v3 schema dry-run."""
         source = MIGRATION.read_text(encoding="utf-8")
         up = source.split("public function up", 1)[1].split("public function down", 1)[0]
         down = source.split("public function down", 1)[1]
-        for expression in (r"\bDROP\s+", r"\bDELETE\s+FROM\b", r"\bTRUNCATE\b"):
-            self.assertNotRegex(up, expression)
-        for phrase in (
-            "UlidFactory::new()", "new DateTimeImmutable('now'",
-            "version_number", "effective_until", "monthly_amount",
-            "annual_amount", "quote_required", "limits",
-            "condor_commercial_plan_version_vertical",
-            "condor_commercial_plan_version_capability",
-            "condor_commercial_plan_version_addon",
+        for operation in (
+            "addSql(", "executeStatement(", "executeQuery(",
+            "prepare(", "query(",
         ):
-            self.assertIn(phrase, source)
+            self.assertNotIn(operation, up)
+        self.assertNotRegex(
+            up, r"(?i)\b(?:UPDATE|INSERT|DELETE|DROP|TRUNCATE|ALTER|RENAME|MODIFY|CHANGE)\b",
+        )
         self.assertIn("IrreversibleMigration", down)
-        self.assertIn("condor_commercial_subscription", down)
-        self.assertIn("condor_commercial_quote", down)
-        self.assertIn("addSql(", up)
-        self.assertNotIn("executeStatement(", up)
+        self.assertIn("throw new IrreversibleMigration(", down)
+        self.assertIn("app:commercial:seed", up)
+        post_deploy = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
+        migration_call = "if run_construction_migrations; then"
+        seed_phase = 'set_post_deploy_phase "catalog-seed"'
+        warmup_call = 'bin/console cache:warmup --env=prod'
+        for step in (migration_call, seed_phase, warmup_call):
+            self.assertIn(step, post_deploy)
+        self.assertLess(post_deploy.index(migration_call), post_deploy.index(seed_phase))
+        self.assertLess(post_deploy.index(seed_phase), post_deploy.index(warmup_call))
+        self.assertNotIn("$this->connection", up)
 
     def test_seeder_keeps_v1_v2_and_publishes_v3(self) -> None:
         text = SEEDER.read_text(encoding="utf-8")
@@ -146,6 +200,14 @@ class CatalogoPlanesV3PreciosTests(unittest.TestCase):
         ):
             self.assertRegex(text, pattern)
         self.assertIn("$unpriced->closeAt($publishedAt)", text)
+        for guard in (
+            "$number === 3",
+            "$version->monthlyAmount() !== $monthly",
+            "$version->annualAmount() !== $annual",
+            "$version->quoteRequired() !== $quoteRequired",
+            "throw new RuntimeException(",
+        ):
+            self.assertIn(guard, text)
 
     def test_php_http_and_quote_are_canonical_v3(self) -> None:
         php = shutil.which("php")
