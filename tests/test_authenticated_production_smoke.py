@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import ast
+import contextlib
+import io
+import os
+import tempfile
 import importlib.util
 import json
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -71,6 +76,32 @@ class AuthenticatedProductionSmokeTests(unittest.TestCase):
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn("EXPECTED_MAIN_SHA:", workflow)
         self.assertNotIn("set -x", workflow)
+
+    def test_manual_sonar_main_triage_never_runs_authenticated_smoke(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("      sonar_main_triage:", workflow)
+        self.assertIn("  sonar_main_triage:", workflow)
+        self.assertIn("inputs.sonar_main_triage == true && github.ref == 'refs/heads/main'", workflow)
+        self.assertIn("inputs.sonar_main_triage == true && github.ref != 'refs/heads/main'", workflow)
+        self.assertIn("sonar_main_triage_invalid_ref:", workflow)
+        self.assertIn("exit 1", workflow)
+        self.assertEqual(workflow.count(
+            "&& !(github.event_name == 'workflow_dispatch' && inputs.sonar_main_triage == true)"
+        ), 2, "identity y smoke deben quedar aislados")
+        manual = workflow.split("\n  sonar_main_triage:\n", 1)[1].split("\n  identity:\n", 1)[0]
+        for required in (
+            "checks: read", "contents: read", "MAIN_SHA: ${{ github.sha }}",
+            "GH_TOKEN: ${{ github.token }}", "branches/main", "main-drift",
+            "sinceLeakPeriod=true", "status = \"BLOCKED\" if",
+            "status, total, rows = \"UNKNOWN\", \"UNKNOWN\", []",
+            'sys.exit(0 if status == "INSPECTED" else 1)',
+        ):
+            self.assertIn(required, manual)
+        for forbidden in (
+            "secrets.CONDOR_SMOKE_PASSWORD", "condorapp.com.co",
+            "contents: write", "issues: write", "/admin/login",
+        ):
+            self.assertNotIn(forbidden, manual)
 
     def test_sonar_triage_is_read_only_and_fails_closed(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -246,6 +277,122 @@ class AuthenticatedProductionSmokeTests(unittest.TestCase):
             smoke.probe(inconsistent, "synthetic@example.test", "private",
                         SHA, expected_version="0.1.194", clock=lambda: NOW)
 
+
+class SonarMainTriageExecutionTests(unittest.TestCase):
+    """Execute the embedded manual job with mocked GitHub/Sonar responses only."""
+
+    def run_triage(self, conclusion="failure", issues=None, total=None,
+                   branch_shas=None, check_sha=SHA, sonar_unavailable=False,
+                   analysis_revisions=None, run_attempt="1"):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        job = workflow.split("\n  sonar_main_triage:\n", 1)[1].split("\n  identity:\n", 1)[0]
+        source = job.split("          python3 - <<'PY'\n", 1)[1].split("          PY\n", 1)[0]
+        script = "\n".join(line[10:] for line in source.splitlines())
+        ast.parse(script)
+        if issues is None:
+            issues = [{"rule": "python:S2245",
+                       "component": "pl0n3r_Condor:src/Service.php",
+                       "severity": "HIGH",
+                       "impacts": [{"softwareQuality": "SECURITY", "severity": "HIGH"}]}]
+        if total is None:
+            total = len(issues)
+        branches = iter(branch_shas if branch_shas is not None else [SHA, SHA])
+        analyses = iter(analysis_revisions if analysis_revisions is not None else [SHA, SHA])
+        seen_urls = []
+
+        def fake_urlopen(request, timeout):
+            url = request.full_url
+            seen_urls.append(url)
+            if url.endswith("/branches/main"):
+                payload = {"commit": {"sha": next(branches)}}
+            elif "/check-runs?" in url:
+                payload = {"total_count": 1, "check_runs": [
+                    {"name": "SonarCloud Code Analysis", "head_sha": check_sha,
+                     "status": "completed", "conclusion": conclusion}]}
+            elif url.startswith("https://sonarcloud.io/api/project_analyses/search?"):
+                if sonar_unavailable:
+                    raise OSError("Sonar API unavailable (synthetic)")
+                payload = {"analyses": [{"revision": next(analyses)}]}
+            elif url.startswith("https://sonarcloud.io/api/issues/search?"):
+                if sonar_unavailable:
+                    raise OSError("Sonar API unavailable (synthetic)")
+                payload = {"issues": issues, "total": total}
+            else:
+                raise AssertionError("Unexpected remote address: " + url)
+            return io.BytesIO(json.dumps(payload).encode("utf-8"))
+
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "summary.md"
+            with patch.dict(os.environ, {"MAIN_SHA": SHA, "GH_TOKEN": "fake-test-token",
+                                          "GITHUB_RUN_ATTEMPT": run_attempt,
+                                          "GITHUB_STEP_SUMMARY": str(report)}):
+                with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        with self.assertRaises(SystemExit) as result:
+                            exec(compile(script, "<manual-sonar-triage>", "exec"), {})
+            content = report.read_text(encoding="utf-8")
+        if run_attempt == "1":
+            self.assertTrue(seen_urls)
+        else:
+            self.assertFalse(seen_urls, "los reintentos se rechazan antes de consultar APIs")
+        self.assertTrue(all(url.startswith(("https://api.github.com/repos/pl0n3r/Condor/",
+                                             "https://sonarcloud.io/api/issues/search?",
+                                             "https://sonarcloud.io/api/project_analyses/search?"))
+                            for url in seen_urls))
+        self.assertNotIn("fake-test-token", content)
+        return result.exception.code, content
+
+    def test_sonar_failure_is_blocked_and_includes_safe_severity_path(self):
+        status, summary = self.run_triage()
+        self.assertEqual(status, 1)
+        self.assertIn("Estado: BLOCKED", summary)
+        self.assertIn("SECURITY:HIGH", summary)
+        self.assertIn("src/Service.php", summary)
+        self.assertIn("python:S2245", summary)
+
+    def test_successful_exact_main_diagnosis_is_not_release_evidence(self):
+        status, summary = self.run_triage(conclusion="success")
+        self.assertEqual(status, 0)
+        self.assertIn("Estado: INSPECTED", summary)
+        self.assertIn("INSPECTED no sustituye el Quality Gate", summary)
+
+    def test_unknown_for_incomplete_or_unavailable_sonar(self):
+        for options in ({"total": 2}, {"sonar_unavailable": True},
+                        {"issues": [{"rule": "python:S2245",
+                                     "component": "pl0n3r_Condor:src/Service.php"}]}):
+            with self.subTest(options=options):
+                status, summary = self.run_triage(**options)
+                self.assertEqual(status, 1)
+                self.assertIn("Estado: UNKNOWN", summary)
+
+    def test_unknown_for_wrong_check_sha_or_concurrent_main_drift(self):
+        for options in ({"check_sha": "b" * 40},
+                        {"branch_shas": [SHA, "b" * 40]},
+                        {"branch_shas": ["b" * 40]},
+                        {"analysis_revisions": ["b" * 40, "b" * 40]},
+                        {"analysis_revisions": [None, SHA]},
+                        {"analysis_revisions": [SHA, "b" * 40]},
+                        {"run_attempt": "2"}):
+            with self.subTest(options=options):
+                status, summary = self.run_triage(**options)
+                self.assertEqual(status, 1)
+                self.assertIn("Estado: UNKNOWN", summary)
+
+    def test_severe_finding_at_position_51_is_visible(self):
+        issues = [
+            {"rule": "python:S1000",
+             "component": "pl0n3r_Condor:src/Low.php",
+             "severity": "LOW"} for _ in range(50)
+        ]
+        issues.append({
+            "rule": "python:S9999",
+            "component": "pl0n3r_Condor:src/HighRisk.php",
+            "severity": "CRITICAL",
+        })
+        status, summary = self.run_triage(issues=issues)
+        self.assertEqual(status, 1)
+        self.assertIn("Issues verificados: 51", summary)
+        self.assertIn("python:S9999 / pl0n3r_Condor:src/HighRisk.php", summary)
 
 if __name__ == "__main__":
     unittest.main()

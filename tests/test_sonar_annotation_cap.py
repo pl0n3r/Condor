@@ -23,6 +23,24 @@ def is_incomplete(findings, total, expected):
 
 
 class SonarAnnotationCapTests(unittest.TestCase):
+    def test_main_sonar_triage_fails_closed_on_red_or_incomplete_evidence(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        manual = workflow.split("\n  sonar_main_triage:\n", 1)[1].split("\n  identity:\n", 1)[0]
+        for required in (
+            'found[0]["conclusion"] == "failure"',
+            'checks.get("total_count") != 1',
+            'len(issues) != total',
+            'total < 0 or total > 100',
+            'raise ValueError("finding-invalid")',
+            'raise ValueError("main-drift")',
+            'status, total, rows = "UNKNOWN", "UNKNOWN", []',
+            'sys.exit(0 if status == "INSPECTED" else 1)',
+            'main&sinceLeakPeriod=true',
+        ):
+            self.assertIn(required, manual)
+        self.assertNotIn("NOSONAR", manual)
+        self.assertNotIn("SonarCloud Code Analysis = success", manual)
+
     def test_annotations_cap_does_not_hide_severe_findings(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         for required in (
