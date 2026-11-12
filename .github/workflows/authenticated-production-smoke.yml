@@ -3,6 +3,12 @@ name: Condor smoke autenticado de producción (pre-live)
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      sonar_main_triage:
+        description: 'Diagnostico Sonar main solo lectura; nunca smoke productivo'
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: '17 5 * * *'
 
@@ -162,9 +168,93 @@ jobs:
           sys.exit(0 if state == "NO_HIGH_FINDINGS" else 1)
           PY
 
+
+  sonar_main_triage:
+    name: Diagnosticar Sonar main (sin datos productivos)
+    if: github.event_name == 'workflow_dispatch' && inputs.sonar_main_triage == true && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: Leer Sonar y SHA main (solo GitHub/SonarCloud)
+        env:
+          MAIN_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          from urllib.request import Request, urlopen
+
+          def get(url, token=None):
+              headers = {"Accept": "application/json",
+                         "User-Agent": "Condor-Sonar-Main-Triage/1"}
+              if token:
+                  headers["Authorization"] = "Bearer " + token
+              with urlopen(Request(url, headers=headers), timeout=12) as response:
+                  raw = response.read(524289)
+              if len(raw) > 524288:
+                  raise ValueError("oversized")
+              return json.loads(raw)
+
+          def diagnose():
+              sha, token = os.environ.get("MAIN_SHA", ""), os.environ.get("GH_TOKEN", "")
+              if not re.fullmatch(r"[0-9a-f]{40}", sha) or not token:
+                  raise ValueError("identity")
+              base = "https://api.github.com/repos/pl0n3r/Condor/"
+              if get(base + "branches/main", token)["commit"]["sha"] != sha:
+                  raise ValueError("main-drift")
+              checks = get(base + "commits/" + sha
+                           + "/check-runs?check_name=SonarCloud%20Code%20Analysis&per_page=10", token)
+              found = [x for x in checks.get("check_runs", [])
+                       if x.get("name") == "SonarCloud Code Analysis"
+                       and x.get("head_sha") == sha and x.get("status") == "completed"
+                       and x.get("conclusion") in {"success", "failure"}]
+              if checks.get("total_count") != 1 or len(found) != 1:
+                  raise ValueError("sonar-check-unverified")
+              issues_json = get("https://sonarcloud.io/api/issues/search?componentKeys=pl0n3r_Condor"
+                                "&branch=main&sinceLeakPeriod=true&issueStatuses=OPEN%2CCONFIRMED&ps=100&p=1")
+              issues, total = issues_json.get("issues"), issues_json.get("total")
+              if (not isinstance(issues, list) or type(total) is not int
+                      or total < 0 or total > 100 or len(issues) != total):
+                  raise ValueError("issues-incomplete")
+              rows = []
+              for issue in issues:
+                  rule, file = issue.get("rule"), issue.get("component")
+                  if (not isinstance(rule, str)
+                      or not re.fullmatch(r"[A-Za-z0-9_:-]{1,96}", rule)
+                      or not isinstance(file, str)
+                      or not re.fullmatch(r"pl0n3r_Condor:[A-Za-z0-9_./:#-]{1,185}", file)):
+                      raise ValueError("finding-invalid")
+                  rows.append(rule + " / " + file)
+              status = "BLOCKED" if found[0]["conclusion"] == "failure" else "INSPECTED"
+              return status, total, rows
+
+          status, total, rows = "UNKNOWN", "UNKNOWN", []
+          try:
+              status, total, rows = diagnose()
+          except Exception:
+              pass
+          summary = ["### Sonar main: diagnostico manual read-only",
+                     "Estado: " + status,
+                     "SHA: " + os.environ.get("MAIN_SHA", "UNKNOWN"),
+                     "Issues verificados: " + str(total),
+                     "INSPECTED no sustituye el Quality Gate.",
+                     "Sin acceso a Hostinger ni a datos de produccion."]
+          summary.extend("- " + row for row in rows[:50])
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
+              stream.write("\n".join(summary) + "\n")
+          print("Sonar main:", status)
+          sys.exit(0 if status == "INSPECTED" else 1)
+          PY
+
   identity:
     name: Confirmar identidad sintética (sin revelar secrets)
-    if: github.ref == 'refs/heads/main' && vars.CONDOR_AUTH_SMOKE_ENABLED == 'true'
+    if: github.ref == 'refs/heads/main' && vars.CONDOR_AUTH_SMOKE_ENABLED == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.sonar_main_triage == true)
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
@@ -189,7 +279,7 @@ jobs:
   smoke:
     name: Smoke autenticado read-only (exact-main)
     needs: identity
-    if: github.ref == 'refs/heads/main' && vars.CONDOR_AUTH_SMOKE_ENABLED == 'true' && needs.identity.outputs.configured == 'true'
+    if: github.ref == 'refs/heads/main' && vars.CONDOR_AUTH_SMOKE_ENABLED == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.sonar_main_triage == true) && needs.identity.outputs.configured == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
