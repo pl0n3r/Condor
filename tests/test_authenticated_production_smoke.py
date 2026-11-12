@@ -72,6 +72,29 @@ class AuthenticatedProductionSmokeTests(unittest.TestCase):
         self.assertIn("EXPECTED_MAIN_SHA:", workflow)
         self.assertNotIn("set -x", workflow)
 
+    def test_manual_sonar_main_triage_never_runs_authenticated_smoke(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("      sonar_main_triage:", workflow)
+        self.assertIn("  sonar_main_triage:", workflow)
+        self.assertIn("inputs.sonar_main_triage == true && github.ref == 'refs/heads/main'", workflow)
+        self.assertEqual(workflow.count(
+            "&& !(github.event_name == 'workflow_dispatch' && inputs.sonar_main_triage == true)"
+        ), 2, "identity y smoke deben quedar aislados")
+        manual = workflow.split("\n  sonar_main_triage:\n", 1)[1].split("\n  identity:\n", 1)[0]
+        for required in (
+            "checks: read", "contents: read", "MAIN_SHA: ${{ github.sha }}",
+            "GH_TOKEN: ${{ github.token }}", "branches/main", "main-drift",
+            "sinceLeakPeriod=true", "status = \"BLOCKED\" if",
+            "status, total, rows = \"UNKNOWN\", \"UNKNOWN\", []",
+            'sys.exit(0 if status == "INSPECTED" else 1)',
+        ):
+            self.assertIn(required, manual)
+        for forbidden in (
+            "secrets.CONDOR_SMOKE_PASSWORD", "condorapp.com.co",
+            "contents: write", "issues: write", "/admin/login",
+        ):
+            self.assertNotIn(forbidden, manual)
+
     def test_sonar_triage_is_read_only_and_fails_closed(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         sonar = workflow.split("  sonar_triage:\n", 1)[1].split("  identity:\n", 1)[0]
