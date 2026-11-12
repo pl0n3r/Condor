@@ -130,12 +130,14 @@ class CatalogoPlanesV3PreciosTests(unittest.TestCase):
         self.assertIn("throw new IrreversibleMigration(", down)
         self.assertIn("app:commercial:seed", up)
         post_deploy = (ROOT / "scripts/post-deploy.sh").read_text(encoding="utf-8")
-        self.assertIn("run_construction_migrations", post_deploy)
-        self.assertIn('set_post_deploy_phase "catalog-seed"', post_deploy)
-        self.assertLess(
-            post_deploy.index("run_construction_migrations"),
-            post_deploy.index('set_post_deploy_phase "catalog-seed"'),
-        )
+        migration_call = "if run_construction_migrations; then"
+        seed_phase = 'set_post_deploy_phase "catalog-seed"'
+        warmup_call = 'bin/console cache:warmup --env=prod'
+        for step in (migration_call, seed_phase, warmup_call):
+            self.assertIn(step, post_deploy)
+        self.assertLess(post_deploy.index(migration_call), post_deploy.index(seed_phase))
+        self.assertLess(post_deploy.index(seed_phase), post_deploy.index(warmup_call))
+        self.assertNotIn("$this->connection", up)
 
     def test_seeder_keeps_v1_v2_and_publishes_v3(self) -> None:
         text = SEEDER.read_text(encoding="utf-8")
