@@ -118,6 +118,11 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
     await page.evaluate(({ name, props }) => window.renderFinanceCompliance(name, props), { name, props: PROPS });
     // Comprobar montaje real de React antes de interacciones; no basta la carga de módulos.
     await expect(page.locator('#root')).not.toBeEmpty();
+    // Capturar la regresión de DEV desde el fixture: una página con React montado
+    // pero FinanceManagement oculto no satisface el contrato de Finanzas.
+    if (name === 'finance') {
+      await expect(page.getByRole('button', { name: 'Nuevo asiento ilustrativo' })).toBeVisible();
+    }
   }
 
   async function verifyErrorAndEscape(page, dialog, opener, message, testInfo) {
