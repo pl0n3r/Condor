@@ -69,9 +69,23 @@ test.describe('M01 S02–S11: visualización de catálogos estrictamente sintét
     vite = await createServer({
       configFile: false, root: process.cwd(), appType: 'custom',
       plugins: [entry(), react()],
-      server: { host: '127.0.0.1', port: 0, strictPort: false },
+      // El entrypoint es virtual; el scanner HTML no ve estos imports
+      // en CI frío. Optimizar React antes del primer render evita recargas.
+      optimizeDeps: {
+        include: ['react', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+      },
+      // Un fixture Playwright no necesita WebSocket/HMR en puerto efímero.
+      server: { host: '127.0.0.1', port: 0, strictPort: false, hmr: false },
     });
     await vite.listen();
+    // Una entrada virtual debe calentarse antes de que Chromium navegue.
+    await vite.warmupRequest('/__m01_entry__.js');
+    await vite.waitForRequestsIdle();
+    // Regresión del contrato del fixture: revertir las guardas falla aquí.
+    expect(vite.config.optimizeDeps.include).toEqual(expect.arrayContaining([
+      'react', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime',
+    ]));
+    expect(vite.config.server.hmr).toBe(false);
     origin = 'http://127.0.0.1:' + vite.httpServer.address().port;
   });
 
