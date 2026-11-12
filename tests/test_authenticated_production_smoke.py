@@ -331,7 +331,10 @@ class SonarMainTriageExecutionTests(unittest.TestCase):
                         with self.assertRaises(SystemExit) as result:
                             exec(compile(script, "<manual-sonar-triage>", "exec"), {})
             content = report.read_text(encoding="utf-8")
-        self.assertTrue(seen_urls)
+        if run_attempt == "1":
+            self.assertTrue(seen_urls)
+        else:
+            self.assertFalse(seen_urls, "los reintentos se rechazan antes de consultar APIs")
         self.assertTrue(all(url.startswith(("https://api.github.com/repos/pl0n3r/Condor/",
                                              "https://sonarcloud.io/api/issues/search?",
                                              "https://sonarcloud.io/api/project_analyses/search?"))
