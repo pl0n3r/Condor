@@ -3,8 +3,8 @@
 ## Propósito y alcance
 
 Este laboratorio desarrolla el instrumento reversible para la hoja QA #1499. Ejecuta
-ocho escenarios de recorridos privados locales, no una certificación del producto ni una prueba de
-producción:
+ocho escenarios privados locales con cuentas enteramente ficticias; no constituye una
+certificación del producto ni una prueba de producción:
 
 | Rol ficticio | Ruta privada | Motores | Viewports |
 | --- | --- | --- | --- |
