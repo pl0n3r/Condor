@@ -108,9 +108,58 @@ final class PlanesV3PreciosTest extends WebTestCase
         self::assertStringContainsString('Solicitar propuesta', $enterprise->text());
         self::assertStringNotContainsString('0 COP', $enterprise->text());
     }
+
+    public function testSeederRejectsDivergentV3AndPreservesHistory(): void
+    {
+        static::createClient();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $em);
+        $seeder = new CommercialCatalogSeeder($em);
+        $seeder->seed();
+
+        // Solo fixtures de PHPUnit; jamás datos de producción.
+        $db = $em->getConnection();
+        $v3 = $db->fetchAssociative(
+            'SELECT v.id, v.monthly_amount FROM condor_commercial_plan_version v
+               JOIN condor_commercial_plan p ON p.id = v.plan_id
+              WHERE p.catalog_key = :key AND v.version_number = 3',
+            ['key' => 'basic'],
+        );
+        self::assertIsArray($v3);
+        self::assertSame(79900, (int) $v3['monthly_amount']);
+        $id = (string) $v3['id'];
+        $historySql = 'SELECT id, plan_id, version_number, monthly_amount,
+                              annual_amount, quote_required, effective_from, effective_until
+                         FROM condor_commercial_plan_version
+                     ORDER BY plan_id, version_number';
+        $db->executeStatement(
+            'UPDATE condor_commercial_plan_version SET monthly_amount = :amount WHERE id = :id',
+            ['amount' => 1, 'id' => $id],
+        );
+        try {
+            $before = $db->fetchAllAssociative($historySql);
+            $em->clear();
+            try {
+                $seeder->seed();
+                self::fail('El seeder debe rechazar una tarifa v3 discrepante.');
+            } catch (\RuntimeException $error) {
+                self::assertStringContainsString(
+                    'Tarifa comercial v3 no canónica', $error->getMessage(),
+                );
+            }
+            self::assertSame(
+                $before, $db->fetchAllAssociative($historySql),
+                'La transacción rechazada no debe modificar el historial.',
+            );
+        } finally {
+            $db->executeStatement(
+                'UPDATE condor_commercial_plan_version SET monthly_amount = :amount WHERE id = :id',
+                ['amount' => (int) $v3['monthly_amount'], 'id' => $id],
+            );
+        }
+    }
 }
 """
-
 
 class CatalogoPlanesV3PreciosTests(unittest.TestCase):
     def test_migration_is_additive_and_reversible_with_guards(self) -> None:
@@ -151,6 +200,14 @@ class CatalogoPlanesV3PreciosTests(unittest.TestCase):
         ):
             self.assertRegex(text, pattern)
         self.assertIn("$unpriced->closeAt($publishedAt)", text)
+        for guard in (
+            "$number === 3",
+            "$version->monthlyAmount() !== $monthly",
+            "$version->annualAmount() !== $annual",
+            "$version->quoteRequired() !== $quoteRequired",
+            "throw new RuntimeException(",
+        ):
+            self.assertIn(guard, text)
 
     def test_php_http_and_quote_are_canonical_v3(self) -> None:
         php = shutil.which("php")
