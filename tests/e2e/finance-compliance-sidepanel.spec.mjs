@@ -116,6 +116,8 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
     await page.goto(origin + '/__sidepanel_fixture__');
     await page.waitForFunction(() => typeof window.renderFinanceCompliance === 'function');
     await page.evaluate(({ name, props }) => window.renderFinanceCompliance(name, props), { name, props: PROPS });
+    // Comprobar montaje real de React antes de interacciones; no basta la carga de módulos.
+    await expect(page.locator('#root')).not.toBeEmpty();
   }
 
   async function verifyErrorAndEscape(page, dialog, opener, message, testInfo) {
