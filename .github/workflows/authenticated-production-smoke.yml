@@ -169,6 +169,19 @@ jobs:
           PY
 
 
+  sonar_main_triage_invalid_ref:
+    name: Rechazar triage manual fuera de main
+    if: github.event_name == 'workflow_dispatch' && inputs.sonar_main_triage == true && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      contents: read
+    steps:
+      - name: Rechazar ref no autorizado sin consultar producción
+        run: |
+          echo "::error::sonar_main_triage solo admite refs/heads/main"
+          exit 1
+
   sonar_main_triage:
     name: Diagnosticar Sonar main (sin datos productivos)
     if: github.event_name == 'workflow_dispatch' && inputs.sonar_main_triage == true && github.ref == 'refs/heads/main'
@@ -182,6 +195,7 @@ jobs:
         env:
           MAIN_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ github.token }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           python3 - <<'PY'
           import json
@@ -203,9 +217,20 @@ jobs:
 
           def diagnose():
               sha, token = os.environ.get("MAIN_SHA", ""), os.environ.get("GH_TOKEN", "")
+              if os.environ.get("GITHUB_RUN_ATTEMPT") != "1":
+                  raise ValueError("replay")
               if not re.fullmatch(r"[0-9a-f]{40}", sha) or not token:
                   raise ValueError("identity")
               base = "https://api.github.com/repos/pl0n3r/Condor/"
+
+              def verify_latest_analysis():
+                  evidence = get("https://sonarcloud.io/api/project_analyses/search"
+                                 "?project=pl0n3r_Condor&branch=main&ps=1")
+                  analyses = evidence.get("analyses")
+                  if (not isinstance(analyses, list) or len(analyses) != 1
+                          or not isinstance(analyses[0], dict)
+                          or analyses[0].get("revision") != sha):
+                      raise ValueError("analysis-revision-unverified")
               if get(base + "branches/main", token)["commit"]["sha"] != sha:
                   raise ValueError("main-drift")
               checks = get(base + "commits/" + sha
@@ -216,6 +241,7 @@ jobs:
                        and x.get("conclusion") in {"success", "failure"}]
               if checks.get("total_count") != 1 or len(found) != 1:
                   raise ValueError("sonar-check-unverified")
+              verify_latest_analysis()
               issues_json = get("https://sonarcloud.io/api/issues/search?componentKeys=pl0n3r_Condor"
                                 "&branch=main&sinceLeakPeriod=true&issueStatuses=OPEN%2CCONFIRMED&ps=100&p=1")
               issues, total = issues_json.get("issues"), issues_json.get("total")
@@ -249,6 +275,7 @@ jobs:
               # A concurrent main update invalidates any otherwise-successful diagnosis.
               if get(base + "branches/main", token)["commit"]["sha"] != sha:
                   raise ValueError("main-drift")
+              verify_latest_analysis()
               status = "BLOCKED" if found[0]["conclusion"] == "failure" else "INSPECTED"
               return status, total, rows
 
@@ -263,7 +290,7 @@ jobs:
                      "Issues verificados: " + str(total),
                      "INSPECTED no sustituye el Quality Gate.",
                      "Sin acceso a Hostinger ni a datos de produccion."]
-          summary.extend("- " + row for row in rows[:50])
+          summary.extend("- " + row for row in rows[:100])
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
               stream.write("\n".join(summary) + "\n")
           print("Sonar main:", status)
