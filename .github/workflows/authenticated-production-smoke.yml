@@ -223,14 +223,32 @@ jobs:
                       or total < 0 or total > 100 or len(issues) != total):
                   raise ValueError("issues-incomplete")
               rows = []
+              valid_severities = {"INFO", "LOW", "MINOR", "MEDIUM", "MAJOR",
+                                  "HIGH", "CRITICAL", "BLOCKER"}
               for issue in issues:
                   rule, file = issue.get("rule"), issue.get("component")
+                  severity, impacts = issue.get("severity"), issue.get("impacts", [])
                   if (not isinstance(rule, str)
                       or not re.fullmatch(r"[A-Za-z0-9_:-]{1,96}", rule)
                       or not isinstance(file, str)
-                      or not re.fullmatch(r"pl0n3r_Condor:[A-Za-z0-9_./:#-]{1,185}", file)):
+                      or not re.fullmatch(r"pl0n3r_Condor:[A-Za-z0-9_./:#-]{1,185}", file)
+                      or (severity is not None and severity not in valid_severities)
+                      or not isinstance(impacts, list)):
                       raise ValueError("finding-invalid")
-                  rows.append(rule + " / " + file)
+                  severity_labels = ["legacy:" + severity] if severity else []
+                  for impact in impacts:
+                      if (not isinstance(impact, dict)
+                          or impact.get("softwareQuality") not in
+                          {"SECURITY", "RELIABILITY", "MAINTAINABILITY"}
+                          or impact.get("severity") not in valid_severities):
+                          raise ValueError("finding-invalid")
+                      severity_labels.append(impact["softwareQuality"] + ":" + impact["severity"])
+                  if not severity_labels:
+                      raise ValueError("finding-invalid")
+                  rows.append(rule + " / " + file + " / " + ",".join(sorted(severity_labels)))
+              # A concurrent main update invalidates any otherwise-successful diagnosis.
+              if get(base + "branches/main", token)["commit"]["sha"] != sha:
+                  raise ValueError("main-drift")
               status = "BLOCKED" if found[0]["conclusion"] == "failure" else "INSPECTED"
               return status, total, rows
 
