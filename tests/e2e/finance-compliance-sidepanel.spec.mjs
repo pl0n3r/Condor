@@ -74,8 +74,14 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
       configFile: false,
       root: process.cwd(),
       appType: 'custom',
+      // El fixture de laboratorio exige DEV aunque el runner use NODE_ENV=production.
+      // No activa flags ni modifica bundles productivos.
+      mode: 'development',
+      define: { 'import.meta.env.DEV': 'true' },
       plugins: [fixturePlugin(), react()],
-      server: { host: '127.0.0.1', port: 0, strictPort: false },
+      // El puerto efímero no soporta el fallback WebSocket de Vite (puerto 0);
+      // HMR no se necesita en una suite de navegación Playwright.
+      server: { host: '127.0.0.1', port: 0, strictPort: false, hmr: false },
     };
     vite = await createServer(options);
     await vite.listen();
