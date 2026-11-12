@@ -74,8 +74,14 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
       configFile: false,
       root: process.cwd(),
       appType: 'custom',
+      // El fixture de laboratorio exige DEV aunque el runner use NODE_ENV=production.
+      // No activa flags ni modifica bundles productivos.
+      mode: 'development',
+      define: { 'import.meta.env.DEV': 'true' },
       plugins: [fixturePlugin(), react()],
-      server: { host: '127.0.0.1', port: 0, strictPort: false },
+      // El puerto efímero no soporta el fallback WebSocket de Vite (puerto 0);
+      // HMR no se necesita en una suite de navegación Playwright.
+      server: { host: '127.0.0.1', port: 0, strictPort: false, hmr: false },
     };
     vite = await createServer(options);
     await vite.listen();
@@ -110,6 +116,13 @@ test.describe('Finanzas y cumplimiento: SidePanel accesible (solo fixture)', () 
     await page.goto(origin + '/__sidepanel_fixture__');
     await page.waitForFunction(() => typeof window.renderFinanceCompliance === 'function');
     await page.evaluate(({ name, props }) => window.renderFinanceCompliance(name, props), { name, props: PROPS });
+    // Comprobar montaje real de React antes de interacciones; no basta la carga de módulos.
+    await expect(page.locator('#root')).not.toBeEmpty();
+    // Capturar la regresión de DEV desde el fixture: una página con React montado
+    // pero FinanceManagement oculto no satisface el contrato de Finanzas.
+    if (name === 'finance') {
+      await expect(page.getByRole('button', { name: 'Nuevo asiento ilustrativo' })).toBeVisible();
+    }
   }
 
   async function verifyErrorAndEscape(page, dialog, opener, message, testInfo) {
