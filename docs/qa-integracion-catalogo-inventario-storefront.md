@@ -18,9 +18,10 @@
 | Agotado y actualización | Ajuste `-5` vía Admin, mismo balance queda 0; `POST /{tenantA}/checkout` sin stock es rechazado | `/{tenantA}` y recarga presentan `Agotado` sin fallback de fuente |
 | Reposición | Ajuste `+5` vía Admin; el único balance vuelve a 5 | `/{tenantA}` y recarga vuelven a `Disponible`, mismo canal/lista/SKU/precio |
 | Aislamiento B | Sesión distinta, `GET` a rutas de sucursal A = 404; B consulta sus propios snapshots, ninguno contiene entidades de A | `/{tenantB}` no publica SKU ni producto de A |
-| Mutaciones ajenas | CSRF auténtico de B; `PATCH` a fuente A desde rama A y `POST` con `source_id` A desde B = 404 | Verificación posterior del balance de A garantiza ausencia de escritura cruzada |
+| Mutaciones ajenas | CSRF auténtico de B; `PATCH` a fuente A desde rama A y `POST` con `source_id` A desde B = 404; fuente propia de B + variante ajena de A también = 404 | Balances de B y A quedan sin cambios tras las denegaciones |
+| Sin fallback entre fuentes | Una segunda fuente sintética de A conserva 7 unidades de la misma variante mientras la fuente enlazada al canal pasa 5→0→5 | Storefront publica `Agotado` con 0 aunque la fuente no asignada tenga 7; checkout 409/422 y fuente del canal no cambia |
 
-**Criterios negativos estrictos.** El harness nunca usa `page.route().fulfill()` para hacer pasar el aislamiento. El acceso y la denegación se verifican contra el servidor Symfony real y la misma base MariaDB efímera. Se cierra el contexto navegador de B incluso si fallan las aserciones.
+**Criterios negativos estrictos.** La revisión FINAL de CodeRabbit sobre el HEAD previo identificó dos brechas de cobertura (variante extranjera con fuente autorizada y fallback ante otra fuente con stock). Ambas se incorporan al E2E sin modificar fixtures compartidos, controladores ni fuentes de producción; esta ampliación requiere `Validar` exact-HEAD nuevamente. El harness nunca usa `page.route().fulfill()` para hacer pasar el aislamiento. El acceso y la denegación se verifican contra el servidor Symfony real y la misma base MariaDB efímera. Se cierra el contexto navegador de B incluso si fallan las aserciones.
 
 ## Evidencia real del recorrido integrado
 

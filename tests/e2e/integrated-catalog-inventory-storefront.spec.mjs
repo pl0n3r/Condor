@@ -10,7 +10,7 @@ const config = {
 };
 
 test('catálogo → inventario → storefront conserva SKU, precio y stock sin cruzar tenants', async ({ page, browser }, testInfo) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
 
   // This is a required MariaDB-backed CI test, not an optional browser smoke.
   // Missing tenant B credentials must FAIL, never silently skip AC-03.
@@ -125,6 +125,24 @@ test('catálogo → inventario → storefront conserva SKU, precio y stock sin c
     expect(bInventoryPayload.variants.some((item) => item.id === variant.id)).toBe(false);
     expect((await bPricing.json()).variants.some((item) => item.sku === sku)).toBe(false);
 
+    // Create a genuine source belonging to B. This proves that the variant ID
+    // is independently scoped even when the source itself is authorized for B.
+    const bSourceName = 'Origen aislado B ' + suffix;
+    await tenantBPage.goto('/admin#inventory');
+    const bInventoryUI = tenantBPage.locator('#inventory');
+    await expect(bInventoryUI.getByRole('heading', { name: 'Inventario', exact: true })).toBeVisible();
+    await bInventoryUI.getByLabel('Nombre', { exact: true }).fill(bSourceName);
+    await bInventoryUI.getByLabel('Slug').fill('origen-aislado-b-' + suffix);
+    await bInventoryUI.getByLabel('Tipo').selectOption('logical');
+    await bInventoryUI.getByRole('button', { name: 'Crear fuente' }).click();
+    await expect(bInventoryUI.getByText('Fuente creada.')).toBeVisible();
+    const bBeforeResponse = await tenantBPage.request.get(bApiPath + '/inventory');
+    expect(bBeforeResponse.status()).toBe(200);
+    const bBefore = await bBeforeResponse.json();
+    const bSource = bBefore.sources.find((item) => item.name === bSourceName);
+    expect(bSource).toBeTruthy();
+    const bBalancesBefore = bBefore.balances;
+
     const csrf = await tenantBPage.locator('#condor-admin-root').getAttribute('data-access-token');
     expect(csrf).toBeTruthy();
     // Real authenticated, CSRF-valid server-side mutation checks, not 403 due
@@ -151,6 +169,26 @@ test('catálogo → inventario → storefront conserva SKU, precio y stock sin c
     );
     expect(foreignSource.status()).toBe(404);
 
+    // The source is valid for B but the variant is foreign (A): 404 must be
+    // caused by tenant-scoped variant validation, not by a foreign source.
+    const foreignVariant = await tenantBPage.request.post(
+      bApiPath + '/inventory/adjustments',
+      {
+        headers,
+        data: {
+          source_id: bSource.id,
+          variant_id: variant.id,
+          delta: 1,
+          reason: 'Variante cruzada E2E denegada',
+          idempotency_key: 'blocked-foreign-variant-' + suffix,
+        },
+      },
+    );
+    expect(foreignVariant.status()).toBe(404);
+    const bAfterResponse = await tenantBPage.request.get(bApiPath + '/inventory');
+    expect(bAfterResponse.status()).toBe(200);
+    expect((await bAfterResponse.json()).balances).toEqual(bBalancesBefore);
+
     await tenantBPage.goto('/' + bContext.tenant.slug);
     await expect(
       tenantBPage.locator('.storefront-variant[data-sku="' + sku + '"]'),
@@ -159,7 +197,48 @@ test('catálogo → inventario → storefront conserva SKU, precio y stock sin c
   } finally {
     await tenantBContext.close();
   }
-  await assertSourceQuantity(5); // Neither negative attempt changed A.
+  await assertSourceQuantity(5); // Neither cross-tenant mutation changed A.
+
+  // A second source has real stock for this SAME variant, but is not assigned
+  // to the storefront channel. This detects incorrect cross-source fallback.
+  const spareSourceName = 'Reserva no asignada ' + suffix;
+  await page.goto('/admin#inventory');
+  const inventoryUI = page.locator('#inventory');
+  await expect(inventoryUI.getByRole('heading', { name: 'Inventario', exact: true })).toBeVisible();
+  await inventoryUI.getByLabel('Nombre', { exact: true }).fill(spareSourceName);
+  await inventoryUI.getByLabel('Slug').fill('reserva-no-asignada-' + suffix);
+  await inventoryUI.getByLabel('Tipo').selectOption('logical');
+  await inventoryUI.getByRole('button', { name: 'Crear fuente' }).click();
+  await expect(inventoryUI.getByText('Fuente creada.')).toBeVisible();
+  await inventoryUI.locator('#inventory-adjust-source').selectOption({ label: spareSourceName });
+  await inventoryUI.getByLabel('Variante').first().selectOption({ label: productName + ' · ' + sku });
+  await inventoryUI.getByLabel('Cantidad (+ entrada / - salida)').fill('7');
+  await inventoryUI.getByLabel('Motivo').fill('Stock alternativo NO asignado al canal');
+  await inventoryUI.getByRole('button', { name: 'Aplicar ajuste' }).click();
+  await expect(inventoryUI.getByText('Ajuste aplicado.')).toBeVisible();
+
+  const inventoryWithSpare = await snapshot('/inventory');
+  const spareSource = inventoryWithSpare.sources.find((item) => item.name === spareSourceName);
+  expect(spareSource).toBeTruthy();
+  async function assertSpareQuantity(quantity) {
+    const inventory = await snapshot('/inventory');
+    const balance = inventory.balances.filter((item) => (
+      item.source_id === spareSource.id && item.variant.id === variant.id
+    ));
+    expect(balance).toHaveLength(1);
+    expect(balance[0].quantity).toBe(quantity);
+  }
+  await assertSourceQuantity(5);
+  await assertSpareQuantity(7);
+
+  await page.goto('/admin/storefront');
+  const channelForm = page.locator('form.channel-admin-form');
+  const channelSourceSelect = channelForm.locator('select[name="inventory_source_id"]');
+  if (await channelSourceSelect.count()) {
+    await expect(channelSourceSelect).toHaveValue(source.id);
+  } else {
+    await expect(channelForm.locator('input[type="hidden"][name="inventory_source_id"]')).toHaveValue(source.id);
+  }
 
   async function adjustStock(delta, reason) {
     await page.goto('/admin#inventory');
@@ -175,6 +254,7 @@ test('catálogo → inventario → storefront conserva SKU, precio y stock sin c
 
   await adjustStock(-5, 'Agotamiento integrado E2E');
   await assertSourceQuantity(0);
+  await assertSpareQuantity(7); // Other source still has stock, but no fallback.
   await assertPublicAvailability('Agotado');
   await page.reload();
   await assertPublicAvailability('Agotado');
@@ -189,9 +269,11 @@ test('catálogo → inventario → storefront conserva SKU, precio y stock sin c
   });
   expect([409, 422], 'Checkout sin stock debe fallar en el servidor.').toContain(noOversell.status());
   await assertSourceQuantity(0);
+  await assertSpareQuantity(7);
 
   await adjustStock(5, 'Reposición integrada E2E');
   await assertSourceQuantity(5);
+  await assertSpareQuantity(7);
   await assertPublicAvailability('Disponible');
   await page.reload();
   await assertPublicAvailability('Disponible');
