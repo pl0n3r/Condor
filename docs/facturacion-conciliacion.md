@@ -42,6 +42,10 @@ Se excluyen de esta entrega, aunque tengan espacio para futuros adaptadores: fac
 
 **Dato sensible a evitar:** prohibido guardar PAN/CVV, tokens de pasarela, credenciales, cuentas bancarias completas, documentos de identidad o descripciones libres con PII. Las referencias de los fixtures deben ser opacas y no recuperables a identidades reales. Cualquier adopción de datos personales reales exige contrato de finalidad, minimización, retención, derechos, acceso, actualización de `datos.yml` y puertas legal/privacidad antes de construirlo o activarlo.
 
+### Compatibilidad con pedidos anteriores a esta capacidad
+
+Un pedido legacy con `payment_status=paid` no demuestra que exista un movimiento manual sintético ni una conciliación bancaria verificable. La futura proyección debe marcarlo `sin_evidencia_interna` o `no_conciliable` (denominación final sujeta al OWNER) hasta tener eventos propios; **nunca** inventar movimientos a partir del estado, generar importes ficticios por backfill o alterar sus pagos históricos. Si una versión futura requiere esquema nuevo, aplicar migración expand-compatible y tests de rollback/lectura de pedidos anteriores, sin tocar datos reales por esta propuesta.
+
 ## 4. Estados y transiciones propuestos — no aprobados aún
 
 La fuente canónica de pedido conserva `open/cancelled` y la entrega `reserved/released/consumed`. El campo existente de pago conserva por ahora `pending/paid`; **no se crean transiciones a `paid` desde la simulación**.
