@@ -13,7 +13,7 @@
 
 | Obligación | Método concreto y resultado exigido | Límite |
 | --- | --- | --- |
-| Versionado DBAL por empresa | `testMariaDbVersionChainAuditAndRollback`: versión 1 `BORRADOR` → versión 2 `REQUIERE_REVISION`, `previous_id` al ID original, huellas diferentes e inmutables y tres filas de auditoría (dos escrituras y una lectura) | No existe archivo de contenido ni conexión al controlador HTTP M08 |
+| Versionado DBAL por empresa | `testMariaDbVersionChainAuditAndRollback`: versión 1 `BORRADOR` → versión 2 `REQUIERE_REVISION`, `previous_id` al ID original, huellas diferentes e inmutables y cuatro filas de auditoría (dos escrituras y dos lecturas por versión) | No existe archivo de contenido ni conexión al controlador HTTP M08 |
 | Aislamiento por tenant y entidad | Mismo test crea registros separados para `fixture:tenant/alpha` y `fixture:tenant/beta`; `forCompany` devuelve exclusivamente su empresa | No demuestra todos los roles/sedes de la UI |
 | Roles, revisión separada y orden | `testStaleCrossTenantRoleAndSelfReviewFailClosed`: rechaza auto-revisión, aprobación implícita, evento v2 antes de v1, duplicado v1, scope distinto, rol de solo lectura al escribir, `authorized=false` y referencias no ficticias | `REQUIERE_REVISION` nunca se reinterpreta como `CUMPLE` o `APROBADO` |
 | Huella en base real | `testPersistedFingerprintTamperingIsRejected`: modifica `fingerprint` dentro de transacción descartable y exige `DomainException` en lectura | SHA-256 sobre metadatos, **no** sobre un binario cargado ni evidencia de firma legal |
