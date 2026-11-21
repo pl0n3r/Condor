@@ -55,10 +55,10 @@ final class GestDocumentRecordSqlTest extends KernelTestCase
             self::assertNotSame($own[0]['fingerprint'], $own[1]['fingerprint']);
             self::assertSame($first->tenantRef(), $own[0]['tenant_ref']);
             self::assertSame($foreign->tenantRef(), $other[0]['tenant_ref']);
-            self::assertSame(3, (int) $db->fetchOne(
+            self::assertSame(4, (int) $db->fetchOne(
                 'SELECT COUNT(*) FROM condor_document_audit WHERE tenant_ref = ?',
                 [$first->tenantRef()],
-            ), 'Two writes plus one scoped read require three authentic audit rows.');
+            ), 'Two writes plus two record-level reads require four authentic audit rows.');
             self::assertSame(2, (int) $db->fetchOne(
                 'SELECT COUNT(*) FROM condor_document_record WHERE tenant_ref = ?',
                 [$first->tenantRef()],
