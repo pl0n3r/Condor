@@ -108,6 +108,18 @@ Usar `label` vinculado a input, teclado/foco visible, regiones `role=alert` para
 
 **Restricción de gobernanza:** Factory #1289 limita crear nuevos Issues a motivos acreditados. La autorización para redactar #1514 **no** autoriza en bloque crear tareas o decidir condiciones comerciales. Por eso la matriz propone primero reutilizar Issues existentes y deja cualquier nueva hoja ejecutable sujeta a la decisión del dueño y su alcance exacto.
 
+### Matriz de aceptación verificable para una futura entrega autorizada
+
+| Capacidad que el dueño elija ofrecer | Aserción requerida en backend de pruebas | Aserción de interfaz pendiente, no ejecutada en este PR |
+| --- | --- | --- |
+| Lista/variante (P01) | Mismo tenant, lista activa y moneda; precio no negativo, variante ajena = 404 | Crear/editar con permiso y CSRF, vacío y 403 sin edición |
+| Canal (P02) | Lista efectiva de canal; sin fallback de stock ni precio inventado | Selector de canal, explicación y estado sin lista |
+| Categoría/mayorista (P03) | Una categoría principal; precio desde lista preferida, identidad cross-tenant rechazada | Nombre editable, sin etiqueta mayorista fija, accesible 390/1440 |
+| Regla temporal (P04) | Una regla ganadora por prioridad/especificidad/ID, fecha y límites monetarios válidos | Editor avanzado, vista previa autoritativa y error ante vigencia inválida |
+| Volumen/manual (P05/P06, **solo si se aprueban**) | Rangos sin solape o motivo/actor auditables; snapshot de pedido inmutable | Formulario/preview nuevo con negativos y prueba E2E real |
+
+En la regresión futura deben coincidir el importe de la API, el pedido y la representación en UI; jamás se toma el precio visible como autoridad. Estas son **obligaciones de futuras hojas** y no resultados de pruebas actuales.
+
 ## 7. Evidencia, pruebas exigibles y reversión
 
 - **Entregado en este PR:** especificación documental, matriz de opciones, flujos UI y trazabilidad de contratos existentes. **No entregado:** implementación nueva, precios o descuentos de clientes, métricas de UX, pruebas E2E nuevas, API y producción.
