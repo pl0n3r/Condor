@@ -36,10 +36,10 @@
 | **D-042-S05** Avance Issue→producción | `UNKNOWN` | Hay eventos de GitHub y pruebas de duración CI, pero no una cadena terminal única de instrucción, PR, versión, despliegue y validación |
 | **D-043** Ciclo de entrega | `LOCAL_PARTIAL / UNKNOWN` | Reducer y guardas offline de #1547; observer #44872286995 no ejecutó validación de una release |
 | **D-043-S01** Estados canónicos | `LOCAL_PARTIAL / UNKNOWN` | Tests distinguen `DEPLOY_OBSERVED` de `VALIDATED_IN_PRODUCTION`; no existe recibo terminal para el SHA de este informe |
-| **D-043-S02** Identidad de release | `LOCAL_PARTIAL / HISTORICO_PARCIAL` | Manifest versión/SHA probado offline; `0.1.200@cbc04a5...` observado el 12-nov, no equivale al `main@2a650977...` de este corte |
+| **D-043-S02** Identidad de release | `LOCAL_PARTIAL / HISTORICO_PARCIAL / UNKNOWN` | Manifest versión/SHA probado offline; `0.1.200@cbc04a5...` observado el 12-nov, no equivale al `main@2a650977...` de este corte |
 | **D-043-S03** Compatibilidad Hostinger | `LOCAL_PARTIAL / UNKNOWN` | Test de MIME/JS legacy en observer; sin ensayo completo de compatibilidad del artefacto y entorno de hosting vigente |
 | **D-043-S04** Build reproducible | `LOCAL_PARTIAL / UNKNOWN` | CI #44872287673 construyó frontend y verificó reproducibilidad en CI; falta cotejo del build realmente publicado en Hostinger |
-| **D-043-S05** Migraciones | `LOCAL_PARTIAL / HISTORICO_PARCIAL` | #1908/#1909 y observación histórica de esquema convergido; sin comprobación privada nueva del inventario Doctrine, restore real ni recibo D-043 terminal de la última release |
+| **D-043-S05** Migraciones | `LOCAL_PARTIAL / HISTORICO_PARCIAL / UNKNOWN` | #1908/#1909 y observación histórica de esquema convergido; sin comprobación privada nueva del inventario Doctrine, restore real ni recibo D-043 terminal de la última release |
 | **D-043-S06** Observación del despliegue | `LOCAL_PARTIAL / UNKNOWN` | Observer distingue SHA y emite NO_EVALUADO sin nueva release; #44872286995 no acredita transiciones operativas finales |
 | **D-043-S07** Smoke público | `HISTORICO_PARCIAL / UNKNOWN` | /health HTTP 200 y esquema al día el 12-nov según #1705; en el corte actual los GET directos no fueron accesibles desde el lector, por tanto no hay smoke actual exact-release |
 | **D-043-S08** Smoke autenticado | `LOCAL_PARTIAL / UNKNOWN` | Tests Symfony sintéticos comprueban permisos; #44909247353 estuvo `skipped` y no se verificó interfaz autenticada en hosting |
@@ -47,7 +47,7 @@
 | **D-043-S10** Primer release V0.1.0 | `UNKNOWN` | No hay recibo histórico de Hostinger + SHA + versión + smoke recuperado que certifique ese primer corte |
 | **D-044** Operación integral | `LOCAL_PARTIAL / UNKNOWN` | Fuentes de health/CI/uptime dan partes del recorrido, no observabilidad, alertas, restore y capacidad integrales |
 | **D-044-S01** Observabilidad | `LOCAL_PARTIAL / UNKNOWN` | Job externo #44927432236 ejecutó muestras sin archivarlas; faltan métricas/errores productivos verificables por ventana e identidad |
-| **D-044-S02** Alertas | `LOCAL_PARTIAL / HISTORICO_PARCIAL` | Alerta #1705 cerrada mediante recibo de dos HEALTHY; faltan notificación real a receptor, acuse y ejercicio de escalamiento |
+| **D-044-S02** Alertas | `LOCAL_PARTIAL / HISTORICO_PARCIAL / UNKNOWN` | Alerta #1705 cerrada mediante recibo de dos HEALTHY; faltan notificación real a receptor, acuse y ejercicio de escalamiento |
 | **D-044-S03** Backups y recovery | `LOCAL_PARTIAL / UNKNOWN` | CI #44872287673 probó restore de DB/archivos sintéticos y descartables; no acredita backup/restore productivo ni RPO/RTO del hosting |
 | **D-044-S04** Rendimiento | `LOCAL_PARTIAL / UNKNOWN` | Test de ventanas de CI; faltan CWV p75, p95 API, carga y presupuesto observados para la release y entorno objetivo |
 
