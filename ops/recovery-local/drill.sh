@@ -12,7 +12,7 @@ set -euo pipefail
 umask 077
 
 repeat=1
-if [ "${1:-}" = "--repeat" ]; then repeat="${2:?--repeat N}"; fi
+if [[ "${1:-}" = "--repeat" ]]; then repeat="${2:?--repeat N}"; fi
 
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
@@ -27,7 +27,7 @@ code_sha="$(git -C "$repo" rev-parse HEAD)"
 code_dirty="$(git -C "$repo" status --porcelain --untracked-files=no | wc -l | tr -d ' ')"
 
 for f in app_password encryption_passphrase; do
-  [ -s "$secrets/$f" ] || { echo "drill: falta $secrets/$f; ejecuta lab.sh up" >&2; exit 1; }
+  [[ -s "$secrets/$f" ]] || { echo "drill: falta $secrets/$f; ejecuta lab.sh up" >&2; exit 1; }
 done
 app_password="$(cat "$secrets/app_password")"
 
@@ -92,7 +92,7 @@ SQL
   (cd "$repo" && BACKUP_DIR="$run_dir/backup" CONDOR_BACKUP_CLIENT=pdo DATABASE_URL="$seed_url" \
      sh scripts/backup-database.sh >>"$log" 2>&1)
   local plain; plain="$(find "$run_dir/backup" -maxdepth 1 -name 'condor-*.sql.gz' | head -1)"
-  [ -n "$plain" ] && gzip -t "$plain"
+  [[ -n "$plain" ]] && gzip -t "$plain"
   local backup_ms=$(( $(now_ms) - t0 )); check backup_pdo PASS "$backup_ms ms, $(wc -c <"$plain" | tr -d ' ') bytes"
 
   # 3. Cifrado AES-256-CBC/PBKDF2 (200k) con el script canónico; el claro se borra.
@@ -125,10 +125,10 @@ SQL
     a="$(sql "$seed_db" -N -e "CHECKSUM TABLE \`$t\` EXTENDED" | awk '{print $2}')"
     b="$(sql "$target_db" -N -e "CHECKSUM TABLE \`$t\` EXTENDED" | awk '{print $2}')"
     c="$(sql "$target_db" -N -e "SELECT COUNT(*) FROM \`$t\`")"; rows=$((rows + c))
-    [ "$a" = "$b" ] || { mismatches=$((mismatches + 1)); echo "checksum distinto: $t" >>"$log"; }
+    [[ "$a" = "$b" ]] || { mismatches=$((mismatches + 1)); echo "checksum distinto: $t" >>"$log"; }
   done
   local restored_tables; restored_tables="$(sql "$target_db" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$target_db'")"
-  if [ "$mismatches" -eq 0 ] && [ "$restored_tables" = "$n_tables" ]; then
+  if [[ "$mismatches" -eq 0 ]] && [[ "$restored_tables" = "$n_tables" ]]; then
     check integrity_checksum_table PASS "$n_tables tablas, $rows filas"
   else
     check integrity_checksum_table FAIL "$mismatches tablas distintas"; return 1
@@ -146,7 +146,7 @@ SQL
   if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert d.get("status")=="ok" and d.get("schema_up_to_date") is True' "$health" 2>/dev/null; then
     check app_health_schema PASS
   else check app_health_schema FAIL "$(printf '%s' "$health" | head -c 120)"; return 1; fi
-  if [ "$smoke_code" = "200" ]; then check app_smoke_root PASS; else check app_smoke_root FAIL "HTTP $smoke_code"; return 1; fi
+  if [[ "$smoke_code" = "200" ]]; then check app_smoke_root PASS; else check app_smoke_root FAIL "HTTP $smoke_code"; return 1; fi
   local completed_at; completed_at=$(now_ms); local rto_ms=$((completed_at - started_at))
   check rto_local PASS "$rto_ms ms"
 
@@ -166,7 +166,7 @@ SQL
   expect_fail fail_truncated_backup sh -c "cd '$repo' && DATABASE_URL='$(lab_url condor_restore_truncated)' CONDOR_ALLOW_DESTRUCTIVE_RESTORE=1 CONDOR_RESTORE_EXPECT_TENANT_SLUG=$tenant_slug CONDOR_RESTORE_EXPECT_USER_EMAIL=$user_email sh scripts/verify-backup-restore.sh '$dr_root/truncated.sql.gz'"
   # Tras los fallos, la base restaurada buena sigue intacta.
   local still; still="$(sql "$target_db" -N -e "SELECT COUNT(*) FROM condor_tenant WHERE slug='$tenant_slug'")"
-  [ "$still" = "1" ] && check target_intact_after_failures PASS || { check target_intact_after_failures FAIL; return 1; }
+  [[ "$still" = "1" ]] && check target_intact_after_failures PASS || { check target_intact_after_failures FAIL; return 1; }
   sql "" -e "DROP DATABASE IF EXISTS condor_restore_truncated" >/dev/null 2>&1 || true
 
   # Limpieza de artefactos en claro; se conserva solo el cifrado + su SHA-256.

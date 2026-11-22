@@ -14,7 +14,7 @@ ensure_secrets() {
   chmod 700 "$CONDOR_RECOVERY_HOME" "$CONDOR_RECOVERY_SECRETS_DIR"
   for name in root_password app_password encryption_passphrase; do
     f="$CONDOR_RECOVERY_SECRETS_DIR/$name"
-    [ -s "$f" ] || openssl rand -hex 32 > "$f"
+    [[ -s "$f" ]] || openssl rand -hex 32 > "$f"
     chmod 600 "$f"
   done
   # El contenedor lee los secretos como usuario mysql: copia legible solo para ese montaje.
