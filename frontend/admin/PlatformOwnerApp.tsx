@@ -906,7 +906,23 @@ export function PlatformOwnerApp({
       )}
 
 
-      {state.status === 'loading' && (
+      {currentSection === 'diagnosticos' && (
+        <>
+          <header className="platform-heading">
+            <div className="platform-heading-copy">
+              <h1>Diagnósticos</h1>
+              <p className="muted">Consulta el estado del sistema y los incidentes recientes.</p>
+            </div>
+            <div className="platform-heading-actions">
+              <a className="button button-secondary"
+                href="/adminpl0n3r/diagnosticos/reportes/actividad.csv">Descargar reporte</a>
+            </div>
+          </header>
+          <PlatformDiagnosticsContent />
+        </>
+      )}
+
+      {currentSection !== 'diagnosticos' && state.status === 'loading' && (
         <>
           <h1>Preparando centro de control…</h1>
           <output className="muted" aria-live="polite">
@@ -915,7 +931,7 @@ export function PlatformOwnerApp({
         </>
       )}
 
-      {state.status === 'permission-denied' && (
+      {currentSection !== 'diagnosticos' && state.status === 'permission-denied' && (
         <div className="alert alert-error" role="alert">
           <strong>Acceso no autorizado.</strong>{' '}
           Tu sesión no tiene permisos para consultar este contexto de
@@ -923,14 +939,14 @@ export function PlatformOwnerApp({
         </div>
       )}
 
-      {state.status === 'not-found' && (
+      {currentSection !== 'diagnosticos' && state.status === 'not-found' && (
         <div className="alert alert-error" role="alert">
           <strong>Empresa no encontrada.</strong>{' '}
           El tenant seleccionado ya no existe o dejó de estar disponible.
         </div>
       )}
 
-      {state.status === 'error' && (
+      {currentSection !== 'diagnosticos' && state.status === 'error' && (
         <div className="alert alert-error platform-error" role="alert">
           <strong>No pudimos cargar el centro de control.</strong>
           <span>
@@ -987,7 +1003,7 @@ export function PlatformOwnerApp({
         </div>
       )}
 
-      {state.status === 'ready' && (
+      {currentSection !== 'diagnosticos' && state.status === 'ready' && (
         <>
           <header className="platform-heading">
             <div className="platform-heading-copy">
@@ -1010,10 +1026,6 @@ export function PlatformOwnerApp({
                     onClick={() => void loadContext(undefined, state.data.tenant_pagination.page)}>
                     Actualizar suscripciones
                   </button>
-                )}
-                {currentSection === 'diagnosticos' && (
-                  <a className="button button-secondary"
-                    href="/adminpl0n3r/diagnosticos/reportes/actividad.csv">Descargar reporte</a>
                 )}
               </div>
             )}
@@ -1268,9 +1280,6 @@ export function PlatformOwnerApp({
           )}
           {!selected && currentSection === 'integraciones' && (
             <PlatformIntegrationsPanel refreshKey={platformRevision} />
-          )}
-          {!selected && currentSection === 'diagnosticos' && (
-            <PlatformDiagnosticsContent />
           )}
 
           {!selected && currentSection === 'suscripciones' && (
