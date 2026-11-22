@@ -1,0 +1,46 @@
+# Laboratorio LOCAL de recuperación de Condor (Condor #1929 / #1590).
+# Solo datos sintéticos. Escucha únicamente en 127.0.0.1. Nunca apuntar a producción.
+# Secretos fuera de Git: ${CONDOR_RECOVERY_SECRETS_DIR} (por defecto ~/.condor-recovery-local/secrets).
+name: condor-recovery-lab
+
+services:
+  mariadb:
+    # Misma versión que producción (MariaDB 11.8.9), fijada por digest.
+    image: mariadb:11.8@sha256:e1d5495f445654134f226f55a41ce0da227116f6f27f283101f405c794d841fc
+    container_name: condor-recovery-mariadb
+    restart: "no"
+    command: ["--skip-name-resolve", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--local-infile=0"]
+    environment:
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/root_password
+      MARIADB_AUTO_UPGRADE: "0"
+    secrets:
+      - root_password
+      - app_password
+    ports:
+      - "127.0.0.1:${CONDOR_RECOVERY_PORT:-3317}:3306"
+    volumes:
+      - condor_recovery_data:/var/lib/mysql
+      - ./init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "SETGID", "SETUID", "DAC_OVERRIDE", "FOWNER"]
+
+secrets:
+  root_password:
+    file: ${CONDOR_RECOVERY_SECRETS_DIR:?define CONDOR_RECOVERY_SECRETS_DIR}/root_password
+  app_password:
+    file: ${CONDOR_RECOVERY_SECRETS_DIR:?define CONDOR_RECOVERY_SECRETS_DIR}/app_password
+
+volumes:
+  condor_recovery_data:
+    name: condor_recovery_lab_data
