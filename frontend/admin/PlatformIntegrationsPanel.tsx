@@ -257,7 +257,7 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
           </label>
           <Detail setting={setting('mail.api_key')} />
           <div className="ui-form-actions">
-            <button className="button" type="submit" disabled={busy || !data.secret_write_enabled}>Guardar clave</button>
+            <button className="button" type="submit" disabled={busy || !data.secret_write_enabled}>Guardar {field.label}</button>
             <button className="button button-secondary" type="button" disabled={busy || !setting('mail.api_key').configured}
               onClick={() => void deleteSecret('mail.api_key')}>Eliminar clave</button>
           </div>
@@ -305,7 +305,7 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
         </div>
         </div>
       </Card>
-      <Card title="Pagos · Wompi sandbox">
+      <Card title="Pagos">
         <div className="ui-integration-content">
           <p className="muted">Solo claves test; no se aceptan claves de producción ni se realizan cobros reales.</p>
           {!data.wompi_sandbox_enabled && <p className="muted">Pruebas de pago deshabilitadas por configuración.</p>}
