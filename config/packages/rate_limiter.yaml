@@ -66,3 +66,45 @@ framework:
       policy: sliding_window
       limit: 5
       interval: '1 hour'
+
+    # Defensa transversal #1967: rutas anónimas mutantes, sin excepciones para
+    # nuevos formularios. Ventanas conservadoras y configurables por despliegue.
+    public_abuse_ip:
+      policy: sliding_window
+      limit: 24
+      interval: '5 minutes'
+
+    public_abuse_identifier:
+      policy: sliding_window
+      limit: 12
+      interval: '5 minutes'
+
+    # Misma cuota para recuperación de acceso y solicitud de trial.
+    # La identidad de destinatario se almacena solo como SHA-256.
+    public_email_recipient:
+      policy: sliding_window
+      limit: 5
+      interval: '1 hour'
+
+    # Límite adicional en el gateway, independientemente del origen de la
+    # solicitud (protege nuevos envíos transaccionales por destinatario).
+    transactional_email_recipient:
+      policy: sliding_window
+      limit: 12
+      interval: '1 hour'
+
+# Test-scope fixture isolation: the real HTTP contract suite shares a loopback
+# IP across >1000 test calls. The antiabuse acceptance fixture separately
+# enforces PRODUCTION quotas with real Symfony limiter instances (24/12/5).
+# Production and all non-test environments retain strict budgets above.
+when@test:
+  framework:
+    rate_limiter:
+      public_abuse_ip:
+        limit: 100000
+      public_abuse_identifier:
+        limit: 100000
+      public_email_recipient:
+        limit: 100000
+      transactional_email_recipient:
+        limit: 100000

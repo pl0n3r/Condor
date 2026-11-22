@@ -154,7 +154,7 @@ final class StorefrontCheckoutController extends AbstractController
         if (
             array_diff(
                 array_keys($payload),
-                ['idempotency_key', 'items'],
+                ['idempotency_key', 'items', 'captcha'],
             ) !== []
         ) {
             throw new UnprocessableEntityHttpException(
