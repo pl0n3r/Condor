@@ -1,0 +1,40 @@
+{
+  "nota": "Fallos de robustez ya conocidos, cada uno con su issue. Se reportan pero no bloquean el CI; cualquier fallo nuevo sí. Al arreglar uno, quitarlo de aquí en el mismo PR.",
+  "known": [
+    {
+      "endpoint": "POST /api/v1/hr/employees",
+      "problema": "HTTP 503",
+      "issue": "#1957"
+    },
+    {
+      "endpoint": "POST /api/v1/hr/employees/{employeeId}/attendance",
+      "problema": "HTTP 503",
+      "issue": "#1957"
+    },
+    {
+      "endpoint": "POST /api/v1/hr/employees/{employeeId}/link",
+      "problema": "HTTP 503",
+      "issue": "#1957"
+    },
+    {
+      "endpoint": "Proveedores.name",
+      "problema": "rechazo sin decir qué campo falla",
+      "issue": "#1956"
+    },
+    {
+      "endpoint": "Proveedores.code",
+      "problema": "rechazo sin decir qué campo falla",
+      "issue": "#1956"
+    },
+    {
+      "endpoint": "Proveedores.payment_terms_days",
+      "problema": "rechazo sin decir qué campo falla",
+      "issue": "#1956"
+    },
+    {
+      "endpoint": "Proveedores.name",
+      "problema": "guardado distinto de lo enviado",
+      "issue": "#1955"
+    }
+  ]
+}

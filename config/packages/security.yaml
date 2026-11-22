@@ -41,6 +41,9 @@ security:
       roles: PUBLIC_ACCESS
     - path: '^/support/diagnostics/[a-f0-9]{64}$'
       roles: PUBLIC_ACCESS
+    # Public only for verified sandbox HMAC webhooks.
+    - path: '^/webhooks/wompi/sandbox$'
+      roles: PUBLIC_ACCESS
     - path: '^/adminpl0n3r(?:/|$)'
       roles: ROLE_PLATFORM_OWNER
     - path: '^/api/v1(?:/|$)'

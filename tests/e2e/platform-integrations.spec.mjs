@@ -55,7 +55,8 @@ test.describe('Integraciones de plataforma — secretos de solo escritura', () =
 
     const secret = 'synthetic-secret-not-for-display-9876';
     await page.getByLabel('Clave de API · solo escritura').fill(secret);
-    await page.getByRole('button', { name: 'Guardar clave' }).click();
+    await page.locator('form[aria-label="Clave API de correo"]')
+      .getByRole('button', { name: 'Guardar clave', exact: true }).click();
     await expect(page.getByText('Termina en ••••9876')).toBeVisible();
     await expect(page.getByLabel('Clave de API · solo escritura')).toHaveValue('');
     await expect(page.locator('body')).not.toContainText(secret);

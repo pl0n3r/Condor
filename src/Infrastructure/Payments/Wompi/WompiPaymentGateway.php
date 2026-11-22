@@ -10,7 +10,7 @@ use DomainException;
 use JsonException;
 
 /**
- * Wompi Colombia sandbox protocol, NO external transport by default.
+ * Wompi Colombia sandbox protocol. The legacy charge contract stays offline by default.
  * A caller must inject a network-free double until a separate legal/live gate.
  * The base contract has no payment method or acceptance token: this adapter
  * cannot initiate a funded payment. No customer/card PII or production keys.
@@ -37,11 +37,14 @@ final class WompiPaymentGateway implements PaymentGateway
     /** @var array<string,array{fingerprint:string,result:RefundResult}> */
     private array $refunds = [];
 
-    public function __construct(Closure $transport, ?string $privateKeyFile = null, ?string $eventsSecretFile = null, ?Closure $clock = null)
+    /** @param Closure(string):?string|null $storedSecret Resolver returning an encrypted-store key or null. */
+    public function __construct(?Closure $transport = null, ?string $privateKeyFile = null, ?string $eventsSecretFile = null, ?Closure $clock = null, ?Closure $storedSecret = null)
     {
-        $this->apiKey = self::secret($privateKeyFile, 'WOMPI_PRIVATE_KEY_FILE', '/^prv_test_[A-Za-z0-9_-]{16,}$/D');
-        $this->eventsSecret = self::secret($eventsSecretFile, 'WOMPI_EVENTS_SECRET_FILE', '/^test_events_[A-Za-z0-9_-]{16,}$/D');
-        $this->transport = $transport;
+        $this->apiKey = self::secret($privateKeyFile, 'WOMPI_PRIVATE_KEY_FILE', '/^prv_test_[A-Za-z0-9_-]{16,}$/D', $storedSecret, 'wompi.private_key');
+        $this->eventsSecret = self::secret($eventsSecretFile, 'WOMPI_EVENTS_SECRET_FILE', '/^test_events_[A-Za-z0-9_-]{16,}$/D', $storedSecret, 'wompi.events_secret');
+        // An injected Closure is an explicitly offline payment double; production
+        // Wompi transactions use WompiSandboxHttpTransport instead.
+        $this->transport = $transport ?? static fn (): array => throw new DomainException('WOMPI_OFFLINE_ONLY');
         $this->clock = $clock ?? time(...);
     }
 
@@ -198,6 +201,62 @@ final class WompiPaymentGateway implements PaymentGateway
     }
 
     /**
+     * Pure signature verification for sandbox webhook delivery before any side effect.
+     * In contrast to verifyWebhook(), no in-memory transaction cache is assumed
+     * across separate HTTP requests. No status is applied to an account/ledger.
+     */
+    public static function verifySignedSandboxEvent(string $payload, string $checksum, string $secret): bool
+    {
+        if (strlen($payload) > 16384
+            || preg_match('/\A[a-fA-F0-9]{64}\z/D', $checksum) !== 1
+            || preg_match('/\Atest_events_[A-Za-z0-9_-]{16,}\z/D', $secret) !== 1) {
+            return false;
+        }
+        try {
+            $body = json_decode($payload, true, 16, JSON_THROW_ON_ERROR);
+            if (!is_array($body) || ($body['event'] ?? null) !== 'transaction.updated'
+                || ($body['environment'] ?? null) !== 'test'
+                || !is_array($body['data']['transaction'] ?? null)
+                || !is_array($body['signature']['properties'] ?? null)
+                || !array_is_list($body['signature']['properties'])
+                || !is_string($body['signature']['checksum'] ?? null)
+                || !is_int($body['timestamp'] ?? null)
+                || abs(time() - $body['timestamp']) > 300) {
+                return false;
+            }
+            $properties = $body['signature']['properties'];
+            foreach (['transaction.id', 'transaction.status', 'transaction.amount_in_cents'] as $required) {
+                if (!in_array($required, $properties, true)) return false;
+            }
+            if (count($properties) > 16 || count(array_unique($properties)) !== count($properties)) {
+                return false;
+            }
+            $parts = '';
+            foreach ($properties as $path) {
+                if (!is_string($path) || preg_match('/\A[a-z_]+(?:\.[a-z_]+){1,4}\z/D', $path) !== 1) return false;
+                $cursor = $body['data'];
+                foreach (explode('.', $path) as $part) {
+                    if (!is_array($cursor) || !array_key_exists($part, $cursor)) return false;
+                    $cursor = $cursor[$part];
+                }
+                if (!is_string($cursor) && !is_int($cursor)) return false;
+                $parts .= (string) $cursor;
+            }
+            $expected = hash('sha256', $parts.$body['timestamp'].$secret);
+            $tx = $body['data']['transaction'];
+            return hash_equals($expected, strtolower($checksum))
+                && hash_equals($expected, strtolower($body['signature']['checksum']))
+                && is_string($tx['id'] ?? null)
+                && preg_match('/\A[A-Za-z0-9_-]{6,120}\z/D', $tx['id']) === 1
+                && in_array($tx['status'] ?? null, ['PENDING','APPROVED','DECLINED','VOIDED','ERROR'], true)
+                && is_int($tx['amount_in_cents'] ?? null)
+                && $tx['amount_in_cents'] > 0;
+        } catch (JsonException | \TypeError | \ValueError) {
+            return false;
+        }
+    }
+
+    /**
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
@@ -280,8 +339,15 @@ final class WompiPaymentGateway implements PaymentGateway
         return $value;
     }
 
-    private static function secret(?string $file, string $env, string $pattern): string
+    private static function secret(?string $file, string $env, string $pattern, ?Closure $stored = null, string $setting = ''): string
     {
+        $value = $stored !== null ? $stored($setting) : null;
+        if ($value !== null) {
+            if (!is_string($value) || preg_match($pattern, $value) !== 1) {
+                throw new DomainException('WOMPI_TEST_SECRET_ONLY');
+            }
+            return $value;
+        }
         $file ??= getenv($env) ?: '';
         if ($file === '' || !is_file($file) || is_link($file) || !is_readable($file)) throw new DomainException('WOMPI_PRIVATE_SECRET_REQUIRED');
         $perms = fileperms($file);

@@ -6,6 +6,7 @@ namespace App\Tests\Http\Controller;
 
 use App\Application\Platform\PlatformIntegrationSettings;
 use App\Infrastructure\Observability\SentryTestEventSender;
+use App\Infrastructure\Payments\Wompi\WompiSandboxHttpTransport;
 use App\Domain\Identity\Entity\User;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
@@ -61,8 +62,10 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
         self::assertArrayHasKey('csrf_token', $data);
         self::assertFalse($data['test_email_enabled']);
         self::assertFalse($data['secret_write_enabled']);
-        self::assertSame(['mail.provider', 'mail.from', 'mail.api_key', 'sentry.dsn'],
-            array_keys($data['settings']));
+        self::assertSame([
+            'mail.provider', 'mail.from', 'mail.api_key', 'sentry.dsn',
+            'wompi.public_key', 'wompi.private_key', 'wompi.integrity_secret', 'wompi.events_secret',
+        ], array_keys($data['settings']));
         self::assertArrayNotHasKey('value', $data['settings']['sentry.dsn']);
 
         $client->jsonRequest('PUT', self::PATH, ['key' => 'sentry.dsn', 'value' => 'https://fake.invalid/8765']);
@@ -370,6 +373,116 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
             putenv($previousFlag === false
                 ? 'CONDOR_PLATFORM_SENTRY_TEST_ENABLED'
                 : 'CONDOR_PLATFORM_SENTRY_TEST_ENABLED='.$previousFlag);
+        }
+    }
+
+    public function testWompiTestKeysAreEncryptedAndTestActionRequiresOwnerCsrfFlagAndRateLimit(): void
+    {
+        $oldWrite = getenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED');
+        $oldFlag = getenv('CONDOR_PAYMENTS_SANDBOX_ENABLED');
+        putenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED=true');
+        putenv('CONDOR_PAYMENTS_SANDBOX_ENABLED=true');
+        $keys = [
+            'wompi.public_key' => 'pub_test_',
+            'wompi.private_key' => 'prv_test_',
+            'wompi.integrity_secret' => 'test_integrity_',
+            'wompi.events_secret' => 'test_events_',
+        ];
+        $owner = null;
+        try {
+            $client = self::createClient();
+            $client->disableReboot();
+            $stub = $this->createMock(WompiSandboxHttpTransport::class);
+            $stub->expects(self::once())->method('testPayment')->willReturn([
+                'reference' => 'condor-sandbox-fixture', 'transaction_id' => 'wompi_sandbox_001', 'status' => 'PENDING',
+            ]);
+            self::getContainer()->set(WompiSandboxHttpTransport::class, $stub);
+            $owner = $this->actor(true);
+            $tenant = $this->actor(false);
+            $client->loginUser($owner);
+            $client->request('GET', self::PATH);
+            $snapshot = self::responseData((string) $client->getResponse()->getContent());
+            self::assertTrue($snapshot['wompi_sandbox_enabled']);
+            $token = $snapshot['csrf_token'];
+
+            $client->jsonRequest('POST', self::PATH.'/test-wompi', []);
+            self::assertResponseStatusCodeSame(403);
+            $client->loginUser($tenant);
+            $client->jsonRequest('POST', self::PATH.'/test-wompi', [], ['HTTP_X_CSRF_TOKEN' => $token]);
+            self::assertResponseStatusCodeSame(403);
+            $client->loginUser($owner);
+            $client->jsonRequest('POST', self::PATH.'/test-wompi', [], ['HTTP_X_CSRF_TOKEN' => $token]);
+            self::assertResponseStatusCodeSame(409);
+
+            foreach ($keys as $name => $prefix) {
+                $invalid = str_replace('_test_', '_prod_', $prefix).str_repeat('x', 24);
+                // The integrity/events production prefixes are "prod_*".
+                if ($name === 'wompi.integrity_secret') $invalid = 'prod_integrity_'.str_repeat('x',24);
+                if ($name === 'wompi.events_secret') $invalid = 'prod_events_'.str_repeat('x',24);
+                $client->jsonRequest('PUT', self::PATH, ['key' => $name, 'value' => $invalid], [
+                    'HTTP_X_CSRF_TOKEN' => $token,
+                ]);
+                self::assertResponseStatusCodeSame(422);
+                self::assertStringNotContainsString($invalid, (string) $client->getResponse()->getContent());
+
+                $fixture = $prefix.str_repeat('x', 24);
+                $client->jsonRequest('PUT', self::PATH, ['key' => $name, 'value' => $fixture], [
+                    'HTTP_X_CSRF_TOKEN' => $token,
+                ]);
+                self::assertResponseStatusCodeSame(200);
+                $body = (string) $client->getResponse()->getContent();
+                self::assertStringNotContainsString($fixture, $body);
+                self::assertArrayNotHasKey('value', self::responseData($body)['setting']);
+                $client->request('GET', self::PATH);
+                $redacted = (string) $client->getResponse()->getContent();
+                self::assertStringNotContainsString($fixture, $redacted);
+                self::assertTrue(self::responseData($redacted)['settings'][$name]['configured']);
+            }
+            $client->jsonRequest('POST', self::PATH.'/test-wompi', [], ['HTTP_X_CSRF_TOKEN' => $token]);
+            self::assertResponseStatusCodeSame(200);
+            $data = self::responseData((string) $client->getResponse()->getContent());
+            self::assertSame('wompi_sandbox_001', $data['transaction_id']);
+            self::assertSame('PENDING', $data['status']);
+            $client->jsonRequest('POST', self::PATH.'/test-wompi', [], ['HTTP_X_CSRF_TOKEN' => $token]);
+            self::assertResponseStatusCodeSame(429);
+
+            foreach (array_keys($keys) as $key) {
+                $client->request('DELETE', self::PATH.'/secret/'.$key,
+                    server: ['HTTP_X_CSRF_TOKEN' => $token]);
+                self::assertResponseStatusCodeSame(200);
+                self::assertFalse(self::responseData(
+                    (string) $client->getResponse()->getContent())['setting']['configured']);
+            }
+        } finally {
+            if ($owner !== null) {
+                $settings = self::getContainer()->get(PlatformIntegrationSettings::class);
+                self::assertInstanceOf(PlatformIntegrationSettings::class, $settings);
+                foreach (array_keys($keys) as $name) $settings->delete($name, $owner->id(), true);
+            }
+            putenv($oldWrite === false ? 'CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED'
+                : 'CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED='.$oldWrite);
+            putenv($oldFlag === false ? 'CONDOR_PAYMENTS_SANDBOX_ENABLED'
+                : 'CONDOR_PAYMENTS_SANDBOX_ENABLED='.$oldFlag);
+        }
+    }
+
+    public function testWompiSandboxFlagCannotEnableNetworkImplicitly(): void
+    {
+        $old = getenv('CONDOR_PAYMENTS_SANDBOX_ENABLED');
+        putenv('CONDOR_PAYMENTS_SANDBOX_ENABLED=false');
+        try {
+            $client = self::createClient();
+            $client->loginUser($this->actor(true));
+            $client->request('GET', self::PATH);
+            $snapshot = self::responseData((string) $client->getResponse()->getContent());
+            self::assertFalse($snapshot['wompi_sandbox_enabled']);
+            $client->jsonRequest('POST', self::PATH.'/test-wompi', [], [
+                'HTTP_X_CSRF_TOKEN' => $snapshot['csrf_token'],
+            ]);
+            self::assertResponseStatusCodeSame(423);
+        } finally {
+            putenv($old === false ? 'CONDOR_PAYMENTS_SANDBOX_ENABLED'
+                : 'CONDOR_PAYMENTS_SANDBOX_ENABLED='.$old);
         }
     }
 

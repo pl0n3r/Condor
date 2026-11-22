@@ -29,7 +29,7 @@ async function checkViewport(page: Page, width: number) {
 
 /** Contraste WCAG de texto; opacity=1 evita diluir el botón deshabilitado. */
 async function disabledButtonContrast(page: Page) {
-  return page.getByRole('button', { name: 'Guardar clave' }).evaluate(button => {
+  return page.locator('form[aria-label="Clave API de correo"]').getByRole('button', { name: 'Guardar clave', exact: true }).evaluate(button => {
     const style = getComputedStyle(button);
     function rgb(value: string) {
       const parts = value.match(/[\d.]+/g)?.slice(0, 3).map(Number) ?? [];
@@ -66,7 +66,9 @@ test.describe('1930: formularios compactos, tarjetas y accesibilidad', () => {
       await expect(page.getByRole('heading', { name: 'Integraciones', exact: true })).toBeVisible();
       const cards = page.locator('.ui-integrations-grid > .ui-card');
       await expect(cards).toHaveCount(4);
-      await expect(page.locator('form.ui-integration-form')).toHaveCount(5);
+      // Cinco formularios previos más cuatro formularios Wompi de secretos de prueba.
+      await expect(page.locator('form.ui-integration-form')).toHaveCount(9);
+      await expect(cards.nth(2).locator('form.ui-integration-form')).toHaveCount(4);
       const sender = page.getByLabel('Remitente', { exact: true });
       const btn = page.getByRole('button', { name: 'Guardar remitente' });
       await expect(sender).toBeVisible();
@@ -119,7 +121,7 @@ test.describe('1930: formularios compactos, tarjetas y accesibilidad', () => {
         body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
       });
     }
-    const secret = page.getByRole('button', { name: 'Guardar clave' });
+    const secret = page.locator('form[aria-label="Clave API de correo"]').getByRole('button', { name: 'Guardar clave', exact: true });
     await expect(secret).toBeDisabled();
     const contrast = await disabledButtonContrast(page);
     expect(contrast.opacity).toBe('1');
