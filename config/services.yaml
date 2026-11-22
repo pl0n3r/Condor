@@ -16,14 +16,15 @@ services:
     arguments:
       $projectDir: '%kernel.project_dir%'
 
-  # Exclusive SENTRY_DSN bridge: loader for missing env values and
-  # string processor for owner-store precedence over an existing env DSN.
-  # The DB connection is lazy to avoid bootstrap cycles during env loading.
+  # Exclusive, fail-closed SENTRY_DSN bridge: its own env processor prefix
+  # avoids collisions with Symfony's built-in string processor and preserves
+  # explicit environment precedence over the encrypted owner setting.
+  # Bootstrap DSN reads use an isolated short-lived DBAL connection if needed,
+  # avoiding cycles with the Doctrine service graph.
   App\Infrastructure\Observability\StoredSentryDsnEnvLoader:
     arguments:
       $container: '@service_container'
     tags:
-      - { name: container.env_var_loader }
       - { name: container.env_var_processor }
 
   App\Infrastructure\Observability\ErrorSanitizer:
