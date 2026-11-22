@@ -27,8 +27,8 @@ test.describe('Propietario #1961: módulo arriba, navegación clara y diagnósti
     const [oldJs, oldCss] = await Promise.all([
       fetch(assetURL('admin.js')), fetch(assetURL('admin.css')),
     ]);
-    expect(oldJs.ok(), 'bundle JS del main fijado').toBeTruthy();
-    expect(oldCss.ok(), 'CSS del main fijado').toBeTruthy();
+    expect(oldJs.ok, 'bundle JS del main fijado').toBeTruthy();
+    expect(oldCss.ok, 'CSS del main fijado').toBeTruthy();
     const jsSource = Buffer.from(await oldJs.arrayBuffer());
     const cssSource = Buffer.from(await oldCss.arrayBuffer());
 
