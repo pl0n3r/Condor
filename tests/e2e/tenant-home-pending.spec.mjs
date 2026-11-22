@@ -92,7 +92,9 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end('<!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1"><body>'
           + '<div id="condor-admin-root" class="admin-shell" data-payroll-real-data-enabled="true">'
-          + '<main class="workspace" data-module="inicio"></main></div>'
+          + '<div class="workspace-heading"><label>Sede activa'
+          + '<select aria-label="Sede activa"><option value="' + BRANCH + '">Sede ficticia</option>'
+          + '</select></label></div><main class="workspace" data-module="inicio"></main></div>'
           + '<script type="module" src="/home.js"></script></body></html>');
         return;
       }
@@ -126,6 +128,9 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
     await page.route('**/api/v1/**', async route => {
       const url = new URL(route.request().url());
       called.push(url.pathname);
+      if (url.pathname === '/api/v1/context') {
+        expect(url.searchParams.get('branch')).toBe(BRANCH);
+      }
       const denied = mode === 'denied';
       if (url.pathname === '/api/v1/context') {
         await route.fulfill({ status: 200, contentType: 'application/json',
