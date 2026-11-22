@@ -98,7 +98,7 @@ test.describe('Propietario #1961: módulo arriba, navegación clara y diagnósti
     await page.getByLabel('Correo').fill(process.env.E2E_PLATFORM_EMAIL);
     await page.getByLabel('Contraseña').fill(process.env.E2E_PASSWORD);
     await page.getByRole('button', { name: 'Ingresar' }).click();
-    await expect(page).toHaveURL(/\\/adminpl0n3r/);
+    await expect(page).toHaveURL(/\/adminpl0n3r/);
 
     // La plantilla Twig del propietario no depende de la API del dashboard.
     // Falla la API de manera aislada para detectar regresiones de montaje.
