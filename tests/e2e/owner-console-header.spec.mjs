@@ -53,6 +53,29 @@ test.describe('Propietario #1961: módulo arriba, navegación clara y diagnósti
         await page.goto(href);
         const workspace = page.locator('.admin-shell-platform .workspace');
         await expect(workspace.getByRole('heading', { level: 1 })).toHaveText(title);
+        if (width === 1440 && key === 'empresas') {
+          const identity = page.locator('.admin-shell-platform .sidebar .sidebar-user strong');
+          await expect(identity).toBeVisible();
+          const ratio = await identity.evaluate((element) => {
+            const channelsOf = (color) => color.slice(color.indexOf('(') + 1,
+              color.indexOf(')')).split(',').slice(0, 3).map((part) => Number(part.trim()));
+            const luminance = (rgb) => {
+              const channels = rgb.map((value) => {
+                const scaled = value / 255;
+                return scaled <= 0.04045 ? scaled / 12.92
+                  : ((scaled + 0.055) / 1.055) ** 2.4;
+              });
+              return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+            };
+            const foreground = luminance(channelsOf(getComputedStyle(element).color));
+            const background = luminance(channelsOf(getComputedStyle(
+              element.closest('.sidebar-user')).backgroundColor));
+            return (Math.max(foreground, background) + 0.05)
+              / (Math.min(foreground, background) + 0.05);
+          });
+          expect(ratio, 'Identidad de propietario: contraste WCAG AA').toBeGreaterThanOrEqual(4.5);
+        }
+
         await expect(workspace).not.toContainText('Administración global');
         await expect(workspace).not.toContainText('CONTROL CENTER');
         await expect(workspace).not.toContainText('ACTOR REAL');

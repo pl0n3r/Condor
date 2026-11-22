@@ -1105,3 +1105,12 @@ dialog.ui-sidepanel[open] { animation: ui-sheet-in .2s cubic-bezier(.22, 1, .36,
   order: -1;
   margin: 0;
 }
+
+/* Revisión visual real #1961: identidad en barra lateral oscura y
+   contraste WCAG AA verificado automáticamente a 1440 px. */
+.admin-shell-platform .sidebar .sidebar-user {
+  background: #18243c;
+  border-color: rgba(255, 255, 255, .22);
+}
+.admin-shell-platform .sidebar .sidebar-user span { color: #c9d1e6; }
+.admin-shell-platform .sidebar .sidebar-user strong { color: #ffffff; }
