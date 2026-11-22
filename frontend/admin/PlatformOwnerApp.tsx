@@ -566,6 +566,9 @@ export function PlatformOwnerApp({
         : section;
   const selected = selectedTenantFromState(state);
   const [supportBranchId, setSupportBranchId] = useState('');
+  // A branch from another tenant must never be sent in a support grant.
+  const selectedSupportBranchId = selected?.branches.some((branch) => branch.id === supportBranchId)
+    ? supportBranchId : '';
   const [supportBusy, setSupportBusy] = useState(false);
   const [supportError, setSupportError] = useState('');
   const moduleRequested = new URLSearchParams(window.location.search).get('modulo') ?? '';
@@ -615,6 +618,7 @@ export function PlatformOwnerApp({
     setSelectedPlanVersionId('');
     setSubscriptionCreation({ status: 'idle' });
     setTrialCreation({ status: 'idle' });
+    setSupportBranchId('');
   }, [selected?.id]);
 
   async function createInitialSubscription() {
@@ -834,7 +838,7 @@ export function PlatformOwnerApp({
             <>
               <label className="field">
                 <span>Sede de soporte</span>
-                <select value={supportBranchId}
+                <select value={selectedSupportBranchId}
                   onChange={(event) => setSupportBranchId(event.target.value)}>
                   <option value="">Sede principal</option>
                   {selected.branches.map((branch) => (
@@ -843,7 +847,7 @@ export function PlatformOwnerApp({
                 </select>
               </label>
               <button className="button button-context" type="button" disabled={supportBusy}
-                onClick={() => void openSupport(selected.id, supportBranchId || (
+                onClick={() => void openSupport(selected.id, selectedSupportBranchId || (
                   selected.branches.find((branch) => branch.is_default)?.id
                   ?? selected.branches[0].id
                 ))}>
