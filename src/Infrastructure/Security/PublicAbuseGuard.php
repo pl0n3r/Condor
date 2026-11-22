@@ -110,7 +110,13 @@ final readonly class PublicAbuseGuard
             && !$this->validFormProof($request)
         ) {
             $event->setResponse(self::invalidForm());
+            return;
         }
+
+        // Discard middleware-only fields before strict DTO allowlists in
+        // PublicTrialEnrollmentService, checkout and other controllers.
+        $request->request->remove('_condor_form_proof');
+        $request->request->remove('_condor_website');
     }
 
     /** Inject signed proof and an inert honeypot in public HTML POST forms. */
