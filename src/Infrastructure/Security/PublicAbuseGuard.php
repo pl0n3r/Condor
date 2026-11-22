@@ -78,7 +78,9 @@ final readonly class PublicAbuseGuard
         // A global IP window prevents an attacker from rotating public endpoints.
         $ipLimit = $this->ipLimiter->create(hash('sha256', $ip))->consume();
         // An independent identity window stops distributed requests for one victim.
-        $identity = self::identifier($request);
+        // Requests without an identifier must NOT share one global
+        // "anonymous" bucket across independent visitors.
+        $identity = self::identifier($request) ?? 'ip:'.$ip;
         $identityLimit = $this->identifierLimiter
             ->create(hash('sha256', $route.':'.$identity))->consume();
         $limits = [$ipLimit, $identityLimit];
@@ -300,7 +302,7 @@ final readonly class PublicAbuseGuard
         return filter_var($email, FILTER_VALIDATE_EMAIL) !== false ? $email : null;
     }
 
-    private static function identifier(Request $request): string
+    private static function identifier(Request $request): ?string
     {
         foreach (['email', 'username', 'account', 'identifier', 'phone', 'token',
             'idempotency_key', 'customer_id'] as $key) {
@@ -314,8 +316,9 @@ final readonly class PublicAbuseGuard
         if (is_string($token) && $token !== '' && strlen($token) < 256) {
             return $token;
         }
-        // Fallback remains bounded and rate-limited by the global IP window.
-        return 'anonymous';
+        // Caller IP is the fallback in onKernelRequest; do not aggregate all
+        // anonymous visitors into one exhausted global quota.
+        return null;
     }
 
     private static function formOrJson(Request $request, string $key): mixed

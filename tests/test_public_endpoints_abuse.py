@@ -102,6 +102,13 @@ for ($i = 0; $i < 50; ++$i) {
         throw new RuntimeException('El formulario nuevo no está protegido.');
     }
 }
+// Distinct visitors without an account identifier must not consume a
+// shared global anonymous bucket (availability/DoS regression).
+$visitorA = $make('future_public_anonymous', '/formulario-futuro', '192.0.2.118');
+$visitorB = $make('future_public_anonymous', '/formulario-futuro', '192.0.2.119');
+if ($visitorA->hasResponse() || $visitorB->hasResponse()) {
+    throw new RuntimeException('Un visitante agotó la cuota de otro.');
+}
 $trap = $make('future_public_contact', '/contacto-futuro', '192.0.2.100', ['_condor_website' => 'spam']);
 if (!$trap->hasResponse() || $trap->getResponse()->getStatusCode() !== 422) {
     throw new RuntimeException('El honeypot no rechazó el envío.');
@@ -211,6 +218,8 @@ class PublicEndpointsAbuseAcceptance(unittest.TestCase):
             if path == "/api/v1" or path.startswith("/api/v1/"):
                 return False
             if path.startswith("/adminpl0n3r"):
+                return False
+            if path == "/ops" or path.startswith("/ops/"):
                 return False
             if path.startswith("/admin"):
                 return path in (
