@@ -55,6 +55,8 @@ async function inspectPage(page) {
     const width = document.documentElement.clientWidth;
     const scrollWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
     const payloadExecuted = window.__condorRobustnessXss === true;
+    const markupInjected = [...document.querySelectorAll('script, img[onerror]')]
+      .some(el => el.outerHTML.includes('window.__condorRobustnessXss = true'));
     const textContent = document.body.innerText?.trim() ?? '';
     const messages = [...document.querySelectorAll('[role="alert"],[role="status"]')]
       .filter(el => el.getClientRects().length > 0)
@@ -97,7 +99,7 @@ async function inspectPage(page) {
         return { name: (el.innerText || el.getAttribute('aria-label') || '').slice(0, 60),
           contrast: (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05) };
       }).filter(Boolean).filter(x => x.contrast < 4.5);
-    return { width, scrollWidth, payloadExecuted, emptyBody: textContent.length === 0,
+    return { width, scrollWidth, payloadExecuted, markupInjected, emptyBody: textContent.length === 0,
       blankMessages: messages.filter(x => x.empty), overflowingText, lowContrast };
   });
 }
@@ -177,6 +179,7 @@ for (const role of ROLES) {
           const checks = [
             ['console', events],
             ['xss', metrics.payloadExecuted ? ['payload ejecutado'] : []],
+            ['unsafe-dom', metrics.markupInjected ? ['payload HTML no escapado en el DOM'] : []],
             ['horizontal', metrics.scrollWidth > viewport + 1
               ? ['scrollWidth=' + metrics.scrollWidth + ', viewport=' + viewport] : []],
             ['content', metrics.emptyBody ? ['documento vacío'] : []],
