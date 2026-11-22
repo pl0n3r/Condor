@@ -197,6 +197,11 @@ class RecoveryLocalLabContract(unittest.TestCase):
         self.assertIn("--ephemeral", r)
         self.assertRegex(r, r'runner_sha256="[0-9a-f]{64}"')
         self.assertIn("shasum -a 256 -c", r)
+        # El hash no sustituye la protección de transporte: redirects solo HTTPS.
+        # Regresión de SonarCloud shell:S6506, sin descargas ni secretos.
+        self.assertIn("curl --proto '=https' --proto-redir '=https' -fsSL", r)
+        self.assertIn("https://github.com/actions/runner/releases/download/", r)
+        self.assertNotIn('curl -fsSL -o "$dist/$runner_tgz"', r)
         self.assertIn("ACTIONS_RUNNER_HOOK_JOB_STARTED", r)
         self.assertIn("runner-job-guard.sh", r)
         self.assertIn("--labels condor-recovery", r)

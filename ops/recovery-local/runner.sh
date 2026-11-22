@@ -31,7 +31,8 @@ work="$base/instance-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 3)"
 umask 077
 mkdir -p "$dist"
 if [[ ! -x "$dist/run.sh" ]]; then
-  curl -fsSL -o "$dist/$runner_tgz" "https://github.com/actions/runner/releases/download/v${runner_version}/${runner_tgz}"
+  # Sonar shell:S6506: --location must never downgrade this download to HTTP.
+  curl --proto '=https' --proto-redir '=https' -fsSL -o "$dist/$runner_tgz" "https://github.com/actions/runner/releases/download/v${runner_version}/${runner_tgz}"
   echo "$runner_sha256  $dist/$runner_tgz" | shasum -a 256 -c - >/dev/null
   tar -xzf "$dist/$runner_tgz" -C "$dist"
   rm -f "$dist/$runner_tgz"
