@@ -18,7 +18,8 @@ test.describe('Integraciones de plataforma — secretos de solo escritura', () =
     await page.route('**/adminpl0n3r/api/integrations', async route => {
       if (route.request().method() === 'GET') {
         await route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ settings, csrf_token: 'synthetic-csrf', test_email_enabled: false, secret_write_enabled: true }) });
+          body: JSON.stringify({ settings, csrf_token: 'synthetic-csrf', test_email_enabled: false, secret_write_enabled: true,
+            sentry_test_enabled: true, sentry_capture_active: settings['sentry.dsn'].configured }) });
       } else {
         const payload = route.request().postDataJSON();
         captured.push({ ...payload, csrf: route.request().headers()['x-csrf-token'] });
@@ -29,6 +30,14 @@ test.describe('Integraciones de plataforma — secretos de solo escritura', () =
         await route.fulfill({ status: 200, contentType: 'application/json',
           body: JSON.stringify({ key: payload.key, setting: settings[payload.key] }) });
       }
+    });
+
+    const sentryCalls = [];
+    await page.route('**/adminpl0n3r/api/integrations/test-sentry', async route => {
+      sentryCalls.push({ method: route.request().method(),
+        csrf: route.request().headers()['x-csrf-token'] });
+      await route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ sent: true, event_id: '1234567890abcdef1234567890abcdef' }) });
     });
 
     await page.goto('/admin/login');
@@ -53,5 +62,18 @@ test.describe('Integraciones de plataforma — secretos de solo escritura', () =
     expect(captured).toEqual([{ key: 'mail.api_key', value: secret, csrf: 'synthetic-csrf' }]);
     await expect(page.getByRole('button', { name: 'Enviar correo de prueba' })).toBeDisabled();
     await expect(page.getByText('Envío de prueba deshabilitado hasta autorización expresa de live.')).toBeVisible();
+    await expect(page.getByText('Captura Sentry: inactiva (requiere DSN guardado y entorno prod).')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Enviar evento de prueba' })).toBeDisabled();
+
+    const syntheticDsn = 'https://synthetic-public@sentry.synthetic.invalid/42';
+    await page.getByLabel('DSN de Sentry · solo escritura').fill(syntheticDsn);
+    await page.getByRole('button', { name: 'Guardar DSN' }).click();
+    await expect(page.getByLabel('DSN de Sentry · solo escritura')).toHaveValue('');
+    await expect(page.getByText('Captura Sentry: activa (DSN configurado y entorno prod).')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Enviar evento de prueba' })).toBeEnabled();
+    await page.getByRole('button', { name: 'Enviar evento de prueba' }).click();
+    await expect(page.getByText('ID del evento Sentry: 1234567890abcdef1234567890abcdef')).toBeVisible();
+    await expect(page.locator('body')).not.toContainText(syntheticDsn);
+    expect(sentryCalls).toEqual([{ method: 'POST', csrf: 'synthetic-csrf' }]);
   });
 });
