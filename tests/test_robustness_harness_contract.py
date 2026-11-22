@@ -42,6 +42,20 @@ class RobustnessHarnessContractTests(unittest.TestCase):
         self.assertIn("debug:router", run.call_args.args[0])
         self.assertIn("--format=json", run.call_args.args[0])
 
+    def test_empty_discovery_does_not_create_false_green(self) -> None:
+        class FakeClient:
+            def login(self) -> None:
+                pass
+
+            def req(self, method, path, body=None, ctype="application/json", **kwargs):
+                return 200, '{"active_branch":{"id":"synthetic-branch"}}', .001
+
+        with patch.object(harness, "Client", FakeClient), \
+             patch.object(harness, "EMAIL", "owner-ci@example.test"), \
+             patch.object(harness, "PASSWORD", "synthetic"), \
+             patch.object(harness, "discover_routes", return_value=[]):
+            self.assertEqual(harness.main(), 1, "Sin rutas no se acepta éxito vacuo")
+
     def test_baseline_requires_exact_issue_and_no_duplicate_signatures(self) -> None:
         source = json.loads((ROOT / "tests/robustness/known_findings.json").read_text(encoding="utf-8"))
         self.assertIsInstance(source["known"], list)

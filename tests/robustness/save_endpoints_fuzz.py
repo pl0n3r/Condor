@@ -166,6 +166,9 @@ def main() -> int:
         branch = ""
     ctx = {"branchId": branch}
     routes = discover_routes()
+    if not routes:
+        print("fuzz: no se descubrieron rutas de escritura /api; falla cerrado", file=sys.stderr)
+        return 1
     findings = []
     for method, raw_path in routes:
         path = fill(raw_path, ctx)
