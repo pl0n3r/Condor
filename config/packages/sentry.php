@@ -10,8 +10,8 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 /*
  * Errores de producción hacia Sentry (proyecto Condor en pl0n3r.sentry.io).
  *
- * SENTRY_DSN queda vacío por defecto: la integración no envía eventos hasta
- * que el entorno configure explícitamente el DSN tras la puerta legal vigente.
+ * Un SENTRY_DSN explícito tiene prioridad; si falta, el procesador exclusivo
+ * lee el valor cifrado del propietario, y sin valor Sentry queda desactivado.
  * El SDK se configura sin PII por defecto, sin cuerpos de request y con un
  * before_send que elimina query strings, cookies, datos del request, cabeceras
  * sensibles, variables locales de stacktrace y user context.
@@ -29,13 +29,15 @@ return static function (ContainerConfigurator $container): void {
         $appVersion->releaseSha(),
     );
 
+    // A safe native fallback remains for unrelated legacy consumers.
+    // Sentry itself uses the dedicated processor to read encrypted storage.
     $container->parameters()->set(
         'env(SENTRY_DSN)',
         '',
     );
 
     $container->extension('sentry', [
-        'dsn' => '%env(SENTRY_DSN)%',
+        'dsn' => '%env(condor_sentry_dsn:SENTRY_DSN)%',
         'register_error_listener' => true,
         'register_error_handler' => true,
         'options' => [
