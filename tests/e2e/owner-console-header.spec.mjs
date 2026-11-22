@@ -71,6 +71,9 @@ test.describe('Propietario #1961: módulo arriba, navegación clara y diagnósti
         }
 
         if (key === 'diagnosticos') {
+          // La fuente SSR debe seguir oculta para no duplicar el contenido
+          // ni ofrecer tokens de enlaces efímeros fuera del panel visible.
+          await expect(page.locator('#platform-diagnostics-template')).toBeHidden();
           await expect(workspace.locator('.platform-diagnostics-content')).toContainText('p50');
           await expect(workspace.locator('.platform-diagnostics-content')).toContainText('p95');
           await expect(workspace.locator('.platform-diagnostics-content')).toContainText('Tasa de error 5xx');
