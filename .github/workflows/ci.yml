@@ -601,6 +601,9 @@ jobs:
     if: needs.preflight.outputs.backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: read
     services:
       mariadb:
         image: mariadb:11.4
@@ -768,6 +771,25 @@ jobs:
           test "$code" = "302"
           curl -fsS -b /tmp/cookies.txt http://127.0.0.1:8080/admin >/tmp/condor-admin.html
           grep -q 'Empresa CI' /tmp/condor-admin.html
+
+      # Temporary read-only security triage for the current PR. Remove after
+      # repairing findings to avoid adding GitHub API traffic to routine CI.
+      - name: Inspect Sonar annotations (read-only, exact HEAD)
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SONAR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          check_id="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SONAR_HEAD_SHA}/check-runs?per_page=100" \
+            --jq '.check_runs[] | select(.name == "SonarCloud Code Analysis") | .id' | head -n1)"
+          if [[ "$check_id" =~ ^[0-9]+$ ]]; then
+            echo "SonarCloud check id: ${check_id}"
+            gh api "repos/${GITHUB_REPOSITORY}/check-runs/${check_id}/annotations?per_page=100" \
+              --jq '.[] | "Sonar annotation: \(.path):\(.start_line) \(.title // "") \(.message)"'
+          else
+            echo "Sonar check still unavailable; no security conclusion inferred."
+          fi
 
   e2e:
     name: Playwright Chromium
