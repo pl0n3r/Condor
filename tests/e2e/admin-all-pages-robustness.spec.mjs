@@ -33,7 +33,7 @@ export async function discoverMenuLinks(page, ariaLabel, home) {
   const urls = [home];
   for (const href of hrefs) {
     const parsed = new URL(href, 'http://127.0.0.1');
-    if (parsed.origin !== 'http://127.0.0.1') continue;
+    if (parsed.protocol !== 'http:' || parsed.origin !== 'http://127.0.0.1') continue;
     const path = parsed.pathname + parsed.search + parsed.hash;
     if (parsed.pathname !== home && !parsed.pathname.startsWith(home + '/')) continue;
     if (path.endsWith('/logout') || path.endsWith('/login')) continue;
@@ -123,8 +123,22 @@ test('descubrimiento dinámico cubre un enlace añadido sin editar la prueba', a
     a.textContent = 'Módulo nuevo';
     nav.append(a);
   });
+  for (const href of [
+    'data:text/html,<script>alert(1)</script>',
+    'vbscript:msgbox(1)',
+    'javascript:alert(1)',
+    'https://evil.example/admin',
+  ]) {
+    await page.locator('nav').evaluate((nav, value) => {
+      const a = document.createElement('a'); a.href = value; a.textContent = 'No permitido'; nav.append(a);
+    }, href);
+  }
   const after = await discoverMenuLinks(page, 'Navegación principal', '/admin');
   expect(after).toContain('/admin#modulo-agregado-sin-editar-test');
+  expect(after).not.toContain('data:text/html,<script>alert(1)</script>');
+  expect(after).not.toContain('vbscript:msgbox(1)');
+  expect(after).not.toContain('javascript:alert(1)');
+  expect(after).not.toContain('https://evil.example/admin');
   expect(after.length).toBe(before.length + 1);
 });
 
