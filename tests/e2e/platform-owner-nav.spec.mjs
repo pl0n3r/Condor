@@ -14,6 +14,36 @@ const GROUPS = [
     links: ['/adminpl0n3r/empresas'],
   },
   {
+    name: 'Módulos de empresa',
+    links: [
+      '/adminpl0n3r/empresas?modulo=commerce',
+      '/adminpl0n3r/empresas?modulo=orders',
+      '/adminpl0n3r/empresas?modulo=sales-reports',
+      '/adminpl0n3r/empresas?modulo=reports-downloads',
+      '/adminpl0n3r/empresas?modulo=customer-service',
+      '/adminpl0n3r/empresas?modulo=catalog',
+      '/adminpl0n3r/empresas?modulo=inventory',
+      '/adminpl0n3r/empresas?modulo=stock-alerts',
+      '/adminpl0n3r/empresas?modulo=stock-transfers',
+      '/adminpl0n3r/empresas?modulo=production',
+      '/adminpl0n3r/empresas?modulo=purchasing',
+      '/adminpl0n3r/empresas?modulo=assets-management',
+      '/adminpl0n3r/empresas?modulo=seo-settings',
+      '/adminpl0n3r/empresas?modulo=employees-management',
+      '/adminpl0n3r/empresas?modulo=human-resources-management',
+      '/adminpl0n3r/empresas?modulo=payroll-management',
+      '/adminpl0n3r/empresas?modulo=contracts-management',
+      '/adminpl0n3r/empresas?modulo=social-security-management',
+      '/adminpl0n3r/empresas?modulo=finance-management',
+      '/adminpl0n3r/empresas?modulo=compliance-management',
+      '/adminpl0n3r/empresas?modulo=compliance-evidence-management',
+      '/adminpl0n3r/empresas?modulo=governance-management',
+      '/adminpl0n3r/empresas?modulo=workflows',
+      '/adminpl0n3r/empresas?modulo=operations-processes',
+      '/adminpl0n3r/empresas?modulo=roles',
+    ],
+  },
+  {
     name: 'Comercial',
     links: [
       '/adminpl0n3r/catalogo?vista=planes',
@@ -40,7 +70,7 @@ test.describe('Propietario — navegación agrupada sin enlaces inexistentes', (
     'Requiere aplicación E2E y credenciales de propietario.',
   );
 
-  test('acordeones accesibles, nueve enlaces funcionales y sección activa', async ({ page }) => {
+  test('acordeones accesibles, módulos de empresa y sección activa', async ({ page }) => {
     await page.goto('/admin/login');
     await page.getByLabel('Correo').fill(email);
     await page.getByLabel('Contraseña').fill(password);
