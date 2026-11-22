@@ -11,9 +11,6 @@ const settings = {
   'mail.api_key': { configured: false, last4: null, updated_at: null },
   'sentry.dsn': { configured: false, last4: null, updated_at: null },
 };
-const pixelWidth = async (page: Page, selector: string) =>
-  page.locator(selector).first().evaluate(element => element.getBoundingClientRect().width);
-
 async function login(page: Page) {
   await page.goto('/admin/login');
   await page.getByLabel('Correo').fill(email!);
@@ -96,6 +93,8 @@ test.describe('1930: formularios compactos, tarjetas y accesibilidad', () => {
       });
       if (width === 1440) expect(statusRect.topDifference).toBeLessThan(8);
       if (width === 1440) {
+        // Reconstrucción CSS sintética del diseño anterior; no es captura
+        // de un entorno real ni se usa como evidencia de despliegue.
         const reconstruction = await page.addStyleTag({ content: `
           .admin-shell .ui-integrations-grid { display: block !important; }
           .admin-shell .ui-integration-content { padding: 0 !important; display: block !important; }
