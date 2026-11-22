@@ -63,10 +63,11 @@ class RobustnessHarnessContractTests(unittest.TestCase):
         self.assertEqual(harness.BASE, "http://127.0.0.1:8091")
         handler = harness.LoopbackOnlyRedirect()
         request = urllib.request.Request(harness.BASE + "/admin/login")
-        with self.assertRaises(urllib.error.HTTPError):
+        with self.assertRaises(urllib.error.HTTPError) as denied:
             handler.redirect_request(
                 request, None, 302, "Found", {}, "https://example.test/steal-session"
             )
+        denied.exception.close()
         safe = handler.redirect_request(
             request, None, 302, "Found", {}, harness.BASE + "/admin"
         )
@@ -134,6 +135,13 @@ class RobustnessHarnessContractTests(unittest.TestCase):
             self.assertTrue(recipe["list"].startswith("/api/"))
             self.assertIn(recipe["id_field"], recipe["base"]())
             self.assertTrue(recipe["fields"])
+
+    def test_bidi_payload_is_present_at_runtime_not_literal_in_source(self) -> None:
+        control = chr(0x202e)
+        self.assertIn(control + "RTL", harness.WEIRD_STRINGS)
+        self.assertIn(control + "RTL", roundtrip.TEXT_CASES)
+        self.assertNotIn(control, (ROOT / "tests/robustness/save_endpoints_fuzz.py").read_text(encoding="utf-8"))
+        self.assertNotIn(control, (ROOT / "tests/robustness/save_roundtrip_fuzz.py").read_text(encoding="utf-8"))
 
     def test_workflow_runs_live_fuzzers_only_after_synthetic_onboarding(self) -> None:
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")

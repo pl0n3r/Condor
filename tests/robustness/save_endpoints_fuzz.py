@@ -41,7 +41,7 @@ LEAK = re.compile(r"(Stack trace|#\d+ /|\bat [\w\\]+->|Uncaught|Fatal error|SQLS
 WEIRD_STRINGS = [
     "", "   ", "\t\n", "a" * 100_000, "😀🇨🇴𝔘𝔫𝔦𝔠𝔬𝔡𝔢", "Ñandú ÁÉÍÓÚ ü", "مرحبا שלום",
     "<script>alert(1)</script>", "\"'><img src=x onerror=alert(1)>", "'; DROP TABLE condor_user; --",
-    "../../etc/passwd", "a\u0000b", "‮RTL", "null", "NaN", "-1", "9" * 40, "1e309",
+    "../../etc/passwd", "a\u0000b", "\u202eRTL", "null", "NaN", "-1", "9" * 40, "1e309",
     "2026-02-30", "0000-00-00", "{{7*7}}", "${7*7}", "%s%s%n",
 ]
 WEIRD_VALUES = WEIRD_STRINGS + [None, True, False, 0, -1, -0.0001, 2**63, -(2**63), 1e308, 3.14159,

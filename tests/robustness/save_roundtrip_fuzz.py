@@ -21,7 +21,7 @@ import save_endpoints_fuzz as base  # noqa: E402
 
 GENERIC = "Los datos enviados no son válidos."
 TEXT_CASES = ["😀 Ñandú ÁÉÍÓÚ 🇨🇴", "مرحبا שלום", "<script>alert(1)</script>", "O'Brien \"Ltda\"",
-              "'; DROP TABLE x; --", "   espacios   ", "", "a" * 5000, "a\u0000b", "{{7*7}}", "‮RTL"]
+              "'; DROP TABLE x; --", "   espacios   ", "", "a" * 5000, "a\u0000b", "{{7*7}}", "\u202eRTL"]
 NUM_CASES = [-1, 0, 365, 366, 10**12, 1.5, "30", None, True, [], {}]
 
 
@@ -91,7 +91,7 @@ def main() -> int:
                     if stored != sent and stored != sent.strip() and stored.upper() != sent.strip().upper():
                         findings.append((label, "guardado distinto de lo enviado",
                                          f"enviado={sent[:40]!r} guardado={stored[:40]!r}"))
-                    if "\u0000" in stored or "‮" in stored:
+                    if "\u0000" in stored or "\u202e" in stored:
                         findings.append((label, "guarda caracteres de control invisibles", repr(stored[:40])))
                 elif stored != sent:
                     findings.append((label, "valor numérico/tipo alterado o aceptado sin validar",
