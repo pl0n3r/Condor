@@ -593,11 +593,9 @@ export function PlatformOwnerApp({
       if (!response.ok) {
         throw new Error('No fue posible iniciar la sesión de soporte.');
       }
-      const payload = await response.json() as { href?: string };
-      if (typeof payload.href !== 'string' || !payload.href.startsWith('/admin')) {
-        throw new Error('Destino de soporte inválido.');
-      }
-      window.location.assign(payload.href);
+      // Never navigate to an untrusted URL from a network response.
+      // Only our local allowlisted module may affect the destination.
+      window.location.assign('/admin' + (supportModule ? '#' + supportModule : ''));
     } catch {
       setSupportError('No se pudo abrir el panel de la empresa. Reintenta desde aquí.');
       setSupportBusy(false);

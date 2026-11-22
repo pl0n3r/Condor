@@ -473,7 +473,7 @@ export function AdminShell({
 
       <main className="workspace" aria-label="Área de trabajo" data-module={/^[a-z0-9-]+$/.test(activeId) ? activeId : 'inicio'}>
         {supportMode && (
-          <output className="alert alert-info" role="status" aria-live="polite">
+          <output className="alert alert-info" aria-live="polite">
             <strong>Soporte de propietario · {supportTenantName}</strong>
             <span> Estás administrando esta empresa como propietario de la plataforma.</span>
             <button className="button button-secondary" type="button"

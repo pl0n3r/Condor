@@ -52,7 +52,8 @@ test.describe('Propietario — soporte temporal por empresa', () => {
       await expect(pagination.locator('span')).not.toHaveText(before);
     }
     await expect(row).toBeVisible();
-    await row.click();
+    // The table row is not an interactive target: open its accessible first-cell button.
+    await row.getByRole('button').first().click();
 
     const dialog = page.getByRole('dialog', { name: tenantName });
     await expect(dialog).toBeVisible();
