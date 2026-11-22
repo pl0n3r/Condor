@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Security;
 
-use DateTimeImmutable;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
+use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 
@@ -24,6 +24,7 @@ use Symfony\Component\RateLimiter\RateLimiterFactory;
  * Existing controller-specific limits remain in place as defense in depth.
  */
 #[AsEventListener(event: KernelEvents::REQUEST, method: 'onKernelRequest', priority: 9)]
+#[AsEventListener(event: KernelEvents::RESPONSE, method: 'onKernelResponse', priority: 0)]
 final readonly class PublicAbuseGuard
 {
     private const MUTATING_METHODS = ['POST', 'PUT', 'PATCH'];
@@ -39,6 +40,10 @@ final readonly class PublicAbuseGuard
         private RateLimiterFactory $identifierLimiter,
         #[Autowire(service: 'limiter.public_email_recipient')]
         private RateLimiterFactory $recipientLimiter,
+        #[Autowire('%kernel.secret%')]
+        private ?string $signingKey = null,
+        #[Autowire('%kernel.environment%')]
+        private string $environment = 'test',
     ) {
     }
 
@@ -92,12 +97,105 @@ final readonly class PublicAbuseGuard
         // Never trust a repeated or array-valued input.
         $trap = $request->request->all()['_condor_website'] ?? '';
         if ($trap !== '' && $trap !== null) {
-            $event->setResponse(new JsonResponse(
-                ['error' => 'Solicitud inválida.'],
-                Response::HTTP_UNPROCESSABLE_ENTITY,
-                ['Cache-Control' => 'no-store'],
-            ));
+            $event->setResponse(self::invalidForm());
+            return;
         }
+
+        // Production HTML forms must be submitted after a short, signed dwell
+        // on the GET form. Do not accept caller-supplied clocks or missing
+        // proof; app-test skips dwell for legacy HTTP fixtures (strict mode is
+        // exercised independently with the production setting).
+        if ($this->environment !== 'test'
+            && self::isHtmlPost($request)
+            && !$this->validFormProof($request)
+        ) {
+            $event->setResponse(self::invalidForm());
+        }
+    }
+
+    /** Inject signed proof and an inert honeypot in public HTML POST forms. */
+    public function onKernelResponse(ResponseEvent $event): void
+    {
+        if (!$event->isMainRequest() || $event->getRequest()->getMethod() !== 'GET') {
+            return;
+        }
+        $request = $event->getRequest();
+        if (!self::isPublicMutationPath($request->getPathInfo())) {
+            return;
+        }
+        $response = $event->getResponse();
+        $body = $response->getContent();
+        if (!is_string($body)
+            || !str_contains(strtolower((string) $response->headers->get('Content-Type')), 'text/html')
+            || !str_contains(strtolower($body), '<form')
+            || !is_string($this->signingKey) || strlen($this->signingKey) < 16
+        ) {
+            return;
+        }
+
+        $issued = time();
+        $changed = false;
+        $html = preg_replace_callback(
+            '~<form\b(?=[^>]*\bmethod\s*=\s*["\x27]?post(?:["\x27\s>]))[^>]*>~i',
+            function (array $match) use ($request, $issued, &$changed): string {
+                $form = $match[0];
+                $targetPath = $request->getPathInfo();
+                if (preg_match('~\baction\s*=\s*(["\x27])([^"\x27]*)\1~i', $form, $actions) === 1) {
+                    $action = parse_url(html_entity_decode($actions[2], ENT_QUOTES), PHP_URL_PATH);
+                    if (is_string($action) && str_starts_with($action, '/')) {
+                        $targetPath = $action;
+                    }
+                }
+                if (!self::isPublicMutationPath($targetPath)) {
+                    return $form;
+                }
+                $digest = hash_hmac('sha256', $issued.'|'.$targetPath, $this->signingKey ?? '');
+                $proof = $issued.'.'.$digest;
+                $changed = true;
+                return $form
+                    .'<input type="hidden" name="_condor_form_proof" value="'.$proof.'">'
+                    .'<input type="text" name="_condor_website" value="" hidden'
+                    .' autocomplete="off" tabindex="-1" aria-hidden="true">';
+            },
+            $body,
+        );
+        if ($changed && is_string($html)) {
+            $response->setContent($html);
+            $response->headers->remove('Content-Length');
+            $response->headers->set('Cache-Control', 'private, no-store');
+        }
+    }
+
+    private static function invalidForm(): JsonResponse
+    {
+        return new JsonResponse(['error' => 'Solicitud inválida.'],
+            Response::HTTP_UNPROCESSABLE_ENTITY, ['Cache-Control' => 'no-store']);
+    }
+
+    private static function isHtmlPost(Request $request): bool
+    {
+        $type = strtolower((string) $request->headers->get('Content-Type'));
+        return str_contains($type, 'application/x-www-form-urlencoded')
+            || str_contains($type, 'multipart/form-data');
+    }
+
+    private function validFormProof(Request $request): bool
+    {
+        if (!is_string($this->signingKey) || strlen($this->signingKey) < 16) {
+            return false;
+        }
+        $proof = $request->request->all()['_condor_form_proof'] ?? null;
+        if (!is_string($proof)
+            || preg_match('/^([0-9]{10})\.([a-f0-9]{64})$/D', $proof, $parts) !== 1) {
+            return false;
+        }
+        $issued = (int) $parts[1];
+        $age = time() - $issued;
+        if ($age < 2 || $age > 600) {
+            return false;
+        }
+        $signed = hash_hmac('sha256', $issued.'|'.$request->getPathInfo(), $this->signingKey);
+        return hash_equals($signed, $parts[2]);
     }
 
     /**
