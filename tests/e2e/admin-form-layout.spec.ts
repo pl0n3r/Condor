@@ -115,11 +115,16 @@ test.describe('1930: formularios compactos, tarjetas y accesibilidad', () => {
     const contrast = await disabledButtonContrast(page);
     expect(contrast.opacity).toBe('1');
     expect(contrast.ratio).toBeGreaterThanOrEqual(4.5);
+    // La interfaz usa outline de 3px (no box-shadow) para foco visible.
     await page.keyboard.press('Tab');
-    await page.getByLabel('Remitente', { exact: true }).focus();
-    const focus = await page.getByLabel('Remitente', { exact: true })
-      .evaluate(element => getComputedStyle(element).boxShadow);
-    expect(focus).not.toBe('none');
+    const sender = page.getByLabel('Remitente', { exact: true });
+    await sender.focus();
+    const focus = await sender.evaluate(element => {
+      const style = getComputedStyle(element);
+      return { outlineWidth: parseFloat(style.outlineWidth), outlineStyle: style.outlineStyle };
+    });
+    expect(focus.outlineStyle).not.toBe('none');
+    expect(focus.outlineWidth).toBeGreaterThanOrEqual(2);
   });
 
   test('Otras pantallas: Empresas y Catálogo conservan campos y botones legibles', async ({ page }, testInfo: TestInfo) => {
