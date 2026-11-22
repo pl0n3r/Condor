@@ -7,6 +7,8 @@ namespace App\Http\Controller;
 use App\Application\Notification\MailProviderConfiguration;
 use App\Application\Platform\PlatformIntegrationSettings;
 use App\Infrastructure\Notification\MailerFactory;
+use App\Infrastructure\Observability\SentryTestEventSender;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -38,6 +40,10 @@ final class PlatformIntegrationsController extends PlatformOwnerApiController
         private readonly RateLimiterFactory $testEmailLimiter,
         private readonly MailProviderConfiguration $mailConfiguration,
         private readonly MailerFactory $mailerFactory,
+        private readonly SentryTestEventSender $sentryTestSender,
+        private readonly LoggerInterface $logger,
+        #[Autowire('%kernel.environment%')]
+        private readonly string $kernelEnvironment,
     ) {
     }
 
@@ -56,6 +62,9 @@ final class PlatformIntegrationsController extends PlatformOwnerApiController
             'csrf_token' => $this->csrfTokens->getToken(self::CSRF_ID)->getValue(),
             'test_email_enabled' => self::testEmailEnabled(),
             'secret_write_enabled' => self::secretWriteEnabled(),
+            'sentry_test_enabled' => self::sentryTestEnabled(),
+            'sentry_capture_active' => $this->kernelEnvironment === 'prod'
+                && $settings['sentry.dsn']['configured'],
         ]);
     }
 
@@ -178,6 +187,60 @@ final class PlatformIntegrationsController extends PlatformOwnerApiController
         return $this->privateJson(['sent' => true]);
     }
 
+    #[Route('/test-sentry', name: 'platform_integrations_test_sentry', methods: ['POST'])]
+    public function testSentry(Request $request): JsonResponse
+    {
+        $owner = $this->platformOwner();
+        $this->requireManagementCsrf($request, self::CSRF_ID);
+
+        if (!self::sentryTestEnabled()) {
+            return $this->privateJson([
+                'error' => 'Prueba Sentry deshabilitada por configuración.',
+            ], Response::HTTP_LOCKED);
+        }
+
+        // Comprobar solo metadatos; el DSN nunca atraviesa esta API.
+        if (!$this->safeSetting('sentry.dsn', $owner->id())['configured']) {
+            return $this->privateJson(['error' => 'DSN de Sentry ausente.'], Response::HTTP_CONFLICT);
+        }
+
+        // Mismo límite de una prueba/minuto, partición independiente del correo.
+        if (!$this->testEmailLimiter->create($owner->id().':test-sentry')->consume()->isAccepted()) {
+            return $this->privateJson([
+                'error' => 'Solo un evento Sentry de prueba por minuto.',
+            ], Response::HTTP_TOO_MANY_REQUESTS);
+        }
+
+        try {
+            $eventId = $this->sentryTestSender->send();
+        } catch (\DomainException $exception) {
+            $reason = $exception->getMessage();
+            $status = match ($reason) {
+                'dsn_invalid' => Response::HTTP_UNPROCESSABLE_ENTITY,
+                'rejected' => Response::HTTP_BAD_GATEWAY,
+                default => Response::HTTP_SERVICE_UNAVAILABLE,
+            };
+            $this->logger->warning('condor_sentry_test_failed', [
+                'reason' => in_array($reason, ['dsn_invalid', 'rejected', 'network'], true)
+                    ? $reason : 'network',
+            ]);
+
+            return $this->privateJson(['error' => match ($reason) {
+                'dsn_invalid' => 'DSN de Sentry inválido o no disponible.',
+                'rejected' => 'Sentry rechazó el evento de prueba.',
+                default => 'No hay conexión con Sentry.',
+            }], $status);
+        } catch (Throwable) {
+            $this->logger->warning('condor_sentry_test_failed', ['reason' => 'network']);
+
+            return $this->privateJson([
+                'error' => 'No hay conexión con Sentry.',
+            ], Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        return $this->privateJson(['sent' => true, 'event_id' => $eventId]);
+    }
+
     /** @return array<string,mixed> */
     private function safeSetting(string $key, string $actor): array
     {
@@ -204,6 +267,12 @@ final class PlatformIntegrationsController extends PlatformOwnerApiController
         // El guardado de claves nunca habilita el envío de prueba por sí solo.
         return self::secretWriteEnabled()
             && getenv('CONDOR_PLATFORM_TEST_EMAIL_ENABLED') === 'true';
+    }
+
+    private static function sentryTestEnabled(): bool
+    {
+        return self::secretWriteEnabled()
+            && getenv('CONDOR_PLATFORM_SENTRY_TEST_ENABLED') === 'true';
     }
 
     /** @param array<string,mixed> $payload */
