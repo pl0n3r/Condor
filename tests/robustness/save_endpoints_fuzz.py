@@ -61,6 +61,17 @@ RAW_BODIES = [
 ]
 
 
+def require_disposable_database() -> None:
+    """Never fuzz a production-configured PHP server or remote database."""
+    if os.environ.get("APP_ENV") != "test":
+        raise SystemExit("fuzz: APP_ENV debe ser test, no se permite producción")
+    database = urllib.parse.urlsplit(os.environ.get("DATABASE_URL", ""))
+    if (database.scheme not in ("mysql", "mariadb")
+            or database.hostname not in ("127.0.0.1", "localhost")
+            or database.path != "/condor_test"):
+        raise SystemExit("fuzz: DATABASE_URL debe apuntar a MariaDB local condor_test")
+
+
 class LoopbackOnlyRedirect(urllib.request.HTTPRedirectHandler):
     """Accept only same-origin redirects; never forward the CI session off host."""
 
@@ -73,6 +84,7 @@ class LoopbackOnlyRedirect(urllib.request.HTTPRedirectHandler):
 
 class Client:
     def __init__(self) -> None:
+        require_disposable_database()
         self.jar = http.cookiejar.CookieJar()
         self.opener = urllib.request.build_opener(
             urllib.request.ProxyHandler({}), LoopbackOnlyRedirect(),

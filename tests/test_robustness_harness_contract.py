@@ -56,6 +56,31 @@ class RobustnessHarnessContractTests(unittest.TestCase):
              patch.object(harness, "discover_routes", return_value=[]):
             self.assertEqual(harness.main(), 1, "Sin rutas no se acepta éxito vacuo")
 
+    def test_refuses_production_or_remote_database_before_login(self) -> None:
+        import os
+
+        safe = {
+            "APP_ENV": "test",
+            "DATABASE_URL": (
+                "mysql://root@127.0.0.1:3306/condor_test"
+                "?serverVersion=mariadb-11.4.0&charset=utf8mb4"
+            ),
+        }
+        with patch.dict(os.environ, safe, clear=True):
+            harness.require_disposable_database()
+            client = harness.Client()
+            self.assertIsNotNone(client.opener)
+        unsafe = [
+            {"APP_ENV": "prod", "DATABASE_URL": safe["DATABASE_URL"]},
+            {"APP_ENV": "test", "DATABASE_URL": "mysql://root@prod-db.example.test/condor_test"},
+            {"APP_ENV": "test", "DATABASE_URL": "mysql://root@127.0.0.1/condor"},
+            {"APP_ENV": "test", "DATABASE_URL": ""},
+        ]
+        for env in unsafe:
+            with self.subTest(env=env), patch.dict(os.environ, env, clear=True):
+                with self.assertRaises(SystemExit):
+                    harness.Client()
+
     def test_ci_credentials_cannot_leave_local_server(self) -> None:
         import urllib.error
         import urllib.request
