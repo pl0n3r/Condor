@@ -105,7 +105,9 @@ test.describe('AdminApp: shell real compilada en producción con datos ficticios
         ? CONTEXT
         : url.pathname.endsWith('/hr/records')
           ? { records: [] }
-          : { products: [], services: [], items: [], records: [], orders: [], inventory: [] };
+          : url.pathname.endsWith('/inventory/stock-alerts')
+            ? { source_id: 'synthetic', alerts: [] }
+            : { products: [], services: [], items: [], records: [], orders: [], inventory: [] };
       await route.fulfill({ status: 200, contentType: 'application/json',
         body: JSON.stringify(payload) });
     });
@@ -116,15 +118,21 @@ test.describe('AdminApp: shell real compilada en producción con datos ficticios
     await syntheticApi(page, calls);
     await page.goto(origin + '/admin');
     await expect(page.locator('.module-directory')).toBeVisible();
-    // The initial workspace must not mount any privileged module before selection.
+    // La portada consulta únicamente las alertas autorizadas, no monta otros paneles.
+    await expect(page.getByRole('heading', { name: 'Para hoy' })).toBeVisible();
+    await expect(page.getByText(/Todo al día/)).toBeVisible();
+    await expect(page.getByText('Permisos efectivos')).toHaveCount(0);
     await expect(page.locator('#human-resources-management')).toHaveCount(0);
-    expect(calls.filter(path => path.startsWith('/api/v1/branches/'))).toEqual([]);
+    expect(calls.filter(path => path.startsWith('/api/v1/branches/')))
+      .toEqual(['/api/v1/branches/' + BRANCH + '/inventory/stock-alerts']);
+    const beforeCatalog = calls.length;
     await page.evaluate(() => { window.location.hash = '#catalog'; });
     await expect(page.locator('#catalog')).toBeVisible();
     await expect(page.locator('#orders')).toHaveCount(0);
     await expect(page.locator('#inventory')).toHaveCount(0);
     await page.waitForLoadState('networkidle');
-    const catalogUrls = calls.filter(path => path.startsWith('/api/v1/branches/'));
+    const catalogUrls = calls.slice(beforeCatalog)
+      .filter(path => path.startsWith('/api/v1/branches/'));
     expect(catalogUrls.some(path => path.endsWith('/catalog/products'))).toBe(true);
     expect(catalogUrls.some(path => /\/orders|\/inventory|\/hr\//.test(path))).toBe(false);
 
@@ -142,6 +150,7 @@ test.describe('AdminApp: shell real compilada en producción con datos ficticios
     await expect(page.locator('#catalog')).toBeVisible();
     await page.evaluate(() => { window.location.hash = ''; });
     await expect(page.locator('.module-directory')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Para hoy' })).toBeVisible();
     await expect(page.locator('#catalog')).toHaveCount(0);
   });
 

@@ -40,7 +40,11 @@ test.describe('Administrador — menú agrupado y módulos aislados', () => {
     expect(new Set(hrefs).size).toBe(hrefs.length);
     for (const href of REQUIRED_LINKS) expect(hrefs).toContain(href);
     await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
-    await expect(page.locator('.module-directory-group')).toHaveCount(GROUPS.length);
+    await expect(page.getByRole('heading', { name: 'Para hoy' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Módulos', exact: true })).toHaveCount(0);
+    await expect(page.getByText('Permisos efectivos')).toHaveCount(0);
+    // El inicio deja de ser un directorio: las tareas solo aparecen con fuentes autorizadas.
+    expect(await page.locator('.module-directory-group').count()).toBeLessThanOrEqual(1);
     await expect(page.locator('.workspace > section#catalog')).toHaveCount(0);
     await expect(page.locator('.workspace > section#orders')).toHaveCount(0);
 
