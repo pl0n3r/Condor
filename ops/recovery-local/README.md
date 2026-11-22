@@ -73,6 +73,8 @@ un drill: `runner.sh` lo registra con `--ephemeral`, atiende un trabajo y se bor
   un archivo temporal modo 600 y se borra antes de salir.
 - **Base desechable:** `disposable-url.sh` deriva la URL del laboratorio (`127.0.0.1:3317/condor_restore_test`)
   y rechaza cualquier destino que no sea loopback/puerto/usuario/base del laboratorio.
+  Para el **drill productivo** el puerto se fija obligatoriamente en `3317`, aun cuando
+  el ensayo exclusivamente sintético de `lab.sh` admita un puerto alternativo.
 - **Offsite:** S3 compatible con Object Lock `COMPLIANCE` y versionado (Backblaze B2 funciona con
   el driver actual de FactoryRunner; Cloudflare R2 requiere soporte nuevo en FactoryRunner).
 
