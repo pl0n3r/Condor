@@ -587,3 +587,19 @@ input {
   .admin-shell .sidebar { position: static; height: auto; }
   .admin-shell .sidebar nav { overflow: visible; padding: 8px 12px 12px; }
 }
+
+/* #1982: navegación de ambos roles con contraste AA estable en todas
+   las superficies claras/oscuras y durante la expansión del acordeón.
+   Fondo y tinta explícitos evitan mezclar blanco/#aab4cf sobre #f3f5f8. */
+.admin-shell .sidebar a.nav-sub {
+  background: #18243c;
+  color: #eef1f8;
+}
+.admin-shell .sidebar nav a.nav-sub[aria-current="page"] {
+  background: #2447e5;
+  color: #ffffff;
+}
+.admin-shell .sidebar a.nav-sub:hover {
+  background: #1b37b8;
+  color: #ffffff;
+}
