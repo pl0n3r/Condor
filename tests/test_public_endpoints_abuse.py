@@ -24,10 +24,12 @@ CONFIG = ROOT / "config/packages/rate_limiter.yaml"
 PHP_HARNESS = r"""<?php
 declare(strict_types=1);
 
+use App\Application\Onboarding\PublicTrialCaptcha;
 use App\Infrastructure\Security\PublicAbuseGuard;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
+use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
@@ -107,6 +109,68 @@ if (!$trap->hasResponse() || $trap->getResponse()->getStatusCode() !== 422) {
 $invalidArea = $make('protected_edit', '/api/v1/internal/edit', '192.0.2.101');
 if ($invalidArea->hasResponse()) {
     throw new RuntimeException('Guard alteró un endpoint autenticado.');
+}
+
+$captchaFake = new class extends PublicTrialCaptcha {
+    public function verifyForAction(string $token, string $action): bool {
+        return $token === 'fixture-valid-token' && in_array($action,
+            ['condor_password_reset', 'condor_storefront_checkout'], true);
+    }
+};
+$signingKey = 'fixture-only-signing-secret-long-enough';
+$strict = new PublicAbuseGuard($factories[0], $factories[1], $factories[2],
+    $signingKey, 'prod', $captchaFake);
+$get = Request::create('/admin/recuperar-contrasena', 'GET');
+$get->attributes->set('_route', 'app_password_reset_request');
+$page = new ResponseEvent($kernel, $get, HttpKernelInterface::MAIN_REQUEST,
+    new Response('<html><form method="post"><button>Enviar</button></form></html>',
+        200, ['Content-Type' => 'text/html']));
+$strict->onKernelResponse($page);
+$html = $page->getResponse()->getContent();
+if (!is_string($html)
+    || preg_match('/name="_condor_form_proof" value="([^"]+)"/', $html, $found) !== 1
+    || !str_contains($html, 'name="_condor_website"')) {
+    throw new RuntimeException('GET no generó prueba firmada y honeypot.');
+}
+$post = static function (array $data, string $ip) use ($strict, $kernel): RequestEvent {
+    $request = Request::create('/admin/recuperar-contrasena', 'POST', $data, [], [],
+        ['REMOTE_ADDR' => $ip, 'CONTENT_TYPE' => 'application/x-www-form-urlencoded']);
+    $request->attributes->set('_route', 'app_password_reset_request');
+    $event = new RequestEvent($kernel, $request, HttpKernelInterface::MAIN_REQUEST);
+    $strict->onKernelRequest($event);
+    return $event;
+};
+$fields = ['email' => 'fixture@example.test', '_condor_form_proof' => $found[1],
+    'cf-turnstile-response' => 'fixture-valid-token'];
+$tooFast = $post($fields, '192.0.2.201');
+if (!$tooFast->hasResponse() || $tooFast->getResponse()->getStatusCode() !== 422) {
+    throw new RuntimeException('La protección de tiempo no rechazó una ráfaga inmediata.');
+}
+$issued = time() - 3;
+$fields['_condor_form_proof'] = $issued.'.'.hash_hmac(
+    'sha256', $issued.'|/admin/recuperar-contrasena', $signingKey);
+$accepted = $post($fields, '192.0.2.202');
+if ($accepted->hasResponse()
+    || $accepted->getRequest()->request->has('_condor_form_proof')) {
+    throw new RuntimeException('Un formulario válido fue rechazado.');
+}
+$invalid = $post([...$fields, 'cf-turnstile-response' => 'fake'], '192.0.2.203');
+if (!$invalid->hasResponse() || $invalid->getResponse()->getStatusCode() !== 422) {
+    throw new RuntimeException('Se aceptó Turnstile inválido.');
+}
+$honeypot = $post([...$fields, '_condor_website' => 'filled'], '192.0.2.204');
+if (!$honeypot->hasResponse() || $honeypot->getResponse()->getStatusCode() !== 422) {
+    throw new RuntimeException('Se aceptó el honeypot lleno.');
+}
+$checkout = Request::create('/checkout', 'POST', [], [], [],
+    ['REMOTE_ADDR' => '192.0.2.205', 'CONTENT_TYPE' => 'application/json'],
+    json_encode(['idempotency_key' => 'fixture-key', 'items' => [],
+        'captcha' => 'fixture-valid-token'], JSON_THROW_ON_ERROR));
+$checkout->attributes->set('_route', 'app_storefront_checkout_domain');
+$checkoutEvent = new RequestEvent($kernel, $checkout, HttpKernelInterface::MAIN_REQUEST);
+$strict->onKernelRequest($checkoutEvent);
+if ($checkoutEvent->hasResponse()) {
+    throw new RuntimeException('Checkout válido con Turnstile rechazado.');
 }
 
 echo json_encode(['discovered' => count($result), 'routes' => $result, 'honeypot' => true], JSON_THROW_ON_ERROR);
