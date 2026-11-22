@@ -697,6 +697,35 @@ jobs:
             --owner-name="Propietario CI"
           php bin/console doctrine:query:sql "SELECT id, slug FROM condor_tenant WHERE slug = 'empresa-ci'" | grep -q 'empresa-ci'
 
+      - name: Robustez de guardado HTTP sintético (#1955)
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests/test_robustness_harness_contract.py -v
+
+          php -S 127.0.0.1:8091 -t public public/router.php >/tmp/condor-robustness-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          ready=false
+          for intento in {1..20}; do
+            if curl --silent --fail http://127.0.0.1:8091/health >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 0.5
+          done
+          if [[ "$ready" != "true" ]]; then
+            echo "::error::El servidor HTTP sintético no arrancó."
+            tail -n 30 /tmp/condor-robustness-http.log
+            exit 1
+          fi
+
+          export CONDOR_FUZZ_BASE_URL=http://127.0.0.1:8091
+          export CONDOR_FUZZ_EMAIL=owner-ci@example.test
+          export CONDOR_FUZZ_PASSWORD="$CONDOR_OWNER_PASSWORD"
+          python3 tests/robustness/save_endpoints_fuzz.py
+          python3 tests/robustness/save_roundtrip_fuzz.py
+
       - name: Smoke HTTP y login real
         run: |
           set -euo pipefail
