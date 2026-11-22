@@ -19,8 +19,36 @@ test.describe('Propietario #1961: módulo arriba, navegación clara y diagnósti
     await page.getByRole('button', { name: 'Ingresar' }).click();
     await expect(page).toHaveURL(/\/adminpl0n3r/);
 
+    // Base reproducible: assets publicados en el main exacto antes de este PR.
+    // Se usan con la MISMA app y cuenta sintética; nunca son recreaciones HTML.
+    const baseline = '2571536a6c32b8c3a1b328e71d978afd9eeca45b';
+    const assetURL = (filename) => 'https://raw.githubusercontent.com/pl0n3r/Condor/'
+      + baseline + '/public/build/' + filename;
+    const [oldJs, oldCss] = await Promise.all([
+      fetch(assetURL('admin.js')), fetch(assetURL('admin.css')),
+    ]);
+    expect(oldJs.ok(), 'bundle JS del main fijado').toBeTruthy();
+    expect(oldCss.ok(), 'CSS del main fijado').toBeTruthy();
+    const jsSource = Buffer.from(await oldJs.arrayBuffer());
+    const cssSource = Buffer.from(await oldCss.arrayBuffer());
+
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      await page.route('**/build/admin.js*', (route) => route.fulfill({
+        status: 200, contentType: 'text/javascript', body: jsSource,
+      }));
+      await page.route('**/build/admin.css*', (route) => route.fulfill({
+        status: 200, contentType: 'text/css', body: cssSource,
+      }));
+      await page.goto('/adminpl0n3r/empresas');
+      await expect(page.locator('.control-kicker')).toContainText('CONTROL CENTER');
+      await page.screenshot({
+        path: testInfo.outputPath('owner-support-before-console-' + width + '.png'),
+        fullPage: true,
+      });
+      await page.unroute('**/build/admin.js*');
+      await page.unroute('**/build/admin.css*');
+
       for (const { href, title, key } of pages) {
         await page.goto(href);
         const workspace = page.locator('.admin-shell-platform .workspace');
@@ -59,7 +87,7 @@ test.describe('Propietario #1961: módulo arriba, navegación clara y diagnósti
 
         // Captura real de la sesión sintética para el reporte visual del CI.
         await page.screenshot({
-          path: testInfo.outputPath('owner-console-after-' + key + '-' + width + '.png'),
+          path: testInfo.outputPath('owner-support-after-console-' + key + '-' + width + '.png'),
           fullPage: true,
         });
       }
