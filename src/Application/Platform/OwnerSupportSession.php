@@ -138,7 +138,7 @@ final readonly class OwnerSupportSession
         if (
             !is_array($context)
             || ($context['actor_id'] ?? null) !== $actor->id()
-            || !($context['tenant'] ?? null) instanceof Tenant
+            || !(($context['tenant'] ?? null) instanceof Tenant)
             || $context['tenant']->id() !== $tenant->id()
             || $branch->tenant()->id() !== $tenant->id()
         ) {
