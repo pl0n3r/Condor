@@ -1063,3 +1063,37 @@ dialog.ui-sidepanel[open] { animation: ui-sheet-in .2s cubic-bezier(.22, 1, .36,
 @media (max-width: 700px) {
   .admin-shell-platform .platform-heading-actions, .admin-shell-platform .platform-heading-actions > * { width: 100%; }
 }
+
+/* #1961: panel de datos sintéticos con listas válidas para axe (no <dt>/<dd>
+   sueltos en subárboles) y contraste de navegación en fondos claros. */
+.admin-shell .platform-section ul.ui-metrics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.admin-shell .ui-metric-key {
+  display: block;
+  font-size: .8125rem;
+  color: var(--zd, #566073);
+  font-weight: 600;
+}
+.admin-shell .ui-metric-value {
+  display: block;
+  font-size: 1.25rem;
+  color: var(--zk, #0f1626);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.admin-shell .admin-nav-drawer a.nav-sub {
+  color: var(--zk, #0f1626);
+}
+.admin-shell .admin-nav-drawer a.nav-sub[aria-current="page"] {
+  background: var(--z4, #eaeefd);
+  color: var(--z5, #1b37b8);
+}
+.admin-shell .t-acc-panel-inner {
+  /* El texto no debe perder contraste durante la apertura del acordeón. */
+  opacity: 1;
+  filter: none;
+  transition: none;
+}

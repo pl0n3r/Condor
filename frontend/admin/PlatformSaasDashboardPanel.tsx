@@ -144,7 +144,7 @@ export function PlatformSaasDashboardPanel({
   return (
     <section className="platform-section ui-page" aria-label="Métricas SaaS por empresa" aria-live="polite">
       <header className="ui-page-header">
-        <div><h2>Control Center · Métricas SaaS</h2>
+        <div><h2>Métricas SaaS</h2>
           <p>Indicadores comerciales de prueba; no representan ingresos ni clientes reales.</p></div>
         <span className="ui-pill ui-pill-info">Solo lectura · datos sintéticos</span>
       </header>
@@ -157,7 +157,7 @@ export function PlatformSaasDashboardPanel({
         </div>
       )}
       {visible.status === 'ready' && (
-        <dl className="ui-metrics" aria-label="Indicadores comerciales sintéticos">
+        <ul className="ui-metrics" aria-label="Indicadores comerciales sintéticos">
           {([
             ['MRR', money(visible.data.mrr_minor, visible.data.currency)],
             ['ARR', money(visible.data.arr_minor, visible.data.currency)],
@@ -171,11 +171,12 @@ export function PlatformSaasDashboardPanel({
             ['NRR', ratio(visible.data.nrr_percent_exact)],
             ['Eventos auditados', String(visible.data.audit_count)],
           ] as const).map(([label, value]) => (
-            <div className="ui-metric" key={label}>
-              <dt>{label}</dt><dd>{value}</dd>
-            </div>
+            <li className="ui-metric" key={label}>
+              <span className="ui-metric-key">{label}</span>
+              <strong className="ui-metric-value">{value}</strong>
+            </li>
           ))}
-        </dl>
+        </ul>
       )}
     </section>
   );

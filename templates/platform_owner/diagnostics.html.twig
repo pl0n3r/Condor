@@ -24,7 +24,7 @@
   </section>
 </div>
 
-<template id="platform-diagnostics-template">
+<div id="platform-diagnostics-template" hidden>
   <section class="ui-page platform-diagnostics-page" aria-label="Diagnósticos de Condor">
     <h2 class="ui-sr-only">Estado e incidentes del sistema</h2>
         <p class="muted">Los enlaces temporales duran 30 minutos y solo muestran información sanitizada.</p>
@@ -120,6 +120,6 @@
 
         <p class="version-line">V {{ app_version }}</p>
   </section>
-</template>
+</div>
 <script type="module" src="/build/admin.js?v={{ app_version|url_encode }}"></script>
 {% endblock %}

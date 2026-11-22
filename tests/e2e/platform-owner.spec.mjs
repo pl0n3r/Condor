@@ -24,7 +24,7 @@ test.describe('Super Admin — clientes y staff de plataforma', () => {
 
     await expect(page).toHaveURL(/\/adminpl0n3r$/);
     await expect(
-      page.getByRole('heading', { name: 'Administración global' }),
+      page.getByRole('heading', { name: 'Centro de control', exact: true }),
     ).toBeVisible();
 
     const platformNav = page.getByRole('navigation', { name: 'Navegación de plataforma' });

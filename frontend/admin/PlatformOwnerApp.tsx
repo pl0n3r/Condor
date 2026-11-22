@@ -443,8 +443,14 @@ function PlatformDiagnosticsContent() {
   useEffect(() => {
     const host = container.current;
     const source = document.getElementById('platform-diagnostics-template');
-    if (!host || !(source instanceof HTMLTemplateElement)) return;
-    host.replaceChildren(source.content.cloneNode(true));
+    if (!host || !(source instanceof HTMLDivElement)) return;
+    // Copy server-rendered, CSRF-protected nodes into the shared shell; the
+    // original is hidden but remains usable without running JavaScript.
+    const fragment = document.createDocumentFragment();
+    for (const child of Array.from(source.childNodes)) {
+      fragment.appendChild(child.cloneNode(true));
+    }
+    host.replaceChildren(fragment);
     return () => { host.replaceChildren(); };
   }, []);
   return <div ref={container} className="platform-diagnostics-content" role="region"
