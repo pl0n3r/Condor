@@ -107,7 +107,7 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname === '/admin') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end('<!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1"><body>'
+        res.end('<!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><body>'
           + '<div id="condor-admin-root" class="admin-shell" data-payroll-real-data-enabled="true">'
           + '<div class="workspace-heading"><label>Sede activa'
           + '<select aria-label="Sede activa"><option value="' + BRANCH + '">Sede ficticia</option>'
@@ -189,6 +189,7 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
 
   test('antes histórico: React original con fixture sintético a 390/1440 px', async ({ page }, testInfo) => {
     await page.goto(origin + '/admin?view=before');
+    await expect(page.locator('link[rel="stylesheet"]')).toHaveAttribute('href', '/styles.css');
     await expect(page.getByRole('heading', { name: 'Módulos' })).toBeVisible();
     await expect(page.getByText('Permisos efectivos')).toBeVisible();
     // Regresión del before auténtico: tres grupos de directorio y navegación heredada.
@@ -208,6 +209,7 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
   test('pendientes reales del contrato, enlaces, sin cifras decorativas', async ({ page }, testInfo) => {
     const called = await mockApi(page);
     await page.goto(origin + '/admin');
+    await expect(page.locator('link[rel="stylesheet"]')).toHaveAttribute('href', '/styles.css');
     await expect(page.getByRole('heading', { name: 'Para hoy' })).toBeVisible();
     const entries = [
       ['Pedidos por despachar: 2', '/admin#orders'],
