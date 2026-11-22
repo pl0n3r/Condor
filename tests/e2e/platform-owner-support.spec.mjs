@@ -10,7 +10,7 @@ test.describe('Propietario — soporte temporal por empresa', () => {
     'Requiere entorno E2E sintético con propietario autenticado.',
   );
 
-  test('desde Empresas abre Talento humano, conserva el actor y vuelve a la consola', async ({ page }) => {
+  test('desde Empresas abre Talento humano, conserva el actor y vuelve a la consola', async ({ page }, testInfo) => {
     const unique = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
     const tenantName = '000 Soporte E2E ' + unique;
     const tenantSlug = 'support-e2e-' + unique;
@@ -41,6 +41,17 @@ test.describe('Propietario — soporte temporal por empresa', () => {
     await nav.getByRole('link', { name: 'Talento humano', exact: true }).click();
     await expect(page).toHaveURL(/\/adminpl0n3r\/empresas\?modulo=human-resources-management$/);
 
+    // The "before" screenshots show the owner choosing a company, not a
+    // fabricated historical design comparison. All data is synthetic.
+    for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
+      await page.setViewportSize(size);
+      await page.screenshot({
+        path: testInfo.outputPath('owner-support-before-' + size.width + '.png'),
+        fullPage: true,
+      });
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
+
     const table = page.getByRole('table', { name: 'Empresas de esta página' });
     const row = table.getByRole('row').filter({ hasText: tenantName });
     for (let pageNumber = 0; pageNumber < 100 && !(await row.isVisible()); pageNumber++) {
@@ -59,7 +70,25 @@ test.describe('Propietario — soporte temporal por empresa', () => {
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Abrir panel de la empresa' }).click();
     await expect(page).toHaveURL(/\/admin#human-resources-management$/);
-    await expect(page.getByRole('status').filter({ hasText: 'Soporte de propietario' })).toContainText(tenantName);
+    const supportBanner = page.getByRole('status').filter({ hasText: 'Soporte de propietario' });
+    await expect(supportBanner).toContainText(tenantName);
+    // The sticky banner occupies normal flow and must fit narrow and wide
+    // viewports. Store screenshots as real, reviewable CI artifacts.
+    for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
+      await page.setViewportSize(size);
+      await expect(supportBanner).toBeVisible();
+      expect(await supportBanner.evaluate((element) => getComputedStyle(element).position))
+        .toBe('sticky');
+      const bounds = await supportBanner.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(size.width + 1);
+      await page.screenshot({
+        path: testInfo.outputPath('owner-support-after-' + size.width + '.png'),
+        fullPage: true,
+      });
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
     const adminNav = page.getByRole('navigation', { name: 'Navegación principal' });
     await expect(adminNav.getByRole('button', { name: 'Personas', exact: true })).toBeVisible();
     await expect(adminNav.getByRole('button', { name: 'Administración', exact: true })).toBeVisible();
