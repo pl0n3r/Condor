@@ -23,25 +23,25 @@ const builds = new Map();
 
 const orders = {
   orders: [{
-    id: 'order-fixture-0001', inventory_source_id: 'source-demo', sales_channel_id: null,
+    id: '01ARZ3NDEKTSV4RRFFQ69G5FB0', inventory_source_id: '01ARZ3NDEKTSV4RRFFQ69G5FAY', sales_channel_id: null,
     customer_id: null, order_status: 'open', payment_status: 'pending',
     fulfillment_status: 'reserved', currency: 'COP', total_amount_minor: 120000,
     created_at: '2026-11-20T11:00:00Z', lines: [],
   }],
   pagination: { page: 1, per_page: 20, total: 1, has_more: false },
-  sources: [{ id: 'source-demo', name: 'Sede principal', legal_entity_id: 'company-demo' }],
-  price_lists: [{ id: 'price-demo', name: 'Lista de prueba', currency: 'COP' }],
+  sources: [{ id: '01ARZ3NDEKTSV4RRFFQ69G5FAY', name: 'Sede principal', legal_entity_id: '01ARZ3NDEKTSV4RRFFQ69G5FAX' }],
+  price_lists: [{ id: '01ARZ3NDEKTSV4RRFFQ69G5FB1', name: 'Lista de prueba', currency: 'COP' }],
   customers: [], channels: [],
-  variants: [{ id: 'variant-demo', sku: 'SKU-DEMO', name: 'Única', product_name: 'Producto de prueba' }],
+  variants: [{ id: '01ARZ3NDEKTSV4RRFFQ69G5FAZ', sku: 'SKU-DEMO', name: 'Única', product_name: 'Producto de prueba' }],
 };
 const inventory = {
-  legal_entity: { id: 'company-demo', name: 'Empresa de prueba' },
+  legal_entity: { id: '01ARZ3NDEKTSV4RRFFQ69G5FAX', name: 'Empresa de prueba' },
   branch: { id: '01ARZ3NDEKTSV4RRFFQ69G5FAV', name: 'Sede principal' },
-  sources: [{ id: 'source-demo', name: 'Sede principal', slug: 'principal', type: 'branch',
-    branch_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV', legal_entity_id: 'company-demo' }],
-  variants: [{ id: 'variant-demo', sku: 'SKU-DEMO', name: 'Única', product_name: 'Producto de prueba' }],
-  balances: [{ id: 'balance-demo', source_id: 'source-demo', legal_entity_id: 'company-demo',
-    variant: { id: 'variant-demo', sku: 'SKU-DEMO', name: 'Única', product_name: 'Producto de prueba' },
+  sources: [{ id: '01ARZ3NDEKTSV4RRFFQ69G5FAY', name: 'Sede principal', slug: 'principal', type: 'branch',
+    branch_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV', legal_entity_id: '01ARZ3NDEKTSV4RRFFQ69G5FAX' }],
+  variants: [{ id: '01ARZ3NDEKTSV4RRFFQ69G5FAZ', sku: 'SKU-DEMO', name: 'Única', product_name: 'Producto de prueba' }],
+  balances: [{ id: '01ARZ3NDEKTSV4RRFFQ69G5FB2', source_id: '01ARZ3NDEKTSV4RRFFQ69G5FAY', legal_entity_id: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+    variant: { id: '01ARZ3NDEKTSV4RRFFQ69G5FAZ', sku: 'SKU-DEMO', name: 'Única', product_name: 'Producto de prueba' },
     quantity: 12, version: 1 }],
   movements: [], can_manage_logical_sources: false,
 };
@@ -83,7 +83,7 @@ async function buildFixture(phase) {
     "const permissions = readOnly ? ['users.view'] : ['orders.view','orders.create','inventory.view','inventory.create','inventory.update','users.view','users.create','settings.view','settings.create'];",
     "const components = {orders:OrdersManagement, inventory:InventoryManagement, payroll:PayrollManagement, finance:FinanceRealManagement, demo:FinanceManagement};",
     "const C = components[moduleName] || OrdersManagement;",
-    "const props = {branchId:'01ARZ3NDEKTSV4RRFFQ69G5FAV',tenantId:'tenant-demo',companyId:'company-demo',csrfToken:'fixture-only',enabled:true,permissions};",
+    "const props = {branchId:'01ARZ3NDEKTSV4RRFFQ69G5FAV',tenantId:'01ARZ3NDEKTSV4RRFFQ69G5FAW',companyId:'01ARZ3NDEKTSV4RRFFQ69G5FAX',csrfToken:'fixture-only',enabled:true,permissions};",
     "createRoot(document.getElementById('fixture-root')).render(React.createElement(C, props));",
   ].join('\n');
   const result = await build({
