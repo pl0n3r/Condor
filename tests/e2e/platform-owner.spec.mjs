@@ -289,7 +289,8 @@ test.describe('Ingresos SaaS de propietario · sintético (#1693)', () => {
       status: 200, contentType: 'application/json',
       body: JSON.stringify(syntheticRevenueResponse(new URL(route.request().url()))),
     }));
-    await expect(panel.getByRole('heading', { name: 'Ingresos SaaS' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ingresos SaaS', level: 1 })).toBeVisible();
+    await expect(panel.getByRole('heading', { name: 'Movimientos del período' })).toBeVisible();
     const navigation = page.getByRole('navigation', { name: 'Navegación de plataforma' });
     await navigation.getByRole('button', { name: 'Comercial' }).click();
     await expect(navigation.getByRole('link', { name: 'Ingresos', exact: true }))
