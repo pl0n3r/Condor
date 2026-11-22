@@ -26,10 +26,14 @@ import urllib.parse
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-BASE = os.environ.get("CONDOR_FUZZ_BASE_URL", "http://127.0.0.1:8091").rstrip("/")
+# The client holds an ephemeral CI owner password: never allow remote targets.
+BASE = "http://127.0.0.1:8091"
+if os.environ.get("CONDOR_FUZZ_BASE_URL", BASE).rstrip("/") != BASE:
+    raise SystemExit("fuzz: destino rechazado, solo HTTP loopback local 127.0.0.1:8091")
 EMAIL = os.environ.get("CONDOR_FUZZ_EMAIL", "")
 PASSWORD = os.environ.get("CONDOR_FUZZ_PASSWORD", "")
-SKIP = re.compile(os.environ.get("CONDOR_FUZZ_SKIP", r"^/api/public/|/logout"))
+# Exclusions are deliberately not configurable to avoid quietly omitting writes.
+SKIP = re.compile(r"^/api/public/|/logout")
 LEAK = re.compile(r"(Stack trace|#\d+ /|\bat [\w\\]+->|Uncaught|Fatal error|SQLSTATE|PDOException|"
                   r"Doctrine\\|vendor/|/var/www|/home/\w+/|Symfony\\Component|Traceback)", re.I)
 
@@ -57,10 +61,23 @@ RAW_BODIES = [
 ]
 
 
+class LoopbackOnlyRedirect(urllib.request.HTTPRedirectHandler):
+    """Accept only same-origin redirects; never forward the CI session off host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        target = urllib.parse.urlsplit(newurl)
+        if (target.scheme, target.hostname, target.port) != ("http", "127.0.0.1", 8091):
+            raise urllib.error.HTTPError(req.full_url, 403, "fuzz: redirect externo rechazado", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 class Client:
     def __init__(self) -> None:
         self.jar = http.cookiejar.CookieJar()
-        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
+        self.opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({}), LoopbackOnlyRedirect(),
+            urllib.request.HTTPCookieProcessor(self.jar),
+        )
         self.csrf = ""
 
     def req(self, method: str, path: str, body: bytes | None = None, ctype: str = "application/json",

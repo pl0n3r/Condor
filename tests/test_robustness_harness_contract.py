@@ -56,6 +56,22 @@ class RobustnessHarnessContractTests(unittest.TestCase):
              patch.object(harness, "discover_routes", return_value=[]):
             self.assertEqual(harness.main(), 1, "Sin rutas no se acepta éxito vacuo")
 
+    def test_ci_credentials_cannot_leave_local_server(self) -> None:
+        import urllib.error
+        import urllib.request
+
+        self.assertEqual(harness.BASE, "http://127.0.0.1:8091")
+        handler = harness.LoopbackOnlyRedirect()
+        request = urllib.request.Request(harness.BASE + "/admin/login")
+        with self.assertRaises(urllib.error.HTTPError):
+            handler.redirect_request(
+                request, None, 302, "Found", {}, "https://example.test/steal-session"
+            )
+        safe = handler.redirect_request(
+            request, None, 302, "Found", {}, harness.BASE + "/admin"
+        )
+        self.assertEqual(safe.full_url, harness.BASE + "/admin")
+
     def test_baseline_requires_exact_issue_and_no_duplicate_signatures(self) -> None:
         source = json.loads((ROOT / "tests/robustness/known_findings.json").read_text(encoding="utf-8"))
         self.assertIsInstance(source["known"], list)
