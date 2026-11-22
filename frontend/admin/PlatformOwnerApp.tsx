@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
-import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
+import { Card, DataTable, MetricStrip, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 import { SystemHealthPanel } from './SystemHealthPanel';
 import { SaasControlCenterReadPanel } from './SaasControlCenterReadPanel';
 import {
@@ -422,7 +422,7 @@ const OWNER_SUPPORT_MODULES = [
   { key: 'roles', label: 'Roles y permisos' },
 ] as const;
 
-type PlatformOwnerSection = 'control' | 'empresas' | 'staff' | 'suscripciones' | 'catalogo' | 'integraciones';
+type PlatformOwnerSection = 'control' | 'empresas' | 'staff' | 'suscripciones' | 'catalogo' | 'integraciones' | 'diagnosticos';
 
 function selectedTenantFromState(state: State): SelectedTenant | null {
   return state.status === 'ready' ? state.data.selected_tenant : null;
@@ -436,6 +436,26 @@ type PlatformOwnerAppProps = Readonly<{
   subscriptionToken: string;
   section: PlatformOwnerSection;
 }>;
+
+/** Conserva el HTML servidor de Diagnósticos (incluidos CSRF y acciones) dentro del AdminShell React. */
+function PlatformDiagnosticsContent() {
+  const container = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const host = container.current;
+    const source = document.getElementById('platform-diagnostics-template');
+    if (!host || !(source instanceof HTMLDivElement)) return;
+    // Copy server-rendered, CSRF-protected nodes into the shared shell; the
+    // original is hidden but remains usable without running JavaScript.
+    const fragment = document.createDocumentFragment();
+    for (const child of Array.from(source.childNodes)) {
+      fragment.appendChild(child.cloneNode(true));
+    }
+    host.replaceChildren(fragment);
+    return () => { host.replaceChildren(); };
+  }, []);
+  return <div ref={container} className="platform-diagnostics-content" role="region"
+    aria-label="Información de diagnósticos" />;
+}
 
 export function PlatformOwnerApp({
   version,
@@ -558,7 +578,9 @@ export function PlatformOwnerApp({
   const revenueView = window.location.pathname === '/adminpl0n3r/catalogo'
     && new URLSearchParams(window.location.search).get('vista') === 'ingresos';
   const currentSection: PlatformOwnerSection =
-    window.location.pathname === '/adminpl0n3r/integraciones'
+    window.location.pathname === '/adminpl0n3r/diagnosticos'
+      ? 'diagnosticos'
+      : window.location.pathname === '/adminpl0n3r/integraciones'
       ? 'integraciones'
       : window.location.pathname === '/adminpl0n3r/suscripciones'
       ? 'suscripciones'
@@ -738,10 +760,32 @@ export function PlatformOwnerApp({
   }
 
 
+  const pageTitle = selected?.name ?? (
+    currentSection === 'control' ? 'Centro de control'
+      : currentSection === 'empresas' ? 'Empresas'
+      : currentSection === 'staff' ? 'Staff y permisos'
+      : currentSection === 'integraciones' ? 'Integraciones'
+      : currentSection === 'diagnosticos' ? 'Diagnósticos'
+      : currentSection === 'suscripciones' ? 'Plan y suscripciones'
+      : plansView ? 'Planes y precios'
+      : revenueView ? 'Ingresos SaaS' : 'Catálogo comercial'
+  );
+  const pageDescription = selected
+    ? 'Revisa los módulos y la operación de esta empresa con tus permisos de propietario.'
+    : currentSection === 'control' ? 'Resumen de empresas, accesos y funcionamiento de Condor.'
+    : currentSection === 'empresas' ? 'Consulta las empresas y abre el contexto que necesitas administrar.'
+    : currentSection === 'staff' ? 'Administra accesos y permisos del equipo.'
+    : currentSection === 'integraciones' ? 'Revisa conexiones y su estado.'
+    : currentSection === 'diagnosticos' ? 'Consulta el estado del sistema y los incidentes recientes.'
+    : currentSection === 'suscripciones' ? 'Consulta el plan y la vigencia de cada empresa.'
+    : currentSection === 'catalogo' ? 'Consulta el catálogo y las opciones comerciales de Condor.'
+    : 'Resumen de la plataforma';
+
   return (
     <AdminShell
       version={version}
       logoutToken={logoutToken}
+      userName={state.status === 'ready' ? state.data.actor.name : undefined}
       ariaLabel="Centro de control de Condor"
       navLabel="Navegación de plataforma"
       variant="platform"
@@ -820,6 +864,7 @@ export function PlatformOwnerApp({
             {
               href: '/adminpl0n3r/diagnosticos',
               label: 'Diagnósticos',
+              current: currentSection === 'diagnosticos',
             },
           ],
         },
@@ -866,9 +911,24 @@ export function PlatformOwnerApp({
         </output>
       )}
 
-      <span className="eyebrow">Propietario de plataforma</span>
 
-      {state.status === 'loading' && (
+      {currentSection === 'diagnosticos' && (
+        <>
+          <header className="platform-heading">
+            <div className="platform-heading-copy">
+              <h1>Diagnósticos</h1>
+              <p className="muted">Consulta el estado del sistema y los incidentes recientes.</p>
+            </div>
+            <div className="platform-heading-actions">
+              <a className="button button-secondary"
+                href="/adminpl0n3r/diagnosticos/reportes/actividad.csv">Descargar reporte</a>
+            </div>
+          </header>
+          <PlatformDiagnosticsContent />
+        </>
+      )}
+
+      {currentSection !== 'diagnosticos' && state.status === 'loading' && (
         <>
           <h1>Preparando centro de control…</h1>
           <output className="muted" aria-live="polite">
@@ -877,7 +937,7 @@ export function PlatformOwnerApp({
         </>
       )}
 
-      {state.status === 'permission-denied' && (
+      {currentSection !== 'diagnosticos' && state.status === 'permission-denied' && (
         <div className="alert alert-error" role="alert">
           <strong>Acceso no autorizado.</strong>{' '}
           Tu sesión no tiene permisos para consultar este contexto de
@@ -885,14 +945,14 @@ export function PlatformOwnerApp({
         </div>
       )}
 
-      {state.status === 'not-found' && (
+      {currentSection !== 'diagnosticos' && state.status === 'not-found' && (
         <div className="alert alert-error" role="alert">
           <strong>Empresa no encontrada.</strong>{' '}
           El tenant seleccionado ya no existe o dejó de estar disponible.
         </div>
       )}
 
-      {state.status === 'error' && (
+      {currentSection !== 'diagnosticos' && state.status === 'error' && (
         <div className="alert alert-error platform-error" role="alert">
           <strong>No pudimos cargar el centro de control.</strong>
           <span>
@@ -949,32 +1009,37 @@ export function PlatformOwnerApp({
         </div>
       )}
 
-      {state.status === 'ready' && (
+      {currentSection !== 'diagnosticos' && state.status === 'ready' && (
         <>
-          <div className="platform-heading">
-            <div>
-              <span className="control-kicker">CONTROL CENTER</span>
-              <h1>
-                {selected ? selected.name : 'Administración global'}
-              </h1>
-              <p className="muted">
-                {selected
-                  ? 'Vista privilegiada del tenant sin cambiar tu identidad ni suplantar usuarios.'
-                  : 'Visibilidad global de empresas, usuarios, sedes y operación de la plataforma.'}
-              </p>
+          <header className="platform-heading">
+            <div className="platform-heading-copy">
+              <h1>{pageTitle}</h1>
+              <p className="muted">{pageDescription}</p>
             </div>
-            <div className="actor-chip" aria-label="Identidad activa">
-              <span>Actor real</span>
-              <strong>{state.data.actor.name}</strong>
-            </div>
-          </div>
+            {!selected && (
+              <div className="platform-heading-actions">
+                {currentSection === 'control' && (
+                  <a className="button button-secondary" href="/adminpl0n3r/diagnosticos">Abrir diagnósticos</a>
+                )}
+                {currentSection === 'empresas' && (
+                  <button className="button" type="button" onClick={() => setCreatingTenant(true)}>Crear cliente</button>
+                )}
+                {currentSection === 'catalogo' && !plansView && !revenueView && (
+                  <a className="button button-secondary" href="/adminpl0n3r/planes">Editar planes y tarifas</a>
+                )}
+                {currentSection === 'suscripciones' && (
+                  <button className="button button-secondary" type="button"
+                    onClick={() => void loadContext(undefined, state.data.tenant_pagination.page)}>
+                    Actualizar suscripciones
+                  </button>
+                )}
+              </div>
+            )}
+          </header>
 
           {!selected && currentSection === 'control' && (
             <section className="ui-page" aria-label="Centro de control de plataforma">
-              <PageHeader title="Centro de control"
-                description="Visibilidad global de empresas, accesos y funcionamiento de Condor."
-                actions={<a className="button button-secondary" href="/adminpl0n3r/diagnosticos">Abrir diagnósticos</a>}
-              />
+              <h2 className="ui-sr-only">Indicadores generales</h2>
               <MetricStrip label="Métricas globales de Condor"
                 items={[
                   {
@@ -1021,10 +1086,7 @@ export function PlatformOwnerApp({
 
           {!selected && currentSection === 'catalogo' && !plansView && !revenueView && (
             <section className="platform-section ui-page admin-form-layout-page" aria-label="Catálogo comercial de plataforma">
-              <PageHeader title="Catálogo comercial"
-                description="Planes vigentes, cartera de empresas y uso observado. Datos canónicos solo de lectura."
-                actions={<a className="button button-secondary"
-                  href="/adminpl0n3r/planes">Editar planes y tarifas</a>} />
+              <h2 className="ui-sr-only">Cartera y planes</h2>
               <MetricStrip label="Resumen del catálogo comercial" items={[
                 { label: 'Planes vigentes', value: state.data.commercial_catalog.length },
                 { label: 'Empresas en cartera', value: state.data.commercial_portfolio.length,
@@ -1122,11 +1184,7 @@ export function PlatformOwnerApp({
 
           {!selected && currentSection === 'empresas' && (
             <section className="ui-page admin-form-layout-page" aria-label="Gestión de empresas">
-              <PageHeader
-                title="Empresas"
-                description="Consulta las empresas registradas y elige el contexto que necesitas revisar."
-                actions={<button className="button" type="button" onClick={() => setCreatingTenant(true)}>Crear cliente</button>}
-              />
+              <h2 className="ui-sr-only">Listado de empresas</h2>
               <MetricStrip label="Resumen de empresas" items={[
                 { label: 'Empresas registradas', value: state.data.tenant_pagination.total },
                 { label: 'En esta página', value: state.data.tenants.length },
@@ -1232,13 +1290,7 @@ export function PlatformOwnerApp({
 
           {!selected && currentSection === 'suscripciones' && (
             <section className="platform-section ui-page admin-form-layout-page" aria-label="Plan y suscripciones">
-              <PageHeader title="Plan y suscripciones"
-                description="Consulta el estado, plan y vigencia de cada empresa. Los cambios se validan en el servidor."
-                actions={<button className="button button-secondary" type="button"
-                  onClick={() => void loadContext(undefined, state.data.tenant_pagination.page)}>
-                  Actualizar suscripciones
-                </button>}
-              />
+              <h2 className="ui-sr-only">Suscripciones actuales</h2>
               <MetricStrip label="Resumen de suscripciones de esta página" items={[
                 { label: 'Empresas visibles', value: state.data.tenants.length },
                 { label: 'Con suscripción', value: state.data.tenants.filter((tenant) =>

@@ -131,6 +131,7 @@ function StandaloneNavLink({ item, onNavigate }: Readonly<{
 type AdminShellProps = Readonly<{
   version: string;
   logoutToken: string;
+  userName?: string;
   ariaLabel: string;
   navLabel: string;
   navItems: readonly AdminNavItem[] | readonly AdminNavEntry[];
@@ -356,6 +357,7 @@ function AdminGlobalSearch() {
 export function AdminShell({
   version,
   logoutToken,
+  userName,
   ariaLabel,
   navLabel,
   navItems,
@@ -482,6 +484,9 @@ export function AdminShell({
     )
   ));
   const moduleName = activeLabel || (variant === 'platform' ? 'Plataforma' : 'Inicio');
+  const breadcrumbGroup = activeGroup !== activeLabel && visibleNav.some(
+    (entry) => isGroup(entry) && entry.group === activeGroup && entry.items.length > 1,
+  ) ? activeGroup : '';
   return (
     <section
       className={'admin-shell admin-shell-' + variant}
@@ -520,6 +525,11 @@ export function AdminShell({
           <span>V {version}</span>
         </div>
         <nav aria-label={navLabel}>{renderNavigation()}</nav>
+        {variant === 'platform' && userName && (
+          <div className="sidebar-user" aria-label="Usuario activo">
+            <span>Sesión activa</span><strong>{userName}</strong>
+          </div>
+        )}
         <form method="post" action="/admin/logout">
           <input type="hidden" name="_csrf_token" value={logoutToken} />
           <button className="button button-secondary" type="submit">Cerrar sesión</button>
@@ -547,6 +557,11 @@ export function AdminShell({
         <nav aria-label={navLabel}>
           {mobileMenuOpen ? renderNavigation(true) : null}
         </nav>
+        {variant === 'platform' && userName && (
+          <div className="sidebar-user" aria-label="Usuario activo">
+            <span>Sesión activa</span><strong>{userName}</strong>
+          </div>
+        )}
         <form method="post" action="/admin/logout">
           <input type="hidden" name="_csrf_token" value={logoutToken} />
           <button className="button button-secondary" type="submit">Cerrar sesión</button>
@@ -571,8 +586,12 @@ export function AdminShell({
           <nav className="module-breadcrumb" aria-label="Ruta">
             <a href={variant === 'platform' ? '/adminpl0n3r' : '/admin'}>Inicio</a>
             <span aria-hidden="true">/</span>
-            <span>{activeGroup}</span>
-            <span aria-hidden="true">/</span>
+            {breadcrumbGroup && (
+              <>
+                <span>{breadcrumbGroup}</span>
+                <span aria-hidden="true">/</span>
+              </>
+            )}
             <strong aria-current="page">{activeLabel}</strong>
           </nav>
         )}

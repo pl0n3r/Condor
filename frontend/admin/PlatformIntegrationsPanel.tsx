@@ -225,7 +225,7 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
   const setting = (key: IntegrationKey) => data?.settings[key] ?? empty;
 
   return <section className="ui-page platform-section" aria-label="Integraciones de plataforma">
-    <PageHeader title="Integraciones" description="Configuración global exclusiva del propietario. Los secretos se escriben, pero nunca se muestran." actions={
+    <PageHeader title="Conexiones y credenciales" description="Configuración global exclusiva del propietario. Los secretos se escriben, pero nunca se muestran." actions={
       <button className="button button-secondary" type="button" onClick={() => void load()} disabled={busy}>Actualizar</button>
     } />
     {loading && <output role="status">Cargando integraciones…</output>}

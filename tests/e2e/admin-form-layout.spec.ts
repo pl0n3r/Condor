@@ -154,7 +154,7 @@ test.describe('1930: formularios compactos, tarjetas y accesibilidad', () => {
         const search = panel.locator('.ui-search input').first();
         await expect(search).toBeVisible();
         expect(await search.evaluate(input => input.getBoundingClientRect().width)).toBeLessThanOrEqual(48 * 16 + 1);
-        const action = panel.locator('.ui-page-actions .button').first();
+        const action = page.locator('.platform-heading-actions .button').first();
         await expect(action).toBeVisible();
         if (width === 1440) {
           const card = await panel.evaluate(element => element.getBoundingClientRect().width);
