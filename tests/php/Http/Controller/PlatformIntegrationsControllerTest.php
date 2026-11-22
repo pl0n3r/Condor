@@ -329,7 +329,7 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
             ]);
             self::assertResponseStatusCodeSame(502);
             $response = (string) $client->getResponse()->getContent();
-            self::assertStringContainsString('Sentry rechazó', $response);
+            self::assertStringContainsString('Sentry rechazó', (string) self::responseData($response)['error']);
             self::assertStringNotContainsString($dsn, $response);
             self::assertStringNotContainsString('fixture_secret_', $response);
         } finally {
