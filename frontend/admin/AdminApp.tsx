@@ -218,6 +218,13 @@ export function AdminApp({
         === readyContext.active_legal_entity?.id
       ));
 
+  // SSR is authoritative: no client-supplied tenant/user selector can add permissions.
+  const granted = typeof document === 'undefined' ? undefined
+    : document.getElementById('condor-admin-root')?.dataset.enabledModules;
+  const enabled = granted === undefined ? null : new Set(granted.split(',').filter(Boolean));
+  const mayOpen = (key: string) => key === '' || enabled === null || enabled.has(key)
+    || ['roles', 'documents', 'design-preview'].includes(key);
+
   const navEntries: AdminNavEntry[] = [
 
         { href: '/admin', label: 'Inicio', current: section === 'home', icon: 'home' },
@@ -303,6 +310,12 @@ export function AdminApp({
           ],
         },
   ];
+  const visibleNavEntries: AdminNavEntry[] = navEntries
+    .map((entry): AdminNavEntry => 'items' in entry
+      ? { ...entry, items: entry.items.filter((item) =>
+          mayOpen(item.href === '/admin/sitio' ? 'site' : item.href.split('#')[1] ?? '')) }
+      : entry)
+    .filter((entry) => !('items' in entry) || entry.items.length > 0);
 
   return (
     <AdminShell
@@ -310,7 +323,7 @@ export function AdminApp({
       logoutToken={logoutToken}
       ariaLabel="Administrador de Condor"
       navLabel="Navegación principal"
-      navItems={navEntries}
+      navItems={visibleNavEntries}
     >
       <span className="eyebrow">Administrador</span>
 
@@ -414,7 +427,13 @@ export function AdminApp({
           </div>
 
           {section === 'home' && (
-            <>
+            !mayOpen(activeModule) ? (
+              <section className="ui-page" role="alert" aria-label="Módulo no habilitado">
+                <h2>Módulo no habilitado</h2>
+                <p>Este módulo está desactivado para tu empresa o usuario.</p>
+                <a className="button button-secondary" href="/admin">Volver al inicio</a>
+              </section>
+            ) : <>
           {activeModule === '' && (<OverviewGrid
             ariaLabel="Estado de la empresa"
             items={[
@@ -435,7 +454,7 @@ export function AdminApp({
             ]}
           />)}
 
-          {activeModule === '' && <ModuleDirectory entries={navEntries} />}
+          {activeModule === '' && <ModuleDirectory entries={visibleNavEntries} />}
 
           {activeModule === 'documents' && DevDocumentsManagement && (
             <section id="documents-module" aria-label="Gestión documental (pruebas)">

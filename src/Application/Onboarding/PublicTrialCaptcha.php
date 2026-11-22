@@ -9,8 +9,37 @@ class PublicTrialCaptcha
 {
     public function verify(string $response): bool
     {
-        $secret = getenv('CONDOR_TRIAL_CAPTCHA_SECRET');
-        $hostname = getenv('CONDOR_TRIAL_CAPTCHA_HOSTNAME');
+        return $this->verifyChallenge(
+            $response,
+            'condor_trial',
+            'CONDOR_TRIAL_CAPTCHA_SECRET',
+            'CONDOR_TRIAL_CAPTCHA_HOSTNAME',
+        );
+    }
+
+    /** Same fixed Cloudflare endpoint, distinct secret and action for public forms. */
+    public function verifyForAction(string $response, string $action): bool
+    {
+        if (!in_array($action, ['condor_password_reset', 'condor_storefront_checkout'], true)) {
+            return false;
+        }
+
+        return $this->verifyChallenge(
+            $response,
+            $action,
+            'CONDOR_PUBLIC_FORMS_CAPTCHA_SECRET',
+            'CONDOR_PUBLIC_FORMS_CAPTCHA_HOSTNAME',
+        );
+    }
+
+    private function verifyChallenge(
+        string $response,
+        string $action,
+        string $secretName,
+        string $hostnameName,
+    ): bool {
+        $secret = getenv($secretName);
+        $hostname = getenv($hostnameName);
         if (!is_string($secret) || strlen(trim($secret)) < 12
             || !is_string($hostname) || trim($hostname) === ''
             || strlen($response) < 10 || strlen($response) > 2048
@@ -35,6 +64,7 @@ class PublicTrialCaptcha
         return is_array($decoded)
             && ($decoded['success'] ?? null) === true
             && ($decoded['hostname'] ?? null) === trim($hostname)
-            && ($decoded['action'] ?? null) === 'condor_trial';
+            && ($decoded['action'] ?? null) === $action;
     }
+
 }
