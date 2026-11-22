@@ -56,11 +56,12 @@ function itemIsCurrent(item: AdminNavItem, hash: string): boolean {
 }
 
 /** Una única expansión por shell, compartida por la navegación de escritorio y el drawer. */
-function NavGroup({ entry, hash, expanded, onToggle }: Readonly<{
+function NavGroup({ entry, hash, expanded, onToggle, onNavigate }: Readonly<{
   entry: AdminNavGroup;
   hash: string;
   expanded: boolean;
   onToggle: () => void;
+  onNavigate?: () => void;
 }>) {
   const panelId = useId();
   return (
@@ -87,6 +88,7 @@ function NavGroup({ entry, hash, expanded, onToggle }: Readonly<{
             <a
               className="nav-sub"
               href={item.href}
+              onClick={onNavigate}
               aria-current={itemIsCurrent(item, hash) ? 'page' : undefined}
               key={item.href}
             >
@@ -114,9 +116,12 @@ function isGroup(entry: AdminNavEntry): entry is AdminNavGroup {
 }
 
 /** Enlace suelto, compatible con PlatformOwnerApp; el estado actual conserva su semántica ARIA. */
-function StandaloneNavLink({ item }: Readonly<{ item: AdminNavItem }>) {
+function StandaloneNavLink({ item, onNavigate }: Readonly<{
+  item: AdminNavItem;
+  onNavigate?: () => void;
+}>) {
   return (
-    <a href={item.href} aria-current={item.current ? 'page' : undefined}>
+    <a href={item.href} aria-current={item.current ? 'page' : undefined} onClick={onNavigate}>
       <NavIcon name={item.icon} />
       <span>{item.label}</span>
     </a>
@@ -460,16 +465,18 @@ export function AdminShell({
     query.addEventListener('change', onChange);
     return () => query.removeEventListener('change', onChange);
   }, []);
-  const renderNavigation = () => visibleNav.map((entry) => (
+  const renderNavigation = (mobile = false) => visibleNav.map((entry) => (
     isGroup(entry) ? (
       <NavGroup
         entry={entry} hash={hash} key={entry.group}
+        onNavigate={mobile ? () => mobileDialogRef.current?.close() : undefined}
         expanded={expandedGroup === entry.group}
         onToggle={() => setExpandedGroup((current) => current === entry.group ? null : entry.group)}
       />
     ) : (
       <StandaloneNavLink
         key={entry.href}
+        onNavigate={mobile ? () => mobileDialogRef.current?.close() : undefined}
         item={entry.current && sectionInGroup ? { ...entry, current: false } : entry}
       />
     )
@@ -537,10 +544,8 @@ export function AdminShell({
             Cerrar navegación
           </button>
         </div>
-        <nav aria-label={navLabel} onClick={(event) => {
-          if ((event.target as HTMLElement).closest('a[href]')) mobileDialogRef.current?.close();
-        }}>
-          {mobileMenuOpen ? renderNavigation() : null}
+        <nav aria-label={navLabel}>
+          {mobileMenuOpen ? renderNavigation(true) : null}
         </nav>
         <form method="post" action="/admin/logout">
           <input type="hidden" name="_csrf_token" value={logoutToken} />
