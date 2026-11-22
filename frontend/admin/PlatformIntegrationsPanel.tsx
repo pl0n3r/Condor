@@ -1,7 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Card, PageHeader, StatusPill } from './ui/Kit';
 
-type IntegrationKey = 'mail.provider' | 'mail.from' | 'mail.api_key' | 'sentry.dsn';
+type WompiKey = 'wompi.public_key' | 'wompi.private_key' | 'wompi.integrity_secret' | 'wompi.events_secret';
+type IntegrationKey = 'mail.provider' | 'mail.from' | 'mail.api_key' | 'sentry.dsn' | WompiKey;
+const wompiFields: ReadonlyArray<{ key: WompiKey; label: string; prefix: string }> = [
+  { key: 'wompi.public_key', label: 'Clave pública de prueba', prefix: 'pub_test_' },
+  { key: 'wompi.private_key', label: 'Clave privada de prueba', prefix: 'prv_test_' },
+  { key: 'wompi.integrity_secret', label: 'Secreto de integridad de prueba', prefix: 'test_integrity_' },
+  { key: 'wompi.events_secret', label: 'Secreto de eventos de prueba', prefix: 'test_events_' },
+];
 type SafeSetting = { configured: boolean; last4: string | null; updated_at: string | null; value?: string };
 type IntegrationResponse = {
   settings: Record<IntegrationKey, SafeSetting>;
@@ -10,6 +17,7 @@ type IntegrationResponse = {
   secret_write_enabled: boolean;
   sentry_test_enabled: boolean;
   sentry_capture_active: boolean;
+  wompi_sandbox_enabled: boolean;
 };
 type Props = Readonly<{ refreshKey: number }>;
 
@@ -40,6 +48,10 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
   const [sentryDsn, setSentryDsn] = useState('');
   const [testRecipient, setTestRecipient] = useState('');
   const [sentryEventId, setSentryEventId] = useState('');
+  const [wompiInputs, setWompiInputs] = useState<Record<WompiKey, string>>({
+    'wompi.public_key': '', 'wompi.private_key': '', 'wompi.integrity_secret': '', 'wompi.events_secret': '',
+  });
+  const [wompiResult, setWompiResult] = useState<{ reference: string; status: string; transaction_id: string } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -61,6 +73,10 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
       // Intencionadamente NUNCA se carga un secreto en los formularios.
       setApiKey('');
       setSentryDsn('');
+      setWompiInputs({
+        'wompi.public_key': '', 'wompi.private_key': '',
+        'wompi.integrity_secret': '', 'wompi.events_secret': '',
+      });
     } catch {
       setData(null);
       setError('No fue posible consultar las integraciones.');
@@ -98,11 +114,14 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
       // Ni siquiera tras un error se conserva la clave en el estado.
       if (key === 'mail.api_key') setApiKey('');
       if (key === 'sentry.dsn') setSentryDsn('');
+      if (key.startsWith('wompi.')) {
+        setWompiInputs(current => ({ ...current, [key]: '' }));
+      }
       setBusy(false);
     }
   }
 
-  async function deleteSecret(key: 'mail.api_key' | 'sentry.dsn') {
+  async function deleteSecret(key: 'mail.api_key' | 'sentry.dsn' | WompiKey) {
     if (!data?.csrf_token || busy) return;
     setBusy(true);
     setError('');
@@ -170,6 +189,34 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
       setNotice('Evento sintético enviado a Sentry.');
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : 'No se pudo enviar la prueba de Sentry.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendWompiTest() {
+    if (!data?.csrf_token || !data.wompi_sandbox_enabled || busy
+      || !wompiFields.every(field => setting(field.key).configured)) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    setWompiResult(null);
+    try {
+      const response = await fetch(endpoint + '/test-wompi', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': data.csrf_token },
+        body: '{}',
+      });
+      const result = await response.json() as {
+        reference?: string; status?: string; transaction_id?: string; error?: string;
+      };
+      if (!response.ok || !result.reference || !result.status || !result.transaction_id) {
+        throw new Error(result.error || 'Wompi sandbox no completó la prueba.');
+      }
+      setWompiResult({ reference: result.reference, status: result.status, transaction_id: result.transaction_id });
+      setNotice('Transacción sintética creada en Wompi sandbox.');
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : 'No fue posible probar Wompi sandbox.');
     } finally {
       setBusy(false);
     }
@@ -258,7 +305,40 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
         </div>
         </div>
       </Card>
-      <Card title="Pagos"><div className="ui-integration-content"><StatusPill>Próximamente</StatusPill><p className="muted">La pasarela aún no está habilitada.</p></div></Card>
+      <Card title="Pagos">
+        <div className="ui-integration-content">
+          <p className="muted">Solo claves test; no se aceptan claves de producción ni se realizan cobros reales.</p>
+          {!data.wompi_sandbox_enabled && <p className="muted">Pruebas de pago deshabilitadas por configuración.</p>}
+          {!data.secret_write_enabled && <p className="muted">La escritura de secretos requiere habilitación del propietario.</p>}
+          {wompiFields.map(field => <form key={field.key} className="ui-integration-form"
+            aria-label={field.label} onSubmit={event => void save(event, field.key, wompiInputs[field.key])}>
+            <label className="field">{field.label} · solo escritura
+              <input type="password" autoComplete="new-password" value={wompiInputs[field.key]}
+                onChange={event => setWompiInputs(current => ({ ...current, [field.key]: event.target.value }))}
+                pattern={field.prefix + '[A-Za-z0-9_-]{16,}'} required placeholder={field.prefix + '…'} />
+            </label>
+            <Detail setting={setting(field.key)} />
+            <div className="ui-form-actions">
+              <button className="button" type="submit" disabled={busy || !data.secret_write_enabled}>Guardar {field.label}</button>
+              <button className="button button-secondary" type="button"
+                disabled={busy || !setting(field.key).configured}
+                onClick={() => void deleteSecret(field.key)}>Eliminar clave</button>
+            </div>
+          </form>)}
+          <div className="ui-integration-form" aria-label="Prueba de pago Wompi sandbox">
+            <div className="ui-form-actions">
+              <button className="button button-secondary" type="button"
+                disabled={busy || !data.wompi_sandbox_enabled || !wompiFields.every(field => setting(field.key).configured)}
+                onClick={() => void sendWompiTest()}>Probar pago sandbox</button>
+            </div>
+            {wompiResult && <output role="status">
+              Referencia: {wompiResult.reference} · Estado: {wompiResult.status}
+              {' '}· Transacción: {wompiResult.transaction_id}
+            </output>}
+            <p className="muted">Pago sintético NEQUI de COP 1.500; máximo uno por minuto.</p>
+          </div>
+        </div>
+      </Card>
       <Card title="Almacenamiento"><div className="ui-integration-content"><StatusPill>Próximamente</StatusPill><p className="muted">La gestión de proveedores de archivos aún no está habilitada.</p></div></Card>
     </div>}
   </section>;

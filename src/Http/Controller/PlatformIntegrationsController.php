@@ -8,6 +8,8 @@ use App\Application\Notification\MailProviderConfiguration;
 use App\Application\Platform\PlatformIntegrationSettings;
 use App\Infrastructure\Notification\MailerFactory;
 use App\Infrastructure\Observability\SentryTestEventSender;
+use App\Infrastructure\Payments\Wompi\WompiSandboxHttpTransport;
+use DomainException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -27,9 +29,21 @@ use Throwable;
 final class PlatformIntegrationsController extends PlatformOwnerApiController
 {
     private const CSRF_ID = 'platform_integrations_management';
-    private const SECRET_KEYS = ['mail.api_key', 'sentry.dsn'];
+    private const WOMPI_KEYS = [
+        'wompi.public_key' => 'pub_test_',
+        'wompi.private_key' => 'prv_test_',
+        'wompi.integrity_secret' => 'test_integrity_',
+        'wompi.events_secret' => 'test_events_',
+    ];
+    private const SECRET_KEYS = [
+        'mail.api_key', 'sentry.dsn', 'wompi.public_key', 'wompi.private_key',
+        'wompi.integrity_secret', 'wompi.events_secret',
+    ];
     private const PLAIN_KEYS = ['mail.provider', 'mail.from'];
-    private const ALL_KEYS = ['mail.provider', 'mail.from', 'mail.api_key', 'sentry.dsn'];
+    private const ALL_KEYS = [
+        'mail.provider', 'mail.from', 'mail.api_key', 'sentry.dsn',
+        'wompi.public_key', 'wompi.private_key', 'wompi.integrity_secret', 'wompi.events_secret',
+    ];
 
     public function __construct(
         private readonly PlatformIntegrationSettings $settings,
@@ -41,6 +55,7 @@ final class PlatformIntegrationsController extends PlatformOwnerApiController
         private readonly MailProviderConfiguration $mailConfiguration,
         private readonly MailerFactory $mailerFactory,
         private readonly SentryTestEventSender $sentryTestSender,
+        private readonly WompiSandboxHttpTransport $wompiSandbox,
         private readonly LoggerInterface $logger,
         #[Autowire('%kernel.environment%')]
         private readonly string $kernelEnvironment,
@@ -63,6 +78,7 @@ final class PlatformIntegrationsController extends PlatformOwnerApiController
             'test_email_enabled' => self::testEmailEnabled(),
             'secret_write_enabled' => self::secretWriteEnabled(),
             'sentry_test_enabled' => self::sentryTestEnabled(),
+            'wompi_sandbox_enabled' => WompiSandboxHttpTransport::enabled(),
             'sentry_capture_active' => $this->kernelEnvironment === 'prod'
                 && $settings['sentry.dsn']['configured'],
         ]);
@@ -98,6 +114,14 @@ final class PlatformIntegrationsController extends PlatformOwnerApiController
                 if ($key === 'sentry.dsn' && (!filter_var($value, FILTER_VALIDATE_URL)
                     || parse_url($value, PHP_URL_SCHEME) !== 'https')) {
                     return $this->privateJson(['error' => 'DSN no válido.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+                }
+                if (isset(self::WOMPI_KEYS[$key])) {
+                    $prefix = self::WOMPI_KEYS[$key];
+                    if (preg_match('/\A'.preg_quote($prefix, '/').'[A-Za-z0-9_-]{16,}\z/D', $value) !== 1) {
+                        return $this->privateJson([
+                            'error' => 'Solo se permiten claves Wompi de pruebas.',
+                        ], Response::HTTP_UNPROCESSABLE_ENTITY);
+                    }
                 }
                 $this->settings->saveSecret($key, $value, $owner->id(), true);
             } else {
@@ -239,6 +263,47 @@ final class PlatformIntegrationsController extends PlatformOwnerApiController
         }
 
         return $this->privateJson(['sent' => true, 'event_id' => $eventId]);
+    }
+
+    #[Route('/test-wompi', name: 'platform_integrations_test_wompi', methods: ['POST'])]
+    public function testWompi(Request $request): JsonResponse
+    {
+        $owner = $this->platformOwner();
+        $this->requireManagementCsrf($request, self::CSRF_ID);
+        if (!WompiSandboxHttpTransport::enabled()) {
+            return $this->privateJson(['error' => 'Wompi sandbox deshabilitado.'], Response::HTTP_LOCKED);
+        }
+        foreach (array_keys(self::WOMPI_KEYS) as $key) {
+            if (!$this->safeSetting($key, $owner->id())['configured']) {
+                return $this->privateJson([
+                    'error' => 'Configura las cuatro claves Wompi de prueba.',
+                ], Response::HTTP_CONFLICT);
+            }
+        }
+        if (!$this->testEmailLimiter->create($owner->id().':test-wompi')->consume()->isAccepted()) {
+            return $this->privateJson([
+                'error' => 'Solo un pago sandbox por minuto.',
+            ], Response::HTTP_TOO_MANY_REQUESTS);
+        }
+        try {
+            $result = $this->wompiSandbox->testPayment();
+        } catch (DomainException $exception) {
+            $this->logger->warning('condor_wompi_sandbox_test_failed', [
+                'reason' => in_array($exception->getMessage(), [
+                    'WOMPI_TEST_SECRET_ONLY', 'WOMPI_SANDBOX_KEYS_UNAVAILABLE',
+                    'WOMPI_SANDBOX_ACCEPTANCE_UNAVAILABLE', 'WOMPI_SANDBOX_RESPONSE_UNVERIFIED',
+                ], true) ? $exception->getMessage() : 'WOMPI_SANDBOX_UNAVAILABLE',
+            ]);
+            return $this->privateJson([
+                'error' => 'No fue posible completar el pago de prueba en Wompi sandbox.',
+            ], Response::HTTP_SERVICE_UNAVAILABLE);
+        } catch (Throwable) {
+            $this->logger->warning('condor_wompi_sandbox_test_failed', ['reason' => 'WOMPI_SANDBOX_UNAVAILABLE']);
+            return $this->privateJson([
+                'error' => 'No fue posible completar el pago de prueba en Wompi sandbox.',
+            ], Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+        return $this->privateJson($result);
     }
 
     /** @return array<string,mixed> */
