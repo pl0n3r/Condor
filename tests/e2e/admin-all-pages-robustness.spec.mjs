@@ -166,8 +166,8 @@ for (const role of ROLES) {
       for (const [index, path] of links.entries()) {
         const events = [];
         const networkErrors = new Set();
-        const error = message => events.push('console: ' + message.text().slice(0, 300));
-        const uncaught = exception => events.push('javascript: ' + exception.message.slice(0, 300));
+        const error = message => events.push({ kind: 'console', detail: 'console: ' + message.text().slice(0, 300) });
+        const uncaught = exception => events.push({ kind: 'javascript', detail: 'javascript: ' + exception.message.slice(0, 300) });
         const responseError = response => {
           const status = response.status();
           if (status >= 400 && response.url().startsWith(baseURL)) {
@@ -194,10 +194,10 @@ for (const role of ROLES) {
           const metrics = await inspectPage(page);
           const eventGroups = new Map();
           for (const event of events) {
-            const status = event.match(/Failed to load resource: the server responded with a status of ([0-9]{3})/)?.[1];
-            const kind = status ? 'console-http-' + status : event.startsWith('javascript:') ? 'javascript' : 'console';
+            const status = event.detail.match(/Failed to load resource: the server responded with a status of ([0-9]{3})/)?.[1];
+            const kind = status ? 'console-http-' + status : event.kind;
             if (!eventGroups.has(kind)) eventGroups.set(kind, []);
-            eventGroups.get(kind).push(event);
+            eventGroups.get(kind).push(event.detail);
           }
           const checks = [
             ...eventGroups.entries(),
