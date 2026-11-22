@@ -2,6 +2,7 @@
 
 > **Estado:** PROPUESTA PARA REVISIÓN DEL DUEÑO, NO APROBADA. Documento de producto de [Condor #1513](https://github.com/pl0n3r/Condor/issues/1513), autorizado para redacción por el [comentario OWNER del 20-nov-2026](https://github.com/pl0n3r/Condor/issues/1513#issuecomment-7053851597). La aprobación de negocio de AC-01 se producirá únicamente mediante revisión expresa de su PR por el dueño; ni el presente texto ni un CI verde equivalen a aprobación.
 >
+> **Versión técnica de referencia:** Condor `0.1.202` (`config/version.php`); la identidad de esta entrega documental no aprueba las decisiones E1–E6, no implica publicación y no cambia cobros ni datos.
 > **Restricción permanente de esta propuesta:** SIN emisión de facturas, SIN DIAN/proveedor fiscal, SIN pasarela bancaria, SIN cobros/reembolsos reales, SIN datos personales/financieros reales, SIN go-live. Todo ejemplo y prueba usa fixtures sintéticos. Los futuros cambios de esquema, API y UI se realizarán únicamente en issues y PR separados, una vez aprobadas las elecciones.
 
 ## 1. Objetivo, fuentes de verdad y frontera
