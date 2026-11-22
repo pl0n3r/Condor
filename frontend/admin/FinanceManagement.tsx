@@ -167,14 +167,15 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
   return (
     <section id="finance-management" className="ui-page catalog-panel" aria-label="Finanzas y contabilidad · laboratorio M07">
       <PageHeader title="Finanzas y contabilidad · laboratorio M07" description="Registros ficticios y cierres de prueba sin efecto financiero." actions={canCreate ? <button type="button" className="button" onClick={() => { setSelected(''); setPanelError(''); setCreating(true); }}>Nuevo asiento ilustrativo</button> : undefined} />
-      <MetricStrip label="Indicadores de Finanzas y contabilidad · laboratorio M07" items={[{ label: 'Registros', value: scoped.length }, { label: 'Resultados', value: visible.length }, { label: 'Eventos de esta sesión', value: events.filter(item => item.scope === scope).length }]} />
+      {scoped.length > 0 && <MetricStrip label="Indicadores de Finanzas y contabilidad · laboratorio M07" items={[{ label: 'Registros', value: scoped.length }, { label: 'Resultados', value: visible.length }, { label: 'Eventos de esta sesión', value: events.filter(item => item.scope === scope).length }]} />}
       <p role="alert">SOLO DATOS FICTICIOS. Sin valor legal, contable, bancario ni tributario.</p>
       <p className="muted">Registros locales descartables. Sin transferencias, facturas ni operaciones bancarias.</p>
       {notice && <output role="status" aria-live="polite">{notice}</output>}
 
 
-      <section className="ui-card catalog-card" aria-labelledby="finance-closure-title"
+      <details className="ui-card catalog-card" aria-labelledby="finance-closure-title"
         aria-busy={closurePreview.status === 'loading'}>
+        <summary>Consultar cierres de prueba (opcional)</summary>
         <h3 id="finance-closure-title">Vista previa HTTP de cierre (solo laboratorio)</h3>
         <p>Consulta autenticada por sede. No aprueba, registra ni cierra períodos contables.</p>
         {canReview ? (
@@ -206,7 +207,7 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
             </ul>
           </div>
         )}
-      </section>
+      </details>
 
       <div className="ui-grid-2 catalog-grid">
         <SidePanel open={creating && canCreate} title="Nuevo asiento ilustrativo" onClose={() => { setCreating(false); setPanelError(''); }}>
@@ -267,7 +268,20 @@ function Workspace({ tenantId, companyId, branchId, permissions }: Props) {
 
           </Toolbar>
           <p role="status">{visible.length} registro(s) ficticio(s) en el ámbito actual.</p>
-          <DataTable caption="Listado de Finanzas y contabilidad · laboratorio M07" rows={visible} rowKey={row => row.reference} onOpen={row => view(row.reference)} empty="Sin registros ficticios para estos filtros." columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.reference}</strong></span> }, { key: 'kind', header: 'Clase', render: row => row.kind }, { key: 'amount', header: 'COP ilustrativo', render: row => row.amountFixture, align: 'right' as const }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'EN_REVISION' ? 'info' : row.state === 'REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.state}</StatusPill> }]} />
+          <DataTable caption="Listado de Finanzas y contabilidad · laboratorio M07" rows={visible} rowKey={row => row.reference} onOpen={row => view(row.reference)} empty={<div role="status">
+            <strong>{search.trim() || kindFilter !== 'TODOS' || stateFilter !== 'TODOS'
+              ? 'Sin resultados para estos filtros' : 'Aún no hay asientos de prueba'}</strong>
+            <p>{search.trim() || kindFilter !== 'TODOS' || stateFilter !== 'TODOS'
+              ? 'Cambia la búsqueda para consultar otros asientos.'
+              : 'Crea un primer asiento ilustrativo. Se conserva solo en esta sesión y no tiene efecto contable.'}</p>
+            {search.trim() || kindFilter !== 'TODOS' || stateFilter !== 'TODOS'
+              ? <button className="button button-secondary" type="button" onClick={() => {
+                  setSearch(''); setKindFilter('TODOS'); setStateFilter('TODOS');
+                }}>Limpiar filtros</button>
+              : canCreate && <button className="button" type="button" onClick={() => {
+                  setSelected(''); setPanelError(''); setCreating(true);
+                }}>Crear primer asiento ilustrativo</button>}
+          </div>} columns={[{ key: 'ref', header: 'Referencia', render: row => <span className="ui-cell-main"><strong>{row.reference}</strong></span> }, { key: 'kind', header: 'Clase', render: row => row.kind }, { key: 'amount', header: 'COP ilustrativo', render: row => row.amountFixture, align: 'right' as const }, { key: 'state', header: 'Estado', render: row => <StatusPill tone={row.state === 'EN_REVISION' ? 'info' : row.state === 'REQUIERE_REVISION' ? 'warn' : 'neutral'}>{row.state}</StatusPill> }]} />
         </section>
 
         <SidePanel open={Boolean(current) && !creating} title="Inspección y control manual" onClose={() => { setSelected(''); setPanelError(''); }}>
@@ -506,16 +520,16 @@ export function FinanceRealManagement({
     <PageHeader title="Finanzas" description="Registros internos de revisión por empresa y razón social."
       actions={canCreate ? <button type="button" onClick={() => setPanel('create')}>Nuevo registro</button>
         : undefined} />
-    <p className="muted">Solo referencias opacas. Sin movimientos bancarios, pagos ni cierre contable automático.</p>
+    <p className="muted">Consulta registros preparados para revisión. Esta sección no realiza pagos ni cierra períodos contables.</p>
     {notice && <output role="status" aria-live="polite">{notice}</output>}
     {status === 'loading' && <p role="status">Cargando registros financieros…</p>}
     {status === 'error' && <p role="alert">No se pudieron cargar los registros. Comprueba la conexión.</p>}
     {status === 'ready' && <>
-      <MetricStrip label="Resumen financiero" items={[
+      {rows.length > 0 && <MetricStrip label="Resumen financiero" items={[
         { label: 'Registros', value: rows.length },
         { label: 'Pendientes', value: rows.filter(row => row.state === 'PENDIENTE').length },
         { label: 'En revisión', value: rows.filter(row => row.state === 'REQUIERE_REVISION').length },
-      ]} />
+      ]} />}
       <section className="ui-card catalog-card" aria-label="Listado de registros financieros">
         <Toolbar trailing={<output aria-live="polite">{visible.length} resultados</output>}>
           <label>Buscar referencia <input type="search" value={searchReal}
@@ -537,7 +551,20 @@ export function FinanceRealManagement({
               <StatusPill tone={row.state === 'PENDIENTE' ? 'neutral' : 'warn'}>
                 {row.state === 'PENDIENTE' ? 'Pendiente' : 'Requiere revisión'}
               </StatusPill> },
-          ]} empty={<p role="status">No hay registros para este ámbito y filtro.</p>} />
+          ]} empty={<div role="status">
+            <strong>{searchReal.trim() || stateFilterReal !== 'TODOS'
+              ? 'No se encontraron registros financieros'
+              : 'Aún no hay registros financieros'}</strong>
+            <p>{searchReal.trim() || stateFilterReal !== 'TODOS'
+              ? 'Prueba con otro estado o referencia.'
+              : 'Crea un primer registro para organizar su revisión desde aquí.'}</p>
+            {searchReal.trim() || stateFilterReal !== 'TODOS'
+              ? <button className="button button-secondary" type="button" onClick={() => {
+                  setSearchReal(''); setStateFilterReal('TODOS');
+                }}>Limpiar filtros</button>
+              : canCreate && <button className="button" type="button"
+                  onClick={() => setPanel('create')}>Crear primer registro financiero</button>}
+          </div>} />
       </section>
     </>}
     <SidePanel open={panel === 'create' && canCreate && status === 'ready'}
