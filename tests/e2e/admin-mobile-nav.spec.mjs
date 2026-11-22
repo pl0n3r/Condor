@@ -146,6 +146,8 @@ test.describe('Condor #1960: navegación compacta y accesible', () => {
     const drawer = page.getByRole('dialog', { name: 'Menú de navegación' });
     await expect(drawer).toBeVisible();
     await expect(drawer.getByRole('button', { name: 'Cerrar navegación' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => document.activeElement?.closest('dialog')?.classList.contains('admin-nav-drawer'))).toBe(true);
     await expect(drawer.locator('a[href="/admin#orders"]')).toHaveAttribute('aria-current', 'page');
     await page.keyboard.press('Escape');
     await expect(drawer).toBeHidden();
