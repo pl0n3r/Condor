@@ -55,30 +55,23 @@ async function getJson(path: string, signal: AbortSignal): Promise<unknown> {
   return response.json() as Promise<unknown>;
 }
 
-/** Nunca convertir un subconjunto de página en un total exacto. */
+/** La API existente aplica ambos filtros y calcula pagination.total con scope seguro. */
 async function orderPending(branchId: string, signal: AbortSignal): Promise<Pending> {
-  let count = 0;
-  let partial = false;
-  // Paginación bounded: si la API supera el máximo, declarar mínimo explícito.
-  for (let page = 1; page <= 50; page += 1) {
-    const query = new URLSearchParams({ status: 'open', page: String(page), per_page: '100' });
-    const response = await getJson(
-      '/api/v1/branches/' + encodeURIComponent(branchId) + '/orders?' + query.toString(),
-      signal,
-    );
-    if (!record(response) || !Array.isArray(response.orders) || !record(response.pagination)
-      || typeof response.pagination.has_more !== 'boolean') {
-      throw new Error('INVALID_ORDERS');
-    }
-    for (const order of response.orders) {
-      if (!record(order) || typeof order.order_status !== 'string'
-        || typeof order.fulfillment_status !== 'string') throw new Error('INVALID_ORDER');
-      if (order.order_status === 'open' && order.fulfillment_status === 'reserved') count += 1;
-    }
-    if (!response.pagination.has_more) break;
-    if (page === 50) partial = true;
-  }
-  return { id: 'orders', title: 'Pedidos por despachar', href: '/admin#orders', count, partial };
+  const query = new URLSearchParams({
+    status: 'open', fulfillment_status: 'reserved', page: '1', per_page: '1',
+  });
+  const payload = await getJson(
+    '/api/v1/branches/' + encodeURIComponent(branchId) + '/orders?' + query.toString(),
+    signal,
+  );
+  if (!record(payload) || !record(payload.pagination)
+    || !Number.isSafeInteger(payload.pagination.total)
+    || (payload.pagination.total as number) < 0
+    || !Array.isArray(payload.orders)) throw new Error('INVALID_ORDERS_TOTAL');
+  return {
+    id: 'orders', title: 'Pedidos por despachar', href: '/admin#orders',
+    count: payload.pagination.total as number,
+  };
 }
 
 async function stockPending(branchId: string, signal: AbortSignal): Promise<Pending> {
