@@ -723,7 +723,8 @@ jobs:
 
           grep -q '"status":"ok"' /tmp/health.json
           grep -q "\"version\":\"$app_version\"" /tmp/health.json
-          curl -fsS http://127.0.0.1:8080/ | grep -q "V $app_version"
+          curl -fsS http://127.0.0.1:8080/ >/tmp/condor-home.html
+          grep -q "V $app_version" /tmp/condor-home.html
           curl -fsS -c /tmp/cookies.txt http://127.0.0.1:8080/admin/login >/tmp/login.html
           grep -q "V $app_version" /tmp/login.html
 
@@ -736,7 +737,8 @@ jobs:
             --data-urlencode "_csrf_token=$token" \
             http://127.0.0.1:8080/admin/login)"
           test "$code" = "302"
-          curl -fsS -b /tmp/cookies.txt http://127.0.0.1:8080/admin | grep -q 'Empresa CI'
+          curl -fsS -b /tmp/cookies.txt http://127.0.0.1:8080/admin >/tmp/condor-admin.html
+          grep -q 'Empresa CI' /tmp/condor-admin.html
 
   e2e:
     name: Playwright Chromium
