@@ -32,6 +32,7 @@ final readonly class BranchAuthorization
 
         $membership = $this->membership($user, $tenant);
         if ($membership->roleKey() === Membership::ROLE_OWNER) {
+            $this->support?->rememberAuthorizedBranch($user, $tenant, $branch);
             return PermissionCatalog::all();
         }
 
@@ -68,6 +69,7 @@ final readonly class BranchAuthorization
 
         $membership = $this->membership($user, $tenant);
         if ($membership->roleKey() === Membership::ROLE_OWNER) {
+            $this->support?->rememberAuthorizedBranch($user, $tenant, $branch);
             return true;
         }
 
@@ -106,6 +108,7 @@ final readonly class BranchAuthorization
 
         $membership = $this->membership($user, $tenant);
         if ($membership->roleKey() === Membership::ROLE_OWNER) {
+            $this->support?->rememberAuthorizedBranch($user, $tenant, $branch);
             return $membership;
         }
 
@@ -113,6 +116,7 @@ final readonly class BranchAuthorization
             throw new AccessDeniedException('No tienes permiso para realizar esta acción.');
         }
 
+        $this->support?->rememberAuthorizedBranch($user, $tenant, $branch);
         return $membership;
     }
 
