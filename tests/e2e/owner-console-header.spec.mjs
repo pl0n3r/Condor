@@ -93,4 +93,29 @@ test.describe('Propietario #1961: módulo arriba, navegación clara y diagnósti
       }
     }
   });
+  test('Diagnósticos conserva métricas y navegación si la API de contexto falla con 5xx', async ({ page }) => {
+    await page.goto('/admin/login');
+    await page.getByLabel('Correo').fill(process.env.E2E_PLATFORM_EMAIL);
+    await page.getByLabel('Contraseña').fill(process.env.E2E_PASSWORD);
+    await page.getByRole('button', { name: 'Ingresar' }).click();
+    await expect(page).toHaveURL(/\\/adminpl0n3r/);
+
+    // La plantilla Twig del propietario no depende de la API del dashboard.
+    // Falla la API de manera aislada para detectar regresiones de montaje.
+    await page.route('**/adminpl0n3r/api/context*', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Contexto sintético temporalmente no disponible' }),
+      });
+    });
+    await page.goto('/adminpl0n3r/diagnosticos');
+    const workspace = page.locator('.admin-shell-platform .workspace');
+    await expect(workspace.getByRole('heading', { level: 1 })).toHaveText('Diagnósticos');
+    await expect(workspace.locator('.platform-diagnostics-content')).toContainText('p50');
+    await expect(workspace.locator('.platform-diagnostics-content')).toContainText('p95');
+    await expect(page.getByRole('navigation', { name: 'Navegación de plataforma' }).first()).toBeVisible();
+    await expect(workspace.getByRole('alert')).toHaveCount(0);
+  });
+
 });
