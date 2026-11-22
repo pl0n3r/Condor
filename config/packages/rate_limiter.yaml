@@ -66,3 +66,22 @@ framework:
       policy: sliding_window
       limit: 5
       interval: '1 hour'
+
+    # Defensa transversal #1967: rutas anónimas mutantes, sin excepciones para
+    # nuevos formularios. Ventanas conservadoras y configurables por despliegue.
+    public_abuse_ip:
+      policy: sliding_window
+      limit: 24
+      interval: '5 minutes'
+
+    public_abuse_identifier:
+      policy: sliding_window
+      limit: 12
+      interval: '5 minutes'
+
+    # Misma cuota para recuperación de acceso y solicitud de trial.
+    # La identidad de destinatario se almacena solo como SHA-256.
+    public_email_recipient:
+      policy: sliding_window
+      limit: 5
+      interval: '1 hour'
