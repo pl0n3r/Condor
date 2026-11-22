@@ -18,6 +18,9 @@ const GROUPS = [
   { group: 'Personas', items: [{ href: '/admin#payroll-management', label: 'Nómina' }] },
 ];
 
+const HISTORICAL_MODULE_DIRECTORY = "type AdminNavEntry = { group: string; items: { href: string; label: string }[] } | { href: string; label: string };\n\n/** Descripción de una línea por módulo, para el directorio del inicio. */\nconst HINTS: Record<string, string> = {\n  commerce: 'Clientes, categorías y listas de precios.',\n  orders: 'Crear, seguir y exportar pedidos.',\n  'sales-reports': 'Ventas por periodo y por sede.',\n  'reports-downloads': 'Descarga de informes en CSV.',\n  'customer-service': 'Casos y atención a clientes.',\n  catalog: 'Productos, variantes y políticas de stock.',\n  inventory: 'Existencias, fuentes y ajustes.',\n  'stock-alerts': 'Avisos de stock bajo.',\n  'stock-transfers': 'Traslados entre sedes.',\n  production: 'Recetas y órdenes de producción.',\n  purchasing: 'Solicitudes y órdenes de compra.',\n  'assets-management': 'Activos de la empresa.',\n  'seo-settings': 'Títulos y descripciones para buscadores.',\n  'employees-management': 'Empleados, cargos y asistencia.',\n  'human-resources-management': 'Vinculaciones, novedades y movimientos.',\n  'payroll-management': 'Nómina y novedades de pago.',\n  'contracts-management': 'Contratos de trabajo y su vigencia.',\n  'social-security-management': 'Afiliaciones y aportes.',\n  'finance-management': 'Asientos, periodos y cierres.',\n  'compliance-management': 'Seguridad y salud en el trabajo.',\n  'compliance-evidence-management': 'Evidencia de cumplimiento legal.',\n  'governance-management': 'Órganos, actas y decisiones.',\n  workflows: 'Flujos de trabajo y aprobaciones.',\n  'operations-processes': 'Procesos y procedimientos.',\n  roles: 'Roles, permisos y accesos.',\n  documents: 'Expedientes y evidencias sintéticas; sin firma legal.',\n};\n\nfunction moduleId(href: string): string {\n  const at = href.indexOf('#');\n  return at >= 0 ? href.slice(at + 1) : '';\n}\n\n/** Mapa del administrador: cada módulo agrupado igual que el menú, con una línea que explica para qué sirve. */\nexport function ModuleDirectory({ entries }: Readonly<{ entries: readonly AdminNavEntry[] }>) {\n  const groups = entries.filter((entry): entry is Extract<AdminNavEntry, { group: string }> => 'group' in entry);\n  return (\n    <section className=\"module-directory\" aria-labelledby=\"module-directory-title\">\n      <h2 id=\"module-directory-title\">Módulos</h2>\n      <div className=\"module-directory-groups\">\n        {groups.map((group) => (\n          <div className=\"module-directory-group\" key={group.group}>\n            <h3>{group.group}</h3>\n            <ul>\n              {group.items.map((item) => (\n                <li key={item.href}>\n                  <a href={item.href}>\n                    <strong>{item.label.replace(' (pruebas)', '')}</strong>\n                    <span>{HINTS[moduleId(item.href)] ?? ''}</span>\n                    {item.label.includes('(pruebas)') && <em>En pruebas</em>}\n                  </a>\n                </li>\n              ))}\n            </ul>\n          </div>\n        ))}\n      </div>\n    </section>\n  );\n}\n";
+const HISTORICAL_OVERVIEW_GRID = "type OverviewItem = Readonly<{\n  label: string;\n  value: string | number;\n  detail?: string;\n}>;\n\ntype OverviewGridProps = Readonly<{\n  ariaLabel: string;\n  items: readonly OverviewItem[];\n  variant?: 'standard' | 'control';\n}>;\n\nexport function OverviewGrid({\n  ariaLabel,\n  items,\n  variant = 'standard',\n}: OverviewGridProps) {\n  return (\n    <section\n      className={'foundation-grid foundation-grid-' + variant}\n      aria-label={ariaLabel}\n    >\n      {items.map((item) => (\n        <article key={item.label}>\n          <strong>{item.label}</strong>\n          <span className=\"overview-value\">{item.value}</span>\n          {item.detail && (\n            <small className=\"overview-detail\">{item.detail}</small>\n          )}\n        </article>\n      ))}\n    </section>\n  );\n}\n";
+
 let output;
 let server;
 let origin;
@@ -27,14 +30,20 @@ function fixtureEntry() {
     name: 'condor-tenant-home-pending-fixture',
     resolveId(id) {
       if (id === 'virtual:condor-tenant-home-pending') return '\0condor-tenant-home-pending';
+      if (id === 'virtual:condor-tenant-home-before') return '\0condor-tenant-home-before';
+      if (id === 'virtual:condor-legacy-module') return '\0condor-legacy-module.tsx';
+      if (id === 'virtual:condor-legacy-overview') return '\0condor-legacy-overview.tsx';
     },
     load(id) {
-      if (id !== '\0condor-tenant-home-pending') return;
+      if (id === '\0condor-legacy-module.tsx') return HISTORICAL_MODULE_DIRECTORY;
+      if (id === '\0condor-legacy-overview.tsx') return HISTORICAL_OVERVIEW_GRID;
+      if (!['\0condor-tenant-home-pending', '\0condor-tenant-home-before'].includes(id)) return;
+      const before = id === '\0condor-tenant-home-before';
       return [
         "import React from 'react';",
         "import { createRoot } from 'react-dom/client';",
-        "import { ModuleDirectory } from '/frontend/admin/ModuleDirectory.tsx';",
-        "import { OverviewGrid } from '/frontend/admin/OverviewGrid.tsx';",
+        "import { ModuleDirectory } from '" + (before ? 'virtual:condor-legacy-module' : '/frontend/admin/ModuleDirectory.tsx') + "';",
+        "import { OverviewGrid } from '" + (before ? 'virtual:condor-legacy-overview' : '/frontend/admin/OverviewGrid.tsx') + "';",
         "import '/frontend/admin/admin-ui.css';",
         "import '/frontend/admin/admin.css';",
         'const groups = ' + JSON.stringify(GROUPS) + ';',
@@ -81,8 +90,8 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
       build: {
         outDir: output, emptyOutDir: true, cssCodeSplit: false,
         rollupOptions: {
-          input: 'virtual:condor-tenant-home-pending',
-          output: { entryFileNames: 'home.js', chunkFileNames: 'chunks/[name]-[hash].js', assetFileNames: 'styles.css' },
+          input: { after: 'virtual:condor-tenant-home-pending', before: 'virtual:condor-tenant-home-before' },
+          output: { entryFileNames: '[name].js', chunkFileNames: 'chunks/[name]-[hash].js', assetFileNames: 'styles.css' },
         },
       },
     });
@@ -95,7 +104,7 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
           + '<div class="workspace-heading"><label>Sede activa'
           + '<select aria-label="Sede activa"><option value="' + BRANCH + '">Sede ficticia</option>'
           + '</select></label></div><main class="workspace" data-module="inicio"></main></div>'
-          + '<script type="module" src="/home.js"></script></body></html>');
+          + '<script type="module" src="' + (url.searchParams.get('view') === 'before' ? '/before.js' : '/after.js') + '"></script></body></html>');
         return;
       }
       const filename = resolve(output, '.' + url.pathname);
@@ -166,6 +175,18 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
     return called;
   }
 
+  test('antes histórico: React original con fixture sintético a 390/1440 px', async ({ page }, testInfo) => {
+    await page.goto(origin + '/admin?view=before');
+    await expect(page.getByRole('heading', { name: 'Módulos' })).toBeVisible();
+    await expect(page.getByText('Permisos efectivos')).toBeVisible();
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await testInfo.attach('owner-support-before-home-' + width + '.png', {
+        body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
+      });
+    }
+  });
+
   test('pendientes reales del contrato, enlaces, sin cifras decorativas', async ({ page }, testInfo) => {
     const called = await mockApi(page);
     await page.goto(origin + '/admin');
@@ -189,7 +210,7 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.getByRole('heading', { name: 'Para hoy' })).toBeVisible();
-      await testInfo.attach('despues-' + width + 'px.png', {
+      await testInfo.attach('owner-support-after-home-' + width + '.png', {
         body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
       });
     }
