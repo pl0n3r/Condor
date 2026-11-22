@@ -165,7 +165,7 @@ for (const role of ROLES) {
           // Chromium also writes failed HTTP resources to the console. Track
           // those with their exact URL/status below, rather than an opaque
           // "Failed to load resource" string that cannot be assigned to an issue.
-          if (/^Failed to load resource: the server responded with a status of \\d{3}/.test(message.text())) return;
+          if (/^Failed to load resource: the server responded with a status of \d{3}/.test(message.text())) return;
           error(message);
         });
         page.on('pageerror', uncaught);
@@ -201,7 +201,7 @@ for (const role of ROLES) {
               detail: observed.slice(0, 5) });
           }
           for (const detail of networkErrors) {
-            const match = /^http: (\\d{3}) (.+)$/.exec(detail);
+            const match = /^http: (\d{3}) (.+)$/.exec(detail);
             if (!match) throw new Error('Hallazgo HTTP sin status/path: ' + detail);
             const key = role.key + '|' + viewport + '|http-' + match[1] + '|' + match[2];
             if (!findings.some(finding => finding.key === key)) findings.push({ key, detail: [detail] });
