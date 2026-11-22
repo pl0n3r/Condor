@@ -85,7 +85,7 @@ jobs:
           echo "CONDOR_OWNER_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
           echo "CONDOR_PLATFORM_OWNER_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
 
-      - name: Instalar dependencias y axe-core fijado
+      - name: Instalar dependencias bloqueadas
         shell: bash
         run: |
           set -euo pipefail
@@ -93,12 +93,6 @@ jobs:
             --label "npm ci Web Vitals" -- npm ci --ignore-scripts --no-audit --no-fund
           python3 scripts/ci_retry.py --attempts 3 --base-delay 3 \
             --label "composer install Web Vitals" -- composer install --no-interaction --prefer-dist --no-progress
-          # Única dependencia adicional, PIN exacto, sin modificar package.json ni lock.
-          python3 scripts/ci_retry.py --attempts 3 --base-delay 3 \
-            --label "axe-core 4.10.3" -- npm install --no-save --package-lock=false \
-            --ignore-scripts --no-audit --no-fund --save-exact axe-core@4.10.3
-          node -e "if (require('axe-core/package.json').version !== '4.10.3') process.exit(1)"
-          git diff --exit-code -- package.json package-lock.json
 
       - name: Construir aplicación real
         shell: bash
@@ -109,6 +103,21 @@ jobs:
           test -s public/build/admin.js
           test -s public/build/admin.css
           git diff --exit-code -- public/build
+
+      - name: Preparar axe-core fijado sin alterar árbol npm
+        shell: bash
+        run: |
+          set -euo pipefail
+          # npm pack no re-resuelve ni reinstala React/Vite del lock.
+          python3 scripts/ci_retry.py --attempts 3 --base-delay 3 \
+            --label "axe-core 4.10.3 tarball" -- npm pack axe-core@4.10.3 \
+            --pack-destination /tmp --ignore-scripts
+          test -s /tmp/axe-core-4.10.3.tgz
+          mkdir -p node_modules/axe-core
+          tar -xzf /tmp/axe-core-4.10.3.tgz -C node_modules/axe-core --strip-components=1
+          node -e "if (require('axe-core/package.json').version !== '4.10.3') process.exit(1)"
+          test -s node_modules/axe-core/axe.min.js
+          git diff --exit-code -- package.json package-lock.json public/build
 
       - name: Migrar y crear usuarios falsos descartables
         shell: bash
