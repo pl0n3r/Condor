@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { build, transformWithEsbuild } from 'vite';
 import react from '@vitejs/plugin-react';
 import { createServer } from 'node:http';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
 
@@ -108,11 +108,13 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
         },
       },
     });
+    // La plantilla Twig real sirve el reset/tokens globales ANTES del CSS de admin.
+    await copyFile(join(process.cwd(), 'public/app.css'), join(output, 'app.css'));
     server = createServer(async (req, res) => {
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname === '/admin') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end('<!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><body>'
+        res.end('<!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/styles.css"><body>'
           + '<div id="condor-admin-root" class="admin-shell admin-shell-tenant" data-payroll-real-data-enabled="true">'
           + '<main class="workspace" data-module="inicio"></main></div>'
           + '<script type="module" src="' + (url.searchParams.get('view') === 'before' ? '/before.js' : '/after.js') + '"></script></body></html>');
