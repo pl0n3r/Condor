@@ -127,6 +127,14 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
             self::assertNotEmpty($stored['nonce']);
             self::assertSame(1, (int) $stored['key_version']);
             self::assertStringNotContainsString($synthetic, (string) $stored['encrypted_value']);
+            $audit = $connection->fetchAssociative(
+                'SELECT action, actor_id FROM condor_platform_setting_audit '
+                .'WHERE setting_key = ? ORDER BY id DESC LIMIT 1',
+                ['sentry.dsn'],
+            );
+            self::assertIsArray($audit);
+            self::assertSame('UPSERT', $audit['action']);
+            self::assertSame($owner->id(), $audit['actor_id']);
             self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('private'));
             self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
 
