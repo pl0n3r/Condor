@@ -393,6 +393,34 @@ type State =
       diagnostic?: OwnerDiagnostic;
     };
 
+const OWNER_SUPPORT_MODULES = [
+  { key: 'commerce', label: 'Comercial' },
+  { key: 'orders', label: 'Pedidos' },
+  { key: 'sales-reports', label: 'Reportes de ventas' },
+  { key: 'reports-downloads', label: 'Descargas CSV' },
+  { key: 'customer-service', label: 'Servicio al cliente' },
+  { key: 'catalog', label: 'Catálogo' },
+  { key: 'inventory', label: 'Inventario' },
+  { key: 'stock-alerts', label: 'Alertas de stock' },
+  { key: 'stock-transfers', label: 'Transferencias' },
+  { key: 'production', label: 'Producción' },
+  { key: 'purchasing', label: 'Compras' },
+  { key: 'assets-management', label: 'Activos' },
+  { key: 'seo-settings', label: 'SEO' },
+  { key: 'employees-management', label: 'Empleados y asistencia' },
+  { key: 'human-resources-management', label: 'Talento humano' },
+  { key: 'payroll-management', label: 'Nómina' },
+  { key: 'contracts-management', label: 'Contratación' },
+  { key: 'social-security-management', label: 'Seguridad social' },
+  { key: 'finance-management', label: 'Finanzas' },
+  { key: 'compliance-management', label: 'SG-SST' },
+  { key: 'compliance-evidence-management', label: 'Cumplimiento legal' },
+  { key: 'governance-management', label: 'Gobierno corporativo' },
+  { key: 'workflows', label: 'Workflows' },
+  { key: 'operations-processes', label: 'Procesos' },
+  { key: 'roles', label: 'Roles y permisos' },
+] as const;
+
 type PlatformOwnerSection = 'control' | 'empresas' | 'staff' | 'suscripciones' | 'catalogo' | 'integraciones';
 
 function selectedTenantFromState(state: State): SelectedTenant | null {
@@ -537,6 +565,46 @@ export function PlatformOwnerApp({
         ? 'catalogo'
         : section;
   const selected = selectedTenantFromState(state);
+  const [supportBranchId, setSupportBranchId] = useState('');
+  // A branch from another tenant must never be sent in a support grant.
+  const selectedSupportBranchId = selected?.branches.some((branch) => branch.id === supportBranchId)
+    ? supportBranchId : '';
+  const [supportBusy, setSupportBusy] = useState(false);
+  const [supportError, setSupportError] = useState('');
+  const moduleRequested = new URLSearchParams(window.location.search).get('modulo') ?? '';
+  const supportModule = OWNER_SUPPORT_MODULES.some((item) => item.key === moduleRequested)
+    ? moduleRequested : '';
+
+  async function openSupport(tenantId: string, branchId?: string): Promise<void> {
+    if (supportBusy) return;
+    setSupportBusy(true);
+    setSupportError('');
+    try {
+      const response = await fetch('/adminpl0n3r/api/support', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': tenantToken,
+        },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          branch_id: branchId ?? null,
+          module: supportModule,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('No fue posible iniciar la sesión de soporte.');
+      }
+      // Never navigate to an untrusted URL from a network response.
+      // Only our local allowlisted module may affect the destination.
+      window.location.assign('/admin' + (supportModule ? '#' + supportModule : ''));
+    } catch {
+      setSupportError('No se pudo abrir el panel de la empresa. Reintenta desde aquí.');
+      setSupportBusy(false);
+    }
+  }
+
   const filteredTenants = state.status === 'ready'
     ? state.data.tenants.filter((tenant) => (
       (tenantScopeFilter === 'all'
@@ -550,6 +618,7 @@ export function PlatformOwnerApp({
     setSelectedPlanVersionId('');
     setSubscriptionCreation({ status: 'idle' });
     setTrialCreation({ status: 'idle' });
+    setSupportBranchId('');
   }, [selected?.id]);
 
   async function createInitialSubscription() {
@@ -699,6 +768,15 @@ export function PlatformOwnerApp({
           ],
         },
         {
+          group: 'Módulos de empresa',
+          icon: 'admin',
+          items: OWNER_SUPPORT_MODULES.map((module) => ({
+            href: '/adminpl0n3r/empresas?modulo=' + module.key,
+            label: module.label,
+            current: currentSection === 'empresas' && supportModule === module.key,
+          })),
+        },
+        {
           group: 'Comercial',
           icon: 'sales',
           items: [
@@ -749,12 +827,34 @@ export function PlatformOwnerApp({
         // o Estado del sistema.
       ]}
     >
+      {supportError && <div className="alert alert-error" role="alert">{supportError}</div>}
       {selected && (
         <output className="platform-context-bar" aria-live="polite">
           <span className="platform-context-copy">
             <strong>Modo propietario · Contexto de empresa</strong>
             <span>{selected.name}</span>
           </span>
+          {selected.branches.length > 0 && (
+            <>
+              <label className="field">
+                <span>Sede de soporte</span>
+                <select value={selectedSupportBranchId}
+                  onChange={(event) => setSupportBranchId(event.target.value)}>
+                  <option value="">Sede principal</option>
+                  {selected.branches.map((branch) => (
+                    <option value={branch.id} key={branch.id}>{branch.name}</option>
+                  ))}
+                </select>
+              </label>
+              <button className="button button-context" type="button" disabled={supportBusy}
+                onClick={() => void openSupport(selected.id, selectedSupportBranchId || (
+                  selected.branches.find((branch) => branch.is_default)?.id
+                  ?? selected.branches[0].id
+                ))}>
+                Abrir panel de la empresa
+              </button>
+            </>
+          )}
           <button
             className="button button-context"
             type="button"
@@ -1085,6 +1185,11 @@ export function PlatformOwnerApp({
                 onClose={() => setTenantPreview(null)}
                 footer={<>
                   <button className="button button-secondary" type="button" onClick={() => setTenantPreview(null)}>Cerrar</button>
+                  <button className="button" type="button"
+                    disabled={!tenantPreview || tenantPreview.branch_count < 1 || supportBusy}
+                    onClick={() => { if (tenantPreview) void openSupport(tenantPreview.id); }}>
+                    Abrir panel de la empresa
+                  </button>
                   <button className="button" type="button" disabled={!tenantPreview}
                     onClick={() => {
                       if (!tenantPreview) return;
