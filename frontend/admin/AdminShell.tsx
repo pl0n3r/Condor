@@ -359,6 +359,8 @@ export function AdminShell({
   children,
 }: AdminShellProps) {
   const hash = useLocationHash();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileNavId = useId();
   const [supportCloseError, setSupportCloseError] = useState('');
   const [supportCloseBusy, setSupportCloseBusy] = useState(false);
   const supportRoot = typeof document === 'undefined'
@@ -440,13 +442,22 @@ export function AdminShell({
       className={'admin-shell admin-shell-' + variant}
       aria-label={ariaLabel}
     >
-      <aside className="sidebar">
+      <aside className="sidebar" data-mobile-open={mobileMenuOpen ? 'true' : 'false'}>
         <div className="brand-block">
           <strong>Condor App</strong>
           <span>V {version}</span>
+          <button
+            className="mobile-menu-toggle"
+            type="button"
+            aria-controls={mobileNavId}
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            {mobileMenuOpen ? 'Ocultar menú' : 'Mostrar menú'}
+          </button>
         </div>
 
-        <nav aria-label={navLabel}>
+        <nav id={mobileNavId} aria-label={navLabel}>
           {visibleNav.map((entry) => (
             isGroup(entry) ? (
               <NavGroup entry={entry} hash={hash} key={entry.group} />
