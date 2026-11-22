@@ -95,16 +95,25 @@ test.describe('1930: formularios compactos, tarjetas y accesibilidad', () => {
       if (width === 1440) {
         // Reconstrucción CSS sintética del diseño anterior; no es captura
         // de un entorno real ni se usa como evidencia de despliegue.
-        const reconstruction = await page.addStyleTag({ content: `
+        // CSSOM constructable solo para la captura sintética: nunca inyectar
+        // <style> inline ni modificar la CSP restrictiva de la aplicación.
+        const baseline = `
           .admin-shell .ui-integrations-grid { display: block !important; }
           .admin-shell .ui-integration-content { padding: 0 !important; display: block !important; }
           .admin-shell .ui-integration-form { border: 0 !important; padding: 0 !important; background: transparent !important; }
           .admin-shell .ui-integration-form .ui-form-actions > button { width: 100% !important; }
-        ` });
+        `;
+        await page.evaluate(css => {
+          const sheet = new CSSStyleSheet();
+          sheet.replaceSync(css);
+          document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+        }, baseline);
         await testInfo.attach('integraciones-reconstruccion-anterior-1440', {
           body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
         });
-        await reconstruction.evaluate(element => element.remove());
+        await page.evaluate(() => {
+          document.adoptedStyleSheets = document.adoptedStyleSheets.slice(0, -1);
+        });
       }
       await testInfo.attach('integraciones-nuevo-diseno-' + width, {
         body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
