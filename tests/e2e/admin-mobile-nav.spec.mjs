@@ -10,6 +10,7 @@ import { extname, join, resolve, sep } from 'node:path';
 let output;
 let server;
 let origin;
+let stylesheet;
 const navigation = [
   { href: '/admin', label: 'Inicio', current: true, icon: 'home' },
   { group: 'Ventas', icon: 'sales', items: [
@@ -35,11 +36,11 @@ test.describe('Condor #1960: navegación compacta y accesible', () => {
   test.beforeAll(async () => {
     test.setTimeout(120_000);
     output = await mkdtemp(join(tmpdir(), 'condor-admin-mobile-nav-'));
-    await build({
+    const built = await build({
       configFile: false, mode: 'production', root: process.cwd(),
       plugins: [{
         name: 'condor-nav-fixture',
-        resolveId(id) { if (id === 'virtual:condor-nav') return '\\0condor-nav'; },
+        resolveId(id) { if (id === 'virtual:condor-nav') return '\0condor-nav'; },
         load(id) {
           if (id !== '\\0condor-nav') return;
           return [
@@ -58,7 +59,7 @@ test.describe('Condor #1960: navegación compacta y accesible', () => {
             "  variant:owner?'platform':'tenant',navItems:owner?platform:tenant,",
             "  children:React.createElement('section',{id:'fixture-content','data-testid':'module-content'},'Contenido del módulo'),",
             "}));",
-          ].join('\\n');
+          ].join('\n');
         },
       }, react()],
       build: {
@@ -69,11 +70,13 @@ test.describe('Condor #1960: navegación compacta y accesible', () => {
         },
       },
     });
+    stylesheet = built.output.find(item => item.type === 'asset' && item.fileName.endsWith('.css'))?.fileName;
+    if (!stylesheet) throw new Error('No se generó el CSS de la shell');
     server = createServer(async (req, res) => {
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname === '/admin' || url.pathname.startsWith('/adminpl0n3r')) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end('<!doctype html><html lang="es"><body>'
+        res.end('<!doctype html><html lang="es"><head><link rel="stylesheet" href="/' + stylesheet + '"></head><body>'
           + '<div id="condor-admin-root"></div>'
           + '<script type="module" src="/shell.js"></script></body></html>');
         return;
