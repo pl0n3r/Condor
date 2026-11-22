@@ -126,6 +126,18 @@ async function collect(page, browser, flow, testInfo) {
     return {
       violations: audit.violations.map((v) => ({
         id: v.id, impact: v.impact, affected_nodes: v.nodes.length,
+        // CSS selectors and numeric color values only; never export node HTML,
+        // page text, user identity, cookies or interactive form values.
+        findings: v.nodes.slice(0, 30).map((node) => ({
+          target: node.target.slice(0, 3),
+          checks: node.any.map((check) => ({
+            id: check.id,
+            fg: check.data?.fgColor ?? null,
+            bg: check.data?.bgColor ?? null,
+            ratio: check.data?.contrastRatio ?? null,
+            expected: check.data?.expectedContrastRatio ?? null,
+          })),
+        })),
       })),
       incomplete_rules: audit.incomplete.map((v) => v.id),
     };
