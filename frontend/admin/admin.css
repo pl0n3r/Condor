@@ -988,3 +988,56 @@ dialog.ui-sidepanel[open] { animation: ui-sheet-in .2s cubic-bezier(.22, 1, .36,
   .admin-shell:not([data-theme="light"]) .ui-pill-danger { background: var(--z7); color: var(--z6); }
   .admin-shell:not([data-theme="light"]) .ui-pill-info { background: var(--z4); color: var(--z5); }
 }
+
+/* #1941: mobile-first support context. Keep the tenant banner in the first
+   viewport while the full menu remains reachable on explicit user request. */
+.admin-shell .sidebar .mobile-menu-toggle { display: none; }
+@media (max-width: 860px) {
+  .admin-shell .sidebar {
+    position: static;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  .admin-shell .sidebar .brand-block {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+  .admin-shell .sidebar .mobile-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+    margin-left: auto;
+    padding: 8px 12px;
+    border: 1px solid rgba(238, 241, 248, .65);
+    border-radius: 8px;
+    background: transparent;
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .admin-shell .sidebar .mobile-menu-toggle:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+  }
+  .admin-shell .sidebar[data-mobile-open="false"] nav,
+  .admin-shell .sidebar[data-mobile-open="false"] form {
+    display: none;
+  }
+  .admin-shell .sidebar[data-mobile-open="true"] nav {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    max-height: min(66dvh, 520px);
+    padding: 8px 12px 12px;
+  }
+  .admin-shell .sidebar[data-mobile-open="true"] form {
+    display: block;
+  }
+}
