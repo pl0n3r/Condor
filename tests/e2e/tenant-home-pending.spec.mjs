@@ -38,7 +38,7 @@ function fixtureEntry() {
         "import '/frontend/admin/admin-ui.css';",
         "import '/frontend/admin/admin.css';",
         'const groups = ' + JSON.stringify(GROUPS) + ';',
-        "const root = document.getElementById('condor-admin-root');",
+        "const root = document.querySelector('.workspace');",
         "createRoot(root).render(React.createElement(React.Fragment, null,",
         "  React.createElement(OverviewGrid, {ariaLabel:'Estado de la empresa',",
         "    items:[{label:'Tenant',value:'Activo'},",
@@ -79,10 +79,10 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
       configFile: false, mode: 'production', root: process.cwd(),
       plugins: [fixtureEntry(), react()],
       build: {
-        outDir: output, emptyOutDir: true,
+        outDir: output, emptyOutDir: true, cssCodeSplit: false,
         rollupOptions: {
           input: 'virtual:condor-tenant-home-pending',
-          output: { entryFileNames: 'home.js', chunkFileNames: 'chunks/[name]-[hash].js' },
+          output: { entryFileNames: 'home.js', chunkFileNames: 'chunks/[name]-[hash].js', assetFileNames: 'styles.css' },
         },
       },
     });
