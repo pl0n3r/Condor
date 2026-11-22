@@ -154,59 +154,69 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
     {denied && <div role="alert" className="alert alert-error">No tienes permisos para gestionar integraciones de plataforma.</div>}
     {error && <div role="alert" className="alert alert-error">{error}</div>}
     {notice && <output role="status" className="alert">{notice}</output>}
-    {data && !denied && <div className="ui-card-grid">
+    {data && !denied && <div className="ui-card-grid ui-integrations-grid">
       <Card title="Correo · Resend">
+        <div className="ui-integration-content">
         <p className="muted">El envío transaccional usa los ajustes cifrados. Ninguna clave se devuelve al navegador.</p>
         {!data.secret_write_enabled && <p className="muted">La escritura de claves está bloqueada hasta autorización expresa de live.</p>}
-        <form onSubmit={event => void save(event, 'mail.provider', provider)}>
+        <form className="ui-integration-form" aria-label="Proveedor de correo" onSubmit={event => void save(event, 'mail.provider', provider)}>
           <label className="field">Proveedor
             <select value={provider} onChange={event => setProvider(event.target.value)}><option value="resend">Resend</option></select>
           </label>
           <Detail setting={setting('mail.provider')} />
-          <button className="button" type="submit" disabled={busy}>Guardar proveedor</button>
+          <div className="ui-form-actions"><button className="button" type="submit" disabled={busy}>Guardar proveedor</button></div>
         </form>
-        <form onSubmit={event => void save(event, 'mail.from', from)}>
+        <form className="ui-integration-form" aria-label="Remitente de correo" onSubmit={event => void save(event, 'mail.from', from)}>
           <label className="field">Remitente
             <input type="email" autoComplete="off" value={from} onChange={event => setFrom(event.target.value)} required placeholder="correo@empresa.com" />
           </label>
           <Detail setting={setting('mail.from')} />
-          <button className="button" type="submit" disabled={busy}>Guardar remitente</button>
+          <div className="ui-form-actions"><button className="button" type="submit" disabled={busy}>Guardar remitente</button></div>
         </form>
-        <form onSubmit={event => void save(event, 'mail.api_key', apiKey)}>
+        <form className="ui-integration-form" aria-label="Clave API de correo" onSubmit={event => void save(event, 'mail.api_key', apiKey)}>
           <label className="field">Clave de API · solo escritura
             <input type="password" autoComplete="new-password" value={apiKey} onChange={event => setApiKey(event.target.value)} minLength={8} required />
           </label>
           <Detail setting={setting('mail.api_key')} />
-          <button className="button" type="submit" disabled={busy || !data.secret_write_enabled}>Guardar clave</button>
-          <button className="button button-secondary" type="button" disabled={busy || !setting('mail.api_key').configured}
-            onClick={() => void deleteSecret('mail.api_key')}>Eliminar clave</button>
+          <div className="ui-form-actions">
+            <button className="button" type="submit" disabled={busy || !data.secret_write_enabled}>Guardar clave</button>
+            <button className="button button-secondary" type="button" disabled={busy || !setting('mail.api_key').configured}
+              onClick={() => void deleteSecret('mail.api_key')}>Eliminar clave</button>
+          </div>
         </form>
-        <form onSubmit={event => void sendTest(event)}>
+        <form className="ui-integration-form" aria-label="Correo de prueba" onSubmit={event => void sendTest(event)}>
           <label className="field">Destino del correo de prueba
             <input type="email" value={testRecipient} onChange={event => setTestRecipient(event.target.value)} required placeholder="destino@empresa.com" />
           </label>
-          <button className="button button-secondary" type="submit" disabled={busy || !data.test_email_enabled}>
-            Enviar correo de prueba
-          </button>
+          <div className="ui-form-actions">
+            <button className="button button-secondary" type="submit" disabled={busy || !data.test_email_enabled}>
+              Enviar correo de prueba
+            </button>
+          </div>
           {!data.test_email_enabled && <p className="muted">Envío de prueba deshabilitado hasta autorización expresa de live.</p>}
           <p className="muted">Máximo uno por minuto, aplicado por el servidor.</p>
         </form>
+        </div>
       </Card>
       <Card title="Observabilidad · Sentry">
+        <div className="ui-integration-content">
         <p className="muted">La captura Sentry permanece apagada hasta live.</p>
         {!data.secret_write_enabled && <p className="muted">La escritura del DSN requiere autorización expresa de live.</p>}
-        <form onSubmit={event => void save(event, 'sentry.dsn', sentryDsn)}>
+        <form className="ui-integration-form" aria-label="Observabilidad Sentry" onSubmit={event => void save(event, 'sentry.dsn', sentryDsn)}>
           <label className="field">DSN de Sentry · solo escritura
             <input type="password" autoComplete="new-password" value={sentryDsn} onChange={event => setSentryDsn(event.target.value)} minLength={8} required placeholder="https://…" />
           </label>
           <Detail setting={setting('sentry.dsn')} />
-          <button className="button" type="submit" disabled={busy || !data.secret_write_enabled}>Guardar DSN</button>
-          <button className="button button-secondary" type="button" disabled={busy || !setting('sentry.dsn').configured}
-            onClick={() => void deleteSecret('sentry.dsn')}>Eliminar DSN</button>
+          <div className="ui-form-actions">
+            <button className="button" type="submit" disabled={busy || !data.secret_write_enabled}>Guardar DSN</button>
+            <button className="button button-secondary" type="button" disabled={busy || !setting('sentry.dsn').configured}
+              onClick={() => void deleteSecret('sentry.dsn')}>Eliminar DSN</button>
+          </div>
         </form>
+        </div>
       </Card>
-      <Card title="Pagos"><StatusPill>Próximamente</StatusPill><p className="muted">La pasarela aún no está habilitada.</p></Card>
-      <Card title="Almacenamiento"><StatusPill>Próximamente</StatusPill><p className="muted">La gestión de proveedores de archivos aún no está habilitada.</p></Card>
+      <Card title="Pagos"><div className="ui-integration-content"><StatusPill>Próximamente</StatusPill><p className="muted">La pasarela aún no está habilitada.</p></div></Card>
+      <Card title="Almacenamiento"><div className="ui-integration-content"><StatusPill>Próximamente</StatusPill><p className="muted">La gestión de proveedores de archivos aún no está habilitada.</p></div></Card>
     </div>}
   </section>;
 }

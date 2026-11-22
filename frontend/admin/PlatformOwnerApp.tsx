@@ -919,7 +919,7 @@ export function PlatformOwnerApp({
           )}
 
           {!selected && currentSection === 'catalogo' && !plansView && !revenueView && (
-            <section className="platform-section ui-page" aria-label="Catálogo comercial de plataforma">
+            <section className="platform-section ui-page admin-form-layout-page" aria-label="Catálogo comercial de plataforma">
               <PageHeader title="Catálogo comercial"
                 description="Planes vigentes, cartera de empresas y uso observado. Datos canónicos solo de lectura."
                 actions={<a className="button button-secondary"
@@ -1020,7 +1020,7 @@ export function PlatformOwnerApp({
           )}
 
           {!selected && currentSection === 'empresas' && (
-            <section className="ui-page" aria-label="Gestión de empresas">
+            <section className="ui-page admin-form-layout-page" aria-label="Gestión de empresas">
               <PageHeader
                 title="Empresas"
                 description="Consulta las empresas registradas y elige el contexto que necesitas revisar."
@@ -1125,7 +1125,7 @@ export function PlatformOwnerApp({
           )}
 
           {!selected && currentSection === 'suscripciones' && (
-            <section className="platform-section ui-page" aria-label="Plan y suscripciones">
+            <section className="platform-section ui-page admin-form-layout-page" aria-label="Plan y suscripciones">
               <PageHeader title="Plan y suscripciones"
                 description="Consulta el estado, plan y vigencia de cada empresa. Los cambios se validan en el servidor."
                 actions={<button className="button button-secondary" type="button"

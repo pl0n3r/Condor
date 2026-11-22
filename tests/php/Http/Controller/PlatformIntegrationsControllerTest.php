@@ -6,6 +6,7 @@ namespace App\Tests\Http\Controller;
 
 use App\Application\Platform\PlatformIntegrationSettings;
 use App\Domain\Identity\Entity\User;
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
@@ -66,8 +67,8 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
         $client->jsonRequest('PUT', self::PATH, ['key' => 'sentry.dsn', 'value' => 'https://fake.invalid/8765']);
         self::assertResponseStatusCodeSame(403);
 
-        // El constructor de Sentry lee el DSN almacenado: no activar en fase
-        // construcción. La autorización aquí es solo sintética y temporal.
+        // La fase construcción no permite guardar secretos sin el flag del dueño.
+        // Estos datos sintéticos nunca deben activar un proveedor externo.
         $client->jsonRequest('PUT', self::PATH, [
             'key' => 'sentry.dsn', 'value' => 'https://synthetic.invalid/9876',
         ], ['HTTP_X_CSRF_TOKEN' => $data['csrf_token']]);
@@ -75,13 +76,35 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
 
         $oldPhase = getenv('CONDOR_PHASE');
         $oldWrite = getenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED');
-        putenv('CONDOR_PHASE=live');
+        $oldTestMail = getenv('CONDOR_PLATFORM_TEST_EMAIL_ENABLED');
+        putenv('CONDOR_PHASE=construccion');
+        putenv('CONDOR_PLATFORM_TEST_EMAIL_ENABLED=false');
         putenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED=true');
         $synthetic = 'https://fixture_secret_'.bin2hex(random_bytes(8)).'@sentry.synthetic.invalid/9876';
         try {
+            $client->request('GET', self::PATH);
+            self::assertResponseStatusCodeSame(200);
+            $enabled = self::responseData((string) $client->getResponse()->getContent());
+            self::assertTrue($enabled['secret_write_enabled']);
+            self::assertFalse($enabled['test_email_enabled']);
+
+            $client->loginUser($tenant);
             $client->jsonRequest('PUT', self::PATH, [
                 'key' => 'sentry.dsn', 'value' => $synthetic,
-            ], ['HTTP_X_CSRF_TOKEN' => $data['csrf_token']]);
+            ], ['HTTP_X_CSRF_TOKEN' => $enabled['csrf_token']]);
+            self::assertResponseStatusCodeSame(403);
+
+            $client->loginUser($owner);
+            $client->jsonRequest('PUT', self::PATH, [
+                'key' => 'sentry.dsn', 'value' => $synthetic,
+            ]);
+            self::assertResponseStatusCodeSame(403);
+            $client->request('GET', self::PATH);
+            $ownerToken = self::responseData((string) $client->getResponse()->getContent())['csrf_token'];
+
+            $client->jsonRequest('PUT', self::PATH, [
+                'key' => 'sentry.dsn', 'value' => $synthetic,
+            ], ['HTTP_X_CSRF_TOKEN' => $ownerToken]);
             self::assertResponseStatusCodeSame(200);
             $body = (string) $client->getResponse()->getContent();
             self::assertStringNotContainsString($synthetic, $body);
@@ -91,6 +114,27 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
             self::assertSame('••••9876', $safe['setting']['last4']);
             self::assertArrayNotHasKey('value', $safe['setting']);
             self::assertNotEmpty($safe['setting']['updated_at']);
+            $connection = self::getContainer()->get(Connection::class);
+            self::assertInstanceOf(Connection::class, $connection);
+            $stored = $connection->fetchAssociative(
+                'SELECT plain_value, encrypted_value, nonce, key_version '
+                .'FROM condor_platform_integration_setting WHERE setting_key = ?',
+                ['sentry.dsn'],
+            );
+            self::assertIsArray($stored);
+            self::assertNull($stored['plain_value']);
+            self::assertNotEmpty($stored['encrypted_value']);
+            self::assertNotEmpty($stored['nonce']);
+            self::assertSame(1, (int) $stored['key_version']);
+            self::assertStringNotContainsString($synthetic, (string) $stored['encrypted_value']);
+            $audit = $connection->fetchAssociative(
+                'SELECT action, actor_id FROM condor_platform_setting_audit '
+                .'WHERE setting_key = ? ORDER BY id DESC LIMIT 1',
+                ['sentry.dsn'],
+            );
+            self::assertIsArray($audit);
+            self::assertSame('UPSERT', $audit['action']);
+            self::assertSame($owner->id(), $audit['actor_id']);
             self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('private'));
             self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
 
@@ -101,7 +145,7 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
             self::assertSame('••••9876', self::responseData($redacted)['settings']['sentry.dsn']['last4']);
 
             $client->request('DELETE', self::PATH.'/secret/sentry.dsn', server: [
-                'HTTP_X_CSRF_TOKEN' => $data['csrf_token'],
+                'HTTP_X_CSRF_TOKEN' => $ownerToken,
             ]);
             self::assertResponseStatusCodeSame(200);
             self::assertFalse(self::responseData(
@@ -116,6 +160,9 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
             putenv($oldWrite === false
                 ? 'CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED'
                 : 'CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED='.$oldWrite);
+            putenv($oldTestMail === false
+                ? 'CONDOR_PLATFORM_TEST_EMAIL_ENABLED'
+                : 'CONDOR_PLATFORM_TEST_EMAIL_ENABLED='.$oldTestMail);
         }
     }
 
@@ -145,14 +192,19 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
     {
         $previousPhase = getenv('CONDOR_PHASE');
         $previousFlag = getenv('CONDOR_PLATFORM_TEST_EMAIL_ENABLED');
+        $previousWrite = getenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED');
         putenv('CONDOR_PHASE=construccion');
+        putenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED=true');
         putenv('CONDOR_PLATFORM_TEST_EMAIL_ENABLED=false');
         try {
             $client = self::createClient();
             $owner = $this->actor(true);
             $client->loginUser($owner);
             $client->request('GET', self::PATH);
-            $token = self::responseData((string) $client->getResponse()->getContent())['csrf_token'];
+            $snapshot = self::responseData((string) $client->getResponse()->getContent());
+            self::assertTrue($snapshot['secret_write_enabled']);
+            self::assertFalse($snapshot['test_email_enabled']);
+            $token = $snapshot['csrf_token'];
             for ($attempt = 0; $attempt < 2; ++$attempt) {
                 $client->jsonRequest('POST', self::PATH.'/test-email', [
                     'email' => 'destino-sintetico@example.test',
@@ -164,6 +216,9 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
             putenv($previousFlag === false
                 ? 'CONDOR_PLATFORM_TEST_EMAIL_ENABLED'
                 : 'CONDOR_PLATFORM_TEST_EMAIL_ENABLED='.$previousFlag);
+            putenv($previousWrite === false
+                ? 'CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED'
+                : 'CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED='.$previousWrite);
         }
     }
 }

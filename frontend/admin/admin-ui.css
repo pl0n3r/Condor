@@ -246,3 +246,82 @@ tbody tr:hover td { background: var(--zj); }
 .workspace-heading .branch-picker { min-width: 240px; }
 .workspace-heading .role-actions { display: flex; gap: 12px; }
 }
+
+/* #1930: lectura cómoda en formularios de propietario y tenant, sin cambiar las API. */
+@scope (.admin-shell) {
+  .workspace :is(form, fieldset, .platform-section, .ui-card, .field) { min-width: 0; }
+  .workspace form > :is(label, .field),
+  .workspace .platform-form .field,
+  .workspace .catalog-form-grid .field { width: min(100%, 48rem); max-width: 48rem; }
+  .workspace :is(form, .platform-form) :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    box-sizing: border-box; min-width: 0; max-width: 48rem;
+  }
+  .workspace .field:has(input:is([type="email"],[type="password"])) { max-width: 32rem; }
+  .workspace :is(.platform-form-grid, .catalog-form-grid) {
+    max-width: 52rem; grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace :is(.platform-form-actions, .catalog-actions) {
+    justify-content: flex-end; max-width: 48rem;
+  }
+  .workspace form > button,
+  .workspace form > .button,
+  .workspace :is(.platform-form-actions, .catalog-actions) .button,
+  .workspace .ui-page-actions .button {
+    width: max-content; max-width: 100%; justify-self: end;
+  }
+
+  /* Los componentes Card tienen padding cero: solo el cuerpo del proveedor
+     recibe padding y cada ajuste propio queda en un bloque discernible. */
+  .workspace .ui-integrations-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 32rem), 1fr));
+    gap: var(--zc); align-items: start;
+  }
+  .workspace .ui-integration-content { min-width: 0; display: grid; gap: 16px; padding: clamp(16px, 2vw, 24px); }
+  .workspace .ui-integration-form {
+    min-width: 0; width: 100%; display: grid; align-content: start; gap: 12px;
+    border: 1px solid var(--z1); border-radius: var(--zg);
+    padding: 16px; background: var(--zj); box-sizing: border-box;
+  }
+  .workspace .ui-integration-form .field { max-width: 38rem; }
+  .workspace .ui-integration-form .field input,
+  .workspace .ui-integration-form .field select { width: 100%; max-width: 100%; }
+  .workspace .ui-integration-status {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px;
+    color: var(--zd); font-size: .8125rem; font-weight: 500;
+  }
+  .workspace .ui-integration-status > .ui-pill { flex: 0 0 auto; }
+  .workspace .ui-form-actions {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    justify-content: flex-end; width: min(100%, 48rem);
+  }
+  .workspace .ui-form-actions > button { width: max-content; max-width: 100%; }
+  .workspace .ui-integration-form .button:disabled {
+    opacity: 1; color: #fff; background: #596579; border-color: #596579;
+  }
+  .workspace .ui-integration-form .button-secondary:disabled {
+    opacity: 1; color: #485468; background: #eceff3; border-color: #c9d0db;
+  }
+}
+@media (max-width: 700px) {
+  @scope (.admin-shell) {
+    .workspace :is(.platform-form-grid, .catalog-form-grid) { grid-template-columns: minmax(0, 1fr); }
+    .workspace .ui-integrations-grid { grid-template-columns: minmax(0, 1fr); }
+    .workspace .ui-integration-content { padding: 16px; }
+    .workspace .ui-integration-form { padding: 14px; }
+    .workspace :is(.ui-form-actions, .platform-form-actions, .catalog-actions) { justify-content: stretch; }
+    .workspace .ui-form-actions > button,
+    .workspace form.ui-integration-form > button,
+    .workspace .ui-page-actions > .button {
+      width: 100%; max-width: 100%; justify-self: stretch;
+    }
+  }
+}
+
+/* #1930: foco visible incluso si la navegación de formularios restaura el
+   elemento mediante focus() después de una operación asíncrona. */
+@scope (.admin-shell) {
+  .workspace .ui-integration-form :is(input, select, textarea):focus {
+    outline: 3px solid #1d4ed8;
+    outline-offset: 2px;
+  }
+}

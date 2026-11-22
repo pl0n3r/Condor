@@ -73,11 +73,11 @@ final class PlatformIntegrationsController extends PlatformOwnerApiController
             return $this->privateJson(['error' => 'Ajuste no válido.'], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
         // El resolver de correo y el bridge de Sentry consumen ajustes persistidos.
-        // Evitar activación indirecta en construcción: no admitir nuevos secretos
-        // hasta que el dueño haya autorizado expresamente live y configuración.
+        // Guardado de secretos solo tras habilitación explícita del dueño, en
+        // cualquier fase. No activa envíos, proveedores ni el uso del secreto.
         if (in_array($key, self::SECRET_KEYS, true) && !self::secretWriteEnabled()) {
             return $this->privateJson([
-                'error' => 'Las claves reales permanecen bloqueadas hasta la autorización de live.',
+                'error' => 'Guardar claves requiere habilitación explícita del propietario.',
             ], Response::HTTP_LOCKED);
         }
         if (!$this->writeLimiter->create($owner->id().':save:'.$key)->consume()->isAccepted()) {
@@ -140,7 +140,7 @@ final class PlatformIntegrationsController extends PlatformOwnerApiController
         }
         if (!self::testEmailEnabled()) {
             return $this->privateJson([
-                'error' => 'El envío real está deshabilitado hasta la autorización de live.',
+                'error' => 'El envío de prueba permanece deshabilitado sin autorización explícita.',
             ], Response::HTTP_LOCKED);
         }
         $payload = $this->jsonPayload($request);
@@ -196,13 +196,12 @@ final class PlatformIntegrationsController extends PlatformOwnerApiController
 
     private static function secretWriteEnabled(): bool
     {
-        return getenv('CONDOR_PHASE') === 'live'
-            && getenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED') === 'true';
+        return getenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED') === 'true';
     }
 
     private static function testEmailEnabled(): bool
     {
-        // Fail-closed por defecto. Construcción no habilita tráfico externo.
+        // El guardado de claves nunca habilita el envío de prueba por sí solo.
         return self::secretWriteEnabled()
             && getenv('CONDOR_PLATFORM_TEST_EMAIL_ENABLED') === 'true';
     }
