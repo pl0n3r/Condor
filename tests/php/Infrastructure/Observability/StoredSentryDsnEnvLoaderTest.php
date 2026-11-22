@@ -20,12 +20,12 @@ final class StoredSentryDsnEnvLoaderTest extends TestCase
         $this->master = bin2hex(random_bytes(32));
     }
 
-    public function testEncryptedOwnerDsnOverridesAnExistingEnvironmentDsn(): void
+    public function testExplicitEnvironmentDsnOverridesAnEncryptedOwnerDsn(): void
     {
         $dsn = 'https://fixture-key@fixture.ingest.sentry.io/123';
         $calls = 0;
         $db = $this->createMock(Connection::class);
-        $db->expects(self::once())->method('fetchAssociative')
+        $db->expects(self::never())->method('fetchAssociative')
             ->willReturnCallback(function (string $sql, array $params) use ($dsn, &$calls): array {
                 ++$calls;
                 self::assertStringContainsString('WHERE setting_key = ?', $sql);
@@ -35,13 +35,19 @@ final class StoredSentryDsnEnvLoaderTest extends TestCase
         $loader = $this->loader($db);
         self::assertInstanceOf(EnvVarLoaderInterface::class, $loader);
         self::assertInstanceOf(EnvVarProcessorInterface::class, $loader);
-        self::assertSame(['string' => 'string'], $loader::getProvidedTypes());
+        self::assertSame(['condor_sentry_dsn' => 'string'], $loader::getProvidedTypes());
 
-        $this->withEnvironmentDsn('https://env-key@backup.ingest.sentry.io/456', function () use ($loader, $dsn): void {
-            self::assertSame($dsn, $loader->getEnv('', 'SENTRY_DSN', $this->envGetter()));
-            self::assertSame($dsn, $loader->getEnv('string', 'SENTRY_DSN', $this->envGetter()));
+        $this->withEnvironmentDsn('https://env-key@backup.ingest.sentry.io/456', function () use ($loader): void {
+            self::assertSame(
+                'https://env-key@backup.ingest.sentry.io/456',
+                $loader->getEnv('condor_sentry_dsn', 'SENTRY_DSN', $this->envGetter()),
+            );
+            self::assertSame(
+                'https://env-key@backup.ingest.sentry.io/456',
+                $loader->getEnv('string', 'SENTRY_DSN', $this->envGetter()),
+            );
         });
-        self::assertSame(1, $calls, 'Debe consultar una sola vez el almacén.');
+        self::assertSame(0, $calls, 'El entorno explícito no debe consultar el almacén.');
     }
 
     public function testShortProcessCacheRefreshesAfterExpiry(): void
@@ -52,13 +58,13 @@ final class StoredSentryDsnEnvLoaderTest extends TestCase
         $db->expects(self::exactly(2))->method('fetchAssociative')
             ->willReturnOnConsecutiveCalls($this->encryptedRow($first), $this->encryptedRow($second));
         $loader = $this->loader($db);
-        self::assertSame($first, $loader->getEnv('', 'SENTRY_DSN', $this->envGetter()));
-        self::assertSame($first, $loader->getEnv('', 'SENTRY_DSN', $this->envGetter()));
+        self::assertSame($first, $loader->getEnv('condor_sentry_dsn', 'SENTRY_DSN', $this->envGetter()));
+        self::assertSame($first, $loader->getEnv('condor_sentry_dsn', 'SENTRY_DSN', $this->envGetter()));
 
         // Simulate passage of time without waiting or mutating the clock.
         $expiry = new \ReflectionProperty($loader, 'cacheExpiresAt');
         $expiry->setValue($loader, time() - 1);
-        self::assertSame($second, $loader->getEnv('', 'SENTRY_DSN', $this->envGetter()));
+        self::assertSame($second, $loader->getEnv('condor_sentry_dsn', 'SENTRY_DSN', $this->envGetter()));
     }
 
     public function testStoredDsnWinsWithNoEnvironmentVariable(): void
@@ -67,7 +73,7 @@ final class StoredSentryDsnEnvLoaderTest extends TestCase
         $db = $this->createMock(Connection::class);
         $db->method('fetchAssociative')->willReturn($this->encryptedRow($dsn));
         $this->withEnvironmentDsn(null, function () use ($db, $dsn): void {
-            self::assertSame($dsn, $this->loader($db)->getEnv('', 'SENTRY_DSN', $this->envGetter()));
+            self::assertSame($dsn, $this->loader($db)->getEnv('condor_sentry_dsn', 'SENTRY_DSN', $this->envGetter()));
         });
     }
 
@@ -77,21 +83,21 @@ final class StoredSentryDsnEnvLoaderTest extends TestCase
         $db->method('fetchAssociative')->willReturn(false);
         $loader = $this->loader($db);
         $this->withEnvironmentDsn('https://backup.ingest.sentry.io/321', function () use ($loader): void {
-            self::assertSame('https://backup.ingest.sentry.io/321', $loader->getEnv('', 'SENTRY_DSN', $this->envGetter()));
+            self::assertSame('https://backup.ingest.sentry.io/321', $loader->getEnv('condor_sentry_dsn', 'SENTRY_DSN', $this->envGetter()));
         });
         $this->withEnvironmentDsn(null, function () use ($loader): void {
-            self::assertSame('', $loader->getEnv('', 'SENTRY_DSN', $this->envGetter()));
+            self::assertSame('', $loader->getEnv('condor_sentry_dsn', 'SENTRY_DSN', $this->envGetter()));
         });
     }
 
-    public function testDatabaseFailureDoesNotThrowAndUsesEnvironment(): void
+    public function testDatabaseFailureReturnsDisabledWithoutEnvironment(): void
     {
         $db = $this->createMock(Connection::class);
         $db->method('fetchAssociative')->willThrowException(new \RuntimeException('synthetic-db-down'));
-        $this->withEnvironmentDsn('https://backup.ingest.sentry.io/321', function () use ($db): void {
+        $this->withEnvironmentDsn(null, function () use ($db): void {
             self::assertSame(
-                'https://backup.ingest.sentry.io/321',
-                $this->loader($db)->getEnv('', 'SENTRY_DSN', $this->envGetter()),
+                '',
+                $this->loader($db)->getEnv('condor_sentry_dsn', 'SENTRY_DSN', $this->envGetter()),
             );
         });
     }
@@ -104,7 +110,7 @@ final class StoredSentryDsnEnvLoaderTest extends TestCase
         $invalid['nonce'] = base64_encode('invalid-nonce');
         $db->method('fetchAssociative')->willReturn($invalid);
         $this->withEnvironmentDsn(null, function () use ($db): void {
-            self::assertSame('', $this->loader($db)->getEnv('', 'SENTRY_DSN', $this->envGetter()));
+            self::assertSame('', $this->loader($db)->getEnv('condor_sentry_dsn', 'SENTRY_DSN', $this->envGetter()));
         });
 
         $placeholderDb = $this->createMock(Connection::class);
@@ -205,10 +211,14 @@ final class StoredSentryDsnEnvLoaderTest extends TestCase
         try {
             $assertions();
         } finally {
-            if ($oldEnv !== null) {
+            if ($oldEnv === null) {
+                unset($_ENV['SENTRY_DSN']);
+            } else {
                 $_ENV['SENTRY_DSN'] = $oldEnv;
             }
-            if ($oldServer !== null) {
+            if ($oldServer === null) {
+                unset($_SERVER['SENTRY_DSN']);
+            } else {
                 $_SERVER['SENTRY_DSN'] = $oldServer;
             }
             if ($oldProcess === false) {
