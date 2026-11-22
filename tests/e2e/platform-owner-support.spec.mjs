@@ -59,7 +59,7 @@ test.describe('Propietario — soporte temporal por empresa', () => {
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Abrir panel de la empresa' }).click();
     await expect(page).toHaveURL(/\/admin#human-resources-management$/);
-    await expect(page.getByRole('status')).toContainText(tenantName);
+    await expect(page.getByRole('status').filter({ hasText: 'Soporte de propietario' })).toContainText(tenantName);
     const adminNav = page.getByRole('navigation', { name: 'Navegación principal' });
     await expect(adminNav.getByRole('button', { name: 'Personas', exact: true })).toBeVisible();
     await expect(adminNav.getByRole('button', { name: 'Administración', exact: true })).toBeVisible();
