@@ -12,6 +12,7 @@ use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Sentry\SentrySdk;
+use Sentry\State\Hub;
 
 /**
  * Real production-kernel wiring on a throwaway MariaDB fixture.
@@ -93,6 +94,12 @@ final class StoredSentryDsnBootTest extends TestCase
         self::assertSame($explicit, $this->bootAndReadDsn($explicit));
     }
 
+    public function testProdKernelTreatsAnExplicitEmptyDsnAsDisabled(): void
+    {
+        $this->seed('https://stored-fixture@sentry.invalid/123');
+        self::assertNull($this->bootAndReadDsn(''));
+    }
+
     private function seed(string $dsn): void
     {
         self::assertNotNull($this->settings);
@@ -130,6 +137,10 @@ final class StoredSentryDsnBootTest extends TestCase
         }
         putenv('CONDOR_EPHEMERAL_CACHE=1');
 
+        // SentrySdk stores a process-wide hub; another case can otherwise
+        // leave the previous fixture client installed even after shutdown.
+        $previousHub = SentrySdk::getCurrentHub();
+        SentrySdk::setCurrentHub(new Hub());
         $kernel = new Kernel('prod', false);
         try {
             $kernel->boot();
@@ -139,6 +150,7 @@ final class StoredSentryDsnBootTest extends TestCase
             return $dsn === null ? null : (string) $dsn;
         } finally {
             $kernel->shutdown();
+            SentrySdk::setCurrentHub($previousHub);
             if ($env === null) {
                 unset($_ENV['SENTRY_DSN']);
             } else {
