@@ -552,18 +552,19 @@ export function FinanceRealManagement({
                 {row.state === 'PENDIENTE' ? 'Pendiente' : 'Requiere revisión'}
               </StatusPill> },
           ]} empty={<div role="status">
-            <strong>{searchReal.trim() || stateFilterReal !== 'TODOS'
-              ? 'No se encontraron registros financieros'
-              : 'Aún no hay registros financieros'}</strong>
-            <p>{searchReal.trim() || stateFilterReal !== 'TODOS'
-              ? 'Prueba con otro estado o referencia.'
-              : 'Crea un primer registro para organizar su revisión desde aquí.'}</p>
-            {searchReal.trim() || stateFilterReal !== 'TODOS'
-              ? <button className="button button-secondary" type="button" onClick={() => {
-                  setSearchReal(''); setStateFilterReal('TODOS');
-                }}>Limpiar filtros</button>
-              : canCreate && <button className="button" type="button"
-                  onClick={() => setPanel('create')}>Crear primer registro financiero</button>}
+            {searchReal.trim() || stateFilterReal !== 'TODOS' ? <>
+              <strong>No se encontraron registros financieros</strong>
+              <p>Prueba con otro estado o referencia.</p>
+              <button className="button button-secondary" type="button"
+                onClick={() => { setSearchReal(''); setStateFilterReal('TODOS'); }}>
+                Limpiar filtros
+              </button>
+            </> : <>
+              <strong>Aún no hay registros financieros</strong>
+              <p>Crea un primer registro para organizar su revisión desde aquí.</p>
+              {canCreate && <button className="button" type="button"
+                onClick={() => setPanel('create')}>Crear primer registro financiero</button>}
+            </>}
           </div>} />
       </section>
     </>}
