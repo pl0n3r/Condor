@@ -175,6 +175,9 @@ async function collect(page, browser, flow, testInfo) {
 for (const flow of FLOWS) {
   test('Web Vitals y axe · ' + flow, async ({ page, browser }, testInfo) => {
     test.setTimeout(90_000);
+    // La CI global ejecuta todos los E2E; esta matriz exige su job aislado,
+    // que instala axe-core y declara explícitamente el SHA exacto.
+    if (!HEAD) test.skip(true, 'Se valida en el workflow Web Vitals dedicado');
     ensureDisposable();
     if (!process.env.E2E_EMAIL || !process.env.E2E_PLATFORM_EMAIL ||
         !process.env.E2E_PASSWORD) {
