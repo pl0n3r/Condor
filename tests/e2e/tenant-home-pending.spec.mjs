@@ -195,6 +195,7 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
   test('antes histórico: React original con fixture sintético a 390/1440 px', async ({ page }, testInfo) => {
     await page.goto(origin + '/admin?view=before');
     await expect(page.locator('link[rel="stylesheet"]')).toHaveAttribute('href', '/styles.css');
+    await expect(page.locator('body')).toHaveCSS('margin', '0px');
     await expect(page.getByRole('heading', { name: 'Módulos' })).toBeVisible();
     await expect(page.getByText('Permisos efectivos')).toBeVisible();
     // Regresión del before auténtico: tres grupos de directorio y navegación heredada.
@@ -215,6 +216,7 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
     const called = await mockApi(page);
     await page.goto(origin + '/admin');
     await expect(page.locator('link[rel="stylesheet"]')).toHaveAttribute('href', '/styles.css');
+    await expect(page.locator('body')).toHaveCSS('margin', '0px');
     await expect(page.getByRole('heading', { name: 'Para hoy' })).toBeVisible();
     const entries = [
       ['Pedidos por despachar: 2', '/admin#orders'],
