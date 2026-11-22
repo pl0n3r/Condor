@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Condor #1342: ejecutar PHP REAL en cinco contratos locales parciales.
 
-El resto se clasifica B/C/D; ninguna fila llega a CUBIERTO por este test.
+El comportamiento PHP parcial no determina por sí solo el estado de una fila.
 No se prueban copias, continuidad, poderes legales, datos reales ni go-live.
 """
 from __future__ import annotations
@@ -10,11 +10,16 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / "docs/matriz-cobertura.md"
+TESTS = ROOT / "tests"
+if str(TESTS) not in sys.path:
+    sys.path.insert(0, str(TESTS))
+from test_cobertura_condor_20 import verify_coverage_row, unproven_promotion
 SPEC = "docs/gestion-empresarial-integral.md"
 BT = chr(96)
 TITLES = {
@@ -158,10 +163,11 @@ def matrix_rows(raw: object) -> dict[str, str]:
             cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
             if (key in rows or len(cells) != 5
                     or cells[0] != BT + key + BT + " · " + BT + SPEC + BT
-                    or cells[1] != title or cells[2] != BT + "NO_VERIFICABLE" + BT
+                    or cells[1] != title or cells[2] not in (BT + "NO_VERIFICABLE" + BT, BT + "CUBIERTO" + BT)
                     or cells[4] != "#802" or key not in cells[3]):
                 raise ValueError("UNKNOWN: malformed, duplicate or promoted " + key)
-            rows[key] = "NO_VERIFICABLE"
+            verify_coverage_row(key, cells)
+            rows[key] = cells[2].strip(BT)
     if set(rows) != set(TITLES):
         raise ValueError("UNKNOWN: incomplete coverage matrix")
     return rows
@@ -216,7 +222,7 @@ class CoberturaCondor23Tests(unittest.TestCase):
             for corrupt in (
                 self.raw.replace(line + "\n", "", 1),
                 self.raw + "\n" + line,
-                self.raw.replace(line, line.replace("NO_VERIFICABLE", "CUBIERTO"), 1),
+                self.raw.replace(line, unproven_promotion(line), 1),
             ):
                 with self.subTest(code=key):
                     with self.assertRaisesRegex(ValueError, "UNKNOWN"):
@@ -235,7 +241,7 @@ class CoberturaCondor23Tests(unittest.TestCase):
         for key, (category, reason) in NOT_OFFLINE.items():
             self.assertIn(category, ("B", "C", "D"))
             self.assertTrue(reason)
-            self.assertEqual(self.rows[key], "NO_VERIFICABLE")
+            self.assertIn(self.rows[key], ("NO_VERIFICABLE", "CUBIERTO"))
 
     def test_ci_gate_contract(self) -> None:
         self.assertEqual(len(self.rows), 12)

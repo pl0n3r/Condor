@@ -22,6 +22,7 @@ if str(TESTS) not in sys.path:
 
 import test_m10_activos as assets
 import test_assets_http_api as asset_api
+from test_cobertura_condor_20 import verify_coverage_row, unproven_promotion
 
 MATRIX = ROOT / "docs/matriz-cobertura.md"
 A = {
@@ -33,14 +34,14 @@ A = {
     "GEST-M10-S03": "AssetRegisterLifecycle: real responsible reference and synthetic assignment, not an HR identity",
     "GEST-M10-S07": "AssetApiService: real evidence-gated transition and audit, no authentic attachment storage",
 }
-D = {
+PENDING_INTEGRAL = {
     "GEST-M08-S07": "No authorized versioned export generator, download or redacted document package is implemented",
-    "GEST-M09-S03": "Procurement requisition submission and approval workflow is not implemented",
-    "GEST-M09-S06": "Versioned supplier evaluation and objective scoring workflow is not implemented",
-    "GEST-M09-S07": "Supplier contract lifecycle, sign-off and immutable contract evidence are not implemented",
-    "GEST-M09-S08": "Accounts-payable ledger, reconciliation and payable authorization are not implemented",
+    "GEST-M09-S03": "No se ha demostrado integralmente la requisición y aprobación por entidad legal",
+    "GEST-M09-S06": "No se ha demostrado integralmente evaluación versionada y puntuación de proveedores",
+    "GEST-M09-S07": "No se ha demostrado integralmente ciclo contractual, firma y evidencia inmutable",
+    "GEST-M09-S08": "No se ha demostrado integralmente libro de pagos, conciliación y autorización",
 }
-IDS = frozenset(A) | frozenset(D)
+IDS = frozenset(A) | frozenset(PENDING_INTEGRAL)
 PROJECT_PHP = r"""
 require $argv[1];
 $cls = $argv[2];
@@ -83,9 +84,10 @@ def rows_from(raw: str) -> dict[str, tuple[str, ...]]:
         key = match.group(1)
         cols = tuple(piece.strip() for piece in line.strip("|").split("|"))
         if (key in rows or len(cols) != 5
-                or cols[2] != "`NO_VERIFICABLE`"
+                or cols[2] not in ("`NO_VERIFICABLE`", "`CUBIERTO`")
                 or cols[4] != "#802" or not all(cols)):
             raise ValueError("UNKNOWN: malformed or promoted " + key)
+        verify_coverage_row(key, cols)
         rows[key] = cols
     if set(rows) != IDS or len(rows) != 12:
         raise ValueError("UNKNOWN: incomplete twelve-row scope")
@@ -236,16 +238,16 @@ namespace {
 
 class CoberturaCondor21Tests(unittest.TestCase):
     def test_contrato_principal(self) -> None:
-        """AC-01: real runtime for seven A subcontrols; five absent functions D."""
+        """AC-01: PHP real parcial y cinco alcances integrales aún sin evidencia suficiente."""
         rows = rows_from(MATRIX.read_text(encoding="utf-8"))
         self.assertEqual(len(A), 7)
-        self.assertEqual(len(D), 5)
+        self.assertEqual(len(PENDING_INTEGRAL), 5)
         for code, row in rows.items():
             with self.subTest(row=code):
                 self.assertIn(code, row[0])
-                self.assertIn("NO_VERIFICABLE", row[2])
-                if code in D:
-                    self.assertGreater(len(D[code]), 35)
+                self.assertIn(row[2], ("`CUBIERTO`", "`NO_VERIFICABLE`"))
+                if code in PENDING_INTEGRAL:
+                    self.assertGreater(len(PENDING_INTEGRAL[code]), 35)
 
         doc = php_run(
             PROJECT_PHP, ROOT / "src/Application/Documents/DocumentApprovalRetention.php",
@@ -309,6 +311,30 @@ class CoberturaCondor21Tests(unittest.TestCase):
         self.assertEqual("fixture:evidence/acta", changes[2]["evidence_ref"])
         self.assertIn("synthetic.state_changed", changes[-1]["audits"])
 
+    def test_promocion_m09_triada_sintetica(self) -> None:
+        """Una promoción con tríada existente pasa; sin PR/código/prueba, falla."""
+        matrix = MATRIX.read_text(encoding="utf-8")
+        row = next(line for line in matrix.splitlines()
+                   if line.startswith("| \x60GEST-M09-S01\x60 · "))
+        proof = (" TRIADA_COBERTURA: codigo=\x60src/Domain/Purchasing/Entity/Supplier.php\x60;"
+                 " prueba=\x60tests/test_cobertura_condor_21.py\x60;"
+                 " PR [#1390 MERGED](https://github.com/pl0n3r/Condor/pull/1390)")
+        candidate = unproven_promotion(row).replace(" | #802 |", proof + " | #802 |", 1)
+        self.assertEqual("\x60CUBIERTO\x60",
+                         rows_from(matrix.replace(row, candidate, 1))["GEST-M09-S01"][2])
+        for corrupted in (
+            candidate.replace("PR [#1390 MERGED]", "PR [#1390 PENDING]", 1),
+            candidate.replace("PR [#1390 MERGED](https://github.com/pl0n3r/Condor/pull/1390)",
+                              "PR [#1390 MERGED](https://github.com/pl0n3r/Condor/pull/1392)", 1),
+            candidate.replace("codigo=\x60src/Domain/Purchasing/Entity/Supplier.php\x60",
+                              "codigo=\x60src/Domain/Purchasing/Entity/Desconocido.php\x60", 1),
+            candidate.replace("prueba=\x60tests/test_cobertura_condor_21.py\x60",
+                              "prueba=\x60tests/test_inexistente.py\x60", 1),
+        ):
+            with self.subTest(corrupted=corrupted[-80:]):
+                with self.assertRaisesRegex(ValueError, "UNKNOWN"):
+                    rows_from(matrix.replace(row, corrupted, 1))
+
     def test_falla_cerrado(self) -> None:
         """AC-02: invalid scopes, authorizations and amounts do not produce effects."""
         matrix = MATRIX.read_text(encoding="utf-8")
@@ -318,7 +344,7 @@ class CoberturaCondor21Tests(unittest.TestCase):
         for corrupt in (
             matrix.replace(first, "", 1),
             matrix + "\n" + first,
-            matrix.replace(first, first.replace("NO_VERIFICABLE", "CUBIERTO"), 1),
+            matrix.replace(first, unproven_promotion(first), 1),
         ):
             with self.assertRaisesRegex(ValueError, "UNKNOWN"):
                 rows_from(corrupt)
@@ -390,9 +416,9 @@ class CoberturaCondor21Tests(unittest.TestCase):
             location = ("src/Application/Purchasing/" if name == "QuotationPreview.php"
                         else "src/Application/Purchasing/") + name
             self.assertTrue((ROOT / location).is_file())
-        self.assertFalse(any(key in D for key in A))
-        self.assertNotIn("CUBIERTO", "\n".join(row[2] for row in
-                         rows_from(MATRIX.read_text(encoding="utf-8")).values()))
+        self.assertFalse(any(key in PENDING_INTEGRAL for key in A))
+        self.assertTrue(all(row[2] in ("`NO_VERIFICABLE`", "`CUBIERTO`") for row in
+                            rows_from(MATRIX.read_text(encoding="utf-8")).values()))
 
 
 if __name__ == "__main__":
