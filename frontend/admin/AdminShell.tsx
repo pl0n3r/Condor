@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { PlatformAuditPanel } from './PlatformAuditPanel';
+import './admin-nav.css';
 
 /** El laboratorio solo existe en desarrollo; no activa datos ficticios en producción. */
 const DesignReference = import.meta.env.DEV
@@ -54,24 +55,23 @@ function itemIsCurrent(item: AdminNavItem, hash: string): boolean {
   return at >= 0 && hash !== '' && item.href.slice(at) === hash;
 }
 
-/** Grupo plegable: el panel anima su altura con grid-template-rows (sin medir) y el chevron se voltea. */
-function NavGroup({ entry, hash }: Readonly<{ entry: AdminNavGroup; hash: string }>) {
-  const hasCurrent = entry.items.some((item) => itemIsCurrent(item, hash));
-  const [open, setOpen] = useState(hasCurrent);
+/** Una única expansión por shell, compartida por la navegación de escritorio y el drawer. */
+function NavGroup({ entry, hash, expanded, onToggle, onNavigate }: Readonly<{
+  entry: AdminNavGroup;
+  hash: string;
+  expanded: boolean;
+  onToggle: () => void;
+  onNavigate?: () => void;
+}>) {
   const panelId = useId();
-
-  useEffect(() => {
-    if (hasCurrent) setOpen(true);
-  }, [hasCurrent]);
-
   return (
-    <div className="nav-group t-acc" data-open={open ? 'true' : 'false'}>
+    <div className="nav-group t-acc" data-open={expanded ? 'true' : 'false'}>
       <button
         type="button"
         className="nav-group-head t-acc-head"
-        aria-expanded={open}
+        aria-expanded={expanded}
         aria-controls={panelId}
-        onClick={() => setOpen((value) => !value)}
+        onClick={onToggle}
       >
         <NavIcon name={entry.icon} />
         <span>{entry.group}</span>
@@ -82,12 +82,13 @@ function NavGroup({ entry, hash }: Readonly<{ entry: AdminNavGroup; hash: string
           </svg>
         </span>
       </button>
-      <div className="t-acc-panel" id={panelId} inert={!open || undefined}>
+      <div className="t-acc-panel" id={panelId} inert={!expanded || undefined}>
         <div className="t-acc-panel-inner">
           {entry.items.map((item) => (
             <a
               className="nav-sub"
               href={item.href}
+              onClick={onNavigate}
               aria-current={itemIsCurrent(item, hash) ? 'page' : undefined}
               key={item.href}
             >
@@ -115,9 +116,12 @@ function isGroup(entry: AdminNavEntry): entry is AdminNavGroup {
 }
 
 /** Enlace suelto, compatible con PlatformOwnerApp; el estado actual conserva su semántica ARIA. */
-function StandaloneNavLink({ item }: Readonly<{ item: AdminNavItem }>) {
+function StandaloneNavLink({ item, onNavigate }: Readonly<{
+  item: AdminNavItem;
+  onNavigate?: () => void;
+}>) {
   return (
-    <a href={item.href} aria-current={item.current ? 'page' : undefined}>
+    <a href={item.href} aria-current={item.current ? 'page' : undefined} onClick={onNavigate}>
       <NavIcon name={item.icon} />
       <span>{item.label}</span>
     </a>
@@ -361,6 +365,8 @@ export function AdminShell({
   const hash = useLocationHash();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileNavId = useId();
+  const mobileDialogRef = useRef<HTMLDialogElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [supportCloseError, setSupportCloseError] = useState('');
   const [supportCloseBusy, setSupportCloseBusy] = useState(false);
   const supportRoot = typeof document === 'undefined'
@@ -437,50 +443,115 @@ export function AdminShell({
         : hit.href.slice(hit.href.indexOf('#') + 1);
     }
   }
+  // El grupo de la ruta activa tiene prioridad; el último grupo elegido se conserva
+  // únicamente en esta sesión. Un segundo clic lo repliega sin abrir otros.
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(() => {
+    if (activeGroup) return activeGroup;
+    try { return window.sessionStorage.getItem('condor:admin-nav:' + variant) || null; }
+    catch { return null; }
+  });
+  useEffect(() => {
+    if (activeGroup) setExpandedGroup(activeGroup);
+  }, [activeGroup]);
+  useEffect(() => {
+    try { window.sessionStorage.setItem('condor:admin-nav:' + variant, expandedGroup || ''); }
+    catch { /* navegadores con almacenamiento deshabilitado */ }
+  }, [expandedGroup, variant]);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 860px)');
+    const onChange = () => {
+      if (!query.matches) mobileDialogRef.current?.close();
+    };
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  const renderNavigation = (mobile = false) => visibleNav.map((entry) => (
+    isGroup(entry) ? (
+      <NavGroup
+        entry={entry} hash={hash} key={entry.group}
+        onNavigate={mobile ? () => mobileDialogRef.current?.close() : undefined}
+        expanded={expandedGroup === entry.group}
+        onToggle={() => setExpandedGroup((current) => current === entry.group ? null : entry.group)}
+      />
+    ) : (
+      <StandaloneNavLink
+        key={entry.href}
+        onNavigate={mobile ? () => mobileDialogRef.current?.close() : undefined}
+        item={entry.current && sectionInGroup ? { ...entry, current: false } : entry}
+      />
+    )
+  ));
+  const moduleName = activeLabel || (variant === 'platform' ? 'Plataforma' : 'Inicio');
   return (
     <section
       className={'admin-shell admin-shell-' + variant}
       aria-label={ariaLabel}
     >
-      <aside className="sidebar" data-mobile-open={mobileMenuOpen ? 'true' : 'false'}>
+      <header className="mobile-module-header">
+        <div className="mobile-module-identity">
+          <span>Condor App</span>
+          <strong>{moduleName}</strong>
+        </div>
+        <button
+          ref={menuButtonRef}
+          className="mobile-nav-toggle"
+          type="button"
+          aria-label="Mostrar menú"
+          aria-haspopup="dialog"
+          aria-controls={mobileNavId}
+          aria-expanded={mobileMenuOpen}
+          onClick={() => {
+            if (mobileDialogRef.current && !mobileDialogRef.current.open) {
+              mobileDialogRef.current.showModal();
+              setMobileMenuOpen(true);
+            }
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+            fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+          <span aria-hidden="true">Menú</span>
+        </button>
+      </header>
+      <aside className="sidebar">
         <div className="brand-block">
           <strong>Condor App</strong>
           <span>V {version}</span>
-          <button
-            className="mobile-menu-toggle"
-            type="button"
-            aria-controls={mobileNavId}
-            aria-expanded={mobileMenuOpen}
-            onClick={() => setMobileMenuOpen((open) => !open)}
-          >
-            {mobileMenuOpen ? 'Ocultar menú' : 'Mostrar menú'}
-          </button>
         </div>
-
-        <nav id={mobileNavId} aria-label={navLabel}>
-          {visibleNav.map((entry) => (
-            isGroup(entry) ? (
-              <NavGroup entry={entry} hash={hash} key={entry.group} />
-            ) : (
-              <StandaloneNavLink
-                key={entry.href}
-                item={entry.current && sectionInGroup ? { ...entry, current: false } : entry}
-              />
-            )
-          ))}
-        </nav>
-
+        <nav aria-label={navLabel}>{renderNavigation()}</nav>
         <form method="post" action="/admin/logout">
-          <input
-            type="hidden"
-            name="_csrf_token"
-            value={logoutToken}
-          />
-          <button className="button button-secondary" type="submit">
-            Cerrar sesión
-          </button>
+          <input type="hidden" name="_csrf_token" value={logoutToken} />
+          <button className="button button-secondary" type="submit">Cerrar sesión</button>
         </form>
       </aside>
+      <dialog
+        ref={mobileDialogRef}
+        id={mobileNavId}
+        className="admin-nav-drawer"
+        aria-label="Menú de navegación"
+        onClose={() => {
+          setMobileMenuOpen(false);
+          menuButtonRef.current?.focus();
+        }}
+      >
+        <div className="admin-nav-drawer-head">
+          <div><strong>Condor App</strong><span>V {version}</span></div>
+          <button className="admin-nav-close" type="button" autoFocus
+            aria-label="Cerrar navegación · Ocultar menú"
+            aria-expanded={mobileMenuOpen}
+            onClick={() => mobileDialogRef.current?.close()}>
+            Cerrar navegación
+          </button>
+        </div>
+        <nav aria-label={navLabel}>
+          {mobileMenuOpen ? renderNavigation(true) : null}
+        </nav>
+        <form method="post" action="/admin/logout">
+          <input type="hidden" name="_csrf_token" value={logoutToken} />
+          <button className="button button-secondary" type="submit">Cerrar sesión</button>
+        </form>
+      </dialog>
 
       <main className="workspace" aria-label="Área de trabajo" data-module={/^[a-z0-9-]+$/.test(activeId) ? activeId : 'inicio'}>
         {supportMode && (
