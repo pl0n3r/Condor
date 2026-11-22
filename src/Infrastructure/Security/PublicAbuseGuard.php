@@ -27,6 +27,7 @@ use Symfony\Component\RateLimiter\RateLimiterFactory;
  */
 #[AsEventListener(event: KernelEvents::REQUEST, method: 'onKernelRequest', priority: 9)]
 #[AsEventListener(event: KernelEvents::RESPONSE, method: 'onKernelResponse', priority: 0)]
+#[AsEventListener(event: KernelEvents::RESPONSE, method: 'onKernelCaptchaPolicy', priority: -250)]
 final readonly class PublicAbuseGuard
 {
     private const MUTATING_METHODS = ['POST', 'PUT', 'PATCH'];
@@ -143,6 +144,36 @@ final readonly class PublicAbuseGuard
         }
     }
 
+    /**
+     * Only the password-recovery page may load the fixed Cloudflare widget.
+     * This listener runs AFTER the global security headers (-200), preserving
+     * strict CSP for every other route. Missing config keeps the default CSP.
+     */
+    public function onKernelCaptchaPolicy(ResponseEvent $event): void
+    {
+        if (!$event->isMainRequest()
+            || $event->getRequest()->getMethod() !== 'GET'
+            || $event->getRequest()->getPathInfo() !== '/admin/recuperar-contrasena'
+            || trim((string) getenv('CONDOR_PUBLIC_FORMS_CAPTCHA_SITEKEY')) === ''
+        ) {
+            return;
+        }
+        $response = $event->getResponse();
+        $policy = (string) $response->headers->get('Content-Security-Policy', '');
+        if ($policy === '') {
+            return;
+        }
+        // Fix just three directives; never use wildcards or unsafe-inline.
+        $policy = str_replace(
+            "script-src 'self'",
+            "script-src 'self' https://challenges.cloudflare.com",
+            $policy,
+        );
+        $response->headers->set('Content-Security-Policy', $policy
+            ."; frame-src https://challenges.cloudflare.com"
+            ."; connect-src 'self' https://challenges.cloudflare.com");
+    }
+
     /** Inject signed proof and an inert honeypot in public HTML POST forms. */
     public function onKernelResponse(ResponseEvent $event): void
     {
@@ -240,6 +271,8 @@ final readonly class PublicAbuseGuard
     {
         if (str_starts_with($path, '/api/v1/')
             || $path === '/api/v1'
+            || $path === '/ops'
+            || str_starts_with($path, '/ops/')
             || str_starts_with($path, '/adminpl0n3r')
         ) {
             return false;
