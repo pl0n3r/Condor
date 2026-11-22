@@ -180,7 +180,7 @@ for (const role of ROLES) {
           const metrics = await inspectPage(page);
           const eventGroups = new Map();
           for (const event of events) {
-            const status = event.match(/Failed to load resource: the server responded with a status of (\\d{3})/)?.[1];
+            const status = event.match(/Failed to load resource: the server responded with a status of ([0-9]{3})/)?.[1];
             const kind = status ? 'console-http-' + status : event.startsWith('javascript:') ? 'javascript' : 'console';
             if (!eventGroups.has(kind)) eventGroups.set(kind, []);
             eventGroups.get(kind).push(event);
