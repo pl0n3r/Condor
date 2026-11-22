@@ -219,7 +219,11 @@ test.describe('Condor #1963: un trabajo por pantalla con estados de primer uso',
     await expect(page.getByText('No hay registros para este filtro.')).toHaveCount(0);
     await expect(page.locator('#payroll-management .ui-metrics')).toHaveCount(0);
     await evidence(page, info, 'nomina', 'after', 390);
-    await page.getByRole('button', { name: 'Registra la primera nómina' }).click();
+    const firstPayroll = page.getByRole('button', { name: 'Registra la primera nómina' });
+    await firstPayroll.focus();
+    await expect(firstPayroll).toBeFocused();
+    // La acción principal de primer uso también debe funcionar con teclado.
+    await page.keyboard.press('Enter');
     await expect(page.getByRole('dialog', { name: 'Nuevo registro de nómina' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Nuevo registro de nómina' })).toBeHidden();
