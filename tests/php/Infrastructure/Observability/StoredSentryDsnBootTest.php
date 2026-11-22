@@ -133,7 +133,12 @@ final class StoredSentryDsnBootTest extends TestCase
         if ($explicit === null) {
             putenv('SENTRY_DSN');
         } else {
+            // Mirror a real explicit server value in all runtime sources.
+            // Symfony's dotenv bootstrap may otherwise populate an empty
+            // superglobal ahead of getenv(), hiding the requested override.
             putenv('SENTRY_DSN='.$explicit);
+            $_ENV['SENTRY_DSN'] = $explicit;
+            $_SERVER['SENTRY_DSN'] = $explicit;
         }
         putenv('CONDOR_EPHEMERAL_CACHE=1');
 
