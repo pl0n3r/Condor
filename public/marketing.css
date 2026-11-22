@@ -85,6 +85,9 @@ body:has(.mk-site) { background: #f5f6f2;}
 .mk-seg { display: grid;gap: 6px;}
 .mk-seg label, .mk-tablist label { cursor: pointer;}
 .mk-seg label { padding: 11px 8px;min-height: 44px;border-radius: 12px;border: 1.5px solid var(--mk-line);font: 600 14px/1.2 var(--mk-body);text-align: center;transition: background .15s;}
+/* Prevent a transient low-contrast state when the checked business tab changes.
+   Keep selected labels on --mk-mark/--mk-mark-ink via the existing #pkN rules. */
+.mk-pick-q .mk-seg label { background-color: var(--mk-surface);color: var(--mk-ink);transition: none; }
 .mk-seg label small { display: block;font: 400 11px/1.2 var(--mk-mono);color: var(--mk-ink-2);margin-top: 4px;}
 .mk-seg label:hover { background: var(--mk-soft);}
 
