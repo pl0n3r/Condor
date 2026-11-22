@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application\Identity;
 
+use App\Application\Platform\OwnerSupportSession;
 use App\Domain\Identity\Entity\BranchRoleAssignment;
 use App\Domain\Identity\Entity\Membership;
 use App\Domain\Identity\Entity\User;
@@ -15,7 +16,10 @@ use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 final readonly class BranchAuthorization
 {
-    public function __construct(private EntityManagerInterface $entityManager)
+    public function __construct(
+        private EntityManagerInterface $entityManager,
+        private OwnerSupportSession $support,
+    )
     {
     }
 
@@ -154,6 +158,13 @@ final readonly class BranchAuthorization
 
     public function membership(User $user, Tenant $tenant): Membership
     {
+        // Scoped, in-memory OWNER membership. Never grant access to another
+        // tenant, persist this object or alter memberships of customer users.
+        $supportTenant = $this->support->tenantFor($user);
+        if ($supportTenant !== null && $supportTenant->id() === $tenant->id()) {
+            return new Membership($tenant, $user, Membership::ROLE_OWNER);
+        }
+
         $membership = $this->entityManager->getRepository(Membership::class)->findOneBy([
             'user' => $user,
             'tenant' => $tenant,

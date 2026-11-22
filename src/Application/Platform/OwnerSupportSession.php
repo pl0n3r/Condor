@@ -11,6 +11,7 @@ use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
@@ -135,6 +136,28 @@ final readonly class OwnerSupportSession
         $this->record($actor, $active['tenant'], 'owner.support.ended', [
             'branch_id' => $active['branch']?->id(),
         ]);
+    }
+
+    #[AsEventListener(event: KernelEvents::REQUEST, priority: -16)]
+    public function chooseInitialBranch(RequestEvent $event): void
+    {
+        if (!$event->isMainRequest()) {
+            return;
+        }
+        $request = $event->getRequest();
+        if ($request->getPathInfo() !== '/api/v1/context'
+            || $request->getMethod() !== 'GET'
+            || $request->query->has('branch')) {
+            return;
+        }
+        $actor = $this->tokens->getToken()?->getUser();
+        if (!$actor instanceof User) {
+            return;
+        }
+        $branch = $this->current($actor)['branch'] ?? null;
+        if ($branch instanceof Branch) {
+            $request->query->set('branch', $branch->id());
+        }
     }
 
     #[AsEventListener(event: KernelEvents::RESPONSE, priority: -64)]

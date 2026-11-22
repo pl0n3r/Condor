@@ -359,6 +359,36 @@ export function AdminShell({
   children,
 }: AdminShellProps) {
   const hash = useLocationHash();
+  const [supportCloseError, setSupportCloseError] = useState('');
+  const [supportCloseBusy, setSupportCloseBusy] = useState(false);
+  const supportRoot = typeof document === 'undefined'
+    ? null : document.getElementById('condor-admin-root');
+  const supportMode = variant === 'tenant' && supportRoot?.dataset.supportMode === 'true';
+  const supportTenantName = supportRoot?.dataset.supportTenantName ?? '';
+  const supportToken = supportRoot?.dataset.ownerSupportToken ?? '';
+
+  async function closeSupport(): Promise<void> {
+    if (supportCloseBusy || !supportMode) return;
+    setSupportCloseBusy(true);
+    setSupportCloseError('');
+    try {
+      const response = await fetch('/adminpl0n3r/api/support/close', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': supportToken,
+        },
+        body: '{}',
+      });
+      if (!response.ok) throw new Error('No se pudo cerrar la sesión.');
+      window.location.assign('/adminpl0n3r');
+    } catch {
+      setSupportCloseBusy(false);
+      setSupportCloseError('No fue posible cerrar el soporte. Reintenta o cierra sesión.');
+    }
+  }
+
   const designPreview = import.meta.env.DEV && variant === 'tenant' && hash === '#design-preview';
   // La ruta del propietario ya está protegida en el servidor; solo la vista
   // de auditoría usa su consulta, sin ampliar permisos ni tocar OwnerApp.
@@ -442,6 +472,17 @@ export function AdminShell({
       </aside>
 
       <main className="workspace" aria-label="Área de trabajo" data-module={/^[a-z0-9-]+$/.test(activeId) ? activeId : 'inicio'}>
+        {supportMode && (
+          <output className="alert alert-info" role="status" aria-live="polite">
+            <strong>Soporte de propietario · {supportTenantName}</strong>
+            <span> Estás administrando esta empresa como propietario de la plataforma.</span>
+            <button className="button button-secondary" type="button"
+              disabled={supportCloseBusy} onClick={() => void closeSupport()}>
+              Volver a la consola
+            </button>
+            {supportCloseError && <span role="alert">{supportCloseError}</span>}
+          </output>
+        )}
         {/* El CSS estático activa solo el módulo elegido: compatible con CSP sin estilos embebidos. */}
         {variant === 'tenant' && <AdminGlobalSearch />}
         {activeLabel && (variant === 'tenant' || activeId !== 'inicio') && (

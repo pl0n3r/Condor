@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Identity\CurrentTenantForUser;
+use App\Application\Platform\OwnerSupportSession;
 use App\Domain\Identity\Entity\User;
 use App\Shared\Version\AppVersion;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -14,6 +15,10 @@ use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 final class AdminController extends AbstractController
 {
+    public function __construct(private readonly OwnerSupportSession $support)
+    {
+    }
+
     #[Route('/admin', name: 'app_admin', methods: ['GET'])]
     public function __invoke(
         AppVersion $version,
@@ -40,7 +45,8 @@ final class AdminController extends AbstractController
             throw new AccessDeniedException();
         }
 
-        if ($this->isGranted(User::ROLE_PLATFORM_OWNER)) {
+        $support = $this->support->current($user);
+        if ($this->isGranted(User::ROLE_PLATFORM_OWNER) && $support === null) {
             return $this->redirectToRoute('app_platform_owner');
         }
 
@@ -49,6 +55,8 @@ final class AdminController extends AbstractController
         return $this->render('admin/index.html.twig', [
             'app_version' => $version->human(),
             'tenant_name' => $tenant->name(),
+            'support_mode' => $support !== null,
+            'support_tenant_name' => $support !== null ? $tenant->name() : '',
             'section' => $section,
             'hr_real_data_enabled' => getenv('HR_REAL_DATA_ENABLED') === 'true',
             'payroll_real_data_enabled' => getenv('PAYROLL_REAL_DATA_ENABLED') === 'true',
