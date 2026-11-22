@@ -8,6 +8,8 @@ type IntegrationResponse = {
   csrf_token: string;
   test_email_enabled: boolean;
   secret_write_enabled: boolean;
+  sentry_test_enabled: boolean;
+  sentry_capture_active: boolean;
 };
 type Props = Readonly<{ refreshKey: number }>;
 
@@ -37,6 +39,7 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
   const [apiKey, setApiKey] = useState('');
   const [sentryDsn, setSentryDsn] = useState('');
   const [testRecipient, setTestRecipient] = useState('');
+  const [sentryEventId, setSentryEventId] = useState('');
 
   async function load() {
     setLoading(true);
@@ -88,6 +91,7 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
       const safe = await response.json() as { key: IntegrationKey; setting: SafeSetting };
       setData(current => current ? { ...current, settings: { ...current.settings, [key]: safe.setting } } : current);
       setNotice('Ajuste guardado.');
+      if (key === 'sentry.dsn') await load();
     } catch {
       setError('No se pudo guardar el ajuste. Comprueba el dato y vuelve a intentarlo.');
     } finally {
@@ -116,6 +120,7 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
       const safe = await response.json() as { setting: SafeSetting };
       setData(current => current ? { ...current, settings: { ...current.settings, [key]: safe.setting } } : current);
       setNotice('Secreto eliminado.');
+      if (key === 'sentry.dsn') await load();
     } catch {
       setError('No se pudo eliminar el secreto.');
     } finally {
@@ -139,6 +144,32 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
       setNotice('Solicitud de correo de prueba completada.');
     } catch {
       setError('No se pudo entregar el correo de prueba o se alcanzó el límite de un minuto.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendSentryTest() {
+    if (!data?.csrf_token || !data.sentry_test_enabled || !setting('sentry.dsn').configured || busy) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    setSentryEventId('');
+    try {
+      const response = await fetch(endpoint + '/test-sentry', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json',
+          'X-CSRF-Token': data.csrf_token },
+        body: '{}',
+      });
+      const result = await response.json() as { event_id?: string; error?: string };
+      if (!response.ok || !result.event_id) {
+        throw new Error(result.error || 'No se pudo enviar la prueba de Sentry.');
+      }
+      setSentryEventId(result.event_id);
+      setNotice('Evento sintético enviado a Sentry.');
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : 'No se pudo enviar la prueba de Sentry.');
     } finally {
       setBusy(false);
     }
@@ -200,8 +231,10 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
       </Card>
       <Card title="Observabilidad · Sentry">
         <div className="ui-integration-content">
-        <p className="muted">La captura Sentry permanece apagada hasta live.</p>
-        {!data.secret_write_enabled && <p className="muted">La escritura del DSN requiere autorización expresa de live.</p>}
+        <p className="muted">Captura Sentry: {data.sentry_capture_active
+          ? 'activa (DSN configurado y entorno prod)'
+          : 'inactiva (requiere DSN guardado y entorno prod)'}.</p>
+        {!data.secret_write_enabled && <p className="muted">La escritura del DSN requiere habilitación explícita del propietario.</p>}
         <form className="ui-integration-form" aria-label="Observabilidad Sentry" onSubmit={event => void save(event, 'sentry.dsn', sentryDsn)}>
           <label className="field">DSN de Sentry · solo escritura
             <input type="password" autoComplete="new-password" value={sentryDsn} onChange={event => setSentryDsn(event.target.value)} minLength={8} required placeholder="https://…" />
@@ -213,6 +246,16 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
               onClick={() => void deleteSecret('sentry.dsn')}>Eliminar DSN</button>
           </div>
         </form>
+        <div className="ui-integration-form" aria-label="Prueba de Sentry">
+          <div className="ui-form-actions">
+            <button className="button button-secondary" type="button"
+              disabled={busy || !data.sentry_test_enabled || !setting('sentry.dsn').configured}
+              onClick={() => void sendSentryTest()}>Enviar evento de prueba</button>
+          </div>
+          {!data.sentry_test_enabled && <p className="muted">Prueba de Sentry deshabilitada por configuración.</p>}
+          {sentryEventId && <output role="status">ID del evento Sentry: {sentryEventId}</output>}
+          <p className="muted">Evento sintético sin datos personales. Máximo uno por minuto.</p>
+        </div>
         </div>
       </Card>
       <Card title="Pagos"><div className="ui-integration-content"><StatusPill>Próximamente</StatusPill><p className="muted">La pasarela aún no está habilitada.</p></div></Card>

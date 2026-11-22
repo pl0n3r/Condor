@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Http\Controller;
 
 use App\Application\Platform\PlatformIntegrationSettings;
+use App\Infrastructure\Observability\SentryTestEventSender;
 use App\Domain\Identity\Entity\User;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
@@ -221,4 +222,153 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
                 : 'CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED='.$previousWrite);
         }
     }
+
+    public function testSentrySyntheticEventRequiresOwnerCsrfDsnAndOnePerMinute(): void
+    {
+        $previousWrite = getenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED');
+        $previousSentry = getenv('CONDOR_PLATFORM_SENTRY_TEST_ENABLED');
+        putenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED=true');
+        putenv('CONDOR_PLATFORM_SENTRY_TEST_ENABLED=true');
+        $owner = null;
+        try {
+            $client = self::createClient();
+            $stub = $this->createMock(SentryTestEventSender::class);
+            $stub->expects(self::once())->method('send')
+                ->willReturn('0123456789abcdef0123456789abcdef');
+            self::getContainer()->set(SentryTestEventSender::class, $stub);
+            $owner = $this->actor(true);
+            $other = $this->actor(false);
+            $client->loginUser($owner);
+            $client->request('GET', self::PATH);
+            $data = self::responseData((string) $client->getResponse()->getContent());
+            self::assertTrue($data['sentry_test_enabled']);
+            self::assertFalse($data['sentry_capture_active']); // kernel test, not prod
+            $token = $data['csrf_token'];
+
+            $client->jsonRequest('POST', self::PATH.'/test-sentry', []);
+            self::assertResponseStatusCodeSame(403);
+
+            $client->loginUser($other);
+            $client->jsonRequest('POST', self::PATH.'/test-sentry', [], [
+                'HTTP_X_CSRF_TOKEN' => $token,
+            ]);
+            self::assertResponseStatusCodeSame(403);
+
+            $client->loginUser($owner);
+            $client->jsonRequest('POST', self::PATH.'/test-sentry', [], [
+                'HTTP_X_CSRF_TOKEN' => $token,
+            ]);
+            self::assertResponseStatusCodeSame(409);
+            self::assertStringContainsString(
+                'DSN de Sentry ausente',
+                (string) $client->getResponse()->getContent(),
+            );
+
+            $dsn = 'https://fixture_secret_'.bin2hex(random_bytes(8)).'@sentry.synthetic.invalid/42';
+            $client->jsonRequest('PUT', self::PATH, ['key' => 'sentry.dsn', 'value' => $dsn], [
+                'HTTP_X_CSRF_TOKEN' => $token,
+            ]);
+            self::assertResponseStatusCodeSame(200);
+
+            $client->jsonRequest('POST', self::PATH.'/test-sentry', [], [
+                'HTTP_X_CSRF_TOKEN' => $token,
+            ]);
+            self::assertResponseStatusCodeSame(200);
+            $response = (string) $client->getResponse()->getContent();
+            self::assertStringNotContainsString($dsn, $response);
+            self::assertStringNotContainsString('fixture_secret_', $response);
+            $sent = self::responseData($response);
+            self::assertSame('0123456789abcdef0123456789abcdef', $sent['event_id']);
+            self::assertTrue($sent['sent']);
+
+            $client->jsonRequest('POST', self::PATH.'/test-sentry', [], [
+                'HTTP_X_CSRF_TOKEN' => $token,
+            ]);
+            self::assertResponseStatusCodeSame(429);
+            self::assertStringNotContainsString($dsn, (string) $client->getResponse()->getContent());
+        } finally {
+            if ($owner !== null) {
+                $settings = self::getContainer()->get(PlatformIntegrationSettings::class);
+                self::assertInstanceOf(PlatformIntegrationSettings::class, $settings);
+                $settings->delete('sentry.dsn', $owner->id(), true);
+            }
+            putenv($previousWrite === false
+                ? 'CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED'
+                : 'CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED='.$previousWrite);
+            putenv($previousSentry === false
+                ? 'CONDOR_PLATFORM_SENTRY_TEST_ENABLED'
+                : 'CONDOR_PLATFORM_SENTRY_TEST_ENABLED='.$previousSentry);
+        }
+    }
+
+    public function testSentryFailureIsFixedCodeAndNeverEchoesDsn(): void
+    {
+        $previousWrite = getenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED');
+        $previousSentry = getenv('CONDOR_PLATFORM_SENTRY_TEST_ENABLED');
+        putenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED=true');
+        putenv('CONDOR_PLATFORM_SENTRY_TEST_ENABLED=true');
+        $owner = null;
+        try {
+            $client = self::createClient();
+            $sender = $this->createMock(SentryTestEventSender::class);
+            $sender->method('send')->willThrowException(new \DomainException('rejected'));
+            self::getContainer()->set(SentryTestEventSender::class, $sender);
+            $owner = $this->actor(true);
+            $client->loginUser($owner);
+            $client->request('GET', self::PATH);
+            $token = self::responseData((string) $client->getResponse()->getContent())['csrf_token'];
+            $dsn = 'https://fixture_secret_'.bin2hex(random_bytes(8)).'@sentry.synthetic.invalid/43';
+            $client->jsonRequest('PUT', self::PATH, ['key' => 'sentry.dsn', 'value' => $dsn], [
+                'HTTP_X_CSRF_TOKEN' => $token,
+            ]);
+            self::assertResponseStatusCodeSame(200);
+            $client->jsonRequest('POST', self::PATH.'/test-sentry', [], [
+                'HTTP_X_CSRF_TOKEN' => $token,
+            ]);
+            self::assertResponseStatusCodeSame(502);
+            $response = (string) $client->getResponse()->getContent();
+            self::assertStringContainsString('Sentry rechazó', $response);
+            self::assertStringNotContainsString($dsn, $response);
+            self::assertStringNotContainsString('fixture_secret_', $response);
+        } finally {
+            if ($owner !== null) {
+                $settings = self::getContainer()->get(PlatformIntegrationSettings::class);
+                self::assertInstanceOf(PlatformIntegrationSettings::class, $settings);
+                $settings->delete('sentry.dsn', $owner->id(), true);
+            }
+            putenv($previousWrite === false
+                ? 'CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED'
+                : 'CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED='.$previousWrite);
+            putenv($previousSentry === false
+                ? 'CONDOR_PLATFORM_SENTRY_TEST_ENABLED'
+                : 'CONDOR_PLATFORM_SENTRY_TEST_ENABLED='.$previousSentry);
+        }
+    }
+
+    public function testSentryFlagIsFailClosed(): void
+    {
+        $previousWrite = getenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED');
+        $previousFlag = getenv('CONDOR_PLATFORM_SENTRY_TEST_ENABLED');
+        putenv('CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED=true');
+        putenv('CONDOR_PLATFORM_SENTRY_TEST_ENABLED=false');
+        try {
+            $client = self::createClient();
+            $client->loginUser($this->actor(true));
+            $client->request('GET', self::PATH);
+            $settings = self::responseData((string) $client->getResponse()->getContent());
+            self::assertFalse($settings['sentry_test_enabled']);
+            $client->jsonRequest('POST', self::PATH.'/test-sentry', [], [
+                'HTTP_X_CSRF_TOKEN' => $settings['csrf_token'],
+            ]);
+            self::assertResponseStatusCodeSame(423);
+        } finally {
+            putenv($previousWrite === false
+                ? 'CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED'
+                : 'CONDOR_PLATFORM_INTEGRATIONS_SECRET_WRITE_ENABLED='.$previousWrite);
+            putenv($previousFlag === false
+                ? 'CONDOR_PLATFORM_SENTRY_TEST_ENABLED'
+                : 'CONDOR_PLATFORM_SENTRY_TEST_ENABLED='.$previousFlag);
+        }
+    }
+
 }
