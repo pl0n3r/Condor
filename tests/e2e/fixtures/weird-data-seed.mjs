@@ -87,6 +87,33 @@ export async function seedWeirdData(page, role, baseURL) {
         throw new Error('Respuesta inesperada al sembrar proveedores, caso ' + index + ': ' + response.status());
       }
     }
+
+    // Product descriptions accept up to 5000 characters in the real domain
+    // contract, unlike names (160). Persist those edge cases rather than
+    // merely submitting doomed 5000-character names.
+    const productsPath = '/api/v1/branches/' + encodeURIComponent(branchId) + '/catalog/products';
+    const storedSlugs = [];
+    for (const [index, description] of WEIRD_VALUES.entries()) {
+      const slug = 'robustness-' + suffix();
+      const response = await page.request.post(productsPath, {
+        headers: csrfHeaders(token),
+        data: { name: 'Producto robustez E2E ' + index, slug, description },
+      });
+      results.push({ module: 'catalogo', case: index, status: response.status(), persisted: response.status() === 201 });
+      if (response.status() >= 500) throw new Error('5xx al sembrar catálogo sintético, caso ' + index);
+      if (![200, 201, 400, 409, 422].includes(response.status())) {
+        throw new Error('Respuesta inesperada de catálogo, caso ' + index + ': ' + response.status());
+      }
+      if (response.status() === 201) storedSlugs.push(slug);
+    }
+    const catalog = await page.request.get(productsPath);
+    if (!catalog.ok()) throw new Error('No se pudo verificar la lectura del catálogo sintético');
+    const catalogRows = (await catalog.json()).products || [];
+    for (const slug of storedSlugs) {
+      if (!catalogRows.some(product => product.slug === slug)) {
+        throw new Error('Catálogo aceptó un producto pero no lo devuelve: ' + slug);
+      }
+    }
   } else {
     throw new Error('Rol de siembra desconocido');
   }
