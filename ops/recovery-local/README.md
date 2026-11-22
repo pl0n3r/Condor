@@ -52,12 +52,37 @@ Cada ejecución deja en `~/.condor-recovery-local/runs/<run_id>/`:
 ciphertext, resultado por check), `checks.tsv`, `drill.log`, `backup.enc.sha256` y el `backup.enc` cifrado.
 Los artefactos en claro se borran al terminar.
 
-## Integración con GitHub Actions
+## Drill productivo en runner efímero del Mac (#1952)
 
-Un runner alojado por GitHub **no** puede llegar a `127.0.0.1` de este Mac. Para que
-`RECOVERY_DISPOSABLE_DATABASE_URL` apunte a este laboratorio haría falta un runner autoalojado
-efímero, restringido al workflow `Recovery production drill`, a `main` y al propietario.
-No se registra ningún runner sin autorización expresa del dueño.
+`Recovery production drill` corre en un runner autoalojado **efímero** de este Mac
+(`runs-on: [self-hosted, macOS, ARM64, condor-recovery]`), solo con `workflow_dispatch`
+desde `main` por el propietario. Condor es público, así que hay tres barreras: el `if` del
+workflow, la etiqueta exclusiva y `runner-job-guard.sh` (hook `ACTIONS_RUNNER_HOOK_JOB_STARTED`)
+que aborta cualquier otro trabajo antes del primer paso. El runner solo existe mientras dura
+un drill: `runner.sh` lo registra con `--ephemeral`, atiende un trabajo y se borra.
+
+- **Backup:** `remote-backup.sh` ejecuta `scripts/backup-database.sh` en Hostinger por SSH
+  (la `DATABASE_URL` no sale del servidor), trae el `.sql.gz`, lo borra del servidor y el
+  runner lo cifra antes del offsite. Configuración local (modo 600, fuera de Git):
+  `~/.condor-recovery-local/ssh/target` = `HOST PUERTO USUARIO RAIZ_REMOTA` y
+  `~/.condor-recovery-local/ssh/id` = clave SSH dedicada; el host debe estar en `~/.ssh/known_hosts`.
+  Alternativamente, el dueño puede provisionar `CONDOR_RECOVERY_SSH_HOST`,
+  `CONDOR_RECOVERY_SSH_PORT`, `CONDOR_RECOVERY_SSH_USER` y `CONDOR_RECOVERY_SSH_KEY`
+  como GitHub Secrets, más `CONDOR_RECOVERY_SSH_ROOT` como variable del repositorio.
+  Si falta parte de un conjunto de secretos, se aborta; la clave se escribe solo en
+  un archivo temporal modo 600 y se borra antes de salir.
+- **Base desechable:** `disposable-url.sh` deriva la URL del laboratorio (`127.0.0.1:3317/condor_restore_test`)
+  y rechaza cualquier destino que no sea loopback/puerto/usuario/base del laboratorio.
+  Para el **drill productivo** el puerto se fija obligatoriamente en `3317`, aun cuando
+  el ensayo exclusivamente sintético de `lab.sh` admita un puerto alternativo.
+- **Offsite:** S3 compatible con Object Lock `COMPLIANCE` y versionado (Backblaze B2 funciona con
+  el driver actual de FactoryRunner; Cloudflare R2 requiere soporte nuevo en FactoryRunner).
+
+Lanzar un drill (el Mac debe estar encendido):
+
+```bash
+ops/recovery-local/runner.sh drill
+```
 
 ## Eliminación segura
 
