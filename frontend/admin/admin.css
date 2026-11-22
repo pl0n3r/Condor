@@ -978,10 +978,15 @@ dialog.ui-sidepanel[open] { animation: ui-sheet-in .2s cubic-bezier(.22, 1, .36,
     --z4: #233b62; --ze: #91e2b2; --zf: #164533;
     --zl: #f5c67e; --zm: #4d371d; --z6: #ffafa8;
     --z7: #4c252b; --zb: #b5ccff;
+    /* El azul claro --z3 queda reservado a enlaces/foco, no a CTA blanco. */
+    --ui-cta-bg: #3154ba; --ui-cta-fg: #ffffff; --ui-cta-hover: #24439d;
+    --ui-error-fg: #ffafa8; --ui-error-bg: #4c252b; --ui-error-border: #a45d61;
+    --ui-warn-fg: #f5c67e; --ui-warn-bg: #4d371d; --ui-warn-border: #80613a;
+    --ui-success-fg: #91e2b2; --ui-success-bg: #164533; --ui-success-border: #3a6e4b;
     --bg: var(--z0); --surface: var(--zi); --text: var(--zk);
     --muted: var(--zd); --border: var(--z1); color-scheme: dark;
   }
-  .admin-shell:not([data-theme="light"]) .button:not(.button-secondary) { background: #3154ba; color: #fff; }
+  .admin-shell:not([data-theme="light"]) .button:not(.button-secondary) { background: var(--ui-cta-bg); color: var(--ui-cta-fg); }
   .admin-shell:not([data-theme="light"]) .ui-pill { background: #2b3d58; color: #e3edff; }
   .admin-shell:not([data-theme="light"]) .ui-pill-ok { background: var(--zf); color: var(--ze); }
   .admin-shell:not([data-theme="light"]) .ui-pill-warn { background: var(--zm); color: var(--zl); }
