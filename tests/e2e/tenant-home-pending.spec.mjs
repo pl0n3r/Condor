@@ -179,6 +179,9 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
     await page.goto(origin + '/admin?view=before');
     await expect(page.getByRole('heading', { name: 'Módulos' })).toBeVisible();
     await expect(page.getByText('Permisos efectivos')).toBeVisible();
+    // Regresión del before auténtico: tres grupos de directorio y navegación heredada.
+    await expect(page.locator('.module-directory-group')).toHaveCount(GROUPS.length);
+    await expect(page.locator('a[href="/admin#orders"]')).toHaveCount(1);
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await testInfo.attach('owner-support-before-home-' + width + '.png', {
