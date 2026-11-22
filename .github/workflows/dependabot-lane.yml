@@ -1,0 +1,100 @@
+name: Dependabot protegido
+
+on:
+  workflow_run:
+    workflows: ['CI Condor (V 0.1.0)']
+    types: [completed]
+  schedule:
+    - cron: '29 10 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-${{ github.repository_id }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  verificar_dependabot:
+    name: Verificar bot y SHA con API GitHub (solo lectura)
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.pull_requests[0].number > 0 &&
+      github.event.workflow_run.pull_requests[1] == null &&
+      github.event.workflow_run.pull_requests[0].head.sha == github.event.workflow_run.head_sha
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      authenticated: ${{ steps.verify.outputs.authenticated }}
+      pr_number: ${{ steps.verify.outputs.pr_number }}
+      head_sha: ${{ steps.verify.outputs.head_sha }}
+    steps:
+      - name: Verificar run y PR oficiales sin ejecutar checkout de PR
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          PR: ${{ github.event.workflow_run.pull_requests[0].number }}
+          HEAD: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]] || exit 1
+          [[ "$PR" =~ ^[1-9][0-9]*$ ]] || exit 1
+          [[ "$HEAD" =~ ^[0-9a-f]{40}$ ]] || exit 1
+
+          run_json="$(gh api "repos/$REPO/actions/runs/$RUN_ID")"
+          pr_json="$(gh api "repos/$REPO/pulls/$PR")"
+          if ! jq -e --arg repo "$REPO" --arg head "$HEAD" --argjson pr "$PR" '
+              .name == "CI Condor (V 0.1.0)" and
+              .event == "pull_request" and .conclusion == "success" and
+              .head_repository.full_name == $repo and .head_sha == $head and
+              .actor.login == "dependabot[bot]" and .actor.id == 49699333 and
+              (.pull_requests | length) == 1 and
+              .pull_requests[0].number == $pr
+            ' <<<"$run_json" >/dev/null; then
+            echo 'Run no autenticado como Dependabot oficial; no se delega escritura.'
+            exit 0
+          fi
+          if ! jq -e --arg repo "$REPO" --arg head "$HEAD" --argjson pr "$PR" '
+              .number == $pr and .state == "open" and .draft == false and
+              .user.login == "dependabot[bot]" and .user.id == 49699333 and
+              .user.type == "Bot" and .head.repo.full_name == $repo and
+              .head.sha == $head and .base.ref == "main"
+            ' <<<"$pr_json" >/dev/null; then
+            echo 'PR no coincide con identidad oficial y HEAD exacto; no se delega escritura.'
+            exit 0
+          fi
+          printf 'authenticated=true\npr_number=%s\nhead_sha=%s\n' "$PR" "$HEAD" >> "$GITHUB_OUTPUT"
+
+  dependabot:
+    needs: verificar_dependabot
+    if: needs.verificar_dependabot.outputs.authenticated == 'true'
+    permissions:
+      contents: write
+      checks: read
+      issues: write
+      pull-requests: write
+    uses: pl0n3r/factory/.github/workflows/coordinacion.yml@v1
+    with:
+      operation: dependabot
+      pr_number: ${{ fromJSON(needs.verificar_dependabot.outputs.pr_number || '0') }}
+      head_sha: ${{ needs.verificar_dependabot.outputs.head_sha }}
+
+  dependabot-sweep:
+    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      checks: read
+      issues: write
+      pull-requests: write
+    uses: pl0n3r/factory/.github/workflows/coordinacion.yml@v1
+    with:
+      operation: dependabot-sweep
