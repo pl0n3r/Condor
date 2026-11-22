@@ -83,6 +83,24 @@ test.describe('Propietario — soporte temporal por empresa', () => {
       expect(bounds).not.toBeNull();
       expect(bounds.x).toBeGreaterThanOrEqual(0);
       expect(bounds.x + bounds.width).toBeLessThanOrEqual(size.width + 1);
+      // At 390px the support banner must be visible without scrolling.
+      expect(bounds.y).toBeLessThan(size.height);
+      const menuToggle = page.getByRole('button', { name: 'Mostrar menú' });
+      const mobileNav = page.getByRole('navigation', { name: 'Navegación principal' });
+      if (size.width === 390) {
+        await expect(menuToggle).toBeVisible();
+        await expect(menuToggle).toHaveAttribute('aria-expanded', 'false');
+        await expect(mobileNav).toBeHidden();
+        await menuToggle.click();
+        await expect(page.getByRole('button', { name: 'Ocultar menú' }))
+          .toHaveAttribute('aria-expanded', 'true');
+        await expect(mobileNav).toBeVisible();
+        await page.getByRole('button', { name: 'Ocultar menú' }).click();
+        await expect(mobileNav).toBeHidden();
+      } else {
+        await expect(menuToggle).toBeHidden();
+        await expect(mobileNav).toBeVisible();
+      }
       await page.screenshot({
         path: testInfo.outputPath('owner-support-after-' + size.width + '.png'),
         fullPage: true,
