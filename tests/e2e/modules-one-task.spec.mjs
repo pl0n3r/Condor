@@ -36,9 +36,9 @@ const orders = {
 };
 const inventory = {
   legal_entity: { id: 'company-demo', name: 'Empresa de prueba' },
-  branch: { id: 'branch-demo', name: 'Sede principal' },
+  branch: { id: '01ARZ3NDEKTSV4RRFFQ69G5FAV', name: 'Sede principal' },
   sources: [{ id: 'source-demo', name: 'Sede principal', slug: 'principal', type: 'branch',
-    branch_id: 'branch-demo', legal_entity_id: 'company-demo' }],
+    branch_id: '01ARZ3NDEKTSV4RRFFQ69G5FAV', legal_entity_id: 'company-demo' }],
   variants: [{ id: 'variant-demo', sku: 'SKU-DEMO', name: 'Única', product_name: 'Producto de prueba' }],
   balances: [{ id: 'balance-demo', source_id: 'source-demo', legal_entity_id: 'company-demo',
     variant: { id: 'variant-demo', sku: 'SKU-DEMO', name: 'Única', product_name: 'Producto de prueba' },
@@ -83,7 +83,7 @@ async function buildFixture(phase) {
     "const permissions = readOnly ? ['users.view'] : ['orders.view','orders.create','inventory.view','inventory.create','inventory.update','users.view','users.create','settings.view','settings.create'];",
     "const components = {orders:OrdersManagement, inventory:InventoryManagement, payroll:PayrollManagement, finance:FinanceRealManagement, demo:FinanceManagement};",
     "const C = components[moduleName] || OrdersManagement;",
-    "const props = {branchId:'branch-demo',tenantId:'tenant-demo',companyId:'company-demo',csrfToken:'fixture-only',enabled:true,permissions};",
+    "const props = {branchId:'01ARZ3NDEKTSV4RRFFQ69G5FAV',tenantId:'tenant-demo',companyId:'company-demo',csrfToken:'fixture-only',enabled:true,permissions};",
     "createRoot(document.getElementById('fixture-root')).render(React.createElement(C, props));",
   ].join('\n');
   const result = await build({
