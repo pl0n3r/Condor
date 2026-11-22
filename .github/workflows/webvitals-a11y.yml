@@ -152,6 +152,38 @@ jobs:
           ./node_modules/.bin/playwright test tests/e2e/webvitals-a11y.spec.mjs \
             --project=chromium --project=webkit --workers=1 --retries=0
 
+      - name: Verificar matriz íntegra de 6 informes en HEAD exacto
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { resolve } from 'node:path';
+          const sha = process.env.VITALS_HEAD_SHA;
+          const browsers = ['chromium', 'webkit'];
+          const flows = ['publico', 'tenant', 'plataforma'];
+          for (const browser of browsers) {
+            for (const flow of flows) {
+              const path = resolve('test-results/webvitals', sha + '-' + browser + '-' + flow + '.json');
+              const report = JSON.parse(readFileSync(path, 'utf8'));
+              if (report.head_sha !== sha || report.browser !== browser ||
+                  report.flow !== flow || report.scope !== 'ci_disposable_only' ||
+                  report.verdict !== 'PASS' || !report.vitals ||
+                  !report.axe || !report.thresholds) {
+                throw new Error('Informe incompleto o no elegible: ' + browser + '/' + flow);
+              }
+              for (const metric of ['lcp', 'cls', 'inp']) {
+                if (report.vitals.supported[metric] === false &&
+                    (report.vitals[metric === 'cls' ? 'cls' : metric + '_ms'] !== null ||
+                    report.vitals.caveats[metric] !== 'API_NOT_SUPPORTED')) {
+                  throw new Error('Métrica no soportada declarada incorrectamente: ' + metric);
+                }
+              }
+            }
+          }
+          console.log('6 informes completos y vinculados a ' + sha);
+          NODE
+
       - name: Publicar evidencia JSON exact-SHA incluso al fallar pruebas
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f

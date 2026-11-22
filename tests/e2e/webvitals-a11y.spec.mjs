@@ -106,7 +106,7 @@ async function collect(page, browser, flow, testInfo) {
     return {
       supported: state.supported,
       lcp_ms: state.lcp_ms,
-      cls: Number(state.cls.toFixed(4)),
+      cls: state.supported.cls ? Number(state.cls.toFixed(4)) : null,
       inp_ms: inp,
       observed_interactions: durations.length,
       caveats: {
