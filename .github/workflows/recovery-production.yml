@@ -9,7 +9,10 @@ concurrency:
 
 jobs:
   recovery:
-    runs-on: ubuntu-latest
+    # Runner efímero del Mac del propietario (#1952). Repo público: solo el
+    # propietario, desde main y a mano; la guardia del runner lo vuelve a exigir.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == github.repository_owner
+    runs-on: [self-hosted, macOS, ARM64, condor-recovery]
     timeout-minutes: 60
     permissions:
       contents: read
@@ -32,13 +35,15 @@ jobs:
           ref: bb732b0feb2b5f45b9d9f96efe257c289e76bbc9
           path: _factory
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: '24'
+      - name: Herramientas locales del runner
+        run: |
+          set -euo pipefail
+          php -r 'exit(PHP_VERSION_ID >= 80500 ? 0 : 1);'
+          node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)'
+          command -v composer mariadb gzip shasum >/dev/null
 
       - name: Preflight gobernado
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           RECOVERY_S3_ENDPOINT: ${{ secrets.RECOVERY_S3_ENDPOINT }}
           RECOVERY_S3_BUCKET: ${{ secrets.RECOVERY_S3_BUCKET }}
           RECOVERY_S3_REGION: ${{ secrets.RECOVERY_S3_REGION }}
@@ -46,21 +51,16 @@ jobs:
           RECOVERY_S3_ACCESS_KEY_ID: ${{ secrets.RECOVERY_S3_ACCESS_KEY_ID }}
           RECOVERY_S3_SECRET_ACCESS_KEY: ${{ secrets.RECOVERY_S3_SECRET_ACCESS_KEY }}
           RECOVERY_S3_OBJECT_LOCK_DAYS: ${{ secrets.RECOVERY_S3_OBJECT_LOCK_DAYS }}
-          RECOVERY_DISPOSABLE_DATABASE_URL: ${{ secrets.RECOVERY_DISPOSABLE_DATABASE_URL }}
           CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE: ${{ secrets.CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE }}
         run: |
           set -euo pipefail
-          root="$HOME/.condor-recovery"; mkdir -p "$root"; chmod 700 "$root"
+          # Raíz de trabajo del drill: se recrea vacía en cada ejecución del runner persistente del Mac.
+          root="$HOME/.condor-recovery"; rm -rf -- "$root"; mkdir -p "$root"; chmod 700 "$root"
+          bash ops/recovery-local/disposable-url.sh >/dev/null
           python3 scripts/recovery-production.py preflight --connection-ref "$CONNECTION_REF" --privacy-ref "$PRIVACY_REF" >/dev/null
-          for name in DATABASE_URL RECOVERY_S3_ENDPOINT RECOVERY_S3_BUCKET RECOVERY_S3_REGION RECOVERY_S3_PREFIX RECOVERY_S3_ACCESS_KEY_ID RECOVERY_S3_SECRET_ACCESS_KEY RECOVERY_S3_OBJECT_LOCK_DAYS RECOVERY_DISPOSABLE_DATABASE_URL CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE; do
+          for name in RECOVERY_S3_ENDPOINT RECOVERY_S3_BUCKET RECOVERY_S3_REGION RECOVERY_S3_PREFIX RECOVERY_S3_ACCESS_KEY_ID RECOVERY_S3_SECRET_ACCESS_KEY RECOVERY_S3_OBJECT_LOCK_DAYS CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE; do
             [[ -n "${!name:-}" ]] || { echo "::error::Recovery live no provisionado"; exit 1; }
           done
-
-      - name: Preparar PHP 8.5
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
-        with:
-          php-version: '8.5'
-          coverage: none
 
       - name: Instalar dependencias PHP reproducibles
         run: |
@@ -69,13 +69,12 @@ jobs:
       - name: Backup y cifrado cliente
         id: backup
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE: ${{ secrets.CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE }}
         run: |
           set -euo pipefail
           root="$HOME/.condor-recovery"
           created_at="$(date +%s)"
-          BACKUP_DIR="$root" sh scripts/backup-database.sh >/dev/null
+          BACKUP_DIR="$root" bash ops/recovery-local/remote-backup.sh >/dev/null
           plain="$(find "$root" -maxdepth 1 -type f -name 'condor-*.sql.gz' -print | sort | tail -1)"
           [[ -n "$plain" ]] || { echo "::error::Backup ausente"; exit 1; }
           plain_name="$(basename "$plain")"
@@ -115,7 +114,7 @@ jobs:
       - name: Restore, integrity, health y smoke descartables
         id: restore
         env:
-          RECOVERY_DISPOSABLE_DATABASE_URL: ${{ secrets.RECOVERY_DISPOSABLE_DATABASE_URL }}
+          RECOVERY_DISPOSABLE_DATABASE_URL_OVERRIDE: ${{ secrets.RECOVERY_DISPOSABLE_DATABASE_URL }}
           CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE: ${{ secrets.CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE }}
           CONDOR_RESTORE_EXPECT_TENANT_SLUG: ${{ vars.RECOVERY_RESTORE_EXPECT_TENANT_SLUG }}
           CONDOR_RESTORE_EXPECT_USER_EMAIL: ${{ vars.RECOVERY_RESTORE_EXPECT_USER_EMAIL }}
@@ -124,6 +123,9 @@ jobs:
           root="$HOME/.condor-recovery"
           incident_at="$(date +%s)"
           started_at="$(date +%s)"
+          # Solo la base desechable del laboratorio local (loopback :3317, condor_restore_*).
+          RECOVERY_DISPOSABLE_DATABASE_URL="$(bash ops/recovery-local/disposable-url.sh "${RECOVERY_DISPOSABLE_DATABASE_URL_OVERRIDE:-}")"
+          export RECOVERY_DISPOSABLE_DATABASE_URL
           python3 scripts/recovery-production.py decrypt --source materialized.enc --target restored.sql.gz >/dev/null
           DATABASE_URL="$RECOVERY_DISPOSABLE_DATABASE_URL" CONDOR_ALLOW_DESTRUCTIVE_RESTORE=1 sh scripts/verify-backup-restore.sh "$root/restored.sql.gz"
           integrity_ok=true
@@ -234,3 +236,9 @@ jobs:
           if report["status"]!="PASSED":
               raise SystemExit("recovery_drill_breached")
           PY
+
+      - name: Borrar artefactos en claro del runner
+        if: always()
+        run: |
+          root="$HOME/.condor-recovery"
+          find "$root" -maxdepth 1 -type f \( -name '*.sql.gz' -o -name '*.sql' \) -exec rm -f -- {} + 2>/dev/null || true

@@ -35,7 +35,7 @@ class RecoveryProductionRolloutTests(unittest.TestCase):
         self.assertIn("FACTORYRUNNER_CONNECTION_RECOVERY_PRIMARY_OBJECT_LOCK_DAYS",w)
         self.assertIn('created_at="$(date +%s)"',w)
         self.assertNotIn('stat -c %Y "$plain"',w)
-        self.assertLess(w.index('created_at="$(date +%s)"'),w.index('BACKUP_DIR="$root" sh scripts/backup-database.sh'))
+        self.assertLess(w.index('created_at="$(date +%s)"'),w.index('BACKUP_DIR="$root" bash ops/recovery-local/remote-backup.sh'))
 
     def test_restore_target_is_disposable_and_source_is_untouched(self):
         w=read(".github/workflows/recovery-production.yml")
