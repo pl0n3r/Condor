@@ -97,6 +97,38 @@ test.describe('Condor #1960: navegación compacta y accesible', () => {
     if (output) await rm(output, { recursive: true, force: true });
   });
 
+  // La referencia anterior es una reconstrucción del comportamiento observado en
+  // #1960 sobre el MISMO shell de prueba: sidebar apilado y todos los grupos
+  // expandidos. No se presenta como una captura histórica de producción.
+  async function captureComparison(page, info, width) {
+    const after = info.outputPath('owner-support-after-condor1960-' + width + '.png');
+    const before = info.outputPath('owner-support-before-condor1960-' + width + '.png');
+    await page.screenshot({ path: after, fullPage: true });
+    await page.addStyleTag({ content: `
+      .admin-shell .mobile-module-header { display: none !important; }
+      .admin-shell .nav-group .t-acc-panel { display: block !important; max-height: none !important; }
+      @media (max-width: 860px) {
+        .admin-shell > .sidebar { display: flex !important; flex-direction: column !important; }
+        .admin-shell .sidebar nav { display: flex !important; flex-direction: column !important; max-height: none !important; overflow: visible !important; }
+        .admin-shell .sidebar form { display: block !important; }
+      }
+    ` });
+    await page.evaluate(() => {
+      const sidebar = document.querySelector('.admin-shell > .sidebar');
+      if (sidebar) sidebar.dataset.mobileOpen = 'true';
+      document.querySelectorAll('.sidebar .nav-group').forEach(group => {
+        group.dataset.open = 'true';
+        group.querySelector('.nav-group-head')?.setAttribute('aria-expanded', 'true');
+        group.querySelector('.t-acc-panel')?.removeAttribute('inert');
+      });
+    });
+    await page.screenshot({ path: before, fullPage: true });
+    await info.attach('antes-' + width + '-reconstruccion', { path: before, contentType: 'image/png' });
+    await info.attach('despues-' + width, { path: after, contentType: 'image/png' });
+    await page.reload();
+    await expect(page.getByTestId('module-content')).toBeVisible();
+  }
+
   test('390 px: módulo en primer viewport, drawer modal, Escape y retorno de foco', async ({ page }, info) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(origin + '/admin#orders');
@@ -109,7 +141,7 @@ test.describe('Condor #1960: navegación compacta y accesible', () => {
     await expect(content).toBeVisible();
     expect((await content.boundingBox()).y).toBeLessThan(844);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
-    await info.attach('despues-390.png', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+    await captureComparison(page, info, 390);
     await toggle.click();
     const drawer = page.getByRole('dialog', { name: 'Menú de navegación' });
     await expect(drawer).toBeVisible();
@@ -137,7 +169,7 @@ test.describe('Condor #1960: navegación compacta y accesible', () => {
     await expect(nav.getByRole('button', { name: 'Catálogo e inventario' })).toHaveAttribute('aria-expanded', 'false');
     await expect(nav.locator('[aria-expanded="true"]')).toHaveCount(1);
     await expect(nav.locator('a[href="/admin#orders"]')).toHaveAttribute('aria-current', 'page');
-    await info.attach('despues-1440.png', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+    await captureComparison(page, info, 1440);
     await nav.getByRole('button', { name: 'Catálogo e inventario' }).click();
     await expect(nav.getByRole('button', { name: 'Ventas' })).toHaveAttribute('aria-expanded', 'false');
     await page.reload();
