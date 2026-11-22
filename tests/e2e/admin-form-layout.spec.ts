@@ -128,6 +128,7 @@ test.describe('1930: formularios compactos, tarjetas y accesibilidad', () => {
     await page.keyboard.press('Tab');
     const sender = page.getByLabel('Remitente', { exact: true });
     await sender.focus();
+    await expect(sender).toBeFocused();
     const focus = await sender.evaluate(element => {
       const style = getComputedStyle(element);
       return { outlineWidth: parseFloat(style.outlineWidth), outlineStyle: style.outlineStyle };

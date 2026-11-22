@@ -316,3 +316,12 @@ tbody tr:hover td { background: var(--zj); }
     }
   }
 }
+
+/* #1930: foco visible incluso si la navegación de formularios restaura el
+   elemento mediante focus() después de una operación asíncrona. */
+@scope (.admin-shell) {
+  .workspace .ui-integration-form :is(input, select, textarea):focus {
+    outline: 3px solid #1d4ed8;
+    outline-offset: 2px;
+  }
+}
