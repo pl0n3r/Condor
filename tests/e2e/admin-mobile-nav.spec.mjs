@@ -137,6 +137,9 @@ test.describe('Condor #1960: navegación compacta y accesible', () => {
     await expect(header).toBeVisible();
     await expect(header).toContainText('Pedidos');
     await expect(page.locator('.sidebar')).toBeHidden();
+    // El drawer cerrado no puede duplicar enlaces del shell: evita colisiones
+    // en el navegador y mantiene la única navegación desktop/tenant vigente.
+    await expect(page.locator('.admin-nav-drawer a[href="/admin#orders"]')).toHaveCount(0);
     const content = page.getByTestId('module-content');
     await expect(content).toBeVisible();
     expect((await content.boundingBox()).y).toBeLessThan(844);
