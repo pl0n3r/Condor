@@ -14,8 +14,12 @@ export const WEIRD_VALUES = Object.freeze([
 export function assertDisposableBaseUrl(baseURL) {
   if (!baseURL) throw new Error('PLAYWRIGHT_BASE_URL obligatorio para sembrar datos');
   const url = new URL(baseURL);
-  if (url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
-    throw new Error('Siembra prohibida fuera de HTTP loopback y una base E2E desechable');
+  const database = new URL(process.env.DATABASE_URL || 'mysql://invalid/invalid');
+  if (process.env.APP_ENV !== 'test' || !['mysql:', 'mariadb:'].includes(database.protocol)
+    || !['127.0.0.1', 'localhost'].includes(database.hostname)
+    || database.pathname !== '/condor_e2e'
+    || url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+    throw new Error('Siembra prohibida fuera de APP_ENV=test, MariaDB condor_e2e local y HTTP loopback');
   }
 }
 
@@ -63,8 +67,10 @@ export async function seedWeirdData(page, role, baseURL) {
     const context = await contextResponse.json();
     const branchId = context.active_branch?.id;
     if (!branchId) throw new Error('Sucursal sintética ausente');
-    const token = context.csrf_token ?? context.csrfToken
-      ?? await page.locator('meta[name="csrf-token"]').getAttribute('content');
+    // The admin shell publishes its branch_access CSRF token in the DOM.
+    // /api/v1/context intentionally does not return a CSRF token.
+    const token = await page.locator('[data-access-token]').first().getAttribute('data-access-token');
+    if (!token) throw new Error('Token CSRF de la empresa sintética ausente');
 
     for (const [index, value] of WEIRD_VALUES.entries()) {
       const id = suffix().toUpperCase();
