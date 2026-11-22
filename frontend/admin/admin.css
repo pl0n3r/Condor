@@ -1097,3 +1097,11 @@ dialog.ui-sidepanel[open] { animation: ui-sheet-in .2s cubic-bezier(.22, 1, .36,
   filter: none;
   transition: none;
 }
+
+/* #1961: @scope(.admin-shell) en admin-ui.css da order: 2 al breadcrumb
+   para las pantallas tenant. En plataforma debe preceder al H1 también
+   VISUALMENTE, no solamente en el árbol DOM (AC-01 390/1440 px). */
+.admin-shell-platform .workspace > .module-breadcrumb {
+  order: -1;
+  margin: 0;
+}
