@@ -70,6 +70,11 @@ async function visitFlow(page, flow) {
     await expect(page.getByRole('heading', {
       name: 'Digitaliza tu negocio, sea del tamaño que sea.',
     })).toBeVisible();
+    // The public landing animates .mk-pick from 0 to 1 opacity with GSAP.
+    // axe during that transition reports blended foreground/background colors,
+    // not the contrast users see when the content is fully rendered.
+    // Audit the *real final UI*, without disabling animations or axe rules.
+    await expect(page.locator('.mk-pick')).toHaveCSS('opacity', '1', { timeout: 15_000 });
     // The public page has no harmless guaranteed action; no fabricated INP.
     return;
   }
