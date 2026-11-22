@@ -12,6 +12,9 @@ Corre en el runner efímero del Mac del propietario (`ops/recovery-local/runner.
 - `RECOVERY_PRIMARY_CONNECTION_REF=controlbot:connection/recovery-primary`.
 - `RECOVERY_PROVIDER_PRIVACY_REF=controlbot:privacy/...`: referencia a revisión/inventario del proveedor. Sin ella el run falla cerrado.
 - secrets S3-compatible (`RECOVERY_S3_*`), `RECOVERY_S3_OBJECT_LOCK_DAYS` (1–3650 días) y `CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE`. `RECOVERY_DISPOSABLE_DATABASE_URL` es opcional (por defecto el laboratorio local) y `DATABASE_URL` ya no se guarda en GitHub.
+- SSH: secrets `CONDOR_RECOVERY_SSH_HOST`, `_PORT`, `_USER`, `_KEY`, y variable
+  `CONDOR_RECOVERY_SSH_ROOT` (raíz de la instalación en Hostinger); en su ausencia
+  se admite la configuración manual local del Mac. No se imprime la clave privada.
 - la DB descartable debe usar un nombre aceptado por `verify-backup-restore.sh`; los centinelas llegan por variables no secretas.
 
 El primary offsite debe demostrar Object Lock `COMPLIANCE` con retención futura; VersionId sin lock no es evidencia suficiente. No se imprime ningún secreto, backup ni URL firmada. El provider recibe solo ciphertext. Google Drive no participa como primary offsite y permanece cold-copy opcional fuera de este slice.

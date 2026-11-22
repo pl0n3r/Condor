@@ -66,6 +66,11 @@ un drill: `runner.sh` lo registra con `--ephemeral`, atiende un trabajo y se bor
   runner lo cifra antes del offsite. Configuración local (modo 600, fuera de Git):
   `~/.condor-recovery-local/ssh/target` = `HOST PUERTO USUARIO RAIZ_REMOTA` y
   `~/.condor-recovery-local/ssh/id` = clave SSH dedicada; el host debe estar en `~/.ssh/known_hosts`.
+  Alternativamente, el dueño puede provisionar `CONDOR_RECOVERY_SSH_HOST`,
+  `CONDOR_RECOVERY_SSH_PORT`, `CONDOR_RECOVERY_SSH_USER` y `CONDOR_RECOVERY_SSH_KEY`
+  como GitHub Secrets, más `CONDOR_RECOVERY_SSH_ROOT` como variable del repositorio.
+  Si falta parte de un conjunto de secretos, se aborta; la clave se escribe solo en
+  un archivo temporal modo 600 y se borra antes de salir.
 - **Base desechable:** `disposable-url.sh` deriva la URL del laboratorio (`127.0.0.1:3317/condor_restore_test`)
   y rechaza cualquier destino que no sea loopback/puerto/usuario/base del laboratorio.
 - **Offsite:** S3 compatible con Object Lock `COMPLIANCE` y versionado (Backblaze B2 funciona con

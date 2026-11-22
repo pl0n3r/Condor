@@ -70,6 +70,11 @@ jobs:
         id: backup
         env:
           CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE: ${{ secrets.CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE }}
+          CONDOR_RECOVERY_SSH_HOST: ${{ secrets.CONDOR_RECOVERY_SSH_HOST }}
+          CONDOR_RECOVERY_SSH_PORT: ${{ secrets.CONDOR_RECOVERY_SSH_PORT }}
+          CONDOR_RECOVERY_SSH_USER: ${{ secrets.CONDOR_RECOVERY_SSH_USER }}
+          CONDOR_RECOVERY_SSH_KEY: ${{ secrets.CONDOR_RECOVERY_SSH_KEY }}
+          CONDOR_RECOVERY_SSH_ROOT: ${{ vars.CONDOR_RECOVERY_SSH_ROOT }}
         run: |
           set -euo pipefail
           root="$HOME/.condor-recovery"

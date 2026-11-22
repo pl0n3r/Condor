@@ -208,6 +208,13 @@ class RecoveryLocalLabContract(unittest.TestCase):
         self.assertIn("scripts/backup-database.sh", b)
         self.assertIn("rm -rf --", b)
         self.assertNotIn("echo \"$DATABASE_URL", b)
+        for name in ("HOST", "PORT", "USER", "KEY"):
+            self.assertIn("CONDOR_RECOVERY_SSH_" + name, b)
+            workflow = (ROOT / ".github/workflows/recovery-production.yml").read_text(encoding="utf-8")
+            self.assertIn("secrets.CONDOR_RECOVERY_SSH_" + name, workflow)
+        self.assertIn("CONDOR_RECOVERY_SSH_ROOT", b)
+        self.assertIn("vars.CONDOR_RECOVERY_SSH_ROOT", workflow)
+        self.assertIn("key_temp=\"$(mktemp", b)
 
     def test_disposable_url_rejects_non_lab_targets(self):
         script = str(LAB / "disposable-url.sh")
