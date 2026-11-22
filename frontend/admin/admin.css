@@ -1046,3 +1046,71 @@ dialog.ui-sidepanel[open] { animation: ui-sheet-in .2s cubic-bezier(.22, 1, .36,
     display: block;
   }
 }
+
+/* #1961 · Cabecera y diagnósticos del propietario dentro del shell existente. */
+.admin-shell-platform .sidebar-user { display: grid; gap: 2px; min-width: 0; margin: 14px 0; padding: 12px; border: 1px solid var(--z1, #e2e6ed); border-radius: var(--zg, 8px); background: var(--zi, #fff); }
+.admin-shell-platform .sidebar-user span { color: var(--zd, #566073); font-size: .75rem; }
+.admin-shell-platform .sidebar-user strong { overflow-wrap: anywhere; font-size: .875rem; }
+.admin-shell-platform .platform-heading { min-width: 0; align-items: flex-start; }
+.admin-shell-platform .platform-heading > div:first-child { min-width: 0; flex: 1 1 auto; }
+.admin-shell-platform .platform-heading-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.admin-shell-platform .platform-diagnostics-content { display: grid; min-width: 0; max-width: 100%; gap: 20px; }
+.admin-shell-platform .platform-diagnostics-page { display: grid; min-width: 0; max-width: 100%; gap: 20px; }
+.admin-shell-platform .platform-diagnostics-page :is(code, a, span, dd) { overflow-wrap: anywhere; word-break: break-word; }
+.admin-shell-platform .platform-diagnostics-page .foundation-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); min-width: 0; }
+.admin-shell-platform .platform-diagnostics-page .foundation-grid article { min-width: 0; display: grid; gap: 8px; align-content: start; }
+.admin-shell-platform .platform-diagnostics-page .platform-diagnostic-link { display: block; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .admin-shell-platform .platform-heading-actions, .admin-shell-platform .platform-heading-actions > * { width: 100%; }
+}
+
+/* #1961: panel de datos sintéticos con listas válidas para axe (no <dt>/<dd>
+   sueltos en subárboles) y contraste de navegación en fondos claros. */
+.admin-shell .platform-section ul.ui-metrics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.admin-shell .ui-metric-key {
+  display: block;
+  font-size: .8125rem;
+  color: var(--zd, #566073);
+  font-weight: 600;
+}
+.admin-shell .ui-metric-value {
+  display: block;
+  font-size: 1.25rem;
+  color: var(--zk, #0f1626);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.admin-shell .admin-nav-drawer a.nav-sub {
+  color: var(--zk, #0f1626);
+}
+.admin-shell .admin-nav-drawer a.nav-sub[aria-current="page"] {
+  background: var(--z4, #eaeefd);
+  color: var(--z5, #1b37b8);
+}
+.admin-shell .t-acc-panel-inner {
+  /* El texto no debe perder contraste durante la apertura del acordeón. */
+  opacity: 1;
+  filter: none;
+  transition: none;
+}
+
+/* #1961: @scope(.admin-shell) en admin-ui.css da order: 2 al breadcrumb
+   para las pantallas tenant. En plataforma debe preceder al H1 también
+   VISUALMENTE, no solamente en el árbol DOM (AC-01 390/1440 px). */
+.admin-shell-platform .workspace > .module-breadcrumb {
+  order: -1;
+  margin: 0;
+}
+
+/* Revisión visual real #1961: identidad en barra lateral oscura y
+   contraste WCAG AA verificado automáticamente a 1440 px. */
+.admin-shell-platform .sidebar .sidebar-user {
+  background: #18243c;
+  border-color: rgba(255, 255, 255, .22);
+}
+.admin-shell-platform .sidebar .sidebar-user span { color: #c9d1e6; }
+.admin-shell-platform .sidebar .sidebar-user strong { color: #ffffff; }

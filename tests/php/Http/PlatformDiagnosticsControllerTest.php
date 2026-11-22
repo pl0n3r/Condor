@@ -259,9 +259,18 @@ final class PlatformDiagnosticsControllerTest extends WebTestCase
         self::assertResponseIsSuccessful();
 
         $expectedToken = FatalLog::accessToken($appSecret);
-        $text = $crawler->filter('.workspace')->text();
-
-        self::assertStringContainsString('platform-fatal-log.php', $text);
-        self::assertStringContainsString($expectedToken, $text);
+        // La fuente SSR de Diagnósticos queda fuera del root que hidrata React.
+        // El enlace existe para el propietario, pero el token nunca es texto
+        // visible ni forma parte del contenido copiable en la consola.
+        $links = $crawler->filter('#platform-diagnostics-template a.platform-diagnostic-link');
+        self::assertCount(1, $links);
+        $url = (string) $links->attr('href');
+        self::assertStringContainsString('platform-fatal-log.php', $url);
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        self::assertSame($expectedToken, $query['token'] ?? null);
+        self::assertStringNotContainsString(
+            $expectedToken,
+            $crawler->filter('.workspace')->text(),
+        );
     }
 }

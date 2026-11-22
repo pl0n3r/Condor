@@ -103,7 +103,7 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
     await renderOwner(page, () => ({ status: 200, body: ready() }),
       (url) => url.includes('tenant=') ? context(true) : global, 'suscripciones');
     const view = page.getByRole('region', { name: 'Plan y suscripciones' });
-    await expect(view.getByRole('heading', { name: 'Plan y suscripciones' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Plan y suscripciones', level: 1 })).toBeVisible();
     const table = view.getByRole('table', { name: 'Suscripciones de esta página' });
     await expect(table.getByRole('row').filter({ hasText: 'Empresa sintética' }))
       .toContainText('Inicial');
@@ -133,7 +133,7 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
     };
     await renderOwner(page, () => ({ status: 200, body: ready() }), () => global, 'catalogo');
     const view = page.getByRole('region', { name: 'Catálogo comercial de plataforma' });
-    await expect(view.getByRole('heading', { name: 'Catálogo comercial' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Catálogo comercial', level: 1 })).toBeVisible();
     const portfolio = view.getByRole('table', { name: 'Cartera comercial de esta página' });
     await portfolio.getByRole('button', { name: 'Empresa sintética' }).click();
     await expect(page.getByRole('dialog', { name: 'Empresa sintética' }))
