@@ -51,10 +51,20 @@ async function buildFixture(phase) {
   const original = new Map();
   const replacements = new Set();
   if (old) {
+    // CI usa checkout con fetch-depth=1: el commit anterior puede no estar en
+    // el repositorio local. Recuperar exactamente ese SHA sin cambiar el árbol.
+    const gitOptions = { cwd: base, encoding: 'utf8', maxBuffer: 2_000_000 };
+    try {
+      execFileSync('git', ['cat-file', '-e', baselineSha + ':frontend/admin/OrdersManagement.tsx'], {
+        ...gitOptions, stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch {
+      execFileSync('git', ['fetch', '--no-tags', '--depth=1', 'origin', baselineSha], {
+        ...gitOptions, timeout: 45_000,
+      });
+    }
     for (const path of modules) {
-      original.set(path, execFileSync('git', ['show', baselineSha + ':' + path], {
-        cwd: base, encoding: 'utf8', maxBuffer: 2_000_000,
-      }));
+      original.set(path, execFileSync('git', ['show', baselineSha + ':' + path], gitOptions));
     }
   }
   const virtual = 'virtual:condor-1963-one-task';
