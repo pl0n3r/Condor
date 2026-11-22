@@ -18,7 +18,7 @@ final readonly class BranchAuthorization
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
-        private OwnerSupportSession $support,
+        private ?OwnerSupportSession $support = null,
     )
     {
     }
@@ -160,7 +160,7 @@ final readonly class BranchAuthorization
     {
         // Scoped, in-memory OWNER membership. Never grant access to another
         // tenant, persist this object or alter memberships of customer users.
-        $supportTenant = $this->support->tenantFor($user);
+        $supportTenant = $this->support?->tenantFor($user);
         if ($supportTenant !== null && $supportTenant->id() === $tenant->id()) {
             return new Membership($tenant, $user, Membership::ROLE_OWNER);
         }
