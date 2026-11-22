@@ -61,5 +61,18 @@ class AssetsFlagBootstrapTests(unittest.TestCase):
         self.assertIn("No hay activos", self.view)
 
 
+
+    def test_server_default_on_with_explicit_emergency_off(self):
+        bootstrap = (ROOT / "config/bootstrap.php").read_text()
+        example = (ROOT / ".env.example").read_text()
+        self.assertIn("'ASSETS_REAL_DATA_ENABLED'", bootstrap)
+        self.assertIn("getenv($moduleFlag) !== false", bootstrap)
+        self.assertIn("array_key_exists($moduleFlag, $_ENV)", bootstrap)
+        self.assertIn("array_key_exists($moduleFlag, $_SERVER)", bootstrap)
+        self.assertIn("putenv($moduleFlag.'=true')", bootstrap)
+        self.assertIn("$_ENV[$moduleFlag] = 'true'", bootstrap)
+        self.assertIn("$_SERVER[$moduleFlag] = 'true'", bootstrap)
+        self.assertIn("ASSETS_REAL_DATA_ENABLED=true", example)
+
 if __name__ == "__main__":
     unittest.main()

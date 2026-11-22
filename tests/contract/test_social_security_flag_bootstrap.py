@@ -14,7 +14,7 @@ class SocialSecurityFlagBootstrapContract(unittest.TestCase):
         cls.view = (ROOT / 'frontend/admin/SocialSecurityManagement.tsx').read_text()
         cls.backend = (ROOT / 'src/Http/Controller/SocialSecurityController.php').read_text()
 
-    def test_server_exact_flag_and_template_off_by_default(self):
+    def test_server_exact_flag_and_template_visible_by_default(self):
         self.assertIn("'social_security_real_data_enabled' => getenv('SOCIAL_SECURITY_REAL_DATA_ENABLED') === 'true'", self.php)
         self.assertIn("data-social-security-real-data-enabled", self.twig)
         self.assertIn("social_security_real_data_enabled ? 'true' : 'false'", self.twig)
@@ -52,6 +52,19 @@ class SocialSecurityFlagBootstrapContract(unittest.TestCase):
         self.assertIn('"nothing_live": true', data)
         self.assertIn('"no_real_customer_data": true', data)
 
+
+
+    def test_server_default_on_with_explicit_emergency_off(self):
+        bootstrap = (ROOT / "config/bootstrap.php").read_text()
+        example = (ROOT / ".env.example").read_text()
+        self.assertIn("'SOCIAL_SECURITY_REAL_DATA_ENABLED'", bootstrap)
+        self.assertIn("getenv($moduleFlag) !== false", bootstrap)
+        self.assertIn("array_key_exists($moduleFlag, $_ENV)", bootstrap)
+        self.assertIn("array_key_exists($moduleFlag, $_SERVER)", bootstrap)
+        self.assertIn("putenv($moduleFlag.'=true')", bootstrap)
+        self.assertIn("$_ENV[$moduleFlag] = 'true'", bootstrap)
+        self.assertIn("$_SERVER[$moduleFlag] = 'true'", bootstrap)
+        self.assertIn("SOCIAL_SECURITY_REAL_DATA_ENABLED=true", example)
 
 if __name__ == '__main__':
     unittest.main()

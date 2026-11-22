@@ -1,4 +1,4 @@
-"""D-063: bootstrap de Contratación persistida apagado por defecto (solo lectura de código)."""
+"""D-063: bootstrap de Contratación persistida habilitado por defecto con freno de emergencia (solo lectura de código)."""
 from pathlib import Path
 import unittest
 
@@ -40,12 +40,25 @@ class ContractsRealFlagBootstrapTests(unittest.TestCase):
         self.assertIn("legalEntity->tenant()->id() !== $tenant->id()", api)
         self.assertIn("['state', 'expected_version']", api)
 
-    def test_no_real_feature_activation_in_defaults(self):
+    def test_no_real_customer_data_in_construction(self):
         data = (ROOT / "datos.yml").read_text()
         self.assertIn('"phase": "construccion"', data)
         self.assertIn('"nothing_live": true', data)
         self.assertIn('"no_real_customer_data": true', data)
 
+
+
+    def test_server_default_on_with_explicit_emergency_off(self):
+        bootstrap = (ROOT / "config/bootstrap.php").read_text()
+        example = (ROOT / ".env.example").read_text()
+        self.assertIn("'CONTRACTS_REAL_DATA_ENABLED'", bootstrap)
+        self.assertIn("getenv($moduleFlag) !== false", bootstrap)
+        self.assertIn("array_key_exists($moduleFlag, $_ENV)", bootstrap)
+        self.assertIn("array_key_exists($moduleFlag, $_SERVER)", bootstrap)
+        self.assertIn("putenv($moduleFlag.'=true')", bootstrap)
+        self.assertIn("$_ENV[$moduleFlag] = 'true'", bootstrap)
+        self.assertIn("$_SERVER[$moduleFlag] = 'true'", bootstrap)
+        self.assertIn("CONTRACTS_REAL_DATA_ENABLED=true", example)
 
 if __name__ == '__main__':
     unittest.main()
