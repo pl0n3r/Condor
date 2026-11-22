@@ -142,10 +142,12 @@ async function openFixture(page, phase, moduleName, empty = false) {
   await page.goto(origin + '/' + phase + '?module=' + moduleName);
 }
 async function evidence(page, info, label, phase, width) {
-  // Persistir las capturas en el artifact visual existente del CI.
-  await info.attach('owner-support-' + phase + '-condor1963-' + label + '-' + width + '.png', {
-    body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
-  });
+  // Guardar un PNG físico en test-results para el uploader del workflow.
+  // testInfo.attach(body) solo crea un adjunto interno que no recoge el glob.
+  const name = 'owner-support-' + phase + '-condor1963-' + label + '-' + width + '.png';
+  const pngPath = info.outputPath(name);
+  await page.screenshot({ path: pngPath, fullPage: true });
+  await info.attach(name, { path: pngPath, contentType: 'image/png' });
 }
 
 test.describe('Condor #1963: un trabajo por pantalla con estados de primer uso', () => {
