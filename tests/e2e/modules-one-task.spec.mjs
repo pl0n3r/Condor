@@ -142,7 +142,8 @@ async function openFixture(page, phase, moduleName, empty = false) {
   await page.goto(origin + '/' + phase + '?module=' + moduleName);
 }
 async function evidence(page, info, label, phase, width) {
-  await info.attach(label + '-' + phase + '-' + width + '.png', {
+  // Persistir las capturas en el artifact visual existente del CI.
+  await info.attach('owner-support-' + phase + '-condor1963-' + label + '-' + width + '.png', {
     body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
   });
 }
