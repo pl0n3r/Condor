@@ -215,6 +215,10 @@ final class PlatformOwnerSupportSessionTest extends WebTestCase
         ], ['HTTP_X_CSRF_TOKEN' => $csrf]);
         self::assertResponseIsSuccessful();
 
+        // KernelBrowser normally reboots the kernel between requests, which
+        // would discard the test listener before the write response arrives.
+        // Keep this kernel for the synthetic expiry boundary regression.
+        $client->disableReboot();
         // After the controller has authorized and committed the write, but
         // before the response auditor runs at priority -64, expire the lease.
         $dispatcher = static::getContainer()->get('event_dispatcher');
