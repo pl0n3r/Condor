@@ -91,7 +91,7 @@ def workflow_section_value(text: str, section: str, key: str) -> str | None:
 
 
 def step_blocks(text: str) -> list[list[str]]:
-    """Extrae steps completos para que los controles no crucen entre steps."""
+    """Extrae steps completos sin absorber jobs hermanos ni sus reusables."""
     lines = text.splitlines()
     starts: list[tuple[int, int]] = []
     for index, line in enumerate(lines):
@@ -100,14 +100,18 @@ def step_blocks(text: str) -> list[list[str]]:
             starts.append((index, len(match.group(1))))
 
     blocks: list[list[str]] = []
-    for position, (start, indent) in enumerate(starts):
+    for start, indent in starts:
         end = len(lines)
-        for next_start, next_indent in starts[position + 1:]:
-            if next_indent == indent:
-                end = next_start
-                break
-            if next_indent < indent:
-                end = next_start
+        for index in range(start + 1, len(lines)):
+            candidate = lines[index]
+            stripped = candidate.lstrip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            candidate_indent = len(candidate) - len(stripped)
+            if candidate_indent < indent or (
+                candidate_indent == indent and stripped.startswith("- ")
+            ):
+                end = index
                 break
         blocks.append(lines[start:end])
     return blocks
