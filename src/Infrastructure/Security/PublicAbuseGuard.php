@@ -109,7 +109,7 @@ final readonly class PublicAbuseGuard
         // Trap fields in HTML forms are always rejected before any side effects.
         // Never trust a repeated or array-valued input.
         $trap = $request->request->all()['_condor_website'] ?? '';
-        if ($trap !== '' && $trap !== null) {
+        if ($trap !== '') {
             $event->setResponse(self::invalidForm());
             return;
         }
