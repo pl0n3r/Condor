@@ -1,0 +1,211 @@
+name: Web Vitals y accesibilidad E2E · #1982
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - tests/e2e/webvitals-a11y.spec.mjs
+      - .github/workflows/webvitals-a11y.yml
+  push:
+    branches: [main]
+    paths:
+      - tests/e2e/webvitals-a11y.spec.mjs
+      - .github/workflows/webvitals-a11y.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: webvitals-a11y-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  webvitals-a11y:
+    name: Web Vitals + axe · Chromium y WebKit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: condor_webvitals_ci
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      APP_ENV: test
+      APP_DEBUG: '0'
+      DATABASE_URL: mysql://root@127.0.0.1:3306/condor_webvitals_ci?serverVersion=mariadb-11.4.0&charset=utf8mb4
+      VITALS_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
+      E2E_EMAIL: owner-e2e@example.test
+      E2E_PLATFORM_EMAIL: owner-e2e-platform@example.test
+    steps:
+      - name: Checkout del SHA evaluado (no merge sintético)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Verificar identidad exacta del checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$VITALS_HEAD_SHA"
+          [[ "$VITALS_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Preparar PHP 8.5
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Preparar Node.js 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Generar secreto local y usuario sintético
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_secret="$(openssl rand -hex 32)"
+          e2e_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$app_secret"
+          echo "::add-mask::$e2e_password"
+          echo "APP_SECRET=$app_secret" >> "$GITHUB_ENV"
+          echo "E2E_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
+          echo "CONDOR_OWNER_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
+          echo "CONDOR_PLATFORM_OWNER_PASSWORD=$e2e_password" >> "$GITHUB_ENV"
+
+      - name: Instalar dependencias bloqueadas
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci_retry.py --attempts 3 --base-delay 3 \
+            --label "npm ci Web Vitals" -- npm ci --ignore-scripts --no-audit --no-fund
+          python3 scripts/ci_retry.py --attempts 3 --base-delay 3 \
+            --label "composer install Web Vitals" -- composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Construir aplicación real
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm run build:admin
+          test -s public/build/admin.js
+          test -s public/build/admin.css
+          git diff --exit-code -- public/build
+
+      - name: Preparar axe-core fijado sin alterar árbol npm
+        shell: bash
+        run: |
+          set -euo pipefail
+          # npm pack no re-resuelve ni reinstala React/Vite del lock.
+          python3 scripts/ci_retry.py --attempts 3 --base-delay 3 \
+            --label "axe-core 4.10.3 tarball" -- npm pack axe-core@4.10.3 \
+            --pack-destination /tmp --ignore-scripts
+          test -s /tmp/axe-core-4.10.3.tgz
+          mkdir -p node_modules/axe-core
+          tar -xzf /tmp/axe-core-4.10.3.tgz -C node_modules/axe-core --strip-components=1
+          node -e "if (require('axe-core/package.json').version !== '4.10.3') process.exit(1)"
+          test -s node_modules/axe-core/axe.min.js
+          git diff --exit-code -- package.json package-lock.json public/build
+
+      - name: Migrar y crear usuarios falsos descartables
+        shell: bash
+        run: |
+          set -euo pipefail
+          php bin/console doctrine:migrations:migrate --no-interaction
+          php bin/console app:onboarding:create \
+            --name="Empresa E2E" --slug="empresa-e2e" \
+            --legal-name="Empresa E2E SAS" --branch="Principal" \
+            --email="$E2E_EMAIL" --owner-name="Propietario E2E"
+          php bin/console app:platform-owner:provision \
+            --email="$E2E_PLATFORM_EMAIL" --name="Propietario Plataforma E2E" \
+            --password-env=CONDOR_PLATFORM_OWNER_PASSWORD
+
+      - name: Iniciar servidor Symfony local
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -S 127.0.0.1:8080 -t public public/router.php > /tmp/condor-webvitals-http.log 2>&1 &
+          echo "$!" > /tmp/condor-webvitals-http.pid
+          for intento in {1..30}; do
+            if curl -fsS "$PLAYWRIGHT_BASE_URL/health" >/dev/null; then
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "::error::Servidor local no respondió al health"
+          exit 1
+
+      - name: Instalar Chromium y WebKit de Playwright
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci_retry.py --attempts 3 --base-delay 3 \
+            --label "Playwright Chromium WebKit" -- ./node_modules/.bin/playwright install --with-deps chromium webkit
+
+      - name: Ejecutar los tres flujos en ambos navegadores
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/playwright test tests/e2e/webvitals-a11y.spec.mjs \
+            --project=chromium --project=webkit --workers=1 --retries=0
+
+      - name: Verificar matriz íntegra de 6 informes en HEAD exacto
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { resolve } from 'node:path';
+          const sha = process.env.VITALS_HEAD_SHA;
+          const browsers = ['chromium', 'webkit'];
+          const flows = ['publico', 'tenant', 'plataforma'];
+          for (const browser of browsers) {
+            for (const flow of flows) {
+              const path = resolve('test-results/webvitals', sha + '-' + browser + '-' + flow + '.json');
+              const report = JSON.parse(readFileSync(path, 'utf8'));
+              if (report.head_sha !== sha || report.browser !== browser ||
+                  report.flow !== flow || report.scope !== 'ci_disposable_only' ||
+                  report.verdict !== 'PASS' || !report.vitals ||
+                  !report.axe || !report.thresholds) {
+                throw new Error('Informe incompleto o no elegible: ' + browser + '/' + flow);
+              }
+              for (const metric of ['lcp', 'cls', 'inp']) {
+                if (report.vitals.supported[metric] === false &&
+                    (report.vitals[metric === 'cls' ? 'cls' : metric + '_ms'] !== null ||
+                    report.vitals.caveats[metric] !== 'API_NOT_SUPPORTED')) {
+                  throw new Error('Métrica no soportada declarada incorrectamente: ' + metric);
+                }
+              }
+            }
+          }
+          console.log('6 informes completos y vinculados a ' + sha);
+          NODE
+
+      - name: Publicar evidencia JSON exact-SHA incluso al fallar pruebas
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: webvitals-a11y-${{ github.event.pull_request.head.sha || github.sha }}
+          path: test-results/webvitals/*.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Detener servidor descartable
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f /tmp/condor-webvitals-http.pid ]]; then
+            kill "$(cat /tmp/condor-webvitals-http.pid)" 2>/dev/null || true
+          fi

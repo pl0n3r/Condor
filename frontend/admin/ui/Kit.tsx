@@ -25,15 +25,15 @@ export type Metric = Readonly<{ label: string; value: string | number; hint?: st
 
 export function MetricStrip({ items, label }: Readonly<{ items: readonly Metric[]; label: string }>) {
   return (
-    <dl className="ui-metrics" aria-label={label}>
+    <ul className="ui-metrics" aria-label={label}>
       {items.map((item) => (
-        <div className="ui-metric" key={item.label}>
-          <dt>{item.label}</dt>
-          <dd>{item.value}</dd>
+        <li className="ui-metric" key={item.label}>
+          <span className="ui-metric-key">{item.label}</span>
+          <strong className="ui-metric-value">{item.value}</strong>
           {item.hint && <span className={'ui-metric-hint ui-tone-' + (item.tone ?? 'neutral')}>{item.hint}</span>}
-        </div>
+        </li>
       ))}
-    </dl>
+    </ul>
   );
 }
 
