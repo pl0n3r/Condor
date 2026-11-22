@@ -232,6 +232,7 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
         $owner = null;
         try {
             $client = self::createClient();
+            $client->disableReboot(); // Preserve synthetic sender across requests.
             $stub = $this->createMock(SentryTestEventSender::class);
             $stub->expects(self::once())->method('send')
                 ->willReturn('0123456789abcdef0123456789abcdef');
@@ -310,6 +311,7 @@ final class PlatformIntegrationsControllerTest extends WebTestCase
         $owner = null;
         try {
             $client = self::createClient();
+            $client->disableReboot(); // Preserve synthetic sender across requests.
             $sender = $this->createMock(SentryTestEventSender::class);
             $sender->method('send')->willThrowException(new \DomainException('rejected'));
             self::getContainer()->set(SentryTestEventSender::class, $sender);
