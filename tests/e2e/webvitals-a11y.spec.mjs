@@ -75,6 +75,11 @@ async function visitFlow(page, flow) {
     // not the contrast users see when the content is fully rendered.
     // Audit the *real final UI*, without disabling animations or axe rules.
     await expect(page.locator('.mk-pick')).toHaveCSS('opacity', '1', { timeout: 15_000 });
+    // The #negocio heading reveals independently through IntersectionObserver.
+    // Scroll it into view and audit its real final colors, not an opacity tween.
+    const businessHead = page.locator('#negocio > .mk-head');
+    await businessHead.scrollIntoViewIfNeeded();
+    await expect(businessHead).toHaveCSS('opacity', '1', { timeout: 15_000 });
     // Real, local interaction on the synthetic marketing selector (no network
     // or mutation). It permits EventTiming/INP observation when supported.
     // Missing entries are still reported as NO_INTERACTION_ENTRY, never 0 ms.
