@@ -173,6 +173,8 @@ class RecoveryLocalLabContract(unittest.TestCase):
                     {"GITHUB_WORKFLOW_REF": "pl0n3r/Condor/.github/workflows/recovery-production.yml@refs/pull/9/merge"},
                     {"GITHUB_EVENT_NAME": "pull_request"}, {"GITHUB_EVENT_NAME": "pull_request_target"},
                     {"GITHUB_ACTOR": "intruso"}, {"GITHUB_TRIGGERING_ACTOR": "intruso"},
+                    {"GITHUB_TRIGGERING_ACTOR": ""},
+                    {"CONDOR_RECOVERY_OWNER": "intruso", "GITHUB_ACTOR": "intruso", "GITHUB_TRIGGERING_ACTOR": "intruso"},
                     {"GITHUB_REPOSITORY": "intruso/Condor"}, {"GITHUB_REF": "refs/heads/feature"}):
             self.assertNotEqual(self._guard(**bad), 0, bad)
 
