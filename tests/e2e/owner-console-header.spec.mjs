@@ -74,6 +74,9 @@ test.describe('Propietario #1961: módulo arriba, navegación clara y diagnósti
           await expect(workspace.locator('.platform-diagnostics-content')).toContainText('p50');
           await expect(workspace.locator('.platform-diagnostics-content')).toContainText('p95');
           await expect(workspace.locator('.platform-diagnostics-content')).toContainText('Tasa de error 5xx');
+          // El visor protegido conserva su enlace pero el token nunca se
+          // convierte en texto visible, seleccionable o capturado.
+          await expect(workspace).not.toContainText('platform-fatal-log.php');
           const overflow = await page.evaluate(() => ({
             documentWidth: document.documentElement.scrollWidth,
             windowWidth: window.innerWidth,
