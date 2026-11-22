@@ -113,7 +113,7 @@ export function PlatformRevenuePanel() {
   ];
   return (
     <section className="platform-section" aria-label="Ingresos SaaS del propietario">
-      <PageHeader title="Ingresos SaaS" description="Movimientos de ingreso recurrente (MRR), no pagos cobrados ni facturas." />
+      <PageHeader title="Movimientos del período" description="Movimientos de ingreso recurrente (MRR), no pagos cobrados ni facturas." />
       <Toolbar>
         <label className="field">Desde<input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></label>
         <label className="field">Hasta<input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></label>
