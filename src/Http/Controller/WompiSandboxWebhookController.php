@@ -28,8 +28,7 @@ final readonly class WompiSandboxWebhookController
         }
         $payload = $request->getContent();
         $checksum = $request->headers->get('X-Event-Checksum', '');
-        if (!is_string($payload) || strlen($payload) > 16384
-            || !is_string($checksum)
+        if (strlen($payload) > 16384
             || !$this->transport->verifyEvent($payload, $checksum)) {
             // No raw payload, metadata, key or untrusted event in response/logs.
             return new JsonResponse(['error' => 'Firma inválida.'], Response::HTTP_FORBIDDEN);

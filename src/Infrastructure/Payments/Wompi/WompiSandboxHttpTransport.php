@@ -106,7 +106,6 @@ class WompiSandboxHttpTransport
         } catch (Throwable) {
             throw new DomainException('WOMPI_SANDBOX_UNAVAILABLE');
         }
-        if (!is_array($response)) throw new DomainException('WOMPI_SANDBOX_RESPONSE_UNVERIFIED');
         return $response;
     }
 
@@ -140,10 +139,8 @@ class WompiSandboxHttpTransport
             'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
         ]);
         $body = @file_get_contents($url, false, $context);
-        $responseHeaders = $http_response_header ?? [];
-        $statusLine = is_array($responseHeaders) ? ($responseHeaders[0] ?? '') : '';
+        $statusLine = $http_response_header[0] ?? '';
         if (!is_string($body) || strlen($body) > 65536
-            || !is_string($statusLine)
             || preg_match('/\AHTTP\/\S+ (200|201)\b/', $statusLine) !== 1) {
             throw new DomainException('WOMPI_SANDBOX_UNAVAILABLE');
         }
@@ -165,7 +162,7 @@ class WompiSandboxHttpTransport
             throw new DomainException('WOMPI_SANDBOX_KEYS_UNAVAILABLE');
         }
         if ($row !== false) {
-            if (!is_array($row) || ($row['plain_value'] ?? null) !== null
+            if (($row['plain_value'] ?? null) !== null
                 || (int) ($row['key_version'] ?? 0) !== 1
                 || !is_string($row['encrypted_value'] ?? null)
                 || !is_string($row['nonce'] ?? null)
