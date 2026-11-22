@@ -1,64 +1,241 @@
+import { useEffect, useState } from 'react';
 import type { AdminNavEntry } from './AdminShell';
 
-/** Descripción de una línea por módulo, para el directorio del inicio. */
-const HINTS: Record<string, string> = {
-  commerce: 'Clientes, categorías y listas de precios.',
-  orders: 'Crear, seguir y exportar pedidos.',
-  'sales-reports': 'Ventas por periodo y por sede.',
-  'reports-downloads': 'Descarga de informes en CSV.',
-  'customer-service': 'Casos y atención a clientes.',
-  catalog: 'Productos, variantes y políticas de stock.',
-  inventory: 'Existencias, fuentes y ajustes.',
-  'stock-alerts': 'Avisos de stock bajo.',
-  'stock-transfers': 'Traslados entre sedes.',
-  production: 'Recetas y órdenes de producción.',
-  purchasing: 'Solicitudes y órdenes de compra.',
-  'assets-management': 'Activos de la empresa.',
-  'seo-settings': 'Títulos y descripciones para buscadores.',
-  'employees-management': 'Empleados, cargos y asistencia.',
-  'human-resources-management': 'Vinculaciones, novedades y movimientos.',
-  'payroll-management': 'Nómina y novedades de pago.',
-  'contracts-management': 'Contratos de trabajo y su vigencia.',
-  'social-security-management': 'Afiliaciones y aportes.',
-  'finance-management': 'Asientos, periodos y cierres.',
-  'compliance-management': 'Seguridad y salud en el trabajo.',
-  'compliance-evidence-management': 'Evidencia de cumplimiento legal.',
-  'governance-management': 'Órganos, actas y decisiones.',
-  workflows: 'Flujos de trabajo y aprobaciones.',
-  'operations-processes': 'Procesos y procedimientos.',
-  roles: 'Roles, permisos y accesos.',
-  documents: 'Expedientes y evidencias sintéticas; sin firma legal.',
-};
+/**
+ * Inicio operativo del tenant. AdminApp ya monta esta pieza solo cuando el
+ * contexto de empresa está listo; sus APIs siguen siendo la fuente de verdad.
+ * Nunca deriva pendientes de cifras simuladas ni consulta módulos ocultos.
+ */
+type Pending = Readonly<{
+  id: 'orders' | 'stock' | 'payroll';
+  title: string;
+  count: number;
+  href: string;
+  partial?: boolean;
+}>;
+type State =
+  | { status: 'loading' }
+  | { status: 'ready'; rows: Pending[]; warning: boolean }
+  | { status: 'denied' }
+  | { status: 'error' };
+type SafeObject = Record<string, unknown>;
 
-function moduleId(href: string): string {
-  const at = href.indexOf('#');
-  return at >= 0 ? href.slice(at + 1) : '';
+function record(value: unknown): value is SafeObject {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** Mapa del administrador: cada módulo agrupado igual que el menú, con una línea que explica para qué sirve. */
+function isUlid(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(value);
+}
+
+function permittedLinks(entries: readonly AdminNavEntry[]): Set<string> {
+  const hrefs = new Set<string>();
+  for (const entry of entries) {
+    if ('group' in entry) {
+      for (const item of entry.items) hrefs.add(item.href);
+    } else {
+      hrefs.add(entry.href);
+    }
+  }
+  return hrefs;
+}
+
+class Denied extends Error {}
+class Unavailable extends Error {}
+
+async function getJson(path: string, signal: AbortSignal): Promise<unknown> {
+  const response = await fetch(path, {
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' },
+    signal,
+  });
+  if (response.status === 401 || response.status === 403) throw new Denied();
+  if (response.status === 404) throw new Unavailable();
+  if (!response.ok) throw new Error('REQUEST_FAILED');
+  return response.json() as Promise<unknown>;
+}
+
+/** Nunca convertir un subconjunto de página en un total exacto. */
+async function orderPending(branchId: string, signal: AbortSignal): Promise<Pending> {
+  let count = 0;
+  let partial = false;
+  // Paginación bounded: si la API supera el máximo, declarar mínimo explícito.
+  for (let page = 1; page <= 50; page += 1) {
+    const query = new URLSearchParams({ status: 'open', page: String(page), per_page: '100' });
+    const response = await getJson(
+      '/api/v1/branches/' + encodeURIComponent(branchId) + '/orders?' + query.toString(),
+      signal,
+    );
+    if (!record(response) || !Array.isArray(response.orders) || !record(response.pagination)
+      || typeof response.pagination.has_more !== 'boolean') {
+      throw new Error('INVALID_ORDERS');
+    }
+    for (const order of response.orders) {
+      if (!record(order) || typeof order.order_status !== 'string'
+        || typeof order.fulfillment_status !== 'string') throw new Error('INVALID_ORDER');
+      if (order.order_status === 'open' && order.fulfillment_status === 'reserved') count += 1;
+    }
+    if (!response.pagination.has_more) break;
+    if (page === 50) partial = true;
+  }
+  return { id: 'orders', title: 'Pedidos por despachar', href: '/admin#orders', count, partial };
+}
+
+async function stockPending(branchId: string, signal: AbortSignal): Promise<Pending> {
+  const response = await getJson(
+    '/api/v1/branches/' + encodeURIComponent(branchId) + '/inventory/stock-alerts', signal,
+  );
+  if (!record(response) || !Array.isArray(response.alerts)) throw new Error('INVALID_STOCK');
+  let count = 0;
+  for (const alert of response.alerts) {
+    if (!record(alert) || !['pending', 'delivered'].includes(String(alert.status))) {
+      throw new Error('INVALID_STOCK_ALERT');
+    }
+    if (alert.status === 'pending') count += 1;
+  }
+  return { id: 'stock', title: 'Alertas de stock', href: '/admin#stock-alerts', count };
+}
+
+async function payrollPending(branchId: string, tenantId: string, companyId: string,
+  signal: AbortSignal): Promise<Pending> {
+  const response = await getJson(
+    '/api/v1/branches/' + encodeURIComponent(branchId) + '/payroll/real-records', signal,
+  );
+  if (!record(response) || !Array.isArray(response.records)
+    || response.records.length > 100) throw new Error('INVALID_PAYROLL');
+  let count = 0;
+  for (const row of response.records) {
+    if (!record(row) || row.tenant_id !== tenantId || row.legal_entity_id !== companyId
+      || !['BORRADOR', 'EN_REVISION'].includes(String(row.state))) {
+      throw new Error('INVALID_PAYROLL_SCOPE');
+    }
+    if (row.state === 'EN_REVISION') count += 1;
+  }
+  return { id: 'payroll', title: 'Nómina para revisión', href: '/admin#payroll-management', count };
+}
+
 export function ModuleDirectory({ entries }: Readonly<{ entries: readonly AdminNavEntry[] }>) {
-  const groups = entries.filter((entry): entry is Extract<AdminNavEntry, { group: string }> => 'group' in entry);
+  const [state, setState] = useState<State>({ status: 'loading' });
+  const [retry, setRetry] = useState(0);
+
+  useEffect(() => {
+    const abort = new AbortController();
+    void (async () => {
+      setState({ status: 'loading' });
+      try {
+        const context = await getJson('/api/v1/context', abort.signal);
+        if (!record(context) || !record(context.tenant) || !record(context.active_branch)
+          || !isUlid(context.tenant.id) || !isUlid(context.active_branch.id)
+          || !Array.isArray(context.permissions)
+          || !context.permissions.every((permission) => typeof permission === 'string')) {
+          throw new Error('INVALID_CONTEXT');
+        }
+        const tenantId = context.tenant.id;
+        const branchId = context.active_branch.id;
+        const companyId = record(context.active_legal_entity)
+          ? context.active_legal_entity.id : null;
+        const permissions = context.permissions as string[];
+        const links = permittedLinks(entries);
+        const requests: Array<Promise<Pending | null>> = [];
+        if (permissions.includes('orders.view') && links.has('/admin#orders')) {
+          requests.push(orderPending(branchId, abort.signal).catch(error => {
+            if (error instanceof Denied || error instanceof Unavailable) return null;
+            throw error;
+          }));
+        }
+        if (permissions.includes('inventory.view') && links.has('/admin#stock-alerts')) {
+          requests.push(stockPending(branchId, abort.signal).catch(error => {
+            if (error instanceof Denied || error instanceof Unavailable) return null;
+            throw error;
+          }));
+        }
+        // Flag real SSR + autorización: jamás abrir nómina desde el preview.
+        const payrollEnabled = document.getElementById('condor-admin-root')
+          ?.dataset.payrollRealDataEnabled === 'true';
+        if (payrollEnabled && permissions.includes('users.view')
+          && links.has('/admin#payroll-management') && isUlid(companyId)) {
+          requests.push(payrollPending(branchId, tenantId, companyId, abort.signal)
+            .catch(error => {
+              if (error instanceof Denied || error instanceof Unavailable) return null;
+              throw error;
+            }));
+        }
+        if (requests.length === 0) {
+          if (!abort.signal.aborted) setState({ status: 'denied' });
+          return;
+        }
+        const results = await Promise.allSettled(requests);
+        if (abort.signal.aborted) return;
+        const successful = results
+          .filter((result): result is PromiseFulfilledResult<Pending | null> =>
+            result.status === 'fulfilled')
+          .map(result => result.value)
+          .filter((value): value is Pending => value !== null);
+        const warning = results.some(result => result.status === 'rejected')
+          || successful.length !== requests.length
+          || successful.some(item => item.partial);
+        if (successful.length === 0) {
+          setState({ status: warning ? 'error' : 'denied' });
+          return;
+        }
+        setState({ status: 'ready', rows: successful.filter(item => item.count > 0), warning });
+      } catch (error) {
+        if (!abort.signal.aborted) {
+          setState({ status: error instanceof Denied ? 'denied' : 'error' });
+        }
+      }
+    })();
+    return () => abort.abort();
+    // AdminApp desmonta esta pieza al cambiar empresa/sede; este mount es único.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retry]);
+
   return (
     <section className="module-directory" aria-labelledby="module-directory-title">
-      <h2 id="module-directory-title">Módulos</h2>
-      <div className="module-directory-groups">
-        {groups.map((group) => (
-          <div className="module-directory-group" key={group.group}>
-            <h3>{group.group}</h3>
-            <ul>
-              {group.items.map((item) => (
-                <li key={item.href}>
-                  <a href={item.href}>
-                    <strong>{item.label.replace(' (pruebas)', '')}</strong>
-                    <span>{HINTS[moduleId(item.href)] ?? ''}</span>
-                    {item.label.includes('(pruebas)') && <em>En pruebas</em>}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+      <h2 id="module-directory-title">Para hoy</h2>
+      {state.status === 'loading' && <p role="status">Consultando pendientes de esta sede…</p>}
+      {state.status === 'denied' && (
+        <p role="status">No tienes permiso para consultar los pendientes de esta empresa.</p>
+      )}
+      {state.status === 'error' && (
+        <div role="alert">
+          <p>No pudimos comprobar los pendientes. No asumimos que todo esté al día.</p>
+          <button type="button" className="button" onClick={() => setRetry(value => value + 1)}>
+            Reintentar
+          </button>
+        </div>
+      )}
+      {state.status === 'ready' && (
+        <>
+          {state.warning && (
+            <p role="status">Algunas fuentes no están disponibles. Los totales visibles pueden ser parciales.</p>
+          )}
+          {state.rows.length === 0 && !state.warning && (
+            <p role="status">Todo al día. No encontramos pendientes en los módulos disponibles.</p>
+          )}
+          {state.rows.length > 0 && (
+            <div className="module-directory-groups">
+              <div className="module-directory-group">
+                <h3>Prioridades de la sede</h3>
+                <ul>
+                  {state.rows.map(item => (
+                    <li key={item.id}>
+                      <a href={item.href} aria-label={item.title + ': ' + (item.partial ? 'al menos ' : '') + item.count}>
+                        <strong>{item.title}</strong>
+                        <span className="overview-value">
+                          {item.partial ? 'Al menos ' : ''}{item.count}
+                          {' '}pendiente{item.count === 1 ? '' : 's'}
+                        </span>
+                        <span>Ver módulo</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </section>
   );
 }
