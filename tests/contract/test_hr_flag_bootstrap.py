@@ -12,7 +12,7 @@ class HrFlagBootstrapContract(unittest.TestCase):
         cls.app = (ROOT/'frontend/admin/AdminApp.tsx').read_text()
         cls.backend = (ROOT/'src/Http/Controller/HumanResourcesController.php').read_text()
 
-    def test_server_is_only_source_and_defaults_closed(self):
+    def test_server_is_only_source_and_defaults_visible(self):
         self.assertIn("'hr_real_data_enabled' => getenv('HR_REAL_DATA_ENABLED') === 'true'", self.controller)
         self.assertIn('data-hr-real-data-enabled="{{ hr_real_data_enabled ? \'true\' : \'false\' }}"', self.twig)
         self.assertIn("getenv('HR_REAL_DATA_ENABLED') === 'true'", self.backend)
@@ -27,6 +27,19 @@ class HrFlagBootstrapContract(unittest.TestCase):
         self.assertIn('<HumanResourcesManagement', self.app)
         self.assertNotIn('DevHumanResourcesManagement', self.app)
         self.assertNotIn('Talento Humano (pruebas)', self.app)
+
+
+    def test_server_default_on_with_explicit_emergency_off(self):
+        bootstrap = (ROOT / "config/bootstrap.php").read_text()
+        example = (ROOT / ".env.example").read_text()
+        self.assertIn("'HR_REAL_DATA_ENABLED'", bootstrap)
+        self.assertIn("getenv($moduleFlag) !== false", bootstrap)
+        self.assertIn("array_key_exists($moduleFlag, $_ENV)", bootstrap)
+        self.assertIn("array_key_exists($moduleFlag, $_SERVER)", bootstrap)
+        self.assertIn("putenv($moduleFlag.'=true')", bootstrap)
+        self.assertIn("$_ENV[$moduleFlag] = 'true'", bootstrap)
+        self.assertIn("$_SERVER[$moduleFlag] = 'true'", bootstrap)
+        self.assertIn("HR_REAL_DATA_ENABLED=true", example)
 
 if __name__ == '__main__':
     unittest.main()
