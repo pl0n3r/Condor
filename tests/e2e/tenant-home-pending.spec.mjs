@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { build } from 'vite';
+import { build, transformWithEsbuild } from 'vite';
 import react from '@vitejs/plugin-react';
 import { createServer } from 'node:http';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -35,8 +35,16 @@ function fixtureEntry() {
       if (id === 'virtual:condor-legacy-overview') return '\0condor-legacy-overview.tsx';
     },
     load(id) {
-      if (id === '\0condor-legacy-module.tsx') return HISTORICAL_MODULE_DIRECTORY;
-      if (id === '\0condor-legacy-overview.tsx') return HISTORICAL_OVERVIEW_GRID;
+      if (id === '\0condor-legacy-module.tsx') {
+        return transformWithEsbuild(HISTORICAL_MODULE_DIRECTORY, 'historical-module.tsx', {
+          loader: 'tsx', jsx: 'automatic',
+        });
+      }
+      if (id === '\0condor-legacy-overview.tsx') {
+        return transformWithEsbuild(HISTORICAL_OVERVIEW_GRID, 'historical-overview.tsx', {
+          loader: 'tsx', jsx: 'automatic',
+        });
+      }
       if (!['\0condor-tenant-home-pending', '\0condor-tenant-home-before'].includes(id)) return;
       const before = id === '\0condor-tenant-home-before';
       return [
