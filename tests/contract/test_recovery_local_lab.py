@@ -4,7 +4,7 @@ No arranca Docker: fija las invariantes de seguridad que el ensayo local debe
 conservar (solo loopback, imagen fijada, secretos fuera de Git, mínimo
 privilegio, reutilización de los scripts canónicos y guarda anti-producción).
 """
-import os, re, subprocess, tempfile, unittest
+import os, re, secrets, subprocess, tempfile, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -157,6 +157,92 @@ class RecoveryLocalLabContract(unittest.TestCase):
         self.assertIn('"data": "synthetic-only"', d)
         self.assertIn("No acredita backup productivo", d)
         self.assertNotIn("app_password\": ", d)
+
+    # --- Runner efímero del Mac para el drill productivo (#1952) ---
+    def _guard(self, **env):
+        base = {"PATH": "/usr/bin:/bin", "GITHUB_REPOSITORY": "pl0n3r/Condor",
+                "GITHUB_WORKFLOW_REF": "pl0n3r/Condor/.github/workflows/recovery-production.yml@refs/heads/main",
+                "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_ACTOR": "pl0n3r",
+                "GITHUB_TRIGGERING_ACTOR": "pl0n3r", "GITHUB_REF": "refs/heads/main"}
+        base.update(env)
+        return subprocess.run(["bash", str(LAB / "runner-job-guard.sh")], env=base, capture_output=True, text=True).returncode
+
+    def test_runner_guard_only_accepts_owner_dispatch_of_drill_on_main(self):
+        self.assertEqual(self._guard(), 0)
+        for bad in ({"GITHUB_WORKFLOW_REF": "pl0n3r/Condor/.github/workflows/ci.yml@refs/heads/main"},
+                    {"GITHUB_WORKFLOW_REF": "pl0n3r/Condor/.github/workflows/recovery-production.yml@refs/pull/9/merge"},
+                    {"GITHUB_EVENT_NAME": "pull_request"}, {"GITHUB_EVENT_NAME": "pull_request_target"},
+                    {"GITHUB_ACTOR": "intruso"}, {"GITHUB_TRIGGERING_ACTOR": "intruso"},
+                    {"GITHUB_TRIGGERING_ACTOR": ""},
+                    {"CONDOR_RECOVERY_OWNER": "intruso", "GITHUB_ACTOR": "intruso", "GITHUB_TRIGGERING_ACTOR": "intruso"},
+                    {"GITHUB_REPOSITORY": "intruso/Condor"}, {"GITHUB_REF": "refs/heads/feature"}):
+            self.assertNotEqual(self._guard(**bad), 0, bad)
+
+    def test_drill_workflow_is_pinned_to_owner_main_dispatch_and_exclusive_label(self):
+        w = (ROOT / ".github/workflows/recovery-production.yml").read_text(encoding="utf-8")
+        self.assertIn("runs-on: [self-hosted, macOS, ARM64, condor-recovery]", w)
+        self.assertIn("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == github.repository_owner", w)
+        self.assertNotIn("pull_request", w.split("jobs:")[0])
+        self.assertNotIn("secrets.DATABASE_URL", w)
+        self.assertIn("bash ops/recovery-local/remote-backup.sh", w)
+        self.assertIn("bash ops/recovery-local/disposable-url.sh", w)
+        self.assertIn("Borrar artefactos en claro del runner", w)
+        for other in (ROOT / ".github/workflows").glob("*.yml"):
+            if other.name != "recovery-production.yml":
+                runs_on = [l for l in other.read_text(encoding="utf-8").splitlines() if "runs-on" in l or "self-hosted" in l]
+                self.assertFalse([l for l in runs_on if "condor-recovery" in l or "self-hosted" in l], other.name)
+
+    def test_runner_is_ephemeral_pinned_and_guarded(self):
+        r = read("runner.sh")
+        self.assertIn("--ephemeral", r)
+        self.assertRegex(r, r'runner_sha256="[0-9a-f]{64}"')
+        self.assertIn("shasum -a 256 -c", r)
+        # El hash no sustituye la protección de transporte: redirects solo HTTPS.
+        # Regresión de SonarCloud shell:S6506, sin descargas ni secretos.
+        self.assertIn("curl --proto '=https' --proto-redir '=https' -fsSL", r)
+        self.assertIn("https://github.com/actions/runner/releases/download/", r)
+        self.assertNotIn('curl -fsSL -o "$dist/$runner_tgz"', r)
+        self.assertIn("ACTIONS_RUNNER_HOOK_JOB_STARTED", r)
+        self.assertIn("runner-job-guard.sh", r)
+        self.assertIn("--labels condor-recovery", r)
+        self.assertNotIn("svc.sh", r)
+
+    def test_remote_backup_keeps_database_url_on_the_server(self):
+        b = read("remote-backup.sh")
+        self.assertIn("StrictHostKeyChecking=yes", b)
+        self.assertIn("scripts/backup-database.sh", b)
+        self.assertIn("rm -rf --", b)
+        self.assertNotIn("echo \"$DATABASE_URL", b)
+        for name in ("HOST", "PORT", "USER", "KEY"):
+            self.assertIn("CONDOR_RECOVERY_SSH_" + name, b)
+            workflow = (ROOT / ".github/workflows/recovery-production.yml").read_text(encoding="utf-8")
+            self.assertIn("secrets.CONDOR_RECOVERY_SSH_" + name, workflow)
+        self.assertIn("CONDOR_RECOVERY_SSH_ROOT", b)
+        self.assertIn("vars.CONDOR_RECOVERY_SSH_ROOT", workflow)
+        self.assertIn("key_temp=\"$(mktemp", b)
+
+    def test_disposable_url_rejects_non_lab_targets(self):
+        script = str(LAB / "disposable-url.sh")
+        # Credencial sintética generada por prueba: nunca se guarda en código.
+        def dsn(user, host, port, database):
+            return f"mysql://{user}:{secrets.token_urlsafe(18)}@{host}:{port}/{database}"
+
+        ok = subprocess.run(["bash", script, dsn("condor_restore", "127.0.0.1", 3317, "condor_restore_test")], capture_output=True, text=True)
+        self.assertEqual(ok.returncode, 0)
+        for bad in (dsn("condor_restore", "db.example.com", 3317, "condor_restore_test"),
+                    dsn("condor_restore", "127.0.0.1", 3306, "condor_restore_test"),
+                    dsn("root", "127.0.0.1", 3317, "condor_restore_test"),
+                    dsn("condor_restore", "127.0.0.1", 3317, "condor")):
+            r = subprocess.run(["bash", script, bad], capture_output=True, text=True)
+            self.assertNotEqual(r.returncode, 0, bad)
+            self.assertEqual(r.stdout, "")
+        # Una variable de entorno tampoco puede convertir otro puerto en autorizado.
+        bad_port_env = os.environ.copy()
+        bad_port_env["CONDOR_RECOVERY_PORT"] = "3306"
+        r = subprocess.run(["bash", script, dsn("condor_restore", "127.0.0.1", 3306, "condor_restore_test")],
+                           env=bad_port_env, capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(r.stdout, "")
 
 
 if __name__ == "__main__":
