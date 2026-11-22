@@ -25,6 +25,8 @@ final readonly class OwnerSupportSession
 {
     private const KEY = 'condor.platform_owner_support';
     private const TTL_SECONDS = 8 * 60 * 60;
+    private const REQUEST_CONTEXT = 'condor.platform_owner_support.request_context';
+    private const REQUEST_BRANCH = 'condor.platform_owner_support.authorized_branch';
 
     public function __construct(
         private RequestStack $requests,
@@ -44,15 +46,17 @@ final readonly class OwnerSupportSession
             ?? throw new AccessDeniedException('No hay una petición activa.');
         $session = $request->getSession();
         $this->stop($actor);
+        // Persist the audit grant before creating it in the session. If flush
+        // fails, even Symfony's error-response session save grants no access.
+        $this->record($actor, $tenant, 'owner.support.started', [
+            'branch_id' => $branch?->id(),
+        ]);
         $session->migrate(true);
         $session->set(self::KEY, [
             'actor_id' => $actor->id(),
             'tenant_id' => $tenant->id(),
             'branch_id' => $branch?->id(),
             'expires_at' => time() + self::TTL_SECONDS,
-        ]);
-        $this->record($actor, $tenant, 'owner.support.started', [
-            'branch_id' => $branch?->id(),
         ]);
     }
 
@@ -110,7 +114,38 @@ final readonly class OwnerSupportSession
             }
         }
 
+        // Capture the support context while this request is authorized.
+        // Response audit must not re-evaluate an expired session after a
+        // successful, already authorized mutation.
+        if (str_starts_with($request->getPathInfo(), '/api/v1/')) {
+            $request->attributes->set(self::REQUEST_CONTEXT, [
+                'actor_id' => $actor->id(),
+                'tenant' => $tenant,
+            ]);
+        }
+
         return ['tenant' => $tenant, 'branch' => $branch];
+    }
+
+    /**
+     * Remember only a branch that has passed authorization for this request.
+     * Never derive the audit target from the branch chosen at support start.
+     */
+    public function rememberAuthorizedBranch(User $actor, Tenant $tenant, Branch $branch): void
+    {
+        $request = $this->requests->getCurrentRequest();
+        $context = $request?->attributes->get(self::REQUEST_CONTEXT);
+        if (
+            !is_array($context)
+            || ($context['actor_id'] ?? null) !== $actor->id()
+            || !($context['tenant'] ?? null) instanceof Tenant
+            || $context['tenant']->id() !== $tenant->id()
+            || $branch->tenant()->id() !== $tenant->id()
+        ) {
+            return;
+        }
+
+        $request->attributes->set(self::REQUEST_BRANCH, $branch->id());
     }
 
     public function tenantFor(User $actor): ?Tenant
@@ -178,18 +213,24 @@ final readonly class OwnerSupportSession
         if (!$actor instanceof User) {
             return;
         }
-        $active = $this->current($actor);
-        if ($active === null) {
+        $context = $request->attributes->get(self::REQUEST_CONTEXT);
+        if (!is_array($context) || ($context['actor_id'] ?? null) !== $actor->id()) {
+            return;
+        }
+        $tenant = $context['tenant'] ?? null;
+        if (!$tenant instanceof Tenant) {
             return;
         }
 
         $route = (string) $request->attributes->get('_route', 'unknown');
+        $branchId = $request->attributes->get(self::REQUEST_BRANCH);
         // Never persist request bodies, tokens, credentials or query parameters.
-        $this->record($actor, $active['tenant'], 'owner.support.write', [
+        $this->record($actor, $tenant, 'owner.support.write', [
             'method' => $request->getMethod(),
             'route' => substr($route, 0, 100),
             'status' => $event->getResponse()->getStatusCode(),
-            'branch_id' => $active['branch']?->id(),
+            // A verified per-operation target or null, never a stale start branch.
+            'branch_id' => is_string($branchId) ? $branchId : null,
         ]);
     }
 
