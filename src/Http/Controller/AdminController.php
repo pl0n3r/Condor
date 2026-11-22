@@ -6,6 +6,7 @@ namespace App\Http\Controller;
 
 use App\Application\Identity\CurrentTenantForUser;
 use App\Application\Platform\OwnerSupportSession;
+use App\Application\Platform\ModuleAccess;
 use App\Domain\Identity\Entity\User;
 use App\Shared\Version\AppVersion;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -15,7 +16,10 @@ use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 final class AdminController extends AbstractController
 {
-    public function __construct(private readonly OwnerSupportSession $support)
+    public function __construct(
+        private readonly OwnerSupportSession $support,
+        private readonly ModuleAccess $moduleAccess,
+    )
     {
     }
 
@@ -51,6 +55,10 @@ final class AdminController extends AbstractController
         }
 
         $tenant = $currentTenantForUser->resolve($user);
+        $allowedModules = $this->moduleAccess->allowed($user, $tenant);
+        if ($section === 'site' && !in_array('site', $allowedModules, true)) {
+            throw new AccessDeniedException('El sitio web está deshabilitado para esta empresa o usuario.');
+        }
 
         return $this->render('admin/index.html.twig', [
             'app_version' => $version->human(),
@@ -58,6 +66,7 @@ final class AdminController extends AbstractController
             'support_mode' => $support !== null,
             'support_tenant_name' => $support !== null ? $tenant->name() : '',
             'section' => $section,
+            'allowed_modules' => $allowedModules,
             'hr_real_data_enabled' => getenv('HR_REAL_DATA_ENABLED') === 'true',
             'payroll_real_data_enabled' => getenv('PAYROLL_REAL_DATA_ENABLED') === 'true',
             'contracts_real_data_enabled' => getenv('CONTRACTS_REAL_DATA_ENABLED') === 'true',

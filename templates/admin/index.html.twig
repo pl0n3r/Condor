@@ -17,6 +17,7 @@
     data-support-tenant-name="{{ support_tenant_name|e('html_attr') }}"
     data-owner-support-token="{{ csrf_token('platform_tenant_management') }}"
     data-section="{{ section }}"
+    data-enabled-modules="{{ allowed_modules|join(',')|e('html_attr') }}"
     data-hr-real-data-enabled="{{ hr_real_data_enabled ? 'true' : 'false' }}"
     data-payroll-real-data-enabled="{{ payroll_real_data_enabled ? 'true' : 'false' }}"
     data-contracts-real-data-enabled="{{ contracts_real_data_enabled ? 'true' : 'false' }}"

@@ -10,6 +10,7 @@ import {
 } from './FunctionalSignalsPanel';
 import { PlatformStaffPanel } from './PlatformStaffPanel';
 import { PlatformIntegrationsPanel } from './PlatformIntegrationsPanel';
+import { PlatformTenantModulesPanel } from './PlatformTenantModulesPanel';
 import { PlatformTenantCreationPanel } from './PlatformTenantCreationPanel';
 import { PlatformSubscriptionsPanel, isSyntheticTenant } from './PlatformSubscriptionsPanel';
 import { PlatformPlansPanel } from './PlatformPlansPanel';
@@ -1390,6 +1391,9 @@ export function PlatformOwnerApp({
                   },
                 ]}
               />
+              )}
+              {currentSection === 'empresas' && (
+                <PlatformTenantModulesPanel key={selected.id} tenantId={selected.id} />
               )}
               {currentSection === 'suscripciones' && (
                 <>

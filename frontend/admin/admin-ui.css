@@ -325,3 +325,41 @@ tbody tr:hover td { background: var(--zj); }
     outline-offset: 2px;
   }
 }
+
+
+/* Control de módulos #1943 — mismo vocabulario Operate, sin recursos externos. */
+@scope (.admin-shell) {
+.module-control { gap: 20px; min-width: 0; }
+.module-control-section { display: grid; gap: 14px; min-width: 0; }
+.module-control-heading { display: grid; gap: 4px; }
+.module-control-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.module-control-group { background: var(--zi); border: 1px solid var(--z1); border-radius: var(--zh); padding: 16px; display: grid; gap: 8px; align-content: start; }
+.module-control-group legend { font-size: 1rem; font-weight: 650; padding: 0 6px; }
+.module-control-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; padding: 8px 0; border-bottom: 1px solid var(--z1); }
+.module-control-item:last-child { border-bottom: 0; }
+.module-control-copy { display: grid; gap: 2px; min-width: 0; }
+.module-control-copy strong { line-height: 1.3; overflow-wrap: anywhere; }
+.module-control-state { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.module-control-state input, .module-control-user-option input { width: 19px; height: 19px; accent-color: var(--z3); cursor: pointer; }
+.module-control-state input:focus-visible, .module-control-user-option input:focus-visible { outline: 3px solid var(--zb); outline-offset: 3px; }
+.module-control-state input:disabled, .module-control-user-option input:disabled { cursor: not-allowed; opacity: .45; }
+.module-control-actions { display: flex; justify-content: flex-end; gap: 12px; }
+.module-control-actions .button { min-height: 44px; }
+.module-control-search { width: min(100%, 370px); }
+.module-control-users { max-width: 100%; }
+.module-control-users th[scope="row"] { text-align: left; vertical-align: top; min-width: 155px; }
+.module-control-email { display: block; font-size: .8125rem; color: var(--zd); word-break: break-word; }
+.module-control-user-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 12px; min-width: 290px; }
+.module-control-user-option { display: flex; align-items: center; gap: 8px; padding: 5px; min-height: 40px; line-height: 1.3; }
+.module-control-user-option span { overflow-wrap: anywhere; }
+.module-control-notice:empty { display: none; }
+.module-control-notice { padding: 10px; border-radius: var(--zg); background: var(--zj); }
+}
+@media (max-width: 600px) {
+  @scope (.admin-shell) {
+    .module-control-item { align-items: flex-start; }
+    .module-control-state { flex-direction: column; align-items: flex-end; }
+    .module-control-users { overflow-x: auto; }
+    .module-control-actions .button { width: 100%; }
+  }
+}
