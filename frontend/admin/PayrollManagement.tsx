@@ -236,7 +236,7 @@ export function PayrollManagement(props: Props) {
           ]}
           empty={<div role="status">
             <strong>{search.trim() || filter !== 'TODOS'
-              ? 'No se encontraron registros de nómina'
+              ? 'No hay registros para este filtro.'
               : 'Aún no hay registros de nómina'}</strong>
             <p>{search.trim() || filter !== 'TODOS'
               ? 'Modifica los filtros para ver otros registros.'

@@ -748,7 +748,7 @@ export function OrdersManagement({
           <DataTable caption="Pedidos registrados" rows={ready.orders} rowKey={(order) => order.id}
             onOpen={(order) => { setSelectedOrderId(order.id); setExpandedOrderId(null); }}
             empty={<div role="status">
-              <strong>{hasActiveFilters ? 'Sin pedidos para esta búsqueda' : 'Todavía no hay pedidos en esta sede'}</strong>
+              <strong>{hasActiveFilters ? 'No hay pedidos que coincidan con estos filtros' : 'Todavía no hay pedidos en esta sede'}</strong>
               <p>{hasActiveFilters
                 ? 'Prueba con otros criterios o vuelve a mostrar todos los pedidos.'
                 : 'Cuando registres el primer pedido, aparecerá aquí para consultarlo y darle seguimiento.'}</p>
