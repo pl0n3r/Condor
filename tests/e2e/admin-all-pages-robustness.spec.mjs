@@ -151,14 +151,23 @@ for (const role of ROLES) {
       await page.setViewportSize({ width: viewport, height: 900 });
       for (const [index, path] of links.entries()) {
         const events = [];
+        const networkErrors = new Set();
         const error = message => events.push('console: ' + message.text().slice(0, 300));
         const uncaught = exception => events.push('javascript: ' + exception.message.slice(0, 300));
         const responseError = response => {
-          if (response.status() >= 500 && response.url().startsWith(baseURL)) {
-            events.push('http: ' + response.status() + ' ' + new URL(response.url()).pathname);
+          const status = response.status();
+          if (status >= 400 && response.url().startsWith(baseURL)) {
+            networkErrors.add('http: ' + status + ' ' + new URL(response.url()).pathname);
           }
         };
-        page.on('console', message => { if (message.type() === 'error') error(message); });
+        page.on('console', message => {
+          if (message.type() !== 'error') return;
+          // Chromium also writes failed HTTP resources to the console. Track
+          // those with their exact URL/status below, rather than an opaque
+          // "Failed to load resource" string that cannot be assigned to an issue.
+          if (/^Failed to load resource: the server responded with a status of \\d{3}/.test(message.text())) return;
+          error(message);
+        });
         page.on('pageerror', uncaught);
         page.on('response', responseError);
         // Store a stable screenshot name accepted by the existing always-upload
@@ -190,6 +199,12 @@ for (const role of ROLES) {
           for (const [kind, observed] of checks) {
             if (observed.length) findings.push({ key: role.key + '|' + viewport + '|' + path + '|' + kind,
               detail: observed.slice(0, 5) });
+          }
+          for (const detail of networkErrors) {
+            const match = /^http: (\\d{3}) (.+)$/.exec(detail);
+            if (!match) throw new Error('Hallazgo HTTP sin status/path: ' + detail);
+            const key = role.key + '|' + viewport + '|http-' + match[1] + '|' + match[2];
+            if (!findings.some(finding => finding.key === key)) findings.push({ key, detail: [detail] });
           }
         } finally {
           await page.screenshot({ path: screenshot, fullPage: true });
