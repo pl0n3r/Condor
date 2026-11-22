@@ -42,7 +42,7 @@ test.describe('Condor #1960: navegación compacta y accesible', () => {
         name: 'condor-nav-fixture',
         resolveId(id) { if (id === 'virtual:condor-nav') return '\0condor-nav'; },
         load(id) {
-          if (id !== '\\0condor-nav') return;
+          if (id !== '\0condor-nav') return;
           return [
             "import React from 'react';",
             "import { createRoot } from 'react-dom/client';",
