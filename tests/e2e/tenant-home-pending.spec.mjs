@@ -196,8 +196,11 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
     await expect(page.locator('a[href="/admin#orders"]')).toHaveCount(1);
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      // Persistir en test-results para que el uploader de CI adjunte el PNG al PR.
+      const pngPath = testInfo.outputPath('owner-support-before-home-' + width + '.png');
+      await page.screenshot({ path: pngPath, fullPage: true });
       await testInfo.attach('owner-support-before-home-' + width + '.png', {
-        body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
+        path: pngPath, contentType: 'image/png',
       });
     }
   });
@@ -225,8 +228,11 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.getByRole('heading', { name: 'Para hoy' })).toBeVisible();
+      // Persistir en test-results para que el uploader de CI adjunte el PNG al PR.
+      const pngPath = testInfo.outputPath('owner-support-after-home-' + width + '.png');
+      await page.screenshot({ path: pngPath, fullPage: true });
       await testInfo.attach('owner-support-after-home-' + width + '.png', {
-        body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
+        path: pngPath, contentType: 'image/png',
       });
     }
   });
