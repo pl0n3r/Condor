@@ -47,6 +47,19 @@
   --z6: #b42318;
   --z7: #fdecea;
   --zb: #2447e5;
+  /* CTA y feedback: colores de la acción separados del azul de enlaces/foco. */
+  --ui-cta-bg: #2447e5;
+  --ui-cta-fg: #ffffff;
+  --ui-cta-hover: #1b37b8;
+  --ui-error-fg: #8c1d14;
+  --ui-error-bg: #fdecea;
+  --ui-error-border: #f4c2bd;
+  --ui-warn-fg: #8a4b00;
+  --ui-warn-bg: #fff3df;
+  --ui-warn-border: #e8b56e;
+  --ui-success-fg: #17653a;
+  --ui-success-bg: #e6f4ec;
+  --ui-success-border: #b9e0c8;
   --zg: 8px;
   --zh: 12px;
   --zc: 16px;
@@ -150,22 +163,23 @@ input[type="file"]::file-selector-button {
   transition: background-color .12s ease, border-color .12s ease, color .12s ease, transform .12s ease;
 }
 .workspace .button:not(.button-secondary):not(.button-quiet):not(.button-context), .workspace button[type="submit"]:not(.button-secondary):not(.button-quiet) {
-  color: #fff; background: var(--z3); border-color: var(--z3);
+  color: var(--ui-cta-fg); background: var(--ui-cta-bg); border-color: var(--ui-cta-bg);
 }
-.workspace .button:not(.button-secondary):not(.button-quiet):not(.button-context):hover, .workspace button[type="submit"]:not(.button-secondary):not(.button-quiet):hover { background: var(--z5); border-color: var(--z5); }
+.workspace .button:not(.button-secondary):not(.button-quiet):not(.button-context):hover, .workspace button[type="submit"]:not(.button-secondary):not(.button-quiet):hover { background: var(--ui-cta-hover); border-color: var(--ui-cta-hover); }
 .workspace .button-secondary, .workspace .button-quiet, .workspace button:not(.button):not([type="submit"]) { color: var(--zk); background: var(--zi); border-color: var(--z2); width: auto; }
 .workspace .button-secondary:hover, .workspace .button-quiet:hover, .workspace button:not(.button):not([type="submit"]):hover { background: var(--zj); border-color: #aab3c2; }
 .workspace .button:active, .workspace button:active { transform: scale(0.98); }
 .workspace .button.compact, .workspace button.compact { min-height: 32px; padding: 0 12px; font-size: 0.8125rem; }
 .workspace button:disabled, .workspace .button:disabled, .workspace .button[aria-disabled="true"] { opacity: .55; cursor: not-allowed; transform: none; }
-.workspace button:focus-visible, .workspace .button:focus-visible, a:focus-visible { outline: 2px solid var(--zb); outline-offset: 2px; }
+.workspace button:focus-visible, .workspace .button:focus-visible, a:focus-visible { outline: 3px solid var(--zb); outline-offset: 2px; }
 }
 
 /* ---------- Avisos, estados y píldoras ---------- */
 @scope (.admin-shell) {
 .alert { margin: 0; padding: 12px 14px; font-size: 0.875rem; line-height: 1.45; border: 1px solid var(--z1); border-radius: var(--zg); background: var(--zj); color: var(--zk); }
-.alert-error, .catalog-error { background: var(--z7); border-color: #f4c2bd; color: #8c1d14; }
-.alert-success { background: var(--zf); border-color: #b9e0c8; color: var(--ze); }
+.alert-error, .catalog-error { background: var(--ui-error-bg); border-color: var(--ui-error-border); color: var(--ui-error-fg); }
+.alert-warning { background: var(--ui-warn-bg); border-color: var(--ui-warn-border); color: var(--ui-warn-fg); }
+.alert-success { background: var(--ui-success-bg); border-color: var(--ui-success-border); color: var(--ui-success-fg); }
 .catalog-state, .platform-empty, .catalog-empty, .catalog-variant-empty {
   padding: 16px; text-align: center; color: var(--zd); font-size: 0.875rem; background: var(--zj);
   border: 1px dashed var(--z2); border-radius: var(--zg);
