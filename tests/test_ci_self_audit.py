@@ -98,6 +98,59 @@ jobs:
             findings = audit_workflow(path)
         self.assertTrue(any("timeout-minutes" in item for item in findings))
 
+    def test_factory_reusable_job_does_not_count_as_unpinned_action(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Dependabot
+on: workflow_run
+jobs:
+  verificar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - run: echo verificado
+  dependabot:
+    needs: verificar
+    uses: pl0n3r/factory/.github/workflows/coordinacion.yml@v1
+  sweep:
+    uses: pl0n3r/factory/.github/workflows/coordinacion.yml@v1
+""",
+            )
+            findings = audit_workflow(path)
+        self.assertFalse(
+            any("action no fijada" in item for item in findings), findings
+        )
+        self.assertFalse(
+            any("workflow externo" in item for item in findings), findings
+        )
+
+    def test_real_step_action_is_still_pinned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_workflow(
+                tmp,
+                """name: Dependabot
+on: pull_request
+jobs:
+  verificar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@main
+        with:
+          persist-credentials: false
+  dependabot:
+    uses: pl0n3r/factory/.github/workflows/coordinacion.yml@v1
+""",
+            )
+            findings = audit_workflow(path)
+        unpinned = [item for item in findings if "action no fijada" in item]
+        self.assertEqual(len(unpinned), 1, findings)
+        self.assertIn("actions/checkout@main", unpinned[0])
+        self.assertFalse(
+            any("coordinacion.yml@v1" in item for item in unpinned), findings
+        )
+
     def test_detects_unpinned_job_level_reusable_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self.write_workflow(

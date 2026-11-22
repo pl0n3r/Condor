@@ -11,12 +11,17 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import unittest
 from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / "docs/matriz-cobertura.md"
+TESTS = ROOT / "tests"
+if str(TESTS) not in sys.path:
+    sys.path.insert(0, str(TESTS))
+from test_cobertura_condor_20 import verify_coverage_row, unproven_promotion
 IDS = tuple(
     [f"GEST-M11-S{i:02d}" for i in range(1, 8)]
     + ["GEST-M12-S04", "GEST-M13-S03", "GEST-M14",
@@ -28,11 +33,11 @@ PARTIAL = {
     "GEST-M14-S01": "Real PHP permission catalog and staff grant checks, not full RBAC review",
     "GEST-M14-S02": "Real tenant-bound authorization, not end-to-end access governance",
 }
-# D = the described capability does not exist as an independently testable module.
-UNIMPLEMENTED = {
+# La evidencia PHP parcial no acredita aún el alcance integral de estas filas.
+UNVERIFIED_INTEGRAL = {
     **{f"GEST-M11-S{i:02d}": (
-        "D", "Generic operations workflow/process/task/service-order engine is absent; "
-        "production and commerce orders are different bounded contexts"
+        "D", "Las pruebas sintéticas de operaciones no acreditan el flujo integral "
+        "por submódulo con sus permisos, estados y límites de tenant"
     ) for i in range(1, 8)},
     "GEST-M13-S03": (
         "D", "QualityApiService has NO_CONFORMIDAD and AUDITORIA_INTERNA, "
@@ -199,11 +204,15 @@ def _matrix_rows(text: object) -> dict[str, tuple[str, ...]]:
         key = found.group(1)
         fields = tuple(value.strip() for value in line.strip().strip("|").split("|"))
         if (key in result or len(fields) != 5
-                or fields[2] != "\x60NO_VERIFICABLE\x60"
+                or fields[2] not in ("\x60NO_VERIFICABLE\x60", "\x60CUBIERTO\x60")
                 or fields[4] != "#802"
                 or "gestion-empresarial-integral.md" not in fields[0]
                 or not all(fields)):
             raise AssertionError("UNKNOWN: matrix row ambiguous: " + key)
+        try:
+            verify_coverage_row(key, fields)
+        except ValueError as error:
+            raise AssertionError(str(error)) from error
         result[key] = fields
     if set(result) != set(IDS):
         raise AssertionError("UNKNOWN: row missing or unexpected")
@@ -238,14 +247,14 @@ class CoberturaCondor22Tests(unittest.TestCase):
         cls.proof = _php()
 
     def test_contrato_principal(self) -> None:
-        """AC-01: three partial PHP behaviors, nine explicit missing capabilities."""
-        self.assertEqual(set(PARTIAL) | set(UNIMPLEMENTED), set(IDS))
-        self.assertFalse(set(PARTIAL) & set(UNIMPLEMENTED))
+        """AC-01: tres pruebas parciales PHP y nueve brechas de verificación integral."""
+        self.assertEqual(set(PARTIAL) | set(UNVERIFIED_INTEGRAL), set(IDS))
+        self.assertFalse(set(PARTIAL) & set(UNVERIFIED_INTEGRAL))
         for code, cells in self.rows.items():
             with self.subTest(code=code):
                 self.assertIn(code, cells[0])
-                if code in UNIMPLEMENTED:
-                    category, reason = UNIMPLEMENTED[code]
+                if code in UNVERIFIED_INTEGRAL:
+                    category, reason = UNVERIFIED_INTEGRAL[code]
                     self.assertEqual("D", category)
                     self.assertGreater(len(reason), 35)
 
@@ -265,7 +274,7 @@ class CoberturaCondor22Tests(unittest.TestCase):
         with self.subTest(code="GEST-M14-S02"):
             self.assertIs(access["tenant_visible"], True)
             self.assertIs(access["owner"], True)
-        self.assertEqual("NO_VERIFICABLE", self.rows["GEST-M14"][2].strip(chr(96)))
+        self.assertIn(self.rows["GEST-M14"][2].strip(chr(96)), ("NO_VERIFICABLE", "CUBIERTO"))
 
     def test_falla_cerrado(self) -> None:
         """AC-02: forged, missing, foreign or ungranted PHP inputs deny."""
@@ -291,6 +300,10 @@ class CoberturaCondor22Tests(unittest.TestCase):
         broken = MATRIX.read_text(encoding="utf-8")
         self.assertRaises(AssertionError, _matrix_rows, broken.replace(missing, "| GONE", 1))
         self.assertRaises(AssertionError, _matrix_rows, None)
+        m11 = next(line for line in broken.splitlines()
+                   if line.startswith("| \x60GEST-M11-S01\x60 · "))
+        self.assertRaises(AssertionError, _matrix_rows,
+                          broken.replace(m11, unproven_promotion(m11), 1))
 
     def test_sin_datos_reales(self) -> None:
         """AC-03: sandbox-only classes, PHP -n, no network/PII/credential I/O."""
@@ -302,7 +315,7 @@ class CoberturaCondor22Tests(unittest.TestCase):
         self.assertNotIn("curl_", PHP_PROBE)
         self.assertNotIn("https://", PHP_PROBE)
         self.assertNotIn("Authorization:", PHP_PROBE)
-        self.assertEqual(set(PARTIAL) & set(UNIMPLEMENTED), set())
+        self.assertEqual(set(PARTIAL) & set(UNVERIFIED_INTEGRAL), set())
 
     def test_ci_gate_contract(self) -> None:
         """AC-04: CI wiring; terminal exact-HEAD Validar is checked on GitHub."""

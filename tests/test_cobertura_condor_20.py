@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 import copy
 import json
+import re
 from pathlib import Path
 import sys
 import unittest
@@ -45,6 +46,53 @@ ROWS = {
 }
 
 
+
+# Solo una tríada EXPLÍCITA permite promover la fila; los PRs históricos
+# referidos para comportamiento parcial no constituyen prueba integral.
+TRIAD_PATTERN = re.compile(
+    r"TRIADA_COBERTURA:\s*codigo=\x60([A-Za-z0-9_./-]+)\x60;\s*"
+    r"prueba=\x60([A-Za-z0-9_./-]+)\x60;\s*"
+    r"PR \[#([1-9][0-9]*) MERGED\]\(https://github\.com/pl0n3r/Condor/pull/([1-9][0-9]*)\)"
+)
+
+
+def verify_coverage_row(key: str, cells: tuple[str, ...] | list[str], root: Path = ROOT) -> None:
+    """Estado abierto con brecha, o cobertura con código/test y PR enlazado.
+
+    MERGED es la declaración auditable del documento, no una lectura de GitHub
+    desde CI. La revisión de la promoción debe comprobar el merge y su alcance.
+    """
+    if len(cells) != 5:
+        raise ValueError("UNKNOWN: fila malformada " + key)
+    state = cells[2].strip(chr(96))
+    reason = cells[3].strip()
+    if state == "NO_VERIFICABLE":
+        if len(reason) < 35 or key not in reason:
+            raise ValueError("UNKNOWN: motivo de cobertura ausente " + key)
+        return
+    if state != "CUBIERTO":
+        raise ValueError("UNKNOWN: estado no admitido " + key)
+    proofs = list(TRIAD_PATTERN.finditer(reason))
+    if len(proofs) != 1:
+        raise ValueError("UNKNOWN: tríada integral no acreditada " + key)
+    code, test, pr_number, linked_number = proofs[0].groups()
+    if pr_number != linked_number:
+        raise ValueError("UNKNOWN: PR enlazado no coincide " + key)
+    for path, prefix, extensions in (
+        (code, "src/", (".php", ".ts", ".tsx", ".js")),
+        (test, "tests/", (".py", ".php", ".mjs")),
+    ):
+        if (not path.startswith(prefix) or
+                any(part in ("", ".", "..") for part in path.split("/")) or
+                not path.endswith(extensions) or not (root / path).is_file()):
+            raise ValueError("UNKNOWN: código/prueba inexistente " + key)
+
+
+def unproven_promotion(row: str) -> str:
+    """Promoción adversarial sin tríada independientemente del estado actual."""
+    return TRIAD_PATTERN.sub("", row.replace("NO_VERIFICABLE", "CUBIERTO", 1))
+
+
 def matrix_rows(source: object) -> dict[str, tuple[str, ...]]:
     """Reject unknown/missing/duplicated/promoted requirements, not claim release."""
     if not isinstance(source, str) or not source.strip():
@@ -64,9 +112,10 @@ def matrix_rows(source: object) -> dict[str, tuple[str, ...]]:
         expected = "`" + key + "` · `docs/gestion-empresarial-integral.md`"
         if (len(columns) != 5 or columns[0] != expected
                 or columns[1] != ROWS[key]
-                or columns[2] != "`NO_VERIFICABLE`"
+                or columns[2] not in ("`NO_VERIFICABLE`", "`CUBIERTO`")
                 or not columns[3].strip() or columns[4] != "#802"):
             raise ValueError("UNKNOWN: altered row " + key)
+        verify_coverage_row(key, columns)
         found[key] = columns
     if set(found) != set(ROWS):
         raise ValueError("UNKNOWN: incomplete 12-row matrix")
@@ -153,7 +202,7 @@ class CoberturaCondor20Tests(unittest.TestCase):
             line = next(value for value in source.splitlines()
                         if value.startswith("| `" + key + "` · "))
             for altered in (source.replace(line, "", 1), source + "\n" + line,
-                            source.replace(line, line.replace("NO_VERIFICABLE", "CUBIERTO", 1), 1)):
+                            source.replace(line, unproven_promotion(line), 1)):
                 with self.subTest(row=key):
                     with self.assertRaisesRegex(ValueError, "UNKNOWN"):
                         matrix_rows(altered)
