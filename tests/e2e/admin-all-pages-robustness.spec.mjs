@@ -178,8 +178,15 @@ for (const role of ROLES) {
           // relying on a fixed sleep or silently suppressing console failures.
           await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => null);
           const metrics = await inspectPage(page);
+          const eventGroups = new Map();
+          for (const event of events) {
+            const status = event.match(/Failed to load resource: the server responded with a status of (\\d{3})/)?.[1];
+            const kind = status ? 'console-http-' + status : event.startsWith('javascript:') ? 'javascript' : 'console';
+            if (!eventGroups.has(kind)) eventGroups.set(kind, []);
+            eventGroups.get(kind).push(event);
+          }
           const checks = [
-            ['console', events],
+            ...eventGroups.entries(),
             ['xss', metrics.payloadExecuted ? ['payload ejecutado'] : []],
             ['unsafe-dom', metrics.markupInjected ? ['payload HTML no escapado en el DOM'] : []],
             ['horizontal', metrics.scrollWidth > viewport + 1
