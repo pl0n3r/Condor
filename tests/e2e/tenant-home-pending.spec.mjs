@@ -55,8 +55,13 @@ function fixtureEntry() {
         "import '/frontend/admin/admin-ui.css';",
         "import '/frontend/admin/admin.css';",
         'const groups = ' + JSON.stringify(GROUPS) + ';',
+        'const branchId = ' + JSON.stringify(BRANCH) + ';',
         "const root = document.querySelector('.workspace');",
         "createRoot(root).render(React.createElement(React.Fragment, null,",
+        "  React.createElement('div', {className:'workspace-heading'},",
+        "    React.createElement('label', null, 'Sede activa',",
+        "      React.createElement('select', {'aria-label':'Sede activa', defaultValue:branchId},",
+        "        React.createElement('option', {value:branchId}, 'Sede ficticia')))),",
         "  React.createElement(OverviewGrid, {ariaLabel:'Estado de la empresa',",
         "    items:[{label:'Tenant',value:'Activo'},",
         "      {label:'Permisos efectivos',value:40}]}),",
@@ -108,10 +113,8 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
       if (url.pathname === '/admin') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end('<!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><body>'
-          + '<div id="condor-admin-root" class="admin-shell" data-payroll-real-data-enabled="true">'
-          + '<div class="workspace-heading"><label>Sede activa'
-          + '<select aria-label="Sede activa"><option value="' + BRANCH + '">Sede ficticia</option>'
-          + '</select></label></div><main class="workspace" data-module="inicio"></main></div>'
+          + '<div id="condor-admin-root" class="admin-shell admin-shell-tenant" data-payroll-real-data-enabled="true">'
+          + '<main class="workspace" data-module="inicio"></main></div>'
           + '<script type="module" src="' + (url.searchParams.get('view') === 'before' ? '/before.js' : '/after.js') + '"></script></body></html>');
         return;
       }
