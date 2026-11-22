@@ -146,7 +146,7 @@ test.describe('Módulos por empresa y usuario — 1943', () => {
       expect((await member.request.get(inventoryEndpoint)).status()).toBe(200);
       await member.reload();
       await expect(member.getByRole('alert', { name: 'Módulo no habilitado' })).toHaveCount(0);
-      await expect(member.locator('#inventory').getByRole('heading', { name: 'Inventario' })).toBeVisible();
+      await expect(member.locator('#inventory').getByRole('heading', { name: 'Inventario', exact: true })).toBeVisible();
     } finally {
       await member.close();
     }
