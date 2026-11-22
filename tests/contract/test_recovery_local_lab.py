@@ -4,7 +4,7 @@ No arranca Docker: fija las invariantes de seguridad que el ensayo local debe
 conservar (solo loopback, imagen fijada, secretos fuera de Git, mínimo
 privilegio, reutilización de los scripts canónicos y guarda anti-producción).
 """
-import os, re, subprocess, tempfile, unittest
+import os, re, secrets, subprocess, tempfile, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -218,12 +218,16 @@ class RecoveryLocalLabContract(unittest.TestCase):
 
     def test_disposable_url_rejects_non_lab_targets(self):
         script = str(LAB / "disposable-url.sh")
-        ok = subprocess.run(["bash", script, "mysql://condor_restore:x@127.0.0.1:3317/condor_restore_test"], capture_output=True, text=True)
+        # Credencial sintética generada por prueba: nunca se guarda en código.
+        def dsn(user, host, port, database):
+            return f"mysql://{user}:{secrets.token_urlsafe(18)}@{host}:{port}/{database}"
+
+        ok = subprocess.run(["bash", script, dsn("condor_restore", "127.0.0.1", 3317, "condor_restore_test")], capture_output=True, text=True)
         self.assertEqual(ok.returncode, 0)
-        for bad in ("mysql://condor_restore:x@db.example.com:3317/condor_restore_test",
-                    "mysql://condor_restore:x@127.0.0.1:3306/condor_restore_test",
-                    "mysql://root:x@127.0.0.1:3317/condor_restore_test",
-                    "mysql://condor_restore:x@127.0.0.1:3317/condor"):
+        for bad in (dsn("condor_restore", "db.example.com", 3317, "condor_restore_test"),
+                    dsn("condor_restore", "127.0.0.1", 3306, "condor_restore_test"),
+                    dsn("root", "127.0.0.1", 3317, "condor_restore_test"),
+                    dsn("condor_restore", "127.0.0.1", 3317, "condor")):
             r = subprocess.run(["bash", script, bad], capture_output=True, text=True)
             self.assertNotEqual(r.returncode, 0, bad)
             self.assertEqual(r.stdout, "")
