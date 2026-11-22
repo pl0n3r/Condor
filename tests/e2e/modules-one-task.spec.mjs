@@ -7,7 +7,8 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { relative, resolve, sep, join, extname } from 'node:path';
 
-const baselineSha = '7da9013d7bff92bc87aa3b4527e40c6b9facad5c';
+// SHA de main antes de #1963: contiene los cuatro módulos para comparar capturas reales.
+const baselineSha = '89037b075500c8bd4ced3a0c59a983b48d4691e8';
 const base = process.cwd();
 const modules = [
   'frontend/admin/OrdersManagement.tsx',
