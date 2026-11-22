@@ -160,14 +160,7 @@ for (const role of ROLES) {
             networkErrors.add('http: ' + status + ' ' + new URL(response.url()).pathname);
           }
         };
-        page.on('console', message => {
-          if (message.type() !== 'error') return;
-          // Chromium also writes failed HTTP resources to the console. Track
-          // those with their exact URL/status below, rather than an opaque
-          // "Failed to load resource" string that cannot be assigned to an issue.
-          if (/^Failed to load resource: the server responded with a status of \d{3}/.test(message.text())) return;
-          error(message);
-        });
+        page.on('console', message => { if (message.type() === 'error') error(message); });
         page.on('pageerror', uncaught);
         page.on('response', responseError);
         // Store a stable screenshot name accepted by the existing always-upload
