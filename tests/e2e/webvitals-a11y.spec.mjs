@@ -75,7 +75,11 @@ async function visitFlow(page, flow) {
     // not the contrast users see when the content is fully rendered.
     // Audit the *real final UI*, without disabling animations or axe rules.
     await expect(page.locator('.mk-pick')).toHaveCSS('opacity', '1', { timeout: 15_000 });
-    // The public page has no harmless guaranteed action; no fabricated INP.
+    // Real, local interaction on the synthetic marketing selector (no network
+    // or mutation). It permits EventTiming/INP observation when supported.
+    // Missing entries are still reported as NO_INTERACTION_ENTRY, never 0 ms.
+    await page.locator('label[for="pk2"]').click();
+    await expect(page.locator('#pk2')).toBeChecked();
     return;
   }
   await login(page, flow === 'tenant' ? process.env.E2E_EMAIL : process.env.E2E_PLATFORM_EMAIL);
@@ -90,7 +94,9 @@ async function visitFlow(page, flow) {
   } else {
     await expect(page).toHaveURL(/\/adminpl0n3r$/);
     await page.goto('/adminpl0n3r');
-    await expect(page.getByRole('heading', { name: 'Administración global' })).toBeVisible();
+    // The #1961 design changes the platform H1 from "Administración global"
+    // to the active module title; assert semantics, not retired copy.
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     const navigation = page.getByRole('navigation', { name: 'Navegación de plataforma' });
     const group = navigation.getByRole('button', { name: 'Empresas', exact: true });
     await group.click();
