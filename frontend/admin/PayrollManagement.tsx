@@ -200,16 +200,16 @@ export function PayrollManagement(props: Props) {
   return <section id="payroll-management" className="catalog-panel ui-page" aria-label="Nómina">
     <PageHeader title="Nómina" description="Registros internos de nómina por razón social y sede."
       actions={canCreate ? <button type="button" className="button" onClick={() => setPanel('create')}>Nuevo registro</button> : undefined} />
-    <p className="muted">Referencias opacas únicamente. Esta interfaz no liquida, aprueba ni ejecuta pagos.</p>
+    <p className="muted">Prepara y consulta registros de nómina para su revisión. Los pagos no se realizan desde esta pantalla.</p>
     {notice && <output role="status" aria-live="polite">{notice}</output>}
     {status === 'loading' && <p role="status">Cargando registros de nómina…</p>}
     {status === 'error' && <p role="alert">No fue posible cargar los registros. Comprueba tu conexión.</p>}
     {status === 'ready' && <>
-      <MetricStrip label="Indicadores de nómina" items={[
+      {rows.length > 0 && <MetricStrip label="Indicadores de nómina" items={[
         { label: 'Registros', value: rows.length },
         { label: 'Borradores', value: rows.filter(row => row.state === 'BORRADOR').length },
         { label: 'En revisión', value: rows.filter(row => row.state === 'EN_REVISION').length },
-      ]} />
+      ]} />}
       <Card title="Registros por empresa">
         <Toolbar trailing={<output aria-live="polite">{visible.length} resultados</output>}>
           <label>Buscar referencias
@@ -234,7 +234,19 @@ export function PayrollManagement(props: Props) {
               {row.state === 'BORRADOR' ? 'Borrador' : 'En revisión'}
             </StatusPill> },
           ]}
-          empty={<p role="status">No hay registros para este filtro.</p>} />
+          empty={<div role="status">
+            <strong>{search.trim() || filter !== 'TODOS'
+              ? 'No hay registros para este filtro.'
+              : 'Aún no hay registros de nómina'}</strong>
+            <p>{search.trim() || filter !== 'TODOS'
+              ? 'Modifica los filtros para ver otros registros.'
+              : 'Registra la primera nómina para organizar su revisión desde aquí.'}</p>
+            {search.trim() || filter !== 'TODOS'
+              ? <button className="button button-secondary" type="button"
+                  onClick={() => { setSearch(''); setFilter('TODOS'); }}>Limpiar filtros</button>
+              : canCreate && <button className="button" type="button"
+                  onClick={() => setPanel('create')}>Registra la primera nómina</button>}
+          </div>} />
       </Card>
     </>}
     <SidePanel open={panel === 'create' && canCreate && status === 'ready'}

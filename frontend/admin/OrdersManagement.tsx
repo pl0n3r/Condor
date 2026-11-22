@@ -165,6 +165,7 @@ export function OrdersManagement({
   const [exportFrom, setExportFrom] = useState('');
   const [exportTo, setExportTo] = useState('');
   const [exportBusy, setExportBusy] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [sourceId, setSourceId] = useState('');
   const [priceListId, setPriceListId] = useState('');
@@ -434,6 +435,7 @@ export function OrdersManagement({
 
   const ready = state.status === 'ready' ? state.data : null;
   const selectedOrder = ready?.orders.find((order) => order.id === selectedOrderId);
+  const hasActiveFilters = Object.values(filters).some((value) => value.trim() !== '');
 
   return (
     <section
@@ -443,9 +445,16 @@ export function OrdersManagement({
     >
       <PageHeader title="Pedidos"
         description="Admin y e-commerce comparten el mismo dominio, reservas y snapshots históricos de precio."
-        actions={ready && canCreate ? <button type="button" className="button"
-          onClick={() => setCreateOpen(true)}>Crear pedido</button> : undefined} />
-      {ready && <MetricStrip label="Resumen de pedidos" items={[
+        actions={ready ? <>
+          {canCreate && <button type="button" className="button"
+            onClick={() => setCreateOpen(true)}>Crear pedido</button>}
+          <button type="button" className="button button-secondary"
+            aria-expanded={exportOpen} aria-controls="orders-export-panel"
+            onClick={() => setExportOpen((open) => !open)}>
+            {exportOpen ? 'Ocultar exportación' : 'Exportar CSV'}
+          </button>
+        </> : undefined} />
+      {ready && ready.pagination.total > 0 && <MetricStrip label="Resumen de pedidos" items={[
         { label: 'Pedidos encontrados', value: ready.pagination.total },
         { label: 'Página', value: ready.pagination.page },
       ]} />}
@@ -646,8 +655,9 @@ export function OrdersManagement({
         </SidePanel>
       )}
 
-      {ready && canView && (
+      {ready && canView && exportOpen && (
         <form
+          id="orders-export-panel"
           className="catalog-card"
           onSubmit={(event) => void exportOrders(event)}
           aria-label="Exportar pedidos a CSV"
@@ -737,7 +747,15 @@ export function OrdersManagement({
         <Card title="Pedidos de la sede">
           <DataTable caption="Pedidos registrados" rows={ready.orders} rowKey={(order) => order.id}
             onOpen={(order) => { setSelectedOrderId(order.id); setExpandedOrderId(null); }}
-            empty={<p role="status">No hay pedidos que coincidan con los filtros en esta sede.</p>}
+            empty={<div role="status">
+              <strong>{hasActiveFilters ? 'No hay pedidos que coincidan con estos filtros' : 'Todavía no hay pedidos en esta sede'}</strong>
+              <p>{hasActiveFilters
+                ? 'Prueba con otros criterios o vuelve a mostrar todos los pedidos.'
+                : 'Cuando registres el primer pedido, aparecerá aquí para consultarlo y darle seguimiento.'}</p>
+              {hasActiveFilters
+                ? <button type="button" className="button button-secondary" onClick={clearFilters}>Limpiar filtros</button>
+                : canCreate && <button type="button" className="button" onClick={() => setCreateOpen(true)}>Crear primer pedido</button>}
+            </div>}
             columns={[
               { key: 'id', header: 'Pedido', render: (order) => 'Pedido ' + order.id.slice(-8) },
               { key: 'customer', header: 'Cliente', render: (order) =>
