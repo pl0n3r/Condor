@@ -13,6 +13,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Sentry\SentrySdk;
 use Sentry\State\Hub;
+use Symfony\Component\HttpFoundation\Request;
 
 /**
  * Real production-kernel wiring on a throwaway MariaDB fixture.
@@ -149,7 +150,14 @@ final class StoredSentryDsnBootTest extends TestCase
         $kernel = new Kernel('prod', false);
         try {
             $kernel->boot();
+            // Symfony lazy-loads Sentry's HubInterface service on an HTTP
+            // request. Boot alone can leave the SDK hub from a previous
+            // scenario without re-binding the new kernel's Sentry client.
+            // Internal /health is read-only and never sends an Sentry event.
+            $request = Request::create('/health', 'GET');
+            $response = $kernel->handle($request);
             $client = SentrySdk::getCurrentHub()->getClient();
+            $kernel->terminate($request, $response);
             $dsn = $client?->getOptions()->getDsn();
 
             return $dsn === null ? null : (string) $dsn;
