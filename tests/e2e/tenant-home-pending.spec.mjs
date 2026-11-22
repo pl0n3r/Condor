@@ -137,10 +137,16 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
         return;
       }
       let payload;
-      if (url.pathname.endsWith('/orders')) payload = {
-        orders: mode === 'empty' ? [] : orders,
-        pagination: { page: 1, has_more: false },
-      };
+      if (url.pathname.endsWith('/orders')) {
+        // La consulta de inicio usa filtros del backend + pagination.total.
+        expect(url.searchParams.get('status')).toBe('open');
+        expect(url.searchParams.get('fulfillment_status')).toBe('reserved');
+        const filtered = mode === 'empty' ? [] : orders.filter(item =>
+          item.order_status === 'open' && item.fulfillment_status === 'reserved');
+        payload = { orders: filtered.slice(0, 1),
+          pagination: { page: 1, per_page: 1, total: filtered.length,
+            has_more: filtered.length > 1 } };
+      }
       else if (url.pathname.endsWith('/inventory/stock-alerts')) payload = {
         source_id: 'synthetic', alerts: mode === 'empty' ? [] : alerts,
       };
