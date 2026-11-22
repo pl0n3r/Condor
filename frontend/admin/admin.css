@@ -1046,3 +1046,20 @@ dialog.ui-sidepanel[open] { animation: ui-sheet-in .2s cubic-bezier(.22, 1, .36,
     display: block;
   }
 }
+
+/* #1961 · Cabecera y diagnósticos del propietario dentro del shell existente. */
+.admin-shell-platform .sidebar-user { display: grid; gap: 2px; min-width: 0; margin: 14px 0; padding: 12px; border: 1px solid var(--z1, #e2e6ed); border-radius: var(--zg, 8px); background: var(--zi, #fff); }
+.admin-shell-platform .sidebar-user span { color: var(--zd, #566073); font-size: .75rem; }
+.admin-shell-platform .sidebar-user strong { overflow-wrap: anywhere; font-size: .875rem; }
+.admin-shell-platform .platform-heading { min-width: 0; align-items: flex-start; }
+.admin-shell-platform .platform-heading > div:first-child { min-width: 0; flex: 1 1 auto; }
+.admin-shell-platform .platform-heading-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.admin-shell-platform .platform-diagnostics-content { display: grid; min-width: 0; max-width: 100%; gap: 20px; }
+.admin-shell-platform .platform-diagnostics-page { display: grid; min-width: 0; max-width: 100%; gap: 20px; }
+.admin-shell-platform .platform-diagnostics-page :is(code, a, span, dd) { overflow-wrap: anywhere; word-break: break-word; }
+.admin-shell-platform .platform-diagnostics-page .foundation-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); min-width: 0; }
+.admin-shell-platform .platform-diagnostics-page .foundation-grid article { min-width: 0; display: grid; gap: 8px; align-content: start; }
+.admin-shell-platform .platform-diagnostics-page .platform-diagnostic-link { display: block; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .admin-shell-platform .platform-heading-actions, .admin-shell-platform .platform-heading-actions > * { width: 100%; }
+}

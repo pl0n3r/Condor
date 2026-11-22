@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AdminShell } from './AdminShell';
 import { OverviewGrid } from './OverviewGrid';
-import { Card, DataTable, MetricStrip, PageHeader, SidePanel, StatusPill, Toolbar } from './ui/Kit';
+import { Card, DataTable, MetricStrip, SidePanel, StatusPill, Toolbar } from './ui/Kit';
 import { SystemHealthPanel } from './SystemHealthPanel';
 import { SaasControlCenterReadPanel } from './SaasControlCenterReadPanel';
 import {
@@ -779,6 +779,7 @@ export function PlatformOwnerApp({
     <AdminShell
       version={version}
       logoutToken={logoutToken}
+      userName={state.status === 'ready' ? state.data.actor.name : undefined}
       ariaLabel="Centro de control de Condor"
       navLabel="Navegación de plataforma"
       variant="platform"
