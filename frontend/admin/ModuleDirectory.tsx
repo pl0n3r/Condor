@@ -116,7 +116,14 @@ export function ModuleDirectory({ entries }: Readonly<{ entries: readonly AdminN
     void (async () => {
       setState({ status: 'loading' });
       try {
-        const context = await getJson('/api/v1/context', abort.signal);
+        // AdminApp controla el selector real de sede; sin identidad válida,
+        // jamás consultar la sede por defecto ni heredar datos de otra.
+        const selectedBranch = document.querySelector<HTMLSelectElement>(
+          '.workspace-heading select[aria-label="Sede activa"]',
+        )?.value;
+        if (!isUlid(selectedBranch)) throw new Error('MISSING_ACTIVE_BRANCH');
+        const contextQuery = new URLSearchParams({ branch: selectedBranch });
+        const context = await getJson('/api/v1/context?' + contextQuery.toString(), abort.signal);
         if (!record(context) || !record(context.tenant) || !record(context.active_branch)
           || !isUlid(context.tenant.id) || !isUlid(context.active_branch.id)
           || !Array.isArray(context.permissions)
@@ -125,6 +132,7 @@ export function ModuleDirectory({ entries }: Readonly<{ entries: readonly AdminN
         }
         const tenantId = context.tenant.id;
         const branchId = context.active_branch.id;
+        if (branchId !== selectedBranch) throw new Error('MISMATCHED_ACTIVE_BRANCH');
         const companyId = record(context.active_legal_entity)
           ? context.active_legal_entity.id : null;
         const permissions = context.permissions as string[];
