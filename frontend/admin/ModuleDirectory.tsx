@@ -105,7 +105,7 @@ async function payrollPending(branchId: string, tenantId: string, companyId: str
     || response.records.length > 100) throw new Error('INVALID_PAYROLL');
   let count = 0;
   for (const row of response.records) {
-    if (!record(row) || row.tenant_id !== tenantId || row.legal_entity_id !== companyId
+    if (!record(row) || row.tenant_id !== tenantId || row.company_id !== companyId
       || !['BORRADOR', 'EN_REVISION'].includes(String(row.state))) {
       throw new Error('INVALID_PAYROLL_SCOPE');
     }
