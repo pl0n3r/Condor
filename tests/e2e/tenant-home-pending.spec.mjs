@@ -137,6 +137,10 @@ test.describe('Inicio tenant / Para hoy - datos exclusivamente sintéticos', () 
     await page.route('**/api/v1/**', async route => {
       const url = new URL(route.request().url());
       called.push(url.pathname);
+      // Un contador de otra sede/tenant jamás puede alimentar la vista activa.
+      if (url.pathname !== '/api/v1/context') {
+        expect(url.pathname.startsWith('/api/v1/branches/' + BRANCH + '/')).toBe(true);
+      }
       if (url.pathname === '/api/v1/context') {
         expect(url.searchParams.get('branch')).toBe(BRANCH);
       }
