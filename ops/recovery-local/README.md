@@ -20,7 +20,7 @@ reutiliza exactamente sus piezas (`scripts/backup-database.sh`, `scripts/recover
 ## Requisitos
 
 - Docker (probado con Colima + Docker CLI + Compose en macOS arm64).
-- PHP 8.5, Composer (`composer install` en la raíz), cliente `mariadb`, `openssl`, `python3`, `shasum`.
+- PHP 8.5, Composer (`composer install` en la raíz), cliente `mariadb`, `openssl`, `python3`, `shasum`, `lsof`.
 
 ## Uso
 

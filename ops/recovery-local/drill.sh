@@ -12,7 +12,19 @@ set -euo pipefail
 umask 077
 
 repeat=1
-if [[ "${1:-}" = "--repeat" ]]; then repeat="${2:?--repeat N}"; fi
+case "${1:-}" in
+  --run-once)
+    [[ $# -eq 1 ]] || { echo "drill: argumentos extra" >&2; exit 2; }
+    ;;
+  --repeat)
+    [[ $# -eq 2 && "${2:-}" =~ ^[1-9][0-9]*$ ]] || { echo "drill: --repeat exige un entero positivo" >&2; exit 2; }
+    repeat="$2"
+    ;;
+  "")
+    [[ $# -eq 0 ]] || { echo "drill: argumentos inesperados" >&2; exit 2; }
+    ;;
+  *) echo "drill: opción desconocida" >&2; exit 2 ;;
+esac
 
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
@@ -136,13 +148,33 @@ SQL
 
   # Aplicación Condor contra la base restaurada: /health (schema_up_to_date) y smoke de /.
   local app_port=18087 app_secret; app_secret="$(openssl rand -hex 32)"
+  command -v lsof >/dev/null || { check app_server_port FAIL "falta lsof"; return 1; }
+  # Nunca aceptar la salud de un listener existente, ni matar procesos ajenos.
+  if ! python3 - "$app_port" <<'PY'
+import socket, sys
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.bind(("127.0.0.1", int(sys.argv[1])))
+PY
+  then check app_server_port FAIL "puerto ocupado"; return 1; fi
+
   (cd "$repo" && DATABASE_URL="$target_url" APP_SECRET="$app_secret" APP_ENV=prod APP_DEBUG=0 CONDOR_EPHEMERAL_CACHE=1 \
-     php -S 127.0.0.1:$app_port -t public public/index.php >"$run_dir/app-server.log" 2>&1) &
-  local server_pid=$!; disown "$server_pid" 2>/dev/null || true
-  local health=""
-  for _ in $(seq 1 30); do health="$(curl -fsS --max-time 5 http://127.0.0.1:$app_port/health 2>/dev/null)" && break; sleep 1; done
+     exec php -S 127.0.0.1:$app_port -t public public/index.php) >"$run_dir/app-server.log" 2>&1 &
+  app_server_pid=$!
+  trap 'if [[ -n "${app_server_pid:-}" ]]; then kill "$app_server_pid" 2>/dev/null || true; wait "$app_server_pid" 2>/dev/null || true; fi' EXIT
+  local health="" bound=0
+  for _ in $(seq 1 30); do
+    if ! kill -0 "$app_server_pid" 2>/dev/null; then check app_server_port FAIL "servidor terminó"; return 1; fi
+    if lsof -nP -a -p "$app_server_pid" -iTCP:"$app_port" -sTCP:LISTEN >/dev/null 2>&1; then
+      bound=1
+      health="$(curl -fsS --max-time 5 http://127.0.0.1:$app_port/health 2>/dev/null)" && break
+    fi
+    sleep 1
+  done
+  [[ "$bound" -eq 1 ]] || { check app_server_port FAIL "listener propio no comprobado"; return 1; }
   local smoke_code; smoke_code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:$app_port/ || true)"
-  kill "$server_pid" 2>/dev/null || true; pkill -f "php -S 127.0.0.1:$app_port" 2>/dev/null || true
+  kill "$app_server_pid" 2>/dev/null || true
+  wait "$app_server_pid" 2>/dev/null || true
+  app_server_pid=""
   if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert d.get("status")=="ok" and d.get("schema_up_to_date") is True' "$health" 2>/dev/null; then
     check app_health_schema PASS
   else check app_health_schema FAIL "$(printf '%s' "$health" | head -c 120)"; return 1; fi
@@ -154,11 +186,21 @@ SQL
   expect_fail() { local name="$1"; shift; if "$@" >>"$log" 2>&1; then check "$name" FAIL "no rechazado"; return 1; else check "$name" PASS "rechazado"; fi; }
 
   cp "$dr_root/backup.enc" "$dr_root/tampered.enc"
-  printf '\x00' | dd of="$dr_root/tampered.enc" bs=1 seek=4096 conv=notrunc 2>/dev/null
+  python3 - "$dr_root/tampered.enc" <<'PY'
+from pathlib import Path
+import sys
+with Path(sys.argv[1]).open("r+b") as ciphertext:
+    ciphertext.seek(4096)
+    original = ciphertext.read(1)
+    if not original:
+        raise SystemExit("ciphertext demasiado corto para alterar")
+    ciphertext.seek(4096)
+    ciphertext.write(bytes([original[0] ^ 0x01]))
+PY
   expect_fail fail_tampered_ciphertext sh -c "cd '$dr_root' && sed 's/backup.enc/tampered.enc/' '$run_dir/backup.enc.sha256' | shasum -a 256 -c -"
   expect_fail fail_wrong_passphrase sh -c "cd '$repo' && HOME='$dr_home' CONDOR_RECOVERY_ENCRYPTION_PASSPHRASE=wrong-passphrase python3 scripts/recovery-production.py decrypt --source backup.enc --target wrongpass.sql.gz && gzip -t '$dr_root/wrongpass.sql.gz'"
   expect_fail fail_target_not_disposable sh -c "cd '$repo' && DATABASE_URL='$(lab_url condor)' CONDOR_ALLOW_DESTRUCTIVE_RESTORE=1 CONDOR_RESTORE_EXPECT_TENANT_SLUG=$tenant_slug CONDOR_RESTORE_EXPECT_USER_EMAIL=$user_email sh scripts/verify-backup-restore.sh '$dr_root/restored.sql.gz'"
-  expect_fail fail_missing_destructive_flag sh -c "cd '$repo' && DATABASE_URL='$target_url' CONDOR_RESTORE_EXPECT_TENANT_SLUG=$tenant_slug CONDOR_RESTORE_EXPECT_USER_EMAIL=$user_email sh scripts/verify-backup-restore.sh '$dr_root/restored.sql.gz'"
+  expect_fail fail_missing_destructive_flag sh -c "cd '$repo' && DATABASE_URL='$target_url' CONDOR_RESTORE_EXPECT_TENANT_SLUG=$tenant_slug CONDOR_RESTORE_EXPECT_USER_EMAIL=$user_email env -u CONDOR_ALLOW_DESTRUCTIVE_RESTORE sh scripts/verify-backup-restore.sh '$dr_root/restored.sql.gz'"
   expect_fail fail_guard_remote_host assert_lab_url "mysql://condor_restore:x@db.example.com:$port/condor_restore_test"
   expect_fail fail_guard_prod_db_name assert_lab_url "mysql://condor_restore:x@127.0.0.1:$port/condor"
   expect_fail fail_privilege_other_db sql "" -e "CREATE DATABASE condor_probe_forbidden"
@@ -195,6 +237,13 @@ print(json.dumps({k: ev[k] for k in ("run_id","result","rto_ms","backup_ms","tab
 PY
 }
 
+# Cada ensayo corre en Bash independiente: el "||" exterior no desactiva errexit.
+if [[ "${1:-}" == "--run-once" ]]; then
+  run_once
+  exit 0
+fi
 status=0
-for i in $(seq 1 "$repeat"); do run_once || status=1; done
-exit $status
+for i in $(seq 1 "$repeat"); do
+  if ! "$here/drill.sh" --run-once; then status=1; fi
+done
+exit "$status"

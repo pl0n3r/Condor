@@ -8,6 +8,18 @@ export CONDOR_RECOVERY_SECRETS_DIR="$CONDOR_RECOVERY_HOME/secrets"
 export CONDOR_RECOVERY_PORT="${CONDOR_RECOVERY_PORT:-3317}"
 compose() { docker compose -f "$here/compose.yaml" "$@"; }
 
+reject_secrets_in_checkout() {
+  # Resuelve rutas reales, incluso a través de enlaces simbólicos.
+  python3 - "$here/../.." "$CONDOR_RECOVERY_HOME" <<'PY'
+from pathlib import Path
+import sys
+repo = Path(sys.argv[1]).resolve()
+home = Path(sys.argv[2]).expanduser().resolve(strict=False)
+if home == repo or repo in home.parents:
+    raise SystemExit("lab.sh: CONDOR_RECOVERY_HOME no puede vivir dentro del checkout")
+PY
+}
+
 ensure_secrets() {
   umask 077
   mkdir -p "$CONDOR_RECOVERY_SECRETS_DIR"
@@ -23,6 +35,7 @@ ensure_secrets() {
 
 case "${1:-}" in
   up)
+    reject_secrets_in_checkout
     command -v docker >/dev/null || { echo "lab.sh: falta docker" >&2; exit 1; }
     ensure_secrets
     compose up -d --wait
