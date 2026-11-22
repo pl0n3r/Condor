@@ -6,6 +6,8 @@
 set -euo pipefail
 lab_home="${CONDOR_RECOVERY_HOME:-$HOME/.condor-recovery-local}"
 port="${CONDOR_RECOVERY_PORT:-3317}"
+# El drill productivo solo restaura en el puerto fijo del laboratorio desechable.
+[[ "$port" == "3317" ]] || { echo "disposable-url: puerto del drill inválido" >&2; exit 3; }
 url="${1:-}"
 if [[ -z "$url" ]]; then
   pw_file="$lab_home/secrets/app_password"

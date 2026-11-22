@@ -231,6 +231,13 @@ class RecoveryLocalLabContract(unittest.TestCase):
             r = subprocess.run(["bash", script, bad], capture_output=True, text=True)
             self.assertNotEqual(r.returncode, 0, bad)
             self.assertEqual(r.stdout, "")
+        # Una variable de entorno tampoco puede convertir otro puerto en autorizado.
+        bad_port_env = os.environ.copy()
+        bad_port_env["CONDOR_RECOVERY_PORT"] = "3306"
+        r = subprocess.run(["bash", script, dsn("condor_restore", "127.0.0.1", 3306, "condor_restore_test")],
+                           env=bad_port_env, capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(r.stdout, "")
 
 
 if __name__ == "__main__":
