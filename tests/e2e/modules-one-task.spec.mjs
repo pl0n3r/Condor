@@ -209,39 +209,51 @@ test.describe('Condor #1963: un trabajo por pantalla con estados de primer uso',
     await expect(page.locator('#inventory-secondary-tools')).toBeVisible();
   });
 
-  test('Nómina: sin datos muestra CTA real y sin indicadores cero', async ({ page }, info) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await openFixture(page, 'before', 'payroll');
-    await expect(page.getByText('No hay registros para este filtro.')).toBeVisible();
-    await evidence(page, info, 'nomina', 'before', 390);
-    await openFixture(page, 'after', 'payroll');
-    await expect(page.getByText('Aún no hay registros de nómina')).toBeVisible();
-    await expect(page.getByText('No hay registros para este filtro.')).toHaveCount(0);
-    await expect(page.locator('#payroll-management .ui-metrics')).toHaveCount(0);
-    await evidence(page, info, 'nomina', 'after', 390);
-    const firstPayroll = page.getByRole('button', { name: 'Registra la primera nómina' });
-    await firstPayroll.focus();
-    await expect(firstPayroll).toBeFocused();
-    // La acción principal de primer uso también debe funcionar con teclado.
-    await page.keyboard.press('Enter');
-    await expect(page.getByRole('dialog', { name: 'Nuevo registro de nómina' })).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog', { name: 'Nuevo registro de nómina' })).toBeHidden();
-  });
-
-  test('Finanzas: primer uso con CTA, sin KPI artificiales', async ({ page }, info) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await openFixture(page, 'before', 'finance');
-    await expect(page.getByText('No hay registros para este ámbito y filtro.')).toBeVisible();
-    await evidence(page, info, 'finanzas', 'before', 390);
-    await openFixture(page, 'after', 'finance');
-    await expect(page.getByText('Aún no hay registros financieros')).toBeVisible();
-    await expect(page.getByText('No hay registros para este ámbito y filtro.')).toHaveCount(0);
-    await expect(page.locator('#finance-management .ui-metrics')).toHaveCount(0);
-    await evidence(page, info, 'finanzas', 'after', 390);
-    await page.getByRole('button', { name: 'Crear primer registro financiero' }).click();
-    await expect(page.getByRole('dialog', { name: 'Crear registro financiero' })).toBeVisible();
-  });
+  // Los dos módulos comparten el mismo contrato visual sin duplicar pasos de
+  // captura, aserciones ni apertura de la acción principal.
+  for (const scene of [
+    {
+      name: 'Nómina: sin datos muestra CTA real y sin indicadores cero',
+      module: 'payroll', label: 'nomina', panel: '#payroll-management',
+      before: 'No hay registros para este filtro.',
+      after: 'Aún no hay registros de nómina',
+      action: 'Registra la primera nómina', dialog: 'Nuevo registro de nómina',
+      keyboard: true,
+    },
+    {
+      name: 'Finanzas: primer uso con CTA, sin KPI artificiales',
+      module: 'finance', label: 'finanzas', panel: '#finance-management',
+      before: 'No hay registros para este ámbito y filtro.',
+      after: 'Aún no hay registros financieros',
+      action: 'Crear primer registro financiero', dialog: 'Crear registro financiero',
+      keyboard: false,
+    },
+  ]) {
+    test(scene.name, async ({ page }, info) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await openFixture(page, 'before', scene.module);
+      await expect(page.getByText(scene.before)).toBeVisible();
+      await evidence(page, info, scene.label, 'before', 390);
+      await openFixture(page, 'after', scene.module);
+      await expect(page.getByText(scene.after)).toBeVisible();
+      await expect(page.getByText(scene.before)).toHaveCount(0);
+      await expect(page.locator(scene.panel + ' .ui-metrics')).toHaveCount(0);
+      await evidence(page, info, scene.label, 'after', 390);
+      const action = page.getByRole('button', { name: scene.action });
+      if (scene.keyboard) {
+        await action.focus();
+        await expect(action).toBeFocused();
+        await page.keyboard.press('Enter');
+      } else {
+        await action.click();
+      }
+      await expect(page.getByRole('dialog', { name: scene.dialog })).toBeVisible();
+      if (scene.keyboard) {
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog', { name: scene.dialog })).toBeHidden();
+      }
+    });
+  }
 
   test('Comparativas complementarias 390/1440 de los cuatro módulos con su baseline real', async ({ page }, info) => {
     const scenes = [
