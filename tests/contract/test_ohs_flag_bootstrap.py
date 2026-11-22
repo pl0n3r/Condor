@@ -1,4 +1,4 @@
-"""#1661: bootstrap SG-SST jamás habilitado por cliente ni por defecto."""
+"""#1661: bootstrap SG-SST visible por defecto y con autorización exclusivamente del servidor."""
 from pathlib import Path
 import unittest
 
@@ -50,6 +50,19 @@ class OhsFlagBootstrapTests(unittest.TestCase):
         self.assertIn("import.meta.env.DEV", self.ui)
         self.assertIn("SG-SST aún no está habilitado", self.ui)
 
+
+
+    def test_server_default_on_with_explicit_emergency_off(self):
+        bootstrap = (ROOT / "config/bootstrap.php").read_text()
+        example = (ROOT / ".env.example").read_text()
+        self.assertIn("'OHS_REAL_DATA_ENABLED'", bootstrap)
+        self.assertIn("getenv($moduleFlag) !== false", bootstrap)
+        self.assertIn("array_key_exists($moduleFlag, $_ENV)", bootstrap)
+        self.assertIn("array_key_exists($moduleFlag, $_SERVER)", bootstrap)
+        self.assertIn("putenv($moduleFlag.'=true')", bootstrap)
+        self.assertIn("$_ENV[$moduleFlag] = 'true'", bootstrap)
+        self.assertIn("$_SERVER[$moduleFlag] = 'true'", bootstrap)
+        self.assertIn("OHS_REAL_DATA_ENABLED=true", example)
 
 if __name__ == "__main__":
     unittest.main()
