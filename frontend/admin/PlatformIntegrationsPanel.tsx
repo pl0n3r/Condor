@@ -257,7 +257,7 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
           </label>
           <Detail setting={setting('mail.api_key')} />
           <div className="ui-form-actions">
-            <button className="button" type="submit" disabled={busy || !data.secret_write_enabled}>Guardar {field.label}</button>
+            <button className="button" type="submit" disabled={busy || !data.secret_write_enabled}>Guardar clave</button>
             <button className="button button-secondary" type="button" disabled={busy || !setting('mail.api_key').configured}
               onClick={() => void deleteSecret('mail.api_key')}>Eliminar clave</button>
           </div>
@@ -319,7 +319,7 @@ export function PlatformIntegrationsPanel({ refreshKey }: Props) {
             </label>
             <Detail setting={setting(field.key)} />
             <div className="ui-form-actions">
-              <button className="button" type="submit" disabled={busy || !data.secret_write_enabled}>Guardar clave</button>
+              <button className="button" type="submit" disabled={busy || !data.secret_write_enabled}>Guardar {field.label}</button>
               <button className="button button-secondary" type="button"
                 disabled={busy || !setting(field.key).configured}
                 onClick={() => void deleteSecret(field.key)}>Eliminar clave</button>
