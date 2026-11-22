@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Security;
 
+use App\Application\Onboarding\PublicTrialCaptcha;
+
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -32,6 +34,12 @@ final readonly class PublicAbuseGuard
         'public_trial_request',
         'app_password_reset_request',
     ];
+    /** Cloudflare actions are checked against the server response, not caller claims. */
+    private const FORM_CAPTCHA_ROUTES = [
+        'app_password_reset_request' => 'condor_password_reset',
+        'app_storefront_checkout_domain' => 'condor_storefront_checkout',
+        'app_storefront_checkout_platform' => 'condor_storefront_checkout',
+    ];
 
     public function __construct(
         #[Autowire(service: 'limiter.public_abuse_ip')]
@@ -44,6 +52,8 @@ final readonly class PublicAbuseGuard
         private ?string $signingKey = null,
         #[Autowire('%kernel.environment%')]
         private string $environment = 'test',
+        #[Autowire(service: PublicTrialCaptcha::class)]
+        private ?PublicTrialCaptcha $formsCaptcha = null,
     ) {
     }
 
@@ -117,6 +127,20 @@ final readonly class PublicAbuseGuard
         // PublicTrialEnrollmentService, checkout and other controllers.
         $request->request->remove('_condor_form_proof');
         $request->request->remove('_condor_website');
+
+        if ($this->environment !== 'test'
+            && isset(self::FORM_CAPTCHA_ROUTES[$route])
+        ) {
+            $token = self::formOrJson($request,
+                $route === 'app_password_reset_request' ? 'cf-turnstile-response' : 'captcha');
+            if (!is_string($token)
+                || !$this->formsCaptcha?->verifyForAction(
+                    $token, self::FORM_CAPTCHA_ROUTES[$route],
+                )
+            ) {
+                $event->setResponse(self::invalidForm());
+            }
+        }
     }
 
     /** Inject signed proof and an inert honeypot in public HTML POST forms. */

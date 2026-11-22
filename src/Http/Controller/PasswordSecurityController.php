@@ -74,6 +74,7 @@ final class PasswordSecurityController extends AbstractController
             [
                 'app_version' => $version->human(),
                 'message' => $message,
+                'captcha_sitekey' => trim((string) getenv('CONDOR_PUBLIC_FORMS_CAPTCHA_SITEKEY')),
             ],
         ));
     }
