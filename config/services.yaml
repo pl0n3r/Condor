@@ -22,6 +22,7 @@ services:
   # Bootstrap DSN reads use an isolated short-lived DBAL connection if needed,
   # avoiding cycles with the Doctrine service graph.
   App\Infrastructure\Observability\StoredSentryDsnEnvLoader:
+    autoconfigure: false
     arguments:
       $container: '@service_container'
     tags:

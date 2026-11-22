@@ -117,7 +117,7 @@ final class StoredSentryDsnEnvLoaderTest extends TestCase
         $placeholderDb->expects(self::never())->method('fetchAssociative');
         $this->withEnvironmentDsn(null, function () use ($placeholderDb): void {
             self::assertSame('', $this->loader($placeholderDb)->getEnv(
-                '', 'SENTRY_DSN', static fn (string $key): string => 'APP_SECRET' === $key ? 'example-app-secret' : '',
+                'condor_sentry_dsn', 'SENTRY_DSN', static fn (string $key): string => 'APP_SECRET' === $key ? 'example-app-secret' : '',
             ));
         });
     }

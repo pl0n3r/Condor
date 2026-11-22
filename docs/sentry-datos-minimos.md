@@ -7,19 +7,24 @@ jurídica pendiente del tratamiento `error_incidents` (#617). `config/packages/s
 
 La pantalla del propietario /adminpl0n3r gestiona el campo Sentry. El backend cifra
 el secreto global como sentry.dsn en el almacén #1726 (nunca por tenant, en una
-respuesta de API ni en la bitácora). La lectura se realiza al resolver
-SENTRY_DSN en ejecución: **el almacén cifrado tiene prioridad sobre el entorno**.
-Si el registro no existe, la BD falla o el cifrado es inválido, se usa la variable
-del entorno como respaldo. Sin ninguno, el DSN es vacío y no hay transmisión.
+respuesta de API ni en la bitácora). La lectura se realiza al resolver `%env(condor_sentry_dsn:SENTRY_DSN)%`
+en ejecución. La precedencia vigente es **`SENTRY_DSN` del entorno explícito
+(incluido el valor vacío, que desactiva Sentry) → ajuste `sentry.dsn` cifrado
+→ vacío (sin transmisión)**. Un entorno explícito evita consultar la base de
+datos. Sin variable de entorno, si el registro no existe, la BD falla o el
+cifrado es inválido, el DSN queda vacío y no se envían eventos.
 
-StoredSentryDsnEnvLoader implementa EnvVarLoaderInterface y, para respetar
-la prioridad también cuando ya existe una variable de entorno, implementa
-EnvVarProcessorInterface exclusivamente para el procesador string.
-Los demás nombres conservan el procesamiento estándar de Symfony y el
-cargador nunca publica otro nombre distinto de SENTRY_DSN. La conexión
-es diferida y el secreto se cachea como máximo 30 segundos en memoria del proceso,
-no en logs. Los fallos (tabla, BD, APP_SECRET o autenticación del cifrado)
-retornan vacío sin excepción ni revelar causa o DSN.
+`StoredSentryDsnEnvLoader` implementa `EnvVarProcessorInterface` con
+el prefijo exclusivo `condor_sentry_dsn`; no intercepta ni altera el
+procesador nativo `string` de Symfony. Aunque también implementa
+`EnvVarLoaderInterface`, el servicio tiene `autoconfigure: false` y
+solo registra explícitamente `container.env_var_processor`, **nunca**
+`container.env_var_loader`: así se evita precargar un DSN incorrecto
+antes de disponer de Doctrine. Los demás nombres conservan el procesamiento
+estándar de Symfony. La conexión es diferida y el secreto se cachea como
+máximo 30 segundos en memoria del proceso, no en logs. Los fallos (tabla,
+BD, APP_SECRET o autenticación del cifrado) retornan vacío sin excepción
+ni revelar causa o DSN.
 
 **Seguridad:** este cambio no configura ningún DSN real, no activa Sentry
 productivo ni autoriza salida de datos. Se mantiene la puerta legal #617,
