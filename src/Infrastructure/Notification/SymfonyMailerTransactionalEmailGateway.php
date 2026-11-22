@@ -9,6 +9,8 @@ use App\Application\Notification\TransactionalEmailGateway;
 use App\Application\Notification\TransactionalEmailMessage;
 use JsonException;
 use RuntimeException;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Mime\Email;
 use Throwable;
 
@@ -21,6 +23,8 @@ final readonly class SymfonyMailerTransactionalEmailGateway implements Transacti
         private MailerFactory $mailerFactory,
         private string $projectDir,
         private ?MailProviderConfiguration $mailProviderConfiguration = null,
+        #[Autowire(service: 'limiter.transactional_email_recipient')]
+        private ?RateLimiterFactory $recipientLimiter = null,
     ) {
     }
 
@@ -37,6 +41,17 @@ final readonly class SymfonyMailerTransactionalEmailGateway implements Transacti
         $configuration = $this->configuration();
         if ($configuration === null || !$this->providerIsDocumented($configuration['provider'])) {
             throw new RuntimeException(self::CONFIGURATION_ERROR);
+        }
+
+        if ($this->recipientLimiter !== null) {
+            // A separate per-recipient budget limits all transactional messages,
+            // even if a future caller forgets its own controller-level guard.
+            // Cache keys never contain the actual email address.
+            $recipientKey = hash('sha256', strtolower(trim($message->recipient)));
+            $budget = $this->recipientLimiter->create($recipientKey)->consume();
+            if (!$budget->isAccepted()) {
+                throw new RuntimeException(self::DELIVERY_ERROR);
+            }
         }
 
         try {

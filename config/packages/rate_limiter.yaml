@@ -85,3 +85,10 @@ framework:
       policy: sliding_window
       limit: 5
       interval: '1 hour'
+
+    # Límite adicional en el gateway, independientemente del origen de la
+    # solicitud (protege nuevos envíos transaccionales por destinatario).
+    transactional_email_recipient:
+      policy: sliding_window
+      limit: 12
+      interval: '1 hour'

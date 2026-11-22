@@ -669,6 +669,9 @@ jobs:
           php bin/console lint:twig templates
           php bin/console about
 
+      - name: Enumerar y probar antiabuso en todas las rutas públicas POST/PUT/PATCH (#1967)
+        run: python3 -m unittest tests/test_public_endpoints_abuse.py -v
+
       - name: Aplicar migraciones en MariaDB descartable
         run: php bin/console doctrine:migrations:migrate --no-interaction
 
