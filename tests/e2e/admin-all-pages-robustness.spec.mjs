@@ -170,9 +170,14 @@ for (const role of ROLES) {
         const uncaught = exception => events.push({ kind: 'javascript', detail: 'javascript: ' + exception.message.slice(0, 300) });
         const responseError = response => {
           const status = response.status();
-          if (status >= 400 && response.url().startsWith(baseURL)) {
-            networkErrors.add('http: ' + status + ' ' + new URL(response.url()).pathname);
+          const responseUrl = new URL(response.url());
+          if (status < 400 || responseUrl.origin !== new URL(baseURL).origin) return;
+          const pathSegments = responseUrl.pathname.split('/');
+          const branchSegment = pathSegments.indexOf('branches');
+          if (branchSegment >= 0 && pathSegments[branchSegment + 1]) {
+            pathSegments[branchSegment + 1] = '{branchId}';
           }
+          networkErrors.add('http: ' + status + ' ' + pathSegments.join('/'));
         };
         page.on('console', message => { if (message.type() === 'error') error(message); });
         page.on('pageerror', uncaught);
@@ -185,7 +190,7 @@ for (const role of ROLES) {
           const response = await page.goto(path, { waitUntil: 'domcontentloaded' });
           await expect(page.locator('body')).toBeVisible();
           if (/\/admin\/login(?:$|\?)/.test(new URL(page.url()).pathname)) {
-            events.push('auth: redirigió a login en ' + path);
+            events.push({ kind: 'auth', detail: 'auth: redirigió a login en ' + path });
           }
           if (response && response.status() >= 500) events.push('http: documento ' + response.status());
           // React panels render after DOMContentLoaded: observe settling without
