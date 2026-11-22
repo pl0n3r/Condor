@@ -489,6 +489,7 @@ export function AdminShell({
           ref={menuButtonRef}
           className="mobile-nav-toggle"
           type="button"
+          aria-label="Mostrar menú"
           aria-haspopup="dialog"
           aria-controls={mobileNavId}
           aria-expanded={mobileMenuOpen}
@@ -503,7 +504,7 @@ export function AdminShell({
             fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M4 7h16M4 12h16M4 17h16" />
           </svg>
-          <span>Menú</span>
+          <span aria-hidden="true">Menú</span>
         </button>
       </header>
       <aside className="sidebar">
@@ -530,6 +531,8 @@ export function AdminShell({
         <div className="admin-nav-drawer-head">
           <div><strong>Condor App</strong><span>V {version}</span></div>
           <button className="admin-nav-close" type="button" autoFocus
+            aria-label="Cerrar navegación · Ocultar menú"
+            aria-expanded={mobileMenuOpen}
             onClick={() => mobileDialogRef.current?.close()}>
             Cerrar navegación
           </button>
@@ -537,7 +540,7 @@ export function AdminShell({
         <nav aria-label={navLabel} onClick={(event) => {
           if ((event.target as HTMLElement).closest('a[href]')) mobileDialogRef.current?.close();
         }}>
-          {renderNavigation()}
+          {mobileMenuOpen ? renderNavigation() : null}
         </nav>
         <form method="post" action="/admin/logout">
           <input type="hidden" name="_csrf_token" value={logoutToken} />

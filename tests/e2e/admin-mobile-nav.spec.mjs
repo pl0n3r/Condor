@@ -57,7 +57,7 @@ test.describe('Condor #1960: navegación compacta y accesible', () => {
             "  version:'0.1.202',logoutToken:'',ariaLabel:'Administrador',",
             "  navLabel:owner?'Navegación de plataforma':'Navegación principal',",
             "  variant:owner?'platform':'tenant',navItems:owner?platform:tenant,",
-            "  children:React.createElement('section',{id:'fixture-content','data-testid':'module-content'},'Contenido del módulo'),",
+            "  children:React.createElement('div',{'data-testid':'module-content'},'Contenido del módulo'),",
             "}));",
           ].join('\n');
         },
