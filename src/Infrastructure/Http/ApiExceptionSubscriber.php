@@ -96,6 +96,13 @@ final readonly class ApiExceptionSubscriber
             return null;
         }
 
+        $isFieldValidation = preg_match('/^El campo [a-z][a-z0-9_]{0,63}\\\\b/u', $message) === 1
+            || preg_match('/^El (?:código|nombre) del proveedor\\\\b/u', $message) === 1
+            || preg_match('/^El plazo de pago\\\\b/u', $message) === 1;
+        if (!$isFieldValidation) {
+            return null;
+        }
+
         $internalPattern = '/\\b(?:'
             .'SQLSTATE|SQL|SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|UNION|JOIN|FROM|WHERE|TABLE|DATABASE|'
             .'PDO|DBAL|MYSQL|MARIADB|DOCTRINE|SYMFONY|ERROR|EXCEPTION|THROWABLE|WARNING|NOTICE|FATAL|STACK|TRACE|'

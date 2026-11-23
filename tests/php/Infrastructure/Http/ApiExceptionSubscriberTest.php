@@ -104,6 +104,10 @@ final class ApiExceptionSubscriberTest extends TestCase
             'El proveedor pertenece a otro tenant.',
             new \DomainException('El proveedor pertenece a otro tenant.'),
         );
+        $exceptions[] = new UnprocessableEntityHttpException(
+            'La variante no tiene precio en la lista seleccionada.',
+            new \DomainException('La variante no tiene precio en la lista seleccionada.'),
+        );
 
         foreach ($exceptions as $exception) {
             $event = $this->event('/api/v1/purchasing/suppliers', $exception);
