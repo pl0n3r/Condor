@@ -27,6 +27,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\HttpKernel\Exception\UnsupportedMediaTypeHttpException;
@@ -153,7 +154,7 @@ final class EmployeeController extends AbstractController
     private function store(): EmployeeHttpStore
     {
         if (!$this->employees instanceof EmployeeHttpStore) {
-            throw new ServiceUnavailableHttpException(0, 'Persistencia de empleados no habilitada.');
+            throw new HttpException(Response::HTTP_NOT_IMPLEMENTED, 'El módulo de empleados no está implementado: falta persistencia autorizada.');
         }
         return $this->employees;
     }
@@ -224,7 +225,7 @@ final class EmployeeController extends AbstractController
     {
         $employee = $this->ownedEmployee($tenant, $actor, $id);
         if (!$this->attendanceEvents instanceof AttendanceEventStore) {
-            throw new ServiceUnavailableHttpException(0, 'Persistencia de asistencia no habilitada.');
+            throw new HttpException(Response::HTTP_NOT_IMPLEMENTED, 'La asistencia no está implementada: falta persistencia autorizada.');
         }
         $payload = $this->strictPayload($request, ['external_event_id', 'occurred_at', 'type']);
         // No source key or raw device/sensor-sensitive data is accepted from the client.
@@ -264,7 +265,7 @@ final class EmployeeController extends AbstractController
     {
         $employee = $this->ownedEmployee($tenant, $actor, $id);
         if (!$this->attendanceEvents instanceof AttendanceHttpReadStore) {
-            throw new ServiceUnavailableHttpException(0, 'Consulta de asistencia no habilitada.');
+            throw new HttpException(Response::HTTP_NOT_IMPLEMENTED, 'La consulta de asistencia no está implementada: falta persistencia autorizada.');
         }
         $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $since = $now->modify('-30 days');

@@ -8,6 +8,8 @@ use App\Application\Identity\CurrentTenantForUser;
 use App\Application\Platform\ModuleAccess;
 use App\Application\Platform\ModuleCatalog;
 use App\Domain\Identity\Entity\User;
+use App\Infrastructure\Http\ApiErrorResponseFactory;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
@@ -25,6 +27,7 @@ final readonly class ModuleAccessSubscriber
         private TokenStorageInterface $tokens,
         private CurrentTenantForUser $tenantForUser,
         private ModuleAccess $access,
+        private ApiErrorResponseFactory $responses,
     ) {
     }
 
@@ -40,6 +43,18 @@ final readonly class ModuleAccessSubscriber
         $actor = $this->tokens->getToken()?->getUser();
         if (!$actor instanceof User || !$actor->isActive()) {
             throw new AccessDeniedHttpException('Se requiere una sesión activa.');
+        }
+        // Deny this capability before owner overrides or support sessions.
+        // Respond through the standard private API envelope, with no data leak.
+        if (!ModuleCatalog::isAvailable($module)) {
+            $request = $event->getRequest();
+            $event->setController(fn () => $this->responses->create(
+                $request,
+                'module_unavailable',
+                'El módulo Empleados y asistencia no está disponible porque no tiene persistencia autorizada.',
+                Response::HTTP_FORBIDDEN,
+            ));
+            return;
         }
         try {
             $tenant = $this->tenantForUser->resolve($actor);
