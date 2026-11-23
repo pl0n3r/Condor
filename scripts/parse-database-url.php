@@ -54,7 +54,7 @@ if ($action === 'client-config') {
     // its value is parsed from DATABASE_URL and is never hard-coded.
     $config = "[client]\n"
         .'user='.optionValue($parsed['user'])."\n"
-        .'password='.optionValue($parsed['password'])."\n"; // NOSONAR
+        .'password='.optionValue($parsed['password'])."\n"; //NOSONAR
     if (is_string($host) && $host !== '') {
         $config .= 'host='.optionValue($host)."\n";
     }
