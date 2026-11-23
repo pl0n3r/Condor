@@ -55,10 +55,22 @@ final class ApiExceptionSubscriberTest extends TestCase
     public function testSafeApplicationValidationMessagesArePreservedAndExposeOnlyAnExplicitField(): void
     {
         foreach ([
-            ['El campo code no es válido.', ['field' => 'code']],
-            ['El plazo de pago debe estar entre 0 y 365 días.', []],
-        ] as [$message, $details]) {
-            $event = $this->event('/api/v1/purchasing/suppliers', new UnprocessableEntityHttpException($message));
+            ['El campo code no es válido.', ['field' => 'code'], null],
+            [
+                'El código del proveedor debe ser alfanumérico (máximo 64 caracteres).',
+                ['field' => 'code'],
+                new \\DomainException('El código del proveedor debe ser alfanumérico (máximo 64 caracteres).'),
+            ],
+            [
+                'El plazo de pago debe estar entre 0 y 365 días.',
+                ['field' => 'payment_terms_days'],
+                new \\InvalidArgumentException('El plazo de pago debe estar entre 0 y 365 días.'),
+            ],
+        ] as [$message, $details, $previous]) {
+            $event = $this->event(
+                '/api/v1/purchasing/suppliers',
+                new UnprocessableEntityHttpException($message, $previous),
+            );
             (new ApiExceptionSubscriber(new ApiErrorResponseFactory()))($event);
             $response = $event->getResponse();
             self::assertNotNull($response);
@@ -87,6 +99,10 @@ final class ApiExceptionSubscriberTest extends TestCase
         $exceptions[] = new UnprocessableEntityHttpException(
             'El campo code no es válido.',
             new RuntimeException('private internal detail'),
+        );
+        $exceptions[] = new UnprocessableEntityHttpException(
+            'El proveedor pertenece a otro tenant.',
+            new \\DomainException('El proveedor pertenece a otro tenant.'),
         );
 
         foreach ($exceptions as $exception) {

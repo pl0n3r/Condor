@@ -40,8 +40,18 @@ final readonly class ApiExceptionSubscriber
             $validationMessage = self::safeValidationMessage($error);
             if ($validationMessage !== null) {
                 $message = $validationMessage;
+                $field = null;
                 if (preg_match('/^El campo ([a-z][a-z0-9_]{0,63}) no es válido\.$/u', $message, $matches) === 1) {
-                    $details['field'] = $matches[1];
+                    $field = $matches[1];
+                } elseif (preg_match('/^El código del proveedor\\b/u', $message) === 1) {
+                    $field = 'code';
+                } elseif (preg_match('/^El nombre del proveedor\\b/u', $message) === 1) {
+                    $field = 'name';
+                } elseif (preg_match('/^El plazo de pago\\b/u', $message) === 1) {
+                    $field = 'payment_terms_days';
+                }
+                if ($field !== null) {
+                    $details['field'] = $field;
                 }
             }
         }
@@ -57,12 +67,20 @@ final readonly class ApiExceptionSubscriber
     }
 
     /**
-     * Only direct, bounded application validation messages may cross the API boundary.
-     * Wrapped exceptions and diagnostic/code-like content keep the generic contract.
+     * Only bounded application validation messages may cross the API boundary.
+     * Direct errors and matching DomainException/InvalidArgumentException wrappers are allowed.
      */
     private static function safeValidationMessage(HttpExceptionInterface $error): ?string
     {
-        if (!$error instanceof UnprocessableEntityHttpException || $error->getPrevious() !== null) {
+        if (!$error instanceof UnprocessableEntityHttpException) {
+            return null;
+        }
+
+        $previous = $error->getPrevious();
+        if ($previous !== null
+            && (!$previous instanceof \\DomainException && !$previous instanceof \\InvalidArgumentException
+                || $previous->getMessage() !== $error->getMessage())
+        ) {
             return null;
         }
 
@@ -79,7 +97,7 @@ final readonly class ApiExceptionSubscriber
         $internalPattern = '/\\b(?:'
             .'SQLSTATE|SQL|SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|UNION|JOIN|FROM|WHERE|TABLE|DATABASE|'
             .'PDO|DBAL|MYSQL|MARIADB|DOCTRINE|SYMFONY|ERROR|EXCEPTION|THROWABLE|WARNING|NOTICE|FATAL|STACK|TRACE|'
-            .'PASSWORD|SECRET|TOKEN|AUTHORIZATION|COOKIE|CREDENTIALS?'
+            .'PASSWORD|SECRET|TOKEN|AUTHORIZATION|COOKIE|CREDENTIALS?|TENANT'
             .')\\b/i';
         if (preg_match($internalPattern, $message) === 1) {
             return null;
