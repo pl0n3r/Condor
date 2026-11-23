@@ -407,6 +407,15 @@ def verify_branch(api) -> str:
         head = pr.get("head") or {}
         base = pr.get("base") or {}
         body = pr.get("body")
+        repo_owner, repo_name = REPO.split("/", 1)
+
+        def authentic_repo(candidate: object) -> bool:
+            if type(candidate) is not dict:
+                return False
+            owner = candidate.get("owner")
+            return (candidate.get("name") == repo_name
+                    and type(owner) is dict
+                    and owner.get("login") == repo_owner)
         marker = f"<!-- condor-reserva-id: {EXPECTED_LEASE} -->"
         demand(
             pr.get("number") == 2003
@@ -415,9 +424,9 @@ def verify_branch(api) -> str:
             and (pr.get("user") or {}).get("login") == "pl0n3r"
             and head.get("ref") == BRANCH
             and head.get("sha") == branch_sha
-            and (head.get("repo") or {}).get("full_name") == REPO
+            and authentic_repo(head.get("repo"))
             and base.get("ref") == "main"
-            and (base.get("repo") or {}).get("full_name") == REPO
+            and authentic_repo(base.get("repo"))
             and isinstance(body, str)
             and body.count("<!-- condor-reserva-id:") == 1
             and marker in body

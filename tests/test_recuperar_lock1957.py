@@ -69,8 +69,8 @@ class FakeAPI:
             "number": 2003, "state": "open", "draft": True,
             "user": {"login": "pl0n3r"},
             "head": {"ref": subject.BRANCH, "sha": self.branch_sha,
-                     "repo": {"full_name": subject.REPO}},
-            "base": {"ref": "main", "repo": {"full_name": subject.REPO}},
+                     "repo": {"name": "Condor", "owner": {"login": "pl0n3r"}}},
+            "base": {"ref": "main", "repo": {"name": "Condor", "owner": {"login": "pl0n3r"}}},
             "body": "Closes #1957\n<!-- condor-reserva-id: "
                     + subject.EXPECTED_LEASE + " -->",
         }
@@ -202,9 +202,11 @@ class RecoveryTests(unittest.TestCase):
             "wrong_number": lambda p: p.update(number=2005),
             "wrong_author": lambda p: p["user"].update(login="attacker"),
             "wrong_sha": lambda p: p["head"].update(sha="0" * 40),
-            "fork": lambda p: p["head"]["repo"].update(full_name="other/fork"),
+            "fork": lambda p: p["head"]["repo"].update(name="Other"),
+            "foreign_head_owner": lambda p: p["head"]["repo"]["owner"].update(login="attacker"),
             "wrong_base": lambda p: p["base"].update(ref="staging"),
-            "foreign_base": lambda p: p["base"]["repo"].update(full_name="other/fork"),
+            "foreign_base": lambda p: p["base"]["repo"].update(name="Other"),
+            "foreign_base_owner": lambda p: p["base"]["repo"]["owner"].update(login="attacker"),
             "missing_marker": lambda p: p.update(body="Closes #1957"),
             "wrong_uuid": lambda p: p.update(body="Closes #1957\n<!-- condor-reserva-id: WRONG -->"),
             "double_marker": lambda p: p.update(body=p["body"] + "\n<!-- condor-reserva-id: WRONG -->"),
@@ -256,7 +258,7 @@ class RecoveryTests(unittest.TestCase):
             ("changed_paths", ["README.md"]),
             ("changed_paths", [subject.EXPECTED_PATHS[0], "secret.env"]),
             ("pulls", [{"head": {"ref": subject.BRANCH,
-                                 "repo": {"full_name": subject.REPO}}}]),
+                                 "repo": {"name": "Condor", "owner": {"login": "pl0n3r"}}}}]),
         ]
         for key, value in cases:
             with self.subTest(key=key, value=str(value)):
