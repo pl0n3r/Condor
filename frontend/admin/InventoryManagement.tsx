@@ -462,6 +462,16 @@ export function InventoryManagement({
     }
   }
 
+  // One predicate per collection keeps tables and responsive cards in sync.
+  const query = search.trim().toLocaleLowerCase('es-CO');
+  const visibleBalances = ready?.balances.filter(balance =>
+    (balance.variant.product_name + ' ' + balance.variant.sku + ' ' + balance.variant.name)
+      .toLocaleLowerCase('es-CO').includes(query)
+    || (sourceById.get(balance.source_id)?.name ?? '')
+      .toLocaleLowerCase('es-CO').includes(query)) ?? [];
+  const visibleSources = ready?.sources.filter(source =>
+    (source.name + ' ' + source.slug).toLocaleLowerCase('es-CO').includes(query)) ?? [];
+
   if (!canView) {
     return (
       <section id="inventory" className="catalog-panel" aria-labelledby="inventory-title">
@@ -516,9 +526,9 @@ export function InventoryManagement({
         </div>
       )}
 
-      {ready && toolsOpen && (
-        <section id="inventory-secondary-tools" aria-label="Herramientas de inventario">
-          {canUpdate && ready.sources.length > 0 && ready.variants.length > 0 && <div className="catalog-actions">
+      <section id="inventory-secondary-tools" aria-label="Herramientas de inventario"
+        hidden={!ready || !toolsOpen}>
+          {ready && canUpdate && ready.sources.length > 0 && ready.variants.length > 0 && <div className="catalog-actions">
             <button className="button button-secondary" type="button"
               onClick={() => document.getElementById('inventory-adjust-source')?.focus()}>Ajuste manual</button>
             {ready.sources.length > 1 && <button className="button button-secondary" type="button"
@@ -530,13 +540,12 @@ export function InventoryManagement({
             csrfToken={csrfToken}
             onCommitted={() => { void loadInventory(); }}
           />}
-          <RestockSuggestions
+          {ready && toolsOpen && <RestockSuggestions
             key={'restock-' + branchId}
             branchId={branchId}
             permissions={permissions}
-          />
-        </section>
-      )}
+          />}
+      </section>
 
       {ready && (
         <>
@@ -548,11 +557,7 @@ export function InventoryManagement({
               </label>
             </Toolbar>
             <DataTable caption="Saldos por fuente y producto"
-              rows={ready.balances.filter(balance =>
-                (balance.variant.product_name + ' ' + balance.variant.sku + ' ' + balance.variant.name)
-                  .toLocaleLowerCase('es-CO').includes(search.toLocaleLowerCase('es-CO'))
-                || (sourceById.get(balance.source_id)?.name ?? '').toLocaleLowerCase('es-CO')
-                  .includes(search.toLocaleLowerCase('es-CO')))}
+              rows={visibleBalances}
               rowKey={balance => balance.id} onOpen={balance => setSelectedBalanceId(balance.id)}
               empty={<div role="status">
                 <strong>{search.trim() ? 'Sin existencias para esta búsqueda' : 'Todavía no hay existencias registradas'}</strong>
@@ -568,7 +573,7 @@ export function InventoryManagement({
                 { key: 'quantity', header: 'Cantidad', render: balance => balance.quantity, align: 'right' },
               ]} />
             <div className="catalog-list" aria-label="Fichas de saldos">
-              {ready.balances.map(balance => <article className="catalog-card" key={balance.id}>
+              {visibleBalances.map(balance => <article className="catalog-card" key={balance.id}>
                 <div><h3>{balance.variant.product_name}</h3>
                   <p>{balance.variant.sku} · {balance.variant.name}</p>
                   <p className="muted">{sourceById.get(balance.source_id)?.name ?? 'Fuente'}</p>
@@ -580,8 +585,7 @@ export function InventoryManagement({
           <Card title="Fuentes de inventario">
 
             <DataTable caption="Fuentes de inventario"
-              rows={ready.sources.filter(source => (source.name + ' ' + source.slug)
-                .toLocaleLowerCase('es-CO').includes(search.toLocaleLowerCase('es-CO')))}
+              rows={visibleSources}
               rowKey={source => source.id} onOpen={source => setSelectedSourceId(source.id)}
               empty={<><strong>Sin fuentes</strong><span>No hay fuentes configuradas o no coinciden con la búsqueda.</span></>}
               columns={[
@@ -592,7 +596,7 @@ export function InventoryManagement({
                 </StatusPill> },
               ]} />
             <div className="catalog-list" aria-label="Fichas de fuentes de inventario">
-              {ready.sources.map(source => <article className="catalog-card" key={source.id}>
+              {visibleSources.map(source => <article className="catalog-card" key={source.id}>
                 <div><h3>{source.name}</h3><p className="muted">{source.slug}</p></div>
               </article>)}
             </div>
