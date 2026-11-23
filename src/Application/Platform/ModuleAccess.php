@@ -36,7 +36,7 @@ final class ModuleAccess
 
     public function canAccess(User $user, Tenant $tenant, string $module): bool
     {
-        if (!$user->isActive() || !ModuleCatalog::exists($module)) {
+        if (!$user->isActive() || !ModuleCatalog::isAvailable($module)) {
             return false;
         }
         if ($user->hasRole(User::ROLE_PLATFORM_OWNER)) {
@@ -64,7 +64,7 @@ final class ModuleAccess
      */
     public function disabledByOwner(User $user, Tenant $tenant, string $module): bool
     {
-        if (!$user->isActive() || !ModuleCatalog::exists($module)) {
+        if (!$user->isActive() || !ModuleCatalog::isAvailable($module)) {
             return true;
         }
         if ($user->hasRole(User::ROLE_PLATFORM_OWNER)) {
@@ -141,9 +141,10 @@ final class ModuleAccess
             $capability = $item['capability'];
             // No subscription / no corresponding commercial capability:
             // preserve the legacy behavior, never silently hide a module.
-            $defaults[$item['key']] = $item['key'] === 'production' && $subscription instanceof Subscription
+            $defaults[$item['key']] = ModuleCatalog::isAvailable($item['key'])
+                && ($item['key'] === 'production' && $subscription instanceof Subscription
                 ? $productionLite
-                : ($capability === null || $subscription === null || isset($capabilities[$capability]));
+                : ($capability === null || $subscription === null || isset($capabilities[$capability])));
         }
 
         return $this->planCache[$tenantId] = $defaults;
