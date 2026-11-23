@@ -1,6 +1,6 @@
 # Matriz de cobertura requisito por requisito — Condor
 
-> Corte verificable: `main@3b9ef8ca0f5cf36729d08be8eeb90cdcb2c394cf` (22-nov-2026; reconciliación documental #1981 de evidencia ya fusionada, sin ejecutar pruebas de producción). Fase `construccion`. Auditoría de código, tests y PRs; **no certifica producción, permisos reales, datos personales ni go-live**.
+> Corte verificable: `main@3b9ef8ca0f5cf36729d08be8eeb90cdcb2c394cf` (22-nov-2026; versión inalterada `V 0.1.204`; reconciliación documental #1981 de evidencia ya fusionada, sin ejecutar pruebas de producción). Fase `construccion`. Auditoría de código, tests y PRs; **no certifica producción, permisos reales, datos personales ni go-live**.
 
 ## Método y alcance
 
