@@ -298,5 +298,40 @@ class RecoveryTests(unittest.TestCase):
             subject.authorized_event(event, env)
 
 
+
+class ActualContractHashTests(unittest.TestCase):
+    """Ejecuta hashes reales, sin parchar la lógica del contrato v3."""
+
+    def test_hash_task_v3_fijo_y_mutacion_rechazada(self):
+        marker = json.loads(json.dumps(subject.EXPECTED_TASK))
+        self.assertEqual(subject.task_marker_fingerprint(marker),
+                         subject.EXPECTED_TASK_MARKER_SHA256)
+        marker["paths"].append("secrets.env")
+        self.assertNotEqual(subject.task_marker_fingerprint(marker),
+                            subject.EXPECTED_TASK_MARKER_SHA256)
+
+    def test_contrato_humano_maquina_une_mismos_ids(self):
+        body = "\n".join([
+            "### Contexto", "Incidente sintético", "### Alcance", "Reparación",
+            "### Fuera de alcance", "Identidades reales",
+            "### Criterios de aceptación", "- [ ] [AC-01] proteger una ref",
+            "### Contrato ejecutable",
+            '<!-- factory-acceptance {"version":1,"criteria":'
+            '[{"id":"AC-01","kind":"check","target":"Validar"}]} -->',
+        ])
+        good = subject.contract_fingerprint(body)
+        self.assertEqual(len(good), 64)
+        changed = body.replace("proteger una ref", "borrar todas las refs")
+        self.assertNotEqual(good, subject.contract_fingerprint(changed))
+        wrong_id = body.replace('"AC-01"', '"AC-02"')
+        with self.assertRaises(subject.Denied):
+            subject.contract_fingerprint(wrong_id)
+        duplicated = body + "\n" + (
+            '<!-- factory-acceptance {"version":1,"criteria":'
+            '[{"id":"AC-01","kind":"check","target":"Validar"}]} -->')
+        with self.assertRaises(subject.Denied):
+            subject.contract_fingerprint(duplicated)
+
+
 if __name__ == "__main__":
     unittest.main()
