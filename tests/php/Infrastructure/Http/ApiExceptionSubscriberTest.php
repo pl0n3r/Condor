@@ -58,6 +58,11 @@ final class ApiExceptionSubscriberTest extends TestCase
             ['El campo code no es válido.', ['field' => 'code'], null],
             ['El campo name no es válido.', ['field' => 'name'], null],
             [
+                'El nombre del proveedor es obligatorio (máximo 160 caracteres).',
+                ['field' => 'name'],
+                new \DomainException('El nombre del proveedor es obligatorio (máximo 160 caracteres).'),
+            ],
+            [
                 'El código del proveedor debe ser alfanumérico (máximo 64 caracteres).',
                 ['field' => 'code'],
                 new \DomainException('El código del proveedor debe ser alfanumérico (máximo 64 caracteres).'),
