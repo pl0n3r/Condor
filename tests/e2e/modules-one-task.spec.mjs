@@ -243,7 +243,7 @@ test.describe('Condor #1963: un trabajo por pantalla con estados de primer uso',
       const search = page.getByPlaceholder('Buscar fuente, producto o SKU');
       await search.fill('sin-coincidencias-1985');
       await expect(page.getByText('Sin existencias para esta búsqueda')).toBeVisible();
-      await expect(page.getByRole('table', { name: 'Fuentes de inventario' }).getByText('Sin fuentes')).toBeVisible();
+      await expect(page.getByText('Sin fuentes', { exact: true })).toBeVisible();
       await expect(balanceCards).toHaveCount(0);
       await expect(sourceCards).toHaveCount(0);
       await evidence(page, info, 'inventario-busqueda', 'after', width);
