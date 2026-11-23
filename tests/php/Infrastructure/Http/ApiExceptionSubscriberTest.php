@@ -59,12 +59,12 @@ final class ApiExceptionSubscriberTest extends TestCase
             [
                 'El código del proveedor debe ser alfanumérico (máximo 64 caracteres).',
                 ['field' => 'code'],
-                new \\DomainException('El código del proveedor debe ser alfanumérico (máximo 64 caracteres).'),
+                new \DomainException('El código del proveedor debe ser alfanumérico (máximo 64 caracteres).'),
             ],
             [
                 'El plazo de pago debe estar entre 0 y 365 días.',
                 ['field' => 'payment_terms_days'],
-                new \\InvalidArgumentException('El plazo de pago debe estar entre 0 y 365 días.'),
+                new \InvalidArgumentException('El plazo de pago debe estar entre 0 y 365 días.'),
             ],
         ] as [$message, $details, $previous]) {
             $event = $this->event(
@@ -102,7 +102,7 @@ final class ApiExceptionSubscriberTest extends TestCase
         );
         $exceptions[] = new UnprocessableEntityHttpException(
             'El proveedor pertenece a otro tenant.',
-            new \\DomainException('El proveedor pertenece a otro tenant.'),
+            new \DomainException('El proveedor pertenece a otro tenant.'),
         );
 
         foreach ($exceptions as $exception) {

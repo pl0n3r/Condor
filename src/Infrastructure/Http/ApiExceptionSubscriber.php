@@ -78,8 +78,10 @@ final readonly class ApiExceptionSubscriber
 
         $previous = $error->getPrevious();
         if ($previous !== null
-            && (!$previous instanceof \\DomainException && !$previous instanceof \\InvalidArgumentException
-                || $previous->getMessage() !== $error->getMessage())
+            && (
+                (!($previous instanceof \DomainException) && !($previous instanceof \InvalidArgumentException))
+                || $previous->getMessage() !== $error->getMessage()
+            )
         ) {
             return null;
         }
