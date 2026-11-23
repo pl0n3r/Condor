@@ -7,12 +7,12 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: coordinacion-${{ github.event.issue.number }}
-  cancel-in-progress: false
-
 jobs:
   recover:
+    # Job-level: los eventos ajenos con recover skipped no deben cancelar la coordinación V3.
+    concurrency:
+      group: coordinacion-${{ github.event.issue.number }}
+      cancel-in-progress: false
     if: >-
       github.repository == 'pl0n3r/Condor' &&
       github.event.issue.number == 1957 &&
