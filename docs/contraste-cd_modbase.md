@@ -1,6 +1,6 @@
 # Contraste de módulos M09, M11 y M14 · Condor #1981
 
-**Base contrastada:** `Condor/main@3b9ef8ca0f5cf36729d08be8eeb90cdcb2c394cf` (22-nov-2026) y `docs/gestion-empresarial-integral.md`. **Fase:** construcción. Esta auditoría de documentación y código no autoriza producción, uso de datos reales ni go-live.
+**Base contrastada:** `Condor/main@8d75e1636076c87b1ccf018404f1e88fb456ac28` (22-nov-2026) y `docs/gestion-empresarial-integral.md`. **Fase:** construcción. Esta auditoría de documentación y código no autoriza producción, uso de datos reales ni go-live.
 
 ## Regla de evidencia
 
