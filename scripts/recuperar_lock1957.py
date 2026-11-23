@@ -353,12 +353,8 @@ def verify_branch(api) -> str:
     demand(type(ancestry) is dict and ancestry.get("status") in
            {"ahead", "identical"} and ancestry.get("behind_by") == 0,
            "rama no desciende del parent firmado")
-    files = ancestry.get("files")
-    demand(type(files) is list and len(files) <= 100,
-           "diff de la rama incompleto")
-    demand(all(type(row) is dict and type(row.get("filename")) is str
-               and row["filename"] in EXPECTED_PATHS for row in files),
-           "el HEAD contiene archivos fuera de claims #1957")
+    # La comparación desde el parent incluye commits de main (no son
+    # cambios propios del issue): solo sirve para probar ascendencia.
     main = api.get(f"/repos/{REPO}/branches/main")
     main_sha = (main.get("commit") or {}).get("sha")
     demand(type(main_sha) is str and re.fullmatch(r"[0-9a-f]{40}", main_sha)
@@ -370,6 +366,18 @@ def verify_branch(api) -> str:
            and comparison.get("status") in {"ahead", "identical"}
            and comparison.get("behind_by") == 0,
            "main ya no desciende del parent del lock")
+    # Diff del issue contra main, no contra el parent: permite commits
+    # legítimos de main que se incorporaron por merge al branch.
+    scope = api.get(f"/repos/{REPO}/compare/{main_sha}...{branch_sha}")
+    demand(type(scope) is dict and scope.get("status") in
+           {"ahead", "identical"} and scope.get("behind_by") == 0,
+           "rama de trabajo no reconciliada con main")
+    files = scope.get("files")
+    demand(type(files) is list and len(files) <= 100,
+           "diff del issue incompleto")
+    demand(all(type(row) is dict and type(row.get("filename")) is str
+               and row["filename"] in EXPECTED_PATHS for row in files),
+           "diff del issue contiene archivos fuera de claims #1957")
     pulls = api.get(f"/repos/{REPO}/pulls?state=open&per_page=100")
     demand(type(pulls) is list and len(pulls) < 100,
            "inventario PR incompleto")

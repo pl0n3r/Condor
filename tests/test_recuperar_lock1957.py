@@ -50,6 +50,7 @@ class FakeAPI:
         self.branch_ancestor = "ahead"
         self.changed_paths = [subject.EXPECTED_PATHS[0]]
         self.main_ancestor = "ahead"
+        self.scope_ancestor = "ahead"
         self.pulls = []
         self.lock_issue_status = "estado: reservado"
         self.frozen = False
@@ -99,7 +100,9 @@ class FakeAPI:
             end = path.rsplit("...", 1)[-1]
             if end == "c" * 40:
                 return {"status": self.main_ancestor, "behind_by": 0}
-            return {"status": self.branch_ancestor, "behind_by": 0,
+            return {"status": self.branch_ancestor, "behind_by": 0}
+        if path.startswith(f"{BASE}/compare/{'c' * 40}..."):
+            return {"status": self.scope_ancestor, "behind_by": 0,
                     "files": [{"filename": name} for name in self.changed_paths]}
         if path == f"{BASE}/pulls?state=open&per_page=100":
             return self.pulls
@@ -174,6 +177,7 @@ class RecoveryTests(unittest.TestCase):
             ("committer_time", "2026-11-23T05:59:30Z"),
             ("branch_ancestor", "diverged"),
             ("main_ancestor", "diverged"),
+            ("scope_ancestor", "diverged"),
             ("changed_paths", ["README.md"]),
             ("changed_paths", [subject.EXPECTED_PATHS[0], "secret.env"]),
             ("pulls", [{"head": {"ref": subject.BRANCH,
