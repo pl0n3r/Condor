@@ -50,9 +50,11 @@ if ($action === 'client-config') {
         fail('falta ruta destino para client-config.');
     }
 
+    // S2068 false positive: "password=" is the MySQL option-file key;
+    // its value is parsed from DATABASE_URL and is never hard-coded.
     $config = "[client]\n"
         .'user='.optionValue($parsed['user'])."\n"
-        .'password='.optionValue($parsed['password'])."\n";
+        .'password='.optionValue($parsed['password'])."\n"; // NOSONAR
     if (is_string($host) && $host !== '') {
         $config .= 'host='.optionValue($host)."\n";
     }
@@ -61,7 +63,13 @@ if ($action === 'client-config') {
         $config .= 'socket='.optionValue($socket)."\n";
     }
 
-    if (file_put_contents($path, $config, LOCK_EX) === false) {
+    $previousUmask = umask(0077);
+    try {
+        $written = file_put_contents($path, $config, LOCK_EX);
+    } finally {
+        umask($previousUmask);
+    }
+    if ($written === false) {
         fail('no fue posible escribir el option-file MySQL.');
     }
     if (!chmod($path, 0600)) {
