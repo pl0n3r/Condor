@@ -177,7 +177,7 @@ class RecoveryTests(unittest.TestCase):
             ("committer_time", "2026-11-23T05:59:30Z"),
             ("branch_ancestor", "diverged"),
             ("main_ancestor", "diverged"),
-            ("scope_ancestor", "diverged"),
+            ("scope_ancestor", "unsupported"),
             ("changed_paths", ["README.md"]),
             ("changed_paths", [subject.EXPECTED_PATHS[0], "secret.env"]),
             ("pulls", [{"head": {"ref": subject.BRANCH,
@@ -210,6 +210,21 @@ class RecoveryTests(unittest.TestCase):
                 with self.assertRaises(subject.Denied):
                     subject.prepare(fake, NOW, "999")
                 self.assert_no_post(fake)
+
+    def test_main_avanza_sin_invalidar_claims_del_issue(self):
+        # La rama original puede ir detrás de main tras un merge ajeno.
+        # La descendencia del parent firmado y el diff exclusivo de #1957
+        # siguen siendo obligatorios en ambos escenarios.
+        for direction in ("behind", "diverged"):
+            with self.subTest(direction=direction):
+                api = FakeAPI()
+                api.scope_ancestor = direction
+                self.assertEqual(subject.verify_branch(api), api.branch_sha)
+                self.assert_no_post(api)
+                api.changed_paths = ["not-in-lease/other-issue.php"]
+                with self.assertRaises(subject.Denied):
+                    subject.verify_branch(api)
+                self.assert_no_post(api)
 
     def test_CAS_unico_verifica_404_y_preserva_lease(self):
         api = FakeAPI()

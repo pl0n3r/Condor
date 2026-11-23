@@ -369,9 +369,14 @@ def verify_branch(api) -> str:
     # Diff del issue contra main, no contra el parent: permite commits
     # legítimos de main que se incorporaron por merge al branch.
     scope = api.get(f"/repos/{REPO}/compare/{main_sha}...{branch_sha}")
+    # Un main posterior puede situar la rama detrás o divergida; las dos
+    # pruebas de ascendencia de EXPECTED_PARENT ya son obligatorias. Los
+    # archivos exclusivos del trabajo se calculan desde merge-base.
     demand(type(scope) is dict and scope.get("status") in
-           {"ahead", "identical"} and scope.get("behind_by") == 0,
-           "rama de trabajo no reconciliada con main")
+           {"ahead", "identical", "behind", "diverged"}
+           and type(scope.get("behind_by")) is int
+           and scope["behind_by"] >= 0,
+           "comparación del HEAD con main ilegible")
     files = scope.get("files")
     demand(type(files) is list and len(files) <= 100,
            "diff del issue incompleto")
