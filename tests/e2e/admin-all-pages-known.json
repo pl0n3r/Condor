@@ -144,6 +144,26 @@
     {
       "key": "tenant|390|http-503|/api/v1/hr/employees",
       "issue": 1957
+    },
+    {
+      "key": "tenant|1440|http-404|/api/v1/branches/{branchId}/production/orders",
+      "issue": 1971
+    },
+    {
+      "key": "tenant|390|/admin#assets-management|console-http-422",
+      "issue": 1971
+    },
+    {
+      "key": "tenant|390|http-404|/api/v1/branches/{branchId}/production/boms",
+      "issue": 1971
+    },
+    {
+      "key": "tenant|390|http-404|/api/v1/branches/{branchId}/production/orders",
+      "issue": 1971
+    },
+    {
+      "key": "tenant|390|http-404|/api/v1/branches/{branchId}/purchasing/orders",
+      "issue": 1971
     }
   ]
 }
