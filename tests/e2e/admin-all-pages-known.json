@@ -50,10 +50,6 @@
       "issue": 1971
     },
     {
-      "key": "tenant|1440|http-404|/api/v1/branches/{branchId}/production/orders",
-      "issue": 1971
-    },
-    {
       "key": "tenant|1440|http-404|/api/v1/branches/{branchId}/purchasing/material-costs",
       "issue": 1971
     },
@@ -62,15 +58,15 @@
       "issue": 1994
     },
     {
+      "key": "tenant|1440|http-404|/chunks/client-YWPnaJPF.js",
+      "issue": 1994
+    },
+    {
       "key": "tenant|1440|http-404|/chunks/CustomerServiceManagement-fCP497n-.js",
       "issue": 1994
     },
     {
       "key": "tenant|1440|http-404|/chunks/OperationsProcessesPanel-CjPm4IAC.js",
-      "issue": 1994
-    },
-    {
-      "key": "tenant|1440|http-404|/chunks/client-YWPnaJPF.js",
       "issue": 1994
     },
     {
@@ -84,10 +80,6 @@
     {
       "key": "tenant|390|/admin#assets-management|console-http-404",
       "issue": 1994
-    },
-    {
-      "key": "tenant|390|/admin#assets-management|console-http-422",
-      "issue": 1971
     },
     {
       "key": "tenant|390|/admin#customer-service|console-http-404",
@@ -126,23 +118,15 @@
       "issue": 1971
     },
     {
-      "key": "tenant|390|http-404|/api/v1/branches/{branchId}/production/boms",
-      "issue": 1971
-    },
-    {
-      "key": "tenant|390|http-404|/api/v1/branches/{branchId}/production/orders",
-      "issue": 1971
-    },
-    {
       "key": "tenant|390|http-404|/api/v1/branches/{branchId}/purchasing/material-costs",
       "issue": 1971
     },
     {
-      "key": "tenant|390|http-404|/api/v1/branches/{branchId}/purchasing/orders",
-      "issue": 1971
+      "key": "tenant|390|http-404|/chunks/AssetsManagement-D49PMvSy.js",
+      "issue": 1994
     },
     {
-      "key": "tenant|390|http-404|/chunks/AssetsManagement-D49PMvSy.js",
+      "key": "tenant|390|http-404|/chunks/client-YWPnaJPF.js",
       "issue": 1994
     },
     {
@@ -154,16 +138,32 @@
       "issue": 1994
     },
     {
-      "key": "tenant|390|http-404|/chunks/client-YWPnaJPF.js",
-      "issue": 1994
-    },
-    {
       "key": "tenant|390|http-422|/api/v1/branches/{branchId}/production/materials",
       "issue": 1956
     },
     {
       "key": "tenant|390|http-503|/api/v1/hr/employees",
       "issue": 1957
+    },
+    {
+      "key": "tenant|1440|http-404|/api/v1/branches/{branchId}/production/orders",
+      "issue": 1971
+    },
+    {
+      "key": "tenant|390|/admin#assets-management|console-http-422",
+      "issue": 1971
+    },
+    {
+      "key": "tenant|390|http-404|/api/v1/branches/{branchId}/production/boms",
+      "issue": 1971
+    },
+    {
+      "key": "tenant|390|http-404|/api/v1/branches/{branchId}/production/orders",
+      "issue": 1971
+    },
+    {
+      "key": "tenant|390|http-404|/api/v1/branches/{branchId}/purchasing/orders",
+      "issue": 1971
     }
   ]
 }
