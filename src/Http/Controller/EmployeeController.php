@@ -154,7 +154,7 @@ final class EmployeeController extends AbstractController
     private function store(): EmployeeHttpStore
     {
         if (!$this->employees instanceof EmployeeHttpStore) {
-            throw new HttpException(Response::HTTP_NOT_IMPLEMENTED, 'El módulo de empleados no está implementado: falta persistencia autorizada.');
+            throw new HttpException(Response::HTTP_NOT_IMPLEMENTED, 'Persistencia de empleados no habilitada. El módulo de empleados no está implementado: falta persistencia autorizada.');
         }
         return $this->employees;
     }
