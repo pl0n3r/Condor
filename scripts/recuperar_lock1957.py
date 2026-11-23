@@ -304,8 +304,8 @@ def verify_issue_and_lease(api) -> tuple[dict, dict]:
     demand(
         current.get("number") == ISSUE
         and current.get("state") == "open"
-        and "estado: reservado" in labels,
-        "issue #1957 no está abierta y reservada",
+        and len(labels & {"estado: reservado", "estado: en revisión"}) == 1,
+        "issue #1957 sin estado V3 único (reservado o en revisión)",
     )
     dependency = api.get(f"/repos/{REPO}/issues/{DEPENDENCY}")
     demand(
@@ -381,7 +381,10 @@ def verify_branch(api) -> str:
     demand(type(files) is list and len(files) <= 100,
            "diff del issue incompleto")
     demand(all(type(row) is dict and type(row.get("filename")) is str
-               and row["filename"] in EXPECTED_PATHS for row in files),
+               and row["filename"] in EXPECTED_PATHS
+               and (row.get("previous_filename") is None
+                    or row["previous_filename"] in EXPECTED_PATHS)
+               for row in files),
            "diff del issue contiene archivos fuera de claims #1957")
     pulls = api.get(f"/repos/{REPO}/pulls?state=open&per_page=100")
     demand(type(pulls) is list and len(pulls) < 100,
@@ -392,7 +395,44 @@ def verify_branch(api) -> str:
         pr for pr in pulls
         if (pr.get("head") or {}).get("ref") == BRANCH
     ]
-    demand(not matching, "ya existe un PR abierto para la rama #1957")
+    issue = api.get(f"/repos/{REPO}/issues/{ISSUE}")
+    labels = {entry.get("name") for entry in issue.get("labels", [])
+              if isinstance(entry, dict)}
+    if "estado: reservado" in labels:
+        demand(not matching, "issue reservado con PR abierto no autorizado")
+    else:
+        demand("estado: en revisión" in labels and len(matching) == 1,
+               "issue en revisión sin un único PR auténtico")
+        pr = matching[0]
+        head = pr.get("head") or {}
+        base = pr.get("base") or {}
+        body = pr.get("body")
+        repo_owner, repo_name = REPO.split("/", 1)
+
+        def authentic_repo(candidate: object) -> bool:
+            if type(candidate) is not dict:
+                return False
+            owner = candidate.get("owner")
+            return (candidate.get("name") == repo_name
+                    and type(owner) is dict
+                    and owner.get("login") == repo_owner)
+        marker = f"<!-- condor-reserva-id: {EXPECTED_LEASE} -->"
+        demand(
+            pr.get("number") == 2003
+            and pr.get("state") == "open"
+            and type(pr.get("draft")) is bool
+            and (pr.get("user") or {}).get("login") == "pl0n3r"
+            and head.get("ref") == BRANCH
+            and head.get("sha") == branch_sha
+            and authentic_repo(head.get("repo"))
+            and base.get("ref") == "main"
+            and authentic_repo(base.get("repo"))
+            and isinstance(body, str)
+            and body.count("<!-- condor-reserva-id:") == 1
+            and marker in body
+            and re.search(r"(?m)^Closes #1957$", body) is not None,
+            "PR #2003 sin HEAD, OWNER, base o reserva V3 auténticos",
+        )
     return branch_sha
 
 

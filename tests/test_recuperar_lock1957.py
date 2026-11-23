@@ -52,6 +52,8 @@ class FakeAPI:
         self.main_ancestor = "ahead"
         self.scope_ancestor = "ahead"
         self.pulls = []
+        self.pr_reads = 0
+        self.pr_drift = False
         self.lock_issue_status = "estado: reservado"
         self.frozen = False
         self.paused = False
@@ -61,6 +63,17 @@ class FakeAPI:
         self.cas_keeps_lock = False
         self.drift_second = False
         self.branch_reads = 0
+
+    def authorized_pr(self):
+        return {
+            "number": 2003, "state": "open", "draft": True,
+            "user": {"login": "pl0n3r"},
+            "head": {"ref": subject.BRANCH, "sha": self.branch_sha,
+                     "repo": {"name": "Condor", "owner": {"login": "pl0n3r"}}},
+            "base": {"ref": "main", "repo": {"name": "Condor", "owner": {"login": "pl0n3r"}}},
+            "body": "Closes #1957\n<!-- condor-reserva-id: "
+                    + subject.EXPECTED_LEASE + " -->",
+        }
 
     def get(self, path):
         self.calls.append(("GET", path))
@@ -105,6 +118,10 @@ class FakeAPI:
             return {"status": self.scope_ancestor, "behind_by": 0,
                     "files": [{"filename": name} for name in self.changed_paths]}
         if path == f"{BASE}/pulls?state=open&per_page=100":
+            self.pr_reads += 1
+            if self.pr_drift and self.pr_reads >= 2:
+                return [dict(pr, body="Closes #1957\n<!-- condor-reserva-id: FOREIGN -->")
+                        for pr in self.pulls]
             return self.pulls
         if "/actions/runs?status=" in path:
             return {"total_count": int(self.coord_active),
@@ -165,6 +182,66 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(subject.verify_branch(api), api.branch_sha)
         self.assert_no_post(api)
 
+
+    def test_recuperar_con_pr_de_revision_exactamente_autenticado(self):
+        api = FakeAPI()
+        api.lock_issue_status = "estado: en revisión"
+        api.pulls = [api.authorized_pr()]
+        original_lease = dict(api.lease)
+        original_head = api.branch_sha
+        self.assertEqual(subject.prepare(api, NOW, "999"), "REPO_NODE_TEST")
+        subject.recover(api, NOW, "999")
+        self.assertFalse(api.lock_exists)
+        self.assertEqual(api.lease, original_lease)
+        self.assertEqual(api.branch_sha, original_head)
+        self.assertEqual([x[1] for x in api.calls if x[0] == "POST"],
+                         ["/graphql", f"{BASE}/issues/1957/comments"])
+
+    def test_rechazar_pr_incorrecto_ambiguedad_y_carrera_sin_cas(self):
+        changes = {
+            "wrong_number": lambda p: p.update(number=2005),
+            "wrong_author": lambda p: p["user"].update(login="attacker"),
+            "wrong_sha": lambda p: p["head"].update(sha="0" * 40),
+            "fork": lambda p: p["head"]["repo"].update(name="Other"),
+            "foreign_head_owner": lambda p: p["head"]["repo"]["owner"].update(login="attacker"),
+            "wrong_base": lambda p: p["base"].update(ref="staging"),
+            "foreign_base": lambda p: p["base"]["repo"].update(name="Other"),
+            "foreign_base_owner": lambda p: p["base"]["repo"]["owner"].update(login="attacker"),
+            "missing_marker": lambda p: p.update(body="Closes #1957"),
+            "wrong_uuid": lambda p: p.update(body="Closes #1957\n<!-- condor-reserva-id: WRONG -->"),
+            "double_marker": lambda p: p.update(body=p["body"] + "\n<!-- condor-reserva-id: WRONG -->"),
+            "wrong_issue": lambda p: p.update(body=p["body"].replace("Closes #1957", "Closes #2000")),
+            "closed": lambda p: p.update(state="closed"),
+            "bad_draft": lambda p: p.update(draft=None),
+        }
+        for name, change in changes.items():
+            with self.subTest(name=name):
+                api = FakeAPI()
+                api.lock_issue_status = "estado: en revisión"
+                pr = api.authorized_pr()
+                change(pr)
+                api.pulls = [pr]
+                with self.assertRaises(subject.Denied):
+                    subject.prepare(api, NOW, "999")
+                self.assert_no_post(api)
+
+        for scenario in ("missing", "duplicate", "reserved_with_pr", "pr_race"):
+            with self.subTest(scenario=scenario):
+                api = FakeAPI()
+                api.lock_issue_status = "estado: en revisión"
+                api.pulls = [api.authorized_pr()]
+                if scenario == "missing":
+                    api.pulls = []
+                elif scenario == "duplicate":
+                    api.pulls.append(dict(api.authorized_pr()))
+                elif scenario == "reserved_with_pr":
+                    api.lock_issue_status = "estado: reservado"
+                elif scenario == "pr_race":
+                    api.pr_drift = True
+                with self.assertRaises(subject.Denied):
+                    subject.recover(api, NOW, "999")
+                self.assert_no_post(api)
+
     def test_rechaza_cualquier_driftsin_cas(self):
         cases = [
             ("paused", True), ("frozen", True),
@@ -181,7 +258,7 @@ class RecoveryTests(unittest.TestCase):
             ("changed_paths", ["README.md"]),
             ("changed_paths", [subject.EXPECTED_PATHS[0], "secret.env"]),
             ("pulls", [{"head": {"ref": subject.BRANCH,
-                                 "repo": {"full_name": subject.REPO}}}]),
+                                 "repo": {"name": "Condor", "owner": {"login": "pl0n3r"}}}}]),
         ]
         for key, value in cases:
             with self.subTest(key=key, value=str(value)):
