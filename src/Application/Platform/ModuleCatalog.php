@@ -62,6 +62,15 @@ final class ModuleCatalog
         return isset(self::MODULES[$key]);
     }
 
+    /**
+     * A registered entry may still lack an authorized persistent adapter.
+     * An owner override cannot activate employees until the privacy gate.
+     */
+    public static function isAvailable(string $key): bool
+    {
+        return self::exists($key) && $key !== 'employees-management';
+    }
+
     public static function capability(string $key): ?string
     {
         return self::MODULES[$key]['capability'] ?? null;
@@ -70,6 +79,8 @@ final class ModuleCatalog
     public static function forApiPath(string $path): ?string
     {
         // The global endpoints below predate the branch-scoped API.
+        // Keep the entire legacy HR namespace inside this security boundary.
+        // Narrowing it could accidentally expose sibling HR APIs.
         if (str_starts_with($path, '/api/v1/hr/')) {
             return 'employees-management';
         }

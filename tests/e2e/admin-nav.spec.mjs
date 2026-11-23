@@ -12,7 +12,7 @@ const REQUIRED_LINKS = [
   '/admin#reports-downloads', '/admin#catalog', '/admin#inventory',
   '/admin#stock-alerts', '/admin#stock-transfers', '/admin#production',
   '/admin#purchasing', '/admin/sitio', '/admin#seo-settings',
-  '/admin#employees-management', '/admin#workflows', '/admin#roles',
+  '/admin#workflows', '/admin#roles',
 ];
 
 test.describe('Administrador — menú agrupado y módulos aislados', () => {
@@ -39,6 +39,7 @@ test.describe('Administrador — menú agrupado y módulos aislados', () => {
     );
     expect(new Set(hrefs).size).toBe(hrefs.length);
     for (const href of REQUIRED_LINKS) expect(hrefs).toContain(href);
+    expect(hrefs).not.toContain('/admin#employees-management');
     await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Para hoy' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Módulos', exact: true })).toHaveCount(0);
@@ -76,5 +77,55 @@ test.describe('Administrador — menú agrupado y módulos aislados', () => {
     await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
     await expect(page.locator('.workspace > section[id]:visible')).toHaveCount(0);
     await expect(page.locator('.workspace > section#catalog')).toHaveCount(0);
+  });
+
+  test('empleados no disponible: evidencias sintéticas a 390 y 1440 px', async ({ page }, testInfo) => {
+    await page.goto('/admin/login');
+    await page.getByLabel('Correo').fill(email);
+    await page.getByLabel('Contraseña').fill(password);
+    await page.getByRole('button', { name: 'Ingresar' }).click();
+    await expect(page).toHaveURL(/\/admin$/);
+
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const nav = page.getByRole('navigation', { name: 'Navegación principal' });
+      await expect(nav.locator('a[href="/admin#employees-management"]')).toHaveCount(0);
+      const enabled = await page.locator('#condor-admin-root').getAttribute('data-enabled-modules');
+      expect((enabled || '').split(',')).not.toContain('employees-management');
+
+      // Baseline ONLY for comparison: simulate the old link in the same shell.
+      // No production view or entitlement is asserted by this screenshot.
+      await page.evaluate(() => {
+        const root = document.querySelector('#condor-admin-root');
+        const navigation = document.querySelector('nav[aria-label="Navegación principal"]');
+        const sample = navigation?.querySelector('.nav-group a.nav-sub');
+        if (!root || !navigation || !sample) throw new Error('Navegación de prueba ausente');
+        root.setAttribute('data-enabled-modules',
+          `${root.getAttribute('data-enabled-modules') || ''},employees-management`);
+        const oldLink = sample.cloneNode(true);
+        oldLink.setAttribute('href', '/admin#employees-management');
+        oldLink.setAttribute('data-synthetic-before', 'true');
+        oldLink.textContent = 'Empleados y asistencia (referencia sintética)';
+        navigation.appendChild(oldLink);
+      });
+      const beforePath = testInfo.outputPath(`employees-nav-before-${width}px.png`);
+      await page.screenshot({ path: beforePath, fullPage: true });
+      await testInfo.attach(`empleados-antes-sintetico-${width}px`, {
+        path: beforePath, contentType: 'image/png',
+      });
+      await page.evaluate(() => {
+        document.querySelector('[data-synthetic-before="true"]')?.remove();
+        const root = document.querySelector('#condor-admin-root');
+        if (root) root.setAttribute('data-enabled-modules',
+          (root.getAttribute('data-enabled-modules') || '').split(',')
+            .filter((key) => key !== 'employees-management').join(','));
+      });
+      await expect(nav.locator('a[href="/admin#employees-management"]')).toHaveCount(0);
+      const afterPath = testInfo.outputPath(`employees-nav-after-${width}px.png`);
+      await page.screenshot({ path: afterPath, fullPage: true });
+      await testInfo.attach(`empleados-despues-${width}px`, {
+        path: afterPath, contentType: 'image/png',
+      });
+    }
   });
 });
