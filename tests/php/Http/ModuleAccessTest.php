@@ -162,4 +162,70 @@ final class ModuleAccessTest extends WebTestCase
         self::assertNull(ModuleCatalog::forApiPath('/api/v1/context'));
         self::assertNull(ModuleCatalog::forApiPath('/api/health'));
     }
+
+    public function testEmployeesModuleCannotBeRevivedByOverridesOrSupport(): void
+    {
+        self::assertTrue(ModuleCatalog::exists('employees-management'));
+        self::assertFalse(ModuleCatalog::isAvailable('employees-management'));
+        self::assertSame('employees-management', ModuleCatalog::forApiPath('/api/v1/hr/employees'));
+        self::assertNull(ModuleCatalog::forApiPath('/api/v1/hr/employees-unsafe'));
+
+        $client = static::createClient();
+        $manager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+        $suffix = bin2hex(random_bytes(5));
+        $owner = new User('employees-support-'.$suffix.'@example.test', 'Soporte plataforma', [User::ROLE_PLATFORM_OWNER]);
+        $member = new User('employees-member-'.$suffix.'@example.test', 'Administradora empresa');
+        $tenant = new Tenant('Empresa empleados '.$suffix, 'employees-'.$suffix);
+        $branch = new Branch($tenant, 'Sede principal', 'principal', default: true);
+        $membership = new Membership($tenant, $member, Membership::ROLE_OWNER);
+        foreach ([$owner, $member, $tenant, $branch, $membership] as $entity) {
+            $manager->persist($entity);
+        }
+        $manager->flush();
+
+        $client->loginUser($member);
+        $crawler = $client->request('GET', '/admin');
+        self::assertResponseIsSuccessful();
+        self::assertNotContains('employees-management', explode(',',
+            (string) $crawler->filter('#condor-admin-root')->attr('data-enabled-modules')));
+        $client->jsonRequest('POST', '/api/v1/hr/employees', ['code' => 'SINTETICO']);
+        self::assertResponseStatusCodeSame(403);
+        $payload = json_decode((string) $client->getResponse()->getContent(), true);
+        self::assertSame('module_unavailable', $payload['error'] ?? null);
+        self::assertStringContainsString('no está disponible', (string) ($payload['message'] ?? ''));
+
+        $client->loginUser($owner);
+        $client->request('GET', '/adminpl0n3r');
+        $csrf = $this->csrfToken($client, 'platform_tenant_management');
+        $api = '/adminpl0n3r/api/tenants/'.$tenant->id().'/modules';
+        $client->jsonRequest('PUT', $api, ['changes' => [
+            ['key' => 'employees-management', 'enabled' => true],
+        ]], ['HTTP_X_CSRF_TOKEN' => $csrf]);
+        self::assertContains($client->getResponse()->getStatusCode(), [200, 403, 422]);
+
+        $client->loginUser($member);
+        $crawler = $client->request('GET', '/admin');
+        self::assertResponseIsSuccessful();
+        self::assertNotContains('employees-management', explode(',',
+            (string) $crawler->filter('#condor-admin-root')->attr('data-enabled-modules')));
+        $access = static::getContainer()->get(\App\Application\Platform\ModuleAccess::class);
+        self::assertFalse($access->canAccess($member, $tenant, 'employees-management'));
+        self::assertTrue($access->disabledByOwner($member, $tenant, 'employees-management'));
+
+        $client->loginUser($owner);
+        $client->request('GET', '/adminpl0n3r');
+        $csrf = $this->csrfToken($client, 'platform_tenant_management');
+        $client->jsonRequest('POST', '/adminpl0n3r/api/support', [
+            'tenant_id' => $tenant->id(), 'branch_id' => $branch->id(),
+        ], ['HTTP_X_CSRF_TOKEN' => $csrf]);
+        self::assertResponseIsSuccessful();
+        $crawler = $client->request('GET', '/admin');
+        self::assertResponseIsSuccessful();
+        self::assertNotContains('employees-management', explode(',',
+            (string) $crawler->filter('#condor-admin-root')->attr('data-enabled-modules')));
+        self::assertFalse($access->canAccess($owner, $tenant, 'employees-management'));
+        self::assertTrue($access->disabledByOwner($owner, $tenant, 'employees-management'));
+    }
+
 }

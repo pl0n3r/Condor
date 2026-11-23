@@ -36,7 +36,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
-use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\HttpKernel\Exception\UnsupportedMediaTypeHttpException;
 
@@ -137,6 +137,14 @@ final class MemoryAttendanceStore implements AttendanceHttpReadStore
 function invokeAction(EmployeeController $api, string $method, mixed ...$args): mixed
 {
     return (new ReflectionMethod($api, $method))->invoke($api, ...$args);
+}
+function rejectedNotImplemented(callable $fn): bool
+{
+    try { $fn(); return false; }
+    catch (HttpException $error) {
+        return $error->getStatusCode() === 501
+            && str_contains($error->getMessage(), 'persistencia autorizada');
+    }
 }
 function req(array $data): Request
 {
@@ -255,10 +263,9 @@ $writeOnly = new class implements AttendanceEventStore {
     }
 };
 $writeOnlyApi = new EmployeeController($store, $writeOnly);
-$historyWithoutAdapterDenied = rejected(
+$historyWithoutAdapterDenied = rejectedNotImplemented(
     fn() => invokeAction($writeOnlyApi, 'attendanceHistoryWithinTenant',
         $tenantA, $owner, $employeeId),
-    ServiceUnavailableHttpException::class,
 );
 $extraFieldDenied = rejected(
     fn() => invokeAction($api, 'createWithinTenant', $tenantA, $owner,
@@ -291,9 +298,8 @@ $missingMediaType = rejected(
 );
 $disabled = new EmployeeController();
 $disabled->setContainer(new ServiceLocator([]));
-$failClosed = rejected(
+$failClosed = rejectedNotImplemented(
     fn() => invokeAction($disabled, 'indexWithinTenant', $tenantA, $owner),
-    ServiceUnavailableHttpException::class,
 );
 // Exercise public controller entrypoints, not only private tenant-scoped helpers.
 // No token is installed; no real DB, CSRF bypass or personal data is involved.
