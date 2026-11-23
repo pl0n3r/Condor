@@ -96,9 +96,9 @@ final readonly class ApiExceptionSubscriber
             return null;
         }
 
-        $isFieldValidation = preg_match('/^El campo [a-z][a-z0-9_]{0,63}\\\\b/u', $message) === 1
-            || preg_match('/^El (?:código|nombre) del proveedor\\\\b/u', $message) === 1
-            || preg_match('/^El plazo de pago\\\\b/u', $message) === 1;
+        $isFieldValidation = preg_match('/^El campo [a-z][a-z0-9_]{0,63}\\b/u', $message) === 1
+            || preg_match('/^El (?:código|nombre) del proveedor\\b/u', $message) === 1
+            || preg_match('/^El plazo de pago\\b/u', $message) === 1;
         if (!$isFieldValidation) {
             return null;
         }
