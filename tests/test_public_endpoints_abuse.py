@@ -139,6 +139,26 @@ if (!is_string($html)
     || !str_contains($html, 'name="_condor_website"')) {
     throw new RuntimeException('GET no generó prueba firmada y honeypot.');
 }
+// Regression: AbstractController::render() returns no Content-Type yet; the
+// proof must still be injected, while explicit non-HTML bodies stay untouched.
+$untyped = new ResponseEvent($kernel, Request::create('/admin/login', 'GET'),
+    HttpKernelInterface::MAIN_REQUEST,
+    new Response('<html><form method="post" class="stack"><button>Entrar</button></form></html>'));
+$untyped->getResponse()->headers->remove('Content-Type');
+$strict->onKernelResponse($untyped);
+$untypedHtml = (string) $untyped->getResponse()->getContent();
+if (!str_contains($untypedHtml, 'name="_condor_form_proof"')
+    || !str_contains($untypedHtml, 'name="_condor_website"')) {
+    throw new RuntimeException('Formulario sin Content-Type quedó sin prueba firmada.');
+}
+$jsonBody = '{"html":"<form method=\\"post\\"></form>"}';
+$typedJson = new ResponseEvent($kernel, Request::create('/admin/login', 'GET'),
+    HttpKernelInterface::MAIN_REQUEST,
+    new Response($jsonBody, 200, ['Content-Type' => 'application/json']));
+$strict->onKernelResponse($typedJson);
+if ($typedJson->getResponse()->getContent() !== $jsonBody) {
+    throw new RuntimeException('El guard alteró una respuesta JSON.');
+}
 $post = static function (array $data, string $ip) use ($strict, $kernel): RequestEvent {
     $request = Request::create('/admin/recuperar-contrasena', 'POST', $data, [], [],
         ['REMOTE_ADDR' => $ip, 'CONTENT_TYPE' => 'application/x-www-form-urlencoded']);
