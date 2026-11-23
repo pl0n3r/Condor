@@ -79,7 +79,9 @@ final class ModuleCatalog
     public static function forApiPath(string $path): ?string
     {
         // The global endpoints below predate the branch-scoped API.
-        if ($path === '/api/v1/hr/employees' || str_starts_with($path, '/api/v1/hr/employees/')) {
+        // Keep the entire legacy HR namespace inside this security boundary.
+        // Narrowing it could accidentally expose sibling HR APIs.
+        if (str_starts_with($path, '/api/v1/hr/')) {
             return 'employees-management';
         }
         if (str_starts_with($path, '/api/reports/sales-')) {

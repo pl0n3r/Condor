@@ -168,7 +168,9 @@ final class ModuleAccessTest extends WebTestCase
         self::assertTrue(ModuleCatalog::exists('employees-management'));
         self::assertFalse(ModuleCatalog::isAvailable('employees-management'));
         self::assertSame('employees-management', ModuleCatalog::forApiPath('/api/v1/hr/employees'));
-        self::assertNull(ModuleCatalog::forApiPath('/api/v1/hr/employees-unsafe'));
+        self::assertSame('employees-management', ModuleCatalog::forApiPath('/api/v1/hr/employees-unsafe'));
+        // A sibling /hr endpoint is also denied until its scope is explicitly classified.
+        self::assertSame('employees-management', ModuleCatalog::forApiPath('/api/v1/hr/unknown'));
 
         $client = static::createClient();
         $manager = static::getContainer()->get(EntityManagerInterface::class);
