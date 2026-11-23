@@ -341,32 +341,46 @@ def verify_issue_and_lease(api) -> tuple[dict, dict]:
     return current, lease
 
 
-def verify_branch(api) -> None:
+def verify_branch(api) -> str:
+    """El HEAD puede avanzar, pero solo en los ocho claims V3 de #1957."""
     branch = api.get(f"/repos/{REPO}/branches/{BRANCH}")
-    demand(
-        (branch.get("commit") or {}).get("sha") == EXPECTED_PARENT,
-        "la rama de trabajo #1957 ya no está en su parent original",
+    branch_sha = (branch.get("commit") or {}).get("sha")
+    demand(type(branch_sha) is str and re.fullmatch(r"[0-9a-f]{40}", branch_sha)
+           is not None, "HEAD de la rama ilegible")
+    ancestry = api.get(
+        f"/repos/{REPO}/compare/{EXPECTED_PARENT}...{branch_sha}"
     )
+    demand(type(ancestry) is dict and ancestry.get("status") in
+           {"ahead", "identical"} and ancestry.get("behind_by") == 0,
+           "rama no desciende del parent firmado")
+    files = ancestry.get("files")
+    demand(type(files) is list and len(files) <= 100,
+           "diff de la rama incompleto")
+    demand(all(type(row) is dict and type(row.get("filename")) is str
+               and row["filename"] in EXPECTED_PATHS for row in files),
+           "el HEAD contiene archivos fuera de claims #1957")
     main = api.get(f"/repos/{REPO}/branches/main")
     main_sha = (main.get("commit") or {}).get("sha")
-    demand(isinstance(main_sha, str) and main_sha, "HEAD de main ilegible")
+    demand(type(main_sha) is str and re.fullmatch(r"[0-9a-f]{40}", main_sha)
+           is not None, "HEAD de main ilegible")
     comparison = api.get(
         f"/repos/{REPO}/compare/{EXPECTED_PARENT}...{main_sha}"
     )
-    demand(
-        comparison.get("status") in {"ahead", "identical"}
-        and comparison.get("behind_by") == 0,
-        "main ya no desciende del parent del lock",
-    )
+    demand(type(comparison) is dict
+           and comparison.get("status") in {"ahead", "identical"}
+           and comparison.get("behind_by") == 0,
+           "main ya no desciende del parent del lock")
     pulls = api.get(f"/repos/{REPO}/pulls?state=open&per_page=100")
-    demand(type(pulls) is list and len(pulls) < 100, "inventario PR incompleto")
+    demand(type(pulls) is list and len(pulls) < 100,
+           "inventario PR incompleto")
+    demand(all(type(pr) is dict and type(pr.get("head")) is dict
+               for pr in pulls), "PR ajeno o ilegible")
     matching = [
-        pr
-        for pr in pulls
+        pr for pr in pulls
         if (pr.get("head") or {}).get("ref") == BRANCH
-        and ((pr.get("head") or {}).get("repo") or {}).get("full_name") == REPO
     ]
     demand(not matching, "ya existe un PR abierto para la rama #1957")
+    return branch_sha
 
 
 def verify_nonce(api, now: datetime) -> None:
@@ -412,6 +426,15 @@ def verify_nonce(api, now: datetime) -> None:
         at.tzinfo is not None and (now - at).total_seconds() >= 3600,
         "el lock todavía no cumple 60 minutos de antigüedad",
     )
+    author_time = author.get("date")
+    demand(type(author_time) is str, "nonce sin fecha de autor")
+    try:
+        author_at = datetime.fromisoformat(author_time.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise Denied("fecha de autor inválida") from exc
+    demand(author_at.tzinfo is not None
+           and (now - author_at).total_seconds() >= 3600,
+           "el autor del lock todavía no cumple 60 minutos")
 
 
 def prepare(api, now: datetime, run_id: str) -> str:
@@ -436,6 +459,7 @@ def prepare(api, now: datetime, run_id: str) -> str:
 
 def recover(api, now: datetime, run_id: str) -> None:
     repo_id = prepare(api, now, run_id)
+    branch_before = verify_branch(api)
     valid_global(api)
     freeze = api.get("/repos/pl0n3r/Factory/issues/921")
     demand(freeze.get("state") == "closed", "freeze global cambió")
@@ -478,13 +502,14 @@ def recover(api, now: datetime, run_id: str) -> None:
         raise Denied("el lock sigue presente después del CAS")
 
     verify_issue_and_lease(api)
-    verify_branch(api)
+    demand(verify_branch(api) == branch_before,
+           "la rama #1957 cambió durante el CAS")
     api.post(f"/repos/{REPO}/issues/{ISSUE}/comments", {
         "body": (
             "Reparación lock-only verificada: CAS eliminó únicamente "
             f"{LOCK_REF} con beforeOid {EXPECTED_NONCE}; GET posterior = 404. "
             f"La reserva V3 {EXPECTED_LEASE} sigue activa y la rama "
-            f"{BRANCH} permanece intacta en {EXPECTED_PARENT}. "
+            f"{BRANCH} permanece intacta en {branch_before}. "
             "No se liberó ni recreó la V3. Continuar en la misma rama; no enviar /tomar."
         )
     })
@@ -502,7 +527,8 @@ def authorized_event(event: dict, env: dict[str, str]) -> None:
     issue = event.get("issue") or {}
     comment = event.get("comment") or {}
     demand(
-        issue.get("number") == ISSUE
+        event.get("action") == "created"
+        and issue.get("number") == ISSUE
         and issue.get("pull_request") is None
         and comment.get("body") == COMMAND
         and (comment.get("user") or {}).get("login") == "pl0n3r"

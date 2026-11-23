@@ -940,6 +940,18 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+      - name: Conservar evidencia sintética empleados, antes y después
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: employees-nav-visual-${{ github.run_id }}
+          path: |
+            test-results/**/employees-nav-before-*.png
+            test-results/**/employees-nav-after-*.png
+          retention-days: 14
+          if-no-files-found: ignore
+
+
       - name: Detener aplicación
         if: always()
         run: |
