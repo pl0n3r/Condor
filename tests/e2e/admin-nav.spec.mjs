@@ -108,8 +108,10 @@ test.describe('Administrador — menú agrupado y módulos aislados', () => {
         oldLink.textContent = 'Empleados y asistencia (referencia sintética)';
         navigation.appendChild(oldLink);
       });
+      const beforePath = testInfo.outputPath(`employees-nav-before-${width}px.png`);
+      await page.screenshot({ path: beforePath, fullPage: true });
       await testInfo.attach(`empleados-antes-sintetico-${width}px`, {
-        body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
+        path: beforePath, contentType: 'image/png',
       });
       await page.evaluate(() => {
         document.querySelector('[data-synthetic-before="true"]')?.remove();
@@ -119,8 +121,10 @@ test.describe('Administrador — menú agrupado y módulos aislados', () => {
             .filter((key) => key !== 'employees-management').join(','));
       });
       await expect(nav.locator('a[href="/admin#employees-management"]')).toHaveCount(0);
+      const afterPath = testInfo.outputPath(`employees-nav-after-${width}px.png`);
+      await page.screenshot({ path: afterPath, fullPage: true });
       await testInfo.attach(`empleados-despues-${width}px`, {
-        body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
+        path: afterPath, contentType: 'image/png',
       });
     }
   });
