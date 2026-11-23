@@ -8,6 +8,7 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 #[AsEventListener(event: KernelEvents::EXCEPTION, priority: 32)]
@@ -34,13 +35,62 @@ final readonly class ApiExceptionSubscriber
         }
 
         [$code, $message] = self::contractFor($status);
+        $details = [];
+        if ($status === Response::HTTP_UNPROCESSABLE_ENTITY) {
+            $validationMessage = self::safeValidationMessage($error);
+            if ($validationMessage !== null) {
+                $message = $validationMessage;
+                if (preg_match('/^El campo ([a-z][a-z0-9_]{0,63}) no es válido\.$/u', $message, $matches) === 1) {
+                    $details['field'] = $matches[1];
+                }
+            }
+        }
+
         $event->setResponse($this->responses->create(
             $event->getRequest(),
             $code,
             $message,
             $status,
+            details: $details,
             headers: self::safeHeaders($error->getHeaders()),
         ));
+    }
+
+    /**
+     * Only direct, bounded application validation messages may cross the API boundary.
+     * Wrapped exceptions and diagnostic/code-like content keep the generic contract.
+     */
+    private static function safeValidationMessage(HttpExceptionInterface $error): ?string
+    {
+        if (!$error instanceof UnprocessableEntityHttpException || $error->getPrevious() !== null) {
+            return null;
+        }
+
+        $raw = $error->getMessage();
+        if ($raw === '' || strlen($raw) > 240 || preg_match('/[\\x00-\\x1F\\x7F]/u', $raw) === 1) {
+            return null;
+        }
+
+        $message = trim($raw);
+        if ($message === '' || preg_match('/^[\\p{L}\\p{N}\\s.,;:¿?¡!()_-]+$/u', $message) !== 1) {
+            return null;
+        }
+
+        if (preg_match(
+            '/\\b(?:SQLSTATE|SQL|SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|UNION|JOIN|FROM|WHERE|TABLE|DATABASE|PDO|DBAL|MYSQL|MARIADB|DOCTRINE|SYMFONY|ERROR|EXCEPTION|THROWABLE|WARNING|NOTICE|FATAL|STACK|TRACE|PASSWORD|SECRET|TOKEN|AUTHORIZATION|COOKIE|CREDENTIALS?)\\b/i',
+            $message,
+        ) === 1) {
+            return null;
+        }
+
+        if (preg_match(
+            '/\\b[A-Z][a-z]+(?:[A-Z][A-Za-z0-9]+)+\\b|\\b[A-Z][A-Za-z0-9_]*(?:Exception|Error|Throwable)\\b|\\b[A-Za-z_][A-Za-z0-9_]*\\(\\)/',
+            $message,
+        ) === 1 || preg_match('/\\.(?:php|sql|env|log|ini|ya?ml)\\b/i', $message) === 1) {
+            return null;
+        }
+
+        return $message;
     }
 
     /** @return array{0: string, 1: string} */
