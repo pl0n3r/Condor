@@ -76,17 +76,21 @@ final readonly class ApiExceptionSubscriber
             return null;
         }
 
-        if (preg_match(
-            '/\\b(?:SQLSTATE|SQL|SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|UNION|JOIN|FROM|WHERE|TABLE|DATABASE|PDO|DBAL|MYSQL|MARIADB|DOCTRINE|SYMFONY|ERROR|EXCEPTION|THROWABLE|WARNING|NOTICE|FATAL|STACK|TRACE|PASSWORD|SECRET|TOKEN|AUTHORIZATION|COOKIE|CREDENTIALS?)\\b/i',
-            $message,
-        ) === 1) {
+        $internalPattern = '/\\b(?:'
+            .'SQLSTATE|SQL|SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|UNION|JOIN|FROM|WHERE|TABLE|DATABASE|'
+            .'PDO|DBAL|MYSQL|MARIADB|DOCTRINE|SYMFONY|ERROR|EXCEPTION|THROWABLE|WARNING|NOTICE|FATAL|STACK|TRACE|'
+            .'PASSWORD|SECRET|TOKEN|AUTHORIZATION|COOKIE|CREDENTIALS?'
+            .')\\b/i';
+        if (preg_match($internalPattern, $message) === 1) {
             return null;
         }
 
-        if (preg_match(
-            '/\\b[A-Z][a-z]+(?:[A-Z][A-Za-z0-9]+)+\\b|\\b[A-Z][A-Za-z0-9_]*(?:Exception|Error|Throwable)\\b|\\b[A-Za-z_][A-Za-z0-9_]*\\(\\)/',
-            $message,
-        ) === 1 || preg_match('/\\.(?:php|sql|env|log|ini|ya?ml)\\b/i', $message) === 1) {
+        $codeLikePattern = '/\\b[A-Z][a-z]+(?:[A-Z][A-Za-z0-9]+)+\\b'
+            .'|\\b[A-Z][A-Za-z0-9_]*(?:Exception|Error|Throwable)\\b'
+            .'|\\b[A-Za-z_][A-Za-z0-9_]*\\(\\)/';
+        $sourceFilePattern = '/\\.(?:php|sql|env|log|ini|ya?ml)\\b/i';
+        if (preg_match($codeLikePattern, $message) === 1
+            || preg_match($sourceFilePattern, $message) === 1) {
             return null;
         }
 

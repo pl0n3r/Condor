@@ -74,7 +74,8 @@ final class ApiExceptionSubscriberTest extends TestCase
     public function testUnsafeOrWrappedValidationMessagesKeepTheGenericContract(): void
     {
         $exceptions = array_map(
-            static fn (string $message): UnprocessableEntityHttpException => new UnprocessableEntityHttpException($message),
+            static fn (string $message): UnprocessableEntityHttpException =>
+                new UnprocessableEntityHttpException($message),
             [
                 'SQLSTATE[HY000]: SELECT * FROM users',
                 'No se pudo leer /srv/app/private.php',
@@ -98,7 +99,14 @@ final class ApiExceptionSubscriberTest extends TestCase
             $payload = json_decode((string) $response->getContent(), true, 512, JSON_THROW_ON_ERROR);
             self::assertSame('Los datos enviados no son válidos.', $payload['message']);
             self::assertArrayNotHasKey('details', $payload);
-            foreach (['SQLSTATE', '/srv/app', 'SafeResponsePolicy', 'Stack trace', 'password', 'private internal detail'] as $secret) {
+            foreach ([
+                'SQLSTATE',
+                '/srv/app',
+                'SafeResponsePolicy',
+                'Stack trace',
+                'password',
+                'private internal detail',
+            ] as $secret) {
                 self::assertStringNotContainsString($secret, (string) $response->getContent());
             }
         }
