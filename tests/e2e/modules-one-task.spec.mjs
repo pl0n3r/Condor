@@ -80,7 +80,8 @@ async function buildFixture(phase) {
     "const query = new URLSearchParams(window.location.search);",
     "const moduleName = query.get('module');",
     "const readOnly = query.has('readOnly');",
-    "const permissions = readOnly ? ['users.view'] : ['orders.view','orders.create','inventory.view','inventory.create','inventory.update','users.view','users.create','settings.view','settings.create'];",
+    "const inventoryReadOnly = query.has('inventoryReadOnly');",
+    "const permissions = inventoryReadOnly ? ['inventory.view'] : readOnly ? ['users.view'] : ['orders.view','orders.create','inventory.view','inventory.create','inventory.update','users.view','users.create','settings.view','settings.create'];",
     "const components = {orders:OrdersManagement, inventory:InventoryManagement, payroll:PayrollManagement, finance:FinanceRealManagement, demo:FinanceManagement};",
     "const C = components[moduleName] || OrdersManagement;",
     "const props = {branchId:'01ARZ3NDEKTSV4RRFFQ69G5FAV',tenantId:'01ARZ3NDEKTSV4RRFFQ69G5FAW',companyId:'01ARZ3NDEKTSV4RRFFQ69G5FAX',csrfToken:'fixture-only',enabled:true,permissions};",
@@ -133,7 +134,12 @@ async function mockApi(page, empty = false) {
       const filtered = new URL(route.request().url()).searchParams.has('status');
       payload = empty || filtered ? { ...orders, orders: [], pagination: { ...orders.pagination, total: 0 } } : orders;
     }
-    if (path.includes('restock')) payload = { suggestions: [] };
+    if (path.includes('restock')) payload = {
+      branch_id: inventory.branch.id,
+      source_id: inventory.sources[0].id,
+      window_days: 30,
+      suggestions: [],
+    };
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) });
   });
 }
@@ -217,10 +223,89 @@ test.describe('Condor #1963: un trabajo por pantalla con estados de primer uso',
     const table = page.getByRole('table', { name: 'Saldos por fuente y producto' });
     await expect(table).toBeVisible();
     expect((await table.boundingBox()).y).toBeLessThan(900);
-    await expect(page.locator('#inventory-secondary-tools')).toHaveCount(0);
+    await expect(page.locator('#inventory-secondary-tools')).toBeHidden();
     await evidence(page, info, 'inventario', 'after', 1440);
     await page.getByRole('button', { name: 'Importar CSV y resurtido' }).click();
     await expect(page.locator('#inventory-secondary-tools')).toBeVisible();
+    await expect(page.getByText('No hay sugerencias de resurtido para esta sede con el consumo registrado.')).toBeVisible();
+    await expect(page.locator('#inventory-secondary-tools').getByRole('alert')).toHaveCount(0);
+  });
+
+  for (const width of [390, 1440]) {
+    test('Inventario: tablas y fichas comparten búsqueda y vacío a ' + width + 'px', async ({ page }, info) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openFixture(page, 'after', 'inventory');
+      const balanceCards = page.locator('[aria-label="Fichas de saldos"] .catalog-card');
+      const sourceCards = page.locator('[aria-label="Fichas de fuentes de inventario"] .catalog-card');
+      await expect(balanceCards).toHaveCount(1);
+      await expect(sourceCards).toHaveCount(1);
+      await evidence(page, info, 'inventario-busqueda', 'before', width);
+      const search = page.getByPlaceholder('Buscar fuente, producto o SKU');
+      await search.fill('sin-coincidencias-1985');
+      await expect(page.getByText('Sin existencias para esta búsqueda')).toBeVisible();
+      await expect(page.getByRole('table', { name: 'Fuentes de inventario' }).getByText('Sin fuentes')).toBeVisible();
+      await expect(balanceCards).toHaveCount(0);
+      await expect(sourceCards).toHaveCount(0);
+      await evidence(page, info, 'inventario-busqueda', 'after', width);
+      await search.fill('sede principal');
+      await expect(balanceCards).toHaveCount(1);
+      await expect(sourceCards).toHaveCount(1);
+    });
+  }
+
+  test('Inventario: CSV parcial persiste al ocultar herramientas durante commit y recarga', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openFixture(page, 'after', 'inventory');
+    let releaseCommit;
+    let startedCommit;
+    const gate = new Promise(resolve => { releaseCommit = resolve; });
+    const started = new Promise(resolve => { startedCommit = resolve; });
+    await page.route('**/api/inventory/adjust-csv/**', async route => {
+      const committing = new URL(route.request().url()).pathname.endsWith('/commit');
+      if (committing) {
+        startedCommit();
+        await gate;
+      }
+      const report = {
+        mode: committing ? 'commit' : 'preview',
+        file_sha256: 'a'.repeat(64),
+        applied: committing ? 1 : 0, replayed: 0, unchanged: 0,
+        rows: [
+          { line: 2, sku: 'SKU-DEMO', branch_id: inventory.branch.id,
+            status: committing ? 'applied' : 'valid' },
+          { line: 3, sku: 'SKU-DEMO-2', branch_id: inventory.branch.id,
+            ...(committing ? { error: 'CSV_ROW_INVALID' } : { status: 'valid' }) },
+        ],
+      };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(report) });
+    });
+    await page.getByRole('button', { name: 'Importar CSV y resurtido' }).click();
+    await page.getByLabel('Archivo CSV de inventario').setInputFiles({
+      name: 'ajuste-sintetico.csv', mimeType: 'text/csv',
+      buffer: Buffer.from('sku,branch_id,quantity\nSKU-DEMO,' + inventory.branch.id + ',3\n'),
+    });
+    await page.getByRole('button', { name: 'Ver vista previa' }).click();
+    await expect(page.getByRole('heading', { name: 'Vista previa del ajuste' })).toBeVisible();
+    await page.getByRole('checkbox', { name: /Confirmo los ajustes/ }).check();
+    await page.getByRole('button', { name: 'Confirmar ajustes' }).click();
+    await started;
+    await page.getByRole('button', { name: 'Ocultar herramientas' }).click();
+    await expect(page.locator('#inventory-secondary-tools')).toBeHidden();
+    releaseCommit();
+    await page.getByRole('button', { name: 'Importar CSV y resurtido' }).click();
+    await expect(page.getByRole('heading', { name: 'Resultado del ajuste' })).toBeVisible();
+    await expect(page.getByText('El resultado contiene filas no aplicadas.')).toBeVisible();
+    await expect(page.getByText('Columnas incompletas o incorrectas.')).toHaveCount(0);
+    await expect(page.getByText('SKU, sede o cantidad inválida.')).toBeVisible();
+  });
+
+  test('Inventario: lectura sin permiso de ajuste no monta el asistente CSV', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockApi(page);
+    await page.goto(origin + '/after?module=inventory&inventoryReadOnly=1');
+    await page.getByRole('button', { name: 'Importar CSV y resurtido' }).click();
+    await expect(page.getByRole('heading', { name: 'Ajustar existencias desde CSV' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Sugerencias de resurtido' })).toBeVisible();
   });
 
   // Los dos módulos comparten el mismo contrato visual sin duplicar pasos de
