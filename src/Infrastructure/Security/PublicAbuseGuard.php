@@ -188,8 +188,12 @@ final readonly class PublicAbuseGuard
         }
         $response = $event->getResponse();
         $body = $response->getContent();
+        // render() leaves Content-Type unset; Symfony's ResponseListener (same
+        // priority, registered later) only then defaults it to text/html. A
+        // missing type is therefore HTML; any explicit non-HTML type is skipped.
+        $type = $response->headers->get('Content-Type');
         if (!is_string($body)
-            || !str_contains(strtolower((string) $response->headers->get('Content-Type')), 'text/html')
+            || ($type !== null && !str_contains(strtolower($type), 'text/html'))
             || !str_contains(strtolower($body), '<form')
             || !is_string($this->signingKey) || strlen($this->signingKey) < 16
         ) {
