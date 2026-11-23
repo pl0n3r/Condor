@@ -237,6 +237,10 @@ jobs:
       - name: Probar contrato de merge Sonar
         run: python3 tests/test_sonar_merge_gate.py
 
+      - name: Probar recuperación OWNER-only V3 #1957 (sin red)
+        run: python3 -m unittest discover -s tests -p 'test_recuperar_lock1957.py' -v
+
+
       - name: Validar ruleset viva de Sonar
         env:
           GH_TOKEN: ${{ github.token }}

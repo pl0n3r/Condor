@@ -464,7 +464,8 @@ def recover(api, now: datetime, run_id: str) -> None:
     freeze = api.get("/repos/pl0n3r/Factory/issues/921")
     demand(freeze.get("state") == "closed", "freeze global cambió")
     verify_issue_and_lease(api)
-    verify_branch(api)
+    demand(verify_branch(api) == branch_before,
+           "la rama #1957 cambió antes del CAS")
     no_live_coordination(api, run_id)
     verify_nonce(api, now)
 

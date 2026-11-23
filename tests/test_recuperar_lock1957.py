@@ -245,9 +245,8 @@ class RecoveryTests(unittest.TestCase):
         api.drift_second = True
         with self.assertRaises(subject.Denied):
             subject.recover(api, NOW, "999")
-        self.assertEqual(
-            [x[1] for x in api.calls if x[0] == "POST"], ["/graphql"])
-        # Un CAS ya finalizado no se interpreta como autorización para otra ref.
+        self.assert_no_post(api)
+        # Cualquier carrera en la rama debe vetar el CAS antes de tocar refs.
         self.assertEqual(api.lease["reservation_id"], subject.EXPECTED_LEASE)
 
     def test_disparador_owner_exacto_y_no_persistencia_real(self):
