@@ -133,7 +133,7 @@ class RobustnessHarnessContractTests(unittest.TestCase):
                 return 503, '{"error":"internal_error"}', .001
 
         signature = "POST /api/v1/hr/employees | HTTP 503"
-        self.assertIn(signature, harness.load_baseline())
+        self.assertNotIn(signature, harness.load_baseline())
         with patch.object(harness, "Client", FakeClient), \
              patch.object(harness, "EMAIL", "owner-ci@example.test"), \
              patch.object(harness, "PASSWORD", "synthetic"), \
