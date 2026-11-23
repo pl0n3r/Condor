@@ -56,6 +56,7 @@ final class ApiExceptionSubscriberTest extends TestCase
     {
         foreach ([
             ['El campo code no es válido.', ['field' => 'code'], null],
+            ['El campo name no es válido.', ['field' => 'name'], null],
             [
                 'El código del proveedor debe ser alfanumérico (máximo 64 caracteres).',
                 ['field' => 'code'],
