@@ -8,6 +8,7 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 #[AsEventListener(event: KernelEvents::EXCEPTION, priority: 32)]
@@ -34,13 +35,93 @@ final readonly class ApiExceptionSubscriber
         }
 
         [$code, $message] = self::contractFor($status);
+        $details = [];
+        if ($status === Response::HTTP_UNPROCESSABLE_ENTITY) {
+            $validationMessage = self::safeValidationMessage($error);
+            if ($validationMessage !== null) {
+                $message = $validationMessage;
+                $field = null;
+                if (preg_match('/^El campo ([a-z][a-z0-9_]{0,63}) no es válido\.$/u', $message, $matches) === 1) {
+                    $field = $matches[1];
+                } elseif (preg_match('/^El código del proveedor\\b/u', $message) === 1) {
+                    $field = 'code';
+                } elseif (preg_match('/^El nombre del proveedor\\b/u', $message) === 1) {
+                    $field = 'name';
+                } elseif (preg_match('/^El plazo de pago\\b/u', $message) === 1) {
+                    $field = 'payment_terms_days';
+                }
+                if ($field !== null) {
+                    $details['field'] = $field;
+                }
+            }
+        }
+
         $event->setResponse($this->responses->create(
             $event->getRequest(),
             $code,
             $message,
             $status,
+            details: $details,
             headers: self::safeHeaders($error->getHeaders()),
         ));
+    }
+
+    /**
+     * Only bounded application validation messages may cross the API boundary.
+     * Direct errors and matching DomainException/InvalidArgumentException wrappers are allowed.
+     */
+    private static function safeValidationMessage(HttpExceptionInterface $error): ?string
+    {
+        if (!$error instanceof UnprocessableEntityHttpException) {
+            return null;
+        }
+
+        $previous = $error->getPrevious();
+        if ($previous !== null
+            && (
+                (!($previous instanceof \DomainException) && !($previous instanceof \InvalidArgumentException))
+                || $previous->getMessage() !== $error->getMessage()
+            )
+        ) {
+            return null;
+        }
+
+        $raw = $error->getMessage();
+        if ($raw === '' || strlen($raw) > 240 || preg_match('/[\\x00-\\x1F\\x7F]/u', $raw) === 1) {
+            return null;
+        }
+
+        $message = trim($raw);
+        if ($message === '' || preg_match('/^[\\p{L}\\p{N}\\s.,;:¿?¡!()_-]+$/u', $message) !== 1) {
+            return null;
+        }
+
+        $isFieldValidation = preg_match('/^El campo [a-z][a-z0-9_]{0,63}\\b/u', $message) === 1
+            || preg_match('/^El (?:código|nombre) del proveedor\\b/u', $message) === 1
+            || preg_match('/^El plazo de pago\\b/u', $message) === 1;
+        if (!$isFieldValidation) {
+            return null;
+        }
+
+        $internalPattern = '/\\b(?:'
+            .'SQLSTATE|SQL|SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|UNION|JOIN|FROM|WHERE|TABLE|DATABASE|'
+            .'PDO|DBAL|MYSQL|MARIADB|DOCTRINE|SYMFONY|ERROR|EXCEPTION|THROWABLE|WARNING|NOTICE|FATAL|STACK|TRACE|'
+            .'PASSWORD|SECRET|TOKEN|AUTHORIZATION|COOKIE|CREDENTIALS?|TENANT'
+            .')\\b/i';
+        if (preg_match($internalPattern, $message) === 1) {
+            return null;
+        }
+
+        $codeLikePattern = '/\\b[A-Z][a-z]+(?:[A-Z][A-Za-z0-9]+)+\\b'
+            .'|\\b[A-Z][A-Za-z0-9_]*(?:Exception|Error|Throwable)\\b'
+            .'|\\b[A-Za-z_][A-Za-z0-9_]*\\(\\)/';
+        $sourceFilePattern = '/\\.(?:php|sql|env|log|ini|ya?ml)\\b/i';
+        if (preg_match($codeLikePattern, $message) === 1
+            || preg_match($sourceFilePattern, $message) === 1) {
+            return null;
+        }
+
+        return $message;
     }
 
     /** @return array{0: string, 1: string} */
