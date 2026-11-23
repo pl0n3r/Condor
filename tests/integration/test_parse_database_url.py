@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-PARSER = Path(__file__).resolve().parents[1] / "scripts" / "parse-database-url.php"
+PARSER = Path(__file__).resolve().parents[2] / "scripts" / "parse-database-url.php"
 
 
 class DatabaseUrlOptionFileTest(unittest.TestCase):
