@@ -1,6 +1,6 @@
 # Matriz de cobertura requisito por requisito — Condor
 
-> Corte verificable: `main@3b9ef8ca0f5cf36729d08be8eeb90cdcb2c394cf` (22-nov-2026; versión inalterada `V 0.1.204`; reconciliación documental #1981 de evidencia ya fusionada, sin ejecutar pruebas de producción). Fase `construccion`. Auditoría de código, tests y PRs; **no certifica producción, permisos reales, datos personales ni go-live**.
+> Corte verificable: `main@8d75e1636076c87b1ccf018404f1e88fb456ac28` (22-nov-2026; versión inalterada `V 0.1.204`; reconciliación documental #1981 de evidencia ya fusionada, sin ejecutar pruebas de producción). Fase `construccion`. Auditoría de código, tests y PRs; **no certifica producción, permisos reales, datos personales ni go-live**.
 
 ## Método y alcance
 
@@ -605,7 +605,7 @@ Auditoría de los 96 IDs con [veredictos trazables](contraste-cd_ops.md) y suite
 
 **Porcentaje `CUBIERTO`: 24.2 %** (114 de 472 filas). Los slices acreditados no prueban ERP integral ni live.
 
-**Reconciliación M09/M11 #1981 (22-nov-2026; evidencia observada en `main@3b9ef8ca0f5cf36729d08be8eeb90cdcb2c394cf`):** 11 promociones acotadas (M09-S01…S08 y M11-S01…S03); 4 filas permanecen `NO_VERIFICABLE` (M11-S04…S07) porque la proyección de Producción Lite no prueba órdenes de trabajo generales, responsables asignados, horas laborales ni productividad. Todas las pruebas citadas usan fixtures/scope sintético; no se acreditan operaciones reales, producción, datos de clientes ni cumplimiento jurídico.
+**Reconciliación M09/M11 #1981 (22-nov-2026; evidencia observada en `main@8d75e1636076c87b1ccf018404f1e88fb456ac28`):** 11 promociones acotadas (M09-S01…S08 y M11-S01…S03); 4 filas permanecen `NO_VERIFICABLE` (M11-S04…S07) porque la proyección de Producción Lite no prueba órdenes de trabajo generales, responsables asignados, horas laborales ni productividad. Todas las pruebas citadas usan fixtures/scope sintético; no se acreditan operaciones reales, producción, datos de clientes ni cumplimiento jurídico.
 
 **Hojas nuevas creadas: 0.** No apareció ningún `SIN_COBERTURA` demostrado sin seguimiento; faltas de evidencia se mantuvieron `NO_VERIFICABLE` para no fabricar backlog bajo Factory #1289.
 
