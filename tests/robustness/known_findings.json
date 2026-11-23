@@ -18,21 +18,6 @@
     },
     {
       "endpoint": "Proveedores.name",
-      "problema": "rechazo sin decir qué campo falla",
-      "issue": "#1956"
-    },
-    {
-      "endpoint": "Proveedores.code",
-      "problema": "rechazo sin decir qué campo falla",
-      "issue": "#1956"
-    },
-    {
-      "endpoint": "Proveedores.payment_terms_days",
-      "problema": "rechazo sin decir qué campo falla",
-      "issue": "#1956"
-    },
-    {
-      "endpoint": "Proveedores.name",
       "problema": "guardado distinto de lo enviado",
       "issue": "#1955"
     }
