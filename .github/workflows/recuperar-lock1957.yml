@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   recover:
+    # Job-level: los eventos ajenos con recover skipped no deben cancelar la coordinación V3.
     concurrency:
       group: coordinacion-${{ github.event.issue.number }}
       cancel-in-progress: false
