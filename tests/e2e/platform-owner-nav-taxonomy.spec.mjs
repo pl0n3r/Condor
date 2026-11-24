@@ -52,6 +52,12 @@ test.describe('Propietario — navegación aprobada #1972', () => {
     await expect(page.getByRole('navigation', { name: 'Navegación de plataforma' })
       .getByRole('link', { name: 'Empresas', exact: true }))
       .toHaveAttribute('aria-current', 'page');
+    // Direct owner roots must retain a breadcrumb, unlike the global dashboard.
+    const breadcrumb = page.getByRole('navigation', { name: 'Ruta' });
+    await expect(breadcrumb).toBeVisible();
+    await expect(breadcrumb.getByRole('link', { name: 'Inicio' }))
+      .toHaveAttribute('href', '/adminpl0n3r');
+    await expect(breadcrumb.getByText('Empresas', { exact: true })).toHaveCount(1);
     await expect(page.getByRole('navigation', { name: 'Navegación empresarial del propietario' }))
       .toHaveCount(0);
   });
