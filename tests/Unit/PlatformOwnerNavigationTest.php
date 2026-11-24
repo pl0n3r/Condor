@@ -52,12 +52,23 @@ final class PlatformOwnerNavigationTest extends WebTestCase
         $source = file_get_contents(dirname(__DIR__, 2).'/frontend/admin/PlatformOwnerApp.tsx');
         self::assertIsString($source);
         foreach ([
-            '/adminpl0n3r/suscripciones' => 'Plan y suscripciones',
+            '/adminpl0n3r' => 'Escritorio global',
+            '/adminpl0n3r/empresas' => 'Empresas',
+            '/adminpl0n3r/suscripciones' => 'Suscripciones',
             '/adminpl0n3r/catalogo' => 'Catálogo comercial',
+            '/adminpl0n3r/staff' => 'Personal de Condor',
+            '/adminpl0n3r/integraciones' => 'Integraciones globales',
         ] as $href => $label) {
             self::assertStringContainsString("href: '".$href."'", $source);
             self::assertStringContainsString("label: '".$label."'", $source);
         }
+
+        // No fifth global menu or hard-coded tenant module shortcuts.
+        self::assertStringNotContainsString("group: 'Módulos de empresa'", $source);
+        $shell = file_get_contents(dirname(__DIR__, 2).'/frontend/admin/AdminShell.tsx');
+        self::assertIsString($shell);
+        self::assertStringContainsString("entry.group === 'Administración de plataforma'", $shell);
+        self::assertStringContainsString("href: '/adminpl0n3r?view=auditoria'", $shell);
 
         self::assertStringContainsString("currentSection === 'catalogo'", $source);
         self::assertStringContainsString("currentSection === 'suscripciones'", $source);
