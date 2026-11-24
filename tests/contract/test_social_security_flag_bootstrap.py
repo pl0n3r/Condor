@@ -11,6 +11,7 @@ class SocialSecurityFlagBootstrapContract(unittest.TestCase):
         cls.php = (ROOT / 'src/Http/Controller/AdminController.php').read_text()
         cls.twig = (ROOT / 'templates/admin/index.html.twig').read_text()
         cls.app = (ROOT / 'frontend/admin/AdminApp.tsx').read_text()
+        cls.nav = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text()
         cls.view = (ROOT / 'frontend/admin/SocialSecurityManagement.tsx').read_text()
         cls.backend = (ROOT / 'src/Http/Controller/SocialSecurityController.php').read_text()
 
@@ -24,8 +25,9 @@ class SocialSecurityFlagBootstrapContract(unittest.TestCase):
         self.assertNotIn('worker_ref', self.twig)
 
     def test_navigation_real_only_on_and_no_fixtures_off(self):
-        self.assertIn("socialSecurityRealDataEnabled ? [{ href: '/admin#social-security-management', label: 'Seguridad social' }]", self.app)
-        self.assertIn("label: 'Seguridad social (pruebas)'", self.app)
+        self.assertIn('flags.socialSecurityRealDataEnabled', self.nav)
+        self.assertIn("link('social-security-management', 'Seguridad social')", self.nav)
+        self.assertIn("link('social-security-management', 'Seguridad social (pruebas)')", self.nav)
         self.assertIn('<SocialSecurityRealManagement', self.app)
         self.assertIn('enabled={socialSecurityRealDataEnabled}', self.app)
         self.assertIn('csrfToken={accessToken}', self.app)
