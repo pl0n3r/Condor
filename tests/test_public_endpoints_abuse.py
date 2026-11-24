@@ -151,12 +151,19 @@ if (!str_contains($untypedHtml, 'name="_condor_form_proof"')
     || !str_contains($untypedHtml, 'name="_condor_website"')) {
     throw new RuntimeException('Formulario sin Content-Type quedó sin prueba firmada.');
 }
-$jsonBody = '{"html":"<form method=\\"post\\"></form>"}';
+$jsonBody = '{"html":"<form method=post></form>"}';
+if (json_decode($jsonBody, true, 32, JSON_THROW_ON_ERROR)['html'] !== '<form method=post></form>') {
+    throw new RuntimeException('Fixture JSON no contiene formulario POST reconocible.');
+}
 $typedJson = new ResponseEvent($kernel, Request::create('/admin/login', 'GET'),
     HttpKernelInterface::MAIN_REQUEST,
     new Response($jsonBody, 200, ['Content-Type' => 'application/json']));
 $strict->onKernelResponse($typedJson);
-if ($typedJson->getResponse()->getContent() !== $jsonBody) {
+$typedJsonContent = $typedJson->getResponse()->getContent();
+if (!is_string($typedJsonContent)
+    || $typedJsonContent !== $jsonBody
+    || str_contains($typedJsonContent, '_condor_form_proof')
+    || str_contains($typedJsonContent, '_condor_website')) {
     throw new RuntimeException('El guard alteró una respuesta JSON.');
 }
 $post = static function (array $data, string $ip) use ($strict, $kernel): RequestEvent {
@@ -305,6 +312,36 @@ class PublicEndpointsAbuseAcceptance(unittest.TestCase):
             for accepted, throttled in data["routes"].values():
                 self.assertLessEqual(accepted, 24)
                 self.assertGreaterEqual(throttled, 26)
+
+    def test_json_fixture_detects_removed_content_type_filter(self):
+        """La misma fixture falla si se retira únicamente el filtro de tipos."""
+        original_guard = GUARD.read_text(encoding="utf-8")
+        condition = "|| ($type !== null && !str_contains(strtolower($type), 'text/html'))"
+        self.assertEqual(original_guard.count(condition), 1)
+        mutant_guard = original_guard.replace(condition, "", 1)
+        with tempfile.TemporaryDirectory(prefix="condor-ctype-mutant-") as folder:
+            root = Path(folder)
+            guard_file = root / "PublicAbuseGuard.php"
+            guard_file.write_text(mutant_guard, encoding="utf-8")
+            routes_file = root / "routes.json"
+            routes_file.write_text(json.dumps(self.inventory), encoding="utf-8")
+            bootstrap = (
+                "require " + json.dumps(str(ROOT / "vendor/autoload.php")) + ";"
+                + chr(10) + "require " + json.dumps(str(guard_file)) + ";"
+            )
+            script = PHP_HARNESS.replace(
+                "require __DIR__ . '/vendor/autoload.php';", bootstrap, 1,
+            )
+            fixture = root / "mutant-fixture.php"
+            fixture.write_text(script, encoding="utf-8")
+            result = subprocess.run(
+                ["php", str(fixture), str(routes_file)],
+                cwd=ROOT, env={**os.environ, "APP_ENV": "test"},
+                capture_output=True, text=True, timeout=90, check=False,
+            )
+            self.assertNotEqual(result.returncode, 0,
+                                "Sin filtro Content-Type el test debe fallar")
+            self.assertIn("El guard alteró una respuesta JSON.", result.stderr)
 
     def test_limits_have_explicit_budgets(self):
         content = CONFIG.read_text(encoding="utf-8")
