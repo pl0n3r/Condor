@@ -16,6 +16,7 @@ import { PlatformSubscriptionsPanel, isSyntheticTenant } from './PlatformSubscri
 import { PlatformPlansPanel } from './PlatformPlansPanel';
 import { PlatformRevenuePanel } from './PlatformRevenuePanel';
 import { platformOwnerContextPath } from './api';
+import { buildTenantNavigation, TENANT_ROOTS } from './CondorNavigationCatalog';
 
 type CommercialPlan = {
   plan_version_id: string;
@@ -394,33 +395,21 @@ type State =
       diagnostic?: OwnerDiagnostic;
     };
 
-const OWNER_SUPPORT_MODULES = [
-  { key: 'commerce', label: 'Comercial' },
-  { key: 'orders', label: 'Pedidos' },
-  { key: 'sales-reports', label: 'Reportes de ventas' },
-  { key: 'reports-downloads', label: 'Descargas CSV' },
-  { key: 'customer-service', label: 'Servicio al cliente' },
-  { key: 'catalog', label: 'Catálogo' },
-  { key: 'inventory', label: 'Inventario' },
-  { key: 'stock-alerts', label: 'Alertas de stock' },
-  { key: 'stock-transfers', label: 'Transferencias' },
-  { key: 'production', label: 'Producción' },
-  { key: 'purchasing', label: 'Compras' },
-  { key: 'assets-management', label: 'Activos' },
-  { key: 'seo-settings', label: 'SEO' },
-  { key: 'employees-management', label: 'Empleados y asistencia' },
-  { key: 'human-resources-management', label: 'Talento humano' },
-  { key: 'payroll-management', label: 'Nómina' },
-  { key: 'contracts-management', label: 'Contratación' },
-  { key: 'social-security-management', label: 'Seguridad social' },
-  { key: 'finance-management', label: 'Finanzas' },
-  { key: 'compliance-management', label: 'SG-SST' },
-  { key: 'compliance-evidence-management', label: 'Cumplimiento legal' },
-  { key: 'governance-management', label: 'Gobierno corporativo' },
-  { key: 'workflows', label: 'Workflows' },
-  { key: 'operations-processes', label: 'Procesos' },
-  { key: 'roles', label: 'Roles y permisos' },
-] as const;
+// /admin and owner support use the same catalogue; the backend remains authoritative.
+const OWNER_TENANT_NAV = buildTenantNavigation({
+  section: 'home', activeModule: '', development: false,
+  customerServiceRealDataEnabled: true, canViewProduction: true,
+  assetsRealDataEnabled: false, processesRealDataEnabled: false,
+  hrRealDataEnabled: true, hrSyntheticPreviewEnabled: false,
+  payrollRealDataEnabled: false, contractsRealDataEnabled: false,
+  socialSecurityRealDataEnabled: false, financeRealDataEnabled: false,
+  ohsRealDataEnabled: false, legalComplianceRealDataEnabled: false,
+  governanceRealDataEnabled: false,
+});
+const OWNER_TENANT_HREFS = new Set(OWNER_TENANT_NAV.flatMap((entry) =>
+  'items' in entry ? entry.items.map((item) => item.href) : [entry.href]));
+const ownerSupportModule = (href: string): string =>
+  href.startsWith('/admin#') ? href.slice('/admin#'.length) : '';
 
 type PlatformOwnerSection = 'control' | 'empresas' | 'staff' | 'suscripciones' | 'catalogo' | 'integraciones' | 'diagnosticos';
 
@@ -594,12 +583,20 @@ export function PlatformOwnerApp({
     ? supportBranchId : '';
   const [supportBusy, setSupportBusy] = useState(false);
   const [supportError, setSupportError] = useState('');
+  const [openCompanyGroup, setOpenCompanyGroup] = useState('');
   const moduleRequested = new URLSearchParams(window.location.search).get('modulo') ?? '';
-  const supportModule = OWNER_SUPPORT_MODULES.some((item) => item.key === moduleRequested)
+  const supportModule = [...OWNER_TENANT_HREFS].some((href) =>
+    moduleRequested !== '' && ownerSupportModule(href) === moduleRequested)
     ? moduleRequested : '';
 
-  async function openSupport(tenantId: string, branchId?: string): Promise<void> {
+  async function openSupport(tenantId: string, branchId?: string, targetHref?: string): Promise<void> {
     if (supportBusy) return;
+    const destination = targetHref ?? ('/admin' + (supportModule ? '#' + supportModule : ''));
+    if (!OWNER_TENANT_HREFS.has(destination)) {
+      setSupportError('El módulo solicitado no está disponible.');
+      return;
+    }
+    const targetModule = ownerSupportModule(destination);
     setSupportBusy(true);
     setSupportError('');
     try {
@@ -613,7 +610,7 @@ export function PlatformOwnerApp({
         body: JSON.stringify({
           tenant_id: tenantId,
           branch_id: branchId ?? null,
-          module: supportModule,
+          module: targetModule,
         }),
       });
       if (!response.ok) {
@@ -621,12 +618,14 @@ export function PlatformOwnerApp({
       }
       // Never navigate to an untrusted URL from a network response.
       // Only our local allowlisted module may affect the destination.
-      window.location.assign('/admin' + (supportModule ? '#' + supportModule : ''));
+      window.location.assign(destination);
     } catch {
       setSupportError('No se pudo abrir el panel de la empresa. Reintenta desde aquí.');
       setSupportBusy(false);
     }
   }
+
+  useEffect(() => { setOpenCompanyGroup(''); }, [selected?.id]);
 
   const filteredTenants = state.status === 'ready'
     ? state.data.tenants.filter((tenant) => (
@@ -790,87 +789,28 @@ export function PlatformOwnerApp({
       navLabel="Navegación de plataforma"
       variant="platform"
       navItems={[
-        {
-          group: 'Resumen',
-          icon: 'home',
-          items: [
-            {
-              href: '/adminpl0n3r',
-              label: 'Centro de control',
-              current: currentSection === 'control',
-            },
-          ],
-        },
-        {
-          group: 'Empresas',
-          icon: 'people',
-          items: [
-            {
-              href: '/adminpl0n3r/empresas',
-              label: 'Empresas',
-              current: currentSection === 'empresas',
-            },
-          ],
-        },
-        {
-          group: 'Módulos de empresa',
-          icon: 'admin',
-          items: OWNER_SUPPORT_MODULES.map((module) => ({
-            href: '/adminpl0n3r/empresas?modulo=' + module.key,
-            label: module.label,
-            current: currentSection === 'empresas' && supportModule === module.key,
-          })),
-        },
-        {
-          group: 'Comercial',
-          icon: 'sales',
-          items: [
-            {
-              href: '/adminpl0n3r/catalogo?vista=planes',
-              label: 'Planes y precios',
-              current: plansView,
-            },
-            {
-              href: '/adminpl0n3r/suscripciones',
-              label: 'Plan y suscripciones',
-              current: currentSection === 'suscripciones',
-            },
-            {
-              href: '/adminpl0n3r/catalogo',
-              label: 'Catálogo comercial',
-              current: currentSection === 'catalogo' && !plansView && !revenueView,
-            },
-            {
-              href: '/adminpl0n3r/catalogo?vista=ingresos',
-              label: 'Ingresos',
-              current: revenueView,
-            },
-          ],
-        },
-        {
-          group: 'Plataforma',
-          icon: 'admin',
-          items: [
-            {
-              href: '/adminpl0n3r/staff',
-              label: 'Staff y permisos',
-              current: currentSection === 'staff',
-            },
-            {
-              href: '/adminpl0n3r/integraciones',
-              label: 'Integraciones',
-              current: currentSection === 'integraciones',
-            },
-            {
-              href: '/adminpl0n3r/diagnosticos',
-              label: 'Diagnósticos',
-              current: currentSection === 'diagnosticos',
-            },
-          ],
-        },
-        // Cumplimiento y Soporte no se muestran hasta tener pantallas
-        // del propietario; tampoco hay enlaces ficticios a Auditoría
-        // o Estado del sistema.
+        { href: '/adminpl0n3r', label: 'Escritorio global', icon: 'home',
+          current: currentSection === 'control' },
+        { href: '/adminpl0n3r/empresas', label: 'Empresas', icon: 'people',
+          current: currentSection === 'empresas' },
+        { group: 'Negocio SaaS', icon: 'finance', items: [
+          { href: '/adminpl0n3r/catalogo?vista=planes', label: 'Planes y precios', current: plansView },
+          { href: '/adminpl0n3r/suscripciones', label: 'Suscripciones',
+            current: currentSection === 'suscripciones' },
+          { href: '/adminpl0n3r/catalogo', label: 'Catálogo comercial',
+            current: currentSection === 'catalogo' && !plansView && !revenueView },
+          { href: '/adminpl0n3r/catalogo?vista=ingresos', label: 'Ingresos de Condor',
+            current: revenueView },
+        ] },
+        { group: 'Administración de plataforma', icon: 'admin', items: [
+          { href: '/adminpl0n3r/staff', label: 'Personal de Condor',
+            current: currentSection === 'staff' },
+          { href: '/adminpl0n3r/integraciones', label: 'Integraciones globales',
+            current: currentSection === 'integraciones' },
+          { href: '/adminpl0n3r/diagnosticos', label: 'Diagnósticos y estado del sistema',
+            current: currentSection === 'diagnosticos' },
+        ] },
+        // Auditoría ya pertenece al AdminShell; no inventar rutas sin backend.
       ]}
     >
       {supportError && <div className="alert alert-error" role="alert">{supportError}</div>}
@@ -911,6 +851,63 @@ export function PlatformOwnerApp({
         </output>
       )}
 
+
+      {selected && currentSection === 'empresas' && (
+        <nav className="platform-section" aria-label="Navegación empresarial del propietario"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && openCompanyGroup) {
+              event.preventDefault();
+              event.currentTarget.querySelector<HTMLButtonElement>(
+                'button[aria-expanded="true"]',
+              )?.focus();
+              setOpenCompanyGroup('');
+            }
+          }}>
+          <div className="section-heading compact">
+            <div>
+              <span className="eyebrow">Modo propietario · {selected.name}</span>
+              <h2>Áreas de la empresa</h2>
+            </div>
+            <span className="status-pill">{TENANT_ROOTS.length} áreas</span>
+          </div>
+          {selected.branches.length === 0 ? (
+            <p role="status">Esta empresa no tiene sedes. No se puede iniciar soporte.</p>
+          ) : (
+            <div className="tenant-grid">
+              {OWNER_TENANT_NAV.map((entry) => {
+                const groupName = 'items' in entry ? entry.group : entry.label;
+                if (!('items' in entry)) {
+                  return <button key={groupName} type="button" className="button button-secondary"
+                    disabled={supportBusy} onClick={() => void openSupport(
+                      selected.id, selectedSupportBranchId || undefined, entry.href,
+                    )}>{entry.label}</button>;
+                }
+                const expanded = openCompanyGroup === groupName;
+                return (
+                  <div key={groupName} className="nav-group" data-open={expanded}>
+                    <button type="button" className="button button-secondary"
+                      aria-expanded={expanded}
+                      aria-controls={'owner-group-' + groupName.replaceAll(' ', '-')}
+                      onClick={() => setOpenCompanyGroup(expanded ? '' : groupName)}>
+                      {groupName}
+                    </button>
+                    <div id={'owner-group-' + groupName.replaceAll(' ', '-')}
+                      hidden={!expanded}>
+                      {entry.items.map((item) => (
+                        <button type="button" className="button button-secondary"
+                          key={item.href} disabled={supportBusy}
+                          onClick={() => void openSupport(
+                            selected.id, selectedSupportBranchId || undefined, item.href,
+                          )}>{item.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </nav>
+      )}
 
       {currentSection === 'diagnosticos' && (
         <>

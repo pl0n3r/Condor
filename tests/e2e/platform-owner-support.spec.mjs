@@ -36,10 +36,7 @@ test.describe('Propietario — soporte temporal por empresa', () => {
     });
     expect(created.status()).toBe(201);
 
-    const nav = page.getByRole('navigation', { name: 'Navegación de plataforma' });
-    await nav.getByRole('button', { name: 'Módulos de empresa', exact: true }).click();
-    await nav.getByRole('link', { name: 'Talento humano', exact: true }).click();
-    await expect(page).toHaveURL(/\/adminpl0n3r\/empresas\?modulo=human-resources-management$/);
+    await page.goto('/adminpl0n3r/empresas');
 
     // The "before" screenshots show the owner choosing a company, not a
     // fabricated historical design comparison. All data is synthetic.
@@ -68,7 +65,11 @@ test.describe('Propietario — soporte temporal por empresa', () => {
 
     const dialog = page.getByRole('dialog', { name: tenantName });
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Abrir panel de la empresa' }).click();
+    await dialog.getByRole('button', { name: 'Ver como propietario' }).click();
+    const companyNav = page.getByRole('navigation', { name: 'Navegación empresarial del propietario' });
+    await expect(companyNav).toBeVisible();
+    await companyNav.getByRole('button', { name: 'Personal', exact: true }).click();
+    await companyNav.getByRole('button', { name: 'Talento humano', exact: true }).click();
     await expect(page).toHaveURL(/\/admin#human-resources-management$/);
     const supportBanner = page.getByRole('status').filter({ hasText: 'Soporte de propietario' });
     await expect(supportBanner).toContainText(tenantName);
