@@ -16,6 +16,17 @@
     data-staff-token="{{ csrf_token('platform_staff_management') }}"
     data-tenant-token="{{ csrf_token('platform_tenant_management') }}"
     data-subscription-token="{{ csrf_token('platform_commercial_subscription_management') }}"
+    data-customer-service-real-data-enabled="{{ customer_service_real_data_enabled ? 'true' : 'false' }}"
+    data-assets-real-data-enabled="{{ assets_real_data_enabled ? 'true' : 'false' }}"
+    data-operations-processes-real-data-enabled="{{ operations_processes_real_data_enabled ? 'true' : 'false' }}"
+    data-hr-real-data-enabled="{{ hr_real_data_enabled ? 'true' : 'false' }}"
+    data-payroll-real-data-enabled="{{ payroll_real_data_enabled ? 'true' : 'false' }}"
+    data-contracts-real-data-enabled="{{ contracts_real_data_enabled ? 'true' : 'false' }}"
+    data-social-security-real-data-enabled="{{ social_security_real_data_enabled ? 'true' : 'false' }}"
+    data-finance-real-data-enabled="{{ finance_real_data_enabled ? 'true' : 'false' }}"
+    data-ohs-real-data-enabled="{{ ohs_real_data_enabled ? 'true' : 'false' }}"
+    data-legal-compliance-real-data-enabled="{{ legal_compliance_real_data_enabled ? 'true' : 'false' }}"
+    data-governance-real-data-enabled="{{ governance_real_data_enabled ? 'true' : 'false' }}"
 >
     <section class="admin-shell admin-shell-platform" aria-label="Centro de control de Condor">
         <aside class="sidebar">

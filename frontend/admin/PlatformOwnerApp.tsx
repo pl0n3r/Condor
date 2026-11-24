@@ -395,16 +395,25 @@ type State =
       diagnostic?: OwnerDiagnostic;
     };
 
-// /admin and owner support use the same catalogue; the backend remains authoritative.
+// Read only SSR feature gates, just as /admin does. This UI never grants access.
+const ownerServerGate = (attribute: string): boolean =>
+  typeof document !== 'undefined'
+  && document.getElementById('condor-platform-root')?.getAttribute('data-' + attribute) === 'true';
 const OWNER_TENANT_NAV = buildTenantNavigation({
   section: 'home', activeModule: '', development: false,
-  customerServiceRealDataEnabled: true, canViewProduction: true,
-  assetsRealDataEnabled: false, processesRealDataEnabled: false,
-  hrRealDataEnabled: true, hrSyntheticPreviewEnabled: false,
-  payrollRealDataEnabled: false, contractsRealDataEnabled: false,
-  socialSecurityRealDataEnabled: false, financeRealDataEnabled: false,
-  ohsRealDataEnabled: false, legalComplianceRealDataEnabled: false,
-  governanceRealDataEnabled: false,
+  customerServiceRealDataEnabled: ownerServerGate('customer-service-real-data-enabled'),
+  canViewProduction: true,
+  assetsRealDataEnabled: ownerServerGate('assets-real-data-enabled'),
+  processesRealDataEnabled: ownerServerGate('operations-processes-real-data-enabled'),
+  hrRealDataEnabled: ownerServerGate('hr-real-data-enabled'),
+  hrSyntheticPreviewEnabled: false,
+  payrollRealDataEnabled: ownerServerGate('payroll-real-data-enabled'),
+  contractsRealDataEnabled: ownerServerGate('contracts-real-data-enabled'),
+  socialSecurityRealDataEnabled: ownerServerGate('social-security-real-data-enabled'),
+  financeRealDataEnabled: ownerServerGate('finance-real-data-enabled'),
+  ohsRealDataEnabled: ownerServerGate('ohs-real-data-enabled'),
+  legalComplianceRealDataEnabled: ownerServerGate('legal-compliance-real-data-enabled'),
+  governanceRealDataEnabled: ownerServerGate('governance-real-data-enabled'),
 });
 const OWNER_TENANT_HREFS = new Set(OWNER_TENANT_NAV.flatMap((entry) =>
   'items' in entry ? entry.items.map((item) => item.href) : [entry.href]));

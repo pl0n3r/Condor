@@ -75,6 +75,18 @@ test.describe('Propietario — soporte temporal por empresa', () => {
     ]) {
       await expect(companyNav.getByRole('button', { name: root, exact: true })).toHaveCount(1);
     }
+    // Support links reflect server capabilities, never a hard-coded disabled list.
+    for (const [attribute, group, label] of [
+      ['finance-real-data-enabled', 'Finanzas e informes', 'Finanzas'],
+      ['assets-real-data-enabled', 'Operaciones', 'Activos'],
+      ['governance-real-data-enabled', 'Empresa', 'Gobierno corporativo'],
+    ]) {
+      const enabled = await page.locator('#condor-platform-root')
+        .getAttribute('data-' + attribute);
+      await companyNav.getByRole('button', { name: group, exact: true }).click();
+      await expect(companyNav.getByRole('button', { name: label, exact: true }))
+        .toHaveCount(enabled === 'true' ? 1 : 0);
+    }
     const sales = companyNav.getByRole('button', { name: 'Ventas', exact: true });
     const inventory = companyNav.getByRole('button', { name: 'Inventario', exact: true });
     const people = companyNav.getByRole('button', { name: 'Personal', exact: true });

@@ -41,6 +41,27 @@ final class PlatformOwnerNavigationTest extends WebTestCase
                 (string) $client->getResponse()->getContent(),
             );
 
+            // The owner support catalogue must mirror /admin's server feature gates.
+            foreach ([
+                'customer-service-real-data-enabled' => 'CUSTOMER_SERVICE_REAL_DATA_ENABLED',
+                'assets-real-data-enabled' => 'ASSETS_REAL_DATA_ENABLED',
+                'operations-processes-real-data-enabled' => 'OPERATIONS_PROCESSES_REAL_DATA_ENABLED',
+                'hr-real-data-enabled' => 'HR_REAL_DATA_ENABLED',
+                'payroll-real-data-enabled' => 'PAYROLL_REAL_DATA_ENABLED',
+                'contracts-real-data-enabled' => 'CONTRACTS_REAL_DATA_ENABLED',
+                'social-security-real-data-enabled' => 'SOCIAL_SECURITY_REAL_DATA_ENABLED',
+                'finance-real-data-enabled' => 'FINANCE_REAL_DATA_ENABLED',
+                'ohs-real-data-enabled' => 'OHS_REAL_DATA_ENABLED',
+                'legal-compliance-real-data-enabled' => 'LEGAL_COMPLIANCE_REAL_DATA_ENABLED',
+                'governance-real-data-enabled' => 'GOVERNANCE_REAL_DATA_ENABLED',
+            ] as $attribute => $environment) {
+                $expected = getenv($environment) === 'true' ? 'true' : 'false';
+                self::assertStringContainsString(
+                    'data-'.$attribute.'="'.$expected.'"',
+                    (string) $client->getResponse()->getContent(),
+                );
+            }
+
             // Las secciones de navegación son GET-only: no crean APIs mutantes.
             $client->request('POST', $route);
             self::assertResponseStatusCodeSame(405);
