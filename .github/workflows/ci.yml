@@ -152,6 +152,25 @@ jobs:
             printf '| Playwright/runtime | **%s** | %s |\n' "$(decision "$E2E")" "$MOTIVO"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  tests-scripts:
+    name: Tests de scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Probar clasificación, autoauditoría y paquete jurídico documental
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p 'test_ci_change_classifier.py' -v
+          python3 -m unittest discover -s tests -p 'test_ci_self_audit.py' -v
+          python3 -m unittest discover -s tests -p 'test_revision_juridica.py' -v
+
   documentacion:
     name: Validar documentación
     needs: preflight
@@ -1304,7 +1323,7 @@ jobs:
 
   validar:
     name: Validar
-    needs: [factory-ci, preflight, documentacion, gobierno, coordinacion, pruebas-base, static-analysis, rector-dry-run, frontend, audit-npm, audit-composer, backend-php, backup-restore, e2e]
+    needs: [factory-ci, preflight, tests-scripts, documentacion, gobierno, coordinacion, pruebas-base, static-analysis, rector-dry-run, frontend, audit-npm, audit-composer, backend-php, backup-restore, e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -1313,6 +1332,8 @@ jobs:
         env:
           FACTORY_CI: ${{ needs.factory-ci.result }}
           PREFLIGHT: ${{ needs.preflight.result }}
+          TESTS_SCRIPTS: ${{ needs.tests-scripts.result }}
+          PRUEBAS_BASE_REQUERIDAS: ${{ needs.preflight.outputs.pruebas_base }}
           DOCUMENTACION: ${{ needs.documentacion.result }}
           GOBIERNO: ${{ needs.gobierno.result }}
           COORDINACION: ${{ needs.coordinacion.result }}
@@ -1333,13 +1354,21 @@ jobs:
 
           [[ "$FACTORY_CI" == "success" ]] || { echo "::error::CI Factory v1 no pasó."; exit 1; }
           [[ "$PREFLIGHT" == "success" ]] || { echo "::error::Preflight no pasó."; exit 1; }
+          [[ "$TESTS_SCRIPTS" == "success" ]] || { echo "::error::Tests de scripts no pasaron."; exit 1; }
           [[ "$GOBIERNO" == "success" ]] || { echo "::error::Gobierno no pasó."; exit 1; }
           case "$COORDINACION" in
             success|skipped) ;;
             *) echo "::error::Coordinación Factory no pasó."; exit 1 ;;
           esac
+          case "$PRUEBAS_BASE_REQUERIDAS" in
+            true|false) ;;
+            *) echo "::error::Clasificación de pruebas base ausente o inválida."; exit 1 ;;
+          esac
           case "$PRUEBAS_BASE" in
-            success|skipped) ;;
+            success) ;;
+            skipped)
+              [[ "$PRUEBAS_BASE_REQUERIDAS" == "false" ]] || { echo "::error::Pruebas base requeridas fueron omitidas."; exit 1; }
+              ;;
             *) echo "::error::Pruebas base no pasaron."; exit 1 ;;
           esac
 
@@ -1379,13 +1408,14 @@ jobs:
             echo
             echo "- CI Factory v1: **$FACTORY_CI**"
             echo "- Preflight: **$PREFLIGHT**"
+            echo "- Tests de scripts: **$TESTS_SCRIPTS**"
             echo "- Documentación: **$DOCUMENTACION**"
             echo "- Gobierno: **$GOBIERNO**"
             echo "- Coordinación: **$COORDINACION**"
             echo "- Modo de selección: **$MODO**"
             printf -- '- Categorías: `%s`\n' "$CATEGORIAS"
             printf -- '- Motivo: `%s`\n' "$MOTIVO"
-            echo "- Pruebas base: **$PRUEBAS_BASE**"
+            echo "- Pruebas base: **$PRUEBAS_BASE** (requeridas: **$PRUEBAS_BASE_REQUERIDAS**)"
             echo "- PHPStan: **$STATIC_ANALYSIS**"
             echo "- Rector dry-run: **$RECTOR_DRY_RUN**"
             echo "- Frontend: **$FRONTEND**"
