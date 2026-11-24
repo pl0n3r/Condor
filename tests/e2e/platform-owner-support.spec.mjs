@@ -68,8 +68,34 @@ test.describe('Propietario — soporte temporal por empresa', () => {
     await dialog.getByRole('button', { name: 'Ver como propietario' }).click();
     const companyNav = page.getByRole('navigation', { name: 'Navegación empresarial del propietario' });
     await expect(companyNav).toBeVisible();
-    await companyNav.getByRole('button', { name: 'Personal', exact: true }).click();
+    // The approved catalogue has nine real roots and only one expanded group.
+    for (const root of [
+      'Escritorio', 'Ventas', 'Catálogo', 'Inventario', 'Operaciones',
+      'Personal', 'Finanzas e informes', 'Sitio web', 'Empresa',
+    ]) {
+      await expect(companyNav.getByRole('button', { name: root, exact: true })).toHaveCount(1);
+    }
+    const sales = companyNav.getByRole('button', { name: 'Ventas', exact: true });
+    const inventory = companyNav.getByRole('button', { name: 'Inventario', exact: true });
+    const people = companyNav.getByRole('button', { name: 'Personal', exact: true });
+    await sales.click();
+    await expect(sales).toHaveAttribute('aria-expanded', 'true');
+    await expect(companyNav.getByRole('button', { name: 'Pedidos', exact: true })).toBeVisible();
+    await inventory.click();
+    await expect(sales).toHaveAttribute('aria-expanded', 'false');
+    await expect(inventory).toHaveAttribute('aria-expanded', 'true');
+    await people.click();
+    await expect(inventory).toHaveAttribute('aria-expanded', 'false');
+    await page.keyboard.press('Escape');
+    await expect(people).toHaveAttribute('aria-expanded', 'false');
+    await expect(people).toBeFocused();
+    await people.click();
+    const grant = page.waitForRequest((request) =>
+      request.url().endsWith('/adminpl0n3r/api/support') && request.method() === 'POST');
     await companyNav.getByRole('button', { name: 'Talento humano', exact: true }).click();
+    const payload = (await grant).postDataJSON();
+    expect(payload.module).toBe('human-resources-management');
+    expect(typeof payload.tenant_id).toBe('string');
     await expect(page).toHaveURL(/\/admin#human-resources-management$/);
     const supportBanner = page.getByRole('status').filter({ hasText: 'Soporte de propietario' });
     await expect(supportBanner).toContainText(tenantName);
