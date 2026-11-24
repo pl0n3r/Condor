@@ -68,10 +68,16 @@ test.describe('AdminApp: shell real compilada en producción con datos ficticios
     server = createServer(async (req, res) => {
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname === '/admin') {
-        const enabled = url.searchParams.get('hr') === 'on' ? 'true' : 'false';
+        const hrEnabled = url.searchParams.get('hr') === 'on';
+        const enabled = hrEnabled ? 'true' : 'false';
+        // La fixture debe representar ModuleAccess del servidor: sin este
+        // contrato SSR el shell correctamente oculta todos los módulos.
+        const authorized = ['catalog', 'inventory', 'stock-alerts'];
+        if (hrEnabled) authorized.push('human-resources-management');
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end('<!doctype html><html lang="es"><body>'
-          + '<div id="condor-admin-root" data-hr-real-data-enabled="' + enabled + '"></div>'
+          + '<div id="condor-admin-root" data-hr-real-data-enabled="' + enabled
+          + '" data-enabled-modules="' + authorized.join(',') + '"></div>'
           + '<script type="module" src="/shell.js"></script></body></html>');
         return;
       }

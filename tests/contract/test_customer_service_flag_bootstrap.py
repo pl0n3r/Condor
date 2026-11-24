@@ -11,6 +11,7 @@ class CustomerServiceFlagBootstrapTests(unittest.TestCase):
         cls.admin = (ROOT / "src/Http/Controller/AdminController.php").read_text()
         cls.twig = (ROOT / "templates/admin/index.html.twig").read_text()
         cls.app = (ROOT / "frontend/admin/AdminApp.tsx").read_text()
+        cls.nav = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text()
         cls.view = (ROOT / "frontend/admin/CustomerServiceManagement.tsx").read_text()
         cls.api = (ROOT / "src/Http/Controller/CustomerServiceController.php").read_text()
 
@@ -23,7 +24,8 @@ class CustomerServiceFlagBootstrapTests(unittest.TestCase):
             self.assertNotIn(forbidden, self.twig)
 
     def test_montaje_protegido_off_sin_fetch_ni_simulador(self):
-        self.assertIn("customerServiceRealDataEnabled ? [{ href: '/admin#customer-service'", self.app)
+        self.assertIn('flags.customerServiceRealDataEnabled', self.nav)
+        self.assertIn("link('customer-service', 'Servicio al cliente')", self.nav)
         self.assertIn("(customerServiceRealDataEnabled || import.meta.env.DEV)", self.app)
         self.assertIn("enabled={customerServiceRealDataEnabled}", self.app)
         self.assertIn("import('./CustomerServiceManagement')", self.app)

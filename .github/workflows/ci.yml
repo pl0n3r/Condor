@@ -956,6 +956,17 @@ jobs:
           if-no-files-found: ignore
 
 
+      - name: Publicar evidencia del menú de nueve áreas (#1971)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: tenant-nav-visual-${{ github.run_id }}
+          path: |
+            test-results/**/tenant-nav-before-*.png
+            test-results/**/tenant-nav-after-*.png
+          retention-days: 14
+          if-no-files-found: ignore
+
       - name: Detener aplicación
         if: always()
         run: |

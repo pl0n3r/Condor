@@ -11,6 +11,7 @@ class ProcessesRealFlagBootstrapTests(unittest.TestCase):
         cls.admin = (ROOT / "src/Http/Controller/AdminController.php").read_text()
         cls.twig = (ROOT / "templates/admin/index.html.twig").read_text()
         cls.app = (ROOT / "frontend/admin/AdminApp.tsx").read_text()
+        cls.nav = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text()
         cls.view = (ROOT / "frontend/admin/OperationsProcessesPanel.tsx").read_text()
         cls.api = (ROOT / "src/Http/Controller/OperationsProcessController.php").read_text()
 
@@ -27,7 +28,8 @@ class ProcessesRealFlagBootstrapTests(unittest.TestCase):
         self.assertIn("getenv('OPERATIONS_PROCESSES_REAL_DATA_ENABLED') === 'true'", self.api)
 
     def test_ui_does_not_leak_into_live_without_flag_and_valid_scope(self):
-        self.assertIn("processesRealDataEnabled ? [{ href: '/admin#operations-processes'", self.app)
+        self.assertIn('flags.processesRealDataEnabled', self.nav)
+        self.assertIn("link('operations-processes', 'Procesos')", self.nav)
         self.assertIn("(processesRealDataEnabled || import.meta.env.DEV)", self.app)
         self.assertIn("enabled={processesRealDataEnabled}", self.app)
         self.assertIn("context.data.active_branch.legal_entity?.id === context.data.active_legal_entity.id", self.app)

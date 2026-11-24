@@ -132,7 +132,10 @@ class EmpleadosUiAdminTests(unittest.TestCase):
         self.assertIn("private function ownedEmployee", API)
         # Administrative context routes into the synthetic/fail-closed HR panel.
         self.assertIn("import { EmployeesManagement } from './EmployeesManagement';", APP)
-        self.assertIn("href: '/admin#employees-management'", APP)
+        navigation = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text(encoding="utf-8")
+        self.assertIn("link('employees-management', 'Empleados y asistencia')", navigation)
+        module_catalog = (ROOT / "src/Application/Platform/ModuleCatalog.php").read_text(encoding="utf-8")
+        self.assertIn("key !== 'employees-management'", module_catalog)
         self.assertIn("<EmployeesManagement", APP)
         self.assertIn("branchId={context.data.active_branch.id}", APP)
         self.assertIn("csrfToken={accessToken}", APP)

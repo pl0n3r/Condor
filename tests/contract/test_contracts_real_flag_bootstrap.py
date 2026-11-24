@@ -18,10 +18,11 @@ class ContractsRealFlagBootstrapTests(unittest.TestCase):
         self.assertIn("enabled={contractsRealDataEnabled}", app)
 
     def test_no_synthetic_ui_in_real_mode_and_no_real_ui_when_disabled(self):
+        nav = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text()
         app = (ROOT / "frontend/admin/AdminApp.tsx").read_text()
         self.assertIn("!contractsRealDataEnabled && DevContractsManagement", app)
-        self.assertIn("label: 'Contratación' ", app)
-        self.assertIn("label: 'Contratación (pruebas)'", app)
+        self.assertIn("link('contracts-management', 'Contratación')", nav)
+        self.assertIn("link('contracts-management', 'Contratación (pruebas)')", nav)
         real = (ROOT / "frontend/admin/ContractsManagement.tsx").read_text()
         self.assertIn("if (!options.enabled) return { status: 'disabled' }", real)
         self.assertIn("if (!options.allowed) return { status: 'denied' }", real)

@@ -11,6 +11,7 @@ class OhsFlagBootstrapTests(unittest.TestCase):
         cls.php = (ROOT / "src/Http/Controller/AdminController.php").read_text()
         cls.twig = (ROOT / "templates/admin/index.html.twig").read_text()
         cls.app = (ROOT / "frontend/admin/AdminApp.tsx").read_text()
+        cls.nav = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text()
         cls.ui = (ROOT / "frontend/admin/ComplianceManagement.tsx").read_text()
         cls.backend = (ROOT / "src/Http/Controller/ComplianceController.php").read_text()
 
@@ -46,7 +47,7 @@ class OhsFlagBootstrapTests(unittest.TestCase):
 
     def test_menu_apaga_simulador_en_produccion(self):
         self.assertIn("ohsRealDataEnabled || import.meta.env.DEV", self.app)
-        self.assertIn("SG-SST (no habilitado)", self.app)
+        self.assertIn("link('compliance-management', 'SG-SST (no habilitado)')", self.nav)
         self.assertIn("import.meta.env.DEV", self.ui)
         self.assertIn("SG-SST aún no está habilitado", self.ui)
 

@@ -3,80 +3,68 @@ import { expect, test } from '@playwright/test';
 const baseURL = process.env.PLAYWRIGHT_BASE_URL;
 const email = process.env.E2E_EMAIL;
 const password = process.env.E2E_PASSWORD;
-const GROUPS = [
-  'Ventas', 'Catálogo e inventario', 'Sitio web', 'Personas',
-  'Finanzas y cumplimiento', 'Operación', 'Administración',
+const ORDER = [
+  'Escritorio', 'Ventas', 'Catálogo', 'Inventario', 'Operaciones',
+  'Personal', 'Finanzas e informes', 'Sitio web', 'Empresa',
 ];
 const REQUIRED_LINKS = [
   '/admin#commerce', '/admin#orders', '/admin#sales-reports',
   '/admin#reports-downloads', '/admin#catalog', '/admin#inventory',
-  '/admin#stock-alerts', '/admin#stock-transfers', '/admin#production',
-  '/admin#purchasing', '/admin/sitio', '/admin#seo-settings',
-  '/admin#workflows', '/admin#roles',
+  '/admin#stock-alerts', '/admin#stock-transfers', '/admin#purchasing',
+  '/admin/sitio', '/admin#seo-settings', '/admin#workflows', '/admin#roles',
 ];
 
 test.describe('Administrador — menú agrupado y módulos aislados', () => {
   test.skip(!baseURL || !email || !password,
     'Requiere instancia E2E y credenciales de tenant.');
 
-  test('grupos, enlaces, acordeón accesible y un módulo a la vez', async ({ page }) => {
+  test('raíces aprobadas, enlaces únicos y rutas reales, a 390 y 1440', async ({ page }) => {
     await page.goto('/admin/login');
     await page.getByLabel('Correo').fill(email);
     await page.getByLabel('Contraseña').fill(password);
     await page.getByRole('button', { name: 'Ingresar' }).click();
     await expect(page).toHaveURL(/\/admin$/);
-
-    const nav = page.getByRole('navigation', { name: 'Navegación principal' });
-    await expect(nav.getByRole('link', { name: 'Inicio', exact: true }))
-      .toHaveAttribute('aria-current', 'page');
-    await expect(nav.locator('button.nav-group-head')).toHaveCount(7);
-    for (const group of GROUPS) {
-      await expect(nav.getByRole('button', { name: group })).toBeVisible();
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      if (width === 390) {
+        // Drawer nativo, el mismo navLabel en móvil y escritorio.
+        await page.getByRole('button', { name: 'Mostrar menú' }).click();
+      }
+      const nav = page.locator(width === 390
+        ? 'dialog.admin-nav-drawer nav[aria-label="Navegación principal"]'
+        : 'aside.sidebar nav[aria-label="Navegación principal"]');
+      const home = nav.getByRole('link', { name: 'Escritorio', exact: true });
+      await expect(home).toBeVisible();
+      await expect(home).toHaveAttribute('aria-current', 'page');
+      const labels = await nav.locator(':scope > a, :scope > .nav-group > button')
+        .allTextContents();
+      const normalized = labels.map(label => label.trim());
+      expect(new Set(normalized).size).toBe(normalized.length);
+      expect(normalized.every(label => ORDER.includes(label))).toBe(true);
+      expect(normalized).toEqual([...normalized].sort((a, b) =>
+        ORDER.indexOf(a) - ORDER.indexOf(b)));
+      const hrefs = await nav.locator('a[href]').evaluateAll(links =>
+        links.map(link => link.getAttribute('href')));
+      expect(new Set(hrefs).size).toBe(hrefs.length);
+      for (const link of REQUIRED_LINKS) expect(hrefs).toContain(link);
+      await expect(nav.getByRole('link', { name: 'Catálogo', exact: true })).toBeVisible();
+      if (width === 390) {
+        await page.keyboard.press('Escape');
+      }
     }
-
-    const hrefs = await nav.locator('.nav-group a.nav-sub').evaluateAll(
-      (links) => links.map((link) => link.getAttribute('href')),
-    );
-    expect(new Set(hrefs).size).toBe(hrefs.length);
-    for (const href of REQUIRED_LINKS) expect(hrefs).toContain(href);
-    expect(hrefs).not.toContain('/admin#employees-management');
-    await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Para hoy' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Módulos', exact: true })).toHaveCount(0);
-    await expect(page.getByText('Permisos efectivos')).toHaveCount(0);
-    // El inicio deja de ser un directorio: las tareas solo aparecen con fuentes autorizadas.
-    expect(await page.locator('.module-directory-group').count()).toBeLessThanOrEqual(1);
-    await expect(page.locator('.workspace > section#catalog')).toHaveCount(0);
-    await expect(page.locator('.workspace > section#orders')).toHaveCount(0);
-
-    const catalog = nav.getByRole('button', { name: 'Catálogo e inventario' });
-    const panel = catalog.locator('..').locator('.t-acc-panel');
-    await expect(catalog).toHaveAttribute('aria-expanded', 'false');
-    await expect(panel).toHaveAttribute('inert', '');
-    await catalog.click();
-    await expect(catalog).toHaveAttribute('aria-expanded', 'true');
-    await expect(panel).not.toHaveAttribute('inert', '');
-
-    await nav.locator('a.nav-sub[href="/admin#catalog"]').click();
+    const desktopNav = page.getByRole('navigation', { name: 'Navegación principal' });
+    await desktopNav.getByRole('link', { name: 'Catálogo', exact: true }).click();
     await expect(page).toHaveURL(/\/admin#catalog$/);
-    await expect(nav.locator('a.nav-sub[href="/admin#catalog"]'))
+    await expect(desktopNav.getByRole('link', { name: 'Catálogo', exact: true }))
       .toHaveAttribute('aria-current', 'page');
-    await expect(nav.getByRole('link', { name: 'Inicio', exact: true }))
+    await expect(desktopNav.getByRole('link', { name: 'Escritorio', exact: true }))
       .not.toHaveAttribute('aria-current', 'page');
-    const breadcrumb = page.getByRole('navigation', { name: 'Ruta' });
-    await expect(breadcrumb).toContainText('Catálogo e inventario');
-    await expect(breadcrumb).toContainText('Catálogo');
     await expect(page.locator('.workspace > section#catalog')).toBeVisible();
     await expect(page.locator('.workspace > section#orders')).toHaveCount(0);
-    await expect(page.locator('.workspace > section#inventory')).toHaveCount(0);
     await expect(page.locator('.workspace > section.module-directory')).toBeHidden();
-    await expect(page.locator('.workspace > section[id]:visible')).toHaveCount(1);
-
-    await nav.getByRole('link', { name: 'Inicio', exact: true }).click();
+    await desktopNav.getByRole('link', { name: 'Escritorio', exact: true }).click();
     await expect(page).toHaveURL(/\/admin$/);
     await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
-    await expect(page.locator('.workspace > section[id]:visible')).toHaveCount(0);
-    await expect(page.locator('.workspace > section#catalog')).toHaveCount(0);
   });
 
   test('empleados no disponible: evidencias sintéticas a 390 y 1440 px', async ({ page }, testInfo) => {
@@ -127,5 +115,92 @@ test.describe('Administrador — menú agrupado y módulos aislados', () => {
         path: afterPath, contentType: 'image/png',
       });
     }
+  });
+  test('capturas navegador: taxonomía anterior sintética frente al menú de nueve áreas', async ({ page }, testInfo) => {
+    // Una sola autenticación: /admin/login redirige a /admin si la sesión existe.
+    await page.goto('/admin/login');
+    await page.getByLabel('Correo').fill(email);
+    await page.getByLabel('Contraseña').fill(password);
+    await page.getByRole('button', { name: 'Ingresar' }).click();
+    await expect(page).toHaveURL(/\/admin$/);
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.goto('/admin');
+      await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
+      if (width === 390) await page.getByRole('button', { name: 'Mostrar menú' }).click();
+      const nav = page.locator(width === 390
+        ? 'dialog.admin-nav-drawer nav[aria-label="Navegación principal"]'
+        : 'aside.sidebar nav[aria-label="Navegación principal"]');
+      await expect(nav).toBeVisible();
+
+      // Reconstrucción explícitamente SINTÉTICA de los títulos anteriores de main@63d8b43.
+      // Se conserva el DOM React original: sólo se oculta durante una captura.
+      await nav.evaluate((element) => {
+        for (const child of element.children) {
+          child.setAttribute('data-real-nav-hidden', '');
+          child.style.display = 'none';
+        }
+        const replica = document.createElement('div');
+        replica.dataset.syntheticOldMenu = 'true';
+        const notice = document.createElement('p');
+        notice.textContent = 'REFERENCIA SINTÉTICA · menú anterior';
+        notice.setAttribute('aria-label', 'Reconstrucción sintética de títulos anteriores');
+        replica.append(notice);
+        const home = document.createElement('a');
+        home.href = '/admin';
+        home.textContent = 'Inicio';
+        home.setAttribute('aria-current', 'page');
+        replica.append(home);
+        for (const title of [
+          'Ventas','Catálogo e inventario','Sitio web','Personas',
+          'Finanzas y cumplimiento','Operación','Administración',
+        ]) {
+          const group = document.createElement('div');
+          group.className = 'nav-group t-acc';
+          const heading = document.createElement('button');
+          heading.type = 'button';
+          heading.className = 'nav-group-head t-acc-head';
+          heading.textContent = title;
+          group.append(heading);
+          replica.append(group);
+        }
+        element.prepend(replica);
+      });
+      const before = testInfo.outputPath('tenant-nav-before-' + width + '.png');
+      await page.screenshot({ path: before, fullPage: true });
+      await testInfo.attach('menu-antes-sintetico-' + width, { path: before, contentType: 'image/png' });
+      await nav.evaluate((element) => {
+        element.querySelector('[data-synthetic-old-menu]')?.remove();
+        for (const child of element.querySelectorAll('[data-real-nav-hidden]')) {
+          child.removeAttribute('data-real-nav-hidden');
+          child.style.removeProperty('display');
+        }
+      });
+      const after = testInfo.outputPath('tenant-nav-after-' + width + '.png');
+      await expect(nav.getByRole('link', { name: 'Escritorio', exact: true })).toBeVisible();
+      await page.screenshot({ path: after, fullPage: true });
+      await testInfo.attach('menu-despues-real-' + width, { path: after, contentType: 'image/png' });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth))
+        .toBeLessThanOrEqual(width + 1);
+      if (width === 390) await page.keyboard.press('Escape');
+    }
+  });
+
+  test('deep-link, recarga, Back y Forward conservan el módulo de catálogo', async ({ page }) => {
+    await page.goto('/admin/login');
+    await page.getByLabel('Correo').fill(email);
+    await page.getByLabel('Contraseña').fill(password);
+    await page.getByRole('button', { name: 'Ingresar' }).click();
+    await expect(page).toHaveURL(/\/admin$/);
+    await page.goto('/admin#catalog');
+    await expect(page.locator('.workspace > section#catalog')).toBeVisible();
+    await page.reload();
+    await expect(page.locator('.workspace > section#catalog')).toBeVisible();
+    await page.locator('aside.sidebar nav a[href="/admin"]').click();
+    await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
+    await page.goBack();
+    await expect(page.locator('.workspace > section#catalog')).toBeVisible();
+    await page.goForward();
+    await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
   });
 });

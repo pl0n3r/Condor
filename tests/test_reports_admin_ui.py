@@ -267,7 +267,8 @@ class ReportesUiAdminTests(unittest.TestCase):
         """The shipped admin mounts CSV downloads for the active authorized branch."""
         source = (ROOT / "frontend/admin/AdminApp.tsx").read_text(encoding="utf-8")
         self.assertIn("import { ReportsDownloads } from './ReportsDownloads';", source)
-        self.assertIn("{ href: '/admin#reports-downloads', label: 'Descargas CSV' }", source)
+        navigation = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text(encoding="utf-8")
+        self.assertIn("link('reports-downloads', 'Descargas CSV')", navigation)
         self.assertIn("<ReportsDownloads", source)
         self.assertIn("key={'reports-downloads-' + context.data.active_branch.id}", source)
         self.assertIn("branchId={context.data.active_branch.id}", source)
