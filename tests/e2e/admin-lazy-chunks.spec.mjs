@@ -50,6 +50,7 @@ test.describe('Admin: chunks lazy con base pública /build/ (#1994)', () => {
     }
     server = createServer(async (request, response) => {
       const path = new URL(request.url, 'http://localhost').pathname;
+      if (path === '/favicon.ico') { response.writeHead(204); response.end(); return; }
       if (path === '/admin') {
         response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         response.end('<!doctype html><html lang="es"><head>'
