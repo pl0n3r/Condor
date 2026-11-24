@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.ci_change_classifier import classify
 from scripts.ci_self_audit import (
     audit_main_ci,
     audit_release_observer,
     audit_repository,
     audit_workflow,
+    job_blocks,
+    job_commands,
+    job_value,
 )
 
 
@@ -562,6 +568,106 @@ jobs:
         self.assertFalse(any("'npm ci'" in item for item in findings))
         self.assertTrue(any("'composer install'" in item for item in findings))
 
+
+    def _run_validate_aggregate(
+        self, required: str, base_result: str, scripts_result: str
+    ) -> subprocess.CompletedProcess[str]:
+        """Ejecuta el bash real de Validar con resultados sintéticos de jobs."""
+        root = Path(__file__).resolve().parent.parent
+        jobs = job_blocks((root / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+        script = "\n".join(job_commands(jobs["validar"]))
+        env = {
+            **os.environ,
+            **{
+                key: "success"
+                for key in (
+                    "FACTORY_CI", "PREFLIGHT", "DOCUMENTACION", "GOBIERNO",
+                    "COORDINACION", "STATIC_ANALYSIS", "RECTOR_DRY_RUN",
+                    "FRONTEND", "AUDIT_NPM", "AUDIT_COMPOSER", "BACKEND_PHP",
+                    "BACKUP_RESTORE", "E2E",
+                )
+            },
+            "PRUEBAS_BASE": base_result,
+            "PRUEBAS_BASE_REQUERIDAS": required,
+            "TESTS_SCRIPTS": scripts_result,
+            "MODO": "rapido" if required == "false" else "completo",
+            "MOTIVO": "test-sintetico",
+            "CATEGORIAS": "documentacion",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            env["GITHUB_STEP_SUMMARY"] = str(Path(tmp) / "summary.md")
+            return subprocess.run(
+                ["bash", "-c", script], cwd=root, env=env,
+                capture_output=True, text=True, check=False,
+            )
+
+    def test_documentation_lane_requires_real_tests(self) -> None:
+        """AC-02: docs rápidos mantienen tests reales y Validar falla cerrado."""
+        root = Path(__file__).resolve().parent.parent
+        jobs = job_blocks((root / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+        light = jobs["tests-scripts"]
+        self.assertEqual(job_value(light, "name"), "Tests de scripts")
+        self.assertIsNone(job_value(light, "if"))
+        self.assertIsNone(job_value(light, "needs"))
+        script = "\n".join(job_commands(light))
+        self.assertIn("set -euo pipefail", script)
+        for pattern in (
+            "test_ci_change_classifier.py",
+            "test_ci_self_audit.py",
+            "test_revision_juridica.py",
+        ):
+            with self.subTest(suite=pattern):
+                self.assertIn(
+                    "python3 -m unittest discover -s tests -p '" + pattern + "' -v",
+                    script,
+                )
+        for path in ("README.md", "docs/manual/propietario/guia.md"):
+            with self.subTest(path=path):
+                decision = classify([path], "pull_request")
+                self.assertEqual(decision.modo, "rapido")
+                self.assertFalse(decision.pruebas_base)
+        self.assertEqual(
+            self._run_validate_aggregate("false", "skipped", "success").returncode, 0
+        )
+        self.assertNotEqual(
+            self._run_validate_aggregate("false", "skipped", "failure").returncode, 0
+        )
+
+    def test_lightweight_tests_fail_aggregate_and_script_on_failure(self) -> None:
+        root = Path(__file__).resolve().parent.parent
+        jobs = job_blocks((root / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+        self.assertIn("tests-scripts", job_value(jobs["validar"], "needs") or "")
+        script = "\n".join(job_commands(jobs["tests-scripts"]))
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_python = Path(tmp) / "python3"
+            fake_python.write_text("#!/bin/sh\nexit 27\n", encoding="utf-8")
+            fake_python.chmod(0o755)
+            run = subprocess.run(
+                ["bash", "-c", script], cwd=root,
+                env={**os.environ, "PATH": tmp + os.pathsep + os.environ["PATH"]},
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(run.returncode, 27, run.stderr)
+        self.assertNotEqual(
+            self._run_validate_aggregate("false", "skipped", "cancelled").returncode, 0
+        )
+
+    def test_runtime_requires_base_tests_and_rejects_invalid_skip(self) -> None:
+        runtime = classify(["src/Http/Controller/AdminController.php"], "pull_request")
+        self.assertTrue(runtime.pruebas_base)
+        self.assertTrue(runtime.backend)
+        self.assertNotEqual(
+            self._run_validate_aggregate("true", "skipped", "success").returncode, 0
+        )
+        self.assertNotEqual(
+            self._run_validate_aggregate("", "skipped", "success").returncode, 0
+        )
+        self.assertNotEqual(
+            self._run_validate_aggregate("true", "failure", "success").returncode, 0
+        )
+        self.assertEqual(
+            self._run_validate_aggregate("true", "success", "success").returncode, 0
+        )
 
 if __name__ == "__main__":
     unittest.main()
