@@ -46,3 +46,10 @@ test('seguridad del menú: backend sigue siendo autoridad y empleados no son dis
   expect(app).toContain("return enabled?.has(key) === true;");
   expect(directory).toContain('visibleTenantHrefs(entries)');
 });
+
+// Regresión: un enlace directo tiene que activar su panel en el shell.
+test('shell reconoce módulos directos y no oculta Catálogo', () => {
+  const shell = readFileSync(new URL('../../frontend/admin/AdminShell.tsx', import.meta.url), 'utf8');
+  expect(shell).toContain("!isGroup(entry) && itemIsCurrent(entry, hash)");
+  expect(shell).toContain("activeId = at >= 0 ? standalone.href.slice(at + 1) : 'inicio'");
+});
