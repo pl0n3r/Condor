@@ -26,12 +26,13 @@ test.describe('Administrador — menú agrupado y módulos aislados', () => {
     await expect(page).toHaveURL(/\/admin$/);
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      const nav = page.getByRole('navigation', { name: width === 390
-        ? 'Navegación principal móvil' : 'Navegación principal' });
       if (width === 390) {
-        // El shell móvil tiene drawer nativo; el test de #1960 cubre foco/Escape.
-        await page.locator('.mobile-menu-trigger').first().click();
+        // Drawer nativo, el mismo navLabel en móvil y escritorio.
+        await page.getByRole('button', { name: 'Mostrar menú' }).click();
       }
+      const nav = page.locator(width === 390
+        ? 'dialog.admin-nav-drawer nav[aria-label="Navegación principal"]'
+        : 'aside.sidebar nav[aria-label="Navegación principal"]');
       const home = nav.getByRole('link', { name: 'Escritorio', exact: true });
       await expect(home).toBeVisible();
       await expect(home).toHaveAttribute('aria-current', 'page');
