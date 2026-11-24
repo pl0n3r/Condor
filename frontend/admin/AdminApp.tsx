@@ -23,6 +23,7 @@ import { SocialSecurityRealManagement } from './SocialSecurityManagement';
 import { FinanceRealManagement } from './FinanceManagement';
 import { OccupationalRealManagement as ComplianceManagement, LegalComplianceRealManagement } from './ComplianceManagement';
 import { AdminShell, type AdminNavEntry } from './AdminShell';
+import { buildTenantNavigation } from './CondorNavigationCatalog';
 import { ModuleDirectory } from './ModuleDirectory';
 import { OverviewGrid } from './OverviewGrid';
 import { contextPath } from './api';
@@ -225,97 +226,42 @@ export function AdminApp({
   const mayOpen = (key: string) => key === '' || enabled === null || enabled.has(key)
     || ['roles', 'documents', 'design-preview'].includes(key);
 
-  const navEntries: AdminNavEntry[] = [
-
-        { href: '/admin', label: 'Inicio', current: section === 'home', icon: 'home' },
-        {
-          group: 'Ventas',
-          icon: 'sales',
-          items: [
-            { href: '/admin#commerce', label: 'Comercial' },
-            { href: '/admin#orders', label: 'Pedidos' },
-            { href: '/admin#sales-reports', label: 'Reportes de ventas' },
-            { href: '/admin#reports-downloads', label: 'Descargas CSV' },
-            ...(customerServiceRealDataEnabled ? [{ href: '/admin#customer-service', label: 'Servicio al cliente' }]
-              : import.meta.env.DEV ? [{ href: '/admin#customer-service', label: 'Servicio al cliente (no habilitado)' }] : []),
-          ],
-        },
-        {
-          group: 'Catálogo e inventario',
-          icon: 'catalog',
-          items: [
-            { href: '/admin#catalog', label: 'Catálogo' },
-            { href: '/admin#inventory', label: 'Inventario' },
-            { href: '/admin#stock-alerts', label: 'Alertas de stock' },
-            { href: '/admin#stock-transfers', label: 'Transferencias' },
-            ...(readyContext?.permissions.includes('inventory.view')
-              ? [{ href: '/admin#production', label: 'Producción' }] : []),
-            { href: '/admin#purchasing', label: 'Compras' },
-            ...(assetsRealDataEnabled ? [{ href: '/admin#assets-management', label: 'Activos' }]
-              : import.meta.env.DEV ? [{ href: '/admin#assets-management', label: 'Activos (no habilitado)' }] : []),
-          ],
-        },
-        {
-          group: 'Sitio web',
-          icon: 'site',
-          items: [
-            { href: '/admin/sitio', label: 'Sitio', current: section === 'site' },
-            { href: '/admin#seo-settings', label: 'SEO' },
-          ],
-        },
-        {
-          group: 'Personas',
-          icon: 'people',
-          items: [
-            { href: '/admin#employees-management', label: 'Empleados y asistencia' },
-            ...(hrRealDataEnabled ? [{ href: '/admin#human-resources-management', label: 'Talento humano' }] : []),
-            ...(hrSyntheticPreviewEnabled && !hrRealDataEnabled ? [{ href: '/admin#human-resources-management', label: 'Catálogos RR. HH. (pruebas)' }] : []),
-            ...(payrollRealDataEnabled ? [{ href: '/admin#payroll-management', label: 'Nómina' }]
-              : import.meta.env.DEV ? [{ href: '/admin#payroll-management', label: 'Nómina (pruebas)' }] : []),
-            ...(contractsRealDataEnabled ? [{ href: '/admin#contracts-management', label: 'Contratación' }]
-              : import.meta.env.DEV ? [{ href: '/admin#contracts-management', label: 'Contratación (pruebas)' }] : []),
-            ...(socialSecurityRealDataEnabled ? [{ href: '/admin#social-security-management', label: 'Seguridad social' }]
-              : import.meta.env.DEV ? [{ href: '/admin#social-security-management', label: 'Seguridad social (pruebas)' }] : []),
-          ],
-        },
-        {
-          group: 'Finanzas y cumplimiento',
-          icon: 'finance',
-          items: [
-            ...(financeRealDataEnabled ? [{ href: '/admin#finance-management', label: 'Finanzas' }]
-              : import.meta.env.DEV ? [{ href: '/admin#finance-management', label: 'Finanzas (pruebas)' }] : []),
-            ...(ohsRealDataEnabled ? [{ href: '/admin#compliance-management', label: 'SG-SST' }]
-              : import.meta.env.DEV ? [{ href: '/admin#compliance-management', label: 'SG-SST (no habilitado)' }] : []),
-            ...(legalComplianceRealDataEnabled ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal' }]
-              : import.meta.env.DEV ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal (no habilitado)' }] : []),
-            ...(governanceRealDataEnabled ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo' }]
-              : import.meta.env.DEV ? [{ href: '/admin#governance-management', label: 'Gobierno corporativo (no habilitado)' }] : []),
-          ],
-        },
-        {
-          group: 'Operación',
-          icon: 'operations',
-          items: [
-            { href: '/admin#workflows', label: 'Workflows' },
-            ...(processesRealDataEnabled ? [{ href: '/admin#operations-processes', label: 'Procesos' }]
-              : import.meta.env.DEV ? [{ href: '/admin#operations-processes', label: 'Procesos (no habilitado)' }] : []),
-          ],
-        },
-        {
-          group: 'Administración',
-          icon: 'admin',
-          items: [
-            { href: '/admin#roles', label: 'Roles y permisos' },
-            ...(import.meta.env.DEV ? [{ href: '/admin#documents', label: 'Gestión documental (pruebas)' }] : []),
-          ],
-        },
-  ];
-  const visibleNavEntries: AdminNavEntry[] = navEntries
-    .map((entry): AdminNavEntry => 'items' in entry
-      ? { ...entry, items: entry.items.filter((item) =>
-          mayOpen(item.href === '/admin/sitio' ? 'site' : item.href.split('#')[1] ?? '')) }
-      : entry)
-    .filter((entry) => !('items' in entry) || entry.items.length > 0);
+  const navEntries: AdminNavEntry[] = buildTenantNavigation({
+    section,
+    activeModule,
+    development: import.meta.env.DEV,
+    customerServiceRealDataEnabled,
+    canViewProduction: readyContext?.permissions.includes('inventory.view') ?? false,
+    assetsRealDataEnabled,
+    processesRealDataEnabled,
+    hrRealDataEnabled,
+    hrSyntheticPreviewEnabled,
+    payrollRealDataEnabled,
+    contractsRealDataEnabled,
+    socialSecurityRealDataEnabled,
+    financeRealDataEnabled,
+    ohsRealDataEnabled,
+    legalComplianceRealDataEnabled,
+    governanceRealDataEnabled,
+  });
+  // Secciones vacías se ocultan. Las de un solo destino son enlaces directos,
+  // sin acordeones redundantes. SSR decide qué módulos existen para el tenant.
+  const visibleNavEntries: AdminNavEntry[] = navEntries.flatMap((entry): AdminNavEntry[] => {
+    if (!('items' in entry)) {
+      const key = entry.href === '/admin/sitio' ? 'site' : entry.href.split('#')[1] ?? '';
+      return mayOpen(key) ? [entry] : [];
+    }
+    const items = entry.items.filter((item) =>
+      mayOpen(item.href === '/admin/sitio' ? 'site' : item.href.split('#')[1] ?? ''));
+    if (items.length === 0) return [];
+    if (items.length === 1) {
+      const item = items[0];
+      return [{ ...item, icon: entry.icon,
+        current: item.href === '/admin/sitio' ? section === 'site'
+          : section === 'home' && item.href === '/admin#' + activeModule }];
+    }
+    return [{ ...entry, items }];
+  });
 
   return (
     <AdminShell

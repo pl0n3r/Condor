@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AdminNavEntry } from './AdminShell';
+import { visibleTenantHrefs } from './CondorNavigationCatalog';
 
 /**
  * Inicio operativo del tenant. AdminApp ya monta esta pieza solo cuando el
@@ -26,18 +27,6 @@ function record(value: unknown): value is SafeObject {
 
 function isUlid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(value);
-}
-
-function permittedLinks(entries: readonly AdminNavEntry[]): Set<string> {
-  const hrefs = new Set<string>();
-  for (const entry of entries) {
-    if ('group' in entry) {
-      for (const item of entry.items) hrefs.add(item.href);
-    } else {
-      hrefs.add(entry.href);
-    }
-  }
-  return hrefs;
 }
 
 class Denied extends Error {}
@@ -136,7 +125,7 @@ export function ModuleDirectory({ entries }: Readonly<{ entries: readonly AdminN
         const companyId = record(context.active_legal_entity)
           ? context.active_legal_entity.id : null;
         const permissions = context.permissions as string[];
-        const links = permittedLinks(entries);
+        const links = visibleTenantHrefs(entries);
         const requests: Array<Promise<Pending | null>> = [];
         if (permissions.includes('orders.view') && links.has('/admin#orders')) {
           requests.push(orderPending(branchId, abort.signal).catch(error => {
