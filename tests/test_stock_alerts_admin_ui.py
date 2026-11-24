@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PANEL = (ROOT / "frontend/admin/StockAlertsPanel.tsx").read_text(encoding="utf-8")
 APP = (ROOT / "frontend/admin/AdminApp.tsx").read_text(encoding="utf-8")
+NAV = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text(encoding="utf-8")
 BUNDLE = (ROOT / "public/build/admin.js").read_text(encoding="utf-8")
 CONTROLLER = (ROOT / "src/Http/Controller/StockAlertController.php").read_text(
     encoding="utf-8"
@@ -64,7 +65,7 @@ class AlertasUiAdminTests(unittest.TestCase):
     def test_branch_context_and_permissions(self):
         """Identity and active branch come from authenticated AdminApp context."""
         self.assertIn("import { StockAlertsPanel } from './StockAlertsPanel';", APP)
-        self.assertIn("href: '/admin#stock-alerts'", APP)
+        self.assertIn("link('stock-alerts', 'Alertas de stock')", NAV)
         self.assertIn("<StockAlertsPanel", APP)
         self.assertIn("key={'stock-alerts-' + context.data.active_branch.id}", APP)
         self.assertIn("branchId={context.data.active_branch.id}", APP)
