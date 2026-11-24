@@ -432,6 +432,18 @@ export function AdminShell({
   let activeGroup = auditView ? 'Plataforma' : '';
   let activeLabel = auditView ? 'Auditoría' : '';
   let activeId = auditView ? 'auditoria' : '';
+  // Los enlaces directos, como Catálogo o un grupo reducido a un hijo,
+  // también activan el panel CSS; antes solo se consideraban grupos.
+  if (variant === 'tenant') {
+    const standalone = visibleNav.find((entry) =>
+      !isGroup(entry) && itemIsCurrent(entry, hash));
+    if (standalone && !isGroup(standalone)) {
+      const at = standalone.href.indexOf('#');
+      activeId = at >= 0 ? standalone.href.slice(at + 1) : 'inicio';
+      activeLabel = standalone.href === '/admin' ? ''
+        : standalone.label.replace(' (pruebas)', '');
+    }
+  }
   for (const entry of visibleNav) {
     if (!isGroup(entry)) continue;
     const hit = entry.items.find(isActiveGroupItem);
