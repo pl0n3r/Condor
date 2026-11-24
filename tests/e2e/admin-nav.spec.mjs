@@ -117,13 +117,15 @@ test.describe('Administrador — menú agrupado y módulos aislados', () => {
     }
   });
   test('capturas navegador: taxonomía anterior sintética frente al menú de nueve áreas', async ({ page }, testInfo) => {
+    // Una sola autenticación: /admin/login redirige a /admin si la sesión existe.
+    await page.goto('/admin/login');
+    await page.getByLabel('Correo').fill(email);
+    await page.getByLabel('Contraseña').fill(password);
+    await page.getByRole('button', { name: 'Ingresar' }).click();
+    await expect(page).toHaveURL(/\/admin$/);
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-      await page.goto('/admin/login');
-      await page.getByLabel('Correo').fill(email);
-      await page.getByLabel('Contraseña').fill(password);
-      await page.getByRole('button', { name: 'Ingresar' }).click();
-      await expect(page).toHaveURL(/\/admin$/);
+      await page.goto('/admin');
       await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
       if (width === 390) await page.getByRole('button', { name: 'Mostrar menú' }).click();
       const nav = page.locator(width === 390
