@@ -28,7 +28,6 @@ test.describe('Super Admin — clientes y staff de plataforma', () => {
     ).toBeVisible();
 
     const platformNav = page.getByRole('navigation', { name: 'Navegación de plataforma' });
-    await platformNav.getByRole('button', { name: 'Empresas', exact: true }).click();
     await platformNav.getByRole('link', { name: 'Empresas', exact: true }).click();
     await expect(page).toHaveURL(/\/adminpl0n3r\/empresas$/);
 
@@ -89,15 +88,15 @@ test.describe('Super Admin — clientes y staff de plataforma', () => {
     }
     await expect(tenantRow).toBeVisible();
 
-    await platformNav.getByRole('button', { name: 'Comercial', exact: true }).click();
-    await platformNav.getByRole('link', { name: 'Plan y suscripciones' }).click();
+    await platformNav.getByRole('button', { name: 'Negocio SaaS', exact: true }).click();
+    await platformNav.getByRole('link', { name: 'Suscripciones' }).click();
     await expect(page.getByRole('heading', { name: 'Plan y suscripciones' })).toBeVisible();
     await expect(page.getByRole('table', { name: 'Suscripciones de esta página' })).toBeVisible();
     await platformNav.getByRole('link', { name: 'Catálogo comercial' }).click();
     await expect(page.getByRole('heading', { name: 'Catálogo comercial' })).toBeVisible();
 
-    await platformNav.getByRole('button', { name: 'Plataforma', exact: true }).click();
-    await platformNav.getByRole('link', { name: 'Staff y permisos', exact: true }).click();
+    await platformNav.getByRole('button', { name: 'Administración de plataforma', exact: true }).click();
+    await platformNav.getByRole('link', { name: 'Personal de Condor', exact: true }).click();
     await expect(page).toHaveURL(/\/adminpl0n3r\/staff$/);
 
     const staffSection = page.locator('.platform-section').filter({
@@ -292,8 +291,8 @@ test.describe('Ingresos SaaS de propietario · sintético (#1693)', () => {
     await expect(page.getByRole('heading', { name: 'Ingresos SaaS', level: 1 })).toBeVisible();
     await expect(panel.getByRole('heading', { name: 'Movimientos del período' })).toBeVisible();
     const navigation = page.getByRole('navigation', { name: 'Navegación de plataforma' });
-    await navigation.getByRole('button', { name: 'Comercial' }).click();
-    await expect(navigation.getByRole('link', { name: 'Ingresos', exact: true }))
+    await navigation.getByRole('button', { name: 'Negocio SaaS' }).click();
+    await expect(navigation.getByRole('link', { name: 'Ingresos de Condor', exact: true }))
       .toHaveAttribute('href', '/adminpl0n3r/catalogo?vista=ingresos');
     await expect(panel.getByRole('table', { name: 'Movimientos de ingresos SaaS' }))
       .toContainText('Empresa ficticia');
