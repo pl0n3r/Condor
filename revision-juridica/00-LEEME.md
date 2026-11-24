@@ -3,7 +3,7 @@
 # Documentos para revisión jurídica — Condor
 
 Estado literal: documented_not_legally_approved. Sin aprobación jurídica.
-Versión del producto: 0.1.204. Commit del repositorio de origen: 696e63c82c2168d48777b28fa152bce8fb412f22.
+Versión del producto: 0.1.205. Commit del repositorio de origen: 696e63c82c2168d48777b28fa152bce8fb412f22.
 Las copias preservan byte a byte los documentos fuente. Este paquete no autoriza go-live, publicación ni tratamiento adicional de datos.
 
 ## Documentos que debe comprobar o corregir el abogado

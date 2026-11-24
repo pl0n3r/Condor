@@ -4,148 +4,92 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL;
 const email = process.env.E2E_PLATFORM_EMAIL;
 const password = process.env.E2E_PASSWORD;
 
-const GROUPS = [
-  {
-    name: 'Resumen',
-    links: ['/adminpl0n3r'],
-  },
-  {
-    name: 'Empresas',
-    links: ['/adminpl0n3r/empresas'],
-  },
-  {
-    name: 'Módulos de empresa',
-    links: [
-      '/adminpl0n3r/empresas?modulo=commerce',
-      '/adminpl0n3r/empresas?modulo=orders',
-      '/adminpl0n3r/empresas?modulo=sales-reports',
-      '/adminpl0n3r/empresas?modulo=reports-downloads',
-      '/adminpl0n3r/empresas?modulo=customer-service',
-      '/adminpl0n3r/empresas?modulo=catalog',
-      '/adminpl0n3r/empresas?modulo=inventory',
-      '/adminpl0n3r/empresas?modulo=stock-alerts',
-      '/adminpl0n3r/empresas?modulo=stock-transfers',
-      '/adminpl0n3r/empresas?modulo=production',
-      '/adminpl0n3r/empresas?modulo=purchasing',
-      '/adminpl0n3r/empresas?modulo=assets-management',
-      '/adminpl0n3r/empresas?modulo=seo-settings',
-      '/adminpl0n3r/empresas?modulo=employees-management',
-      '/adminpl0n3r/empresas?modulo=human-resources-management',
-      '/adminpl0n3r/empresas?modulo=payroll-management',
-      '/adminpl0n3r/empresas?modulo=contracts-management',
-      '/adminpl0n3r/empresas?modulo=social-security-management',
-      '/adminpl0n3r/empresas?modulo=finance-management',
-      '/adminpl0n3r/empresas?modulo=compliance-management',
-      '/adminpl0n3r/empresas?modulo=compliance-evidence-management',
-      '/adminpl0n3r/empresas?modulo=governance-management',
-      '/adminpl0n3r/empresas?modulo=workflows',
-      '/adminpl0n3r/empresas?modulo=operations-processes',
-      '/adminpl0n3r/empresas?modulo=roles',
-    ],
-  },
-  {
-    name: 'Comercial',
-    links: [
-      '/adminpl0n3r/catalogo?vista=planes',
-      '/adminpl0n3r/suscripciones',
-      '/adminpl0n3r/catalogo',
-      '/adminpl0n3r/catalogo?vista=ingresos',
-    ],
-  },
-  {
-    name: 'Plataforma',
-    links: [
-      '/adminpl0n3r/staff',
-      '/adminpl0n3r/integraciones',
-      '/adminpl0n3r/diagnosticos',
-    ],
-  },
+const DIRECT = [
+  { href: '/adminpl0n3r', name: 'Escritorio global' },
+  { href: '/adminpl0n3r/empresas', name: 'Empresas' },
 ];
+const GROUPS = [
+  { name: 'Negocio SaaS', links: [
+    '/adminpl0n3r/catalogo?vista=planes',
+    '/adminpl0n3r/suscripciones',
+    '/adminpl0n3r/catalogo',
+    '/adminpl0n3r/catalogo?vista=ingresos',
+  ] },
+  { name: 'Administración de plataforma', links: [
+    '/adminpl0n3r/staff',
+    '/adminpl0n3r/integraciones',
+    '/adminpl0n3r/diagnosticos',
+    '/adminpl0n3r?view=auditoria',
+  ] },
+];
+const ALL_LINKS = [...DIRECT.map(item => item.href), ...GROUPS.flatMap(group => group.links)];
 
-const EXPECTED_LINKS = GROUPS.flatMap(({ links }) => links);
+test.describe('Propietario — solo destinos reales y cuatro raíces', () => {
+  test.skip(!baseURL || !email || !password,
+    'Requiere entorno E2E sintético con propietario.');
 
-test.describe('Propietario — navegación agrupada sin enlaces inexistentes', () => {
-  test.skip(
-    !baseURL || !email || !password,
-    'Requiere aplicación E2E y credenciales de propietario.',
-  );
-
-  test('acordeones accesibles, módulos de empresa y sección activa', async ({ page }) => {
+  test('enlaces reales, grupo exclusivo, foco y breadcrumb', async ({ page }) => {
     await page.goto('/admin/login');
     await page.getByLabel('Correo').fill(email);
     await page.getByLabel('Contraseña').fill(password);
     await page.getByRole('button', { name: 'Ingresar' }).click();
     await expect(page).toHaveURL(/\/adminpl0n3r$/);
-
     const nav = page.getByRole('navigation', { name: 'Navegación de plataforma' });
-    await expect(nav.locator('button.nav-group-head')).toHaveCount(GROUPS.length);
-
+    await expect(nav.locator('button.nav-group-head')).toHaveCount(2);
+    for (const { href, name } of DIRECT) {
+      await expect(nav.getByRole('link', { name, exact: true })).toHaveAttribute('href', href);
+    }
+    await expect(nav.getByRole('link', { name: 'Escritorio global' }))
+      .toHaveAttribute('aria-current', 'page');
     for (const { name, links } of GROUPS) {
       const group = nav.locator('.nav-group').filter({
         has: page.getByRole('button', { name, exact: true }),
       });
       await expect(group).toHaveCount(1);
-      const button = group.getByRole('button', { name, exact: true });
-      await expect(button).toBeVisible();
       const hrefs = await group.locator('a.nav-sub').evaluateAll(
-        (anchors) => anchors.map((anchor) => anchor.getAttribute('href')),
-      );
+        (nodes) => nodes.map(node => node.getAttribute('href')));
       expect(hrefs).toEqual(links);
     }
+    const all = await nav.locator('a[href]').evaluateAll(
+      nodes => nodes.map(node => node.getAttribute('href')));
+    expect(all).toEqual(ALL_LINKS);
+    expect(new Set(all).size).toBe(all.length);
+    await expect(nav.getByRole('button', { name: 'Módulos de empresa' })).toHaveCount(0);
+    await expect(nav.locator('a[href="/adminpl0n3r?view=auditoria"]')).toHaveCount(1);
 
-    const allHrefs = await nav.locator('a.nav-sub').evaluateAll(
-      (anchors) => anchors.map((anchor) => anchor.getAttribute('href')),
-    );
-    expect(allHrefs).toEqual(EXPECTED_LINKS);
-    expect(new Set(allHrefs).size).toBe(allHrefs.length);
+    const saas = nav.getByRole('button', { name: 'Negocio SaaS' });
+    const platform = nav.getByRole('button', { name: 'Administración de plataforma' });
+    await saas.click();
+    await expect(saas).toHaveAttribute('aria-expanded', 'true');
+    await platform.click();
+    await expect(saas).toHaveAttribute('aria-expanded', 'false');
+    await expect(platform).toHaveAttribute('aria-expanded', 'true');
+    await expect(saas.locator('..').locator('.t-acc-panel')).toHaveAttribute('inert', '');
 
-    // No crear grupos o rutas de propietario para módulos sin pantalla.
-    for (const absent of ['Cumplimiento', 'Soporte', 'Auditoría', 'Estado del sistema']) {
-      await expect(nav.getByRole('button', { name: absent, exact: true })).toHaveCount(0);
-    }
-
-    const summary = nav.getByRole('button', { name: 'Resumen', exact: true });
-    await expect(summary).toHaveAttribute('aria-expanded', 'true');
-    await expect(nav.locator('a.nav-sub[href="/adminpl0n3r"]'))
-      .toHaveAttribute('aria-current', 'page');
-
-    const commercial = nav.getByRole('button', { name: 'Comercial', exact: true });
-    const panel = commercial.locator('..').locator('.t-acc-panel');
-    await expect(commercial).toHaveAttribute('aria-expanded', 'false');
-    await expect(panel).toHaveAttribute('inert', '');
-    await commercial.click();
-    await expect(commercial).toHaveAttribute('aria-expanded', 'true');
-    await expect(panel).not.toHaveAttribute('inert', '');
-
-    // Comprobar destinos HTTP con la misma sesión del propietario:
-    // no aceptar redirecciones a login como falso enlace funcional.
-    for (const href of EXPECTED_LINKS) {
+    for (const href of ALL_LINKS) {
       const response = await page.request.get(href, { maxRedirects: 0 });
       expect(response.status(), href).toBe(200);
       const finalURL = new URL(response.url());
       expect(finalURL.pathname + finalURL.search, href).toBe(href);
     }
-
-    // #1693: no basta un HTTP 200: el destino debe montar la pantalla real.
-    await nav.locator('a.nav-sub[href="/adminpl0n3r/catalogo?vista=ingresos"]').click();
-    await expect(page).toHaveURL(/\/adminpl0n3r\/catalogo\?vista=ingresos$/);
-    await expect(page.getByRole('heading', { name: 'Ingresos SaaS', exact: true }))
-      .toBeVisible();
-    await expect(page.getByRole('navigation', { name: 'Navegación de plataforma' })
-      .locator('a.nav-sub[href="/adminpl0n3r/catalogo?vista=ingresos"]'))
-      .toHaveAttribute('aria-current', 'page');
-
-    await nav.locator('a.nav-sub[href="/adminpl0n3r/suscripciones"]').click();
-    await expect(page).toHaveURL(/\/adminpl0n3r\/suscripciones$/);
-    const subscriptions = page.getByRole('navigation', { name: 'Navegación de plataforma' });
-    await expect(subscriptions.getByRole('button', { name: 'Comercial' }))
+    await page.goto('/adminpl0n3r/catalogo?vista=ingresos');
+    await expect(page.getByRole('heading', { name: 'Ingresos SaaS', exact: true })).toBeVisible();
+    const revenueNav = page.getByRole('navigation', { name: 'Navegación de plataforma' });
+    await expect(revenueNav.getByRole('button', { name: 'Negocio SaaS' }))
       .toHaveAttribute('aria-expanded', 'true');
-    await expect(subscriptions.locator('a.nav-sub[href="/adminpl0n3r/suscripciones"]'))
+    await expect(revenueNav.locator('a[href="/adminpl0n3r/catalogo?vista=ingresos"]'))
       .toHaveAttribute('aria-current', 'page');
-    const breadcrumb = page.getByRole('navigation', { name: 'Ruta' });
-    await expect(breadcrumb).toContainText('Comercial');
-    await expect(breadcrumb).toContainText('Plan y suscripciones');
-    await expect(breadcrumb.getByRole('link', { name: 'Inicio' }))
+    await page.goto('/adminpl0n3r?view=auditoria');
+    await expect(page.getByRole('navigation', { name: 'Navegación de plataforma' })
+      .locator('a[href="/adminpl0n3r?view=auditoria"]')).toHaveAttribute('aria-current', 'page');
+    const auditCrumbs = page.getByRole('navigation', { name: 'Ruta' });
+    await expect(auditCrumbs).toContainText('Administración de plataforma');
+    await expect(auditCrumbs).toContainText('Auditoría');
+    await page.goto('/adminpl0n3r/suscripciones');
+    const crumbs = page.getByRole('navigation', { name: 'Ruta' });
+    await expect(crumbs).toContainText('Negocio SaaS');
+    await expect(crumbs).toContainText('Suscripciones');
+    await expect(crumbs.getByRole('link', { name: 'Inicio' }))
       .toHaveAttribute('href', '/adminpl0n3r');
   });
 });

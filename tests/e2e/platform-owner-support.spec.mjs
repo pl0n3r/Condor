@@ -36,10 +36,7 @@ test.describe('Propietario — soporte temporal por empresa', () => {
     });
     expect(created.status()).toBe(201);
 
-    const nav = page.getByRole('navigation', { name: 'Navegación de plataforma' });
-    await nav.getByRole('button', { name: 'Módulos de empresa', exact: true }).click();
-    await nav.getByRole('link', { name: 'Talento humano', exact: true }).click();
-    await expect(page).toHaveURL(/\/adminpl0n3r\/empresas\?modulo=human-resources-management$/);
+    await page.goto('/adminpl0n3r/empresas');
 
     // The "before" screenshots show the owner choosing a company, not a
     // fabricated historical design comparison. All data is synthetic.
@@ -68,7 +65,49 @@ test.describe('Propietario — soporte temporal por empresa', () => {
 
     const dialog = page.getByRole('dialog', { name: tenantName });
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Abrir panel de la empresa' }).click();
+    await dialog.getByRole('button', { name: 'Ver como propietario' }).click();
+    const companyNav = page.getByRole('navigation', { name: 'Navegación empresarial del propietario' });
+    await expect(companyNav).toBeVisible();
+    // The approved catalogue has nine real roots and only one expanded group.
+    for (const root of [
+      'Escritorio', 'Ventas', 'Catálogo', 'Inventario', 'Operaciones',
+      'Personal', 'Finanzas e informes', 'Sitio web', 'Empresa',
+    ]) {
+      await expect(companyNav.getByRole('button', { name: root, exact: true })).toHaveCount(1);
+    }
+    // Support links reflect server capabilities, never a hard-coded disabled list.
+    for (const [attribute, group, label] of [
+      ['finance-real-data-enabled', 'Finanzas e informes', 'Finanzas'],
+      ['assets-real-data-enabled', 'Operaciones', 'Activos'],
+      ['governance-real-data-enabled', 'Empresa', 'Gobierno corporativo'],
+    ]) {
+      const enabled = await page.locator('#condor-platform-root')
+        .getAttribute('data-' + attribute);
+      await companyNav.getByRole('button', { name: group, exact: true }).click();
+      await expect(companyNav.getByRole('button', { name: label, exact: true }))
+        .toHaveCount(enabled === 'true' ? 1 : 0);
+    }
+    const sales = companyNav.getByRole('button', { name: 'Ventas', exact: true });
+    const inventory = companyNav.getByRole('button', { name: 'Inventario', exact: true });
+    const people = companyNav.getByRole('button', { name: 'Personal', exact: true });
+    await sales.click();
+    await expect(sales).toHaveAttribute('aria-expanded', 'true');
+    await expect(companyNav.getByRole('button', { name: 'Pedidos', exact: true })).toBeVisible();
+    await inventory.click();
+    await expect(sales).toHaveAttribute('aria-expanded', 'false');
+    await expect(inventory).toHaveAttribute('aria-expanded', 'true');
+    await people.click();
+    await expect(inventory).toHaveAttribute('aria-expanded', 'false');
+    await page.keyboard.press('Escape');
+    await expect(people).toHaveAttribute('aria-expanded', 'false');
+    await expect(people).toBeFocused();
+    await people.click();
+    const grant = page.waitForRequest((request) =>
+      request.url().endsWith('/adminpl0n3r/api/support') && request.method() === 'POST');
+    await companyNav.getByRole('button', { name: 'Talento humano', exact: true }).click();
+    const payload = (await grant).postDataJSON();
+    expect(payload.module).toBe('human-resources-management');
+    expect(typeof payload.tenant_id).toBe('string');
     await expect(page).toHaveURL(/\/admin#human-resources-management$/);
     const supportBanner = page.getByRole('status').filter({ hasText: 'Soporte de propietario' });
     await expect(supportBanner).toContainText(tenantName);

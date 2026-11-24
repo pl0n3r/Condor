@@ -55,6 +55,17 @@ final class PlatformOwnerController extends AbstractController
         return $this->render('platform_owner/index.html.twig', [
             'app_version' => $version->human(),
             'section' => $section,
+            'customer_service_real_data_enabled' => getenv('CUSTOMER_SERVICE_REAL_DATA_ENABLED') === 'true',
+            'assets_real_data_enabled' => getenv('ASSETS_REAL_DATA_ENABLED') === 'true',
+            'operations_processes_real_data_enabled' => getenv('OPERATIONS_PROCESSES_REAL_DATA_ENABLED') === 'true',
+            'hr_real_data_enabled' => getenv('HR_REAL_DATA_ENABLED') === 'true',
+            'payroll_real_data_enabled' => getenv('PAYROLL_REAL_DATA_ENABLED') === 'true',
+            'contracts_real_data_enabled' => getenv('CONTRACTS_REAL_DATA_ENABLED') === 'true',
+            'social_security_real_data_enabled' => getenv('SOCIAL_SECURITY_REAL_DATA_ENABLED') === 'true',
+            'finance_real_data_enabled' => getenv('FINANCE_REAL_DATA_ENABLED') === 'true',
+            'ohs_real_data_enabled' => getenv('OHS_REAL_DATA_ENABLED') === 'true',
+            'legal_compliance_real_data_enabled' => getenv('LEGAL_COMPLIANCE_REAL_DATA_ENABLED') === 'true',
+            'governance_real_data_enabled' => getenv('GOVERNANCE_REAL_DATA_ENABLED') === 'true',
         ]);
     }
 }
