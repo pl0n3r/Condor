@@ -405,21 +405,20 @@ export function AdminShell({
   const auditView = variant === 'platform'
     && window.location.pathname === '/adminpl0n3r'
     && new URLSearchParams(window.location.search).get('view') === 'auditoria';
+  // The owner has exactly four global roots. Keep the existing real audit
+  // view under Platform administration, rather than inventing a fifth root.
   const visibleNav: readonly AdminNavEntry[] = variant === 'platform'
-    ? [
-      ...navItems.map((entry) => isGroup(entry)
-        ? {
-          ...entry,
-          items: entry.items.map((item) => ({ ...item, current: auditView ? false : item.current })),
-        }
-        : { ...entry, current: auditView ? false : entry.current }),
-      {
-        href: '/adminpl0n3r?view=auditoria',
-        label: 'Auditoría',
-        icon: 'admin',
-        current: auditView,
-      },
-    ]
+    ? navItems.map((entry) => isGroup(entry)
+      ? {
+        ...entry,
+        items: [
+          ...entry.items.map((item) => ({ ...item, current: auditView ? false : item.current })),
+          ...(entry.group === 'Administración de plataforma'
+            ? [{ href: '/adminpl0n3r?view=auditoria', label: 'Auditoría', current: auditView }]
+            : []),
+        ],
+      }
+      : { ...entry, current: auditView ? false : entry.current })
     : navItems;
   // Si el ancla de la URL apunta a una sección dentro de un grupo, esa sección es la actual y «Inicio» deja de estarlo.
   const sectionInGroup = visibleNav.some((entry) => isGroup(entry)
@@ -429,7 +428,7 @@ export function AdminShell({
   const isActiveGroupItem = (item: AdminNavItem): boolean => (
     variant === 'platform' ? item.current === true : !item.current && itemIsCurrent(item, hash)
   );
-  let activeGroup = auditView ? 'Plataforma' : '';
+  let activeGroup = auditView ? 'Administración de plataforma' : '';
   let activeLabel = auditView ? 'Auditoría' : '';
   let activeId = auditView ? 'auditoria' : '';
   // Los enlaces directos, como Catálogo o un grupo reducido a un hijo,
@@ -451,9 +450,11 @@ export function AdminShell({
       activeGroup = entry.group;
       activeLabel = hit.label.replace(' (pruebas)', '');
       activeId = variant === 'platform'
-        ? (hit.href.startsWith('/adminpl0n3r/')
-          ? hit.href.slice('/adminpl0n3r/'.length)
-          : 'inicio')
+        ? (auditView && hit.href === '/adminpl0n3r?view=auditoria'
+          ? 'auditoria'
+          : hit.href.startsWith('/adminpl0n3r/')
+            ? hit.href.slice('/adminpl0n3r/'.length)
+            : 'inicio')
         : hit.href.slice(hit.href.indexOf('#') + 1);
     }
   }

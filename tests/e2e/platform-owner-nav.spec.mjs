@@ -19,6 +19,7 @@ const GROUPS = [
     '/adminpl0n3r/staff',
     '/adminpl0n3r/integraciones',
     '/adminpl0n3r/diagnosticos',
+    '/adminpl0n3r?view=auditoria',
   ] },
 ];
 const ALL_LINKS = [...DIRECT.map(item => item.href), ...GROUPS.flatMap(group => group.links)];
@@ -54,7 +55,7 @@ test.describe('Propietario — solo destinos reales y cuatro raíces', () => {
     expect(all).toEqual(ALL_LINKS);
     expect(new Set(all).size).toBe(all.length);
     await expect(nav.getByRole('button', { name: 'Módulos de empresa' })).toHaveCount(0);
-    await expect(nav.getByRole('link', { name: 'Auditoría' })).toHaveCount(0);
+    await expect(nav.locator('a[href="/adminpl0n3r?view=auditoria"]')).toHaveCount(1);
 
     const saas = nav.getByRole('button', { name: 'Negocio SaaS' });
     const platform = nav.getByRole('button', { name: 'Administración de plataforma' });
@@ -78,6 +79,12 @@ test.describe('Propietario — solo destinos reales y cuatro raíces', () => {
       .toHaveAttribute('aria-expanded', 'true');
     await expect(revenueNav.locator('a[href="/adminpl0n3r/catalogo?vista=ingresos"]'))
       .toHaveAttribute('aria-current', 'page');
+    await page.goto('/adminpl0n3r?view=auditoria');
+    await expect(page.getByRole('navigation', { name: 'Navegación de plataforma' })
+      .locator('a[href="/adminpl0n3r?view=auditoria"]')).toHaveAttribute('aria-current', 'page');
+    const auditCrumbs = page.getByRole('navigation', { name: 'Ruta' });
+    await expect(auditCrumbs).toContainText('Administración de plataforma');
+    await expect(auditCrumbs).toContainText('Auditoría');
     await page.goto('/adminpl0n3r/suscripciones');
     const crumbs = page.getByRole('navigation', { name: 'Ruta' });
     await expect(crumbs).toContainText('Negocio SaaS');

@@ -26,6 +26,7 @@ test.describe('Propietario — navegación aprobada #1972', () => {
       await expect(nav.getByRole('link', { name: 'Empresas', exact: true })).toBeVisible();
       await expect(nav.getByRole('button', { name: 'Negocio SaaS' })).toBeVisible();
       await expect(nav.getByRole('button', { name: 'Administración de plataforma' })).toBeVisible();
+      await expect(nav.locator('a[href="/adminpl0n3r?view=auditoria"]')).toHaveCount(1);
       await expect(nav.getByRole('button', { name: 'Módulos de empresa' })).toHaveCount(0);
       await expect(nav.locator('button.nav-group-head')).toHaveCount(2);
 
