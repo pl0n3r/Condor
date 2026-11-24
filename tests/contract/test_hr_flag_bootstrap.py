@@ -10,6 +10,7 @@ class HrFlagBootstrapContract(unittest.TestCase):
         cls.controller = (ROOT/'src/Http/Controller/AdminController.php').read_text()
         cls.twig = (ROOT/'templates/admin/index.html.twig').read_text()
         cls.app = (ROOT/'frontend/admin/AdminApp.tsx').read_text()
+        cls.nav = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text()
         cls.backend = (ROOT/'src/Http/Controller/HumanResourcesController.php').read_text()
 
     def test_server_is_only_source_and_defaults_visible(self):
@@ -22,7 +23,8 @@ class HrFlagBootstrapContract(unittest.TestCase):
 
     def test_nav_and_component_only_after_exact_true(self):
         self.assertIn("dataset.hrRealDataEnabled === 'true'", self.app)
-        self.assertIn("...(hrRealDataEnabled ? [{ href: '/admin#human-resources-management', label: 'Talento humano' }] : []),", self.app)
+        self.assertIn('flags.hrRealDataEnabled', self.nav)
+        self.assertIn("link('human-resources-management', 'Talento humano')", self.nav)
         self.assertIn('{hrRealDataEnabled && (', self.app)
         self.assertIn('<HumanResourcesManagement', self.app)
         self.assertNotIn('DevHumanResourcesManagement', self.app)
