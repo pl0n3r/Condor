@@ -11,6 +11,7 @@ class LegalFlagBootstrapTests(unittest.TestCase):
         cls.php = (ROOT / "src/Http/Controller/AdminController.php").read_text()
         cls.twig = (ROOT / "templates/admin/index.html.twig").read_text()
         cls.app = (ROOT / "frontend/admin/AdminApp.tsx").read_text()
+        cls.nav = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text()
         cls.ui = (ROOT / "frontend/admin/ComplianceManagement.tsx").read_text()
         cls.backend = (ROOT / "src/Http/Controller/ComplianceController.php").read_text()
 
@@ -22,7 +23,8 @@ class LegalFlagBootstrapTests(unittest.TestCase):
         self.assertIn("data-legal-compliance-real-data-enabled", self.twig)
         self.assertIn("legal_compliance_real_data_enabled ? 'true' : 'false'", self.twig)
         self.assertIn("dataset.legalComplianceRealDataEnabled === 'true'", self.app)
-        self.assertIn("legalComplianceRealDataEnabled ? [{ href: '/admin#compliance-evidence-management', label: 'Cumplimiento legal' }]", self.app)
+        self.assertIn('flags.legalComplianceRealDataEnabled', self.nav)
+        self.assertIn("link('compliance-evidence-management', 'Cumplimiento legal')", self.nav)
         self.assertIn("enabled={legalComplianceRealDataEnabled}", self.app)
         self.assertIn("<LegalComplianceRealManagement", self.app)
 
@@ -30,7 +32,7 @@ class LegalFlagBootstrapTests(unittest.TestCase):
         self.assertNotIn("<DevComplianceEvidenceManagement", self.app)
         self.assertNotIn("<DevLegalComplianceManagement", self.app)
         self.assertNotIn("Cumplimiento legal (pruebas)", self.app)
-        self.assertIn("Cumplimiento legal (no habilitado)", self.app)
+        self.assertIn("link('compliance-evidence-management', 'Cumplimiento legal (no habilitado)')", self.nav)
         self.assertIn("Este módulo aún no está habilitado", self.app)
         self.assertIn("if (!options.enabled) return { status: 'disabled' };", self.ui)
         self.assertIn("enabled, allowed", self.ui)
