@@ -130,7 +130,9 @@ class ModuloTests(unittest.TestCase):
         self.assertIn("branchId={context.data.active_branch.id}", shell)
         self.assertIn("permissions={context.data.permissions}", shell)
         self.assertIn("Cargando finanzas ficticias", shell)
-        self.assertIn("href: '/admin#finance-management'", shell)
+        navigation = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text(encoding="utf-8")
+        self.assertIn("link('finance-management', 'Finanzas')", navigation)
+        self.assertIn("flags.financeRealDataEnabled", navigation)
 
 
 if __name__ == "__main__":
