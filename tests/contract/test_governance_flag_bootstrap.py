@@ -11,6 +11,7 @@ class GovernanceFlagBootstrapTests(unittest.TestCase):
         cls.admin = (ROOT / 'src/Http/Controller/AdminController.php').read_text()
         cls.twig = (ROOT / 'templates/admin/index.html.twig').read_text()
         cls.app = (ROOT / 'frontend/admin/AdminApp.tsx').read_text()
+        cls.nav = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text()
         cls.view = (ROOT / 'frontend/admin/GovernanceManagement.tsx').read_text()
         cls.api = (ROOT / 'src/Http/Controller/GovernanceController.php').read_text()
 
@@ -28,7 +29,8 @@ class GovernanceFlagBootstrapTests(unittest.TestCase):
         self.assertIn("'feature_unavailable'", self.api)
 
     def test_module_is_visible_only_if_server_enabled_or_explicit_dev_fallback(self):
-        self.assertIn("governanceRealDataEnabled ? [{ href: '/admin#governance-management'", self.app)
+        self.assertIn('flags.governanceRealDataEnabled', self.nav)
+        self.assertIn("link('governance-management', 'Gobierno corporativo')", self.nav)
         self.assertIn("(governanceRealDataEnabled || import.meta.env.DEV)", self.app)
         self.assertIn('enabled={governanceRealDataEnabled}', self.app)
         self.assertIn('context.data.active_branch.legal_entity?.id === context.data.active_legal_entity.id', self.app)
