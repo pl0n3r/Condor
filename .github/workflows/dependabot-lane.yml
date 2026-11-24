@@ -79,7 +79,7 @@ jobs:
     if: needs.verificar_dependabot.outputs.authenticated == 'true'
     permissions:
       contents: write
-      checks: read
+      checks: write
       issues: write
       pull-requests: write
     uses: pl0n3r/factory/.github/workflows/coordinacion.yml@v1
@@ -92,7 +92,7 @@ jobs:
     if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
-      checks: read
+      checks: write
       issues: write
       pull-requests: write
     uses: pl0n3r/factory/.github/workflows/coordinacion.yml@v1
