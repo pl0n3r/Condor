@@ -18,6 +18,7 @@ class UiVentasPorProductoTests(unittest.TestCase):
         """Product/month endpoints, keyboard form, sorting and empty/error states."""
         panel = PANEL.read_text(encoding="utf-8")
         app = APP.read_text(encoding="utf-8")
+        nav = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text(encoding="utf-8")
         api = API.read_text(encoding="utf-8")
 
         for endpoint in ("sales-by-product", "sales-by-month"):
@@ -61,7 +62,7 @@ class UiVentasPorProductoTests(unittest.TestCase):
         self.assertIn("data.items.every(validateRow)", panel)
 
         self.assertIn("import { SalesReportPanel }", app)
-        self.assertIn('href: \'/admin#sales-reports\'', app)
+        self.assertIn("link('sales-reports', 'Informes de ventas')", nav)
         self.assertIn("<SalesReportPanel", app)
         self.assertIn("permissions={context.data.permissions}", app)
         self.assertIn("key={'sales-reports-' + context.data.active_branch.id}", app)
