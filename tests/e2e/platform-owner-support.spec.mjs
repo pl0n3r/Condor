@@ -108,8 +108,8 @@ test.describe('Propietario — soporte temporal por empresa', () => {
     }
     await page.setViewportSize({ width: 1280, height: 720 });
     const adminNav = page.getByRole('navigation', { name: 'Navegación principal' });
-    await expect(adminNav.getByRole('button', { name: 'Personas', exact: true })).toBeVisible();
-    await expect(adminNav.getByRole('button', { name: 'Administración', exact: true })).toBeVisible();
+    await expect(adminNav.getByRole('button', { name: 'Personal', exact: true })).toBeVisible();
+    await expect(adminNav.getByRole('button', { name: 'Empresa', exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Volver a la consola' }).click();
     await expect(page).toHaveURL(/\/adminpl0n3r$/);
