@@ -116,4 +116,89 @@ test.describe('Administrador — menú agrupado y módulos aislados', () => {
       });
     }
   });
+  test('capturas navegador: taxonomía anterior sintética frente al menú de nueve áreas', async ({ page }, testInfo) => {
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.goto('/admin/login');
+      await page.getByLabel('Correo').fill(email);
+      await page.getByLabel('Contraseña').fill(password);
+      await page.getByRole('button', { name: 'Ingresar' }).click();
+      await expect(page).toHaveURL(/\/admin$/);
+      await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
+      if (width === 390) await page.getByRole('button', { name: 'Mostrar menú' }).click();
+      const nav = page.locator(width === 390
+        ? 'dialog.admin-nav-drawer nav[aria-label="Navegación principal"]'
+        : 'aside.sidebar nav[aria-label="Navegación principal"]');
+      await expect(nav).toBeVisible();
+
+      // Reconstrucción explícitamente SINTÉTICA de los títulos anteriores de main@63d8b43.
+      // Se conserva el DOM React original: sólo se oculta durante una captura.
+      await nav.evaluate((element) => {
+        for (const child of element.children) {
+          child.setAttribute('data-real-nav-hidden', '');
+          child.style.display = 'none';
+        }
+        const replica = document.createElement('div');
+        replica.dataset.syntheticOldMenu = 'true';
+        const notice = document.createElement('p');
+        notice.textContent = 'REFERENCIA SINTÉTICA · menú anterior';
+        notice.setAttribute('aria-label', 'Reconstrucción sintética de títulos anteriores');
+        replica.append(notice);
+        const home = document.createElement('a');
+        home.href = '/admin';
+        home.textContent = 'Inicio';
+        home.setAttribute('aria-current', 'page');
+        replica.append(home);
+        for (const title of [
+          'Ventas','Catálogo e inventario','Sitio web','Personas',
+          'Finanzas y cumplimiento','Operación','Administración',
+        ]) {
+          const group = document.createElement('div');
+          group.className = 'nav-group t-acc';
+          const heading = document.createElement('button');
+          heading.type = 'button';
+          heading.className = 'nav-group-head t-acc-head';
+          heading.textContent = title;
+          group.append(heading);
+          replica.append(group);
+        }
+        element.prepend(replica);
+      });
+      const before = testInfo.outputPath('tenant-nav-before-' + width + '.png');
+      await page.screenshot({ path: before, fullPage: true });
+      await testInfo.attach('menu-antes-sintetico-' + width, { path: before, contentType: 'image/png' });
+      await nav.evaluate((element) => {
+        element.querySelector('[data-synthetic-old-menu]')?.remove();
+        for (const child of element.querySelectorAll('[data-real-nav-hidden]')) {
+          child.removeAttribute('data-real-nav-hidden');
+          child.style.removeProperty('display');
+        }
+      });
+      const after = testInfo.outputPath('tenant-nav-after-' + width + '.png');
+      await expect(nav.getByRole('link', { name: 'Escritorio', exact: true })).toBeVisible();
+      await page.screenshot({ path: after, fullPage: true });
+      await testInfo.attach('menu-despues-real-' + width, { path: after, contentType: 'image/png' });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth))
+        .toBeLessThanOrEqual(width + 1);
+      if (width === 390) await page.keyboard.press('Escape');
+    }
+  });
+
+  test('deep-link, recarga, Back y Forward conservan el módulo de catálogo', async ({ page }) => {
+    await page.goto('/admin/login');
+    await page.getByLabel('Correo').fill(email);
+    await page.getByLabel('Contraseña').fill(password);
+    await page.getByRole('button', { name: 'Ingresar' }).click();
+    await expect(page).toHaveURL(/\/admin$/);
+    await page.goto('/admin#catalog');
+    await expect(page.locator('.workspace > section#catalog')).toBeVisible();
+    await page.reload();
+    await expect(page.locator('.workspace > section#catalog')).toBeVisible();
+    await page.locator('aside.sidebar nav a[href="/admin"]').click();
+    await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
+    await page.goBack();
+    await expect(page.locator('.workspace > section#catalog')).toBeVisible();
+    await page.goForward();
+    await expect(page.locator('.workspace > section.module-directory')).toBeVisible();
+  });
 });

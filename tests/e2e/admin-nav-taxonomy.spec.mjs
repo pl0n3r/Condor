@@ -20,7 +20,10 @@ test('contrato offline: nueve raíces aprobadas, sin redundancias', () => {
 });
 
 test('contrato offline: permisos SSR y pendientes usan navegación visible', () => {
-  expect(app).toContain('enabled.has(key)');
+  expect(app).toContain('enabled?.has(key) === true');
+  expect(app).not.toContain('enabled === null || enabled.has(key)');
+  expect(app).toContain("permission === 'roles.view' || permission === 'users.view'");
+  expect(app).toContain("if (key === 'documents' || key === 'design-preview') return import.meta.env.DEV;");
   expect(app).toContain('mayOpen(item.href');
   expect(app).toContain('if (items.length === 0) return [];');
   expect(app).toContain('if (items.length === 1)');
@@ -29,4 +32,17 @@ test('contrato offline: permisos SSR y pendientes usan navegación visible', () 
   expect(directory).toContain("permissions.includes('inventory.view')");
   expect(directory).toContain('payrollRealDataEnabled');
   expect(catalog).toContain("link('roles', 'Roles y permisos')");
+});
+
+test('seguridad del menú: backend sigue siendo autoridad y empleados no son disponibles', () => {
+  const moduleCatalog = readFileSync(
+    new URL('../../src/Application/Platform/ModuleCatalog.php',import.meta.url),'utf8');
+  const adminController = readFileSync(
+    new URL('../../src/Http/Controller/AdminController.php',import.meta.url),'utf8');
+  expect(moduleCatalog).toContain("key !== 'employees-management'");
+  expect(adminController).toContain('$this->moduleAccess->allowed($user, $tenant)');
+  expect(adminController).toContain("'allowed_modules' => $allowedModules");
+  expect(catalog).not.toMatch(/link\('employees-management'[^)]*,\s*'Empleados[^']*'\)\s*,\s*\/\//);
+  expect(app).toContain("return enabled?.has(key) === true;");
+  expect(directory).toContain('visibleTenantHrefs(entries)');
 });

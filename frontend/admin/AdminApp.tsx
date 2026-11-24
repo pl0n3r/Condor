@@ -223,8 +223,17 @@ export function AdminApp({
   const granted = typeof document === 'undefined' ? undefined
     : document.getElementById('condor-admin-root')?.dataset.enabledModules;
   const enabled = granted === undefined ? null : new Set(granted.split(',').filter(Boolean));
-  const mayOpen = (key: string) => key === '' || enabled === null || enabled.has(key)
-    || ['roles', 'documents', 'design-preview'].includes(key);
+  // La ausencia del alcance SSR NO equivale a un permiso. El catálogo
+  // sólo representa módulos que el servidor autorizó para este tenant.
+  const mayOpen = (key: string) => {
+    if (key === '') return true; // Escritorio sin consulta de módulo.
+    if (key === 'roles') {
+      return readyContext?.permissions.some((permission) =>
+        permission === 'roles.view' || permission === 'users.view') === true;
+    }
+    if (key === 'documents' || key === 'design-preview') return import.meta.env.DEV;
+    return enabled?.has(key) === true;
+  };
 
   const navEntries: AdminNavEntry[] = buildTenantNavigation({
     section,
