@@ -11,6 +11,7 @@ class PayrollFlagBootstrapContract(unittest.TestCase):
         cls.controller = (ROOT / 'src/Http/Controller/AdminController.php').read_text()
         cls.twig = (ROOT / 'templates/admin/index.html.twig').read_text()
         cls.app = (ROOT / 'frontend/admin/AdminApp.tsx').read_text()
+        cls.nav = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text()
         cls.view = (ROOT / 'frontend/admin/PayrollManagement.tsx').read_text()
         cls.api = (ROOT / 'src/Http/Controller/PayrollController.php').read_text()
 
@@ -24,8 +25,9 @@ class PayrollFlagBootstrapContract(unittest.TestCase):
         self.assertNotIn('period_ref', self.twig)
 
     def test_frontend_nav_and_gate_propagation(self):
-        self.assertIn("payrollRealDataEnabled ? [{ href: '/admin#payroll-management', label: 'Nómina' }]", self.app)
-        self.assertIn("label: 'Nómina (pruebas)'", self.app)
+        self.assertIn('flags.payrollRealDataEnabled', self.nav)
+        self.assertIn("link('payroll-management', 'Nómina')", self.nav)
+        self.assertIn("link('payroll-management', 'Nómina (pruebas)')", self.nav)
         self.assertIn('enabled={payrollRealDataEnabled}', self.app)
         self.assertIn('csrfToken={accessToken}', self.app)
         self.assertIn("if (!options.enabled) return { status: 'disabled' };", self.view)
