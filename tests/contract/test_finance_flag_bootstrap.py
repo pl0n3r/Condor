@@ -11,6 +11,7 @@ class FinanceFlagBootstrapTests(unittest.TestCase):
         cls.server = (ROOT / "src/Http/Controller/AdminController.php").read_text()
         cls.twig = (ROOT / "templates/admin/index.html.twig").read_text()
         cls.app = (ROOT / "frontend/admin/AdminApp.tsx").read_text()
+        cls.nav = (ROOT / "frontend/admin/CondorNavigationCatalog.ts").read_text()
         cls.view = (ROOT / "frontend/admin/FinanceManagement.tsx").read_text()
         cls.backend = (ROOT / "src/Http/Controller/FinanceController.php").read_text()
 
@@ -27,7 +28,8 @@ class FinanceFlagBootstrapTests(unittest.TestCase):
         self.assertIn("enabled={financeRealDataEnabled}", self.app)
         self.assertIn("csrfToken={accessToken}", self.app)
         self.assertIn("key={'finance-real-'", self.app)
-        self.assertIn("financeRealDataEnabled ? [{ href: '/admin#finance-management', label: 'Finanzas' }]", self.app)
+        self.assertIn('flags.financeRealDataEnabled', self.nav)
+        self.assertIn("link('finance-management', 'Finanzas')", self.nav)
         self.assertIn("DevFinanceManagement && !financeRealDataEnabled", self.app)
 
     def test_criterio_seguridad_y_bordes(self):
