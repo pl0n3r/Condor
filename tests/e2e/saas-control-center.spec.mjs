@@ -149,7 +149,9 @@ test.describe('SaaS Control Center — navegación y errores reales en Chromium'
   test('ruta /suscripciones muestra el SaaS Control Center y el menú propio', async ({ page }) => {
     const panel = await renderOwner(page, () => ({ status: 200, body: ready() }));
     await expect(page).toHaveURL(/adminpl0n3r[/]suscripciones$/);
-    await expect(page.getByRole('link', { name: 'Plan y suscripciones' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Navegación de plataforma' })
+      .getByRole('link', { name: 'Suscripciones', exact: true }))
+      .toHaveAttribute('aria-current', 'page');
     await expect(panel.getByRole('heading', { name: 'Control SaaS por empresa' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Cartera comercial' })).toHaveCount(0);
   });

@@ -442,6 +442,16 @@ export function AdminShell({
       activeLabel = standalone.href === '/admin' ? ''
         : standalone.label.replace(' (pruebas)', '');
     }
+  } else {
+    // Direct owner roots also need a breadcrumb and active workspace identity.
+    // Keep the global dashboard as the sole exception to avoid repeating Inicio.
+    const standalone = visibleNav.find((entry) => !isGroup(entry) && entry.current);
+    if (standalone && !isGroup(standalone)) {
+      activeId = standalone.href === '/adminpl0n3r'
+        ? 'inicio' : standalone.href.slice('/adminpl0n3r/'.length);
+      activeLabel = standalone.href === '/adminpl0n3r' ? '' : standalone.label;
+      activeGroup = '';
+    }
   }
   for (const entry of visibleNav) {
     if (!isGroup(entry)) continue;
