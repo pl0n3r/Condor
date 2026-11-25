@@ -112,17 +112,20 @@ final class GestDocumentBranchScopeSqlTest extends KernelTestCase
         $db->beginTransaction();
         try {
             $draft = self::draft($repo, 'a', 'main', 'north');
-            $foreign = self::draft($repo, 'b', 'main', 'north');
-            try {
-                $db->executeStatement('UPDATE condor_document_branch_link SET record_ref = ? '
-                    . 'WHERE tenant_ref = ? AND legal_entity_ref = ? AND branch_ref = ?',
-                    [$foreign->recordRef(), self::tenant('a'), self::entity('main'), self::branch('north')]);
-                self::fail('The composite FK must reject a foreign internal dossier.');
-            } catch (ForeignKeyConstraintViolationException) {
-                self::assertSame($draft->recordRef(), $db->fetchOne(
-                    'SELECT record_ref FROM condor_document_branch_link WHERE tenant_ref = ? AND branch_ref = ?',
-                    [self::tenant('a'), self::branch('north')],
-                ));
+            $foreignTenant = self::draft($repo, 'b', 'main', 'north');
+            $foreignEntity = self::draft($repo, 'a', 'other', 'north');
+            foreach ([$foreignTenant, $foreignEntity] as $foreign) {
+                try {
+                    $db->executeStatement('UPDATE condor_document_branch_link SET record_ref = ? '
+                        . 'WHERE tenant_ref = ? AND legal_entity_ref = ? AND branch_ref = ?',
+                        [$foreign->recordRef(), self::tenant('a'), self::entity('main'), self::branch('north')]);
+                    self::fail('The composite FK must reject a cross-scope internal dossier.');
+                } catch (ForeignKeyConstraintViolationException) {
+                    self::assertSame($draft->recordRef(), $db->fetchOne(
+                        'SELECT record_ref FROM condor_document_branch_link WHERE tenant_ref = ? AND branch_ref = ?',
+                        [self::tenant('a'), self::branch('north')],
+                    ));
+                }
             }
         } finally {
             $db->rollBack();
