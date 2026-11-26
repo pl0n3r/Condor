@@ -101,7 +101,8 @@ final class GestDocumentDraftPersistenceHttpTest extends WebTestCase
             $row = $db->fetchAssociative('SELECT d.id, d.version FROM condor_document_record d '
                 .'INNER JOIN condor_document_branch_link l ON d.record_ref = l.record_ref '
                 .'AND d.tenant_ref = l.tenant_ref AND d.legal_entity_ref = l.legal_entity_ref '
-                .'WHERE l.external_ref = ? AND l.branch_ref IS NOT NULL', ['fixture:dossier/alpha']);
+                .'WHERE d.id = ? AND l.external_ref = ? AND l.branch_ref IS NOT NULL',
+                [$created['id'], 'fixture:dossier/alpha']);
             self::assertIsArray($row);
             self::assertSame($created['id'], $row['id']);
             self::assertSame(1, (int) $row['version']);
@@ -109,7 +110,9 @@ final class GestDocumentDraftPersistenceHttpTest extends WebTestCase
                 .'WHERE record_ref = (SELECT record_ref FROM condor_document_record WHERE id = ?) '
                 .'AND action = ?', [$created['id'], 'CREADA']));
             self::assertSame(1, (int) $db->fetchOne('SELECT COUNT(*) FROM condor_document_branch_link '
-                .'WHERE external_ref = ? AND branch_ref IS NOT NULL', ['fixture:dossier/alpha']));
+                .'WHERE record_ref = (SELECT record_ref FROM condor_document_record WHERE id = ?) '
+                .'AND external_ref = ? AND branch_ref IS NOT NULL',
+                [$created['id'], 'fixture:dossier/alpha']));
         } finally {
             $db->rollBack();
         }
