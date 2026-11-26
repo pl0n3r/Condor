@@ -104,41 +104,32 @@ final class DocumentsControllerHttpTest extends WebTestCase
         $client->jsonRequest('POST', $base,
             ['reference' => 'fixture:doc/alpha', 'classification' => 'RESERVADA'], $headers);
         self::assertResponseStatusCodeSame(201);
+        $created = $this->body($client)['document'];
+        self::assertSame(1, $created['version']);
+        self::assertSame('BORRADOR', $created['status']);
 
         $client->request('GET', $base.'/alpha');
         self::assertResponseStatusCodeSame(200);
-        self::assertSame('fixture:doc/alpha', $this->body($client)['document']['reference']);
+        self::assertSame($created['id'], $this->body($client)['document']['id']);
+        // The immutable SQL draft is not a session artifact. Pending operations
+        // must never claim to have persisted review/evidence/trace/export.
         $client->request('GET', $base.'/alpha/trace');
-        self::assertResponseStatusCodeSame(200);
-        self::assertSame(['CREADO'], array_column($this->body($client)['events'], 'action'));
-
+        self::assertResponseStatusCodeSame(409);
         $client->jsonRequest('POST', $base.'/alpha/evidence', ['evidence_ref' => 'fixture:evidence/demo']);
         self::assertResponseStatusCodeSame(403);
-        $client->jsonRequest('POST', $base.'/alpha/evidence', ['evidence_ref' => 'somebody@example.test'], $headers);
+        $client->jsonRequest('POST', $base.'/alpha/evidence', ['evidence_ref' => 'someone@example.test'], $headers);
         self::assertResponseStatusCodeSame(422);
         $client->jsonRequest('POST', $base.'/alpha/evidence', ['evidence_ref' => 'fixture:evidence/demo'], $headers);
-        self::assertResponseStatusCodeSame(200);
-        self::assertFalse($this->body($client)['legal_signature']);
-        // The server requires an object JSON body, not the [] emitted by jsonRequest.
+        self::assertResponseStatusCodeSame(409);
         $client->request('POST', $base.'/alpha/request-review', [], [],
             [...$headers, 'CONTENT_TYPE' => 'application/json'], '{}');
-        self::assertResponseStatusCodeSame(200);
-        self::assertFalse($this->body($client)['can_close']);
-        $client->request('GET', $base.'/alpha/trace');
-        self::assertResponseStatusCodeSame(200);
-        self::assertSame(['CREADO', 'EVIDENCIA_ADJUNTADA', 'REVISION_SOLICITADA'],
-            array_column($this->body($client)['events'], 'action'));
-
+        self::assertResponseStatusCodeSame(409);
         $client->request('GET', $base.'/export');
+        self::assertResponseStatusCodeSame(409);
+        $client->request('GET', $base);
         self::assertResponseStatusCodeSame(200);
-        $export = $this->body($client);
-        self::assertSame(['fixture:doc/alpha'], array_column($export['documents'], 'reference'));
-        self::assertTrue($export['synthetic']);
-        self::assertFalse($export['legal_signature']);
-        self::assertFalse($export['can_close']);
-        self::assertTrue($export['signature_gate']['requires_legal_decision']);
-        self::assertStringContainsString('no-store',
-            (string) $client->getResponse()->headers->get('Cache-Control'));
+        self::assertSame($created['id'], $this->body($client)['documents'][0]['id']);
+        self::assertFalse($this->body($client)['signature_gate']['can_close']);
         self::assertSame('NO_VERIFICABLE', VerifiedSignature::STATUS);
         try {
             VerifiedSignature::assertAuthorized();
