@@ -83,6 +83,9 @@ final class DocumentsController extends AbstractController
     {
         $this->constructionOnly();
         [$user, , $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
+        if ($branch->legalEntity() === null) {
+            throw new NotFoundHttpException('Entidad legal de sede no encontrada.');
+        }
         $documents = $this->domain(fn (): array => $this->drafts->listing($branch, $user));
         return $this->json(['documents' => $documents, 'synthetic' => true,
             'can_close' => false, 'signature_gate' => VerifiedSignature::gate()]);
@@ -105,6 +108,9 @@ final class DocumentsController extends AbstractController
         $this->constructionOnly();
         $this->requireCsrf($request);
         [$user, , $branch] = $this->authorizedBranchScope($branchId, 'settings.create');
+        if ($branch->legalEntity() === null) {
+            throw new NotFoundHttpException('Entidad legal de sede no encontrada.');
+        }
         $data = $this->payload($request, ['reference', 'classification']);
         if (!is_string($data['reference'] ?? null) || !is_string($data['classification'] ?? null)) {
             throw new UnprocessableEntityHttpException('Solo se aceptan metadatos sintéticos enumerados.');
@@ -134,7 +140,7 @@ final class DocumentsController extends AbstractController
 
     /**
      * Shared fail-closed write guard for document evidence and review.
-     * Keeps the legacy create path unchanged.
+     * Preserves strict CSRF before the pending write operations are rejected.
      */
     private function requireDocumentWriteCsrf(Request $request): void
     {
