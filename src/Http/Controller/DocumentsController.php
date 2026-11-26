@@ -5,17 +5,20 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Application\Documents\DocumentApiService;
+use App\Application\Documents\DocumentDraftPersistence;
 use App\Application\Documents\VerifiedSignature;
 use App\Application\Identity\BranchAuthorization;
 use App\Application\Identity\CurrentTenantForUser;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Organization\Entity\Branch;
-use App\Domain\Organization\Entity\Tenant;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -28,13 +31,11 @@ final class DocumentsController extends AbstractController
 {
     use BranchApiSupport;
 
-    private const SESSION_KEY = '_condor_m08_synthetic_documents_v1';
-
     public function __construct(
         private readonly CurrentTenantForUser $currentTenantForUser,
         private readonly BranchAuthorization $authorization,
         private readonly EntityManagerInterface $entityManager,
-        private readonly DocumentApiService $documents,
+        private readonly DocumentDraftPersistence $drafts,
     ) {
     }
 
@@ -43,14 +44,8 @@ final class DocumentsController extends AbstractController
     public function export(string $branchId, Request $request): JsonResponse
     {
         $this->constructionOnly();
-        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
-        $payload = $this->documents->export($this->store($request), $this->scope($branch));
-        $payload['signature_gate'] = VerifiedSignature::gate();
-        $this->recordSyntheticAudit($tenant, $user, $branch, 'documents_synthetic.exported', $branch->id());
-        $response = $this->json($payload);
-        $response->headers->set('Content-Disposition', 'attachment; filename="condor-m08-fixtures.json"');
-        $response->headers->set('Cache-Control', 'private, no-store');
-        return $response;
+        $this->authorizedBranchScope($branchId, 'settings.view');
+        throw new HttpException(409, 'Exportación de documentos persistentes pendiente.');
     }
 
     #[Route('/api/v1/branches/{branchId}/documents/{documentKey}/trace',
@@ -59,13 +54,10 @@ final class DocumentsController extends AbstractController
     public function trace(string $branchId, string $documentKey, Request $request): JsonResponse
     {
         $this->constructionOnly();
-        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
+        [$user, , $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
         $reference = $this->domain(fn (): string => DocumentApiService::referenceFromKey($documentKey));
-        $result = $this->domain(fn (): array => $this->documents->trace(
-            $this->store($request), $this->scope($branch), $reference,
-        ));
-        $this->recordSyntheticAudit($tenant, $user, $branch, 'documents_synthetic.trace_read', $reference);
-        return $this->json($result);
+        $this->findDocument($branch, $user, $reference);
+        throw new HttpException(409, 'Traza de documentos persistentes pendiente.');
     }
 
     #[Route('/api/v1/branches/{branchId}/documents/{documentKey}/evidence',
@@ -75,36 +67,27 @@ final class DocumentsController extends AbstractController
     {
         $this->constructionOnly();
         $this->requireDocumentWriteCsrf($request);
-        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.update');
+        [$user, , $branch] = $this->authorizedBranchScope($branchId, 'settings.update');
         $data = $this->payload($request, ['evidence_ref']);
-        $evidenceRef = $data['evidence_ref'] ?? null;
-        if (!is_string($evidenceRef)) {
-            throw new \Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException('Referencia de evidencia inválida.');
+        if (!is_string($data['evidence_ref'] ?? null)
+            || preg_match('~^fixture:evidence/[a-z][a-z0-9_-]{0,47}$~D', $data['evidence_ref']) !== 1) {
+            throw new UnprocessableEntityHttpException('Solo se admite evidencia de prueba.');
         }
         $reference = $this->domain(fn (): string => DocumentApiService::referenceFromKey($documentKey));
-        $result = $this->domain(fn (): array => $this->documents->attachEvidence(
-            $this->store($request), $this->scope($branch), $reference, $evidenceRef,
-        ));
-        if ($result['changed']) {
-            $this->recordSyntheticAudit($tenant, $user, $branch, 'documents_synthetic.evidence_attached', $reference);
-            $request->getSession()->set(self::SESSION_KEY, $result['state']);
-        }
-        return $this->json(['document' => $result['document'], 'changed' => $result['changed'],
-            'synthetic' => true, 'legal_signature' => false, 'can_close' => false]);
+        $this->findDocument($branch, $user, $reference);
+        throw new HttpException(409, 'Evidencia de documentos persistentes pendiente.');
     }
 
     #[Route('/api/v1/branches/{branchId}/documents', name: 'api_documents_list', methods: ['GET'])]
     public function listing(string $branchId, Request $request): JsonResponse
     {
         $this->constructionOnly();
-        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
-        $scope = $this->scope($branch);
-        $result = $this->documents->listing($this->store($request), $scope);
-        $this->audit($tenant, $user, 'documents_synthetic.listed', DocumentApiService::class, $branch->id(), [
-            'branch_id' => $branch->id(), 'synthetic' => true,
-        ]);
-        $this->entityManager->flush();
-        return $this->json(['documents' => $result, 'synthetic' => true,
+        [$user, , $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
+        if ($branch->legalEntity() === null) {
+            throw new NotFoundHttpException('Entidad legal de sede no encontrada.');
+        }
+        $documents = $this->domain(fn (): array => $this->drafts->listing($branch, $user));
+        return $this->json(['documents' => $documents, 'synthetic' => true,
             'can_close' => false, 'signature_gate' => VerifiedSignature::gate()]);
     }
 
@@ -113,11 +96,10 @@ final class DocumentsController extends AbstractController
     public function detail(string $branchId, string $documentKey, Request $request): JsonResponse
     {
         $this->constructionOnly();
-        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
+        [$user, , $branch] = $this->authorizedBranchScope($branchId, 'settings.view');
         $reference = $this->domain(fn (): string => DocumentApiService::referenceFromKey($documentKey));
-        $document = $this->findDocument($request, $this->scope($branch), $reference);
-        $this->recordSyntheticAudit($tenant, $user, $branch, 'documents_synthetic.read', $reference);
-        return $this->json(['document' => $document, 'synthetic' => true, 'can_close' => false]);
+        return $this->json(['document' => $this->findDocument($branch, $user, $reference),
+            'synthetic' => true, 'can_close' => false]);
     }
 
     #[Route('/api/v1/branches/{branchId}/documents', name: 'api_documents_create', methods: ['POST'])]
@@ -125,24 +107,22 @@ final class DocumentsController extends AbstractController
     {
         $this->constructionOnly();
         $this->requireCsrf($request);
-        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.create');
-        $data = $this->payload($request, ['reference', 'classification']);
-        $reference = $data['reference'] ?? null;
-        $classification = $data['classification'] ?? null;
-        // Do not coerce numbers, arrays, names, dates, external IDs or uploaded content.
-        if (!is_string($reference) || !is_string($classification)) {
-            throw new \Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException('Solo se aceptan metadatos sintéticos enumerados.');
+        [$user, , $branch] = $this->authorizedBranchScope($branchId, 'settings.create');
+        if ($branch->legalEntity() === null) {
+            throw new NotFoundHttpException('Entidad legal de sede no encontrada.');
         }
-        $scope = $this->scope($branch);
-        $result = $this->domain(fn (): array => $this->documents->create(
-            $this->store($request), $scope, $reference, $classification,
-        ));
-        $this->audit($tenant, $user, 'documents_synthetic.created', DocumentApiService::class, $reference, [
-            'branch_id' => $branch->id(), 'synthetic' => true,
-        ]);
-        $this->entityManager->flush();
-        $request->getSession()->set(self::SESSION_KEY, $result['state']);
-        return $this->json(['document' => $result['document'], 'synthetic' => true], Response::HTTP_CREATED);
+        $data = $this->payload($request, ['reference', 'classification']);
+        if (!is_string($data['reference'] ?? null) || !is_string($data['classification'] ?? null)) {
+            throw new UnprocessableEntityHttpException('Solo se aceptan metadatos sintéticos enumerados.');
+        }
+        try {
+            $document = $this->domain(fn (): array => $this->drafts->create(
+                $branch, $user, $data['reference'], $data['classification'],
+            ));
+        } catch (UniqueConstraintViolationException $exception) {
+            throw new HttpException(409, 'Referencia sintética ya persistida.', $exception);
+        }
+        return $this->json(['document' => $document, 'synthetic' => true], Response::HTTP_CREATED);
     }
 
     #[Route('/api/v1/branches/{branchId}/documents/{documentKey}/request-review',
@@ -151,45 +131,23 @@ final class DocumentsController extends AbstractController
     {
         $this->constructionOnly();
         $this->requireDocumentWriteCsrf($request);
-        [$user, $tenant, $branch] = $this->authorizedBranchScope($branchId, 'settings.update');
-        // Request body must contain no unverified document values.
+        [$user, , $branch] = $this->authorizedBranchScope($branchId, 'settings.update');
         $this->payload($request, []);
         $reference = $this->domain(fn (): string => DocumentApiService::referenceFromKey($documentKey));
-        $result = $this->domain(fn (): array => $this->documents->requestReview(
-            $this->store($request), $this->scope($branch), $reference,
-        ));
-        if ($result['changed']) {
-            $this->audit($tenant, $user, 'documents_synthetic.review_requested', DocumentApiService::class, $reference, [
-                'branch_id' => $branch->id(), 'synthetic' => true,
-            ]);
-            $this->entityManager->flush();
-            $request->getSession()->set(self::SESSION_KEY, $result['state']);
-        }
-        return $this->json(['document' => $result['document'], 'changed' => $result['changed'],
-            'synthetic' => true, 'can_close' => false]);
+        $this->findDocument($branch, $user, $reference);
+        throw new HttpException(409, 'Revisión de documentos persistentes pendiente.');
     }
 
     /**
      * Shared fail-closed write guard for document evidence and review.
-     * Keeps the legacy create path unchanged.
+     * Preserves strict CSRF before the pending write operations are rejected.
      */
     private function requireDocumentWriteCsrf(Request $request): void
     {
         $this->requireCsrf($request);
     }
 
-    private function recordSyntheticAudit(
-        Tenant $tenant,
-        User $actor,
-        Branch $branch,
-        string $action,
-        string $entityId,
-    ): void {
-        $this->audit($tenant, $actor, $action, DocumentApiService::class, $entityId, [
-            'branch_id' => $branch->id(), 'synthetic' => true,
-        ]);
-        $this->entityManager->flush();
-    }
+
 
     private function constructionOnly(): void
     {
@@ -198,27 +156,11 @@ final class DocumentsController extends AbstractController
         }
     }
 
-    private function scope(Branch $branch): string
-    {
-        $entity = $branch->legalEntity();
-        if ($entity === null) {
-            throw new NotFoundHttpException('Entidad legal de sede no encontrada.');
-        }
-        return hash('sha256', $branch->tenant()->id().'|'.$entity->id().'|'.$branch->id());
-    }
-
     /** @return array<string, mixed> */
-    private function store(Request $request): array
-    {
-        $store = $request->getSession()->get(self::SESSION_KEY, []);
-        return is_array($store) ? $store : [];
-    }
-
-    /** @return array{reference: string, classification: string, status: string} */
-    private function findDocument(Request $request, string $scope, string $reference): array
+    private function findDocument(Branch $branch, User $actor, string $reference): array
     {
         try {
-            return $this->documents->detail($this->store($request), $scope, $reference);
+            return $this->drafts->detail($branch, $actor, $reference);
         } catch (\DomainException $exception) {
             throw new NotFoundHttpException('Documento sintético no encontrado.', $exception);
         }

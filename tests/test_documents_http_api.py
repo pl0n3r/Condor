@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SERVICE = ROOT / "src/Application/Documents/DocumentApiService.php"
 CONTROLLER = ROOT / "src/Http/Controller/DocumentsController.php"
+SQL_BRIDGE = ROOT / "src/Application/Documents/DocumentDraftPersistence.php"
 
 PHP_HARNESS = r'''<?php
 require $argv[1];
@@ -87,10 +88,13 @@ class ModuloTests(unittest.TestCase):
         self.assertEqual(results[4]["value"], [])
         self.assertFalse(results[5]["ok"])
         code = CONTROLLER.read_text(encoding="utf-8")
-        self.assertIn("branch->tenant()->id()", code)
-        self.assertIn("legalEntity()", code)
-        self.assertIn("hash('sha256'", code)
+        bridge = SQL_BRIDGE.read_text(encoding="utf-8")
+        self.assertIn("branch->tenant()->id()", bridge)
+        self.assertIn("legalEntity()", bridge)
+        self.assertIn("self::fixture('tenant'", bridge)
+        self.assertIn("self::fixture('branch'", bridge)
         self.assertIn("$this->authorizedBranchScope(", code)
+        self.assertIn("$this->drafts->listing(", code)
 
     def test_permisos_y_auditoria(self) -> None:
         code = CONTROLLER.read_text(encoding="utf-8")
@@ -98,15 +102,14 @@ class ModuloTests(unittest.TestCase):
         for permission in ("settings.view", "settings.create", "settings.update"):
             self.assertIn("'" + permission + "'", code)
         self.assertEqual(code.count("$this->requireCsrf($request);"), 2)
-        self.assertEqual(code.count("$this->audit("), 4)
-        for action in ("documents_synthetic.listed", "documents_synthetic.read",
-                       "documents_synthetic.created", "documents_synthetic.review_requested"):
-            self.assertIn(action, code)
-        self.assertIn("$this->entityManager->flush();", code)
+        self.assertEqual(code.count("$this->audit("), 0)
+        self.assertIn("->createDraft(", SQL_BRIDGE.read_text(encoding="utf-8"))
+        self.assertIn("->forBranch(", SQL_BRIDGE.read_text(encoding="utf-8"))
+        self.assertIn("throw new HttpException(409", code)
+        self.assertNotIn("->getSession()", code)
         self.assertIn("$this->payload($request, []);", code)
-        self.assertIn("if ($result['changed'])", code)
         self.assertIn("['dev', 'test']", code)
-        self.assertNotIn("'documents.view'", code)  # not yet present in PermissionCatalog
+        self.assertNotIn("'documents.view'", code)
 
     def test_sin_datos_reales(self) -> None:
         invalid = ["CC-12345", "person@example.com", "https://example.com",
@@ -132,7 +135,8 @@ class ModuloTests(unittest.TestCase):
         code = CONTROLLER.read_text(encoding="utf-8")
         self.assertIn("$this->payload($request, ['reference', 'classification'])", code)
         self.assertIn("Módulo documental no disponible.", code)
-        self.assertIn("SESSION_KEY", code)
+        self.assertNotIn("SESSION_KEY", code)
+        self.assertIn("->createDraft(", SQL_BRIDGE.read_text(encoding="utf-8"))
         service = SERVICE.read_text(encoding="utf-8")
         self.assertIn("MAX_DOCUMENTS = 100", service)
         self.assertNotIn("file_put_contents(", service)

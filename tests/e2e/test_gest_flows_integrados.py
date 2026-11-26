@@ -103,24 +103,26 @@ final class GestSyntheticIntegratedHttpTest extends WebTestCase
             self::assertResponseStatusCodeSame(201);
             self::assertSame('PENDIENTE', self::payload($client)['evidence']['state']);
 
-            // Connected synthetic reference: compliance evidence -> document -> audit trace.
+            // Documents now persist to MariaDB, independent of the legacy
+            // compliance fixture. Pending evidence/review/trace fail closed.
             $client->jsonRequest('POST', $documents,
                 ['reference' => 'fixture:doc/flujo', 'classification' => 'INTERNA'], $headers);
             self::assertResponseStatusCodeSame(201);
+            $createdDocument = self::payload($client)['document'];
+            self::assertSame('BORRADOR', $createdDocument['status']);
+            self::assertSame(1, $createdDocument['version']);
             $client->jsonRequest('POST', $documents.'/flujo/evidence',
                 ['evidence_ref' => $evidence['evidence_ref']], $headers);
-            self::assertResponseStatusCodeSame(200);
-            self::assertSame($evidence['evidence_ref'], self::payload($client)['document']['evidence_ref']);
-            self::assertFalse(self::payload($client)['can_close']);
+            self::assertResponseStatusCodeSame(409);
             $client->request('POST', $documents.'/flujo/request-review', [], [],
                 [...$headers, 'CONTENT_TYPE' => 'application/json'], '{}');
-            self::assertResponseStatusCodeSame(200);
-            self::assertSame('PENDIENTE_REVISION', self::payload($client)['document']['status']);
-            self::assertFalse(self::payload($client)['can_close']);
+            self::assertResponseStatusCodeSame(409);
             $client->request('GET', $documents.'/flujo/trace');
+            self::assertResponseStatusCodeSame(409);
+            $client->request('GET', $documents.'/flujo');
             self::assertResponseStatusCodeSame(200);
-            self::assertSame(['CREADO', 'EVIDENCIA_ADJUNTADA', 'REVISION_SOLICITADA'],
-                array_column(self::payload($client)['events'], 'action'));
+            self::assertSame($createdDocument['id'], self::payload($client)['document']['id']);
+            self::assertSame('BORRADOR', self::payload($client)['document']['status']);
 
             // Separate M12/M13 real endpoints: partial, NOT a connected business workflow.
             $client->jsonRequest('POST', $risks,
@@ -160,9 +162,16 @@ final class GestSyntheticIntegratedHttpTest extends WebTestCase
             self::assertCount(1, $em->getRepository(AuditEvent::class)->findBy([
                 'tenant' => $tenantA, 'action' => 'compliance.synthetic.created',
             ]));
-            self::assertCount(1, $em->getRepository(AuditEvent::class)->findBy([
+            // SQL is the sole document audit source: no duplicate session audit.
+            self::assertCount(0, $em->getRepository(AuditEvent::class)->findBy([
                 'tenant' => $tenantA, 'action' => 'documents_synthetic.created',
             ]));
+            self::assertSame(1, (int) $db->fetchOne(
+                'SELECT COUNT(*) FROM condor_document_audit '
+                .'WHERE record_ref = (SELECT record_ref FROM condor_document_record WHERE id = ?) '
+                .'AND action = ?',
+                [$createdDocument['id'], 'CREADA'],
+            ));
             self::assertCount(1, $em->getRepository(AuditEvent::class)->findBy([
                 'tenant' => $tenantA, 'action' => 'risk.synthetic.created',
             ]));

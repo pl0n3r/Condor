@@ -86,15 +86,25 @@ final class GestM08VerificationTest extends TestCase
             "name: 'api_documents_trace'", "'settings.view'", "'settings.update'",
             '$this->authorizedBranchScope($branchId,',
             '$this->requireCsrf($request);', '$this->constructionOnly();',
-            "hash('sha256',", "private const SESSION_KEY",
-            "'Content-Disposition'", "'private, no-store'",
+            '$this->drafts->listing($branch, $user)', '$this->drafts->create(',
+            'throw new HttpException(409',
         ] as $required) {
             self::assertStringContainsString($required, $controller);
         }
         self::assertSame(7, substr_count($controller, '$this->authorizedBranchScope($branchId,'));
         self::assertSame(2, substr_count($controller, '$this->requireDocumentWriteCsrf($request);'));
         self::assertSame(2, substr_count($controller, '$this->requireCsrf($request);'));
-        self::assertSame(4, substr_count($controller, '$this->audit('));
+        self::assertSame(0, substr_count($controller, '$this->audit('));
+        self::assertStringNotContainsString('SESSION_KEY', $controller);
+        self::assertStringNotContainsString('->getSession()', $controller);
+        // En el primer slice el servidor y MariaDB sustituyen el hash de sesión.
+        $bridge = file_get_contents(__DIR__.'/../../../../src/Application/Documents/DocumentDraftPersistence.php');
+        self::assertIsString($bridge);
+        self::assertStringContainsString('BranchDocumentRecordRepository', $bridge);
+        self::assertStringContainsString('self::fixture(\'tenant\'', $bridge);
+        self::assertStringContainsString('self::fixture(\'branch\'', $bridge);
+        self::assertStringContainsString('->createDraft(', $bridge);
+        self::assertStringContainsString('->forBranch(', $bridge);
         // Source contract only; real HTTP negatives and React UI require a scoped follow-up.
     }
 
