@@ -1,9 +1,9 @@
-Última actualización automática: 2026-11-22 · SHA de origen: 696e63c82c2168d48777b28fa152bce8fb412f22
+Última actualización automática: 2026-11-26 · SHA de origen: f53d4e679b675b4bead7af95d10726959458f851
 
 # Documentos para revisión jurídica — Condor
 
 Estado literal: documented_not_legally_approved. Sin aprobación jurídica.
-Versión del producto: 0.1.205. Commit del repositorio de origen: 696e63c82c2168d48777b28fa152bce8fb412f22.
+Versión del producto: 0.1.206. Commit del repositorio de origen: f53d4e679b675b4bead7af95d10726959458f851.
 Las copias preservan byte a byte los documentos fuente. Este paquete no autoriza go-live, publicación ni tratamiento adicional de datos.
 
 ## Documentos que debe comprobar o corregir el abogado
